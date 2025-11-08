@@ -11,7 +11,7 @@ from soulspot.domain.value_objects import TrackId
 
 class DownloadWorker:
     """Worker for processing download jobs in the background.
-    
+
     This worker:
     1. Monitors download queue
     2. Searches for tracks on Soulseek
@@ -28,7 +28,7 @@ class DownloadWorker:
         download_repository: IDownloadRepository,
     ) -> None:
         """Initialize download worker.
-        
+
         Args:
             job_queue: Job queue for background processing
             slskd_client: Client for Soulseek operations
@@ -48,10 +48,10 @@ class DownloadWorker:
 
     async def _handle_download_job(self, job: Job) -> Any:
         """Handle a download job.
-        
+
         Args:
             job: Job to process
-            
+
         Returns:
             Download result
         """
@@ -100,7 +100,7 @@ class DownloadWorker:
         max_retries: int = 3,
     ) -> str:
         """Enqueue a download job.
-        
+
         Args:
             track_id: Track to download
             search_query: Optional custom search query
@@ -108,7 +108,7 @@ class DownloadWorker:
             timeout_seconds: Search timeout
             quality_preference: Quality preference (best, good, any)
             max_retries: Maximum retry attempts
-            
+
         Returns:
             Job ID
         """
@@ -126,14 +126,13 @@ class DownloadWorker:
 
     async def monitor_downloads(self, poll_interval: int = 10) -> None:
         """Monitor active downloads and update status.
-        
+
         This should be run as a background task to periodically
         check download progress and update the database.
-        
+
         Args:
             poll_interval: Seconds between status checks
         """
-        from soulspot.domain.ports import ISlskdClient
 
         while True:
             try:

@@ -237,10 +237,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_secret_key_in_production(cls, v: str, info) -> str:
         """Validate secret key in production."""
-        if (
-            info.data.get("app_env") == "production"
-            and v == "change-me-to-a-random-secret-key-in-production"
-        ):
+        if info.data.get("app_env") == "production" and v == "change-me-to-a-random-secret-key-in-production":
             raise ValueError("Secret key must be changed in production")
         return v
 

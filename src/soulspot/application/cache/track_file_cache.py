@@ -2,7 +2,7 @@
 
 import hashlib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from soulspot.application.cache.base_cache import InMemoryCache
 from soulspot.domain.value_objects import FilePath, TrackId
@@ -10,12 +10,12 @@ from soulspot.domain.value_objects import FilePath, TrackId
 
 class TrackFileCache:
     """Cache for track file locations and metadata.
-    
+
     This cache stores:
     - Track file paths
     - File checksums
     - File metadata (size, format, bitrate)
-    
+
     This helps avoid redundant downloads and enables quick
     file lookup for already downloaded tracks.
     """
@@ -40,12 +40,12 @@ class TrackFileCache:
         """Make cache key for file metadata."""
         return f"metadata:{track_id}"
 
-    async def get_file_path(self, track_id: TrackId) -> Optional[FilePath]:
+    async def get_file_path(self, track_id: TrackId) -> FilePath | None:
         """Get cached file path for track.
-        
+
         Args:
             track_id: Track ID
-            
+
         Returns:
             Cached file path or None
         """
@@ -55,7 +55,7 @@ class TrackFileCache:
 
     async def cache_file_path(self, track_id: TrackId, file_path: FilePath) -> None:
         """Cache file path for track.
-        
+
         Args:
             track_id: Track ID
             file_path: Path to downloaded file
@@ -63,12 +63,12 @@ class TrackFileCache:
         key = self._make_file_path_key(track_id)
         await self._cache.set(key, str(file_path), self.FILE_PATH_TTL)
 
-    async def get_file_metadata(self, track_id: TrackId) -> Optional[dict[str, Any]]:
+    async def get_file_metadata(self, track_id: TrackId) -> dict[str, Any] | None:
         """Get cached file metadata.
-        
+
         Args:
             track_id: Track ID
-            
+
         Returns:
             Cached file metadata or None
         """
@@ -81,7 +81,7 @@ class TrackFileCache:
         metadata: dict[str, Any],
     ) -> None:
         """Cache file metadata.
-        
+
         Args:
             track_id: Track ID
             metadata: File metadata (size, format, bitrate, etc.)
@@ -89,12 +89,12 @@ class TrackFileCache:
         key = self._make_metadata_key(track_id)
         await self._cache.set(key, metadata, self.FILE_PATH_TTL)
 
-    async def get_checksum(self, file_path: str) -> Optional[str]:
+    async def get_checksum(self, file_path: str) -> str | None:
         """Get cached file checksum.
-        
+
         Args:
             file_path: Path to file
-            
+
         Returns:
             Cached MD5 checksum or None
         """
@@ -103,7 +103,7 @@ class TrackFileCache:
 
     async def cache_checksum(self, file_path: str, checksum: str) -> None:
         """Cache file checksum.
-        
+
         Args:
             file_path: Path to file
             checksum: MD5 checksum of file
@@ -113,10 +113,10 @@ class TrackFileCache:
 
     async def compute_and_cache_checksum(self, file_path: str) -> str:
         """Compute and cache file checksum.
-        
+
         Args:
             file_path: Path to file
-            
+
         Returns:
             MD5 checksum of file
         """
@@ -130,20 +130,20 @@ class TrackFileCache:
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 md5.update(chunk)
-        
+
         checksum = md5.hexdigest()
-        
+
         # Cache result
         await self.cache_checksum(file_path, checksum)
-        
+
         return checksum
 
     async def is_file_downloaded(self, track_id: TrackId) -> bool:
         """Check if track file is already downloaded.
-        
+
         Args:
             track_id: Track ID
-            
+
         Returns:
             True if file exists and is cached
         """
@@ -156,19 +156,19 @@ class TrackFileCache:
 
     async def invalidate_track(self, track_id: TrackId) -> bool:
         """Invalidate all cached data for a track.
-        
+
         Args:
             track_id: Track ID
-            
+
         Returns:
             True if any data was invalidated
         """
         path_key = self._make_file_path_key(track_id)
         meta_key = self._make_metadata_key(track_id)
-        
+
         path_deleted = await self._cache.delete(path_key)
         meta_deleted = await self._cache.delete(meta_key)
-        
+
         return path_deleted or meta_deleted
 
     async def clear(self) -> None:
@@ -177,7 +177,7 @@ class TrackFileCache:
 
     async def cleanup_expired(self) -> int:
         """Remove expired entries.
-        
+
         Returns:
             Number of entries removed
         """

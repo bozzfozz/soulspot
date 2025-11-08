@@ -2,10 +2,11 @@
 
 import asyncio
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any
 
 
 class JobType(str, Enum):
@@ -35,10 +36,10 @@ class Job:
     payload: dict[str, Any]
     status: JobStatus = JobStatus.PENDING
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error: Optional[str] = None
-    result: Optional[Any] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error: str | None = None
+    result: Any | None = None
     retries: int = 0
     max_retries: int = 3
 
@@ -72,14 +73,14 @@ class Job:
 
 class JobQueue:
     """In-memory job queue for background workers.
-    
+
     This is a simple in-memory implementation. For production use,
     consider using Redis, RabbitMQ, or Celery.
     """
 
     def __init__(self, max_concurrent_jobs: int = 5) -> None:
         """Initialize job queue.
-        
+
         Args:
             max_concurrent_jobs: Maximum number of jobs to run concurrently
         """
@@ -97,7 +98,7 @@ class JobQueue:
         handler: Callable[[Job], Coroutine[Any, Any, Any]],
     ) -> None:
         """Register a handler for a job type.
-        
+
         Args:
             job_type: Type of job to handle
             handler: Async function to process the job
@@ -111,12 +112,12 @@ class JobQueue:
         max_retries: int = 3,
     ) -> str:
         """Add a job to the queue.
-        
+
         Args:
             job_type: Type of job
             payload: Job data
             max_retries: Maximum retry attempts
-            
+
         Returns:
             Job ID
         """
@@ -126,18 +127,18 @@ class JobQueue:
             payload=payload,
             max_retries=max_retries,
         )
-        
+
         self._jobs[job.id] = job
         await self._queue.put(job)
-        
+
         return job.id
 
-    async def get_job(self, job_id: str) -> Optional[Job]:
+    async def get_job(self, job_id: str) -> Job | None:
         """Get job by ID.
-        
+
         Args:
             job_id: Job ID
-            
+
         Returns:
             Job if found, None otherwise
         """
@@ -145,10 +146,10 @@ class JobQueue:
 
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a job.
-        
+
         Args:
             job_id: Job ID
-            
+
         Returns:
             True if cancelled, False if not found or already completed
         """
@@ -164,17 +165,17 @@ class JobQueue:
 
     async def list_jobs(
         self,
-        status: Optional[JobStatus] = None,
-        job_type: Optional[JobType] = None,
+        status: JobStatus | None = None,
+        job_type: JobType | None = None,
         limit: int = 100,
     ) -> list[Job]:
         """List jobs with optional filtering.
-        
+
         Args:
             status: Filter by status
             job_type: Filter by job type
             limit: Maximum number of jobs to return
-            
+
         Returns:
             List of jobs
         """
@@ -193,7 +194,7 @@ class JobQueue:
 
     async def _process_job(self, job: Job) -> None:
         """Process a single job.
-        
+
         Args:
             job: Job to process
         """
@@ -230,15 +231,15 @@ class JobQueue:
             try:
                 # Wait for job with timeout to allow checking shutdown flag
                 job = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                
+
                 # Wait if too many jobs running
                 while len(self._running_jobs) >= self._max_concurrent:
                     await asyncio.sleep(0.1)
-                
+
                 # Process job
                 asyncio.create_task(self._process_job(job))
-                
-            except asyncio.TimeoutError:
+
+            except TimeoutError:
                 continue
             except Exception as e:
                 # Log error but continue processing
@@ -247,36 +248,33 @@ class JobQueue:
 
     async def start(self, num_workers: int = 3) -> None:
         """Start worker threads.
-        
+
         Args:
             num_workers: Number of worker threads to start
         """
         self._shutdown = False
-        self._workers = [
-            asyncio.create_task(self._worker_loop())
-            for _ in range(num_workers)
-        ]
+        self._workers = [asyncio.create_task(self._worker_loop()) for _ in range(num_workers)]
 
     async def stop(self) -> None:
         """Stop all workers and wait for completion."""
         self._shutdown = True
-        
+
         # Wait for workers to finish
         if self._workers:
             await asyncio.gather(*self._workers, return_exceptions=True)
-        
+
         self._workers = []
 
-    async def wait_for_job(self, job_id: str, timeout: Optional[float] = None) -> Job:
+    async def wait_for_job(self, job_id: str, timeout: float | None = None) -> Job:
         """Wait for a job to complete.
-        
+
         Args:
             job_id: Job ID to wait for
             timeout: Maximum time to wait in seconds
-            
+
         Returns:
             Completed job
-            
+
         Raises:
             asyncio.TimeoutError: If timeout is reached
             ValueError: If job not found
@@ -286,11 +284,11 @@ class JobQueue:
             raise ValueError(f"Job not found: {job_id}")
 
         start_time = asyncio.get_event_loop().time()
-        
+
         while job.status not in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
             if timeout and (asyncio.get_event_loop().time() - start_time) > timeout:
-                raise asyncio.TimeoutError(f"Job did not complete within {timeout}s")
-            
+                raise TimeoutError(f"Job did not complete within {timeout}s")
+
             await asyncio.sleep(0.1)
             job = await self.get_job(job_id)
             if not job:
@@ -300,7 +298,7 @@ class JobQueue:
 
     def get_stats(self) -> dict[str, Any]:
         """Get queue statistics.
-        
+
         Returns:
             Dictionary with queue statistics
         """

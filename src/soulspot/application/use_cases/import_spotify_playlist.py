@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Artist, Playlist, PlaylistSource, Track
@@ -36,7 +35,7 @@ class ImportSpotifyPlaylistResponse:
 
 class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportSpotifyPlaylistResponse]):
     """Use case for importing a Spotify playlist into the system.
-    
+
     This use case:
     1. Fetches playlist metadata from Spotify
     2. Creates or updates the playlist entity
@@ -53,7 +52,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
         artist_repository: IArtistRepository,
     ) -> None:
         """Initialize the use case with required dependencies.
-        
+
         Args:
             spotify_client: Client for Spotify API operations
             playlist_repository: Repository for playlist persistence
@@ -67,10 +66,10 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
 
     async def execute(self, request: ImportSpotifyPlaylistRequest) -> ImportSpotifyPlaylistResponse:
         """Execute the import playlist use case.
-        
+
         Args:
             request: Request containing playlist ID and access token
-            
+
         Returns:
             Response with imported playlist and statistics
         """
@@ -115,7 +114,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
         # 3. Process tracks if requested
         if request.fetch_all_tracks:
             track_items = spotify_playlist["tracks"]["items"]
-            
+
             for item in track_items:
                 try:
                     track_data = item.get("track")
@@ -131,7 +130,9 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                         artist = Artist(
                             id=ArtistId.generate(),
                             name=artist_name,
-                            spotify_uri=SpotifyUri(track_data["artists"][0]["uri"]) if track_data.get("artists") else None,
+                            spotify_uri=SpotifyUri(track_data["artists"][0]["uri"])
+                            if track_data.get("artists")
+                            else None,
                             created_at=datetime.utcnow(),
                             updated_at=datetime.utcnow(),
                         )

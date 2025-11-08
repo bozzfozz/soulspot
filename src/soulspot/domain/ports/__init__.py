@@ -365,9 +365,7 @@ class IMusicBrainzClient(ABC):
         pass
 
     @abstractmethod
-    async def search_recording(
-        self, artist: str, title: str, limit: int = 10
-    ) -> list[dict[str, Any]]:
+    async def search_recording(self, artist: str, title: str, limit: int = 10) -> list[dict[str, Any]]:
         """
         Search for recordings by artist and title.
 

@@ -5,8 +5,9 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from soulspot.api.routers import api_router
+from soulspot.api.routers import api_router, ui
 from soulspot.config import Settings, get_settings
 from soulspot.infrastructure.persistence import Database
 
@@ -52,8 +53,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Mount static files
+    app.mount("/static", StaticFiles(directory="src/soulspot/static"), name="static")
+
     # Include API routers
     app.include_router(api_router, prefix="/api/v1")
+
+    # Include UI router
+    app.include_router(ui.router, prefix="/ui", tags=["UI"])
 
     # Health check endpoint
     @app.get("/health", tags=["Health"])
@@ -86,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "docs": "/docs",
             "health": "/health",
             "api": "/api/v1",
+            "ui": "/ui",
         }
 
     return app

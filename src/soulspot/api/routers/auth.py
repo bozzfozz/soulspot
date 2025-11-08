@@ -45,7 +45,7 @@ async def authorize(
 @router.get("/callback")
 async def callback(
     code: str = Query(..., description="Authorization code from Spotify"),
-    state: str = Query(..., description="State parameter for CSRF protection"),
+    state: str = Query(..., description="State parameter for CSRF protection"),  # noqa: ARG001
     code_verifier: str = Query(..., description="Code verifier for PKCE"),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -76,7 +76,7 @@ async def callback(
             "token_type": token_data.get("token_type", "Bearer"),
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to exchange code: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to exchange code: {str(e)}") from e
 
 
 @router.post("/refresh")
@@ -106,4 +106,4 @@ async def refresh_token(
             "token_type": token_data.get("token_type", "Bearer"),
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to refresh token: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to refresh token: {str(e)}") from e

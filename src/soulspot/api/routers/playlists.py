@@ -12,9 +12,9 @@ router = APIRouter()
 @router.post("/import")
 async def import_playlist(
     playlist_id: str = Query(..., description="Spotify playlist ID"),
-    access_token: str = Query(..., description="Spotify access token"),
+    access_token: str = Query(..., description="Spotify access token"),  # noqa: ARG001
     fetch_all_tracks: bool = Query(True, description="Fetch all tracks in playlist"),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_settings),  # noqa: ARG001
 ) -> dict[str, Any]:
     """Import a Spotify playlist.
 

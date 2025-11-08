@@ -15,7 +15,7 @@ from soulspot.domain.value_objects import TrackId
 
 class MetadataWorker:
     """Worker for processing metadata enrichment jobs in the background.
-    
+
     This worker:
     1. Monitors metadata enrichment queue
     2. Fetches metadata from MusicBrainz
@@ -33,7 +33,7 @@ class MetadataWorker:
         album_repository: IAlbumRepository,
     ) -> None:
         """Initialize metadata worker.
-        
+
         Args:
             job_queue: Job queue for background processing
             musicbrainz_client: Client for MusicBrainz API
@@ -55,10 +55,10 @@ class MetadataWorker:
 
     async def _handle_metadata_job(self, job: Job) -> Any:
         """Handle a metadata enrichment job.
-        
+
         Args:
             job: Job to process
-            
+
         Returns:
             Enrichment result
         """
@@ -105,14 +105,14 @@ class MetadataWorker:
         max_retries: int = 3,
     ) -> str:
         """Enqueue a metadata enrichment job.
-        
+
         Args:
             track_id: Track to enrich
             force_refresh: Force refresh even if metadata exists
             enrich_artist: Whether to enrich artist information
             enrich_album: Whether to enrich album information
             max_retries: Maximum retry attempts
-            
+
         Returns:
             Job ID
         """
@@ -136,14 +136,14 @@ class MetadataWorker:
         max_retries: int = 3,
     ) -> list[str]:
         """Enqueue multiple metadata enrichment jobs.
-        
+
         Args:
             track_ids: Tracks to enrich
             force_refresh: Force refresh even if metadata exists
             enrich_artist: Whether to enrich artist information
             enrich_album: Whether to enrich album information
             max_retries: Maximum retry attempts
-            
+
         Returns:
             List of job IDs
         """

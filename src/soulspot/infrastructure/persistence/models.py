@@ -39,8 +39,12 @@ class ArtistModel(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
-    albums: Mapped[list["AlbumModel"]] = relationship("AlbumModel", back_populates="artist", cascade="all, delete-orphan")
-    tracks: Mapped[list["TrackModel"]] = relationship("TrackModel", back_populates="artist", cascade="all, delete-orphan")
+    albums: Mapped[list["AlbumModel"]] = relationship(
+        "AlbumModel", back_populates="artist", cascade="all, delete-orphan"
+    )
+    tracks: Mapped[list["TrackModel"]] = relationship(
+        "TrackModel", back_populates="artist", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_artists_name_lower", func.lower(name)),)
 
@@ -62,7 +66,9 @@ class AlbumModel(Base):
 
     # Relationships
     artist: Mapped["ArtistModel"] = relationship("ArtistModel", back_populates="albums")
-    tracks: Mapped[list["TrackModel"]] = relationship("TrackModel", back_populates="album", cascade="all, delete-orphan")
+    tracks: Mapped[list["TrackModel"]] = relationship(
+        "TrackModel", back_populates="album", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_albums_title_artist", "title", "artist_id"),)
 
@@ -75,7 +81,9 @@ class TrackModel(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     artist_id: Mapped[str] = mapped_column(String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
-    album_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True)
+    album_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True
+    )
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disc_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
@@ -89,7 +97,9 @@ class TrackModel(Base):
     # Relationships
     artist: Mapped["ArtistModel"] = relationship("ArtistModel", back_populates="tracks")
     album: Mapped["AlbumModel | None"] = relationship("AlbumModel", back_populates="tracks")
-    download: Mapped["DownloadModel | None"] = relationship("DownloadModel", back_populates="track", cascade="all, delete-orphan", uselist=False)
+    download: Mapped["DownloadModel | None"] = relationship(
+        "DownloadModel", back_populates="track", cascade="all, delete-orphan", uselist=False
+    )
 
     __table_args__ = (Index("ix_tracks_title_artist", "title", "artist_id"),)
 
@@ -109,7 +119,10 @@ class PlaylistModel(Base):
 
     # Relationships
     playlist_tracks: Mapped[list["PlaylistTrackModel"]] = relationship(
-        "PlaylistTrackModel", back_populates="playlist", cascade="all, delete-orphan", order_by="PlaylistTrackModel.position"
+        "PlaylistTrackModel",
+        back_populates="playlist",
+        cascade="all, delete-orphan",
+        order_by="PlaylistTrackModel.position",
     )
 
 
@@ -118,7 +131,9 @@ class PlaylistTrackModel(Base):
 
     __tablename__ = "playlist_tracks"
 
-    playlist_id: Mapped[str] = mapped_column(String(36), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True)
+    playlist_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True
+    )
     track_id: Mapped[str] = mapped_column(String(36), ForeignKey("tracks.id", ondelete="CASCADE"), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
@@ -136,7 +151,9 @@ class DownloadModel(Base):
     __tablename__ = "downloads"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    track_id: Mapped[str] = mapped_column(String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    track_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING", index=True)
     target_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

@@ -3,7 +3,6 @@
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
 
 from soulspot.domain.ports import ISpotifyClient
 
@@ -13,10 +12,10 @@ class TokenInfo:
     """Information about an OAuth token."""
 
     access_token: str
-    refresh_token: Optional[str]
+    refresh_token: str | None
     expires_at: datetime
     token_type: str = "Bearer"
-    scope: Optional[str] = None
+    scope: str | None = None
 
     def is_expired(self) -> bool:
         """Check if the token is expired."""
@@ -24,10 +23,10 @@ class TokenInfo:
 
     def expires_soon(self, threshold_seconds: int = 300) -> bool:
         """Check if token expires within threshold.
-        
+
         Args:
             threshold_seconds: Time threshold in seconds (default 5 minutes)
-            
+
         Returns:
             True if token expires within threshold
         """
@@ -36,7 +35,7 @@ class TokenInfo:
 
 class TokenManager:
     """Service for managing OAuth tokens with automatic refresh.
-    
+
     This service:
     1. Stores OAuth tokens (access and refresh tokens)
     2. Checks token expiration
@@ -47,7 +46,7 @@ class TokenManager:
 
     def __init__(self, spotify_client: ISpotifyClient) -> None:
         """Initialize token manager.
-        
+
         Args:
             spotify_client: Spotify client for token operations
         """
@@ -56,18 +55,18 @@ class TokenManager:
 
     def generate_auth_state(self) -> str:
         """Generate a random state parameter for OAuth.
-        
+
         Returns:
             Random state string for CSRF protection
         """
         return secrets.token_urlsafe(32)
 
-    async def get_authorization_url(self, state: Optional[str] = None) -> tuple[str, str, str]:
+    async def get_authorization_url(self, state: str | None = None) -> tuple[str, str, str]:
         """Get Spotify authorization URL for OAuth PKCE flow.
-        
+
         Args:
             state: Optional state parameter, generated if not provided
-            
+
         Returns:
             Tuple of (authorization URL, state, code verifier)
         """
@@ -88,15 +87,15 @@ class TokenManager:
         self,
         code: str,
         code_verifier: str,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> TokenInfo:
         """Exchange authorization code for access token.
-        
+
         Args:
             code: Authorization code from callback
             code_verifier: PKCE code verifier used in authorization
             user_id: Optional user ID to associate token with
-            
+
         Returns:
             TokenInfo with access and refresh tokens
         """
@@ -122,12 +121,12 @@ class TokenManager:
 
         return token_info
 
-    async def get_valid_token(self, user_id: str) -> Optional[str]:
+    async def get_valid_token(self, user_id: str) -> str | None:
         """Get a valid access token, refreshing if necessary.
-        
+
         Args:
             user_id: User ID associated with the token
-            
+
         Returns:
             Valid access token or None if not available
         """
@@ -154,13 +153,13 @@ class TokenManager:
 
     async def refresh_token(self, user_id: str) -> TokenInfo:
         """Refresh an expired access token.
-        
+
         Args:
             user_id: User ID associated with the token
-            
+
         Returns:
             New TokenInfo with refreshed access token
-            
+
         Raises:
             ValueError: If no token found for user or no refresh token available
         """
@@ -194,19 +193,19 @@ class TokenManager:
 
     def store_token(self, user_id: str, token_info: TokenInfo) -> None:
         """Store token information for a user.
-        
+
         Args:
             user_id: User ID to associate token with
             token_info: Token information to store
         """
         self._tokens[user_id] = token_info
 
-    def get_token_info(self, user_id: str) -> Optional[TokenInfo]:
+    def get_token_info(self, user_id: str) -> TokenInfo | None:
         """Get token information for a user.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             TokenInfo if available, None otherwise
         """
@@ -214,10 +213,10 @@ class TokenManager:
 
     def revoke_token(self, user_id: str) -> bool:
         """Revoke (delete) token for a user.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             True if token was revoked, False if no token found
         """
@@ -228,7 +227,7 @@ class TokenManager:
 
     def list_user_ids(self) -> list[str]:
         """List all user IDs with stored tokens.
-        
+
         Returns:
             List of user IDs
         """

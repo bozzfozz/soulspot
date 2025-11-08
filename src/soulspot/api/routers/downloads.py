@@ -35,7 +35,7 @@ async def list_downloads(
 
 @router.get("/{download_id}")
 async def get_download_status(
-    download_id: str,
+    download_id: str,  # noqa: ARG001
 ) -> dict[str, Any]:
     """Get download status.
 

@@ -3,12 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Download, Track
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
-from soulspot.domain.value_objects import DownloadId, FilePath, TrackId
+from soulspot.domain.value_objects import DownloadId, TrackId
 
 
 class DownloadStatus(str, Enum):
@@ -26,7 +25,7 @@ class SearchAndDownloadTrackRequest:
     """Request to search and download a track."""
 
     track_id: TrackId
-    search_query: Optional[str] = None
+    search_query: str | None = None
     max_results: int = 10
     timeout_seconds: int = 30
     quality_preference: str = "best"  # best, good, any
@@ -38,14 +37,14 @@ class SearchAndDownloadTrackResponse:
 
     download: Download
     search_results_count: int
-    selected_file: Optional[dict[str, str]]
+    selected_file: dict[str, str] | None
     status: DownloadStatus
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, SearchAndDownloadTrackResponse]):
     """Use case for searching and downloading a track from Soulseek.
-    
+
     This use case:
     1. Retrieves track metadata from repository
     2. Constructs search query
@@ -62,7 +61,7 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         download_repository: IDownloadRepository,
     ) -> None:
         """Initialize the use case with required dependencies.
-        
+
         Args:
             slskd_client: Client for Soulseek operations via slskd
             track_repository: Repository for track persistence
@@ -74,10 +73,10 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
 
     def _build_search_query(self, track: Track) -> str:
         """Build a search query from track metadata.
-        
+
         Args:
             track: Track entity with metadata
-            
+
         Returns:
             Search query string
         """
@@ -88,13 +87,13 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         self,
         results: list[dict[str, any]],
         quality_preference: str,
-    ) -> Optional[dict[str, any]]:
+    ) -> dict[str, any] | None:
         """Select the best quality file from search results.
-        
+
         Args:
             results: List of search results from slskd
             quality_preference: Quality preference (best, good, any)
-            
+
         Returns:
             Best file match or None
         """
@@ -104,8 +103,7 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         # Filter for audio files (MP3, FLAC, etc.)
         audio_extensions = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav"}
         audio_files = [
-            r for r in results
-            if any(r.get("filename", "").lower().endswith(ext) for ext in audio_extensions)
+            r for r in results if any(r.get("filename", "").lower().endswith(ext) for ext in audio_extensions)
         ]
 
         if not audio_files:
@@ -117,10 +115,10 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
             filename = file.get("filename", "").lower()
             bitrate = file.get("bitrate", 0)
             size = file.get("size", 0)
-            
+
             # Bonus for FLAC
             format_bonus = 1000 if filename.endswith(".flac") else 0
-            
+
             return (format_bonus, bitrate, size)
 
         if quality_preference == "best":
@@ -129,8 +127,7 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         elif quality_preference == "good":
             # Return files with at least 256kbps or FLAC
             good_files = [
-                f for f in audio_files
-                if f.get("bitrate", 0) >= 256 or f.get("filename", "").lower().endswith(".flac")
+                f for f in audio_files if f.get("bitrate", 0) >= 256 or f.get("filename", "").lower().endswith(".flac")
             ]
             return max(good_files, key=quality_score) if good_files else None
         else:  # any
@@ -139,10 +136,10 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
 
     async def execute(self, request: SearchAndDownloadTrackRequest) -> SearchAndDownloadTrackResponse:
         """Execute the search and download use case.
-        
+
         Args:
             request: Request containing track ID and download preferences
-            
+
         Returns:
             Response with download entity and status
         """
