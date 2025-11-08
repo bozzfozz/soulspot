@@ -88,14 +88,16 @@ class SlskdClient(ISlskdClient):
             for user_response in results["responses"]:
                 username = user_response.get("username", "")
                 for file in user_response.get("files", []):
-                    files.append({
-                        "username": username,
-                        "filename": file.get("filename", ""),
-                        "size": file.get("size", 0),
-                        "bitrate": file.get("bitRate", 0),
-                        "length": file.get("length", 0),
-                        "quality": file.get("quality", 0),
-                    })
+                    files.append(
+                        {
+                            "username": username,
+                            "filename": file.get("filename", ""),
+                            "size": file.get("size", 0),
+                            "bitrate": file.get("bitRate", 0),
+                            "length": file.get("length", 0),
+                            "quality": file.get("quality", 0),
+                        }
+                    )
 
         return files
 
@@ -195,15 +197,17 @@ class SlskdClient(ISlskdClient):
         for download in downloads:
             username = download.get("username", "")
             filename = download.get("filename", "")
-            result.append({
-                "id": f"{username}/{filename}",
-                "username": username,
-                "filename": filename,
-                "state": download.get("state", "unknown"),
-                "progress": download.get("percentComplete", 0),
-                "bytes_transferred": download.get("bytesTransferred", 0),
-                "size": download.get("size", 0),
-            })
+            result.append(
+                {
+                    "id": f"{username}/{filename}",
+                    "username": username,
+                    "filename": filename,
+                    "state": download.get("state", "unknown"),
+                    "progress": download.get("percentComplete", 0),
+                    "bytes_transferred": download.get("bytesTransferred", 0),
+                    "size": download.get("size", 0),
+                }
+            )
 
         return result
 

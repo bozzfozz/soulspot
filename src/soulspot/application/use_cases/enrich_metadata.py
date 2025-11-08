@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Album, Artist, Track
@@ -30,15 +29,15 @@ class EnrichMetadataResponse:
     """Response from enriching track metadata."""
 
     track: Track
-    artist: Optional[Artist]
-    album: Optional[Album]
+    artist: Artist | None
+    album: Album | None
     enriched_fields: list[str]
     errors: list[str]
 
 
 class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataResponse]):
     """Use case for enriching track metadata from MusicBrainz.
-    
+
     This use case:
     1. Retrieves track from repository
     2. Looks up recording in MusicBrainz (by ISRC or search)
@@ -56,7 +55,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         album_repository: IAlbumRepository,
     ) -> None:
         """Initialize the use case with required dependencies.
-        
+
         Args:
             musicbrainz_client: Client for MusicBrainz API operations
             track_repository: Repository for track persistence
@@ -72,13 +71,13 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         self,
         track: Track,
         force_refresh: bool,
-    ) -> tuple[Optional[dict[str, any]], list[str]]:
+    ) -> tuple[dict[str, any] | None, list[str]]:
         """Enrich track metadata from MusicBrainz.
-        
+
         Args:
             track: Track entity to enrich
             force_refresh: Whether to force refresh even if metadata exists
-            
+
         Returns:
             Tuple of (MusicBrainz recording data, list of enriched fields)
         """
@@ -116,7 +115,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         if recording:
             # Update track with MusicBrainz data
             track.musicbrainz_id = recording.get("id")
-            
+
             # Update duration if not set or more accurate
             mb_length = recording.get("length")
             if mb_length and (not track.duration_ms or abs(track.duration_ms - mb_length) > 2000):
@@ -137,13 +136,13 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         self,
         recording: dict[str, any],
         track: Track,
-    ) -> tuple[Optional[Artist], list[str]]:
+    ) -> tuple[Artist | None, list[str]]:
         """Enrich artist metadata from MusicBrainz.
-        
+
         Args:
             recording: MusicBrainz recording data
             track: Track entity
-            
+
         Returns:
             Tuple of (Artist entity, list of enriched fields)
         """
@@ -162,7 +161,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
         # Check if artist already exists
         artist = await self._artist_repository.get_by_musicbrainz_id(artist_mbid)
-        
+
         if not artist:
             # Fetch full artist details
             try:
@@ -186,13 +185,13 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         self,
         recording: dict[str, any],
         track: Track,
-    ) -> tuple[Optional[Album], list[str]]:
+    ) -> tuple[Album | None, list[str]]:
         """Enrich album metadata from MusicBrainz.
-        
+
         Args:
             recording: MusicBrainz recording data
             track: Track entity
-            
+
         Returns:
             Tuple of (Album entity, list of enriched fields)
         """
@@ -247,10 +246,10 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
     async def execute(self, request: EnrichMetadataRequest) -> EnrichMetadataResponse:
         """Execute the enrich metadata use case.
-        
+
         Args:
             request: Request containing track ID and enrichment options
-            
+
         Returns:
             Response with enriched entities and statistics
         """
@@ -272,7 +271,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         try:
             recording, track_fields = await self._enrich_track_metadata(track, request.force_refresh)
             all_enriched_fields.extend(track_fields)
-            
+
             if recording:
                 await self._track_repository.update(track)
         except Exception as e:

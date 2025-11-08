@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Spotify Auth - SoulSpot Bridge{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <h1>Connect Spotify</h1>
+    
+    <div class="auth-section">
+        <p>Connect your Spotify account to import playlists and search for tracks.</p>
+        
+        <button id="auth-btn" 
+                class="btn btn-primary btn-large"
+                hx-get="/api/v1/auth/authorize"
+                hx-target="#auth-result">
+            Connect Spotify Account
+        </button>
+        
+        <div id="auth-result" class="result-area"></div>
+    </div>
+
+    <div class="auth-info">
+        <h2>OAuth Flow</h2>
+        <ol>
+            <li>Click "Connect Spotify Account" to get the authorization URL</li>
+            <li>Visit the URL and authorize the application</li>
+            <li>Copy the authorization code from the callback URL</li>
+            <li>Paste it in the form below to get your access token</li>
+        </ol>
+    </div>
+
+    <div class="token-section">
+        <h2>Exchange Authorization Code</h2>
+        <form id="token-form" 
+              hx-get="/api/v1/auth/callback"
+              hx-target="#token-result">
+            <div class="form-group">
+                <label for="code">Authorization Code</label>
+                <input type="text" id="code" name="code" placeholder="Paste authorization code here" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="state">State</label>
+                <input type="text" id="state" name="state" placeholder="State from authorization" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="code_verifier">Code Verifier</label>
+                <input type="text" id="code_verifier" name="code_verifier" placeholder="Code verifier from authorization" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Get Access Token</button>
+        </form>
+        
+        <div id="token-result" class="result-area"></div>
+    </div>
+</div>
+{% endblock %}

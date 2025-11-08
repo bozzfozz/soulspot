@@ -1,19 +1,19 @@
 """MusicBrainz response cache."""
 
-from typing import Any, Optional
+from typing import Any
 
 from soulspot.application.cache.base_cache import InMemoryCache
 
 
 class MusicBrainzCache:
     """Cache for MusicBrainz API responses.
-    
+
     This cache stores:
     - Recording lookups by ISRC
     - Recording search results
     - Release (album) lookups
     - Artist lookups
-    
+
     Cache keys are constructed from query parameters to ensure
     unique caching per request type.
     """
@@ -44,12 +44,12 @@ class MusicBrainzCache:
         """Make cache key for artist lookup."""
         return f"artist:{mbid}"
 
-    async def get_recording_by_isrc(self, isrc: str) -> Optional[dict[str, Any]]:
+    async def get_recording_by_isrc(self, isrc: str) -> dict[str, Any] | None:
         """Get cached recording by ISRC.
-        
+
         Args:
             isrc: ISRC code
-            
+
         Returns:
             Cached recording data or None
         """
@@ -58,7 +58,7 @@ class MusicBrainzCache:
 
     async def cache_recording_by_isrc(self, isrc: str, recording: dict[str, Any]) -> None:
         """Cache recording lookup by ISRC.
-        
+
         Args:
             isrc: ISRC code
             recording: Recording data from MusicBrainz
@@ -66,13 +66,13 @@ class MusicBrainzCache:
         key = self._make_recording_key(isrc)
         await self._cache.set(key, recording, self.RECORDING_TTL)
 
-    async def get_search_results(self, artist: str, title: str) -> Optional[list[dict[str, Any]]]:
+    async def get_search_results(self, artist: str, title: str) -> list[dict[str, Any]] | None:
         """Get cached search results.
-        
+
         Args:
             artist: Artist name
             title: Track title
-            
+
         Returns:
             Cached search results or None
         """
@@ -86,7 +86,7 @@ class MusicBrainzCache:
         results: list[dict[str, Any]],
     ) -> None:
         """Cache search results.
-        
+
         Args:
             artist: Artist name
             title: Track title
@@ -95,12 +95,12 @@ class MusicBrainzCache:
         key = self._make_search_key(artist, title)
         await self._cache.set(key, results, self.SEARCH_TTL)
 
-    async def get_release(self, mbid: str) -> Optional[dict[str, Any]]:
+    async def get_release(self, mbid: str) -> dict[str, Any] | None:
         """Get cached release.
-        
+
         Args:
             mbid: MusicBrainz release ID
-            
+
         Returns:
             Cached release data or None
         """
@@ -109,7 +109,7 @@ class MusicBrainzCache:
 
     async def cache_release(self, mbid: str, release: dict[str, Any]) -> None:
         """Cache release lookup.
-        
+
         Args:
             mbid: MusicBrainz release ID
             release: Release data from MusicBrainz
@@ -117,12 +117,12 @@ class MusicBrainzCache:
         key = self._make_release_key(mbid)
         await self._cache.set(key, release, self.RELEASE_TTL)
 
-    async def get_artist(self, mbid: str) -> Optional[dict[str, Any]]:
+    async def get_artist(self, mbid: str) -> dict[str, Any] | None:
         """Get cached artist.
-        
+
         Args:
             mbid: MusicBrainz artist ID
-            
+
         Returns:
             Cached artist data or None
         """
@@ -131,7 +131,7 @@ class MusicBrainzCache:
 
     async def cache_artist(self, mbid: str, artist: dict[str, Any]) -> None:
         """Cache artist lookup.
-        
+
         Args:
             mbid: MusicBrainz artist ID
             artist: Artist data from MusicBrainz
@@ -141,10 +141,10 @@ class MusicBrainzCache:
 
     async def invalidate_recording(self, isrc: str) -> bool:
         """Invalidate cached recording.
-        
+
         Args:
             isrc: ISRC code
-            
+
         Returns:
             True if invalidated, False if not found
         """
@@ -153,11 +153,11 @@ class MusicBrainzCache:
 
     async def invalidate_search(self, artist: str, title: str) -> bool:
         """Invalidate cached search results.
-        
+
         Args:
             artist: Artist name
             title: Track title
-            
+
         Returns:
             True if invalidated, False if not found
         """
@@ -170,7 +170,7 @@ class MusicBrainzCache:
 
     async def cleanup_expired(self) -> int:
         """Remove expired entries.
-        
+
         Returns:
             Number of entries removed
         """

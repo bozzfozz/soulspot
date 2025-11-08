@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SoulSpot Bridge{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Welcome to SoulSpot Bridge</h1>
+    
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Playlists</h3>
+            <p class="stat-number">{{ stats.playlists or 0 }}</p>
+            <a href="/ui/playlists" class="btn btn-primary">View Playlists</a>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Tracks</h3>
+            <p class="stat-number">{{ stats.tracks or 0 }}</p>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Downloads</h3>
+            <p class="stat-number">{{ stats.downloads or 0 }}</p>
+            <a href="/ui/downloads" class="btn btn-primary">View Downloads</a>
+        </div>
+        
+        <div class="stat-card">
+            <h3>Queue Size</h3>
+            <p class="stat-number">{{ stats.queue_size or 0 }}</p>
+        </div>
+    </div>
+
+    <div class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+            <a href="/ui/playlists/import" class="btn btn-large btn-primary">Import Playlist</a>
+            <a href="/ui/search" class="btn btn-large btn-secondary">Search Tracks</a>
+            <a href="/ui/auth" class="btn btn-large btn-secondary">Connect Spotify</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

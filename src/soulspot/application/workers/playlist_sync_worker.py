@@ -9,7 +9,7 @@ from soulspot.domain.ports import IPlaylistRepository, ISpotifyClient, ITrackRep
 
 class PlaylistSyncWorker:
     """Worker for processing playlist sync jobs in the background.
-    
+
     This worker:
     1. Monitors playlist sync queue
     2. Fetches playlist from Spotify
@@ -26,7 +26,7 @@ class PlaylistSyncWorker:
         track_repository: ITrackRepository,
     ) -> None:
         """Initialize playlist sync worker.
-        
+
         Args:
             job_queue: Job queue for background processing
             spotify_client: Client for Spotify API
@@ -46,10 +46,10 @@ class PlaylistSyncWorker:
 
     async def _handle_playlist_sync_job(self, job: Job) -> Any:
         """Handle a playlist sync job.
-        
+
         Args:
             job: Job to process
-            
+
         Returns:
             Sync result
         """
@@ -95,13 +95,13 @@ class PlaylistSyncWorker:
         max_retries: int = 2,
     ) -> str:
         """Enqueue a playlist sync job.
-        
+
         Args:
             playlist_id: Spotify playlist ID
             access_token: Spotify access token
             fetch_all_tracks: Whether to fetch all tracks
             max_retries: Maximum retry attempts
-            
+
         Returns:
             Job ID
         """
@@ -123,13 +123,13 @@ class PlaylistSyncWorker:
         max_retries: int = 2,
     ) -> list[str]:
         """Enqueue multiple playlist sync jobs.
-        
+
         Args:
             playlist_ids: Spotify playlist IDs
             access_token: Spotify access token
             fetch_all_tracks: Whether to fetch all tracks
             max_retries: Maximum retry attempts
-            
+
         Returns:
             List of job IDs
         """

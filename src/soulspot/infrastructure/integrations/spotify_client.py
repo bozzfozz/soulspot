@@ -85,12 +85,14 @@ class SpotifyClient(ISpotifyClient):
             "state": state,
             "code_challenge_method": "S256",
             "code_challenge": code_challenge,
-            "scope": " ".join([
-                "playlist-read-private",
-                "playlist-read-collaborative",
-                "user-library-read",
-                "user-read-private",
-            ]),
+            "scope": " ".join(
+                [
+                    "playlist-read-private",
+                    "playlist-read-collaborative",
+                    "user-library-read",
+                    "user-read-private",
+                ]
+            ),
         }
 
         return f"{self.AUTHORIZE_URL}?{urlencode(params)}"

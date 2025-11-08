@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Import Playlist - SoulSpot Bridge{% endblock %}
+
+{% block content %}
+<div class="import-playlist">
+    <h1>Import Spotify Playlist</h1>
+    
+    <form id="import-form" 
+          hx-post="/api/v1/playlists/import"
+          hx-target="#import-result"
+          hx-swap="innerHTML">
+        <div class="form-group">
+            <label for="playlist_id">Spotify Playlist ID or URL</label>
+            <input type="text" 
+                   id="playlist_id" 
+                   name="playlist_id" 
+                   placeholder="spotify:playlist:... or https://open.spotify.com/playlist/..."
+                   required>
+            <small>Enter a Spotify playlist ID or paste the full URL</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="access_token">Access Token</label>
+            <input type="text" 
+                   id="access_token" 
+                   name="access_token" 
+                   placeholder="Your Spotify access token"
+                   required>
+            <small>Get a token by connecting your Spotify account</small>
+            <a href="/ui/auth" class="btn btn-small btn-link">Connect Spotify</a>
+        </div>
+        
+        <div class="form-group checkbox">
+            <label>
+                <input type="checkbox" name="fetch_all_tracks" checked>
+                Fetch all tracks in the playlist
+            </label>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-large">Import Playlist</button>
+    </form>
+    
+    <div id="import-result" class="result-area"></div>
+</div>
+{% endblock %}

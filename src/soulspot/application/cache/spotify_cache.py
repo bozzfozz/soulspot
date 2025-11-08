@@ -1,18 +1,18 @@
 """Spotify metadata cache."""
 
-from typing import Any, Optional
+from typing import Any
 
 from soulspot.application.cache.base_cache import InMemoryCache
 
 
 class SpotifyCache:
     """Cache for Spotify API responses.
-    
+
     This cache stores:
     - Track metadata
     - Playlist metadata
     - Search results
-    
+
     Cache keys are constructed from Spotify IDs to ensure
     unique caching per resource.
     """
@@ -38,12 +38,12 @@ class SpotifyCache:
         """Make cache key for search results."""
         return f"search:{query}:{limit}"
 
-    async def get_track(self, track_id: str) -> Optional[dict[str, Any]]:
+    async def get_track(self, track_id: str) -> dict[str, Any] | None:
         """Get cached track metadata.
-        
+
         Args:
             track_id: Spotify track ID
-            
+
         Returns:
             Cached track data or None
         """
@@ -52,7 +52,7 @@ class SpotifyCache:
 
     async def cache_track(self, track_id: str, track: dict[str, Any]) -> None:
         """Cache track metadata.
-        
+
         Args:
             track_id: Spotify track ID
             track: Track data from Spotify
@@ -60,12 +60,12 @@ class SpotifyCache:
         key = self._make_track_key(track_id)
         await self._cache.set(key, track, self.TRACK_TTL)
 
-    async def get_playlist(self, playlist_id: str) -> Optional[dict[str, Any]]:
+    async def get_playlist(self, playlist_id: str) -> dict[str, Any] | None:
         """Get cached playlist metadata.
-        
+
         Args:
             playlist_id: Spotify playlist ID
-            
+
         Returns:
             Cached playlist data or None
         """
@@ -74,7 +74,7 @@ class SpotifyCache:
 
     async def cache_playlist(self, playlist_id: str, playlist: dict[str, Any]) -> None:
         """Cache playlist metadata.
-        
+
         Args:
             playlist_id: Spotify playlist ID
             playlist: Playlist data from Spotify
@@ -82,13 +82,13 @@ class SpotifyCache:
         key = self._make_playlist_key(playlist_id)
         await self._cache.set(key, playlist, self.PLAYLIST_TTL)
 
-    async def get_search_results(self, query: str, limit: int = 10) -> Optional[dict[str, Any]]:
+    async def get_search_results(self, query: str, limit: int = 10) -> dict[str, Any] | None:
         """Get cached search results.
-        
+
         Args:
             query: Search query
             limit: Number of results
-            
+
         Returns:
             Cached search results or None
         """
@@ -102,7 +102,7 @@ class SpotifyCache:
         limit: int = 10,
     ) -> None:
         """Cache search results.
-        
+
         Args:
             query: Search query
             results: Search results from Spotify
@@ -113,10 +113,10 @@ class SpotifyCache:
 
     async def invalidate_track(self, track_id: str) -> bool:
         """Invalidate cached track.
-        
+
         Args:
             track_id: Spotify track ID
-            
+
         Returns:
             True if invalidated, False if not found
         """
@@ -125,10 +125,10 @@ class SpotifyCache:
 
     async def invalidate_playlist(self, playlist_id: str) -> bool:
         """Invalidate cached playlist.
-        
+
         Args:
             playlist_id: Spotify playlist ID
-            
+
         Returns:
             True if invalidated, False if not found
         """
@@ -137,11 +137,11 @@ class SpotifyCache:
 
     async def invalidate_search(self, query: str, limit: int = 10) -> bool:
         """Invalidate cached search results.
-        
+
         Args:
             query: Search query
             limit: Number of results
-            
+
         Returns:
             True if invalidated, False if not found
         """
@@ -154,7 +154,7 @@ class SpotifyCache:
 
     async def cleanup_expired(self) -> int:
         """Remove expired entries.
-        
+
         Returns:
             Number of entries removed
         """
