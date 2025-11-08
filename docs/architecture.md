@@ -1,4 +1,6 @@
-## 1. Ziel-Architektur: Backend (neutral)
+# Ziel-Architektur: Backend & UI
+
+## 1. Ziel-Architektur: Backend
 
 ### 1.1 Architektur-Prinzipien
 
@@ -20,14 +22,14 @@
 
 3. **Single Responsibility**
    - Jede Klasse/Funktion/Modul hat eine klar definierte Hauptverantwortung.
-   - Keine „God Objects“ oder Sammel-Module wie misc.py/helpers.py mit gemischten Aufgaben.
+   - Keine „God Objects“ oder Sammel-Module wie `misc.py` / `helpers.py` mit gemischten Aufgaben.
 
 4. **Domain-Driven Design (taktisch)**
    - Fachlogik im Domain-Layer gekapselt:
      - Entities: enthalten Identität und fachliche Invarianten.
      - Value Objects: wertebasierte Objekte ohne Identität.
      - Domain-Services: fachliche Operationen über mehrere Entities.
-   - Domain-Layer ist unabhängig von technischen Details (keine ORM-Annotations, keine HTTP- oder Cache-Aufrufe).
+   - Domain-Layer ist unabhängig von technischen Details (keine ORM-Annotations, keine HTTP-/Cache-Aufrufe).
 
 5. **SOLID-Prinzipien**
    - SRP: Eine Verantwortlichkeit pro Einheit.
@@ -37,17 +39,18 @@
    - DIP: Abhängigkeiten auf Abstraktionen gerichtet.
 
 6. **12-Factor-App (angepasst)**
-   - Konfiguration über Environment-Variablen (APP_ENV, DATABASE_URL, CACHE_URL, OAUTH_CLIENT_ID, …).
+   - Konfiguration über Environment-Variablen (`APP_ENV`, `DATABASE_URL`, `CACHE_URL`, `OAUTH_CLIENT_ID`, …).
    - Logs als stdout/stderr-kompatible Text- oder JSON-Ausgabe.
    - Build / Release / Run sind getrennte Concerns.
    - Externe Services sind austauschbar und werden über Konfiguration und Ports angebunden.
 
 7. **Profile / Betriebsmodi**
    - Profilbasiertes Verhalten:
-     - simple: Minimalsetup (SQLite, kein externer Cache, keine Queue).
-     - standard: erweitertes Setup (z. B. PostgreSQL, Cache, Queue, Worker).
+     - `simple`: Minimalsetup (SQLite, kein externer Cache, keine Queue).
+     - `standard`: erweitertes Setup (z. B. PostgreSQL, Cache, Queue, Worker).
    - Profile beeinflussen Implementierung von Ports, aber nicht die logische Architektur.
 
+---
 
 ### 1.2 Schichten-Architektur (logisch)
 
@@ -98,28 +101,27 @@
     │  └──────────────┘  └──────────────┘  └──────────────┘      │
     └─────────────────────────────────────────────────────────────┘
 
+---
 
-### 1.3 Ordnerstruktur (neutral, Beispiel-Pattern)
-
-Hinweis: Struktur ist ein Ziel-Pattern. Konkrete Module/Dateien werden erweitert, solange die Layer- und Namensregeln eingehalten werden.
+### 1.3 Ordnerstruktur (Ziel-Pattern)
 
     project-root/
     ├── pyproject.toml
     ├── src/
-    │   ├── myapp/                          # Applikations-Namespace
+    │   ├── soulspot/                     # Applikations-Namespace
     │   │   ├── __init__.py
-    │   │   ├── main.py                     # Application Entry (FastAPI-App)
+    │   │   ├── main.py                   # Application Entry (FastAPI-App)
     │   │   │
-    │   │   ├── api/                        # Presentation Layer - REST API
+    │   │   ├── api/                      # Presentation Layer - REST API
     │   │   │   ├── v1/
     │   │   │   │   ├── items.py
     │   │   │   │   ├── users.py
     │   │   │   │   └── system.py
     │   │   │   │   # weitere Endpoints: <feature>.py
-    │   │   │   └── schemas/                # Pydantic-Schemas (Request/Response)
+    │   │   │   └── schemas/              # Pydantic-Schemas (Request/Response)
     │   │   │       └── base.py
     │   │   │
-    │   │   ├── ui/                         # Presentation Layer - Web UI
+    │   │   ├── ui/                       # Presentation Layer - Web UI
     │   │   │   ├── templates/
     │   │   │   │   ├── layouts/
     │   │   │   │   │   ├── base.j2
@@ -173,17 +175,17 @@ Hinweis: Struktur ist ein Ziel-Pattern. Konkrete Module/Dateien werden erweitert
     │   │   │       ├── __init__.py
     │   │   │       └── ui_routes.py
     │   │   │
-    │   │   ├── application/                # Application Layer
-    │   │   │   ├── commands/               # Schreib-Use-Cases
+    │   │   ├── application/              # Application Layer
+    │   │   │   ├── commands/             # Schreib-Use-Cases
     │   │   │   │   └── create_item.py
-    │   │   │   ├── queries/                # Lese-Use-Cases
+    │   │   │   ├── queries/              # Lese-Use-Cases
     │   │   │   │   └── list_items.py
     │   │   │   ├── dto/
     │   │   │   │   └── item_dto.py
-    │   │   │   └── interfaces/             # Application-spezifische Ports
+    │   │   │   └── interfaces/           # Application-spezifische Ports
     │   │   │       └── scheduler_port.py
     │   │   │
-    │   │   ├── domain/                     # Domain Layer
+    │   │   ├── domain/                   # Domain Layer
     │   │   │   ├── entities/
     │   │   │   │   └── item.py
     │   │   │   ├── value_objects/
@@ -239,12 +241,14 @@ Hinweis: Struktur ist ein Ziel-Pattern. Konkrete Module/Dateien werden erweitert
     │   └── fixtures/
     │
     ├── docs/
+    │   └── soulspot-style-guide.md
     └── docker/
 
+---
 
-### 1.4 Technologie-Stack (aktualisiert, SQLite-basiert)
+### 1.4 Technologie-Stack (SQLite-fokussiert)
 
-Core Framework
+**Core Framework**
 
 - Python 3.12+
 - FastAPI 0.115+ (ASGI, async, type-safe)
@@ -252,19 +256,19 @@ Core Framework
 - Uvicorn 0.31+ (ASGI-Server)
 - HTTPX 0.28+ (async HTTP-Client)
 
-Database & ORM
+**Database & ORM**
 
-- SQLite (eingebettete, zuverlässige relationale Datenbank, Standard für simple-Profil)
+- SQLite (eingebettete, zuverlässige relationale Datenbank, Standard für `simple`-Profil)
 - SQLAlchemy 2.0+ (Async ORM)
 - Alembic 1.14+ (DB-Migrationen, kompatibel mit SQLite)
-- asyncpg 0.29+ (optional, nur für PostgreSQL-basierte Profile)
+- asyncpg 0.29+ (optional, nur für PostgreSQL-basierte Profiles im `standard`-Modus)
 
-Task Queue & Workers
+**Task Queue & Workers**
 
 - Celery 5.4+ oder Dramatiq 1.15+ (Distributed Task Queue; In-Memory- oder Redis-Broker möglich)
 - APScheduler 3.10+ (optionale zeitgesteuerte Tasks, falls ohne Queue gearbeitet wird)
 
-Testing
+**Testing**
 
 - pytest 8.3+
 - pytest-asyncio 0.24+
@@ -272,7 +276,7 @@ Testing
 - factory_boy 3.3+
 - httpx-mock 0.26+ (Mocking externer HTTP-Aufrufe)
 
-Code Quality
+**Code Quality**
 
 - ruff 0.7+ (Linter & Formatter)
 - mypy 1.13+ (statisches Typing)
@@ -281,115 +285,105 @@ Code Quality
 - pre-commit 3.8+ (Hook-Manager)
 - coverage.py 7.6+ (Testabdeckung)
 
+---
 
 ### 1.5 Erweiterbarkeit (Backend)
 
-1.5.1 Allgemeine Regeln
+**Allgemeine Regeln**
 
-- Die Architektur beschreibt Struktur und Regeln, nicht jede einzelne Datei.
+- Architektur definiert Struktur und Regeln, nicht jede Datei.
 - Neue Features werden innerhalb der bestehenden Layer und Namenskonventionen ergänzt.
 - Wenn ein Feature nicht sauber in das vorhandene Modell passt:
   - zuerst Versuch, das Feature in die bestehende Struktur einzuordnen,
-  - nur falls nicht möglich, Anpassung der Ziel-Architektur-Version.
+  - nur falls nicht möglich, Anpassung der Architektur-Version.
 
-Architektur-Version mit SemVer:
+Architektur-Versionierung (SemVer):
 
-- Patch (x.y.Z): Präzisierungen, Beispiele, kleinere Regeln, keine Strukturänderung.
+- Patch (x.y.Z): Präzisierungen, Beispiele, kleinere Regeln.
 - Minor (x.Y.z): neue Module/Patterns innerhalb existierender Layer.
-- Major (X.y.z): neue Layer, grundlegend andere Struktur, Microservices-Abspaltung.
+- Major (X.y.z): neue Layer, grundlegende Strukturänderungen, Abspaltung in Services.
 
-1.5.2 Neue Features
+**Neue Features**
 
-- Neue API-Endpoints:
-  - Ort: api/v1/<feature>.py
-  - HTTP-spezifische Logik (Parsing, Statuscodes, Auth).
-  - Ruft Application-Use-Cases auf (application/commands|queries).
-  - Kein direkter DB- oder Integrationszugriff.
-- Neue UI-Seiten (server-gerendert):
-  - Ort: ui/templates/pages/<feature>.j2
-  - Optional neue Partials/Components:
-    - ui/templates/partials/
-    - ui/templates/components/
-  - Kontext: ui/context/<feature>_context.py
-  - Routing: ui/routes/ui_routes.py oder Submodul.
-- Neue Use-Cases:
-  - commands: application/commands/<feature>_*.py
-  - queries: application/queries/<feature>_*.py
+- API-Endpoints:
+  - `src/soulspot/api/v1/<feature>.py`
+  - Enthält nur HTTP-spezifische Logik.
+  - Ruft Application-Use-Cases auf, kein direkter DB-/Integrationszugriff.
+- Use-Cases:
+  - Commands: `application/commands/<feature>_*.py`
+  - Queries: `application/queries/<feature>_*.py`
   - Eng verwandte Use-Cases in einer Datei.
-  - Kommunikation über Ports mit Domain/Infrastructure.
-  - Kein direkter Zugriff auf ORM-Models oder HTTP-Clients.
-- Neue Domain-Modelle:
-  - Entität: domain/entities/<entity_name>.py
-  - Value Objects, Events, Exceptions ebenfalls im Domain-Layer.
-  - Ports: domain/ports/<purpose>_port.py
-  - Domain-Entitäten kennen keine Infrastruktur-Typen.
-- Neue Integrationen (externe Systeme):
-  - Ort: infrastructure/integrations/<system_name>/
-  - Client-Implementierung + Adapter, der Domain-Port implementiert.
-  - Konfiguration über Settings/Environment.
+- Domain-Modelle:
+  - Entities: `domain/entities/<entity>.py`
+  - Value Objects, Events, Exceptions im Domain-Layer.
+  - Ports: `domain/ports/<purpose>_port.py`
+- Integrationen:
+  - `infrastructure/integrations/<system_name>/`
+  - Adapter implementieren Domain-Ports.
+  - Konfiguration über Settings.
 
-1.5.3 Profile / Betriebsmodi erweitern
+**Profile**
 
-- Neue Profile (z. B. enterprise) in config/settings.py modellieren.
-- Profile entscheiden, welche Implementierung eines Ports gebunden wird:
-  - simple: SQLiteItemRepository (SQLite)
-  - standard: PostgresItemRepository (PostgreSQL + asyncpg)
-- Architektur bleibt identisch, nur DI/Wiring wird angepasst.
+- `simple`: SQLite, keine externe Queue, kein externer Cache.
+- `standard`: z. B. PostgreSQL, Redis, Celery/Dramatiq.
+- Profile binden unterschiedliche Implementierungen an dieselben Ports (DI-Konfiguration / Composition Root).
 
-1.5.4 Refactoring-Regeln
+**Refactoring-Regeln**
 
 - Erlaubt:
-  - Aufteilen übergroßer Module in kleinere innerhalb desselben Layers.
-  - Umbenennen von Modulen/Packages mit Anpassung der Imports.
-  - Verschieben technischer Details aus Application/Domain nach Infrastructure.
+  - Module innerhalb eines Layers aufteilen oder umbenennen.
+  - Technische Details aus Application/Domain nach Infrastructure verschieben.
 - Nicht erlaubt ohne Architektur-Update:
   - Direktzugriff von Presentation auf Infrastructure.
-  - Verschieben von Domain-Logik in Infrastructure oder Presentation.
-- Größere Strukturänderungen:
-  - müssen im Architektur-Dokument beschrieben und versioniert werden
-  - z. B. Einführung eines separaten Integration-Layers zwischen Application und Infrastructure.
+  - Domain-Logik in Infrastructure oder Presentation verschieben.
 
-1.5.5 Anti-Patterns
+**Anti-Patterns**
 
-- Logik-Verkettung quer durch alle Schichten innerhalb eines Moduls.
-- „Schneller Fix“ direkt im Endpoint mit DB-Abfragen und externen API-Calls.
-- Wild wachsendes shared/utils als Sammelbecken für Business-Logik.
-- Verwendung von Infrastruktur-Typen (ORM-Models, HTTP-Response-Objekte) im Domain-Layer.
+- „Schnelle“ Direktzugriffe auf DB/API im Endpoint.
+- Business-Logik in `shared/utils`.
+- Infrastruktur-Typen (ORM-Models, HTTP-Responses) im Domain-Layer.
 
+---
 
-## 2. Ziel-Architektur: UI (neutral)
+## 2. Ziel-Architektur: UI
 
 ### 2.1 Architektur-Prinzipien
 
-1. Component-Driven Development
+0. **Design System Source of Truth**
+   - Alle UI-Komponenten (`ui/templates/components`, `ui/templates/pages`, `ui/static/css/components`) implementieren das zentrale Design-System gemäß  
+     **Style Guide & Design System – Version 1.0.0** (`docs/soulspot-style-guide.md`).
+   - Änderungen an Farben, Typografie, Spacing, Breakpoints und Komponenten-APIs erfolgen im Style Guide und werden von dort in den Code übertragen.
+
+1. **Component-Driven Development**
    - UI als Sammlung wiederverwendbarer Komponenten.
    - Trennung zwischen Seiten, Layouts, Komponenten, Partials.
 
-2. Design-System-First
+2. **Design-System-First**
    - Zentrales Set an Design-Tokens (Farben, Typografie, Spacing, Radius, Schatten).
    - Komponenten referenzieren Tokens, keine Hardcodings.
 
-3. Progressive Enhancement
+3. **Progressive Enhancement**
    - Kernfunktionen funktionieren ohne JavaScript (Server-Rendering).
    - HTMX und leichtgewichtiges JS verbessern Interaktion und Performance.
 
-4. Accessibility-First
+4. **Accessibility-First**
    - Ziel: WCAG AA.
    - Semantisches HTML, ARIA-Attribute, Fokus-Management.
 
-5. Performance-Budgets
+5. **Performance-Budgets**
    - Obergrenzen für CSS- und JS-Bundle-Größen.
    - Vermeidung unnötig schwerer Frontend-Frameworks.
 
-6. Mobile-First
-   - Layout von kleinen Screens nach oben gedacht.
+6. **Mobile-First**
+   - Layout von kleinen Screens nach oben.
    - Breakpoints als Tokens definiert.
 
+---
 
-### 2.2 UI-Struktur (konsistent mit 1.3)
+### 2.2 UI-Struktur
 
     src/
-      myapp/
+      soulspot/
         ui/
           templates/
             layouts/
@@ -447,157 +441,165 @@ Architektur-Version mit SemVer:
             __init__.py
             ui_routes.py
 
+---
 
 ### 2.3 Design-System & CSS
 
-Design-Tokens (in static/css/_tokens.css):
+- Design-Tokens (Farben, Spacing, Typography, Breakpoints) werden ausschließlich in `static/css/_tokens.css` definiert.
+- Die fachliche und visuelle Bedeutung der Tokens ist im **Style Guide & Design System – Version 1.0.0** dokumentiert (`docs/soulspot-style-guide.md`).
+- Komponenten-CSS-Dateien unter `static/css/components/` verwenden nur diese Tokens, keine direkten Farb- oder Pixelwerte.
 
-    :root {
-      /* Colors - Primary */
-      --color-primary-500: #0ea5e9;
+Beispiel `static/css/_tokens.css` (Auszug):
 
-      /* Spacing (4px-Grid) */
-      --spacing-1: 0.25rem;  /* 4px */
-      --spacing-2: 0.5rem;   /* 8px */
-      --spacing-3: 0.75rem;  /* 12px */
-      --spacing-4: 1rem;     /* 16px */
+```css
+:root {
+  /* Colors - Primary */
+  --color-primary-500: #0ea5e9;
 
-      /* Typography */
-      --font-size-base: 1rem;
-      --font-size-sm: 0.875rem;
-      --font-size-lg: 1.125rem;
-      --font-weight-normal: 400;
-      --font-weight-semibold: 600;
-      --line-height-normal: 1.5;
+  /* Spacing (4px-Grid) */
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
 
-      /* Border-Radius */
-      --radius-sm: 0.125rem;
-      --radius-md: 0.25rem;
-      --radius-lg: 0.5rem;
+  /* Typography */
+  --font-size-base: 1rem;
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+  --line-height-normal: 1.5;
 
-      /* Shadows */
-      --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    }
+  /* Border-Radius */
+  --radius-md: 0.25rem;
 
-CSS-Struktur:
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+```
 
-- _tokens.css: Tokens
-- _reset.css: Reset/Normalize
-- _typography.css: Grundtypografie
-- _layout.css: Layout / Grids / Container
-- _utilities.css: Hilfsklassen (Spacing, Flex, Text)
-- components/_*.css: komponentenspezifische Styles
-- app.css: zentraler Entry-Point
+Beispiel Button-Styles `static/css/components/_buttons.css`:
 
-Beispiel Button-Styles (static/css/components/_buttons.css):
+```css
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: var(--spacing-2) var(--spacing-4);
-      font-size: var(--font-size-base);
-      font-weight: var(--font-weight-semibold);
-      border-radius: var(--radius-md);
-      border: none;
-      cursor: pointer;
-      box-shadow: var(--shadow-sm);
-      transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
-    }
+.btn-primary {
+  background-color: var(--color-primary-500);
+  color: white;
+}
 
-    .btn-primary {
-      background-color: var(--color-primary-500);
-      color: white;
-    }
+.btn-primary:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
 
-    .btn-primary:hover {
-      box-shadow: var(--shadow-md);
-      transform: translateY(-1px);
-    }
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+```
 
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-
+---
 
 ### 2.4 Komponenten (Jinja-Macros)
 
-Buttons-Komponente (ui/templates/components/buttons.j2):
+Buttons-Komponente `ui/templates/components/buttons.j2`:
 
-    {% macro button(
-      text,
-      variant="primary",
-      size="md",
-      type="button",
-      disabled=False,
-      aria_label=None
-    ) %}
-      <button
-        type="{{ type }}"
-        class="btn btn-{{ variant }} btn-{{ size }}"
-        {% if disabled %}disabled{% endif %}
-        {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
-      >
-        {{ text }}
-      </button>
-    {% endmacro %}
+```jinja
+{% macro button(
+  text,
+  variant="primary",
+  size="md",
+  type="button",
+  disabled=False,
+  aria_label=None
+) %}
+  <button
+    type="{{ type }}"
+    class="btn btn-{{ variant }} btn-{{ size }}"
+    {% if disabled %}disabled{% endif %}
+    {% if aria_label %}aria-label="{{ aria_label }}"{% endif %}
+  >
+    {{ text }}
+  </button>
+{% endmacro %}
+```
 
-Verwendung (ui/templates/pages/home.j2):
+Verwendung `ui/templates/pages/home.j2`:
 
-    {% import "components/buttons.j2" as buttons %}
+```jinja
+{% import "components/buttons.j2" as buttons %}
 
-    <section class="hero">
-      <h1>Example App</h1>
-      {{ buttons.button("Aktion ausführen", variant="primary", type="submit") }}
-    </section>
+<section class="hero">
+  <h1>Welcome</h1>
+  {{ buttons.button("Aktion ausführen", variant="primary", type="submit") }}
+</section>
+```
 
+---
 
 ### 2.5 HTMX-Patterns
 
-Fragment-Loading-Pattern (ui/templates/partials/status_block.j2):
+Fragment-Loading-Pattern `ui/templates/partials/status_block.j2`:
 
-    <section id="status-block"
-             hx-get="/ui/status/fragment"
-             hx-trigger="load, every 30s"
-             hx-swap="outerHTML">
-      <p>Lädt Status...</p>
-    </section>
+```jinja
+<section id="status-block"
+         hx-get="/ui/status/fragment"
+         hx-trigger="load, every 30s"
+         hx-swap="outerHTML">
+  <p>Lädt Status...</p>
+</section>
+```
 
 Form-Submit-Pattern:
 
-    <form
-      hx-post="/ui/items/create"
-      hx-target="#items-list"
-      hx-swap="innerHTML"
-    >
-      <!-- Form-Felder -->
-      <button class="btn btn-primary" type="submit">
-        Speichern
-      </button>
-    </form>
+```html
+<form
+  hx-post="/ui/items/create"
+  hx-target="#items-list"
+  hx-swap="innerHTML"
+>
+  <!-- Form-Felder -->
+  <button class="btn btn-primary" type="submit">
+    Speichern
+  </button>
+</form>
+```
 
+---
 
 ### 2.6 Accessibility-Ansatz
 
-Modal-Beispiel mit ARIA:
+Modal mit ARIA:
 
-    <div class="modal"
-         role="dialog"
-         aria-modal="true"
-         aria-labelledby="modal-title"
-         aria-describedby="modal-description">
-      <div class="modal-content">
-        <h2 id="modal-title">Bestätigung</h2>
-        <p id="modal-description">Bist du sicher, dass du fortfahren möchtest?</p>
-        <button class="btn btn-secondary" type="button" aria-label="Modal schließen">
-          ×
-        </button>
-      </div>
-    </div>
+```html
+<div class="modal"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="modal-title"
+     aria-describedby="modal-description">
+  <div class="modal-content">
+    <h2 id="modal-title">Bestätigung</h2>
+    <p id="modal-description">Bist du sicher, dass du fortfahren möchtest?</p>
+    <button class="btn btn-secondary" type="button" aria-label="Modal schließen">
+      ×
+    </button>
+  </div>
+</div>
+```
 
 Anforderungen:
 
@@ -606,41 +608,43 @@ Anforderungen:
 - Escape schließt Modal.
 - Tab-Reihenfolge vollständig und logisch.
 
+---
 
 ### 2.7 Erweiterbarkeit (UI)
 
-2.7.1 Neue Seiten
+Neue Seiten:
 
-- Ort: ui/templates/pages/<feature>.j2
-- Layout: nutzt ein Layout aus ui/templates/layouts/.
-- Kontext: ui/context/<feature>_context.py
-- Routing: zusätzlicher Pfad in ui/routes/ui_routes.py.
+- `ui/templates/pages/<feature>.j2`
 
-2.7.2 Neue UI-Komponenten
+Kontext:
 
-- Ort: ui/templates/components/<component_name>.j2
-- Regeln:
-  - Macro pro Komponente oder eng verwandte Varianten.
-  - Parameter für Text, Variante, Größe, A11y.
-- Styling:
-  - static/css/components/_<component_name>.css
-  - Nutzung der Design-Tokens.
+- `ui/context/<feature>_context.py`
 
-2.7.3 Neue Partials / HTMX-Fragmente
+Routing:
 
-- Ort: ui/templates/partials/<feature>_<fragment>.j2
-- Routing: dedizierte Endpoints wie /ui/<feature>/fragment.
-- Inhalt: nur der benötigte Ausschnitt (kein komplettes Layout).
+- `ui/routes/ui_routes.py`
 
-2.7.4 Erweiterung des Design-Systems
+Neue Komponenten:
 
-- Neue Tokens in _tokens.css ergänzen.
-- Eindeutige, semantische Namen (z. B. --color-accent-500).
-- Änderungen an bestehenden Tokens als potenziell „breaking“ betrachten und versionieren.
+- `ui/templates/components/<component>.j2`
 
-2.7.5 UI-Anti-Patterns
+Styles:
 
-- Inline-Styles statt zentralem CSS.
-- Harte Farb-/Spacingwerte ohne Tokens.
-- Komponenten, die Business-Logik, Layout und Fetching mischen.
-- Einsatz schwerer Frontend-Frameworks zusätzlich zu Server-Rendering/HTMX ohne klaren Nutzen.
+- `static/css/components/_<component>.css`
+
+Tokens ausschließlich aus `_tokens.css`.
+
+Neue Partials / HTMX-Fragmente:
+
+- `ui/templates/partials/<feature>_<fragment>.j2`
+
+Endpoints:
+
+- `/ui/<feature>/fragment`
+
+Anpassungen am Design-System:
+
+- In `docs/soulspot-style-guide.md`
+- Danach Abgleich der Tokens in `_tokens.css` und Komponenten-Styles.
+
+---
