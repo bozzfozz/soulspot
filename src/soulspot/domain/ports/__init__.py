@@ -16,12 +16,12 @@ class IArtistRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, artist_id: ArtistId) -> Optional[Artist]:
+    async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
         pass
 
     @abstractmethod
-    async def get_by_name(self, name: str) -> Optional[Artist]:
+    async def get_by_name(self, name: str) -> Artist | None:
         """Get an artist by name."""
         pass
 
@@ -50,7 +50,7 @@ class IAlbumRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, album_id: AlbumId) -> Optional[Album]:
+    async def get_by_id(self, album_id: AlbumId) -> Album | None:
         """Get an album by ID."""
         pass
 
@@ -79,7 +79,7 @@ class ITrackRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, track_id: TrackId) -> Optional[Track]:
+    async def get_by_id(self, track_id: TrackId) -> Track | None:
         """Get a track by ID."""
         pass
 
@@ -113,7 +113,7 @@ class IPlaylistRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, playlist_id: PlaylistId) -> Optional[Playlist]:
+    async def get_by_id(self, playlist_id: PlaylistId) -> Playlist | None:
         """Get a playlist by ID."""
         pass
 
@@ -142,12 +142,12 @@ class IDownloadRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_id(self, download_id: DownloadId) -> Optional[Download]:
+    async def get_by_id(self, download_id: DownloadId) -> Download | None:
         """Get a download by ID."""
         pass
 
     @abstractmethod
-    async def get_by_track(self, track_id: TrackId) -> Optional[Download]:
+    async def get_by_track(self, track_id: TrackId) -> Download | None:
         """Get a download by track ID."""
         pass
 

@@ -22,8 +22,8 @@ class Artist:
 
     id: ArtistId
     name: str
-    spotify_uri: Optional[SpotifyUri] = None
-    musicbrainz_id: Optional[str] = None
+    spotify_uri: SpotifyUri | None = None
+    musicbrainz_id: str | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -47,10 +47,10 @@ class Album:
     id: AlbumId
     title: str
     artist_id: ArtistId
-    release_year: Optional[int] = None
-    spotify_uri: Optional[SpotifyUri] = None
-    musicbrainz_id: Optional[str] = None
-    artwork_path: Optional[FilePath] = None
+    release_year: int | None = None
+    spotify_uri: SpotifyUri | None = None
+    musicbrainz_id: str | None = None
+    artwork_path: FilePath | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -74,14 +74,14 @@ class Track:
     id: TrackId
     title: str
     artist_id: ArtistId
-    album_id: Optional[AlbumId] = None
+    album_id: AlbumId | None = None
     duration_ms: int = 0
-    track_number: Optional[int] = None
+    track_number: int | None = None
     disc_number: int = 1
-    spotify_uri: Optional[SpotifyUri] = None
-    musicbrainz_id: Optional[str] = None
-    isrc: Optional[str] = None
-    file_path: Optional[FilePath] = None
+    spotify_uri: SpotifyUri | None = None
+    musicbrainz_id: str | None = None
+    isrc: str | None = None
+    file_path: FilePath | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -119,9 +119,9 @@ class Playlist:
 
     id: PlaylistId
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     source: PlaylistSource = PlaylistSource.MANUAL
-    spotify_uri: Optional[SpotifyUri] = None
+    spotify_uri: SpotifyUri | None = None
     track_ids: list[TrackId] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -171,12 +171,12 @@ class Download:
     id: DownloadId
     track_id: TrackId
     status: DownloadStatus = DownloadStatus.PENDING
-    target_path: Optional[FilePath] = None
-    source_url: Optional[str] = None
+    target_path: FilePath | None = None
+    source_url: str | None = None
     progress_percent: float = 0.0
-    error_message: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
