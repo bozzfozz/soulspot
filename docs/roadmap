@@ -1,0 +1,290 @@
+# SoulSpot 0.1 – Architektur- & Feature-Roadmap
+
+---
+
+## 0. Überblick & Projektkontext
+
+- Projekt: SoulSpot  
+- Version: 0.1.0  
+- Ziel: Produktionsreife Musik-Download-Anwendung mit klarer Trennung von Kern- und Future-Features.  
+- Kernannahme: Architektur entspricht `docs/architecture.md`; UI/Design entspricht `docs/soulspot-style-guide.md`.
+
+Profile (operativ)
+- **simple**: Minimaler Betrieb (Single-host, lokale Dateien, SQLite).  
+- **standard**: Produktionsbetrieb (getrennte Worker, persistent Broker, optional Objekt-Storage).
+
+Profil-Auswahl  
+- Über Umgebungsvariable `PROFILE=simple | standard` (Default: `simple`).
+
+Wichtig: Keine sensiblen Daten in Repos/Docs.
+
+---
+
+## 1. Prioritäten (betriebs- & architekturzentriert)
+
+1. Stabiler Architektur-Kern (Layered, DDD-taktisch, Ports/Adapters, Profile).  
+2. Zuverlässiges Worker-System (separate Prozesse für blocking tasks).  
+3. Vollständige Integrationen (Spotify, Soulseek/slskd, MusicBrainz) über abstrahierte Clients.  
+4. File-Management & Data Integrity (atomare Moves, Checksums, Retention).  
+5. Observability & Betrieb (Logging, Metrics, Backup/Restore, Alerts).  
+6. Security (Secrets Handling, Audit, Angriffsoberfläche minimieren).
+
+---
+
+## 2. Architekturprinzipien (Kurzfassung)
+
+- Layered Architecture: Presentation → Application → Domain → Infrastructure.  
+- Dependency Inversion: Domain/Application hängen nur von Abstraktionen.  
+- Taktisches DDD: Domain-Entities, Value Objects, Domain-Services, Domain-Events.  
+- Profile steuern Implementierungen (simple vs. standard).  
+- Blocking-/CPU-bound-Work immer außerhalb des request-eventloops ausführen.  
+- Schema-Änderungen erfolgen ausschließlich über Migrationen (Alembic), kein Direct-DDL.
+
+---
+
+## 3. Profile-spezifische Festlegungen
+
+### simple
+- DB: SQLite (Datei). Betriebsgrenzen beachten (WAL, Pragmas).  
+- Queue: keine externen Broker; einfache persistente Retry-Tabelle möglich.  
+- Storage: lokales Dateisystem für Artworks/Downloads.  
+- Einschränkungen: kein horizontales Scaling; geringere Durchsatz-Garantien.
+
+### standard
+- DB: PostgreSQL (Async-client).  
+- Broker: Redis (oder RabbitMQ) + Dramatiq/Celery.  
+- Storage: S3 / MinIO oder lokales FS mit Backup.  
+- Worker: dedizierte Prozesse für Download, Metadata, Artwork.  
+- DLQ: persistent im Broker/DB, Metriken & Alerts aktiv.
+
+Hinweis: Profile sind Implementierungs-Konfigurationen – Features selbst bleiben fachlich gleich.
+
+---
+
+## 4. Kernkomponenten & Verantwortlichkeiten
+
+### Presentation
+- FastAPI REST API (OpenAPI), Web-UI (Server-rendered Jinja2 + HTMX).  
+- Auth: OAuth (Spotify PKCE für Import), Session/JWT für UI/API.
+
+### Application
+- Commands / Queries (CQRS-inspirierte Handlers).  
+- Orchestrierung von Use-Cases, Transaktionen über UnitOfWork.
+
+### Domain
+- Entities: Artist, Album, Track, Playlist, Download.  
+- ValueObjects: ArtistId, FilePath, SpotifyUri.  
+- Domain-Services: Matching, Deduplication, Normalization.  
+- Domain-Events: TrackDownloaded, PlaylistSynced.
+
+### Infrastructure
+- Persistence Adapters (Profile-abhängig).  
+- Integrations:
+  - `ISpotifyClient` (Spotify Web API).  
+  - `ISoulseekClient` mit konkreter Implementierung `SlskdClient`, der die API von `slskd` nutzt ([slskd GitHub](https://github.com/slskd/slskd)).  
+  - `IMusicBrainzClient` (MusicBrainz + CoverArtArchive).  
+- Worker Manager & Worker Prozesse.  
+- FileOrganizationService, Tagging/Artwork Adapters.
+
+---
+
+## 5. Worker-/Task-Strategie (betriebsrelevant)
+
+- Schwere / blocking Tasks:
+  - Tag-Schreiben (mutagen), Bildbearbeitung (Pillow), lange Netzwerkdownloads → immer Worker-Prozess.  
+- Worker-Typen:
+  - **DownloadWorker**: Download, temp-file → atomic move, checksum.  
+  - **MetadataWorker**: MusicBrainz-Enrichment, Tag-Write, DB-Update.  
+  - **ArtworkWorker**: Artwork-Download, Resize, Store.  
+- Retry & DLQ:
+  - exponentielles Backoff, `maxAttempts` konfigurierbar, persistent DLQ (standard).  
+- Observability:
+  - Metriken: `queue_depth`, `retries`, `failures`, `throughput`.  
+  - Tracing/Logs: korrelierte request/trace ids.
+
+---
+
+## 6. Integrationen & Grenzfälle
+
+### Spotify
+- OAuth PKCE, minimal notwendige Scopes, sichere Token-Aufbewahrung (verschlüsselt).  
+- Playlist-Import → Application Service wandelt Playlist → Download-Jobs.
+
+### Soulseek über slskd
+
+Grundsatz:
+- SoulSpot spricht nicht direkt mit einem nativen Soulseek-Client, sondern ausschließlich mit `slskd` ([slskd GitHub](https://github.com/slskd/slskd)) als Soulseek-Bridge.  
+- `slskd` läuft als separater Dienst (Container/Service); SoulSpot verwendet dessen HTTP-/WebSocket-API.
+
+Abstraktion:
+- `ISoulseekClient` bildet Soulseek-Funktionalität generisch ab.  
+- `SlskdClient` implementiert `ISoulseekClient` und kapselt:
+  - Authentisierung gegenüber `slskd` (API-Key/Bearer o. Ä.).  
+  - Such-API (Tracks/Files suchen).  
+  - Download-Steuerung (Download starten, priorisieren, pausieren/abbrechen).  
+  - Status-Abfragen (Progress, Fehler, Queue-Status).
+
+API-Steuerung (erstes Ziel):
+- Endpoints und Payloads der `slskd`-API katalogisieren.  
+- Minimale Steuer-Usecases implementieren:
+  - `search(query)`: Abfrage und Mapping der Suchergebnisse in Domain-Objekte.  
+  - `enqueue_download(resource, target_path)`: Download-Job bei `slskd` anlegen.  
+  - `get_download_status(id)`: Status-Mapping (queued/running/completed/failed).  
+  - `cancel_download(id)`: optional, falls API verfügbar.  
+- Fehlerbilder verstehen und hart codierte Annahmen vermeiden:
+  - Timeouts, Verbindungsfehler, Rate-Limits.  
+  - Mapping von `slskd`-Fehlercodes auf eigene Error-Typen/Domain-Events.
+
+Betrieb:
+- Konfiguration von `slskd` (Host, Port, Auth) über Settings.  
+- Health-Checks:
+  - einfacher Ping/Status-Endpoint zur Überwachung.  
+- Logging:
+  - korrelierte IDs zwischen SoulSpot-Download und `slskd`-Job (z. B. `external_download_id`).
+
+### MusicBrainz / Artwork
+- MetadataEnrichment nach abgeschlossenem Download.  
+- Artwork-Quellen: CoverArtArchive, MusicBrainz, ggf. Spotify (nur Metadaten).  
+- Artwork de-duplizieren via checksum.
+
+### Externe API-Aufrufe
+- Rate limiting, Retry-Strategien, konfigurierbare Timeouts, optional Circuit-Breaker.  
+- Klare Trennung zwischen transienten Fehlern (Retry) und permanenten Fehlern (DLQ).
+
+---
+
+## 7. File-Organisation & Data-Handling
+
+- Struktur: `base_path / Artist / Album / Track - Title.ext` (konfigurierbar).  
+- Atomicität: Download → temp file → validate checksum/size → move to final path.  
+- Deduplication: SHA256 pro Datei, DB-Index.  
+- Tagging: nur nach erfolgreichem vollständigem Download, in Worker.  
+- Retention & Backups: Policy definiert; automatische Archivierung optional.
+
+---
+
+## 8. UI & Style-Guide (Referenz)
+
+- Der Style Guide ist zentral dokumentiert und wird im UI-Bereich der Roadmap nur verlinkt:  
+  - [docs/soulspot-style-guide.md](docs/soulspot-style-guide.md)
+
+Hinweis: Design-Entscheidungen aus dem Style Guide sind verbindlich für Konsistenz und Accessibility.
+
+---
+
+## 9. Security
+
+- Secrets: env oder Secrets Manager; niemals im Repository.  
+- API Auth: minimale Scopes, RBAC-ähnliche Trennung für Admin-Operationen.  
+- Dependency Scanning & Security Linting (policy-level).  
+- Network: least‑privilege für Integrationszugriffe.  
+- Schema-Migrationen unterliegen Code-Review-Pflicht.  
+- Audit-Logging für sicherheitsrelevante Operationen (z. B. Config-Änderungen).
+
+---
+
+## 10. Erfolgskriterien (operativ messbar)
+
+- Stabilität: System betreibt 1.0 Features ohne kritische Ausfälle im definierten Operating-Mode.  
+- Performance: p95 Read-API < 500 ms in `standard`; Write-Pfade asynchronisiert.  
+- Zuverlässigkeit: DLQ-Größe und Failure-Rate unter konfigurierbaren Schwellen.  
+- Observability: Metriken und Logs liefern ausreichende Einblicke, Alerts vorhanden.  
+- Security: Keine High/Critical Findings in Audit.  
+- Accessibility: WCAG AA für Kern-Flows.
+
+---
+
+## 11. Referenzprojekte & Code-Reuse
+
+Ziel: Vor der vollständigen Implementierung von Spotify- und slskd-Integration bestehende funktionierende Projekte analysieren und die funktionalen Patterns in SoulSpot übertragen, ohne deren Architektur 1:1 zu übernehmen.
+
+### 11.1 SoulSync (Nezreka/SoulSync)
+
+Repository: [https://github.com/Nezreka/SoulSync](https://github.com/Nezreka/SoulSync)
+
+Charakteristik
+- Python-Anwendung mit Desktop-GUI + Web UI.  
+- Nutzt `slskd` als Soulseek-Backend-Dienst und Spotify/Tidal/YouTube als Streaming-Quellen.  
+- Deckt viele Ziel-Features von SoulSpot ab (Playlist-Sync, File-Organisation, Lyrics, Wishlist, Media-Server-Scans).
+
+Lernziele für SoulSpot
+- **slskd-Integration**
+  - Welche `slskd`-Konfigurationsparameter und Ports im Docker-/Runtime-Setup genutzt werden.  
+  - Welche minimalen API-Aufrufe für Suche, Enqueue und Status-Abfrage notwendig sind.  
+  - Pattern: externe Soulseek-Engine (`slskd`) + eigene Orchestrierung darüber.
+- **Spotify-Integration**
+  - OAuth-Setup (Redirect-URI, Scopes, Token-Handling).  
+  - Playlists und Tracks so abholen, dass sie direkt in Download-Jobs überführbar sind.
+- **Automatisierungs-Pipeline**
+  - Reihenfolge: Playlist → fehlende Tracks → Soulseek-Download → Metadata/Artwork → Media-Server-Scan.  
+  - Übertrag auf SoulSpot: Pipeline als Use-Case im Application-Layer modellieren, Worker trennen.
+
+Reuse-Strategie
+- Erlaubt: Fachlogik-Ideen (Matching, Retry-Strategien, Media-Server-Abläufe), API-Flows.  
+- Nicht übernehmen: App-Struktur, GUI; stattdessen in SoulSpot-Layered-Architektur einpassen.
+
+---
+
+### 11.2 Soulify (WB2024/soulify)
+
+Repository: [https://github.com/WB2024/soulify](https://github.com/WB2024/soulify)
+
+Charakteristik
+- Python-Webanwendung, die Spotify-Suche/Playlists mit Soulseek-Downloads kombiniert.  
+- Nutzt Konfigurationsdateien (`sldl.conf`, `spotifyauth.conf`, `soulify.conf`) und ein externes Download-Skript (`sldl`, `sldlWB`) als Soulseek-Downloader.
+
+Lernziele für SoulSpot
+- **UX-/Flow-Patterns**
+  - Wie die UI dem User Playlists, Artists, Alben und Tracks präsentiert und Download-Queues aufbaut.  
+  - Wie Post-Download-Verarbeitung (Picard, Sortier-Ordner) modelliert ist.
+- **Konfigurations-Patterns**
+  - Trennung von Spotify-, Soulseek- und Library-Settings.  
+  - Übertrag auf SoulSpot: `SpotifySettings`, `SoulseekSettings`, `LibrarySettings` analog strukturieren.
+
+Reuse-Strategie
+- Soulify als Flow-/Konfig-Referenz nutzen, nicht als technische Basis:  
+  - Download-Engine in SoulSpot ist `slskd`, nicht `sldl`.  
+  - Queue-Management und Post-Processing als Inspiration für Worker/Services übernehmen.
+
+---
+
+### 11.3 Harmony-v1 Backup (bozzfozz/V/backup/harmony-v1)
+
+Repository: [https://github.com/bozzfozz/V/tree/main/backup/harmony-v1](https://github.com/bozzfozz/V/tree/main/backup/harmony-v1)
+
+Charakteristik
+- Unfertiger Stand einer älteren Implementierung mit ähnlicher Zielrichtung.  
+- Eignet sich als Quelle für Domain-Ideen, Namensgebung und erste Schnittstellen-Skizzen.
+
+Lernziele für SoulSpot
+- Domain-Strukturen, Value Objects und Services identifizieren, die sich mit der aktuellen SoulSpot-Domain decken.  
+- Herausziehen: Entity-/VO-Namen, Use-Cases (Playlist-Sync, Download-Orchestrierung), Hilfsfunktionen (Matching/Normalization).
+
+Reuse-Strategie
+- Nur fachliche Konzepte und isolierte Funktionen übernehmen.  
+- Architektur und Projektstruktur nicht übernehmen – SoulSpot bleibt vollständig auf 1.0-Architektur.
+
+---
+
+### 11.4 Konkrete TODOs vor Implementierung von `SlskdClient` & `ISpotifyClient`
+
+1. **Research-Pass SoulSync**
+   - `config/`, `services/`, `core/` nach slskd-/Spotify-Modulen durchsuchen.  
+   - Minimal-API-Schnittstellen von `slskd` herausarbeiten (Search, Download, Status).  
+   - Interface-Design in SoulSpot als `ISoulseekClient` + `SlskdClient`-Signaturen festhalten.
+
+2. **Research-Pass Soulify**
+   - `SpotWebApp.py`, `sldl*` sowie `*conf` analysieren:  
+     - User-Flows (Suche, Playlist-Download, Queue-Handling).  
+     - Post-Download-Pipeline und Verzeichnis-Layouts verstehen.  
+   - Diese Flows als Use-Cases in SoulSpot-Layer abbilden.
+
+3. **Research-Pass Harmony-v1**
+   - Domain-/Service-Module identifizieren.  
+   - Wiederverwendbare Konzepte klassifizieren (übernehmen, neu designen, verwerfen).
+
+4. **Abschluss: Design-Freeze für Integrations-Interfaces**
+   - Finales Interface für:
+     - `ISpotifyClient` (Auth, Playlist, Tracks).  
+     - `ISoulseekClient` / `SlskdClient` (Search, Enqueue, Status, Cancel).  
+   - Im `infrastructure`-Bereich definieren und mit Domain-/Application-Layer kontraktuell fixieren, bevor Implementierung startet.
