@@ -5,9 +5,14 @@ from datetime import datetime
 from typing import Optional
 
 from soulspot.application.use_cases import UseCase
-from soulspot.domain.entities import Playlist, Track
-from soulspot.domain.ports import IPlaylistRepository, ISpotifyClient, ITrackRepository
-from soulspot.domain.value_objects import PlaylistId, SpotifyUri, TrackId
+from soulspot.domain.entities import Artist, Playlist, PlaylistSource, Track
+from soulspot.domain.ports import (
+    IArtistRepository,
+    IPlaylistRepository,
+    ISpotifyClient,
+    ITrackRepository,
+)
+from soulspot.domain.value_objects import ArtistId, PlaylistId, SpotifyUri, TrackId
 
 
 @dataclass
@@ -45,6 +50,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
         spotify_client: ISpotifyClient,
         playlist_repository: IPlaylistRepository,
         track_repository: ITrackRepository,
+        artist_repository: IArtistRepository,
     ) -> None:
         """Initialize the use case with required dependencies.
         
@@ -52,10 +58,12 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
             spotify_client: Client for Spotify API operations
             playlist_repository: Repository for playlist persistence
             track_repository: Repository for track persistence
+            artist_repository: Repository for artist persistence
         """
         self._spotify_client = spotify_client
         self._playlist_repository = playlist_repository
         self._track_repository = track_repository
+        self._artist_repository = artist_repository
 
     async def execute(self, request: ImportSpotifyPlaylistRequest) -> ImportSpotifyPlaylistResponse:
         """Execute the import playlist use case.
@@ -85,10 +93,8 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
             id=playlist_id,
             name=spotify_playlist["name"],
             description=spotify_playlist.get("description"),
+            source=PlaylistSource.SPOTIFY,
             spotify_uri=SpotifyUri(f"spotify:playlist:{request.playlist_id}"),
-            owner=spotify_playlist["owner"]["display_name"],
-            track_count=spotify_playlist["tracks"]["total"],
-            is_public=spotify_playlist["public"],
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -99,8 +105,6 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
             # Update existing playlist
             existing_playlist.name = playlist.name
             existing_playlist.description = playlist.description
-            existing_playlist.track_count = playlist.track_count
-            existing_playlist.is_public = playlist.is_public
             existing_playlist.updated_at = datetime.utcnow()
             await self._playlist_repository.update(existing_playlist)
             playlist = existing_playlist
@@ -120,19 +124,30 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                         errors.append("Skipped item with no track data")
                         continue
 
+                    # Get or create artist
+                    artist_name = track_data["artists"][0]["name"] if track_data.get("artists") else "Unknown Artist"
+                    artist = await self._artist_repository.get_by_name(artist_name)
+                    if not artist:
+                        artist = Artist(
+                            id=ArtistId.generate(),
+                            name=artist_name,
+                            spotify_uri=SpotifyUri(track_data["artists"][0]["uri"]) if track_data.get("artists") else None,
+                            created_at=datetime.utcnow(),
+                            updated_at=datetime.utcnow(),
+                        )
+                        await self._artist_repository.add(artist)
+
                     # Create track entity
                     track_id = TrackId.generate()
                     track = Track(
                         id=track_id,
                         title=track_data["name"],
-                        artist_names=[artist["name"] for artist in track_data["artists"]],
-                        album_name=track_data["album"]["name"],
-                        duration_ms=track_data["duration_ms"],
+                        artist_id=artist.id,
+                        duration_ms=track_data.get("duration_ms", 0),
                         spotify_uri=SpotifyUri(track_data["uri"]),
                         isrc=track_data.get("external_ids", {}).get("isrc"),
                         track_number=track_data.get("track_number"),
-                        disc_number=track_data.get("disc_number"),
-                        release_date=track_data["album"].get("release_date"),
+                        disc_number=track_data.get("disc_number", 1),
                         created_at=datetime.utcnow(),
                         updated_at=datetime.utcnow(),
                     )
@@ -142,13 +157,11 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                     if existing_track:
                         # Update existing track
                         existing_track.title = track.title
-                        existing_track.artist_names = track.artist_names
-                        existing_track.album_name = track.album_name
+                        existing_track.artist_id = track.artist_id
                         existing_track.duration_ms = track.duration_ms
                         existing_track.isrc = track.isrc
                         existing_track.track_number = track.track_number
                         existing_track.disc_number = track.disc_number
-                        existing_track.release_date = track.release_date
                         existing_track.updated_at = datetime.utcnow()
                         await self._track_repository.update(existing_track)
                         track = existing_track

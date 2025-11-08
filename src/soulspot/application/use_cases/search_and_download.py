@@ -81,9 +81,8 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         Returns:
             Search query string
         """
-        # Combine artist names and track title
-        artists = ", ".join(track.artist_names)
-        return f"{artists} - {track.title}"
+        # Just use track title - artist lookup would require repository injection
+        return track.title
 
     def _select_best_file(
         self,
