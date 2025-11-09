@@ -4,7 +4,13 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
-from soulspot.domain.value_objects import AlbumId, ArtistId, DownloadId, PlaylistId, TrackId
+from soulspot.domain.value_objects import (
+    AlbumId,
+    ArtistId,
+    DownloadId,
+    PlaylistId,
+    TrackId,
+)
 
 
 class IArtistRepository(ABC):
@@ -333,7 +339,9 @@ class ISpotifyClient(ABC):
         pass
 
     @abstractmethod
-    async def search_track(self, query: str, access_token: str, limit: int = 20) -> dict[str, Any]:
+    async def search_track(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
         """
         Search for tracks.
 
@@ -365,7 +373,9 @@ class IMusicBrainzClient(ABC):
         pass
 
     @abstractmethod
-    async def search_recording(self, artist: str, title: str, limit: int = 10) -> list[dict[str, Any]]:
+    async def search_recording(
+        self, artist: str, title: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
         """
         Search for recordings by artist and title.
 

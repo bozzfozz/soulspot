@@ -51,7 +51,9 @@ class MetadataWorker:
 
     def register(self) -> None:
         """Register handler with job queue."""
-        self._job_queue.register_handler(JobType.METADATA_ENRICHMENT, self._handle_metadata_job)
+        self._job_queue.register_handler(
+            JobType.METADATA_ENRICHMENT, self._handle_metadata_job
+        )
 
     async def _handle_metadata_job(self, job: Job) -> Any:
         """Handle a metadata enrichment job.

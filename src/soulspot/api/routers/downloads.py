@@ -45,10 +45,16 @@ async def list_downloads(
                 "status": download.status.value,
                 "progress_percent": download.progress_percent,
                 "source_url": download.source_url,
-                "target_path": str(download.target_path) if download.target_path else None,
+                "target_path": str(download.target_path)
+                if download.target_path
+                else None,
                 "error_message": download.error_message,
-                "started_at": download.started_at.isoformat() if download.started_at else None,
-                "completed_at": download.completed_at.isoformat() if download.completed_at else None,
+                "started_at": download.started_at.isoformat()
+                if download.started_at
+                else None,
+                "completed_at": download.completed_at.isoformat()
+                if download.completed_at
+                else None,
                 "created_at": download.created_at.isoformat(),
                 "updated_at": download.updated_at.isoformat(),
             }
@@ -90,13 +96,19 @@ async def get_download_status(
             "source_url": download.source_url,
             "target_path": str(download.target_path) if download.target_path else None,
             "error_message": download.error_message,
-            "started_at": download.started_at.isoformat() if download.started_at else None,
-            "completed_at": download.completed_at.isoformat() if download.completed_at else None,
+            "started_at": download.started_at.isoformat()
+            if download.started_at
+            else None,
+            "completed_at": download.completed_at.isoformat()
+            if download.completed_at
+            else None,
             "created_at": download.created_at.isoformat(),
             "updated_at": download.updated_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid download ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid download ID: {str(e)}"
+        ) from e
 
 
 @router.post("/{download_id}/cancel")
@@ -130,7 +142,9 @@ async def cancel_download(
             "status": "cancelled",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid download ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid download ID: {str(e)}"
+        ) from e
 
 
 @router.post("/{download_id}/retry")
@@ -155,7 +169,9 @@ async def retry_download(
             raise HTTPException(status_code=404, detail="Download not found")
 
         if download.status.value != "failed":
-            raise HTTPException(status_code=400, detail="Can only retry failed downloads")
+            raise HTTPException(
+                status_code=400, detail="Can only retry failed downloads"
+            )
 
         # Update status to queued
         download.status = "queued"
@@ -168,4 +184,6 @@ async def retry_download(
             "status": "queued",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid download ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid download ID: {str(e)}"
+        ) from e

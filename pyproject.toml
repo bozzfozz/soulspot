@@ -69,7 +69,7 @@ soulspot = "soulspot.main:main"
 
 [tool.ruff]
 target-version = "py312"
-line-length = 120
+line-length = 88
 src = ["src"]
 
 [tool.ruff.lint]
@@ -85,8 +85,9 @@ select = [
     "SIM", # flake8-simplify
 ]
 ignore = [
-    "E501", # line too long, handled by formatter
-    "B008", # do not perform function calls in argument defaults
+    "E501",  # line too long, handled by formatter
+    "B008",  # do not perform function calls in argument defaults
+    "UP046", # Generic class uses Generic subclass instead of type parameters (Python 3.12+ syntax)
 ]
 
 [tool.ruff.lint.per-file-ignores]

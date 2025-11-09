@@ -120,7 +120,9 @@ class TestEnrichMetadataUseCase:
         }
         mock_musicbrainz_client.lookup_recording_by_isrc.return_value = mb_recording
 
-        request = EnrichMetadataRequest(track_id=track_id, enrich_artist=False, enrich_album=False)
+        request = EnrichMetadataRequest(
+            track_id=track_id, enrich_artist=False, enrich_album=False
+        )
 
         # Act
         response = await use_case.execute(request)
@@ -187,7 +189,10 @@ class TestEnrichMetadataUseCase:
         mock_track_repository.get_by_id.return_value = enriched_track
 
         request = EnrichMetadataRequest(
-            track_id=enriched_track.id, force_refresh=False, enrich_artist=False, enrich_album=False
+            track_id=enriched_track.id,
+            force_refresh=False,
+            enrich_artist=False,
+            enrich_album=False,
         )
 
         # Act
@@ -227,7 +232,10 @@ class TestEnrichMetadataUseCase:
         mock_musicbrainz_client.lookup_recording_by_isrc.return_value = mb_recording
 
         request = EnrichMetadataRequest(
-            track_id=enriched_track.id, force_refresh=True, enrich_artist=False, enrich_album=False
+            track_id=enriched_track.id,
+            force_refresh=True,
+            enrich_artist=False,
+            enrich_album=False,
         )
 
         # Act
@@ -253,7 +261,9 @@ class TestEnrichMetadataUseCase:
         mock_musicbrainz_client.lookup_recording_by_isrc.return_value = None
         mock_musicbrainz_client.search_recording.return_value = []
 
-        request = EnrichMetadataRequest(track_id=track_id, enrich_artist=False, enrich_album=False)
+        request = EnrichMetadataRequest(
+            track_id=track_id, enrich_artist=False, enrich_album=False
+        )
 
         # Act
         response = await use_case.execute(request)
@@ -279,7 +289,9 @@ class TestEnrichMetadataUseCase:
         mb_recording = {
             "id": "mb-recording-123",
             "title": "Test Song",
-            "artist-credit": [{"artist": {"id": "mb-artist-123", "name": "Test Artist"}}],
+            "artist-credit": [
+                {"artist": {"id": "mb-artist-123", "name": "Test Artist"}}
+            ],
         }
         mock_musicbrainz_client.lookup_recording_by_isrc.return_value = mb_recording
 
@@ -291,7 +303,9 @@ class TestEnrichMetadataUseCase:
         }
         mock_musicbrainz_client.lookup_artist.return_value = mb_artist
 
-        request = EnrichMetadataRequest(track_id=track_id, enrich_artist=True, enrich_album=False)
+        request = EnrichMetadataRequest(
+            track_id=track_id, enrich_artist=True, enrich_album=False
+        )
 
         # Act
         response = await use_case.execute(request)
@@ -332,12 +346,16 @@ class TestEnrichMetadataUseCase:
             "title": "Test Album",
             "date": "2023-01-15",
             "track-count": 12,
-            "artist-credit": [{"artist": {"id": "mb-artist-123", "name": "Test Artist"}}],
+            "artist-credit": [
+                {"artist": {"id": "mb-artist-123", "name": "Test Artist"}}
+            ],
         }
         mock_musicbrainz_client.lookup_release.return_value = mb_release
         mock_artist_repository.get_by_musicbrainz_id.return_value = sample_artist
 
-        request = EnrichMetadataRequest(track_id=track_id, enrich_artist=False, enrich_album=True)
+        request = EnrichMetadataRequest(
+            track_id=track_id, enrich_artist=False, enrich_album=True
+        )
 
         # Act
         response = await use_case.execute(request)
@@ -370,7 +388,9 @@ class TestEnrichMetadataUseCase:
         mock_musicbrainz_client.lookup_recording_by_isrc.return_value = None
         mock_musicbrainz_client.search_recording.side_effect = Exception("API error")
 
-        request = EnrichMetadataRequest(track_id=track_id, enrich_artist=False, enrich_album=False)
+        request = EnrichMetadataRequest(
+            track_id=track_id, enrich_artist=False, enrich_album=False
+        )
 
         # Act
         response = await use_case.execute(request)

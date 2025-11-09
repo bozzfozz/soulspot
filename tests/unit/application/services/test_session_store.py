@@ -2,8 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from soulspot.application.services.session_store import Session, SessionStore
 
 
@@ -35,11 +33,12 @@ class TestSession:
         """Test refresh_access updates last_accessed_at."""
         session = Session(session_id="test-session-id")
         old_time = session.last_accessed_at
-        
+
         # Small delay to ensure timestamp difference
         import time
+
         time.sleep(0.01)
-        
+
         session.refresh_access()
         assert session.last_accessed_at > old_time
 
@@ -70,7 +69,7 @@ class TestSession:
         """Test set_tokens updates token fields."""
         session = Session(session_id="test-session-id")
         session.set_tokens("access-token", "refresh-token", 3600)
-        
+
         assert session.access_token == "access-token"
         assert session.refresh_token == "refresh-token"
         assert session.token_expires_at is not None
@@ -88,8 +87,10 @@ class TestSessionStore:
     def test_create_session(self) -> None:
         """Test creating a session."""
         store = SessionStore()
-        session = store.create_session(oauth_state="test-state", code_verifier="test-verifier")
-        
+        session = store.create_session(
+            oauth_state="test-state", code_verifier="test-verifier"
+        )
+
         assert session.session_id is not None
         assert session.oauth_state == "test-state"
         assert session.code_verifier == "test-verifier"
@@ -99,7 +100,7 @@ class TestSessionStore:
         """Test getting a session by ID."""
         store = SessionStore()
         session = store.create_session()
-        
+
         retrieved = store.get_session(session.session_id)
         assert retrieved is not None
         assert retrieved.session_id == session.session_id
@@ -114,10 +115,10 @@ class TestSessionStore:
         """Test getting expired session returns None and removes it."""
         store = SessionStore()
         session = store.create_session()
-        
+
         # Make session expired
         session.last_accessed_at = datetime.now(UTC) - timedelta(hours=2)
-        
+
         retrieved = store.get_session(session.session_id)
         assert retrieved is None
         assert store.count_sessions() == 0
@@ -126,7 +127,7 @@ class TestSessionStore:
         """Test getting session by OAuth state."""
         store = SessionStore()
         session = store.create_session(oauth_state="test-state")
-        
+
         retrieved = store.get_session_by_state("test-state")
         assert retrieved is not None
         assert retrieved.session_id == session.session_id
@@ -135,7 +136,7 @@ class TestSessionStore:
         """Test getting session by non-existent state returns None."""
         store = SessionStore()
         store.create_session(oauth_state="test-state")
-        
+
         retrieved = store.get_session_by_state("other-state")
         assert retrieved is None
 
@@ -143,7 +144,7 @@ class TestSessionStore:
         """Test updating session data."""
         store = SessionStore()
         session = store.create_session()
-        
+
         updated = store.update_session(session.session_id, access_token="new-token")
         assert updated is not None
         assert updated.access_token == "new-token"
@@ -158,7 +159,7 @@ class TestSessionStore:
         """Test deleting a session."""
         store = SessionStore()
         session = store.create_session()
-        
+
         assert store.delete_session(session.session_id) is True
         assert store.count_sessions() == 0
 
@@ -170,20 +171,20 @@ class TestSessionStore:
     def test_cleanup_expired_sessions(self) -> None:
         """Test cleaning up expired sessions."""
         store = SessionStore()
-        
+
         # Create some sessions
         session1 = store.create_session()
         session2 = store.create_session()
         session3 = store.create_session()
-        
+
         # Make some expired
         session1.last_accessed_at = datetime.now(UTC) - timedelta(hours=2)
         session2.last_accessed_at = datetime.now(UTC) - timedelta(hours=3)
-        
+
         removed_count = store.cleanup_expired_sessions()
         assert removed_count == 2
         assert store.count_sessions() == 1
-        
+
         # Verify the right session remains
         retrieved = store.get_session(session3.session_id)
         assert retrieved is not None
@@ -192,13 +193,14 @@ class TestSessionStore:
         """Test session last_accessed_at is updated on get."""
         store = SessionStore()
         session = store.create_session()
-        
+
         old_time = session.last_accessed_at
-        
+
         # Small delay
         import time
+
         time.sleep(0.01)
-        
+
         retrieved = store.get_session(session.session_id)
         assert retrieved is not None
         assert retrieved.last_accessed_at > old_time

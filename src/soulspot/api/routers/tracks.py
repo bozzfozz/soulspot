@@ -10,7 +10,10 @@ from soulspot.api.dependencies import (
     get_spotify_client,
     get_track_repository,
 )
-from soulspot.application.use_cases.enrich_metadata import EnrichMetadataRequest, EnrichMetadataUseCase
+from soulspot.application.use_cases.enrich_metadata import (
+    EnrichMetadataRequest,
+    EnrichMetadataUseCase,
+)
 from soulspot.application.use_cases.search_and_download import (
     SearchAndDownloadTrackRequest,
     SearchAndDownloadTrackUseCase,
@@ -47,7 +50,9 @@ async def download_track(
         response = await use_case.execute(request)
 
         if response.status.value == "failed":
-            raise HTTPException(status_code=400, detail=response.error_message or "Download failed")
+            raise HTTPException(
+                status_code=400, detail=response.error_message or "Download failed"
+            )
 
         return {
             "message": "Download started",
@@ -58,9 +63,13 @@ async def download_track(
             "search_results_count": response.search_results_count,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid track ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start download: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start download: {str(e)}"
+        ) from e
 
 
 @router.post("/{track_id}/enrich")
@@ -88,7 +97,9 @@ async def enrich_track(
         response = await use_case.execute(request)
 
         return {
-            "message": "Track enriched successfully" if response.enriched_fields else "Track not found in MusicBrainz",
+            "message": "Track enriched successfully"
+            if response.enriched_fields
+            else "Track not found in MusicBrainz",
             "track_id": track_id,
             "enriched": bool(response.enriched_fields),
             "enriched_fields": response.enriched_fields,
@@ -96,9 +107,13 @@ async def enrich_track(
             "errors": response.errors,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid track ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to enrich metadata: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enrich metadata: {str(e)}"
+        ) from e
 
 
 @router.get("/search")
@@ -128,7 +143,9 @@ async def search_tracks(
                 {
                     "id": item["id"],
                     "name": item["name"],
-                    "artists": [{"name": artist["name"]} for artist in item.get("artists", [])],
+                    "artists": [
+                        {"name": artist["name"]} for artist in item.get("artists", [])
+                    ],
                     "album": {"name": item.get("album", {}).get("name")},
                     "duration_ms": item.get("duration_ms"),
                     "uri": item.get("uri"),
@@ -182,4 +199,6 @@ async def get_track(
             "updated_at": track.updated_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid track ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e

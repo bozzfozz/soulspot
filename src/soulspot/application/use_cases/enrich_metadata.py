@@ -91,7 +91,9 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         recording = None
         if track.isrc:
             try:
-                recording = await self._musicbrainz_client.lookup_recording_by_isrc(track.isrc)
+                recording = await self._musicbrainz_client.lookup_recording_by_isrc(
+                    track.isrc
+                )
                 if recording:
                     enriched_fields.append("musicbrainz_lookup_by_isrc")
             except Exception:
@@ -118,7 +120,9 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
             # Update duration if not set or more accurate
             mb_length = recording.get("length")
-            if mb_length and (not track.duration_ms or abs(track.duration_ms - mb_length) > 2000):
+            if mb_length and (
+                not track.duration_ms or abs(track.duration_ms - mb_length) > 2000
+            ):
                 track.duration_ms = mb_length
                 enriched_fields.append("duration_ms")
 
@@ -135,7 +139,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
     async def _enrich_artist_metadata(
         self,
         recording: dict[str, any],
-        track: Track,
+        _track: Track,
     ) -> tuple[Artist | None, list[str]]:
         """Enrich artist metadata from MusicBrainz.
 
@@ -184,7 +188,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
     async def _enrich_album_metadata(
         self,
         recording: dict[str, any],
-        track: Track,
+        _track: Track,
     ) -> tuple[Album | None, list[str]]:
         """Enrich album metadata from MusicBrainz.
 
@@ -217,14 +221,20 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                 if mb_release:
                     # Extract release year
                     release_date = mb_release.get("date", "")
-                    release_year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+                    release_year = (
+                        int(release_date[:4])
+                        if release_date and len(release_date) >= 4
+                        else None
+                    )
 
                     # Get artist ID (should already exist from track enrichment)
                     artist_credit = mb_release.get("artist-credit", [{}])[0]
                     artist_mbid = artist_credit.get("artist", {}).get("id")
                     artist = None
                     if artist_mbid:
-                        artist = await self._artist_repository.get_by_musicbrainz_id(artist_mbid)
+                        artist = await self._artist_repository.get_by_musicbrainz_id(
+                            artist_mbid
+                        )
 
                     if artist:
                         album = Album(
@@ -269,7 +279,9 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
         # 2. Enrich track metadata
         try:
-            recording, track_fields = await self._enrich_track_metadata(track, request.force_refresh)
+            recording, track_fields = await self._enrich_track_metadata(
+                track, request.force_refresh
+            )
             all_enriched_fields.extend(track_fields)
 
             if recording:
@@ -282,7 +294,9 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         artist = None
         if request.enrich_artist and recording:
             try:
-                artist, artist_fields = await self._enrich_artist_metadata(recording, track)
+                artist, artist_fields = await self._enrich_artist_metadata(
+                    recording, track
+                )
                 all_enriched_fields.extend(artist_fields)
             except Exception as e:
                 errors.append(f"Failed to enrich artist: {e}")
@@ -291,7 +305,9 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         album = None
         if request.enrich_album and recording:
             try:
-                album, album_fields = await self._enrich_album_metadata(recording, track)
+                album, album_fields = await self._enrich_album_metadata(
+                    recording, track
+                )
                 all_enriched_fields.extend(album_fields)
             except Exception as e:
                 errors.append(f"Failed to enrich album: {e}")

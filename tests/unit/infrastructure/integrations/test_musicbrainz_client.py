@@ -28,7 +28,9 @@ def musicbrainz_client(musicbrainz_settings: MusicBrainzSettings) -> MusicBrainz
 class TestMusicBrainzClientInit:
     """Test MusicBrainz client initialization."""
 
-    def test_init_with_settings(self, musicbrainz_settings: MusicBrainzSettings) -> None:
+    def test_init_with_settings(
+        self, musicbrainz_settings: MusicBrainzSettings
+    ) -> None:
         """Test client initialization with settings."""
         client = MusicBrainzClient(musicbrainz_settings)
         assert client.settings == musicbrainz_settings

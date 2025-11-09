@@ -1,6 +1,9 @@
 """FastAPI application entry point."""
 
+import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -11,24 +14,46 @@ from soulspot.api.routers import api_router, ui
 from soulspot.config import Settings, get_settings
 from soulspot.infrastructure.persistence import Database
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    # Startup
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan manager.
+
+    Handles startup and shutdown tasks including:
+    - Directory creation
+    - Database initialization
+    - Resource cleanup
+    """
     settings = get_settings()
+    logger.info("Starting application: %s", settings.app_name)
 
-    # Ensure storage directories exist
-    settings.ensure_directories()
+    # Startup
+    try:
+        # Ensure storage directories exist
+        settings.ensure_directories()
+        logger.info("Storage directories initialized")
 
-    # Initialize database
-    db = Database(settings)
-    app.state.db = db
+        # Initialize database
+        db = Database(settings)
+        app.state.db = db
+        logger.info("Database initialized: %s", settings.database.url)
 
-    yield
+        yield
 
-    # Shutdown
-    await db.close()
+    except Exception as e:
+        logger.exception("Error during application startup: %s", e)
+        raise
+    finally:
+        # Shutdown - always attempt cleanup
+        logger.info("Shutting down application")
+        try:
+            if hasattr(app.state, "db"):
+                await app.state.db.close()
+                logger.info("Database connection closed")
+        except Exception as e:
+            logger.exception("Error closing database: %s", e)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -53,8 +78,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Mount static files
-    app.mount("/static", StaticFiles(directory="src/soulspot/static"), name="static")
+    # Mount static files if directory exists
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists() and static_dir.is_dir():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+        logger.info("Static files mounted from: %s", static_dir)
+    else:
+        logger.warning("Static directory not found: %s", static_dir)
 
     # Include API routers
     app.include_router(api_router, prefix="/api/v1")

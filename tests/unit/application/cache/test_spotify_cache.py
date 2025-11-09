@@ -18,7 +18,11 @@ class TestSpotifyCache:
 
     async def test_cache_and_get_track(self, cache):
         """Test caching and retrieving track metadata."""
-        track_data = {"id": "track123", "name": "Test Song", "artists": [{"name": "Test Artist"}]}
+        track_data = {
+            "id": "track123",
+            "name": "Test Song",
+            "artists": [{"name": "Test Artist"}],
+        }
 
         await cache.cache_track("track123", track_data)
         result = await cache.get_track("track123")

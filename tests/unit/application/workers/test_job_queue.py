@@ -193,6 +193,7 @@ class TestJobQueue:
 
     async def test_process_job_success(self, job_queue: JobQueue) -> None:
         """Test successful job processing."""
+
         # Register handler
         async def handler(job: Job) -> str:
             return "success"
@@ -222,6 +223,7 @@ class TestJobQueue:
 
     async def test_process_job_failure(self, job_queue: JobQueue) -> None:
         """Test job processing failure."""
+
         # Register handler that raises exception
         async def handler(job: Job) -> None:
             raise ValueError("Test error")
@@ -253,6 +255,7 @@ class TestJobQueue:
 
     async def test_start_and_stop_workers(self, job_queue: JobQueue) -> None:
         """Test starting and stopping workers."""
+
         # Register a simple handler
         async def handler(job: Job) -> None:
             await asyncio.sleep(0.01)
@@ -315,6 +318,7 @@ class TestJobQueue:
 
     async def test_wait_for_job(self, job_queue: JobQueue) -> None:
         """Test waiting for job completion."""
+
         # Register handler
         async def handler(job: Job) -> str:
             await asyncio.sleep(0.1)
@@ -329,10 +333,10 @@ class TestJobQueue:
         await job_queue.start(num_workers=1)
 
         # Wait for job
-        try:
+        import contextlib
+
+        with contextlib.suppress(TimeoutError):
             job = await job_queue.wait_for_job(job_id, timeout=1.0)
-        except asyncio.TimeoutError:
-            pass
 
         # Stop workers
         await job_queue.stop()
@@ -345,6 +349,7 @@ class TestJobQueue:
 
     async def test_wait_for_job_timeout(self, job_queue: JobQueue) -> None:
         """Test waiting for job with timeout."""
+
         # Register slow handler
         async def handler(job: Job) -> None:
             await asyncio.sleep(2.0)
@@ -361,7 +366,7 @@ class TestJobQueue:
         # Wait for job with short timeout
         try:
             job = await job_queue.wait_for_job(job_id, timeout=0.1)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             job = await job_queue.get_job(job_id)
 
         # Stop workers

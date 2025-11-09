@@ -1,8 +1,7 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
-
 from alembic import context
+from sqlalchemy import engine_from_config, pool
 
 # Import application settings and models
 from soulspot.config import get_settings
@@ -15,7 +14,9 @@ config = context.config
 # Get database URL from application settings
 settings = get_settings()
 # Convert async URL to sync URL for Alembic
-db_url = settings.database.url.replace("+aiosqlite", "").replace("sqlite+", "sqlite:///")
+db_url = settings.database.url.replace("+aiosqlite", "").replace(
+    "sqlite+", "sqlite:///"
+)
 config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
@@ -71,9 +72,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

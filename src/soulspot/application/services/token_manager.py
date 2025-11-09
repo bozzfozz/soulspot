@@ -30,7 +30,9 @@ class TokenInfo:
         Returns:
             True if token expires within threshold
         """
-        return datetime.now(UTC) >= (self.expires_at - timedelta(seconds=threshold_seconds))
+        return datetime.now(UTC) >= (
+            self.expires_at - timedelta(seconds=threshold_seconds)
+        )
 
 
 class TokenManager:
@@ -61,7 +63,9 @@ class TokenManager:
         """
         return secrets.token_urlsafe(32)
 
-    async def get_authorization_url(self, state: str | None = None) -> tuple[str, str, str]:
+    async def get_authorization_url(
+        self, state: str | None = None
+    ) -> tuple[str, str, str]:
         """Get Spotify authorization URL for OAuth PKCE flow.
 
         Args:
@@ -79,7 +83,9 @@ class TokenManager:
         code_verifier = SpotifyClient.generate_code_verifier()
 
         # Get authorization URL
-        auth_url = await self._spotify_client.get_authorization_url(state, code_verifier)
+        auth_url = await self._spotify_client.get_authorization_url(
+            state, code_verifier
+        )
 
         return auth_url, state, code_verifier
 
@@ -171,7 +177,9 @@ class TokenManager:
             raise ValueError(f"No refresh token available for user: {user_id}")
 
         # Refresh the token
-        token_response = await self._spotify_client.refresh_token(token_info.refresh_token)
+        token_response = await self._spotify_client.refresh_token(
+            token_info.refresh_token
+        )
 
         # Calculate new expiration time
         expires_in = token_response.get("expires_in", 3600)

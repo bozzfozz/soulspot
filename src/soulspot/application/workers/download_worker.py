@@ -1,12 +1,15 @@
 """Download worker for background download processing."""
 
 import asyncio
+import logging
 from typing import Any
 
 from soulspot.application.use_cases import SearchAndDownloadTrackUseCase
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
 from soulspot.domain.value_objects import TrackId
+
+logger = logging.getLogger(__name__)
 
 
 class DownloadWorker:
@@ -67,7 +70,9 @@ class DownloadWorker:
         quality_preference = job.payload.get("quality_preference", "best")
 
         # Execute use case
-        from soulspot.application.use_cases.search_and_download import SearchAndDownloadTrackRequest
+        from soulspot.application.use_cases.search_and_download import (
+            SearchAndDownloadTrackRequest,
+        )
 
         request = SearchAndDownloadTrackRequest(
             track_id=track_id,
@@ -85,7 +90,9 @@ class DownloadWorker:
 
         return {
             "download_id": str(response.download.id) if response.download else None,
-            "slskd_download_id": response.download.slskd_download_id if response.download else None,
+            "slskd_download_id": response.download.slskd_download_id
+            if response.download
+            else None,
             "search_results_count": response.search_results_count,
             "status": response.status.value,
         }
@@ -146,7 +153,9 @@ class DownloadWorker:
 
                 # Check each download status
                 for job in running_jobs:
-                    slskd_download_id = job.result.get("slskd_download_id") if job.result else None
+                    slskd_download_id = (
+                        job.result.get("slskd_download_id") if job.result else None
+                    )
                     if slskd_download_id:
                         # Query slskd for status
                         # (This would be implemented in production)
@@ -154,6 +163,6 @@ class DownloadWorker:
 
             except Exception as e:
                 # Log error but continue monitoring
-                print(f"Download monitor error: {e}")
+                logger.exception("Download monitor error: %s", e)
 
             await asyncio.sleep(poll_interval)

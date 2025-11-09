@@ -31,12 +31,20 @@ class ArtistModel(Base):
 
     __tablename__ = "artists"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
-    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
+    musicbrainz_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, unique=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     albums: Mapped[list["AlbumModel"]] = relationship(
@@ -54,15 +62,25 @@ class AlbumModel(Base):
 
     __tablename__ = "albums"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    artist_id: Mapped[str] = mapped_column(String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
+    )
     release_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
-    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
+    musicbrainz_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, unique=True, index=True
+    )
     artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     artist: Mapped["ArtistModel"] = relationship("ArtistModel", back_populates="albums")
@@ -78,27 +96,44 @@ class TrackModel(Base):
 
     __tablename__ = "tracks"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    artist_id: Mapped[str] = mapped_column(String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False)
+    artist_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
+    )
     album_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True
     )
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disc_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
-    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True, index=True)
-    isrc: Mapped[str | None] = mapped_column(String(12), nullable=True, unique=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
+    musicbrainz_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, unique=True, index=True
+    )
+    isrc: Mapped[str | None] = mapped_column(
+        String(12), nullable=True, unique=True, index=True
+    )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     artist: Mapped["ArtistModel"] = relationship("ArtistModel", back_populates="tracks")
-    album: Mapped["AlbumModel | None"] = relationship("AlbumModel", back_populates="tracks")
+    album: Mapped["AlbumModel | None"] = relationship(
+        "AlbumModel", back_populates="tracks"
+    )
     download: Mapped["DownloadModel | None"] = relationship(
-        "DownloadModel", back_populates="track", cascade="all, delete-orphan", uselist=False
+        "DownloadModel",
+        back_populates="track",
+        cascade="all, delete-orphan",
+        uselist=False,
     )
 
     __table_args__ = (Index("ix_tracks_title_artist", "title", "artist_id"),)
@@ -109,13 +144,19 @@ class PlaylistModel(Base):
 
     __tablename__ = "playlists"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="MANUAL")
-    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     playlist_tracks: Mapped[list["PlaylistTrackModel"]] = relationship(
@@ -134,12 +175,16 @@ class PlaylistTrackModel(Base):
     playlist_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True
     )
-    track_id: Mapped[str] = mapped_column(String(36), ForeignKey("tracks.id", ondelete="CASCADE"), primary_key=True)
+    track_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), primary_key=True
+    )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
 
     # Relationships
-    playlist: Mapped["PlaylistModel"] = relationship("PlaylistModel", back_populates="playlist_tracks")
+    playlist: Mapped["PlaylistModel"] = relationship(
+        "PlaylistModel", back_populates="playlist_tracks"
+    )
     track: Mapped["TrackModel"] = relationship("TrackModel")
 
     __table_args__ = (Index("ix_playlist_tracks_position", "playlist_id", "position"),)
@@ -150,11 +195,19 @@ class DownloadModel(Base):
 
     __tablename__ = "downloads"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    track_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING", index=True)
+    track_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tracks.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="PENDING", index=True
+    )
     target_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     progress_percent: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
@@ -162,7 +215,9 @@ class DownloadModel(Base):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
 
     # Relationships
     track: Mapped["TrackModel"] = relationship("TrackModel", back_populates="download")

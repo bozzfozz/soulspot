@@ -97,4 +97,7 @@ class TestCORS:
             headers={"Origin": "http://localhost:8000"},
         )
         assert response.status_code == 200
-        assert response.headers.get("access-control-allow-origin") == "http://localhost:8000"
+        assert (
+            response.headers.get("access-control-allow-origin")
+            == "http://localhost:8000"
+        )

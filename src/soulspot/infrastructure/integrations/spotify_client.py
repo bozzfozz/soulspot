@@ -49,7 +49,11 @@ class SpotifyClient(ISpotifyClient):
         Returns:
             Random code verifier string
         """
-        return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
+        return (
+            base64.urlsafe_b64encode(secrets.token_bytes(32))
+            .decode("utf-8")
+            .rstrip("=")
+        )
 
     @staticmethod
     def generate_code_challenge(code_verifier: str) -> str:
@@ -204,7 +208,9 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
-    async def search_track(self, query: str, access_token: str, limit: int = 20) -> dict[str, Any]:
+    async def search_track(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
         """
         Search for tracks.
 

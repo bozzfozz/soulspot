@@ -1,7 +1,7 @@
 """Tests for Token Manager service."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -96,11 +96,17 @@ class TestTokenManager:
     ) -> None:
         """Test getting authorization URL with provided state."""
         # Mock Spotify client
-        spotify_client_mock.get_authorization_url.return_value = "https://accounts.spotify.com/authorize?..."
+        spotify_client_mock.get_authorization_url.return_value = (
+            "https://accounts.spotify.com/authorize?..."
+        )
 
         # Get authorization URL with custom state
         state = "custom-state-123"
-        auth_url, returned_state, code_verifier = await token_manager.get_authorization_url(state)
+        (
+            auth_url,
+            returned_state,
+            code_verifier,
+        ) = await token_manager.get_authorization_url(state)
 
         # Assert
         assert auth_url == "https://accounts.spotify.com/authorize?..."
@@ -115,7 +121,9 @@ class TestTokenManager:
     ) -> None:
         """Test getting authorization URL without provided state."""
         # Mock Spotify client
-        spotify_client_mock.get_authorization_url.return_value = "https://accounts.spotify.com/authorize?..."
+        spotify_client_mock.get_authorization_url.return_value = (
+            "https://accounts.spotify.com/authorize?..."
+        )
 
         # Get authorization URL without state
         auth_url, state, code_verifier = await token_manager.get_authorization_url()
@@ -156,7 +164,9 @@ class TestTokenManager:
         assert not token_info.is_expired()
 
         # Verify Spotify client was called
-        spotify_client_mock.exchange_code.assert_called_once_with("auth-code-123", "code-verifier-123")
+        spotify_client_mock.exchange_code.assert_called_once_with(
+            "auth-code-123", "code-verifier-123"
+        )
 
     async def test_get_valid_token_when_valid(
         self,

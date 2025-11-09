@@ -1,6 +1,5 @@
 """Tests for settings management."""
 
-
 import pytest
 
 from soulspot.config import Settings, get_settings
@@ -79,14 +78,18 @@ class TestSettings:
 
     def test_cors_origins_from_string(self):
         """Test CORS origins parsing from comma-separated string."""
-        settings = Settings(api={"cors_origins": "http://a.com,http://b.com,http://c.com"})
+        settings = Settings(
+            api={"cors_origins": "http://a.com,http://b.com,http://c.com"}
+        )
         assert len(settings.api.cors_origins) == 3
         assert "http://a.com" in settings.api.cors_origins
         assert "http://b.com" in settings.api.cors_origins
 
     def test_secret_key_production_validation(self):
         """Test secret key validation in production."""
-        with pytest.raises(ValueError, match="Secret key must be changed in production"):
+        with pytest.raises(
+            ValueError, match="Secret key must be changed in production"
+        ):
             Settings(
                 app_env="production",
                 secret_key="change-me-to-a-random-secret-key-in-production",
@@ -151,7 +154,10 @@ class TestSettings:
         """Test Spotify default settings."""
         settings = Settings()
         assert settings.spotify.client_id == ""
-        assert settings.spotify.redirect_uri == "http://localhost:8000/auth/spotify/callback"
+        assert (
+            settings.spotify.redirect_uri
+            == "http://localhost:8000/auth/spotify/callback"
+        )
 
     def test_musicbrainz_defaults(self):
         """Test MusicBrainz default settings."""

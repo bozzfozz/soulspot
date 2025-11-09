@@ -1,10 +1,13 @@
 """Playlist sync worker for background playlist synchronization."""
 
+import logging
 from typing import Any
 
 from soulspot.application.use_cases import ImportSpotifyPlaylistUseCase
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import IPlaylistRepository, ISpotifyClient, ITrackRepository
+
+logger = logging.getLogger(__name__)
 
 
 class PlaylistSyncWorker:
@@ -42,7 +45,9 @@ class PlaylistSyncWorker:
 
     def register(self) -> None:
         """Register handler with job queue."""
-        self._job_queue.register_handler(JobType.PLAYLIST_SYNC, self._handle_playlist_sync_job)
+        self._job_queue.register_handler(
+            JobType.PLAYLIST_SYNC, self._handle_playlist_sync_job
+        )
 
     async def _handle_playlist_sync_job(self, job: Job) -> Any:
         """Handle a playlist sync job.
@@ -64,7 +69,9 @@ class PlaylistSyncWorker:
             raise ValueError("Missing access_token in job payload")
 
         # Execute use case
-        from soulspot.application.use_cases.import_spotify_playlist import ImportSpotifyPlaylistRequest
+        from soulspot.application.use_cases.import_spotify_playlist import (
+            ImportSpotifyPlaylistRequest,
+        )
 
         request = ImportSpotifyPlaylistRequest(
             playlist_id=playlist_id,
@@ -77,7 +84,11 @@ class PlaylistSyncWorker:
         # Check if sync had errors
         if response.tracks_failed > 0:
             # Log errors but don't fail the job
-            print(f"Playlist sync warnings: {len(response.errors)} errors")
+            logger.warning(
+                "Playlist sync completed with %d errors: %s",
+                len(response.errors),
+                response.errors,
+            )
 
         return {
             "playlist_id": str(response.playlist.id),

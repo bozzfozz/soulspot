@@ -82,7 +82,9 @@ class SpotifyCache:
         key = self._make_playlist_key(playlist_id)
         await self._cache.set(key, playlist, self.PLAYLIST_TTL)
 
-    async def get_search_results(self, query: str, limit: int = 10) -> dict[str, Any] | None:
+    async def get_search_results(
+        self, query: str, limit: int = 10
+    ) -> dict[str, Any] | None:
         """Get cached search results.
 
         Args:
