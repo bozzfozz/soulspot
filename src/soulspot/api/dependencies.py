@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.application.services.session_store import SessionStore
 from soulspot.application.services.token_manager import TokenManager
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import ImportSpotifyPlaylistUseCase
@@ -21,6 +22,23 @@ from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
     TrackRepository,
 )
+
+
+# Global session store instance
+# In production, this should be stored in app.state or use Redis
+_session_store: SessionStore | None = None
+
+
+def get_session_store() -> SessionStore:
+    """Get or create session store singleton.
+    
+    Returns:
+        Session store instance
+    """
+    global _session_store
+    if _session_store is None:
+        _session_store = SessionStore(session_timeout_seconds=3600)  # 1 hour timeout
+    return _session_store
 
 
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
