@@ -3,72 +3,109 @@
 {% block title %}Downloads - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="downloads">
-    <h1>Downloads</h1>
-
-    <div class="filters">
-        <button class="btn btn-small" 
-                hx-get="/api/v1/downloads?status=all"
-                hx-target="#downloads-list">
-            All
-        </button>
-        <button class="btn btn-small" 
-                hx-get="/api/v1/downloads?status=queued"
-                hx-target="#downloads-list">
-            Queued
-        </button>
-        <button class="btn btn-small" 
-                hx-get="/api/v1/downloads?status=downloading"
-                hx-target="#downloads-list">
-            Downloading
-        </button>
-        <button class="btn btn-small" 
-                hx-get="/api/v1/downloads?status=completed"
-                hx-target="#downloads-list">
-            Completed
-        </button>
-        <button class="btn btn-small" 
-                hx-get="/api/v1/downloads?status=failed"
-                hx-target="#downloads-list">
-            Failed
-        </button>
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900 leading-tight mb-4">Downloads</h1>
+        
+        <!-- Filters -->
+        <div class="flex flex-wrap gap-2">
+            <button class="btn btn-secondary btn-sm" 
+                    hx-get="/api/v1/downloads?status=all"
+                    hx-target="#downloads-list">
+                All
+            </button>
+            <button class="btn btn-secondary btn-sm" 
+                    hx-get="/api/v1/downloads?status=queued"
+                    hx-target="#downloads-list">
+                Queued
+            </button>
+            <button class="btn btn-secondary btn-sm" 
+                    hx-get="/api/v1/downloads?status=downloading"
+                    hx-target="#downloads-list">
+                Downloading
+            </button>
+            <button class="btn btn-secondary btn-sm" 
+                    hx-get="/api/v1/downloads?status=completed"
+                    hx-target="#downloads-list">
+                Completed
+            </button>
+            <button class="btn btn-secondary btn-sm" 
+                    hx-get="/api/v1/downloads?status=failed"
+                    hx-target="#downloads-list">
+                Failed
+            </button>
+        </div>
     </div>
 
-    <div class="downloads-list" id="downloads-list">
+    <!-- Downloads List -->
+    <div class="space-y-4" id="downloads-list">
         {% if downloads %}
             {% for download in downloads %}
-            <div class="download-card">
-                <div class="download-info">
-                    <h3>{{ download.track_name }}</h3>
-                    <p>Artist: {{ download.artist_name }}</p>
-                    <span class="status status-{{ download.status }}">{{ download.status }}</span>
-                </div>
-                <div class="download-progress">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: {{ download.progress or 0 }}%"></div>
+            <div class="card">
+                <div class="flex justify-between items-start gap-4">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <h3 class="text-lg font-medium text-gray-900">
+                                Track ID: {{ download.track_id }}
+                            </h3>
+                            <span class="status-{{ download.status }}">
+                                {{ download.status }}
+                            </span>
+                        </div>
+                        
+                        {% if download.error_message %}
+                        <p class="text-sm text-error-600 mb-2">
+                            Error: {{ download.error_message }}
+                        </p>
+                        {% endif %}
+                        
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <p>Started: {{ download.started_at or 'Not started' }}</p>
+                            <p>Created: {{ download.created_at }}</p>
+                        </div>
                     </div>
-                    <span class="progress-text">{{ download.progress or 0 }}%</span>
-                </div>
-                <div class="download-actions">
-                    {% if download.status == 'failed' %}
-                    <button class="btn btn-small" 
-                            hx-post="/api/v1/downloads/{{ download.id }}/retry"
-                            hx-swap="outerHTML">
-                        Retry
-                    </button>
-                    {% endif %}
-                    {% if download.status in ['queued', 'downloading'] %}
-                    <button class="btn btn-small btn-danger" 
-                            hx-post="/api/v1/downloads/{{ download.id }}/cancel"
-                            hx-swap="outerHTML">
-                        Cancel
-                    </button>
-                    {% endif %}
+                    
+                    <div class="flex flex-col items-end gap-3">
+                        <!-- Progress Bar -->
+                        <div class="w-48">
+                            <div class="progress-bar mb-1">
+                                <div class="progress-fill" style="width: {{ download.progress_percent or 0 }}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-600">{{ download.progress_percent or 0 }}%</span>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="flex gap-2">
+                            {% if download.status == 'failed' %}
+                            <button class="btn btn-secondary btn-sm" 
+                                    hx-post="/api/v1/downloads/{{ download.id }}/retry"
+                                    hx-swap="outerHTML">
+                                Retry
+                            </button>
+                            {% endif %}
+                            {% if download.status in ['queued', 'downloading', 'pending'] %}
+                            <button class="btn btn-danger btn-sm" 
+                                    hx-post="/api/v1/downloads/{{ download.id }}/cancel"
+                                    hx-swap="outerHTML">
+                                Cancel
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endfor %}
         {% else %}
-            <p class="empty-state">No downloads to show.</p>
+            <div class="card text-center py-12">
+                <div class="card-body">
+                    <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No downloads yet</h3>
+                    <p class="text-gray-600">Downloads will appear here when you start downloading tracks.</p>
+                </div>
+            </div>
         {% endif %}
     </div>
 </div>
