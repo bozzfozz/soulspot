@@ -1,6 +1,6 @@
 """Tests for Token Manager service."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -28,7 +28,7 @@ class TestTokenInfo:
         token = TokenInfo(
             access_token="test-token",
             refresh_token="test-refresh",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         assert token.is_expired() is False
 
@@ -37,7 +37,7 @@ class TestTokenInfo:
         token = TokenInfo(
             access_token="test-token",
             refresh_token="test-refresh",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
         )
         assert token.is_expired() is True
 
@@ -46,7 +46,7 @@ class TestTokenInfo:
         token = TokenInfo(
             access_token="test-token",
             refresh_token="test-refresh",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         # Default threshold is 300 seconds (5 minutes)
         assert token.expires_soon() is False
@@ -56,7 +56,7 @@ class TestTokenInfo:
         token = TokenInfo(
             access_token="test-token",
             refresh_token="test-refresh",
-            expires_at=datetime.utcnow() + timedelta(minutes=2),
+            expires_at=datetime.now(UTC) + timedelta(minutes=2),
         )
         # Default threshold is 300 seconds (5 minutes)
         assert token.expires_soon() is True
@@ -66,7 +66,7 @@ class TestTokenInfo:
         token = TokenInfo(
             access_token="test-token",
             refresh_token="test-refresh",
-            expires_at=datetime.utcnow() + timedelta(seconds=30),
+            expires_at=datetime.now(UTC) + timedelta(seconds=30),
         )
         # Custom threshold of 60 seconds
         assert token.expires_soon(threshold_seconds=60) is True
@@ -167,7 +167,7 @@ class TestTokenManager:
         token_info = TokenInfo(
             access_token="valid-token",
             refresh_token="refresh-token",
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         token_manager._tokens["user-123"] = token_info
 
@@ -187,7 +187,7 @@ class TestTokenManager:
         token_info = TokenInfo(
             access_token="expired-token",
             refresh_token="refresh-token",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
         )
         token_manager._tokens["user-123"] = token_info
 
@@ -216,7 +216,7 @@ class TestTokenManager:
         token_info = TokenInfo(
             access_token="expiring-soon-token",
             refresh_token="refresh-token",
-            expires_at=datetime.utcnow() + timedelta(minutes=2),
+            expires_at=datetime.now(UTC) + timedelta(minutes=2),
         )
         token_manager._tokens["user-123"] = token_info
 
@@ -256,7 +256,7 @@ class TestTokenManager:
         token_info = TokenInfo(
             access_token="old-token",
             refresh_token="refresh-token",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
         )
         token_manager._tokens["user-123"] = token_info
 
@@ -299,7 +299,7 @@ class TestTokenManager:
         token_info = TokenInfo(
             access_token="old-token",
             refresh_token=None,
-            expires_at=datetime.utcnow() - timedelta(hours=1),
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
         )
         token_manager._tokens["user-123"] = token_info
 

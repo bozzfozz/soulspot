@@ -1,7 +1,7 @@
 """Enrich metadata use case."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Album, Artist, Track
@@ -128,7 +128,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                 track.isrc = isrc_list[0]
                 enriched_fields.append("isrc")
 
-            track.updated_at = datetime.utcnow()
+            track.updated_at = datetime.now(UTC)
 
         return recording, enriched_fields
 
@@ -171,8 +171,8 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                         id=ArtistId.generate(),
                         name=mb_artist["name"],
                         musicbrainz_id=artist_mbid,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
                     )
                     await self._artist_repository.add(artist)
                     enriched_fields.append("artist_created")
@@ -234,8 +234,8 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                             release_year=release_year,
                             musicbrainz_id=release_mbid,
                             total_tracks=mb_release.get("track-count"),
-                            created_at=datetime.utcnow(),
-                            updated_at=datetime.utcnow(),
+                            created_at=datetime.now(UTC),
+                            updated_at=datetime.now(UTC),
                         )
                         await self._album_repository.add(album)
                         enriched_fields.append("album_created")

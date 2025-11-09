@@ -1,6 +1,6 @@
 """Tests for SearchAndDownloadTrackUseCase."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -50,8 +50,8 @@ def sample_track():
         title="Test Song",
         artist_id=ArtistId.generate(),
         duration_ms=240000,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 

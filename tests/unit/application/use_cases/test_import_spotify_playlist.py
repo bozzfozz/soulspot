@@ -1,6 +1,6 @@
 """Tests for Import Spotify Playlist use case."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -154,8 +154,8 @@ class TestImportSpotifyPlaylistUseCase:
             description="Old description",
             source=PlaylistSource.SPOTIFY,
             spotify_uri=SpotifyUri("spotify:playlist:existing-playlist-id"),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         # Mock Spotify API responses
@@ -279,8 +279,8 @@ class TestImportSpotifyPlaylistUseCase:
             artist_id=ArtistId.generate(),
             duration_ms=180000,
             spotify_uri=SpotifyUri("spotify:track:track-1"),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         # Mock Spotify API responses

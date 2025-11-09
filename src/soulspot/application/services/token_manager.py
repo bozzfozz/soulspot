@@ -2,7 +2,7 @@
 
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from soulspot.domain.ports import ISpotifyClient
 
@@ -19,7 +19,7 @@ class TokenInfo:
 
     def is_expired(self) -> bool:
         """Check if the token is expired."""
-        return datetime.utcnow() >= self.expires_at
+        return datetime.now(UTC) >= self.expires_at
 
     def expires_soon(self, threshold_seconds: int = 300) -> bool:
         """Check if token expires within threshold.
@@ -30,7 +30,7 @@ class TokenInfo:
         Returns:
             True if token expires within threshold
         """
-        return datetime.utcnow() >= (self.expires_at - timedelta(seconds=threshold_seconds))
+        return datetime.now(UTC) >= (self.expires_at - timedelta(seconds=threshold_seconds))
 
 
 class TokenManager:
@@ -104,7 +104,7 @@ class TokenManager:
 
         # Calculate expiration time
         expires_in = token_response.get("expires_in", 3600)
-        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
         # Create TokenInfo
         token_info = TokenInfo(
@@ -175,7 +175,7 @@ class TokenManager:
 
         # Calculate new expiration time
         expires_in = token_response.get("expires_in", 3600)
-        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
         # Update token info
         new_token_info = TokenInfo(

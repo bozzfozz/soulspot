@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -46,25 +46,25 @@ class Job:
     def mark_running(self) -> None:
         """Mark job as running."""
         self.status = JobStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(UTC)
 
     def mark_completed(self, result: Any = None) -> None:
         """Mark job as completed."""
         self.status = JobStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(UTC)
         self.result = result
 
     def mark_failed(self, error: str) -> None:
         """Mark job as failed."""
         self.status = JobStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(UTC)
         self.error = error
         self.retries += 1
 
     def mark_cancelled(self) -> None:
         """Mark job as cancelled."""
         self.status = JobStatus.CANCELLED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(UTC)
 
     def should_retry(self) -> bool:
         """Check if job should be retried."""

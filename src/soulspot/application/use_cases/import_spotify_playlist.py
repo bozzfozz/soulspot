@@ -1,7 +1,7 @@
 """Import Spotify playlist use case."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Artist, Playlist, PlaylistSource, Track
@@ -94,8 +94,8 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
             description=spotify_playlist.get("description"),
             source=PlaylistSource.SPOTIFY,
             spotify_uri=SpotifyUri(f"spotify:playlist:{request.playlist_id}"),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
 
         # Check if playlist already exists by Spotify URI
@@ -104,7 +104,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
             # Update existing playlist
             existing_playlist.name = playlist.name
             existing_playlist.description = playlist.description
-            existing_playlist.updated_at = datetime.utcnow()
+            existing_playlist.updated_at = datetime.now(UTC)
             await self._playlist_repository.update(existing_playlist)
             playlist = existing_playlist
         else:
@@ -133,8 +133,8 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                             spotify_uri=SpotifyUri(track_data["artists"][0]["uri"])
                             if track_data.get("artists")
                             else None,
-                            created_at=datetime.utcnow(),
-                            updated_at=datetime.utcnow(),
+                            created_at=datetime.now(UTC),
+                            updated_at=datetime.now(UTC),
                         )
                         await self._artist_repository.add(artist)
 
@@ -149,8 +149,8 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                         isrc=track_data.get("external_ids", {}).get("isrc"),
                         track_number=track_data.get("track_number"),
                         disc_number=track_data.get("disc_number", 1),
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow(),
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
                     )
 
                     # Check if track already exists by Spotify URI
@@ -163,7 +163,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                         existing_track.isrc = track.isrc
                         existing_track.track_number = track.track_number
                         existing_track.disc_number = track.disc_number
-                        existing_track.updated_at = datetime.utcnow()
+                        existing_track.updated_at = datetime.now(UTC)
                         await self._track_repository.update(existing_track)
                         track = existing_track
                     else:

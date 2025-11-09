@@ -1,6 +1,6 @@
 """Tests for EnrichMetadataUseCase."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -62,8 +62,8 @@ def sample_track():
         artist_id=ArtistId.generate(),
         duration_ms=240000,
         isrc="USRC12345678",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -73,8 +73,8 @@ def sample_artist():
     return Artist(
         id=ArtistId.generate(),
         name="Test Artist",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
     )
 
 
@@ -145,8 +145,8 @@ class TestEnrichMetadataUseCase:
             title="Test Song",
             artist_id=ArtistId.generate(),
             duration_ms=240000,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_track_repository.get_by_id.return_value = track_without_isrc
 
@@ -181,8 +181,8 @@ class TestEnrichMetadataUseCase:
             artist_id=ArtistId.generate(),
             duration_ms=240000,
             musicbrainz_id="already-enriched",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_track_repository.get_by_id.return_value = enriched_track
 
@@ -214,8 +214,8 @@ class TestEnrichMetadataUseCase:
             duration_ms=240000,
             musicbrainz_id="already-enriched",
             isrc="USRC12345678",
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_track_repository.get_by_id.return_value = enriched_track
 

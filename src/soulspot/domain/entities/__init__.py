@@ -1,7 +1,7 @@
 """Domain entities."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Optional
 
@@ -24,8 +24,8 @@ class Artist:
     name: str
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate artist data."""
@@ -37,7 +37,7 @@ class Artist:
         if not name or not name.strip():
             raise ValueError("Artist name cannot be empty")
         self.name = name
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass
@@ -51,8 +51,8 @@ class Album:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     artwork_path: FilePath | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate album data."""
@@ -64,7 +64,7 @@ class Album:
     def update_artwork(self, artwork_path: FilePath) -> None:
         """Update album artwork."""
         self.artwork_path = artwork_path
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
 
 @dataclass
@@ -82,8 +82,8 @@ class Track:
     musicbrainz_id: str | None = None
     isrc: str | None = None
     file_path: FilePath | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate track data."""
@@ -99,7 +99,7 @@ class Track:
     def update_file_path(self, file_path: FilePath) -> None:
         """Update track file path."""
         self.file_path = file_path
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def is_downloaded(self) -> bool:
         """Check if track has been downloaded."""
@@ -123,8 +123,8 @@ class Playlist:
     source: PlaylistSource = PlaylistSource.MANUAL
     spotify_uri: SpotifyUri | None = None
     track_ids: list[TrackId] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate playlist data."""
@@ -135,18 +135,18 @@ class Playlist:
         """Add a track to the playlist."""
         if track_id not in self.track_ids:
             self.track_ids.append(track_id)
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def remove_track(self, track_id: TrackId) -> None:
         """Remove a track from the playlist."""
         if track_id in self.track_ids:
             self.track_ids.remove(track_id)
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def clear_tracks(self) -> None:
         """Remove all tracks from the playlist."""
         self.track_ids.clear()
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def track_count(self) -> int:
         """Get the number of tracks in the playlist."""
@@ -177,8 +177,8 @@ class Download:
     error_message: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Validate download data."""
@@ -190,15 +190,15 @@ class Download:
         if self.status not in (DownloadStatus.PENDING, DownloadStatus.QUEUED):
             raise ValueError(f"Cannot start download in status {self.status}")
         self.status = DownloadStatus.DOWNLOADING
-        self.started_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.started_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
 
     def update_progress(self, percent: float) -> None:
         """Update download progress."""
         if percent < 0.0 or percent > 100.0:
             raise ValueError("Progress must be between 0 and 100")
         self.progress_percent = percent
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def complete(self, file_path: FilePath) -> None:
         """Mark download as completed."""
@@ -207,21 +207,21 @@ class Download:
         self.status = DownloadStatus.COMPLETED
         self.target_path = file_path
         self.progress_percent = 100.0
-        self.completed_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        self.completed_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
 
     def fail(self, error_message: str) -> None:
         """Mark download as failed."""
         self.status = DownloadStatus.FAILED
         self.error_message = error_message
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def cancel(self) -> None:
         """Cancel the download."""
         if self.status in (DownloadStatus.COMPLETED, DownloadStatus.FAILED):
             raise ValueError(f"Cannot cancel download in status {self.status}")
         self.status = DownloadStatus.CANCELLED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def is_finished(self) -> bool:
         """Check if download is in a terminal state."""

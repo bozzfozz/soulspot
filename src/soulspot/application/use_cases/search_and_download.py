@@ -1,7 +1,7 @@
 """Search and download track use case."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from soulspot.application.use_cases import UseCase
@@ -210,7 +210,7 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
             status=DownloadStatus.QUEUED,
             source_url=f"slskd://{selected_file['username']}/{selected_file['filename']}",
             progress_percent=0.0,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
         )
 
         await self._download_repository.add(download)
