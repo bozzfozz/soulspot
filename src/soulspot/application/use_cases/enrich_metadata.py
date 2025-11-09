@@ -102,9 +102,23 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         # Fall back to search if ISRC lookup failed
         if not recording:
             try:
-                artist = track.artist_names[0] if track.artist_names else ""
+                # Fetch artist name from repository
+                artist_name = ""
+                try:
+                    artist = await self._artist_repository.get_by_id(track.artist_id)
+                    if artist:
+                        artist_name = artist.name
+                except Exception as e:
+                    # Log the error but continue with empty artist name
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning(
+                        "Failed to fetch artist for track %s: %s", track.id.value, e
+                    )
+
                 results = await self._musicbrainz_client.search_recording(
-                    artist=artist,
+                    artist=artist_name,
                     title=track.title,
                     limit=5,
                 )

@@ -106,11 +106,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Readiness check endpoint
     @app.get("/ready", tags=["Health"])
     async def readiness_check() -> dict[str, Any]:
-        """Readiness check endpoint."""
-        # TODO: Add database connectivity check
+        """Readiness check endpoint with database connectivity check."""
+        status = "ready"
+        checks = {}
+
+        # Database connectivity check
+        try:
+            if hasattr(app.state, "db"):
+                # Perform a simple SELECT 1 query to verify database connectivity
+                async with app.state.db.session() as session:
+                    result = await session.execute("SELECT 1")
+                    result.scalar()
+                checks["database"] = "connected"
+            else:
+                checks["database"] = "not_initialized"
+                status = "unavailable"
+        except Exception as e:
+            logger.exception("Database health check failed: %s", e)
+            checks["database"] = f"error: {str(e)}"
+            status = "unavailable"
+
         return {
-            "status": "ready",
-            "database": "connected",
+            "status": status,
+            **checks,
         }
 
     # Root endpoint

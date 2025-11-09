@@ -2,22 +2,11 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
 
 from soulspot.application.use_cases import UseCase
-from soulspot.domain.entities import Download, Track
+from soulspot.domain.entities import Download, DownloadStatus, Track
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
 from soulspot.domain.value_objects import DownloadId, TrackId
-
-
-class DownloadStatus(str, Enum):
-    """Download status enumeration."""
-
-    QUEUED = "queued"
-    SEARCHING = "searching"
-    DOWNLOADING = "downloading"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 @dataclass
@@ -39,6 +28,7 @@ class SearchAndDownloadTrackResponse:
     search_results_count: int
     selected_file: dict[str, str] | None
     status: DownloadStatus
+    slskd_download_id: str | None = None
     error_message: str | None = None
 
 
@@ -202,7 +192,7 @@ class SearchAndDownloadTrackUseCase(
 
         # 5. Initiate download via slskd
         try:
-            _download_id_str = await self._slskd_client.download(
+            download_id_str = await self._slskd_client.download(
                 username=selected_file["username"],
                 filename=selected_file["filename"],
             )
@@ -212,6 +202,7 @@ class SearchAndDownloadTrackUseCase(
                 search_results_count=len(search_results) if search_results else 0,
                 selected_file=selected_file,
                 status=DownloadStatus.FAILED,
+                slskd_download_id=None,
                 error_message=f"Failed to initiate download: {e}",
             )
 
@@ -233,4 +224,5 @@ class SearchAndDownloadTrackUseCase(
             search_results_count=len(search_results) if search_results else 0,
             selected_file=selected_file,
             status=DownloadStatus.QUEUED,
+            slskd_download_id=download_id_str,
         )

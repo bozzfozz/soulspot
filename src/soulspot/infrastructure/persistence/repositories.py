@@ -5,8 +5,16 @@ from typing import TypeVar
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
-from soulspot.domain.exceptions import EntityNotFoundException
+from soulspot.domain.entities import (
+    Album,
+    Artist,
+    Download,
+    DownloadStatus,
+    Playlist,
+    PlaylistSource,
+    Track,
+)
+from soulspot.domain.exceptions import EntityNotFoundException, ValidationException
 from soulspot.domain.ports import (
     IAlbumRepository,
     IArtistRepository,
@@ -567,11 +575,19 @@ class PlaylistRepository(IPlaylistRepository):
         # Get playlist tracks in order
         track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
 
+        # Convert source string to PlaylistSource enum
+        try:
+            source = PlaylistSource(model.source)
+        except ValueError as e:
+            raise ValidationException(
+                f"Invalid playlist source '{model.source}' for playlist {model.id}"
+            ) from e
+
         return Playlist(
             id=PlaylistId.from_string(model.id),
             name=model.name,
             description=model.description,
-            source=model.source,
+            source=source,
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -594,11 +610,19 @@ class PlaylistRepository(IPlaylistRepository):
         # Get playlist tracks in order
         track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
 
+        # Convert source string to PlaylistSource enum
+        try:
+            source = PlaylistSource(model.source)
+        except ValueError as e:
+            raise ValidationException(
+                f"Invalid playlist source '{model.source}' for playlist {model.id}"
+            ) from e
+
         return Playlist(
             id=PlaylistId.from_string(model.id),
             name=model.name,
             description=model.description,
-            source=model.source,
+            source=source,
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -642,12 +666,20 @@ class PlaylistRepository(IPlaylistRepository):
             track_ids = [
                 TrackId.from_string(pt.track_id) for pt in model.playlist_tracks
             ]
+            # Convert source string to PlaylistSource enum
+            try:
+                source = PlaylistSource(model.source)
+            except ValueError as e:
+                raise ValidationException(
+                    f"Invalid playlist source '{model.source}' for playlist {model.id}"
+                ) from e
+
             playlists.append(
                 Playlist(
                     id=PlaylistId.from_string(model.id),
                     name=model.name,
                     description=model.description,
-                    source=model.source,
+                    source=source,
                     spotify_uri=SpotifyUri.from_string(model.spotify_uri)
                     if model.spotify_uri
                     else None,
@@ -723,10 +755,18 @@ class DownloadRepository(IDownloadRepository):
         if not model:
             return None
 
+        # Convert status string to DownloadStatus enum
+        try:
+            status = DownloadStatus(model.status)
+        except ValueError as e:
+            raise ValidationException(
+                f"Invalid download status '{model.status}' for download {model.id}"
+            ) from e
+
         return Download(
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
-            status=model.status,
+            status=status,
             target_path=FilePath(model.target_path) if model.target_path else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
@@ -748,10 +788,18 @@ class DownloadRepository(IDownloadRepository):
         if not model:
             return None
 
+        # Convert status string to DownloadStatus enum
+        try:
+            status = DownloadStatus(model.status)
+        except ValueError as e:
+            raise ValidationException(
+                f"Invalid download status '{model.status}' for download {model.id}"
+            ) from e
+
         return Download(
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
-            status=model.status,
+            status=status,
             target_path=FilePath(model.target_path) if model.target_path else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
@@ -776,7 +824,7 @@ class DownloadRepository(IDownloadRepository):
             Download(
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
-                status=model.status,
+                status=DownloadStatus(model.status),
                 target_path=FilePath(model.target_path) if model.target_path else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,
@@ -793,7 +841,14 @@ class DownloadRepository(IDownloadRepository):
         """List all active downloads (not finished)."""
         stmt = (
             select(DownloadModel)
-            .where(DownloadModel.status.in_(["queued", "searching", "downloading"]))
+            .where(
+                DownloadModel.status.in_(
+                    [
+                        DownloadStatus.QUEUED.value,
+                        DownloadStatus.DOWNLOADING.value,
+                    ]
+                )
+            )
             .order_by(DownloadModel.created_at)
         )
         result = await self.session.execute(stmt)
@@ -803,7 +858,7 @@ class DownloadRepository(IDownloadRepository):
             Download(
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
-                status=model.status,
+                status=DownloadStatus(model.status),
                 target_path=FilePath(model.target_path) if model.target_path else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,

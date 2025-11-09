@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from soulspot.api.dependencies import get_download_repository
+from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.value_objects import DownloadId
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
@@ -132,18 +133,18 @@ async def cancel_download(
         if not download:
             raise HTTPException(status_code=404, detail="Download not found")
 
-        # Update status to cancelled
-        download.status = "cancelled"
+        # Use domain method to cancel download
+        download.cancel()
         await download_repository.update(download)
 
         return {
             "message": "Download cancelled",
             "download_id": download_id,
-            "status": "cancelled",
+            "status": download.status.value,
         }
     except ValueError as e:
         raise HTTPException(
-            status_code=400, detail=f"Invalid download ID: {str(e)}"
+            status_code=400, detail=f"Invalid download ID or operation: {str(e)}"
         ) from e
 
 
@@ -168,20 +169,20 @@ async def retry_download(
         if not download:
             raise HTTPException(status_code=404, detail="Download not found")
 
-        if download.status.value != "failed":
+        if download.status != DownloadStatus.FAILED:
             raise HTTPException(
                 status_code=400, detail="Can only retry failed downloads"
             )
 
-        # Update status to queued
-        download.status = "queued"
+        # Update status to queued using domain enum
+        download.status = DownloadStatus.QUEUED
         download.error_message = None
         await download_repository.update(download)
 
         return {
             "message": "Download retry initiated",
             "download_id": download_id,
-            "status": "queued",
+            "status": download.status.value,
         }
     except ValueError as e:
         raise HTTPException(

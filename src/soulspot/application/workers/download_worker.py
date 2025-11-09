@@ -63,7 +63,7 @@ class DownloadWorker:
         if not track_id_str:
             raise ValueError("Missing track_id in job payload")
 
-        track_id = TrackId(track_id_str)
+        track_id = TrackId.from_string(track_id_str)
         search_query = job.payload.get("search_query")
         max_results = job.payload.get("max_results", 10)
         timeout_seconds = job.payload.get("timeout_seconds", 30)
@@ -89,10 +89,10 @@ class DownloadWorker:
             raise Exception(response.error_message)
 
         return {
-            "download_id": str(response.download.id) if response.download else None,
-            "slskd_download_id": response.download.slskd_download_id
+            "download_id": str(response.download.id.value)
             if response.download
             else None,
+            "slskd_download_id": response.slskd_download_id,
             "search_results_count": response.search_results_count,
             "status": response.status.value,
         }
@@ -122,7 +122,7 @@ class DownloadWorker:
         return await self._job_queue.enqueue(
             job_type=JobType.DOWNLOAD,
             payload={
-                "track_id": str(track_id),
+                "track_id": str(track_id.value),
                 "search_query": search_query,
                 "max_results": max_results,
                 "timeout_seconds": timeout_seconds,
