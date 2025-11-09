@@ -144,7 +144,6 @@ async def example_token_manager():
     print("Example 3: Token Management")
     print("=" * 60)
 
-
     from soulspot.application.services import TokenManager
 
     # Note: This is a mock example without actual Spotify client

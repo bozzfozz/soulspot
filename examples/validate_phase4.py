@@ -21,28 +21,24 @@ def validate_imports() -> bool:
 
     # Test use cases
     try:
-
         print("✓ Use cases imported successfully")
     except Exception as e:
         errors.append(f"✗ Use cases import failed: {e}")
 
     # Test services
     try:
-
         print("✓ Services imported successfully")
     except Exception as e:
         errors.append(f"✗ Services import failed: {e}")
 
     # Test workers
     try:
-
         print("✓ Workers imported successfully")
     except Exception as e:
         errors.append(f"✗ Workers import failed: {e}")
 
     # Test cache
     try:
-
         print("✓ Cache imported successfully")
     except Exception as e:
         errors.append(f"✗ Cache import failed: {e}")
