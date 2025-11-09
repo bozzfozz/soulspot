@@ -46,32 +46,42 @@ SoulSpot Bridge folgt einer **Layered Architecture** mit Domain-Driven Design Pr
 
 ### 📋 Projekt-Status
 
-**✅ Phases 1-4 Completed!**
+**✅ Phase 5 Complete! - Alpha Version 0.1.0**
 
 Aktueller Stand:
 - ✅ Umfassende Architektur-Dokumentation
 - ✅ Design-System und Style Guide
-- ✅ Roadmap und Feature-Planung
+- ✅ Complete Development Roadmap
 - ✅ Initial Assessment abgeschlossen
 - ✅ Domain Layer implementiert
 - ✅ Infrastructure Layer implementiert
 - ✅ External Integrations implementiert (slskd, Spotify, MusicBrainz)
 - ✅ Application Layer implementiert (Use Cases, Workers, Caching)
-- 🔄 Ready for Phase 5: Web UI
+- ✅ Web UI implementiert (Jinja2, HTMX, Tailwind CSS)
+- ✅ REST API vollständig integriert
+- ✅ Session Management und OAuth Flow
+- 🔄 Ready for Phase 6: Production Readiness
 
-**Nächste Schritte:** Web UI Implementation (Phase 5)
+**Nächste Schritte:** Production-Ready Features (Observability, CI/CD, Deployment) - See [Roadmap](docs/development-roadmap.md)
 
 ## 📚 Dokumentation
+
+### Getting Started
+- **[Setup Guide](docs/setup-guide.md)** - Umfassende Installations- und Konfigurationsanleitung
+- **[Contributing Guide](docs/contributing.md)** - Wie man zum Projekt beiträgt
+- **[Testing Guide](docs/testing-guide.md)** - Test-Strategie und Best Practices
 
 ### Haupt-Dokumentation
 - **[Architecture Guide](docs/architecture.md)** - Detaillierte Architektur-Spezifikation
 - **[Style Guide](docs/soulspot-style-guide.md)** - Design-System und UI-Guidelines
-- **[Roadmap](docs/roadmap)** - Feature-Roadmap und Referenzprojekte
-- **[Initial Assessment](docs/analysis/initial-assessment.md)** - Initiale Analyse und Aufgabenplan
+- **[Development Roadmap](docs/development-roadmap.md)** - Zukünftige Entwicklungsphasen und Features
+- **[CHANGELOG](CHANGELOG.md)** - Vollständige Versionshistorie
 
 ### Entwickler-Dokumentation
 - **[Example Issues](docs/issues/example-issues.md)** - Vorgefertigte Issue-Templates für Top-Tasks
-- **[Copilot Instructions](docs/.github/copilot-instructions.md)** - Entwicklungs-Prozess
+- **[Copilot Instructions](.github/copilot-instructions.md)** - Entwicklungs-Prozess
+- **[Initial Assessment](docs/analysis/initial-assessment.md)** - Initiale Analyse und Aufgabenplan
+- **[Development History](docs/history/)** - Phase Summaries und PR-Zusammenfassungen
 
 ## 🚀 Quick Start (geplant)
 
@@ -209,16 +219,18 @@ poetry run alembic downgrade -1
 
 Contributions sind willkommen! Bitte beachte:
 
-1. Lies die [Architektur-Dokumentation](docs/architecture.md)
-2. Erstelle ein Issue für neue Features oder Bugs
-3. Nutze die [Issue-Templates](.github/ISSUE_TEMPLATE/)
-4. Folge dem [Style Guide](docs/soulspot-style-guide.md)
-5. Schreibe Tests für neuen Code
-6. Erstelle einen Pull Request
+1. Lies den **[Contributing Guide](docs/contributing.md)** für detaillierte Anweisungen
+2. Folge dem **[Setup Guide](docs/setup-guide.md)** für die Entwicklungsumgebung
+3. Lies die **[Architektur-Dokumentation](docs/architecture.md)**
+4. Erstelle ein Issue für neue Features oder Bugs
+5. Nutze die [Issue-Templates](.github/ISSUE_TEMPLATE/)
+6. Folge dem [Style Guide](docs/soulspot-style-guide.md)
+7. Schreibe Tests für neuen Code (siehe [Testing Guide](docs/testing-guide.md))
+8. Erstelle einen Pull Request
 
 ### Entwicklungs-Workflow
 
-Siehe [docs/.github/copilot-instructions.md](docs/.github/copilot-instructions.md) für den vollständigen Entwicklungs-Lifecycle.
+Siehe [.github/copilot-instructions.md](.github/copilot-instructions.md) für den vollständigen Entwicklungs-Lifecycle.
 
 ## 📋 Roadmap
 
@@ -243,16 +255,20 @@ Siehe [docs/.github/copilot-instructions.md](docs/.github/copilot-instructions.m
 - [x] Token Management Service
 - [x] Caching Layer
 
-### Phase 5: User Interface (Wochen 15-18)
-- [ ] Web UI mit Jinja2 und HTMX
-- [ ] UI-Komponenten nach Style Guide
+### Phase 5: User Interface (Wochen 15-18) ✅
+- [x] Web UI mit Jinja2 und HTMX
+- [x] UI-Komponenten nach Style Guide
+- [x] REST API Integration
+- [x] Session Management und OAuth
 
-### Phase 6: Production-Ready (Wochen 19-20)
+### Phase 6: Production-Ready (Wochen 19-20) 🔄
 - [ ] Observability (Logging, Metrics, Tracing)
 - [ ] CI/CD Pipeline
 - [ ] Production-Dokumentation
+- [ ] Docker Production Setup
+- [ ] Security Hardening
 
-**Detaillierte Roadmap:** [docs/roadmap](docs/roadmap)
+**Detaillierte Roadmap:** [docs/development-roadmap.md](docs/development-roadmap.md)
 
 ## 🔗 Referenzen
 
@@ -279,4 +295,4 @@ TBD - Lizenz wird noch festgelegt
 
 ---
 
-**Status:** In Planung | **Letzte Aktualisierung:** 2025-11-08
+**Version:** 0.1.0 (Alpha) | **Status:** Active Development | **Letzte Aktualisierung:** 2025-11-09
