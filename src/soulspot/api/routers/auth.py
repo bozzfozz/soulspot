@@ -47,7 +47,7 @@ async def authorize(
         key="session_id",
         value=session.session_id,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
+        secure=settings.api.secure_cookies,  # Configurable via API_SECURE_COOKIES env var
         samesite="lax",
         max_age=3600,  # 1 hour
     )

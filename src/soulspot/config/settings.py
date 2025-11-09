@@ -155,6 +155,10 @@ class APISettings(BaseSettings):
         default=True,
         description="Allow credentials in CORS",
     )
+    secure_cookies: bool = Field(
+        default=False,
+        description="Use secure cookies (requires HTTPS). Set to True in production.",
+    )
 
     @field_validator("cors_origins", mode="before")
     @classmethod
