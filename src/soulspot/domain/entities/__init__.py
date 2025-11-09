@@ -58,7 +58,9 @@ class Album:
         """Validate album data."""
         if not self.title or not self.title.strip():
             raise ValueError("Album title cannot be empty")
-        if self.release_year is not None and (self.release_year < 1900 or self.release_year > 2100):
+        if self.release_year is not None and (
+            self.release_year < 1900 or self.release_year > 2100
+        ):
             raise ValueError("Invalid release year")
 
     def update_artwork(self, artwork_path: FilePath) -> None:
@@ -225,4 +227,8 @@ class Download:
 
     def is_finished(self) -> bool:
         """Check if download is in a terminal state."""
-        return self.status in (DownloadStatus.COMPLETED, DownloadStatus.FAILED, DownloadStatus.CANCELLED)
+        return self.status in (
+            DownloadStatus.COMPLETED,
+            DownloadStatus.FAILED,
+            DownloadStatus.CANCELLED,
+        )

@@ -34,14 +34,18 @@ async def index(
     playlists = await playlist_repository.list_all()
     tracks = await track_repository.list_all()
     active_downloads = await download_repository.list_active()
-    
+
     stats = {
         "playlists": len(playlists),
         "tracks": len(tracks),
         "downloads": len(active_downloads),
-        "queue_size": sum(1 for d in active_downloads if d.status.value in ["pending", "queued"]),
+        "queue_size": sum(
+            1 for d in active_downloads if d.status.value in ["pending", "queued"]
+        ),
     }
-    return templates.TemplateResponse("index.html", {"request": request, "stats": stats})
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "stats": stats}
+    )
 
 
 @router.get("/playlists", response_class=HTMLResponse)
@@ -51,7 +55,7 @@ async def playlists(
 ) -> Any:
     """List playlists page with real data."""
     playlists_list = await playlist_repository.list_all()
-    
+
     # Convert to template-friendly format
     playlists_data = [
         {
@@ -64,8 +68,10 @@ async def playlists(
         }
         for playlist in playlists_list
     ]
-    
-    return templates.TemplateResponse("playlists.html", {"request": request, "playlists": playlists_data})
+
+    return templates.TemplateResponse(
+        "playlists.html", {"request": request, "playlists": playlists_data}
+    )
 
 
 @router.get("/playlists/import", response_class=HTMLResponse)
@@ -81,7 +87,7 @@ async def downloads(
 ) -> Any:
     """Downloads page with real data."""
     downloads_list = await download_repository.list_active()
-    
+
     # Convert to template-friendly format
     downloads_data = [
         {
@@ -90,13 +96,17 @@ async def downloads(
             "status": download.status.value,
             "progress_percent": download.progress_percent,
             "error_message": download.error_message,
-            "started_at": download.started_at.isoformat() if download.started_at else None,
+            "started_at": download.started_at.isoformat()
+            if download.started_at
+            else None,
             "created_at": download.created_at.isoformat(),
         }
         for download in downloads_list
     ]
-    
-    return templates.TemplateResponse("downloads.html", {"request": request, "downloads": downloads_data})
+
+    return templates.TemplateResponse(
+        "downloads.html", {"request": request, "downloads": downloads_data}
+    )
 
 
 @router.get("/auth", response_class=HTMLResponse)

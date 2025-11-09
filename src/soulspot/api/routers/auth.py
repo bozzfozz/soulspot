@@ -40,7 +40,9 @@ async def authorize(
     code_verifier = SpotifyClient.generate_code_verifier()
 
     # Create session and store state + verifier
-    session = session_store.create_session(oauth_state=state, code_verifier=code_verifier)
+    session = session_store.create_session(
+        oauth_state=state, code_verifier=code_verifier
+    )
 
     # Set session cookie (HttpOnly for security)
     response.set_cookie(
@@ -83,25 +85,35 @@ async def callback(
 
     Returns:
         Success message with token info
-        
+
     Raises:
         HTTPException: If session or state verification fails
     """
     # Verify session exists
     if not session_id:
-        raise HTTPException(status_code=401, detail="No session found. Please start authorization flow again.")
+        raise HTTPException(
+            status_code=401,
+            detail="No session found. Please start authorization flow again.",
+        )
 
     session = session_store.get_session(session_id)
     if not session:
-        raise HTTPException(status_code=401, detail="Invalid or expired session. Please start authorization flow again.")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session. Please start authorization flow again.",
+        )
 
     # Verify state matches (CSRF protection)
     if session.oauth_state != state:
-        raise HTTPException(status_code=400, detail="State verification failed. Possible CSRF attack.")
+        raise HTTPException(
+            status_code=400, detail="State verification failed. Possible CSRF attack."
+        )
 
     # Get code verifier from session
     if not session.code_verifier:
-        raise HTTPException(status_code=400, detail="Code verifier not found in session.")
+        raise HTTPException(
+            status_code=400, detail="Code verifier not found in session."
+        )
 
     spotify_client = SpotifyClient(settings.spotify)
 
@@ -126,7 +138,9 @@ async def callback(
             "token_type": token_data.get("token_type", "Bearer"),
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to exchange code: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Failed to exchange code: {str(e)}"
+        ) from e
 
 
 @router.post("/refresh")
@@ -146,7 +160,7 @@ async def refresh_token(
 
     Returns:
         New token information
-        
+
     Raises:
         HTTPException: If session or refresh token not found
     """
@@ -159,7 +173,10 @@ async def refresh_token(
         raise HTTPException(status_code=401, detail="Invalid or expired session.")
 
     if not session.refresh_token:
-        raise HTTPException(status_code=400, detail="No refresh token in session. Please re-authenticate.")
+        raise HTTPException(
+            status_code=400,
+            detail="No refresh token in session. Please re-authenticate.",
+        )
 
     spotify_client = SpotifyClient(settings.spotify)
 
@@ -169,7 +186,9 @@ async def refresh_token(
         # Update session with new token
         session.set_tokens(
             access_token=token_data["access_token"],
-            refresh_token=token_data.get("refresh_token", session.refresh_token),  # Use old refresh token if not provided
+            refresh_token=token_data.get(
+                "refresh_token", session.refresh_token
+            ),  # Use old refresh token if not provided
             expires_in=token_data.get("expires_in", 3600),
         )
 
@@ -179,7 +198,9 @@ async def refresh_token(
             "token_type": token_data.get("token_type", "Bearer"),
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to refresh token: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Failed to refresh token: {str(e)}"
+        ) from e
 
 
 @router.get("/session")
@@ -195,7 +216,7 @@ async def get_session_info(
 
     Returns:
         Session information (without sensitive tokens)
-        
+
     Raises:
         HTTPException: If no session found
     """
@@ -236,5 +257,5 @@ async def logout(
         session_store.delete_session(session_id)
         response.delete_cookie(key="session_id")
         return {"message": "Logged out successfully"}
-    
+
     return {"message": "No active session"}

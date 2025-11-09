@@ -55,7 +55,9 @@ async def import_playlist(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to import playlist: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to import playlist: {str(e)}"
+        ) from e
 
 
 @router.get("/")
@@ -84,7 +86,9 @@ async def list_playlists(
                 "description": playlist.description,
                 "source": playlist.source.value,
                 "track_count": len(playlist.track_ids),
-                "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
+                "spotify_uri": str(playlist.spotify_uri)
+                if playlist.spotify_uri
+                else None,
                 "created_at": playlist.created_at.isoformat(),
                 "updated_at": playlist.updated_at.isoformat(),
             }
@@ -129,4 +133,6 @@ async def get_playlist(
             "updated_at": playlist.updated_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid playlist ID: {str(e)}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e

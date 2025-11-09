@@ -56,7 +56,9 @@ class MusicBrainzCache:
         key = self._make_recording_key(isrc)
         return await self._cache.get(key)
 
-    async def cache_recording_by_isrc(self, isrc: str, recording: dict[str, Any]) -> None:
+    async def cache_recording_by_isrc(
+        self, isrc: str, recording: dict[str, Any]
+    ) -> None:
         """Cache recording lookup by ISRC.
 
         Args:
@@ -66,7 +68,9 @@ class MusicBrainzCache:
         key = self._make_recording_key(isrc)
         await self._cache.set(key, recording, self.RECORDING_TTL)
 
-    async def get_search_results(self, artist: str, title: str) -> list[dict[str, Any]] | None:
+    async def get_search_results(
+        self, artist: str, title: str
+    ) -> list[dict[str, Any]] | None:
         """Get cached search results.
 
         Args:

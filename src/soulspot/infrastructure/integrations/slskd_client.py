@@ -155,7 +155,10 @@ class SlskdClient(ISlskdClient):
         downloads = response.json()
 
         for download in downloads:
-            if download.get("username") == username and download.get("filename") == filename:
+            if (
+                download.get("username") == username
+                and download.get("filename") == filename
+            ):
                 return {
                     "id": download_id,
                     "username": username,

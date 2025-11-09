@@ -47,7 +47,9 @@ class TestSlskdClientInit:
 class TestSlskdClientSearch:
     """Test slskd search operations."""
 
-    async def test_search_success(self, slskd_client: SlskdClient, mocker: MagicMock) -> None:
+    async def test_search_success(
+        self, slskd_client: SlskdClient, mocker: MagicMock
+    ) -> None:
         """Test successful search operation."""
         # Mock HTTP responses
         mock_client = AsyncMock()
@@ -95,7 +97,9 @@ class TestSlskdClientSearch:
         mock_client.post.assert_called_once()
         mock_client.get.assert_called_once()
 
-    async def test_search_no_results(self, slskd_client: SlskdClient, mocker: MagicMock) -> None:
+    async def test_search_no_results(
+        self, slskd_client: SlskdClient, mocker: MagicMock
+    ) -> None:
         """Test search with no results."""
         mock_client = AsyncMock()
 
@@ -120,7 +124,9 @@ class TestSlskdClientSearch:
 class TestSlskdClientDownload:
     """Test slskd download operations."""
 
-    async def test_download_success(self, slskd_client: SlskdClient, mocker: MagicMock) -> None:
+    async def test_download_success(
+        self, slskd_client: SlskdClient, mocker: MagicMock
+    ) -> None:
         """Test successful download initiation."""
         mock_client = AsyncMock()
 
@@ -192,12 +198,16 @@ class TestSlskdClientDownload:
         assert status["state"] == "not_found"
         assert status["progress"] == 0
 
-    async def test_get_download_status_invalid_id(self, slskd_client: SlskdClient) -> None:
+    async def test_get_download_status_invalid_id(
+        self, slskd_client: SlskdClient
+    ) -> None:
         """Test getting download status with invalid ID format."""
         with pytest.raises(ValueError, match="Invalid download_id format"):
             await slskd_client.get_download_status("invalid-id")
 
-    async def test_list_downloads(self, slskd_client: SlskdClient, mocker: MagicMock) -> None:
+    async def test_list_downloads(
+        self, slskd_client: SlskdClient, mocker: MagicMock
+    ) -> None:
         """Test listing all downloads."""
         mock_client = AsyncMock()
 
@@ -234,7 +244,9 @@ class TestSlskdClientDownload:
         assert downloads[1]["id"] == "user2//music/song2.mp3"
         assert downloads[1]["state"] == "Completed"
 
-    async def test_cancel_download(self, slskd_client: SlskdClient, mocker: MagicMock) -> None:
+    async def test_cancel_download(
+        self, slskd_client: SlskdClient, mocker: MagicMock
+    ) -> None:
         """Test cancelling a download."""
         mock_client = AsyncMock()
 

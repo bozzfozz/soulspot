@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from soulspot.application.cache.base_cache import BaseCache, InMemoryCache
+from soulspot.application.cache.base_cache import InMemoryCache
 
 
 class TestInMemoryCache:

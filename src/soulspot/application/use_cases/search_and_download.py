@@ -42,7 +42,9 @@ class SearchAndDownloadTrackResponse:
     error_message: str | None = None
 
 
-class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, SearchAndDownloadTrackResponse]):
+class SearchAndDownloadTrackUseCase(
+    UseCase[SearchAndDownloadTrackRequest, SearchAndDownloadTrackResponse]
+):
     """Use case for searching and downloading a track from Soulseek.
 
     This use case:
@@ -103,7 +105,11 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         # Filter for audio files (MP3, FLAC, etc.)
         audio_extensions = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav"}
         audio_files = [
-            r for r in results if any(r.get("filename", "").lower().endswith(ext) for ext in audio_extensions)
+            r
+            for r in results
+            if any(
+                r.get("filename", "").lower().endswith(ext) for ext in audio_extensions
+            )
         ]
 
         if not audio_files:
@@ -127,14 +133,19 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         elif quality_preference == "good":
             # Return files with at least 256kbps or FLAC
             good_files = [
-                f for f in audio_files if f.get("bitrate", 0) >= 256 or f.get("filename", "").lower().endswith(".flac")
+                f
+                for f in audio_files
+                if f.get("bitrate", 0) >= 256
+                or f.get("filename", "").lower().endswith(".flac")
             ]
             return max(good_files, key=quality_score) if good_files else None
         else:  # any
             # Return any available file
             return audio_files[0] if audio_files else None
 
-    async def execute(self, request: SearchAndDownloadTrackRequest) -> SearchAndDownloadTrackResponse:
+    async def execute(
+        self, request: SearchAndDownloadTrackRequest
+    ) -> SearchAndDownloadTrackResponse:
         """Execute the search and download use case.
 
         Args:
@@ -174,7 +185,9 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
 
         # 4. Select best quality file
         selected_file = self._select_best_file(
-            search_results.get("results", []) if isinstance(search_results, dict) else search_results,
+            search_results.get("results", [])
+            if isinstance(search_results, dict)
+            else search_results,
             request.quality_preference,
         )
 
@@ -189,7 +202,7 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
 
         # 5. Initiate download via slskd
         try:
-            download_id_str = await self._slskd_client.download(
+            _download_id_str = await self._slskd_client.download(
                 username=selected_file["username"],
                 filename=selected_file["filename"],
             )

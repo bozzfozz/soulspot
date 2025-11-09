@@ -31,7 +31,10 @@ class MusicBrainzClient(IMusicBrainzClient):
         """Get or create HTTP client."""
         if self._client is None:
             # User-Agent is required by MusicBrainz
-            user_agent = f"{self.settings.app_name}/{self.settings.app_version} " f"( {self.settings.contact} )"
+            user_agent = (
+                f"{self.settings.app_name}/{self.settings.app_version} "
+                f"( {self.settings.contact} )"
+            )
 
             self._client = httpx.AsyncClient(
                 base_url=self.API_BASE_URL,
@@ -49,7 +52,9 @@ class MusicBrainzClient(IMusicBrainzClient):
             await self._client.aclose()
             self._client = None
 
-    async def _rate_limited_request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+    async def _rate_limited_request(
+        self, method: str, url: str, **kwargs: Any
+    ) -> httpx.Response:
         """
         Make a rate-limited request to MusicBrainz API.
 
@@ -111,7 +116,9 @@ class MusicBrainzClient(IMusicBrainzClient):
                 return None
             raise
 
-    async def search_recording(self, artist: str, title: str, limit: int = 10) -> list[dict[str, Any]]:
+    async def search_recording(
+        self, artist: str, title: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
         """
         Search for recordings by artist and title.
 

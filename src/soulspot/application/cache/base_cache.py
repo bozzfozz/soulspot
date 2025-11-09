@@ -138,7 +138,9 @@ class InMemoryCache(BaseCache[K, V]):
             Number of entries removed
         """
         async with self._lock:
-            expired_keys = [key for key, entry in self._cache.items() if entry.is_expired()]
+            expired_keys = [
+                key for key, entry in self._cache.items() if entry.is_expired()
+            ]
             for key in expired_keys:
                 del self._cache[key]
             return len(expired_keys)

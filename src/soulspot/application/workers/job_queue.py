@@ -35,7 +35,7 @@ class Job:
     job_type: JobType
     payload: dict[str, Any]
     status: JobStatus = JobStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error: str | None = None
@@ -253,7 +253,9 @@ class JobQueue:
             num_workers: Number of worker threads to start
         """
         self._shutdown = False
-        self._workers = [asyncio.create_task(self._worker_loop()) for _ in range(num_workers)]
+        self._workers = [
+            asyncio.create_task(self._worker_loop()) for _ in range(num_workers)
+        ]
 
     async def stop(self) -> None:
         """Stop all workers and wait for completion."""
@@ -285,7 +287,11 @@ class JobQueue:
 
         start_time = asyncio.get_event_loop().time()
 
-        while job.status not in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+        while job.status not in (
+            JobStatus.COMPLETED,
+            JobStatus.FAILED,
+            JobStatus.CANCELLED,
+        ):
             if timeout and (asyncio.get_event_loop().time() - start_time) > timeout:
                 raise TimeoutError(f"Job did not complete within {timeout}s")
 

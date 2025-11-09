@@ -13,7 +13,14 @@ from soulspot.domain.entities import (
     PlaylistSource,
     Track,
 )
-from soulspot.domain.value_objects import AlbumId, ArtistId, DownloadId, FilePath, PlaylistId, TrackId
+from soulspot.domain.value_objects import (
+    AlbumId,
+    ArtistId,
+    DownloadId,
+    FilePath,
+    PlaylistId,
+    TrackId,
+)
 
 
 class TestArtist:
@@ -88,7 +95,9 @@ class TestTrack:
 
     def test_track_is_downloaded(self) -> None:
         """Test is_downloaded method."""
-        track = Track(id=TrackId.generate(), title="Test Track", artist_id=ArtistId.generate())
+        track = Track(
+            id=TrackId.generate(), title="Test Track", artist_id=ArtistId.generate()
+        )
         assert not track.is_downloaded()
 
         track.update_file_path(FilePath.from_string("/tmp/test.mp3"))

@@ -8,8 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.application.services.session_store import SessionStore
 from soulspot.application.services.token_manager import TokenManager
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
-from soulspot.application.use_cases.import_spotify_playlist import ImportSpotifyPlaylistUseCase
-from soulspot.application.use_cases.search_and_download import SearchAndDownloadTrackUseCase
+from soulspot.application.use_cases.import_spotify_playlist import (
+    ImportSpotifyPlaylistUseCase,
+)
+from soulspot.application.use_cases.search_and_download import (
+    SearchAndDownloadTrackUseCase,
+)
 from soulspot.config import Settings, get_settings
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
@@ -23,7 +27,6 @@ from soulspot.infrastructure.persistence.repositories import (
     TrackRepository,
 )
 
-
 # Global session store instance
 # In production, this should be stored in app.state or use Redis
 _session_store: SessionStore | None = None
@@ -31,7 +34,7 @@ _session_store: SessionStore | None = None
 
 def get_session_store() -> SessionStore:
     """Get or create session store singleton.
-    
+
     Returns:
         Session store instance
     """
@@ -58,7 +61,9 @@ def get_slskd_client(settings: Settings = Depends(get_settings)) -> SlskdClient:
     return SlskdClient(settings.slskd)
 
 
-def get_musicbrainz_client(settings: Settings = Depends(get_settings)) -> MusicBrainzClient:
+def get_musicbrainz_client(
+    settings: Settings = Depends(get_settings),
+) -> MusicBrainzClient:
     """Get MusicBrainz client instance."""
     return MusicBrainzClient(settings.musicbrainz)
 

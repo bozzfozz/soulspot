@@ -17,10 +17,16 @@ class UseCase(ABC, Generic[TRequest, TResponse]):
         pass
 
 
-# Import concrete use cases
-from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
-from soulspot.application.use_cases.import_spotify_playlist import ImportSpotifyPlaylistUseCase
-from soulspot.application.use_cases.search_and_download import SearchAndDownloadTrackUseCase
+# Import concrete use cases (after UseCase definition to avoid circular imports)
+from soulspot.application.use_cases.enrich_metadata import (  # noqa: E402
+    EnrichMetadataUseCase,
+)
+from soulspot.application.use_cases.import_spotify_playlist import (  # noqa: E402
+    ImportSpotifyPlaylistUseCase,
+)
+from soulspot.application.use_cases.search_and_download import (  # noqa: E402
+    SearchAndDownloadTrackUseCase,
+)
 
 __all__ = [
     "UseCase",

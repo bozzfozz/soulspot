@@ -45,7 +45,9 @@ class Session:
             return True
         return datetime.now(UTC) >= self.token_expires_at
 
-    def set_tokens(self, access_token: str, refresh_token: str, expires_in: int) -> None:
+    def set_tokens(
+        self, access_token: str, refresh_token: str, expires_in: int
+    ) -> None:
         """Set OAuth tokens.
 
         Args:
@@ -74,7 +76,9 @@ class SessionStore:
         self.session_timeout_seconds = session_timeout_seconds
         self._sessions: dict[str, Session] = {}
 
-    def create_session(self, oauth_state: str | None = None, code_verifier: str | None = None) -> Session:
+    def create_session(
+        self, oauth_state: str | None = None, code_verifier: str | None = None
+    ) -> Session:
         """Create a new session.
 
         Args:
@@ -124,7 +128,9 @@ class SessionStore:
             Session if found and not expired, None otherwise
         """
         for session in self._sessions.values():
-            if session.oauth_state == state and not session.is_expired(self.session_timeout_seconds):
+            if session.oauth_state == state and not session.is_expired(
+                self.session_timeout_seconds
+            ):
                 session.refresh_access()
                 return session
         return None

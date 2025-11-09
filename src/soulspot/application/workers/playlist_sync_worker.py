@@ -42,7 +42,9 @@ class PlaylistSyncWorker:
 
     def register(self) -> None:
         """Register handler with job queue."""
-        self._job_queue.register_handler(JobType.PLAYLIST_SYNC, self._handle_playlist_sync_job)
+        self._job_queue.register_handler(
+            JobType.PLAYLIST_SYNC, self._handle_playlist_sync_job
+        )
 
     async def _handle_playlist_sync_job(self, job: Job) -> Any:
         """Handle a playlist sync job.
@@ -64,7 +66,9 @@ class PlaylistSyncWorker:
             raise ValueError("Missing access_token in job payload")
 
         # Execute use case
-        from soulspot.application.use_cases.import_spotify_playlist import ImportSpotifyPlaylistRequest
+        from soulspot.application.use_cases.import_spotify_playlist import (
+            ImportSpotifyPlaylistRequest,
+        )
 
         request = ImportSpotifyPlaylistRequest(
             playlist_id=playlist_id,

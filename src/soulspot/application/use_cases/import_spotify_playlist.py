@@ -33,7 +33,9 @@ class ImportSpotifyPlaylistResponse:
     errors: list[str]
 
 
-class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportSpotifyPlaylistResponse]):
+class ImportSpotifyPlaylistUseCase(
+    UseCase[ImportSpotifyPlaylistRequest, ImportSpotifyPlaylistResponse]
+):
     """Use case for importing a Spotify playlist into the system.
 
     This use case:
@@ -64,7 +66,9 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
         self._track_repository = track_repository
         self._artist_repository = artist_repository
 
-    async def execute(self, request: ImportSpotifyPlaylistRequest) -> ImportSpotifyPlaylistResponse:
+    async def execute(
+        self, request: ImportSpotifyPlaylistRequest
+    ) -> ImportSpotifyPlaylistResponse:
         """Execute the import playlist use case.
 
         Args:
@@ -84,7 +88,7 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                 request.access_token,
             )
         except Exception as e:
-            raise ValueError(f"Failed to fetch playlist from Spotify: {e}")
+            raise ValueError(f"Failed to fetch playlist from Spotify: {e}") from e
 
         # 2. Create or update playlist entity
         playlist_id = PlaylistId.generate()
@@ -99,7 +103,9 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
         )
 
         # Check if playlist already exists by Spotify URI
-        existing_playlist = await self._playlist_repository.get_by_spotify_uri(playlist.spotify_uri)
+        existing_playlist = await self._playlist_repository.get_by_spotify_uri(
+            playlist.spotify_uri
+        )
         if existing_playlist:
             # Update existing playlist
             existing_playlist.name = playlist.name
@@ -124,7 +130,11 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                         continue
 
                     # Get or create artist
-                    artist_name = track_data["artists"][0]["name"] if track_data.get("artists") else "Unknown Artist"
+                    artist_name = (
+                        track_data["artists"][0]["name"]
+                        if track_data.get("artists")
+                        else "Unknown Artist"
+                    )
                     artist = await self._artist_repository.get_by_name(artist_name)
                     if not artist:
                         artist = Artist(
@@ -154,7 +164,9 @@ class ImportSpotifyPlaylistUseCase(UseCase[ImportSpotifyPlaylistRequest, ImportS
                     )
 
                     # Check if track already exists by Spotify URI
-                    existing_track = await self._track_repository.get_by_spotify_uri(track.spotify_uri)
+                    existing_track = await self._track_repository.get_by_spotify_uri(
+                        track.spotify_uri
+                    )
                     if existing_track:
                         # Update existing track
                         existing_track.title = track.title

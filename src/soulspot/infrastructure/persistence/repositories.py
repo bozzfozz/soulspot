@@ -89,7 +89,9 @@ class ArtistRepository(IArtistRepository):
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -107,7 +109,9 @@ class ArtistRepository(IArtistRepository):
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -125,7 +129,9 @@ class ArtistRepository(IArtistRepository):
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -133,7 +139,9 @@ class ArtistRepository(IArtistRepository):
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Artist]:
         """List all artists with pagination."""
-        stmt = select(ArtistModel).order_by(ArtistModel.name).limit(limit).offset(offset)
+        stmt = (
+            select(ArtistModel).order_by(ArtistModel.name).limit(limit).offset(offset)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -141,7 +149,9 @@ class ArtistRepository(IArtistRepository):
             Artist(
                 id=ArtistId.from_string(model.id),
                 name=model.name,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
@@ -210,7 +220,9 @@ class AlbumRepository(IAlbumRepository):
             title=model.title,
             artist_id=ArtistId.from_string(model.artist_id),
             release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
             created_at=model.created_at,
@@ -219,7 +231,11 @@ class AlbumRepository(IAlbumRepository):
 
     async def get_by_artist(self, artist_id: ArtistId) -> list[Album]:
         """Get all albums by an artist."""
-        stmt = select(AlbumModel).where(AlbumModel.artist_id == str(artist_id.value)).order_by(AlbumModel.release_year)
+        stmt = (
+            select(AlbumModel)
+            .where(AlbumModel.artist_id == str(artist_id.value))
+            .order_by(AlbumModel.release_year)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -229,9 +245,13 @@ class AlbumRepository(IAlbumRepository):
                 title=model.title,
                 artist_id=ArtistId.from_string(model.artist_id),
                 release_year=model.release_year,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
-                artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
+                artwork_path=FilePath(model.artwork_path)
+                if model.artwork_path
+                else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -252,7 +272,9 @@ class AlbumRepository(IAlbumRepository):
             title=model.title,
             artist_id=ArtistId.from_string(model.artist_id),
             release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
             created_at=model.created_at,
@@ -331,7 +353,9 @@ class TrackRepository(ITrackRepository):
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
             file_path=FilePath(model.file_path) if model.file_path else None,
@@ -356,7 +380,9 @@ class TrackRepository(ITrackRepository):
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
             file_path=FilePath(model.file_path) if model.file_path else None,
@@ -379,11 +405,15 @@ class TrackRepository(ITrackRepository):
                 id=TrackId.from_string(model.id),
                 title=model.title,
                 artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+                album_id=AlbumId.from_string(model.album_id)
+                if model.album_id
+                else None,
                 duration_ms=model.duration_ms,
                 track_number=model.track_number,
                 disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
                 file_path=FilePath(model.file_path) if model.file_path else None,
@@ -395,7 +425,11 @@ class TrackRepository(ITrackRepository):
 
     async def get_by_artist(self, artist_id: ArtistId) -> list[Track]:
         """Get all tracks by an artist."""
-        stmt = select(TrackModel).where(TrackModel.artist_id == str(artist_id.value)).order_by(TrackModel.title)
+        stmt = (
+            select(TrackModel)
+            .where(TrackModel.artist_id == str(artist_id.value))
+            .order_by(TrackModel.title)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -404,11 +438,15 @@ class TrackRepository(ITrackRepository):
                 id=TrackId.from_string(model.id),
                 title=model.title,
                 artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+                album_id=AlbumId.from_string(model.album_id)
+                if model.album_id
+                else None,
                 duration_ms=model.duration_ms,
                 track_number=model.track_number,
                 disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
                 file_path=FilePath(model.file_path) if model.file_path else None,
@@ -429,11 +467,15 @@ class TrackRepository(ITrackRepository):
                 id=TrackId.from_string(model.id),
                 title=model.title,
                 artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+                album_id=AlbumId.from_string(model.album_id)
+                if model.album_id
+                else None,
                 duration_ms=model.duration_ms,
                 track_number=model.track_number,
                 disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
                 file_path=FilePath(model.file_path) if model.file_path else None,
@@ -480,7 +522,9 @@ class PlaylistRepository(IPlaylistRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(f"Playlist with id {playlist.id.value} not found")
+            raise EntityNotFoundException(
+                f"Playlist with id {playlist.id.value} not found"
+            )
 
         model.name = playlist.name
         model.description = playlist.description
@@ -489,7 +533,9 @@ class PlaylistRepository(IPlaylistRepository):
         model.updated_at = playlist.updated_at
 
         # Update playlist tracks - delete old and add new
-        delete_stmt = delete(PlaylistTrackModel).where(PlaylistTrackModel.playlist_id == str(playlist.id.value))
+        delete_stmt = delete(PlaylistTrackModel).where(
+            PlaylistTrackModel.playlist_id == str(playlist.id.value)
+        )
         await self.session.execute(delete_stmt)
 
         for position, track_id in enumerate(playlist.track_ids):
@@ -505,7 +551,9 @@ class PlaylistRepository(IPlaylistRepository):
         stmt = delete(PlaylistModel).where(PlaylistModel.id == str(playlist_id.value))
         result = await self.session.execute(stmt)
         if result.rowcount == 0:
-            raise EntityNotFoundException(f"Playlist with id {playlist_id.value} not found")
+            raise EntityNotFoundException(
+                f"Playlist with id {playlist_id.value} not found"
+            )
 
     async def get_by_id(self, playlist_id: PlaylistId) -> Playlist | None:
         """Get a playlist by ID."""
@@ -524,7 +572,9 @@ class PlaylistRepository(IPlaylistRepository):
             name=model.name,
             description=model.description,
             source=model.source,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -532,7 +582,9 @@ class PlaylistRepository(IPlaylistRepository):
 
     async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Playlist | None:
         """Get a playlist by Spotify URI."""
-        stmt = select(PlaylistModel).where(PlaylistModel.spotify_uri == str(spotify_uri))
+        stmt = select(PlaylistModel).where(
+            PlaylistModel.spotify_uri == str(spotify_uri)
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -547,7 +599,9 @@ class PlaylistRepository(IPlaylistRepository):
             name=model.name,
             description=model.description,
             source=model.source,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -556,7 +610,9 @@ class PlaylistRepository(IPlaylistRepository):
     async def add_track(self, playlist_id: PlaylistId, track_id: TrackId) -> None:
         """Add a track to a playlist."""
         # Get current max position
-        stmt = select(PlaylistTrackModel).where(PlaylistTrackModel.playlist_id == str(playlist_id.value))
+        stmt = select(PlaylistTrackModel).where(
+            PlaylistTrackModel.playlist_id == str(playlist_id.value)
+        )
         result = await self.session.execute(stmt)
         existing_tracks = result.scalars().all()
 
@@ -572,20 +628,29 @@ class PlaylistRepository(IPlaylistRepository):
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Playlist]:
         """List all playlists with pagination."""
-        stmt = select(PlaylistModel).order_by(PlaylistModel.name).limit(limit).offset(offset)
+        stmt = (
+            select(PlaylistModel)
+            .order_by(PlaylistModel.name)
+            .limit(limit)
+            .offset(offset)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
         playlists = []
         for model in models:
-            track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
+            track_ids = [
+                TrackId.from_string(pt.track_id) for pt in model.playlist_tracks
+            ]
             playlists.append(
                 Playlist(
                     id=PlaylistId.from_string(model.id),
                     name=model.name,
                     description=model.description,
                     source=model.source,
-                    spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                    spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                    if model.spotify_uri
+                    else None,
                     track_ids=track_ids,
                     created_at=model.created_at,
                     updated_at=model.updated_at,
@@ -626,7 +691,9 @@ class DownloadRepository(IDownloadRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(f"Download with id {download.id.value} not found")
+            raise EntityNotFoundException(
+                f"Download with id {download.id.value} not found"
+            )
 
         model.track_id = str(download.track_id.value)
         model.status = download.status.value
@@ -643,7 +710,9 @@ class DownloadRepository(IDownloadRepository):
         stmt = delete(DownloadModel).where(DownloadModel.id == str(download_id.value))
         result = await self.session.execute(stmt)
         if result.rowcount == 0:
-            raise EntityNotFoundException(f"Download with id {download_id.value} not found")
+            raise EntityNotFoundException(
+                f"Download with id {download_id.value} not found"
+            )
 
     async def get_by_id(self, download_id: DownloadId) -> Download | None:
         """Get a download by ID."""
@@ -670,7 +739,9 @@ class DownloadRepository(IDownloadRepository):
 
     async def get_by_track(self, track_id: TrackId) -> Download | None:
         """Get a download by track ID."""
-        stmt = select(DownloadModel).where(DownloadModel.track_id == str(track_id.value))
+        stmt = select(DownloadModel).where(
+            DownloadModel.track_id == str(track_id.value)
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -693,7 +764,11 @@ class DownloadRepository(IDownloadRepository):
 
     async def list_by_status(self, status: str) -> list[Download]:
         """List all downloads with a specific status."""
-        stmt = select(DownloadModel).where(DownloadModel.status == status).order_by(DownloadModel.created_at)
+        stmt = (
+            select(DownloadModel)
+            .where(DownloadModel.status == status)
+            .order_by(DownloadModel.created_at)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 

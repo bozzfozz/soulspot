@@ -10,7 +10,7 @@ from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistResponse,
     ImportSpotifyPlaylistUseCase,
 )
-from soulspot.domain.entities import Artist, Playlist, PlaylistSource, Track
+from soulspot.domain.entities import Playlist, PlaylistSource, Track
 from soulspot.domain.value_objects import ArtistId, PlaylistId, SpotifyUri, TrackId
 
 
@@ -86,7 +86,13 @@ class TestImportSpotifyPlaylistUseCase:
                             "name": "Test Track 1",
                             "duration_ms": 180000,
                             "uri": "spotify:track:track-1",
-                            "artists": [{"id": "artist-1", "name": "Test Artist 1", "uri": "spotify:artist:artist-1"}],
+                            "artists": [
+                                {
+                                    "id": "artist-1",
+                                    "name": "Test Artist 1",
+                                    "uri": "spotify:artist:artist-1",
+                                }
+                            ],
                         }
                     },
                     {
@@ -95,7 +101,13 @@ class TestImportSpotifyPlaylistUseCase:
                             "name": "Test Track 2",
                             "duration_ms": 200000,
                             "uri": "spotify:track:track-2",
-                            "artists": [{"id": "artist-2", "name": "Test Artist 2", "uri": "spotify:artist:artist-2"}],
+                            "artists": [
+                                {
+                                    "id": "artist-2",
+                                    "name": "Test Artist 2",
+                                    "uri": "spotify:artist:artist-2",
+                                }
+                            ],
                         }
                     },
                 ],
@@ -125,7 +137,9 @@ class TestImportSpotifyPlaylistUseCase:
         assert len(response.errors) == 0
 
         # Verify API calls
-        spotify_client_mock.get_playlist.assert_called_once_with("test-playlist-id", "test-token")
+        spotify_client_mock.get_playlist.assert_called_once_with(
+            "test-playlist-id", "test-token"
+        )
         assert playlist_repository_mock.add.call_count == 1
         assert track_repository_mock.add.call_count == 2
         assert artist_repository_mock.add.call_count == 2
@@ -228,7 +242,13 @@ class TestImportSpotifyPlaylistUseCase:
                             "name": "Valid Track",
                             "duration_ms": 180000,
                             "uri": "spotify:track:track-1",
-                            "artists": [{"id": "artist-1", "name": "Test Artist", "uri": "spotify:artist:artist-1"}],
+                            "artists": [
+                                {
+                                    "id": "artist-1",
+                                    "name": "Test Artist",
+                                    "uri": "spotify:artist:artist-1",
+                                }
+                            ],
                         }
                     },
                     {
@@ -296,7 +316,13 @@ class TestImportSpotifyPlaylistUseCase:
                             "name": "Existing Track",
                             "duration_ms": 180000,
                             "uri": "spotify:track:track-1",
-                            "artists": [{"id": "artist-1", "name": "Test Artist", "uri": "spotify:artist:artist-1"}],
+                            "artists": [
+                                {
+                                    "id": "artist-1",
+                                    "name": "Test Artist",
+                                    "uri": "spotify:artist:artist-1",
+                                }
+                            ],
                         }
                     },
                 ],
