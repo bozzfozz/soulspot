@@ -3,39 +3,84 @@
 {% block title %}Dashboard - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="dashboard">
-    <h1>Welcome to SoulSpot Bridge</h1>
+<div class="dashboard space-y-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 leading-tight">
+            Welcome to SoulSpot Bridge
+        </h1>
+        <p class="text-base text-gray-600 mt-2">
+            Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation
+        </p>
+    </div>
     
-    <div class="stats-grid">
-        <div class="stat-card">
-            <h3>Playlists</h3>
-            <p class="stat-number">{{ stats.playlists or 0 }}</p>
-            <a href="/ui/playlists" class="btn btn-primary">View Playlists</a>
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title text-gray-700">Playlists</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-5xl font-bold text-primary-500 mb-4">
+                    {{ stats.playlists or 0 }}
+                </p>
+            </div>
+            <div class="card-footer">
+                <a href="/ui/playlists" class="btn btn-primary btn-sm">
+                    View Playlists
+                </a>
+            </div>
         </div>
         
-        <div class="stat-card">
-            <h3>Tracks</h3>
-            <p class="stat-number">{{ stats.tracks or 0 }}</p>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title text-gray-700">Tracks</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-5xl font-bold text-primary-500 mb-4">
+                    {{ stats.tracks or 0 }}
+                </p>
+            </div>
         </div>
         
-        <div class="stat-card">
-            <h3>Downloads</h3>
-            <p class="stat-number">{{ stats.downloads or 0 }}</p>
-            <a href="/ui/downloads" class="btn btn-primary">View Downloads</a>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title text-gray-700">Downloads</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-5xl font-bold text-primary-500 mb-4">
+                    {{ stats.downloads or 0 }}
+                </p>
+            </div>
+            <div class="card-footer">
+                <a href="/ui/downloads" class="btn btn-primary btn-sm">
+                    View Downloads
+                </a>
+            </div>
         </div>
         
-        <div class="stat-card">
-            <h3>Queue Size</h3>
-            <p class="stat-number">{{ stats.queue_size or 0 }}</p>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title text-gray-700">Queue Size</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-5xl font-bold text-primary-500 mb-4">
+                    {{ stats.queue_size or 0 }}
+                </p>
+            </div>
         </div>
     </div>
 
-    <div class="quick-actions">
-        <h2>Quick Actions</h2>
-        <div class="action-buttons">
-            <a href="/ui/playlists/import" class="btn btn-large btn-primary">Import Playlist</a>
-            <a href="/ui/search" class="btn btn-large btn-secondary">Search Tracks</a>
-            <a href="/ui/auth" class="btn btn-large btn-secondary">Connect Spotify</a>
+    <!-- Quick Actions Section -->
+    <div class="mt-12">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-6">Quick Actions</h2>
+        <div class="flex flex-wrap gap-4">
+            <a href="/ui/playlists/import" class="btn btn-primary btn-lg">
+                Import Playlist
+            </a>
+            <a href="/ui/auth" class="btn btn-secondary btn-lg">
+                Connect Spotify
+            </a>
         </div>
     </div>
 </div>

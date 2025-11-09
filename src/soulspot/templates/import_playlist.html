@@ -3,44 +3,76 @@
 {% block title %}Import Playlist - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="import-playlist">
-    <h1>Import Spotify Playlist</h1>
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900 leading-tight mb-2">Import Spotify Playlist</h1>
+        <p class="text-base text-gray-600">
+            Import a Spotify playlist to start downloading tracks
+        </p>
+    </div>
     
-    <form id="import-form" 
-          hx-post="/api/v1/playlists/import"
-          hx-target="#import-result"
-          hx-swap="innerHTML">
-        <div class="form-group">
-            <label for="playlist_id">Spotify Playlist ID or URL</label>
-            <input type="text" 
-                   id="playlist_id" 
-                   name="playlist_id" 
-                   placeholder="spotify:playlist:... or https://open.spotify.com/playlist/..."
-                   required>
-            <small>Enter a Spotify playlist ID or paste the full URL</small>
-        </div>
-        
-        <div class="form-group">
-            <label for="access_token">Access Token</label>
-            <input type="text" 
-                   id="access_token" 
-                   name="access_token" 
-                   placeholder="Your Spotify access token"
-                   required>
-            <small>Get a token by connecting your Spotify account</small>
-            <a href="/ui/auth" class="btn btn-small btn-link">Connect Spotify</a>
-        </div>
-        
-        <div class="form-group checkbox">
-            <label>
-                <input type="checkbox" name="fetch_all_tracks" checked>
-                Fetch all tracks in the playlist
-            </label>
-        </div>
-        
-        <button type="submit" class="btn btn-primary btn-large">Import Playlist</button>
-    </form>
+    <!-- Import Form -->
+    <div class="card">
+        <form id="import-form" 
+              hx-post="/api/v1/playlists/import"
+              hx-target="#import-result"
+              hx-swap="innerHTML"
+              class="space-y-6">
+            
+            <div class="form-group">
+                <label for="playlist_id" class="form-label">
+                    Spotify Playlist ID or URL <span class="text-error-500">*</span>
+                </label>
+                <input type="text" 
+                       id="playlist_id" 
+                       name="playlist_id" 
+                       class="form-input"
+                       placeholder="spotify:playlist:... or https://open.spotify.com/playlist/..."
+                       required>
+                <p class="form-helper">
+                    Enter a Spotify playlist ID or paste the full URL
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label for="access_token" class="form-label">
+                    Access Token <span class="text-error-500">*</span>
+                </label>
+                <input type="text" 
+                       id="access_token" 
+                       name="access_token" 
+                       class="form-input"
+                       placeholder="Your Spotify access token"
+                       required>
+                <p class="form-helper">
+                    Get a token by connecting your Spotify account
+                </p>
+                <a href="/ui/auth" class="btn btn-secondary btn-sm mt-2">
+                    Connect Spotify
+                </a>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <input type="checkbox" 
+                       id="fetch_all_tracks"
+                       name="fetch_all_tracks" 
+                       checked
+                       class="w-4 h-4 text-primary-500 rounded border-gray-300 focus:ring-primary-500">
+                <label for="fetch_all_tracks" class="text-sm text-gray-700 cursor-pointer">
+                    Fetch all tracks in the playlist
+                </label>
+            </div>
+            
+            <div class="flex justify-end">
+                <button type="submit" class="btn btn-primary btn-lg">
+                    Import Playlist
+                </button>
+            </div>
+        </form>
+    </div>
     
-    <div id="import-result" class="result-area"></div>
+    <!-- Result Area -->
+    <div id="import-result"></div>
 </div>
 {% endblock %}

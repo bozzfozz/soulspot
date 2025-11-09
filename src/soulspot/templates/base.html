@@ -1,33 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SoulSpot Bridge{% endblock %}</title>
+    <meta name="description" content="Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation und Soulseek-Integration">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="logo">🎵 SoulSpot Bridge</a>
-            <ul class="nav-menu">
-                <li><a href="/ui/playlists">Playlists</a></li>
-                <li><a href="/ui/downloads">Downloads</a></li>
-                <li><a href="/ui/search">Search</a></li>
-                <li><a href="/ui/auth">Auth</a></li>
-            </ul>
+<body class="bg-gray-50 text-gray-900 font-sans">
+    <!-- Navigation -->
+    <nav class="bg-gray-900 border-b border-gray-800">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <!-- Logo -->
+                <a href="/ui/" class="text-2xl font-bold text-primary-500 hover:text-primary-400 transition-colors">
+                    🎵 SoulSpot Bridge
+                </a>
+                
+                <!-- Navigation Menu -->
+                <ul class="flex gap-6 list-none">
+                    <li>
+                        <a href="/ui/playlists" class="text-gray-300 hover:text-white transition-colors text-sm font-medium">
+                            Playlists
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/ui/downloads" class="text-gray-300 hover:text-white transition-colors text-sm font-medium">
+                            Downloads
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/ui/auth" class="text-gray-300 hover:text-white transition-colors text-sm font-medium">
+                            Auth
+                        </a>
+                    </li>
+                </ul>
+            </div>
         </div>
     </nav>
 
-    <main class="container">
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8 min-h-screen">
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="footer">
-        <div class="container">
-            <p>&copy; 2025 SoulSpot Bridge | <a href="/docs">API Docs</a> | <a href="/health">Health</a></p>
+    <!-- Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800 mt-12">
+        <div class="container mx-auto px-4 py-6 text-center">
+            <p class="text-gray-400 text-sm">
+                &copy; 2025 SoulSpot Bridge | 
+                <a href="/docs" class="text-primary-500 hover:text-primary-400 transition-colors">API Docs</a> | 
+                <a href="/health" class="text-primary-500 hover:text-primary-400 transition-colors">Health</a>
+            </p>
         </div>
     </footer>
 

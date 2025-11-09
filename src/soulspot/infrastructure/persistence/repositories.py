@@ -339,6 +339,31 @@ class TrackRepository(ITrackRepository):
             updated_at=model.updated_at,
         )
 
+    async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Track | None:
+        """Get a track by Spotify URI."""
+        stmt = select(TrackModel).where(TrackModel.spotify_uri == str(spotify_uri))
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            file_path=FilePath(model.file_path) if model.file_path else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     async def get_by_album(self, album_id: AlbumId) -> list[Track]:
         """Get all tracks in an album."""
         stmt = (
@@ -371,6 +396,31 @@ class TrackRepository(ITrackRepository):
     async def get_by_artist(self, artist_id: ArtistId) -> list[Track]:
         """Get all tracks by an artist."""
         stmt = select(TrackModel).where(TrackModel.artist_id == str(artist_id.value)).order_by(TrackModel.title)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Track(
+                id=TrackId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+                duration_ms=model.duration_ms,
+                track_number=model.track_number,
+                disc_number=model.disc_number,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                musicbrainz_id=model.musicbrainz_id,
+                isrc=model.isrc,
+                file_path=FilePath(model.file_path) if model.file_path else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Track]:
+        """List all tracks with pagination."""
+        stmt = select(TrackModel).order_by(TrackModel.title).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -460,6 +510,29 @@ class PlaylistRepository(IPlaylistRepository):
     async def get_by_id(self, playlist_id: PlaylistId) -> Playlist | None:
         """Get a playlist by ID."""
         stmt = select(PlaylistModel).where(PlaylistModel.id == str(playlist_id.value))
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        # Get playlist tracks in order
+        track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
+
+        return Playlist(
+            id=PlaylistId.from_string(model.id),
+            name=model.name,
+            description=model.description,
+            source=model.source,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            track_ids=track_ids,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Playlist | None:
+        """Get a playlist by Spotify URI."""
+        stmt = select(PlaylistModel).where(PlaylistModel.spotify_uri == str(spotify_uri))
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
