@@ -113,9 +113,27 @@ class ArtistRepository(IArtistRepository):
             updated_at=model.updated_at,
         )
 
-    async def list_all(self) -> list[Artist]:
-        """List all artists."""
-        stmt = select(ArtistModel).order_by(ArtistModel.name)
+    async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Artist | None:
+        """Get an artist by MusicBrainz ID."""
+        stmt = select(ArtistModel).where(ArtistModel.musicbrainz_id == musicbrainz_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Artist(
+            id=ArtistId.from_string(model.id),
+            name=model.name,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            musicbrainz_id=model.musicbrainz_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Artist]:
+        """List all artists with pagination."""
+        stmt = select(ArtistModel).order_by(ArtistModel.name).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -199,8 +217,8 @@ class AlbumRepository(IAlbumRepository):
             updated_at=model.updated_at,
         )
 
-    async def list_by_artist(self, artist_id: ArtistId) -> list[Album]:
-        """List all albums by an artist."""
+    async def get_by_artist(self, artist_id: ArtistId) -> list[Album]:
+        """Get all albums by an artist."""
         stmt = select(AlbumModel).where(AlbumModel.artist_id == str(artist_id.value)).order_by(AlbumModel.release_year)
         result = await self.session.execute(stmt)
         models = result.scalars().all()
@@ -219,6 +237,27 @@ class AlbumRepository(IAlbumRepository):
             )
             for model in models
         ]
+
+    async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Album | None:
+        """Get an album by MusicBrainz ID."""
+        stmt = select(AlbumModel).where(AlbumModel.musicbrainz_id == musicbrainz_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            release_year=model.release_year,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+            musicbrainz_id=model.musicbrainz_id,
+            artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
 
 
 class TrackRepository(ITrackRepository):
@@ -300,13 +339,38 @@ class TrackRepository(ITrackRepository):
             updated_at=model.updated_at,
         )
 
-    async def list_by_album(self, album_id: AlbumId) -> list[Track]:
-        """List all tracks in an album."""
+    async def get_by_album(self, album_id: AlbumId) -> list[Track]:
+        """Get all tracks in an album."""
         stmt = (
             select(TrackModel)
             .where(TrackModel.album_id == str(album_id.value))
             .order_by(TrackModel.disc_number, TrackModel.track_number)
         )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Track(
+                id=TrackId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+                duration_ms=model.duration_ms,
+                track_number=model.track_number,
+                disc_number=model.disc_number,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri) if model.spotify_uri else None,
+                musicbrainz_id=model.musicbrainz_id,
+                isrc=model.isrc,
+                file_path=FilePath(model.file_path) if model.file_path else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def get_by_artist(self, artist_id: ArtistId) -> list[Track]:
+        """Get all tracks by an artist."""
+        stmt = select(TrackModel).where(TrackModel.artist_id == str(artist_id.value)).order_by(TrackModel.title)
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -416,9 +480,26 @@ class PlaylistRepository(IPlaylistRepository):
             updated_at=model.updated_at,
         )
 
-    async def list_all(self) -> list[Playlist]:
-        """List all playlists."""
-        stmt = select(PlaylistModel).order_by(PlaylistModel.name)
+    async def add_track(self, playlist_id: PlaylistId, track_id: TrackId) -> None:
+        """Add a track to a playlist."""
+        # Get current max position
+        stmt = select(PlaylistTrackModel).where(PlaylistTrackModel.playlist_id == str(playlist_id.value))
+        result = await self.session.execute(stmt)
+        existing_tracks = result.scalars().all()
+
+        max_position = max([pt.position for pt in existing_tracks], default=-1)
+
+        # Add new track at end
+        playlist_track = PlaylistTrackModel(
+            playlist_id=str(playlist_id.value),
+            track_id=str(track_id.value),
+            position=max_position + 1,
+        )
+        self.session.add(playlist_track)
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Playlist]:
+        """List all playlists with pagination."""
+        stmt = select(PlaylistModel).order_by(PlaylistModel.name).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
@@ -540,6 +621,33 @@ class DownloadRepository(IDownloadRepository):
     async def list_by_status(self, status: str) -> list[Download]:
         """List all downloads with a specific status."""
         stmt = select(DownloadModel).where(DownloadModel.status == status).order_by(DownloadModel.created_at)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Download(
+                id=DownloadId.from_string(model.id),
+                track_id=TrackId.from_string(model.track_id),
+                status=model.status,
+                target_path=FilePath(model.target_path) if model.target_path else None,
+                source_url=model.source_url,
+                progress_percent=model.progress_percent,
+                error_message=model.error_message,
+                started_at=model.started_at,
+                completed_at=model.completed_at,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_active(self) -> list[Download]:
+        """List all active downloads (not finished)."""
+        stmt = (
+            select(DownloadModel)
+            .where(DownloadModel.status.in_(["queued", "searching", "downloading"]))
+            .order_by(DownloadModel.created_at)
+        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 

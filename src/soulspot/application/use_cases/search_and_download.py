@@ -207,14 +207,10 @@ class SearchAndDownloadTrackUseCase(UseCase[SearchAndDownloadTrackRequest, Searc
         download = Download(
             id=download_id,
             track_id=request.track_id,
-            slskd_download_id=download_id_str,
-            username=selected_file["username"],
-            filename=selected_file["filename"],
-            file_size=selected_file.get("size", 0),
-            status="queued",
-            progress=0,
+            status=DownloadStatus.QUEUED,
+            source_url=f"slskd://{selected_file['username']}/{selected_file['filename']}",
+            progress_percent=0.0,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
         )
 
         await self._download_repository.add(download)
