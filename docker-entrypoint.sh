@@ -25,8 +25,8 @@ echo "  TZ: $TZ"
 echo ""
 
 # Set timezone
-if [ ! -z "$TZ" ]; then
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+if [ -n "$TZ" ]; then
+    ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime && echo "$TZ" > /etc/timezone
     echo -e "${GREEN}✓${NC} Timezone set to: $TZ"
 fi
 

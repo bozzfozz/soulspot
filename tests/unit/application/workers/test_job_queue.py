@@ -1,6 +1,7 @@
 """Tests for Job Queue system."""
 
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock
 
 import pytest
@@ -333,10 +334,8 @@ class TestJobQueue:
         await job_queue.start(num_workers=1)
 
         # Wait for job
-        import contextlib
-
         with contextlib.suppress(TimeoutError):
-            job = await job_queue.wait_for_job(job_id, timeout=1.0)
+            _ = await job_queue.wait_for_job(job_id, timeout=1.0)
 
         # Stop workers
         await job_queue.stop()

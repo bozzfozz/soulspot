@@ -28,7 +28,8 @@ services:
       - SLSKD_URL=${SLSKD_URL:-http://slskd:5030}
       - SLSKD_API_KEY=${SLSKD_API_KEY:-}
       - SLSKD_USERNAME=${SLSKD_USERNAME:-admin}
-      - SLSKD_PASSWORD=${SLSKD_PASSWORD:-changeme}
+      # WARNING: You MUST set SLSKD_PASSWORD to a strong value in production!
+      - SLSKD_PASSWORD=${SLSKD_PASSWORD:-}
       
       # Application Settings
       - APP_NAME=SoulSpot Bridge

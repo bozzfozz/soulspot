@@ -82,9 +82,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             try:
                 if hasattr(app.state, "auto_import"):
                     await app.state.auto_import.stop()
-                    auto_import_task.cancel()
-                    with suppress(asyncio.CancelledError):
-                        await auto_import_task
+                    # Wait for task to complete gracefully with timeout
+                    try:
+                        await asyncio.wait_for(auto_import_task, timeout=5)
+                    except TimeoutError:
+                        # If timeout, cancel forcefully
+                        auto_import_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await auto_import_task
                     logger.info("Auto-import service stopped")
             except Exception as e:
                 logger.exception("Error stopping auto-import service: %s", e)

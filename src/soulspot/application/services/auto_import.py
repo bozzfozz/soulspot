@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import shutil
+import time
 from pathlib import Path
 
 from soulspot.config import Settings
@@ -154,8 +155,6 @@ class AutoImportService:
             True if file is complete, False otherwise
         """
         try:
-            import time
-
             if not file_path.exists() or not file_path.is_file():
                 return False
 
@@ -197,9 +196,9 @@ class AutoImportService:
                 file_path.unlink()
                 return
 
-            # Move file to music library
+            # Move file to music library (use asyncio.to_thread to avoid blocking event loop)
             logger.info("Importing: %s -> %s", file_path, dest_path)
-            shutil.move(str(file_path), str(dest_path))
+            await asyncio.to_thread(shutil.move, str(file_path), str(dest_path))
             logger.info("Successfully imported: %s", dest_path)
 
             # Clean up empty parent directories in downloads

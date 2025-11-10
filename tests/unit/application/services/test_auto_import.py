@@ -1,8 +1,7 @@
 """Tests for auto-import service."""
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -19,13 +18,13 @@ def mock_settings(tmp_path: Path) -> Settings:
     music_path = tmp_path / "music"
     artwork_path = tmp_path / "artwork"
     temp_path = tmp_path / "tmp"
-    
+
     # Create the directories
     download_path.mkdir(parents=True, exist_ok=True)
     music_path.mkdir(parents=True, exist_ok=True)
     artwork_path.mkdir(parents=True, exist_ok=True)
     temp_path.mkdir(parents=True, exist_ok=True)
-    
+
     # Create a Settings object with the temporary storage
     settings = Settings()
     settings.storage = StorageSettings(
@@ -62,12 +61,12 @@ def test_get_audio_files_with_mp3(auto_import_service: AutoImportService, mock_s
     # Create a test MP3 file
     test_file = mock_settings.storage.download_path / "test.mp3"
     test_file.write_text("test mp3 content")
-    
+
     # Wait a bit to ensure file is "complete" (modified > 5 seconds ago is checked)
     # We need to mock the file completion check for this test
     with patch.object(auto_import_service, '_is_file_complete', return_value=True):
         files = auto_import_service._get_audio_files(mock_settings.storage.download_path)
-    
+
     assert len(files) == 1
     assert files[0] == test_file
 
@@ -77,10 +76,10 @@ def test_get_audio_files_ignores_non_audio(auto_import_service: AutoImportServic
     # Create test files
     (mock_settings.storage.download_path / "test.txt").write_text("text file")
     (mock_settings.storage.download_path / "test.mp3").write_text("mp3 file")
-    
+
     with patch.object(auto_import_service, '_is_file_complete', return_value=True):
         files = auto_import_service._get_audio_files(mock_settings.storage.download_path)
-    
+
     assert len(files) == 1
     assert files[0].suffix == ".mp3"
 
@@ -89,14 +88,14 @@ def test_is_file_complete_empty_file(auto_import_service: AutoImportService, moc
     """Test that empty files are not considered complete."""
     test_file = mock_settings.storage.download_path / "empty.mp3"
     test_file.write_text("")
-    
+
     assert not auto_import_service._is_file_complete(test_file)
 
 
 def test_is_file_complete_nonexistent_file(auto_import_service: AutoImportService, mock_settings: Settings) -> None:
     """Test that nonexistent files are not considered complete."""
     test_file = mock_settings.storage.download_path / "nonexistent.mp3"
-    
+
     assert not auto_import_service._is_file_complete(test_file)
 
 
@@ -104,10 +103,9 @@ def test_is_file_complete_valid_file(auto_import_service: AutoImportService, moc
     """Test that valid files are considered complete."""
     test_file = mock_settings.storage.download_path / "test.mp3"
     test_file.write_text("test content")
-    
+
     # Mock time to simulate file being old enough
-    import time
-    with patch('time.time', return_value=time.time() + 10):
+    with patch('time.time', return_value=test_file.stat().st_mtime + 10):
         assert auto_import_service._is_file_complete(test_file)
 
 
@@ -118,10 +116,10 @@ async def test_import_file_success(auto_import_service: AutoImportService, mock_
     source_file = mock_settings.storage.download_path / "artist" / "album" / "track.mp3"
     source_file.parent.mkdir(parents=True, exist_ok=True)
     source_file.write_text("test mp3 content")
-    
+
     # Import file
     await auto_import_service._import_file(source_file)
-    
+
     # Verify file was moved
     dest_file = mock_settings.storage.music_path / "artist" / "album" / "track.mp3"
     assert dest_file.exists()
@@ -135,14 +133,14 @@ async def test_import_file_existing_destination(auto_import_service: AutoImportS
     # Create source file
     source_file = mock_settings.storage.download_path / "track.mp3"
     source_file.write_text("new content")
-    
+
     # Create existing destination file
     dest_file = mock_settings.storage.music_path / "track.mp3"
     dest_file.write_text("existing content")
-    
+
     # Import file
     await auto_import_service._import_file(source_file)
-    
+
     # Verify source was removed but destination unchanged
     assert not source_file.exists()
     assert dest_file.exists()
@@ -154,10 +152,10 @@ def test_cleanup_empty_dirs(auto_import_service: AutoImportService, mock_setting
     # Create nested empty directories
     empty_dir = mock_settings.storage.download_path / "artist" / "album"
     empty_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Cleanup
     auto_import_service._cleanup_empty_dirs(empty_dir)
-    
+
     # Verify directories were removed but download root remains
     assert not empty_dir.exists()
     assert not (mock_settings.storage.download_path / "artist").exists()
@@ -170,8 +168,8 @@ def test_cleanup_empty_dirs_with_files(auto_import_service: AutoImportService, m
     test_dir = mock_settings.storage.download_path / "artist"
     test_dir.mkdir(parents=True, exist_ok=True)
     (test_dir / "file.txt").write_text("content")
-    
+
     # Cleanup should not remove directory
     auto_import_service._cleanup_empty_dirs(test_dir)
-    
+
     assert test_dir.exists()

@@ -10,6 +10,7 @@ This example shows how to use the application layer components:
 
 import asyncio
 import sys
+import traceback
 from pathlib import Path
 
 # Add src to path
@@ -225,8 +226,6 @@ async def main():
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
         return 1
 

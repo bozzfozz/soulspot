@@ -1,5 +1,6 @@
 """Tests for Session Store service."""
 
+import time
 from datetime import UTC, datetime, timedelta
 
 from soulspot.application.services.session_store import Session, SessionStore
@@ -35,8 +36,6 @@ class TestSession:
         old_time = session.last_accessed_at
 
         # Small delay to ensure timestamp difference
-        import time
-
         time.sleep(0.01)
 
         session.refresh_access()
@@ -197,8 +196,6 @@ class TestSessionStore:
         old_time = session.last_accessed_at
 
         # Small delay
-        import time
-
         time.sleep(0.01)
 
         retrieved = store.get_session(session.session_id)
