@@ -232,7 +232,9 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path) if model.artwork_path else None,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -284,7 +286,9 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path) if model.artwork_path else None,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -366,7 +370,9 @@ class TrackRepository(ITrackRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path) if model.file_path else None,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -393,7 +399,9 @@ class TrackRepository(ITrackRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path) if model.file_path else None,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -424,7 +432,9 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -457,7 +467,9 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -486,7 +498,9 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -759,7 +773,9 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
-            target_path=FilePath.from_string(model.target_path) if model.target_path else None,
+            target_path=FilePath.from_string(model.target_path)
+            if model.target_path
+            else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
             error_message=model.error_message,
@@ -792,7 +808,9 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
-            target_path=FilePath.from_string(model.target_path) if model.target_path else None,
+            target_path=FilePath.from_string(model.target_path)
+            if model.target_path
+            else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
             error_message=model.error_message,
@@ -817,7 +835,9 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
-                target_path=FilePath.from_string(model.target_path) if model.target_path else None,
+                target_path=FilePath.from_string(model.target_path)
+                if model.target_path
+                else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,
                 error_message=model.error_message,
@@ -851,7 +871,9 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
-                target_path=FilePath.from_string(model.target_path) if model.target_path else None,
+                target_path=FilePath.from_string(model.target_path)
+                if model.target_path
+                else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,
                 error_message=model.error_message,

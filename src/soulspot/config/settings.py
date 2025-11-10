@@ -267,9 +267,7 @@ class Settings(BaseSettings):
 
     @field_validator("secret_key")
     @classmethod
-    def validate_secret_key_in_production(
-        cls, v: str, info: ValidationInfo
-    ) -> str:
+    def validate_secret_key_in_production(cls, v: str, info: ValidationInfo) -> str:
         """Validate secret key in production."""
         if (
             info.data.get("app_env") == "production"
