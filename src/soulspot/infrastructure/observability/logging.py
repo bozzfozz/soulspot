@@ -47,7 +47,7 @@ class CorrelationIdFilter(logging.Filter):
         return True
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc, name-defined]
+class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc]
     """Custom JSON formatter with additional fields."""
 
     def add_fields(

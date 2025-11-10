@@ -5,7 +5,12 @@ from typing import Any
 
 from soulspot.application.use_cases import ImportSpotifyPlaylistUseCase
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
-from soulspot.domain.ports import IPlaylistRepository, ISpotifyClient, ITrackRepository
+from soulspot.domain.ports import (
+    IArtistRepository,
+    IPlaylistRepository,
+    ISpotifyClient,
+    ITrackRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,7 @@ class PlaylistSyncWorker:
         spotify_client: ISpotifyClient,
         playlist_repository: IPlaylistRepository,
         track_repository: ITrackRepository,
+        artist_repository: IArtistRepository,
     ) -> None:
         """Initialize playlist sync worker.
 
@@ -35,12 +41,14 @@ class PlaylistSyncWorker:
             spotify_client: Client for Spotify API
             playlist_repository: Repository for playlist persistence
             track_repository: Repository for track persistence
+            artist_repository: Repository for artist persistence
         """
         self._job_queue = job_queue
         self._use_case = ImportSpotifyPlaylistUseCase(
             spotify_client=spotify_client,
             playlist_repository=playlist_repository,
             track_repository=track_repository,
+            artist_repository=artist_repository,
         )
 
     def register(self) -> None:

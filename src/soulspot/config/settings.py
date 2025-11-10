@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -267,7 +267,9 @@ class Settings(BaseSettings):
 
     @field_validator("secret_key")
     @classmethod
-    def validate_secret_key_in_production(cls, v: str, info) -> str:
+    def validate_secret_key_in_production(
+        cls, v: str, info: ValidationInfo
+    ) -> str:
         """Validate secret key in production."""
         if (
             info.data.get("app_env") == "production"

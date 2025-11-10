@@ -145,9 +145,10 @@ class TokenManager:
             if token_info.refresh_token:
                 try:
                     await self.refresh_token(user_id)
-                    token_info = self._tokens.get(user_id)
-                    if token_info:
-                        return token_info.access_token
+                    refreshed_token = self._tokens.get(user_id)
+                    if refreshed_token:
+                        return refreshed_token.access_token
+                    return None
                 except Exception:
                     # If refresh fails, token might be invalid
                     return None

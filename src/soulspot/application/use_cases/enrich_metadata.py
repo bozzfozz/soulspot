@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Album, Artist, Track
@@ -71,7 +72,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
         self,
         track: Track,
         force_refresh: bool,
-    ) -> tuple[dict[str, any] | None, list[str]]:
+    ) -> tuple[dict[str, Any] | None, list[str]]:
         """Enrich track metadata from MusicBrainz.
 
         Args:
@@ -152,7 +153,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
     async def _enrich_artist_metadata(
         self,
-        recording: dict[str, any],
+        recording: dict[str, Any],
         _track: Track,
     ) -> tuple[Artist | None, list[str]]:
         """Enrich artist metadata from MusicBrainz.
@@ -201,7 +202,7 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
 
     async def _enrich_album_metadata(
         self,
-        recording: dict[str, any],
+        recording: dict[str, Any],
         _track: Track,
     ) -> tuple[Album | None, list[str]]:
         """Enrich album metadata from MusicBrainz.
@@ -257,7 +258,6 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                             artist_id=artist.id,
                             release_year=release_year,
                             musicbrainz_id=release_mbid,
-                            total_tracks=mb_release.get("track-count"),
                             created_at=datetime.now(UTC),
                             updated_at=datetime.now(UTC),
                         )

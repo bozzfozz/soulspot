@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Download, DownloadStatus, Track
@@ -77,9 +78,9 @@ class SearchAndDownloadTrackUseCase(
 
     def _select_best_file(
         self,
-        results: list[dict[str, any]],
+        results: list[dict[str, Any]],
         quality_preference: str,
-    ) -> dict[str, any] | None:
+    ) -> dict[str, Any] | None:
         """Select the best quality file from search results.
 
         Args:
@@ -107,7 +108,7 @@ class SearchAndDownloadTrackUseCase(
 
         # Sort by bitrate (higher is better) and file size
         # Prefer FLAC > 320kbps MP3 > lower quality
-        def quality_score(file: dict[str, any]) -> tuple[int, int, int]:
+        def quality_score(file: dict[str, Any]) -> tuple[int, int, int]:
             filename = file.get("filename", "").lower()
             bitrate = file.get("bitrate", 0)
             size = file.get("size", 0)

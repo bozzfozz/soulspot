@@ -71,7 +71,7 @@ class ArtistRepository(IArtistRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(f"Artist with id {artist.id.value} not found")
+            raise EntityNotFoundException("Artist", artist.id.value)
 
         model.name = artist.name
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
@@ -82,8 +82,8 @@ class ArtistRepository(IArtistRepository):
         """Delete an artist."""
         stmt = delete(ArtistModel).where(ArtistModel.id == str(artist_id.value))
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
-            raise EntityNotFoundException(f"Artist with id {artist_id.value} not found")
+        if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Artist", artist_id.value)
 
     async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
@@ -197,7 +197,7 @@ class AlbumRepository(IAlbumRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(f"Album with id {album.id.value} not found")
+            raise EntityNotFoundException("Album", album.id.value)
 
         model.title = album.title
         model.artist_id = str(album.artist_id.value)
@@ -211,8 +211,8 @@ class AlbumRepository(IAlbumRepository):
         """Delete an album."""
         stmt = delete(AlbumModel).where(AlbumModel.id == str(album_id.value))
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
-            raise EntityNotFoundException(f"Album with id {album_id.value} not found")
+        if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Album", album_id.value)
 
     async def get_by_id(self, album_id: AlbumId) -> Album | None:
         """Get an album by ID."""
@@ -232,7 +232,7 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
+            artwork_path=FilePath.from_string(model.artwork_path) if model.artwork_path else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -257,7 +257,7 @@ class AlbumRepository(IAlbumRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
-                artwork_path=FilePath(model.artwork_path)
+                artwork_path=FilePath.from_string(model.artwork_path)
                 if model.artwork_path
                 else None,
                 created_at=model.created_at,
@@ -284,7 +284,7 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
+            artwork_path=FilePath.from_string(model.artwork_path) if model.artwork_path else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -323,7 +323,7 @@ class TrackRepository(ITrackRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(f"Track with id {track.id.value} not found")
+            raise EntityNotFoundException("Track", track.id.value)
 
         model.title = track.title
         model.artist_id = str(track.artist_id.value)
@@ -341,8 +341,8 @@ class TrackRepository(ITrackRepository):
         """Delete a track."""
         stmt = delete(TrackModel).where(TrackModel.id == str(track_id.value))
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
-            raise EntityNotFoundException(f"Track with id {track_id.value} not found")
+        if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Track", track_id.value)
 
     async def get_by_id(self, track_id: TrackId) -> Track | None:
         """Get a track by ID."""
@@ -366,7 +366,7 @@ class TrackRepository(ITrackRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
-            file_path=FilePath(model.file_path) if model.file_path else None,
+            file_path=FilePath.from_string(model.file_path) if model.file_path else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -393,7 +393,7 @@ class TrackRepository(ITrackRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             isrc=model.isrc,
-            file_path=FilePath(model.file_path) if model.file_path else None,
+            file_path=FilePath.from_string(model.file_path) if model.file_path else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -424,7 +424,7 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -457,7 +457,7 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -486,7 +486,7 @@ class TrackRepository(ITrackRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 isrc=model.isrc,
-                file_path=FilePath(model.file_path) if model.file_path else None,
+                file_path=FilePath.from_string(model.file_path) if model.file_path else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -530,9 +530,7 @@ class PlaylistRepository(IPlaylistRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(
-                f"Playlist with id {playlist.id.value} not found"
-            )
+            raise EntityNotFoundException("Playlist", playlist.id.value)
 
         model.name = playlist.name
         model.description = playlist.description
@@ -558,10 +556,8 @@ class PlaylistRepository(IPlaylistRepository):
         """Delete a playlist."""
         stmt = delete(PlaylistModel).where(PlaylistModel.id == str(playlist_id.value))
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
-            raise EntityNotFoundException(
-                f"Playlist with id {playlist_id.value} not found"
-            )
+        if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Playlist", playlist_id.value)
 
     async def get_by_id(self, playlist_id: PlaylistId) -> Playlist | None:
         """Get a playlist by ID."""
@@ -723,9 +719,7 @@ class DownloadRepository(IDownloadRepository):
         model = result.scalar_one_or_none()
 
         if not model:
-            raise EntityNotFoundException(
-                f"Download with id {download.id.value} not found"
-            )
+            raise EntityNotFoundException("Download", download.id.value)
 
         model.track_id = str(download.track_id.value)
         model.status = download.status.value
@@ -741,10 +735,8 @@ class DownloadRepository(IDownloadRepository):
         """Delete a download."""
         stmt = delete(DownloadModel).where(DownloadModel.id == str(download_id.value))
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:
-            raise EntityNotFoundException(
-                f"Download with id {download_id.value} not found"
-            )
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Download", download_id.value)
 
     async def get_by_id(self, download_id: DownloadId) -> Download | None:
         """Get a download by ID."""
@@ -767,7 +759,7 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
-            target_path=FilePath(model.target_path) if model.target_path else None,
+            target_path=FilePath.from_string(model.target_path) if model.target_path else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
             error_message=model.error_message,
@@ -800,7 +792,7 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
-            target_path=FilePath(model.target_path) if model.target_path else None,
+            target_path=FilePath.from_string(model.target_path) if model.target_path else None,
             source_url=model.source_url,
             progress_percent=model.progress_percent,
             error_message=model.error_message,
@@ -825,7 +817,7 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
-                target_path=FilePath(model.target_path) if model.target_path else None,
+                target_path=FilePath.from_string(model.target_path) if model.target_path else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,
                 error_message=model.error_message,
@@ -859,7 +851,7 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
-                target_path=FilePath(model.target_path) if model.target_path else None,
+                target_path=FilePath.from_string(model.target_path) if model.target_path else None,
                 source_url=model.source_url,
                 progress_percent=model.progress_percent,
                 error_message=model.error_message,
