@@ -10,10 +10,15 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -62,6 +67,8 @@ jobs:
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
@@ -108,6 +115,8 @@ jobs:
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
