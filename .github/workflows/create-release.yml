@@ -1,0 +1,156 @@
+name: Create Release
+
+# This workflow helps maintainers create a new release
+# It can be triggered manually with a version bump type
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: 'Custom version (only if version_bump is custom, e.g., 1.2.3)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 2.2.1
+      
+      - name: Get current version
+        id: current_version
+        run: |
+          CURRENT=$(poetry version -s)
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT"
+      
+      - name: Calculate new version
+        id: new_version
+        run: |
+          if [ "${{ inputs.version_bump }}" = "custom" ]; then
+            NEW_VERSION="${{ inputs.custom_version }}"
+          else
+            poetry version ${{ inputs.version_bump }}
+            NEW_VERSION=$(poetry version -s)
+          fi
+          
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $NEW_VERSION"
+      
+      - name: Update version in pyproject.toml
+        run: |
+          poetry version ${{ steps.new_version.outputs.new }}
+      
+      - name: Update version in package.json
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.new }}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+      
+      - name: Update CHANGELOG.md
+        run: |
+          NEW_VERSION="${{ steps.new_version.outputs.new }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # Create a temporary file with the new entry
+          cat > /tmp/new_entry.md << EOF
+          ## [$NEW_VERSION] - $DATE
+          
+          ### Added
+          - 
+          
+          ### Changed
+          - 
+          
+          ### Fixed
+          - 
+          
+          EOF
+          
+          # Insert the new entry after the [Unreleased] section
+          awk '/## \[Unreleased\]/{print; print ""; system("cat /tmp/new_entry.md"); next}1' CHANGELOG.md > /tmp/CHANGELOG.md.tmp
+          mv /tmp/CHANGELOG.md.tmp CHANGELOG.md
+          
+          # Update the comparison links at the bottom
+          echo "" >> CHANGELOG.md
+          echo "[$NEW_VERSION]: https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION" >> CHANGELOG.md
+      
+      - name: Set up Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Create release branch
+        run: |
+          BRANCH_NAME="release/v${{ steps.new_version.outputs.new }}"
+          git checkout -b $BRANCH_NAME
+          git add pyproject.toml package.json CHANGELOG.md
+          git commit -m "chore: bump version to ${{ steps.new_version.outputs.new }}"
+          git push origin $BRANCH_NAME
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        id: create_branch
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: release/v${{ steps.new_version.outputs.new }}
+          title: "Release v${{ steps.new_version.outputs.new }}"
+          body: |
+            ## Release v${{ steps.new_version.outputs.new }}
+            
+            This PR prepares the release for version ${{ steps.new_version.outputs.new }}.
+            
+            ### Changes
+            - Bumped version from ${{ steps.current_version.outputs.current }} to ${{ steps.new_version.outputs.new }}
+            - Updated CHANGELOG.md with new version section
+            - Updated package.json version
+            
+            ### Checklist
+            - [ ] Update CHANGELOG.md with all changes for this release
+            - [ ] Review all version bumps
+            - [ ] Verify Docker builds successfully
+            - [ ] Run all tests
+            
+            ### After Merge
+            Once this PR is merged, create and push a git tag to trigger the release:
+            ```bash
+            git tag v${{ steps.new_version.outputs.new }}
+            git push origin v${{ steps.new_version.outputs.new }}
+            ```
+            
+            Or use the GitHub UI to create a release with tag `v${{ steps.new_version.outputs.new }}`.
+          labels: release
+          draft: false

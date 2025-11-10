@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - CI/CD & Automated Releases (2025-11-10)
+
+#### CI/CD Pipeline
+- **GitHub Actions Workflows**: Implemented automated CI/CD pipelines
+  - **CI Workflow** (`ci.yml`): Runs on all pull requests and pushes
+    - Automated testing with pytest (Python 3.12)
+    - Code quality checks (ruff linter, mypy type checker, bandit security scanner)
+    - Test coverage reporting with Codecov integration
+    - Docker build validation
+    - Build caching for faster execution
+  - **Release Workflow** (`release.yml`): Triggered on version tags (v*.*.*)
+    - Semantic version detection from git tags
+    - Changelog extraction from CHANGELOG.md
+    - Multi-platform Docker builds (linux/amd64, linux/arm64)
+    - Docker image publishing to GitHub Container Registry (ghcr.io)
+    - Automated Docker image tagging (latest, major, minor, patch)
+    - Python package building (wheel and source distribution)
+    - GitHub Release creation with comprehensive release notes
+    - Artifact publishing (Python packages)
+  - **Create Release Workflow** (`create-release.yml`): Interactive release preparation
+    - Manual workflow dispatch with version bump selection
+    - Automated version bumping (patch/minor/major/custom)
+    - Synchronized version updates across all files
+    - CHANGELOG.md automatic section generation
+    - Release branch creation with pull request
+
+#### Release Tooling
+- **Release Script** (`scripts/prepare-release.sh`): Interactive local release preparation
+  - Command-line interface for version selection
+  - Automatic version bumping in pyproject.toml and package.json
+  - CHANGELOG.md section generation with proper formatting
+  - Git branch creation and commit automation
+  - Step-by-step guidance for complete release process
+  - Rollback support for cancelled releases
+
+#### Documentation
+- **CI/CD Guide** (`docs/ci-cd.md`): Comprehensive CI/CD and release documentation
+  - Complete CI pipeline description
+  - Semantic versioning guidelines with examples
+  - Three release process options (GitHub Actions, local script, manual)
+  - Docker image registry and tagging documentation
+  - Version management across multiple files
+  - CHANGELOG.md best practices
+  - Troubleshooting guide for common CI/CD issues
+
+#### Version Management
+- **Semantic Versioning**: Full SemVer 2.0.0 compliance
+  - Version consistency across pyproject.toml and package.json
+  - Git tag-based version detection
+  - Pre-release version support
+  - Automated version comparison links in CHANGELOG.md
+
+#### Docker Registry
+- **GitHub Container Registry Integration**: 
+  - Automated Docker image publishing to ghcr.io/bozzfozz/soulspot-bridge
+  - Multi-platform image support (amd64, arm64)
+  - Smart tagging strategy (latest, major, minor, patch versions)
+  - Image metadata and labels
+  - Build caching for efficient CI
+
+#### Repository Enhancements
+- **README Updates**: Added CI/CD status badges
+  - CI workflow status badge
+  - Release version badge
+  - Docker registry badge
+  - Link to CI/CD documentation
+
 ### Fixed - PR Review Issues (2025-11-10)
 
 #### Security

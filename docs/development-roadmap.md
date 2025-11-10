@@ -54,12 +54,12 @@ Transform the application from a development prototype to a production-ready sys
   - [ ] Circuit breaker patterns for external services
 
 **6.2 CI/CD Pipeline** 🚀
-- [ ] GitHub Actions workflow setup *(Complexity: MEDIUM, Source: roadmap)*
+- [x] GitHub Actions workflow setup *(Complexity: MEDIUM, Source: roadmap)*
   - Automated testing on pull requests
   - Code quality checks (ruff, mypy, bandit)
   - Test coverage reporting
   - Security scanning
-- [ ] Automated release process *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+- [x] Automated release process *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - Semantic versioning (SemVer)
   - Automated changelog generation
   - Docker image building and publishing

@@ -4,7 +4,9 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-TBD-lightgrey.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-planning-yellow.svg)](docs/analysis/initial-assessment.md)
+[![CI](https://github.com/bozzfozz/soulspot-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/bozzfozz/soulspot-bridge/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot-bridge?include_prereleases)](https://github.com/bozzfozz/soulspot-bridge/releases)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/bozzfozz/soulspot-bridge/pkgs/container/soulspot-bridge)
 
 ## 📖 Überblick
 
@@ -79,6 +81,7 @@ Aktueller Stand:
 - **[Architecture Guide](docs/architecture.md)** - Detaillierte Architektur-Spezifikation
 - **[Style Guide](docs/soulspot-style-guide.md)** - Design-System und UI-Guidelines
 - **[Observability Guide](docs/observability-guide.md)** - Strukturiertes Logging und Health Checks
+- **[CI/CD Guide](docs/ci-cd.md)** - Continuous Integration und Automated Releases
 - **[Development Roadmap](docs/development-roadmap.md)** - Zukünftige Entwicklungsphasen und Features
 - **[CHANGELOG](CHANGELOG.md)** - Vollständige Versionshistorie
 
