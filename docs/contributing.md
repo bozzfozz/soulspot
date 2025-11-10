@@ -428,14 +428,55 @@ class TestFeatureName:
 
 ---
 
+## Releases (For Maintainers)
+
+### Release Process
+
+SoulSpot Bridge uses automated CI/CD for releases. See the [CI/CD Guide](ci-cd.md) and [Release Quick Reference](release-quick-reference.md) for complete documentation.
+
+**Quick overview:**
+
+1. **Prepare Release:**
+   - Use GitHub Actions "Create Release" workflow, or
+   - Use local script: `./scripts/prepare-release.sh`, or
+   - Prepare manually
+   
+2. **Update CHANGELOG.md** with all changes for the release
+
+3. **Create Release Tag:**
+   ```bash
+   git tag v1.2.3
+   git push origin v1.2.3
+   ```
+
+4. **Automated Release:**
+   - Docker images built and pushed to GHCR
+   - GitHub Release created with artifacts
+   - Python packages built and attached
+
+### Semantic Versioning
+
+We follow [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **MAJOR** (1.0.0 → 2.0.0): Breaking changes
+- **MINOR** (1.0.0 → 1.1.0): New features, backward compatible
+- **PATCH** (1.0.0 → 1.0.1): Bug fixes, backward compatible
+
+### Release Checklist
+
+Use the [Release Checklist](../.github/ISSUE_TEMPLATE/release_checklist.md) issue template for each release.
+
+---
+
 ## Additional Resources
 
 ### Documentation
 
 - [README.md](../README.md) - Project overview and quick start
-- [Architecture Guide](docs/architecture.md) - Detailed architecture
-- [Style Guide](docs/soulspot-style-guide.md) - UI/UX design system
-- [Development Roadmap](docs/development-roadmap.md) - Future plans
+- [Architecture Guide](architecture.md) - Detailed architecture
+- [Style Guide](soulspot-style-guide.md) - UI/UX design system
+- [CI/CD Guide](ci-cd.md) - Continuous Integration and Releases
+- [Development Roadmap](development-roadmap.md) - Future plans
 - [CHANGELOG.md](../CHANGELOG.md) - Version history
 
 ### External Resources
