@@ -6,7 +6,7 @@ import sys
 import uuid
 from typing import Any
 
-from pythonjsonlogger import jsonlogger  # type: ignore[import-untyped]
+from pythonjsonlogger import jsonlogger
 
 # Context variable for correlation ID
 correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
@@ -43,11 +43,11 @@ class CorrelationIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Add correlation_id to record if available."""
-        setattr(record, "correlation_id", get_correlation_id())
+        record.correlation_id = get_correlation_id()
         return True
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc]
+class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[misc, name-defined]
     """Custom JSON formatter with additional fields."""
 
     def add_fields(
