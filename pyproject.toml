@@ -43,6 +43,8 @@ python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 # Utilities
 python-dotenv = "^1.0.0"
+# Observability & Monitoring
+python-json-logger = "^3.2.0"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
@@ -87,7 +89,6 @@ select = [
 ignore = [
     "E501",  # line too long, handled by formatter
     "B008",  # do not perform function calls in argument defaults
-    "UP046", # Generic class uses Generic subclass instead of type parameters (Python 3.12+ syntax)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -123,6 +124,12 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "pythonjsonlogger.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.3"

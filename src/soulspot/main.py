@@ -12,6 +12,15 @@ from fastapi.staticfiles import StaticFiles
 
 from soulspot.api.routers import api_router, ui
 from soulspot.config import Settings, get_settings
+from soulspot.infrastructure.observability import configure_logging
+from soulspot.infrastructure.observability.health import (
+    HealthStatus,
+    check_database_health,
+    check_musicbrainz_health,
+    check_slskd_health,
+    check_spotify_health,
+)
+from soulspot.infrastructure.observability.middleware import RequestLoggingMiddleware
 from soulspot.infrastructure.persistence import Database
 
 logger = logging.getLogger(__name__)
@@ -22,11 +31,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager.
 
     Handles startup and shutdown tasks including:
+    - Logging configuration
     - Directory creation
     - Database initialization
     - Resource cleanup
     """
     settings = get_settings()
+
+    # Configure structured logging
+    configure_logging(
+        log_level=settings.log_level,
+        json_format=settings.observability.log_json_format,
+        app_name=settings.app_name,
+    )
     logger.info("Starting application: %s", settings.app_name)
 
     # Startup
@@ -69,6 +86,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Request logging middleware
+    app.add_middleware(RequestLoggingMiddleware)
+
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -103,33 +123,74 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "profile": settings.profile.value,
         }
 
-    # Readiness check endpoint
+    # Readiness check endpoint with dependency checks
     @app.get("/ready", tags=["Health"])
     async def readiness_check() -> dict[str, Any]:
-        """Readiness check endpoint with database connectivity check."""
-        status = "ready"
+        """Readiness check endpoint with database and dependency connectivity checks."""
         checks = {}
+        overall_status = HealthStatus.HEALTHY
 
         # Database connectivity check
-        try:
-            if hasattr(app.state, "db"):
-                # Perform a simple SELECT 1 query to verify database connectivity
-                async with app.state.db.session() as session:
-                    result = await session.execute("SELECT 1")
-                    result.scalar()
-                checks["database"] = "connected"
-            else:
-                checks["database"] = "not_initialized"
-                status = "unavailable"
-        except Exception as e:
-            logger.exception("Database health check failed: %s", e)
-            checks["database"] = f"error: {str(e)}"
-            status = "unavailable"
+        if hasattr(app.state, "db"):
+            db_check = await check_database_health(app.state.db)
+            checks["database"] = {
+                "status": db_check.status.value,
+                "message": db_check.message,
+            }
+            if db_check.status == HealthStatus.UNHEALTHY:
+                overall_status = HealthStatus.UNHEALTHY
+            elif (
+                db_check.status == HealthStatus.DEGRADED
+                and overall_status != HealthStatus.UNHEALTHY
+            ):
+                overall_status = HealthStatus.DEGRADED
+        else:
+            checks["database"] = {
+                "status": HealthStatus.UNHEALTHY.value,
+                "message": "Database not initialized",
+            }
+            overall_status = HealthStatus.UNHEALTHY
+
+        # External service health checks (if enabled)
+        if settings.observability.enable_dependency_health_checks:
+            timeout = settings.observability.health_check_timeout
+
+            # slskd health check
+            slskd_check = await check_slskd_health(settings.slskd.url, timeout=timeout)
+            checks["slskd"] = {
+                "status": slskd_check.status.value,
+                "message": slskd_check.message,
+            }
+            if (
+                slskd_check.status == HealthStatus.DEGRADED
+                and overall_status == HealthStatus.HEALTHY
+            ):
+                overall_status = HealthStatus.DEGRADED
+
+            # Spotify health check
+            spotify_check = await check_spotify_health(timeout=timeout)
+            checks["spotify"] = {
+                "status": spotify_check.status.value,
+                "message": spotify_check.message,
+            }
+
+            # MusicBrainz health check
+            mb_check = await check_musicbrainz_health(timeout=timeout)
+            checks["musicbrainz"] = {
+                "status": mb_check.status.value,
+                "message": mb_check.message,
+            }
 
         return {
-            "status": status,
-            **checks,
+            "status": overall_status.value,
+            "checks": checks,
         }
+
+    # Liveness probe endpoint
+    @app.get("/live", tags=["Health"])
+    async def liveness_check() -> dict[str, str]:
+        """Liveness check endpoint - returns OK if application is running."""
+        return {"status": "alive"}
 
     # Root endpoint
     @app.get("/", tags=["Root"])
@@ -140,6 +201,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "version": "0.1.0",
             "docs": "/docs",
             "health": "/health",
+            "ready": "/ready",
+            "live": "/live",
             "api": "/api/v1",
             "ui": "/ui",
         }

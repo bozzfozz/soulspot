@@ -1,0 +1,234 @@
+# Observability Guide
+
+This guide explains how to use the observability features in SoulSpot Bridge.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Structured Logging](#structured-logging)
+- [Health Checks](#health-checks)
+- [Configuration](#configuration)
+- [Best Practices](#best-practices)
+
+## Overview
+
+SoulSpot Bridge includes observability features to help you monitor and debug your application:
+
+- **Structured Logging**: JSON-formatted logs with correlation IDs for request tracking
+- **Health Checks**: Liveness and readiness probes with dependency monitoring
+
+## Structured Logging
+
+### Features
+
+- **Correlation IDs**: Automatic request tracking across logs
+- **JSON Format**: Machine-readable logs for production (optional)
+- **Contextual Information**: Automatic inclusion of metadata (timestamp, level, module)
+- **Request/Response Logging**: Automatic logging of all HTTP requests
+
+### Configuration
+
+Configure logging in your `.env` file:
+
+```env
+# Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LOG_LEVEL=INFO
+
+# Enable JSON format for production
+OBSERVABILITY__LOG_JSON_FORMAT=true
+```
+
+### Correlation IDs
+
+Every request gets a unique correlation ID that's included in all logs. The ID is:
+- Generated automatically if not provided
+- Can be provided via `X-Correlation-ID` header
+- Returned in the response `X-Correlation-ID` header
+- Included in all logs during request processing
+
+Example log output (text format):
+```
+2025-11-10 14:00:00 - INFO - soulspot.api.routers.tracks - [abc-123-def] - Fetching track details
+```
+
+Example log output (JSON format):
+```json
+{
+  "timestamp": "2025-11-10 14:00:00",
+  "level": "INFO",
+  "logger": "soulspot.api.routers.tracks",
+  "correlation_id": "abc-123-def",
+  "message": "Fetching track details"
+}
+```
+
+### Usage in Code
+
+```python
+import logging
+from soulspot.infrastructure.observability.logging import get_correlation_id
+
+logger = logging.getLogger(__name__)
+
+# Logs automatically include correlation ID
+logger.info("Processing request", extra={"user_id": 123})
+
+# Get current correlation ID
+correlation_id = get_correlation_id()
+```
+
+## Health Checks
+
+### Endpoints
+
+#### Liveness Probe (`/live`)
+Checks if the application is running:
+
+```bash
+curl http://localhost:8000/live
+# {"status": "alive"}
+```
+
+#### Health Check (`/health`)
+Basic health check endpoint:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "app_name": "SoulSpot Bridge",
+  "environment": "development",
+  "profile": "simple"
+}
+```
+
+#### Readiness Probe (`/ready`)
+Checks if the application is ready to serve traffic with dependency checks:
+
+```bash
+curl http://localhost:8000/ready
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "checks": {
+    "database": {
+      "status": "healthy",
+      "message": "Database connection successful"
+    },
+    "slskd": {
+      "status": "healthy",
+      "message": "slskd service is accessible"
+    },
+    "spotify": {
+      "status": "healthy",
+      "message": "Spotify API is accessible"
+    },
+    "musicbrainz": {
+      "status": "healthy",
+      "message": "MusicBrainz API is accessible"
+    }
+  }
+}
+```
+
+Status values:
+- `healthy`: All checks passed
+- `degraded`: Some checks failed but service is operational
+- `unhealthy`: Critical checks failed
+
+### Configuration
+
+```env
+# Enable dependency health checks (default: true)
+OBSERVABILITY__ENABLE_DEPENDENCY_HEALTH_CHECKS=true
+
+# Health check timeout in seconds (default: 5.0)
+OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
+```
+
+### Kubernetes Integration
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: soulspot-bridge
+spec:
+  containers:
+  - name: app
+    image: soulspot-bridge:latest
+    livenessProbe:
+      httpGet:
+        path: /live
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 10
+    readinessProbe:
+      httpGet:
+        path: /ready
+        port: 8000
+      initialDelaySeconds: 10
+      periodSeconds: 5
+```
+
+## Configuration
+
+### Complete Environment Variables
+
+```env
+# Application
+APP_ENV=production
+LOG_LEVEL=INFO
+
+# Observability - Logging
+OBSERVABILITY__LOG_JSON_FORMAT=true
+
+# Observability - Health Checks
+OBSERVABILITY__ENABLE_DEPENDENCY_HEALTH_CHECKS=true
+OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
+```
+
+## Best Practices
+
+### Logging
+
+1. **Use appropriate log levels**:
+   - DEBUG: Detailed diagnostic information
+   - INFO: General informational messages
+   - WARNING: Warning messages for potential issues
+   - ERROR: Error messages for failures
+   - CRITICAL: Critical issues requiring immediate attention
+
+2. **Include context**: Use `extra` parameter to add structured data:
+   ```python
+   logger.info("User action completed", extra={
+       "user_id": user.id,
+       "action": "download",
+       "duration_ms": duration
+   })
+   ```
+
+3. **Avoid logging sensitive data**: Never log passwords, tokens, or personal information
+
+4. **Use JSON format in production**: Makes logs easier to parse and analyze with log aggregation tools
+
+### Health Checks
+
+1. **Set appropriate timeouts**: Balance responsiveness with false positives
+2. **Monitor health check latency**: Slow health checks indicate problems
+3. **Use readiness for dependencies**: Liveness for application health only
+4. **Test health checks regularly**: Ensure they accurately reflect system state
+
+---
+
+For more information about the application architecture and deployment, see:
+- [Architecture Guide](architecture.md)
+- [Setup Guide](setup-guide.md)
+- [Development Roadmap](development-roadmap.md)

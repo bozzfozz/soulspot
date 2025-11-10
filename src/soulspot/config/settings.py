@@ -171,6 +171,30 @@ class APISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="API_")
 
 
+class ObservabilitySettings(BaseSettings):
+    """Observability and monitoring configuration."""
+
+    # Logging
+    log_json_format: bool = Field(
+        default=False,
+        description="Use JSON format for logs (recommended for production)",
+    )
+
+    # Health checks
+    enable_dependency_health_checks: bool = Field(
+        default=True,
+        description="Enable health checks for external dependencies",
+    )
+    health_check_timeout: float = Field(
+        default=5.0,
+        description="Timeout for dependency health checks in seconds",
+        ge=1.0,
+        le=30.0,
+    )
+
+    model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_")
+
+
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -227,6 +251,10 @@ class Settings(BaseSettings):
     api: APISettings = Field(
         default_factory=APISettings,
         description="API configuration",
+    )
+    observability: ObservabilitySettings = Field(
+        default_factory=ObservabilitySettings,
+        description="Observability configuration",
     )
 
     model_config = SettingsConfigDict(
