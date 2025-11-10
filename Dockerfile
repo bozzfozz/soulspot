@@ -16,6 +16,7 @@ WORKDIR /build
 
 # Copy dependency files
 COPY pyproject.toml poetry.lock README.md ./
+COPY src/ ./src/
 
 # Install dependencies (without dev dependencies)
 RUN poetry config virtualenvs.create false && \

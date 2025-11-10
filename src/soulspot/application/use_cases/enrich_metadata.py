@@ -1,5 +1,6 @@
 """Enrich metadata use case."""
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -13,6 +14,8 @@ from soulspot.domain.ports import (
     ITrackRepository,
 )
 from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,8 +100,12 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                 )
                 if recording:
                     enriched_fields.append("musicbrainz_lookup_by_isrc")
-            except Exception:
-                pass  # Fall back to search
+            except Exception as e:
+                logger.debug(
+                    "MusicBrainz ISRC lookup failed for track %s: %s. Falling back to search.",
+                    track.id.value,
+                    e,
+                )
 
         # Fall back to search if ISRC lookup failed
         if not recording:
@@ -111,9 +118,6 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                         artist_name = artist.name
                 except Exception as e:
                     # Log the error but continue with empty artist name
-                    import logging
-
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "Failed to fetch artist for track %s: %s", track.id.value, e
                     )
@@ -195,8 +199,12 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                     )
                     await self._artist_repository.add(artist)
                     enriched_fields.append("artist_created")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "Failed to create artist from MusicBrainz ID %s: %s",
+                    artist_mbid,
+                    e,
+                )
 
         return artist, enriched_fields
 
@@ -263,8 +271,12 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                         )
                         await self._album_repository.add(album)
                         enriched_fields.append("album_created")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(
+                    "Failed to create album from MusicBrainz release %s: %s",
+                    release_mbid,
+                    e,
+                )
 
         return album, enriched_fields
 

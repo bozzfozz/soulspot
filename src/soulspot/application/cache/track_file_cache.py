@@ -126,7 +126,8 @@ class TrackFileCache:
             return cached
 
         # Compute checksum
-        md5 = hashlib.md5()
+        # MD5 is used for file integrity checking, not security
+        md5 = hashlib.md5(usedforsecurity=False)  # nosec B324
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 md5.update(chunk)

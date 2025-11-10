@@ -133,7 +133,7 @@ class APISettings(BaseSettings):
     """API server configuration."""
 
     host: str = Field(
-        default="0.0.0.0",
+        default="0.0.0.0",  # nosec B104 - binding to all interfaces is intentional for containerized deployment
         description="API host to bind to",
     )
     port: int = Field(
