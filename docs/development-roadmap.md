@@ -1,7 +1,8 @@
 # Development Roadmap
 
 > **Last Updated:** 2025-11-10  
-> **Current Status:** Phase 6 In Progress - Production Readiness
+> **Current Status:** Phase 6 In Progress - Production Readiness  
+> **Ideas Source:** Integrated from `docs/features/soulspot-ideas.md` (2025-11-10)
 
 ## 📍 Current Status
 
@@ -53,17 +54,18 @@ Transform the application from a development prototype to a production-ready sys
   - [ ] Circuit breaker patterns for external services
 
 **6.2 CI/CD Pipeline** 🚀
-- [ ] GitHub Actions workflow setup
+- [ ] GitHub Actions workflow setup *(Complexity: MEDIUM, Source: roadmap)*
   - Automated testing on pull requests
   - Code quality checks (ruff, mypy, bandit)
   - Test coverage reporting
   - Security scanning
-- [ ] Automated release process
-  - Semantic versioning
+- [ ] Automated release process *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - Semantic versioning (SemVer)
   - Automated changelog generation
   - Docker image building and publishing
   - GitHub releases with artifacts
-- [ ] Deployment automation
+  - Git tag creation (vX.Y.Z)
+- [ ] Deployment automation *(Complexity: HIGH, Source: roadmap)*
   - Development environment deployment
   - Staging environment deployment
   - Production deployment with approval gates
@@ -146,15 +148,17 @@ Transform the application from a development prototype to a production-ready sys
   - [x] Permission problems
   - [x] Directory validation errors
   - [x] Auto-import troubleshooting
-- [ ] Operations runbook
+- [ ] Operations runbook *(Complexity: MEDIUM, Source: roadmap)*
   - [ ] Common operational tasks
   - [ ] Backup and recovery procedures
   - [ ] Monitoring and alerting setup
-- [ ] API documentation improvements
+  - [ ] Rollback procedures *(Source: soulspot-ideas)*
+- [ ] API documentation improvements *(Complexity: LOW, Source: roadmap + soulspot-ideas)*
   - [ ] Request/response examples
   - [ ] Error code documentation
   - [ ] Rate limit documentation
   - [ ] Authentication flow diagrams
+  - [ ] REST API + WebSocket documentation *(Source: soulspot-ideas)*
 
 **Acceptance Criteria:**
 - [x] Docker Compose setup complete with all required services
@@ -177,33 +181,50 @@ Transform the application from a development prototype to a production-ready sys
 Expand functionality with user-requested features and quality-of-life improvements.
 
 **7.1 Download Management Enhancements** ⬇️
-- [ ] Advanced download queue management
-  - Priority-based queuing
-  - Download scheduling
+- [ ] Advanced download queue management *(Complexity: MEDIUM, Source: soulspot-ideas)*
+  - Priority-based queuing (drag & drop, priority field)
+  - Download scheduling (CRON, night mode)
   - Bandwidth throttling
-  - Concurrent download limits
-- [ ] Download retry logic improvements
-  - Configurable retry strategies
+  - Concurrent download limits (configurable, e.g., 1-3 parallel)
+  - Pause/Resume functionality
+- [ ] Download retry logic improvements *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - Configurable retry strategies (3 retries with exponential backoff)
   - Alternative source discovery
   - Automatic quality fallback
-- [ ] Batch download operations
+  - Resume after restart
+- [ ] Batch download operations *(Complexity: MEDIUM, Source: soulspot-ideas)*
   - Bulk track downloads
   - Entire playlist download
   - Album-based downloads
+  - Import from TXT/CSV/JSON/M3U formats
+  - Spotify export integration
+- [ ] Download history & audit log *(Complexity: LOW, Source: soulspot-ideas)*
+  - Persistent download history
+  - Audit log for all download operations
+  - Legal opt-in tracking
 
 **7.2 Metadata Management** 📊
-- [ ] Manual metadata editing
+- [ ] Manual metadata editing *(Complexity: LOW, Source: roadmap)*
   - Edit track information
   - Edit artist information
   - Edit album information
-- [ ] Metadata conflict resolution
+- [ ] Metadata conflict resolution *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - UI for resolving conflicting metadata
   - Preference settings for metadata sources
   - Metadata versioning
-- [ ] Additional metadata sources
+  - Authority hierarchy (manual > MusicBrainz > Discogs > Spotify > fallback) *(Source: soulspot-ideas)*
+  - Tag merging and normalization (feat./ft. standardization) *(Source: soulspot-ideas)*
+- [ ] Additional metadata sources *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - Discogs integration
   - Last.fm integration
   - Custom metadata providers
+  - Lyrics integration (LRClib, Musixmatch, Genius) *(Source: soulspot-ideas)*
+  - External artwork sources (CoverArtArchive, Fanart.tv) *(Source: soulspot-ideas)*
+- [ ] Advanced tagging features *(Complexity: MEDIUM, Source: soulspot-ideas)*
+  - Multi-source tagging with merge logic
+  - Batch tag fixer UI (Dry-Run + Commit)
+  - Metadata cache with SQLite
+  - Multiple artwork resolutions (embed + cover.jpg)
 
 **7.3 File Organization & Quality** 🗂️
 - [x] Auto music import (completed in Phase 6)
@@ -214,18 +235,24 @@ Expand functionality with user-requested features and quality-of-life improvemen
   - [x] Support for multiple audio formats
   - [x] File completion detection
   - [x] Empty directory cleanup
-- [ ] File organization templates
-  - [ ] Customizable folder structures
+- [ ] File organization templates *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - [ ] Customizable folder structures (Downloads, Sorting, New Artists, Unknown Album, Final Library) *(Source: soulspot-ideas)*
   - [ ] Filename templates with variables
   - [ ] Advanced organization rules
-- [ ] Audio quality management
-  - [ ] Quality filtering in search
-  - [ ] Format conversion (optional)
+- [ ] Audio quality management *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - [ ] Quality filtering in search (min-bitrate, format filters FLAC/MP3) *(Source: soulspot-ideas)*
+  - [ ] Format conversion (optional, Archival ↔ Mobile) *(Source: soulspot-ideas)*
   - [ ] Quality reporting and statistics
-- [ ] Duplicate detection
-  - [ ] Identify duplicate files
-  - [ ] Smart merging of metadata
+  - [ ] Exclusion keywords (Live/Remix) *(Source: soulspot-ideas)*
+- [ ] Duplicate detection *(Complexity: HIGH, Source: roadmap + soulspot-ideas)*
+  - [ ] Identify duplicate files (hash + fingerprint) *(Source: soulspot-ideas)*
+  - [ ] Smart merging of metadata ("Smart-Unify") *(Source: soulspot-ideas)*
   - [ ] Cleanup tools
+- [ ] Library scanning & self-healing *(Complexity: HIGH, Source: soulspot-ideas)*
+  - [ ] Library scanner (hash/tag/structure scan, detect broken files)
+  - [ ] Album completeness check
+  - [ ] Auto-re-download for corrupted files
+  - [ ] Fix library (tags, cover, structure)
 
 **7.4 User Management (Multi-User Support)** 👥
 - [ ] User accounts and profiles
@@ -242,32 +269,88 @@ Expand functionality with user-requested features and quality-of-life improvemen
   - UI customization
 
 **7.5 Playlist Management Enhancements** 🎵
-- [ ] Manual playlist creation and editing
+- [ ] Manual playlist creation and editing *(Complexity: LOW, Source: roadmap)*
   - Create playlists from scratch
   - Add/remove tracks manually
   - Reorder tracks
-- [ ] Playlist synchronization
+- [ ] Playlist synchronization *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - Auto-sync with Spotify changes
   - Sync frequency configuration
   - Sync conflict resolution
-- [ ] Playlist export/import
+  - Cross-provider sync (Spotify ↔ Plex ↔ Navidrome ↔ Jellyfin) *(Source: soulspot-ideas)*
+  - Playlist versioning/snapshots/rollback *(Source: soulspot-ideas)*
+- [ ] Playlist export/import *(Complexity: LOW, Source: roadmap + soulspot-ideas)*
   - Export to M3U, PLS formats
   - Import from various formats
   - Cross-platform playlist sharing
+  - CSV/JSON export *(Source: soulspot-ideas)*
+  - Playlist rebuilder with matching *(Source: soulspot-ideas)*
+- [ ] Missing song discovery *(Complexity: MEDIUM, Source: soulspot-ideas)*
+  - Compare playlist entries vs. local library
+  - Report missing tracks
+  - Export missing songs (CSV/JSON)
 
 **7.6 Search & Discovery** 🔍
-- [ ] Advanced search capabilities
+- [ ] Advanced search capabilities *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - Search across all entities (tracks, artists, albums)
   - Filters and facets
   - Search suggestions and autocomplete
-- [ ] Discovery features
+  - Combined search (Spotify + Soulseek) with source labels *(Source: soulspot-ideas)*
+  - Smart matching score system (title/artist/duration/bitrate/size) *(Source: soulspot-ideas)*
+- [ ] Discovery features *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
   - Similar tracks/artists
   - Genre-based browsing
   - Trending downloads
-- [ ] History and recommendations
+  - Discography discovery *(Source: soulspot-ideas)*
+  - Similar-artist discovery *(Source: soulspot-ideas)*
+  - "Download entire discography" feature *(Source: soulspot-ideas)*
+- [ ] History and recommendations *(Complexity: LOW, Source: roadmap)*
   - Recent searches
   - Frequently downloaded
   - Personalized recommendations
+
+**7.7 Automation & Watchlists ("arr"-Style)** 🤖  
+*(Complexity: HIGH, Source: soulspot-ideas)*
+- [ ] Automated workflow implementation
+  - Detect → Search → Match → Download → Tag → Sort → Sync pipeline
+  - Dry-run options for testing
+  - Whitelist/Blacklist configuration
+- [ ] Watchlist functionality
+  - Artist watchlists (auto-download new releases)
+  - Label watchlists
+  - Genre-based watchlists
+  - Auto-download when content becomes available
+- [ ] Library monitoring
+  - Detect missing albums in artist discographies
+  - Auto-completion of partial albums
+  - Quality upgrade detection
+
+**7.8 Ratings & User Signals** ⭐  
+*(Complexity: MEDIUM, Source: soulspot-ideas)*
+- [ ] Ratings synchronization
+  - Plex/Jellyfin/Navidrome ratings sync
+  - Bidirectional sync with conflict resolution
+  - Rating mapping between systems
+- [ ] User signals tracking
+  - Play count tracking
+  - Skip tracking
+  - Like/dislike signals
+  - Use signals for auto-playlist generation
+  - Priority-based download suggestions
+
+**7.9 Post-Processing Pipeline** 🔄  
+*(Complexity: HIGH, Source: soulspot-ideas)*
+- [ ] Automated post-processing steps
+  - Temp download → Auto-tagging → Artwork → Lyrics
+  - Audio analysis (BPM, Loudness)
+  - Rename according to templates
+  - Move to final library location
+  - Trigger media server rescan
+  - Comprehensive logging
+- [ ] Optional processing features
+  - Auto-convert for different formats (Archive ↔ Mobile)
+  - Auto-cleanup of temporary files
+  - Audiofingerprint generation (AcoustID/Chromaprint) *(Needs discussion)*
 
 ---
 
@@ -282,18 +365,24 @@ Expand functionality with user-requested features and quality-of-life improvemen
 - [ ] Offline mode support
 
 **8.2 Advanced Integrations** 🔌
-- [ ] Additional music sources
+- [ ] Additional music sources *(Complexity: MEDIUM-HIGH, Source: roadmap + soulspot-ideas)*
   - SoundCloud integration
   - Bandcamp integration
   - YouTube Music integration
-- [ ] Media server integrations
-  - Plex integration
-  - Jellyfin integration
+- [ ] Media server integrations *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - Plex integration (rescan, mapping, ratings sync)
+  - Jellyfin integration (rescan, mapping, ratings sync)
   - Subsonic integration
-- [ ] Notification services
+  - Navidrome integration (rescan, mapping) *(Source: soulspot-ideas)*
+- [ ] Notification services *(Complexity: LOW, Source: roadmap + soulspot-ideas)*
   - Discord webhooks
   - Telegram bot
   - Email notifications
+  - Smart home integration *(Source: soulspot-ideas)*
+- [ ] Last.fm features *(Complexity: MEDIUM, Source: soulspot-ideas)*
+  - Scrobbling support
+  - Last.fm metadata enrichment
+  - User statistics integration
 
 **8.3 Analytics & Insights** 📈
 - [ ] Download statistics dashboard
@@ -302,10 +391,150 @@ Expand functionality with user-requested features and quality-of-life improvemen
 - [ ] Export reports
 
 **8.4 Automation & Workflows** 🤖
-- [ ] Automated playlist imports
-- [ ] Scheduled synchronization
-- [ ] Webhook triggers
-- [ ] Custom automation scripts
+- [ ] Automated playlist imports *(Complexity: LOW, Source: roadmap)*
+- [ ] Scheduled synchronization *(Complexity: LOW, Source: roadmap)*
+- [ ] Webhook triggers *(Complexity: MEDIUM, Source: roadmap + soulspot-ideas)*
+  - Event-based webhooks
+  - Custom automation events
+  - Integration with external systems
+- [ ] Custom automation scripts *(Complexity: MEDIUM, Source: roadmap)*
+- [ ] CLI for headless operation *(Complexity: MEDIUM, Source: soulspot-ideas)*
+  - Full CLI interface for automation
+  - Scriptable operations
+  - Batch processing support
+
+**8.5 AI & Machine Learning** 🧠  
+*(Complexity: VERY HIGH, Source: soulspot-ideas, Needs discussion)*
+- [ ] AI-based matching *(Deferred to future phase)*
+  - Audio fingerprint matching (AcoustID/Chromaprint)
+  - Machine learning-based track matching
+  - Similarity detection using audio features
+- [ ] AI-powered tagging
+  - Automatic genre classification
+  - Mood detection
+  - Language detection
+  - Tag repair and enrichment
+- [ ] Adaptive automation
+  - Learn from user decisions
+  - Predictive quality preferences
+  - Personalized matching strategies
+- [ ] Future AI features *(Low priority)*
+  - Forecast for new releases
+  - Audio repair capabilities
+  - Anomaly detection
+
+**8.6 Extended UI Features** 🎨  
+*(Complexity: MEDIUM, Source: soulspot-ideas)*
+- [ ] Browser extension
+  - "Add to SoulSpot" button for supported sites
+  - Quick playlist import
+  - Track search from any page
+- [ ] System tray integration
+  - Minimal interface
+  - Quick access to common functions
+  - Download progress in tray
+- [ ] Terminal/Minimal view
+  - Text-based UI option
+  - Headless operation support
+- [ ] Enhanced visualizations
+  - Timeline view for operations
+  - Automation center dashboard
+  - Metadata manager interface
+  - Rating sync interface
+
+---
+
+### Phase 9: Enterprise & Extended Features (Priority: LOW)
+**Estimated Duration:** 4-6 weeks  
+**Target Completion:** Q3-Q4 2025
+
+#### Objectives
+Long-term features for advanced users, enterprise deployments, and experimental functionality.
+
+**9.1 Multi-User & Security** 👥  
+*(Complexity: HIGH, Source: soulspot-ideas)*
+- [ ] Advanced authentication
+  - Multi-user support with role-based access
+  - Admin vs. Read-only roles
+  - OAuth/API Key authentication
+  - IP restriction (optional)
+  - Comprehensive audit logs
+- [ ] User-specific features
+  - Per-user download quotas
+  - User-specific playlists and libraries
+  - Individual preferences and settings
+- [ ] Legal compliance features
+  - Legal mode with restricted features
+  - Opt-in legal notice before automated downloads
+  - Compliance tracking and reporting
+
+**9.2 Plugin System & Extensibility** 🔌  
+*(Complexity: VERY HIGH, Source: soulspot-ideas)*
+- [ ] Plugin architecture
+  - Plugin SDK/API
+  - Dynamic plugin loading
+  - Plugin marketplace/registry
+- [ ] Extensibility points
+  - Custom music sources
+  - Custom tagging engines
+  - Custom automation rules
+  - Custom post-processing steps
+- [ ] Plugin management
+  - Install/uninstall plugins
+  - Plugin versioning
+  - Plugin configuration UI
+
+**9.3 Multi-Library & Advanced Storage** 💾  
+*(Complexity: HIGH, Source: soulspot-ideas)*
+- [ ] Multi-library support
+  - Multiple music library locations (NAS, local, cloud)
+  - Per-library configuration
+  - Library synchronization
+- [ ] Preferred version management
+  - Mark preferred versions of tracks
+  - Quality-based version preference
+  - Automatic version upgrade
+- [ ] Advanced storage features
+  - Deduplication across libraries
+  - Storage quota management
+  - Archive vs. active library separation
+
+**9.4 Advanced Configuration** ⚙️  
+*(Complexity: MEDIUM, Source: soulspot-ideas)*
+- [ ] Configuration management
+  - YAML/JSON configuration files
+  - Configuration versioning
+  - Import/export configuration
+  - Configuration validation
+- [ ] Policy framework
+  - Download policies (quality, format, size limits)
+  - Automation policies (when to auto-download)
+  - Retention policies (auto-cleanup rules)
+  - Rate limiting policies (external API calls)
+- [ ] Multi-device sync
+  - Sync configuration across devices
+  - Sync queue across devices
+  - Shared libraries
+
+**9.5 Experimental Features** 🧪  
+*(Complexity: VARIES, Source: soulspot-ideas, Needs evaluation)*
+- [ ] Audio analysis features
+  - BPM detection
+  - Key detection
+  - Loudness normalization
+  - Audio quality assessment
+- [ ] Smart playlists
+  - Auto-generated based on mood/genre
+  - Dynamic playlists based on listening habits
+  - Similarity-based auto-playlists
+- [ ] Download budgeting
+  - Bandwidth budgets
+  - Storage budgets
+  - Time-based download windows
+- [ ] Advanced UI concepts
+  - PWA (Progressive Web App) support
+  - Offline-first architecture
+  - Real-time collaboration features
 
 ---
 
@@ -317,32 +546,181 @@ Expand functionality with user-requested features and quality-of-life improvemen
 - [ ] Add integration tests for all API endpoints
 - [ ] Documentation updates as code evolves
 - [ ] Performance profiling and optimization
+- [ ] MusicBrainz rate-limit handling (1 req/sec) *(Source: soulspot-ideas)*
+- [ ] Implement circuit breaker patterns for external services
 
 ### Code Quality
 - [ ] Regular dependency updates
 - [ ] Security vulnerability patching
 - [ ] Code review process improvements
 - [ ] Architecture decision records (ADRs)
+- [ ] Safe atomic file operations (temp write + replace) *(Source: soulspot-ideas)*
 
 ### User Experience
 - [ ] Accessibility improvements (WCAG AAA)
 - [ ] Internationalization (i18n)
 - [ ] Dark mode refinements
 - [ ] Responsive design improvements
+- [ ] Progressive enhancement for all UI features
+
+### Metrics & Monitoring *(Source: soulspot-ideas)*
+- [ ] Track key performance indicators
+  - Job throughput and completion rate
+  - Average enrichment time per track
+  - Cache hit rate
+  - External API calls per second
+  - Failed job ratio
+- [ ] Business metrics
+  - Download success rate
+  - User engagement metrics
+  - Library growth statistics
+  - Search-to-download conversion rate
 
 ---
 
 ## 📊 Priority Matrix
 
-| Phase | Priority | Effort | Impact | Risk |
-|-------|----------|--------|--------|------|
-| Phase 6: Production Readiness | HIGH | HIGH | HIGH | MEDIUM |
-| Phase 7: Feature Enhancements | MEDIUM | MEDIUM | HIGH | LOW |
-| Phase 8: Advanced Features | LOW | HIGH | MEDIUM | MEDIUM |
+| Phase | Priority | Effort | Impact | Risk | Complexity |
+|-------|----------|--------|--------|------|------------|
+| Phase 6: Production Readiness | HIGH | HIGH | HIGH | MEDIUM | MEDIUM-HIGH |
+| Phase 7: Feature Enhancements | MEDIUM | MEDIUM | HIGH | LOW | MEDIUM |
+| Phase 8: Advanced Features | LOW | HIGH | MEDIUM | MEDIUM | HIGH |
+| Phase 9: Enterprise & Extended | VERY LOW | VERY HIGH | LOW | HIGH | VERY HIGH |
+
+**Complexity Legend:**
+- **LOW (klein):** 1-3 days of development
+- **MEDIUM (mittel):** 1-2 weeks of development
+- **HIGH (groß):** 2-4 weeks of development
+- **VERY HIGH:** Multiple months, significant complexity
 
 ---
 
-## 🎯 Success Metrics
+## 📋 Default Policies & Configuration Recommendations
+
+*(Source: soulspot-ideas.md - Section 4)*
+
+### Rate Limiting & External API Policies
+- **MusicBrainz:** 1 request/second (strict rate limiting, use worker queue)
+- **Spotify API:** Respect rate limits, implement exponential backoff
+- **slskd API:** Configurable concurrent requests (default: 2-3)
+
+### Metadata Merge Priority
+**Recommended hierarchy:**
+1. Manual user edits (highest priority)
+2. MusicBrainz (authoritative for classical metadata)
+3. Discogs (good for release details)
+4. Spotify (good for popularity and modern metadata)
+5. Last.fm (fallback)
+6. File tags (lowest priority)
+
+**Open Question:** Should Spotify be prioritized higher for certain fields like popularity or user-facing names?
+
+### Download Policies
+- **Default parallel downloads:** 2 (configurable 1-5)
+- **Retry policy:** 3 retries with exponential backoff (1s, 2s, 4s)
+- **Default quality filter:** Minimum 128kbps (configurable)
+- **Format preference:** FLAC > 320kbps MP3 > 256kbps > 192kbps
+
+### Legal & Compliance
+- **Legal opt-in:** Required before automated downloads
+- **Audit logging:** All downloads logged with timestamp, source, user
+- **Legal mode:** Optional restricted mode for compliance-focused deployments
+
+### Storage & Organization
+**Recommended folder structure:**
+```
+/music-library/
+  /downloads/          # Temporary download location
+  /sorting/            # Post-processing staging area
+  /new-artists/        # Recently added artists
+  /unknown-album/      # Files without album metadata
+  /library/            # Final organized library
+    /Artist Name/
+      /Album Name (Year)/
+        01 - Track.flac
+        cover.jpg
+```
+
+---
+
+## ❓ Open Questions & Decision Points
+
+*(Source: soulspot-ideas.md - Section 4)*
+
+### Technical Decisions Needed
+
+1. **Ratings Sync Strategy**
+   - Should initial sync be one-way (Plex→SoulSpot) or bidirectional?
+   - How to handle rating conflicts between systems?
+   - Which rating scale to use as canonical (5-star vs 10-point)?
+   - **Recommendation:** Start with one-way, evolve to bidirectional after testing
+
+2. **Audio Fingerprinting Timeline**
+   - Should AcoustID/Chromaprint be Phase 7 or Phase 8/9?
+   - Significant complexity and performance impact
+   - **Recommendation:** Phase 8 (Advanced Features) with opt-in flag
+
+3. **Metadata Priority for Specific Fields**
+   - Should Spotify be prioritized for popularity, modern artist names, or user-facing data?
+   - How to handle conflicts between MusicBrainz canonical names vs. Spotify user-friendly names?
+   - **Recommendation:** Configurable per-field priority, with sensible defaults
+
+4. **Legal Mode Restrictions**
+   - Which features should be restricted/disabled in legal mode?
+   - How strict should automation be?
+   - **Recommendation:** Define clear boundaries, document extensively, make opt-in explicit
+
+5. **Plugin System Scope**
+   - Full plugin system in Phase 8 or Phase 9?
+   - Security implications of arbitrary plugins
+   - **Recommendation:** Phase 9, with careful security review
+
+6. **Multi-User Implementation**
+   - Simple role-based access or full multi-tenancy?
+   - Shared vs. private libraries?
+   - **Recommendation:** Start with simple RBAC (admin/user), evolve based on demand
+
+### Community Input Needed
+
+These features should be discussed with users/contributors before implementation:
+- [ ] Preferred default quality settings
+- [ ] Folder structure preferences
+- [ ] Rating sync behavior expectations
+- [ ] Automation aggressiveness (how automatic should "auto" be?)
+- [ ] Privacy expectations for metadata caching
+- [ ] Acceptable external service dependencies
+
+---
+
+## 🎯 Quick Reference: Feature Sources
+
+### From Existing Roadmap (Original)
+- Core production readiness features
+- Basic user management concepts
+- Standard integrations (Plex, Jellyfin, Subsonic)
+
+### From soulspot-ideas.md (Integrated 2025-11-10)
+- Enhanced download queue management (priorities, scheduling, pause/resume)
+- Comprehensive metadata management (multi-source, merge logic, lyrics)
+- Post-processing pipeline (tagging, artwork, audio analysis)
+- Automation & watchlists (arr-style features)
+- Ratings synchronization
+- Advanced search and matching (smart scoring, filters)
+- Library scanning and self-healing
+- Plugin system architecture
+- Multi-library support
+- AI/ML features (deferred to later phases)
+- Extended UI features (browser extension, tray, terminal)
+- Configuration policies and best practices
+
+### Deferred or Needs Discussion
+- Full AI-based matching and tagging (Phase 9 or later)
+- Audio repair capabilities (experimental)
+- Forecast for new releases (research needed)
+- Adaptive automation learning (requires user data strategy)
+- Smart home integration (needs use case validation)
+
+
 
 ### Phase 6 Success Criteria
 - [ ] Zero critical security vulnerabilities
@@ -374,18 +752,154 @@ We welcome community input on the roadmap! If you have suggestions for features 
 3. Participate in roadmap discussions
 4. Submit pull requests for features you'd like to implement
 
+### Suggested "Good First Issue" Tasks
+
+*(Source: soulspot-ideas.md - Section 5)*
+
+These tasks are well-suited for new contributors:
+
+**Phase 6-7 Quick Wins:**
+1. **spotify-oauth-enhancements** *(Complexity: LOW)*
+   - Improve OAuth PKCE flow documentation
+   - Add manual testing guide
+   - Enhance error messages
+
+2. **queue-basic-improvements** *(Complexity: LOW)*
+   - Add pagination to job list endpoint
+   - Improve job status filtering
+   - Add job statistics endpoint
+
+3. **safe-tag-writes-enhancement** *(Complexity: LOW)*
+   - Implement atomic temp-write + replace for all tag operations
+   - Add comprehensive error handling
+   - Add rollback on failure
+
+4. **cover-download-multi-source** *(Complexity: LOW-MEDIUM)*
+   - Extend cover download to support multiple sources
+   - Add CoverArtArchive integration
+   - Support multiple resolutions
+
+5. **batch-download-csv-import** *(Complexity: MEDIUM)*
+   - Implement CSV/JSON batch import UI
+   - Add validation and preview
+   - Support M3U playlist import
+
+6. **download-scheduler** *(Complexity: MEDIUM)*
+   - Implement CRON-based download scheduling
+   - Add "night mode" for off-peak downloads
+   - UI for schedule configuration
+
+### Suggested "Help Wanted" Tasks
+
+These tasks are suitable for contributors with more experience:
+
+**Phase 7 Features:**
+1. **musicbrainz-enrichment-advanced** *(Complexity: MEDIUM)*
+   - Advanced MusicBrainz integration with caching
+   - Rate-limit handling with worker queue
+   - Comprehensive unit tests
+
+2. **retry-resume-enhanced** *(Complexity: MEDIUM)*
+   - Implement sophisticated retry logic
+   - Resume after application restart
+   - Alternative source discovery on failure
+
+3. **ratings-sync-connector** *(Complexity: MEDIUM)*
+   - Plex API connector for ratings sync
+   - Dry-run mode for testing
+   - Conflict resolution UI
+
+4. **missing-song-discovery** *(Complexity: MEDIUM)*
+   - Library scanner comparing playlists vs. local files
+   - Missing track reporting
+   - CSV/JSON export of missing tracks
+
+5. **smart-matching-heuristics** *(Complexity: MEDIUM-HIGH)*
+   - Fuzzy matching for track search
+   - Score-based matching algorithm
+   - Configurable matching thresholds
+
+6. **metadata-merge-logic** *(Complexity: HIGH)*
+   - Multi-source metadata merging
+   - Authority hierarchy implementation
+   - Tag normalization (feat./ft. etc.)
+   - Batch tag fixer UI with dry-run
+
+
+
 ---
 
 ## 📅 Release Schedule
 
-| Version | Target Date | Focus |
-|---------|-------------|-------|
-| 0.1.0 | 2025-11-08 | ✅ Alpha Release (Web UI) |
-| 0.2.0 | Q1 2025 | Beta Release (Production Ready) |
-| 1.0.0 | Q2 2025 | Stable Release |
-| 1.1.0 | Q2 2025 | Feature Enhancements |
-| 2.0.0 | Q3 2025 | Major Features & Mobile |
+| Version | Target Date | Focus | Key Features |
+|---------|-------------|-------|--------------|
+| 0.1.0 | 2025-11-08 | ✅ Alpha Release | Web UI, Basic Features |
+| 0.2.0 | Q1 2025 | Beta Release | Production Ready, Docker, Observability |
+| 1.0.0 | Q2 2025 | Stable Release | Complete Phase 6-7 Features |
+| 1.1.0 | Q2 2025 | Feature Enhancements | Automation, Ratings, Advanced Search |
+| 1.5.0 | Q3 2025 | Advanced Features | Phase 8 Complete |
+| 2.0.0 | Q3-Q4 2025 | Major Features | Mobile, AI Features (if viable) |
+| 2.5.0 | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) |
+
+### Version Strategy
+
+Following [Semantic Versioning (SemVer)](https://semver.org/):
+- **MAJOR (X.0.0):** Breaking changes, major feature sets
+- **MINOR (0.X.0):** New features, backward compatible
+- **PATCH (0.0.X):** Bug fixes, security patches
+
+### Release Checklist
+
+Before each release:
+- [ ] All tests pass (unit, integration, e2e)
+- [ ] Security scan clean (no high/critical vulnerabilities)
+- [ ] Documentation updated (CHANGELOG, README, API docs)
+- [ ] Git tag created (vX.Y.Z)
+- [ ] Docker images built and published
+- [ ] Release notes written
+- [ ] Rollback plan documented *(Source: soulspot-ideas)*
+- [ ] Breaking changes clearly communicated
 
 ---
 
 **Note:** This roadmap is subject to change based on user feedback, technical constraints, and project priorities. Dates are estimates and may be adjusted as development progresses.
+
+---
+
+## 📝 Roadmap Change Log
+
+### 2025-11-10: Major Integration from soulspot-ideas.md
+**Integrated by:** Copilot Agent  
+**Changes:**
+- Added detailed feature specifications from comprehensive ideas document
+- Expanded Phase 7 (Feature Enhancements) with 4 new subsections:
+  - 7.7 Automation & Watchlists ("arr"-Style)
+  - 7.8 Ratings & User Signals
+  - 7.9 Post-Processing Pipeline
+- Enhanced Phase 8 (Advanced Features) with additional integrations and UI features
+- Added new Phase 9 (Enterprise & Extended Features) for long-term goals:
+  - Multi-user & security
+  - Plugin system & extensibility
+  - Multi-library support
+  - Advanced configuration
+  - Experimental features
+- Added comprehensive sections:
+  - Default Policies & Configuration Recommendations
+  - Open Questions & Decision Points
+  - Feature Sources Quick Reference
+  - Enhanced Contributing section with "Good First Issue" and "Help Wanted" suggestions
+- Added complexity indicators throughout (LOW/MEDIUM/HIGH/VERY HIGH)
+- Added source attribution for all features (roadmap/soulspot-ideas/both)
+- Updated Priority Matrix to include Phase 9
+- Expanded Release Schedule with version strategy and checklist
+- Added Metrics & Monitoring to Continuous Improvements
+- Total new features added: ~100+ detailed tasks
+- Features marked for discussion: ~10 (AI features, plugin security, legal mode details)
+- Avoided duplicates by carefully mapping existing features
+
+**Impact:**
+- Roadmap now comprehensively covers short-term (Q1 2025) to long-term (Q4 2025+) goals
+- Clear prioritization and complexity indicators for all features
+- Better guidance for contributors with categorized tasks
+- Explicit documentation of open questions and policy decisions needed
+- Maintained consistency with existing roadmap structure and formatting
