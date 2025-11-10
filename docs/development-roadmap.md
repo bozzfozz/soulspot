@@ -1,3 +1,391 @@
+# SoulSpot – Vollständige, Detaillierte Ideensammlung (Konsolidiert aus allen Quellen und Chats)
+
+## 1. Grundkonzept
+
+**Beschreibung:**  
+SoulSpot ist ein moderner Musikmanager, der Spotify, Soulseek (über slskd), lokale Bibliotheken und optionale Media-Server (Plex, Jellyfin, Navidrome) zu einem automatisierten System verbindet.
+
+**Ziel:**  
+Fehlende Songs aus Spotify-Playlists oder Artists automatisch über Soulseek finden, herunterladen, taggen, sortieren und mit vollständigen Metadaten in die lokale Bibliothek integrieren.
+
+**Nutzen:**  
+- Vollautomatische Ergänzung der Musikbibliothek  
+- Konsistente Tags, Cover und Lyrics  
+- Kein manuelles Suchen, Sortieren oder Taggen mehr  
+
+---
+
+## 2. Quellen & Integrationen
+
+### Spotify
+- Zugriff auf Playlists, Artists, Alben, Liked Songs, Saved Albums  
+- Spotify als Metadatenquelle für Titel, Artist, Jahr, ISRC, Cover  
+- OAuth2-Authentifizierung (z. B. mit Spotipy)  
+- Nutzung der API für Suche, Track-Daten, Playlist-Inhalte  
+
+**Nutzen:**  
+Spotify liefert die präzisesten und vollständigsten Metadaten zur Zuordnung und Tagging-Referenz.
+
+---
+
+### Soulseek (slskd)
+- REST-API-Nutzung: `/search`, `/download`, `/status`  
+- Authentifizierung mit Benutzername/Passwort/API-Key  
+- Download- und Queue-Management vollständig automatisiert  
+- Kontrolle über parallele Downloads, Pause/Resume, Statusüberwachung  
+- Logging jedes Transfers (Quelle, Größe, Zeit, User)  
+
+**Nutzen:**  
+Ermöglicht serverbasierten, skriptfähigen Zugriff auf Soulseek ohne GUI. Perfekt für Automation und Integration.
+
+---
+
+### Externe Metadatenquellen
+- **MusicBrainz:** IDs, Labels, Releases, Disknummern, Positionen  
+- **Discogs:** Veröffentlichungsjahr, Edition, Land, Label  
+- **Last.fm:** Genre-Tags, Hörerzahlen, Stimmung, ähnliche Artists  
+- **LRClib / Genius / Musixmatch:** Lyrics und LRC-Dateien  
+- **Fanart.tv / Spotify / Discogs:** Cover-Art in verschiedenen Auflösungen
+
+**Nutzen:**  
+Kombinierte Metadaten aus mehreren Quellen erzeugen die vollständigsten, fehlerfreien Tags.
+
+---
+
+### Media-Server-Integrationen
+- **Plex / Jellyfin / Navidrome:**  
+  - Sync von Bibliotheken, Ratings, Play-Counts  
+  - Trigger für automatischen Rescan nach Downloads  
+- Pfad-Mapping zwischen SoulSpot und Server (z. B. NAS)
+
+**Nutzen:**  
+Einheitliche Verwaltung lokaler und Streaming-Musiksysteme.
+
+---
+
+## 3. Suche & Matching
+
+**Beschreibung:**  
+Zentrale Komponente, die Spotify-Titel mit Soulseek-Ergebnissen abgleicht.
+
+**Mechanik:**
+- Kombination von Spotify-Metadaten (Titel, Artist, Länge) mit Soulseek-Suchergebnissen
+- Algorithmisches Matching (Scoring-System):  
+  `Score = (Title_Similarity * 0.4) + (Artist_Match * 0.3) + (Duration_Match * 0.2) + (Bitrate_Score * 0.1)`
+- Audiofingerprint-Option für präzisere Zuordnung
+- UI zeigt „Best Match" + alternative Treffer
+
+**Nutzen:**  
+Reduziert Fehlzuordnungen, spart Zeit, verbessert Trefferqualität.
+
+---
+
+## 4. Missing Song Discovery
+
+**Beschreibung:**  
+Vergleicht Spotify-Playlists, Artists oder Alben mit der lokalen Library und erkennt fehlende Songs.
+
+**Funktion:**
+- Hash-Index aller lokalen Dateien
+- Abgleich mit Spotify-Library
+- Ausgabe: Liste der fehlenden Titel mit Download-Option
+- Auto-Download-Job für alle fehlenden Songs einer Playlist
+
+**Nutzen:**  
+Automatische Vervollständigung von Playlists, Artists oder Diskografien.
+
+---
+
+## 5. Download-Queue & Batch-System
+
+**Beschreibung:**  
+Steuerung aller laufenden und geplanten Downloads.
+
+**Komponenten:**
+- Queue-Datenbank (SQLite) mit Job-Status (queued, running, done, failed)
+- Batch-Jobs (TXT, CSV, JSON, M3U, Spotify-Exports)
+- Fortschrittsanzeige (pro Job und global)
+- Parallel-Downloads mit Limit
+- Retry-Logik bei Fehlversuchen
+- Scheduler (Zeitfenstersteuerung, z. B. Nachtmodus)
+
+**Nutzen:**  
+Kontrollierter, stabiler, automatisierter Downloadprozess ohne Eingriff.
+
+---
+
+## 6. Soulseek-Automatisierung (Soularr-Prinzip)
+
+**Beschreibung:**  
+Automatische Überwachung, Suche und Vervollständigung der Library (ähnlich Sonarr/Radarr).
+
+**Ablauf:**
+1. Library-Scan → Fehlende Songs erkennen  
+2. Soulseek-Suche → passende Quellen finden  
+3. Automatische Downloads → mit Qualitätsfiltern  
+4. Post-Processing → Tagging, Cover, Sortierung  
+5. Auto-Recheck → bis alles vollständig ist
+
+**Parameter:**
+- Mindestbitrate, bevorzugte Formate (FLAC, MP3 320)
+- Blacklist bestimmter Nutzer oder Keywords (Remix, Live, Radio Edit)
+- Retry-Intervalle für fehlgeschlagene Files
+
+**Nutzen:**  
+„Self-Healing"-Musiksystem, das automatisch vollständig bleibt.
+
+---
+
+## 7. Post-Processing Pipeline
+
+**Beschreibung:**  
+Verarbeitungsschritte nach Download.
+
+**Ablauf:**
+1. Auto-Tagging via Spotify + MusicBrainz + Discogs + Last.fm  
+2. Cover-Art Download aus mehreren Quellen  
+3. Lyrics-Laden (LRC und Text)  
+4. File-Renaming nach Schema:  
+   `Artist/Year - Album/01 - Title.flac`  
+5. Sortieren in Zielordner (Artist / Album / Format)  
+6. Audioanalyse (Lautstärke, BPM, Dynamik, Key, Mood)  
+7. Auto-Sync mit Plex / Jellyfin / Navidrome  
+8. Auto-Cleanup von temporären oder defekten Files
+
+**Nutzen:**  
+Saubere, einheitliche, perfekt getaggte Library.
+
+---
+
+## 8. Metadata Engine & Cache
+
+**Beschreibung:**  
+Zentrale Instanz für Tag-Verwaltung, Metadaten-Zusammenführung und Caching.
+
+**Funktion:**
+- Datenquellen priorisiert mergen (Authority System)
+- Lokaler SQLite-Cache für API-Responses
+- Feldweise Gewichtung (Genre → Last.fm, Label → Discogs)
+- Änderungslog: Vorher/Nachher-Vergleich
+- Periodischer Metadata-Refresh-Job
+
+**Nutzen:**  
+Wiederverwendbare, schnelle Metadatenverarbeitung mit lückenloser Nachvollziehbarkeit.
+
+---
+
+## 9. Ratings & Playcount Sync
+
+**Beschreibung:**  
+Bewertungen und Wiedergabezähler zwischen Server und Dateien synchronisieren.
+
+**Mechanik:**
+- Plex → ID3v2 POPM-Feld (1–5★ → 20–100 Punkte)
+- Zwei-Wege-Option (Server ↔ File)
+- Konfliktregeln (Server gewinnt / Datei gewinnt)
+- Änderungslog und Dry-Run-Modus
+
+**Nutzen:**  
+Zentrale Bewertungssysteme funktionieren überall gleich (Plex, Player, Datei).
+
+---
+
+## 10. Library-Management & Self-Healing
+
+**Beschreibung:**  
+Überwachung, Organisation und Qualitätssicherung der gesamten Musikbibliothek.
+
+**Funktion:**
+- Hash-Index für Duplikaterkennung (MD5/SHA1 + AcoustID)
+- Erkennung defekter Dateien
+- Vollständigkeitsprüfung pro Album/Artist
+- Smart-Unify (beste Version behalten, Rest löschen)
+- Multi-Library-Support (NAS, extern, lokal)
+- History-Log für alle Änderungen
+
+**Nutzen:**  
+Dauerhaft gepflegte, saubere, duplikatfreie Bibliothek.
+
+---
+
+## 11. File-Renaming & Strukturierung
+
+**Beschreibung:**  
+Automatisches Sortieren und Umbenennen aller Dateien nach Regeln.
+
+**Mechanik:**
+- Schema: `Artist/Year - Album/TrackNumber - Title.ext`
+- Erkennung von Compilations (Various Artists)
+- Konfliktbehandlung (gleichnamige Dateien)
+- Move & Rename kombiniert
+
+**Nutzen:**  
+Ordnung, Einheitlichkeit und Kompatibilität mit allen Playern.
+
+---
+
+## 12. User Interface (UI / UX)
+
+**Beschreibung:**  
+Web-App als Steuerzentrale für alle Funktionen.
+
+**Aufbau:**
+- Tabs: Search, Playlists, Artists, Downloads, Library, Settings
+- Dark-Mode im Spotify-Stil
+- Fortschrittsbalken + Echtzeit-Status
+- Automation-Center (Jobs, Logs, Schedules)
+- Metadata Manager (fehlende/fehlerhafte Tags)
+- Rating-Sync-Bereich
+- Activity Feed / Timeline aller Aktionen
+
+**Erweiterungen:**
+- Browser-Extension „Add to SoulSpot"
+- System-Tray-App mit Schnellzugriff
+- Mobile-optimierte Ansicht
+
+**Nutzen:**  
+Transparente Kontrolle, klare Übersicht, einfache Bedienung.
+
+---
+
+## 13. Automation & Job Scheduler
+
+**Beschreibung:**  
+Automatische Prozesse für alle wiederkehrenden Aufgaben.
+
+**Funktion:**
+- Geplante Jobs (CRON oder Zeitplan)
+- Job-Typen: Scan, Download, Tagging, Metadata, Sync
+- Webhooks an externe Systeme nach Abschluss
+- Telegram-/Discord-Notifications mit Statusmeldung
+- Prioritätssteuerung bei parallelen Prozessen
+
+**Nutzen:**  
+Nahezu wartungsfreie, autonome Software.
+
+---
+
+## 14. Playlist-Management & Cross-Sync
+
+**Beschreibung:**  
+Synchronisation von Playlists zwischen Spotify, Plex, Navidrome, Jellyfin.
+
+**Funktion:**
+- Vollständige oder teilweise Synchronisation
+- Snapshot-/Backup-Funktion mit Wiederherstellung
+- Playlist-Diff (Unterschiede zwischen Versionen)
+- Automatische Rebuilder-Funktion aus lokaler Library
+- Import-/Export (CSV, JSON, Markdown)
+- Regelbasierte Syncs (z. B. nur bestimmte Genres oder Bewertungen)
+
+**Nutzen:**  
+Playlists bleiben über alle Dienste hinweg synchron und rekonstruierbar.
+
+---
+
+## 15. Sicherheit & Compliance
+
+**Beschreibung:**  
+Schutz der Benutzer und Einhaltung gesetzlicher Rahmenbedingungen.
+
+**Funktion:**
+- Legal-Opt-in für Download-Aktivierung
+- Audit-Logs jeder Aktion (wer, wann, was)
+- Sandbox-Ordner mit optionalem Virenscan
+- Multi-User-Rollen (Admin, Read-only)
+- IP-Restriktion (nur lokale/DE-Nutzung)
+- Getrennte Config-Dateien:  
+  - `paths.yml`  
+  - `secrets.yml`  
+  - `rules.yml`
+
+**Nutzen:**  
+Rechtssicherer, transparenter, datenschutzfreundlicher Betrieb.
+
+---
+
+## 16. REST-API & Erweiterbarkeit
+
+**Beschreibung:**  
+Offene Schnittstelle für externe Tools und Automationen.
+
+**Funktion:**
+- Endpunkte:  
+  - `/api/search`  
+  - `/api/download`  
+  - `/api/library`  
+  - `/api/metadata`
+- Authentifizierung via API-Key oder OAuth2
+- WebSocket-Live-Updates (Status, Logs, Events)
+- CLI-Interface für Headless-Serverbetrieb
+- Webhook-Auslösung bei bestimmten Ereignissen
+
+**Nutzen:**  
+Nahtlose Integration in Automationssysteme (z.B. Home Assistant, Bots, Tools).
+
+---
+
+## 17. Plugin-System
+
+**Beschreibung:**  
+Modulare Erweiterbarkeit ohne Kernänderung.
+
+**Mechanik:**
+- Plugins als Python-Module mit klar definiertem Interface
+- Registrierung beim Start über Plugin-Manager
+- Prioritätssystem bei Überschneidung (z.B. Tagging-Plugins)
+- Beispielplugins: neue Quellen, Tag-Engines, Filtersysteme
+
+**Nutzen:**  
+Skalierbares, langfristig erweiterbares Framework.
+
+---
+
+## 18. KI-Integration & Intelligenz
+
+**Beschreibung:**  
+Einsatz künstlicher Intelligenz zur Verbesserung von Matching, Tagging und Automatisierung.
+
+**Funktion:**
+- KI-basiertes Audio-Matching (semantische Analyse von Wellenform & Frequenzen)
+- KI-Genre-, Mood-, Sprach- und Instrument-Erkennung
+- Adaptive Automation: System lernt aus Nutzerentscheidungen (z.B. welche Treffer bevorzugt werden)
+- Forecast-Funktion: neue Releases bekannter Artists automatisch vorhersagen
+- KI-gestützte Schreibweisenkorrektur und Tag-Normalisierung
+
+**Nutzen:**  
+Höhere Automatisierungsqualität und selbstlernendes Verhalten.
+
+---
+
+## 19. Komfortfunktionen
+
+**Ideen:**
+- Auto-Mix: kombiniert lokale und fehlende Songs zu dynamischen Playlists
+- Mood-Playlists: automatisch generierte Stimmungskategorien (Chill, Happy, Focus, Dark)
+- Track-Notes & Kommentare: Benutzeranmerkungen zu Songs
+- Download-Budget: maximale Anzahl oder Datenmenge pro Zeitraum
+- Multi-Device-Sync: PC ↔ NAS ↔ Laptop
+- Audio-Analyzer: Lautstärke-, Frequenz-, Dynamikanalyse
+- Auto-Backup (NAS/Cloud)
+- Timeline aller Library-Aktivitäten
+
+**Nutzen:**  
+Komfortable Extras, die über Standardfunktionen hinausgehen.
+
+---
+
+## Gesamtziel
+
+Ein vollständig automatisiertes, selbstheilendes Musikverwaltungssystem, das:
+- Spotify & Soulseek intelligent verbindet,
+- Musik automatisch findet, herunterlädt und sauber taggt,
+- sich selbst organisiert,
+- sich mit Media-Servern und Geräten synchronisiert,
+- und langfristig lernfähig, KI-gestützt und modular bleibt.
+
+---
+
 # Development Roadmap
 
 > **Last Updated:** 2025-11-10  
