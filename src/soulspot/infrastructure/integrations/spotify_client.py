@@ -16,7 +16,7 @@ class SpotifyClient(ISpotifyClient):
     """HTTP client for Spotify API operations with OAuth PKCE."""
 
     AUTHORIZE_URL = "https://accounts.spotify.com/authorize"
-    TOKEN_URL = "https://accounts.spotify.com/api/token"
+    TOKEN_URL = "https://accounts.spotify.com/api/token"  # nosec B105 - this is a public API endpoint URL, not a password
     API_BASE_URL = "https://api.spotify.com/v1"
 
     def __init__(self, settings: SpotifySettings) -> None:
