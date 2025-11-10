@@ -1,8 +1,9 @@
 """FastAPI application entry point."""
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Logging configuration
     - Directory creation
     - Database initialization
+    - Auto-import service startup
     - Resource cleanup
     """
     settings = get_settings()
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting application: %s", settings.app_name)
 
     # Startup
+    auto_import_task = None
     try:
         # Ensure storage directories exist
         settings.ensure_directories()
@@ -57,6 +60,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.db = db
         logger.info("Database initialized: %s", settings.database.url)
 
+        # Start auto-import service in the background
+        from soulspot.application.services import AutoImportService
+
+        auto_import_service = AutoImportService(settings, poll_interval=60)
+        app.state.auto_import = auto_import_service
+        auto_import_task = asyncio.create_task(auto_import_service.start())
+        logger.info("Auto-import service started")
+
         yield
 
     except Exception as e:
@@ -65,6 +76,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         # Shutdown - always attempt cleanup
         logger.info("Shutting down application")
+
+        # Stop auto-import service
+        if auto_import_task is not None:
+            try:
+                if hasattr(app.state, "auto_import"):
+                    await app.state.auto_import.stop()
+                    auto_import_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await auto_import_task
+                    logger.info("Auto-import service stopped")
+            except Exception as e:
+                logger.exception("Error stopping auto-import service: %s", e)
+
+        # Close database
         try:
             if hasattr(app.state, "db"):
                 await app.state.db.close()

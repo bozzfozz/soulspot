@@ -1,6 +1,71 @@
 version: '3.8'
 
 services:
+  # SoulSpot Bridge - Main application
+  soulspot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: soulspot-bridge
+    ports:
+      - "8765:8765"      # Web UI and API
+    volumes:
+      - ./mnt/downloads:/downloads
+      - ./mnt/music:/music
+      - ./mnt/soulspot:/config
+    environment:
+      # User and Permissions
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=Europe/Berlin
+      
+      # Spotify Configuration
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/callback}
+      
+      # slskd Configuration
+      - SLSKD_BASE_URL=${SLSKD_BASE_URL:-http://slskd:5030}
+      - SLSKD_URL=${SLSKD_URL:-http://slskd:5030}
+      - SLSKD_API_KEY=${SLSKD_API_KEY:-}
+      - SLSKD_USERNAME=${SLSKD_USERNAME:-admin}
+      - SLSKD_PASSWORD=${SLSKD_PASSWORD:-changeme}
+      
+      # Application Settings
+      - APP_NAME=SoulSpot Bridge
+      - APP_ENV=${APP_ENV:-production}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Database
+      - DATABASE_URL=sqlite+aiosqlite:///config/soulspot.db
+      
+      # Storage Paths (Container paths - mapped to volumes)
+      - STORAGE__DOWNLOAD_PATH=/downloads
+      - STORAGE__MUSIC_PATH=/music
+      - STORAGE__ARTWORK_PATH=/config/artwork
+      - STORAGE__TEMP_PATH=/config/tmp
+      
+      # Security
+      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-random-secret-key-in-production}
+      
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8765
+      - API_SECURE_COOKIES=${API_SECURE_COOKIES:-false}
+    restart: unless-stopped
+    depends_on:
+      - slskd
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - soulspot-network
+
   # slskd - Soulseek daemon with HTTP API
   slskd:
     image: slskd/slskd:latest
@@ -9,10 +74,10 @@ services:
       - "5030:5030"      # Web UI and API
       - "5031:5031"      # Soulseek listening port
     volumes:
-      - ./data/slskd/config:/app/config
-      - ./data/slskd/state:/app/state
-      - ./downloads:/downloads
-      - ./music:/music
+      - ./mnt/slskd/config:/app/config
+      - ./mnt/slskd/state:/app/state
+      - ./mnt/downloads:/downloads
+      - ./mnt/music:/music
     environment:
       - SLSKD_REMOTE_CONFIGURATION=true
       - SLSKD_HTTP_PORT=5030
@@ -31,7 +96,3 @@ services:
 networks:
   soulspot-network:
     driver: bridge
-
-volumes:
-  slskd-config:
-  slskd-state:
