@@ -43,6 +43,14 @@ python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 # Utilities
 python-dotenv = "^1.0.0"
+# Observability & Monitoring
+prometheus-client = "^0.21.0"
+python-json-logger = "^3.2.0"
+opentelemetry-api = "^1.30.0"
+opentelemetry-sdk = "^1.30.0"
+opentelemetry-instrumentation-fastapi = "^0.51b0"
+opentelemetry-instrumentation-httpx = "^0.51b0"
+opentelemetry-exporter-otlp-proto-grpc = "^1.30.0"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
@@ -87,7 +95,6 @@ select = [
 ignore = [
     "E501",  # line too long, handled by formatter
     "B008",  # do not perform function calls in argument defaults
-    "UP046", # Generic class uses Generic subclass instead of type parameters (Python 3.12+ syntax)
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -123,6 +130,14 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "pythonjsonlogger.*",
+    "opentelemetry.*",
+    "prometheus_client.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.3"

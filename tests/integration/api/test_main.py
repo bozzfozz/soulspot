@@ -14,6 +14,11 @@ def test_settings():
         app_env="development",
         debug=True,
         database={"url": "sqlite+aiosqlite:///:memory:"},
+        observability={
+            "enable_dependency_health_checks": False,
+            "enable_metrics": False,
+            "enable_tracing": False,
+        },
     )
 
 
@@ -21,7 +26,8 @@ def test_settings():
 def client(test_settings):
     """Create test client."""
     app = create_app(test_settings)
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 class TestHealthEndpoints:
@@ -42,8 +48,10 @@ class TestHealthEndpoints:
         response = client.get("/ready")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ready"
-        assert "database" in data
+        print(f"Readiness response: {data}")
+        assert data["status"] in ["healthy", "degraded"]
+        assert "checks" in data
+        assert "database" in data["checks"]
 
     def test_root_endpoint(self, client):
         """Test root endpoint."""
