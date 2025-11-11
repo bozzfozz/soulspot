@@ -2,7 +2,7 @@
 
 > **Letzte Aktualisierung:** 2025-11-11  
 > **Version:** 0.1.0 (Alpha)  
-> **Status:** Phase 6 In Progress - Production Readiness + v2.0 Planning Complete + v3.0 Roadmap Defined
+> **Status:** Phase 6 In Progress - Production Readiness + v2.0 GridStack Page-Builder Roadmap Complete + v3.0 Roadmap Defined
 
 ---
 
@@ -14,6 +14,9 @@
 4. [Entwicklungsphasen](#-entwicklungsphasen)
 5. [v3.0 — Production Hardening & Enterprise Deployment](#-version-30--production-hardening--enterprise-deployment-geplant)
 6. [v2.0 — Dynamic Views & Widget-Palette](#-v20--dynamic-views--widget-palette-geplant)
+   - [GridStack Page-Builder — Detaillierte Entwicklungs-Roadmap](#-gridstack-page-builder--detaillierte-entwicklungs-roadmap)
+   - [Phases P1-P11: Grid-Based Page Builder](#2-phase-p1--basis-layout--gridstack-integration)
+   - [Live-Widgets & Echtzeit-Status (Phases L1-L4)](#-live-widgets--echtzeit-status)
 7. [Feature-Kategorien](#-feature-kategorien)
 8. [Prioritäts-Matrix](#-prioritäts-matrix)
 9. [Release-Plan](#-release-plan)
@@ -1107,6 +1110,514 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 - ❌ Automatisches Widget-Layout-Optimization
 - ❌ AI-basierte Widget-Recommendations
 - ❌ Widget-Marketplace oder Plugin-System (siehe Phase 9)
+
+---
+
+## 📐 GridStack Page-Builder — Detaillierte Entwicklungs-Roadmap
+
+### 0. Ziel & Kontext
+
+Ein visueller Page-Builder innerhalb der bestehenden FastAPI + HTMX + Template-Architektur:
+
+- Leere Seiten, die mit Widgets bestückt werden können.
+- Widgets sind frei platzierbar und skalierbar (Drag + Resize).
+- Mehrere Seiten (Dashboards) können erstellt, verwaltet und umgeschaltet werden.
+- Layouts und Widget-Konfigurationen werden persistent gespeichert (DB/JSON).
+
+---
+
+### 1. Grundkonzept: Grid-basierter Page-Builder
+
+#### Idee
+
+Der Page-Builder besteht aus:
+
+- **Seiten-Menü**: Verwaltung von Seiten (anlegen, umbenennen, löschen, auswählen).
+- **Arbeitsfläche (Canvas)**: Grid-Fläche (GridStack), auf der Widgets als Kacheln liegen.
+- **Widget-Katalog**: Liste verfügbarer Widgets, die per Drag&Drop auf das Grid gezogen werden.
+
+Widgets sind:
+
+- eigenständige Komponenten mit Typ, Template, Logik im Backend.
+- mehrfach instanziierbar (eine Widget-Art → viele Instanzen auf verschiedenen Seiten).
+- konfigurierbar (z. B. Datenquellen, Filter, Refresh-Intervalle).
+
+---
+
+### 2. Phase P1 – Basis-Layout & GridStack-Integration
+
+**Ziel:** Funktionierende Grid-Fläche mit Drag, Drop und Resize für Widgets.
+
+**Inhalte:**
+
+- Integration von **GridStack.js** als zentrales Layout-Framework:
+  - Festlegung von Spaltenanzahl (z. B. 12) und Zellgröße (z. B. 80 px).
+  - Defaults: Drag & Resize aktiviert, Kollisionsvermeidung an, Snapping aktiviert.
+- Aufbau eines **Canvas-Templates**:
+  - Container `div.grid-stack` als Arbeitsfläche.
+  - Erste statische Dummy-Widgets (`div.grid-stack-item`) zur Verhaltensprüfung.
+- Sicherstellen, dass **GridStack & HTMX** zusammen funktionieren:
+  - HTMX darf DOM-Teile austauschen, ohne GridStack zu „zerstören".
+  - Eventuelle Re-Initialisierung von GridStack nach HTMX-Aktionen berücksichtigen.
+- Basis-Test:
+  - Widgets per Maus verschieben und in Größe ändern.
+  - Responsives Verhalten prüfen (Desktop, Tablet, ggf. Mobile).
+
+---
+
+### 3. Phase P2 – Widget-System (Backend-seitig)
+
+**Ziel:** Standardisiertes, erweiterbares System für Widgets.
+
+**Inhalte:**
+
+- **Widget-Katalog** definieren (z. B. in DB oder statischer Config):
+  - Felder: `id`, `slug`, `name`, `description`, `template_name`, `default_w`, `default_h`, optionale Kategorie.
+- **Widget-Instanzen**:
+  - Jede Widget-Instanz gehört zu einer Seite.
+  - Enthält Referenz auf Widget-Typ + Layout-Info (x, y, w, h) + Settings (JSON).
+- **Rendering-Mechanismus**:
+  - Standard-Route zur Darstellung einer Instanz, z. B. `/widgets/render/{instance_id}`.
+  - Templates im Ordner `templates/widgets/`.
+  - Datenbeschaffung über klar definierte Backend-Services/Domain-Funktionen.
+- Erweiterbarkeit:
+  - Neue Widgets können durch Ergänzung des Katalogs und eines Templates hinzugefügt werden.
+  - Geschäftslogik bleibt im Backend, Widgets sind „dumme" Views.
+
+---
+
+### 4. Phase P3 – Page-Management
+
+**Ziel:** Mehrere, voneinander getrennte Seiten (Dashboards) verwalten.
+
+**Inhalte:**
+
+- **Page-Modell**:
+  - Felder: `id`, `name`, optional `description`, `created_at`, `updated_at`.
+- **Seiten-Menü** (typisch Sidebar):
+  - Liste vorhandener Seiten anzeigen (Name, optional Icon).
+  - Aktionen: neue Seite anlegen, umbenennen, duplizieren, löschen.
+- **Seitenwechsel**:
+  - Per HTMX wird beim Klick auf eine Seite das entsprechende Layout in den Canvas geladen.
+- Datenstruktur pro Seite:
+  - Verknüpfung zu Widget-Instanzen per `page_id`.
+  - Layout wird über Instanz-Positionen aufgebaut (kein separates Layout-Objekt notwendig, optional aber möglich).
+
+---
+
+### 5. Phase P4 – Layout-Speicherung & Synchronisation
+
+**Ziel:** Änderungen an Position und Größe zuverlässig persistieren.
+
+**Inhalte:**
+
+- Nutzung von **GridStack-Events**:
+  - `change`-Event: liefert Liste betroffener Items mit neuen `x`, `y`, `w`, `h`.
+  - Optional `added`/`removed` für neue oder entfernte Widgets.
+- Update-Mechanismus:
+  - Browser sendet Änderungen an Backend (z. B. via HTMX `hx-post` oder Fetch).
+  - Endpunkt z. B. `/builder/pages/{page_id}/layout`.
+- Backend-Logik:
+  - Validierung von `x`, `y`, `w`, `h` (Grid-Limits, Mindestgrößen).
+  - Speicherung in DB/JSON pro Instanz.
+- Layout-Format:
+  - JSON-kompatibel, z. B. Liste von Objekten mit Instanz-ID und Koordinaten.
+- Optional:
+  - Autosave nach Layoutänderungen.
+  - Manuelle „Speichern"-Aktion mit sichtbarem Feedback.
+  - Basis für späteres Undo/Redo (Änderungsversionen speichern).
+
+---
+
+### 6. Phase P5 – Widget-Katalog & Hinzufügen von Widgets
+
+**Ziel:** Widgets bequem aus einem Katalog auf die Seite ziehen und verwenden.
+
+**Inhalte:**
+
+- **Widget-Katalog im UI**:
+  - Sidebar-Bereich oder Panel mit:
+    - Name
+    - Icon
+    - Kurzbeschreibung
+    - Kategorie (z. B. „Musik", „System", „Tools")
+- Hinzufügen von Widgets:
+  - Drag&Drop aus Katalog auf die Grid-Fläche.
+  - Alternativ: Klick auf „+"-Button → Widget-Liste → Platzierung im Grid per Default-Position.
+- Beim Hinzufügen:
+  - Erzeugung einer neuen Widget-Instanz im Backend:
+    - Basis auf Default-Maßen `default_w`, `default_h`.
+    - Position aus Drop-Koordinaten bzw. nächstfreiem Grid-Feld.
+- Optional:
+  - Filter/Suche im Katalog.
+  - Vorschau (kleine Mini-Darstellung des Widgets).
+
+---
+
+### 7. Phase P6 – Bearbeitungs- und Ansichtsmodi
+
+**Ziel:** Trennung zwischen „Layout bearbeiten" und „nur ansehen/benutzen".
+
+**Inhalte:**
+
+- **Edit-Mode**:
+  - Drag&Drop und Resize aktiviert.
+  - Zusätzliche UI-Elemente (Handles, Löschen-Buttons, Konfigurations-Icons).
+  - Ggf. visuelle Hervorhebung der Widget-Ränder.
+- **View-Mode**:
+  - GridStack-Interaktion deaktiviert.
+  - Nur Widget-Funktionalität (z. B. Buttons im Widget selbst) bleibt aktiv.
+  - Keine Bearbeitungs-Elemente sichtbar.
+- Modus-Schalter:
+  - Globale Umschaltung pro Seite/User (z. B. Toggle „Bearbeiten" ↔ „Anzeigen").
+  - Modus kann pro User-Session gespeichert werden.
+- Ziel:
+  - Reduzierung von versehentlichem Verschieben im normalen Betrieb.
+  - Klar getrennte Workflows: Layout-Bau vs. Nutzung.
+
+---
+
+### 8. Phase P7 – Widget-Konfiguration & Einstellungen
+
+**Ziel:** Widgets konfigurierbar machen, ohne hart codierte Parameter.
+
+**Inhalte:**
+
+- **Widget-Settings**:
+  - Schema-artige Definition pro Widget-Typ (z. B. `refresh_interval`, Filteroptionen, Datenquelle).
+- UI für Konfiguration:
+  - Button im Widget-Header „Einstellungen".
+  - Öffnen eines Modals mit Formular (HTMX).
+  - Speichern via POST/PATCH an Settings-Endpunkt.
+- Speicherung:
+  - Settings werden als JSON pro Instanz abgelegt.
+  - Rendering berücksichtigt die Settings (z. B. Filter, Polling-Intervalle).
+- Beispiele:
+  - Download-Widget: nur bestimmte Queues anzeigen.
+  - Statistik-Widget: Zeitraum (Tag/Woche/Monat).
+  - Live-Widgets: Refresh-Intervall und „Live an/aus".
+
+---
+
+### 9. Phase P8 – UI-Komfort & Feinschliff
+
+**Ziel:** Bedienbarkeit erhöhen und Layout-Erstellung angenehmer machen.
+
+**Inhalte:**
+
+- Visuelle Hilfen:
+  - Snap-Linien beim Ausrichten von Widgets.
+  - Minimap/Übersicht bei sehr großen Dashboards (optional).
+- Bedien-Komfort:
+  - Auto-Scroll des Canvas beim Draggen an den Rand.
+  - Kontextmenü pro Widget (Rechtsklick oder Button):
+    - Duplizieren
+    - Nach vorne/hinten sortieren (z-Index / Reihenfolge)
+- Feedback:
+  - Anzeige „Layout gespeichert" nach Persistierung.
+  - Dezente Hinweise bei Fehlern (z. B. ungültige Positionen).
+
+---
+
+### 10. Phase P9 – Layout-Templates & Wiederverwendbarkeit
+
+**Ziel:** Schnelles Erstellen von vordefinierten Dashboards.
+
+**Inhalte:**
+
+- **Seiten-Templates**:
+  - Vorkonfigurierte Kombinationen von Widgets + Layout für bestimmte Anwendungsfälle.
+  - Beispiele:
+    - „Musik-Board": Now Playing, Download-Status, Playlist-Übersicht.
+    - „System-Board": Health-Status, Logs, Queue-Statistik.
+- Funktionen:
+  - Seite aus Template erstellen.
+  - Bestehende Seite als Template speichern.
+- Templates als JSON-Blueprints:
+  - Enthalten Widget-Typen, Settings, Grid-Konfiguration.
+
+---
+
+### 11. Phase P10 – Sicherheit, Stabilität & Fehlerfall-Strategien
+
+**Ziel:** Robustes Verhalten des Builders auch in Sonderfällen.
+
+**Inhalte:**
+
+- Server-Side-Validierung:
+  - Positions- und Größenprüfung verhindert ungültige Layouts.
+- Fehlerhandling:
+  - Fallback-Ansicht, wenn Widget-Template oder Datenquelle fehlt/fehlerhaft ist.
+  - Logging von Fehlern und auffälligen Layoutänderungen.
+- Schutzmaßnahmen:
+  - Rate-Limits für Layout-Updates, um Overload durch zu häufige Saves zu verhindern.
+  - Berechtigungsmodell (wer darf Seiten bearbeiten vs. nur ansehen).
+
+---
+
+### 12. Phase P11 – Performance & Optimierung
+
+**Ziel:** Belastbares Verhalten bei vielen Widgets und großen Dashboards.
+
+**Inhalte:**
+
+- **Lazy-Loading**:
+  - Widgets erst rendern, wenn sie im sichtbaren Bereich sind (optional).
+- **Batch-Rendering**:
+  - Gruppierte Requests für mehrere Widgets statt Einzeln.
+- Optimierung von GridStack:
+  - Edit-Mode und View-Mode differenziert konfigurieren, um Overhead zu reduzieren.
+- Caching:
+  - Ergebnisse teurer Widget-Datenabfragen cachen (Backend-seitig).
+- Monitoring:
+  - Metriken über Renderzeiten, Anzahl Widgets pro Seite, API-Last.
+
+---
+
+## 🔴 Live-Widgets & Echtzeit-Status
+
+### 1. Zielbild
+
+Live-fähige Widgets sollen den aktuellen Zustand von Systemen und Prozessen in (nahezu) Echtzeit anzeigen, z. B.:
+
+- Aktueller Download-Status (Fortschritt, Geschwindigkeit, Restzeit)
+- Now-Playing-Status (aktuell gespielter Track)
+- System-Health (Status von `slskd`, Spotify-Integration, Backend)
+
+Die Widgets laufen innerhalb des Page-Builders (GridStack.js + HTMX + Templates) und werden wie alle anderen Widgets frei platzierbar und skalierbar sein.
+
+---
+
+### 2. Datenquellen
+
+**Anforderung:** Jede Live-Anzeige muss auf einer klar definierten Datenquelle basieren.
+
+Mögliche Quellen:
+
+- **`slskd` API**  
+  - Liste laufender Downloads (inkl. Progress, Speed, Restzeit, Status)
+  - Eventuell Historie abgeschlossener Downloads
+- **Spotify / Playback-Backend**
+  - aktuell gespielter Track, Artist, Album
+  - Player-Status (play, pause, skip)
+- **System-/Health-Endpunkte**
+  - Status von `slskd`, DB, Spotify-API, Konnektivität
+
+Grundsatz:
+
+- Widgets enthalten **keine direkte Geschäftslogik**.
+- Zugriff auf Daten erfolgt immer über definierte **Domain-Funktionen/Services** im Backend (z. B. `get_download_status()`, `get_now_playing()`).
+
+---
+
+### 3. Aktualisierungsstrategien („live" Verhalten)
+
+#### 3.1 Polling (MVP, HTMX-freundlich)
+
+**Beschreibung:**
+
+- Das Widget sendet in festen Intervallen (z. B. alle 2–10 Sekunden) einen Request an das Backend.
+- Das Backend liefert den aktuellen Zustand als HTML-Fragment zurück.
+- HTMX tauscht den Inhalt des Widgets aus.
+
+**Eigenschaften:**
+
+- Einfach zu implementieren
+- Stabil, leicht debugbar
+- Funktioniert vollständig innerhalb des bestehenden Stacks (FastAPI + HTMX + Templates)
+- Leichte, definierte Verzögerung (abhängig vom Intervall)
+
+**Einsatz:**
+
+- Download-Status-Widget (z. B. alle 2–5 Sekunden)
+- Now-Playing-Widget (z. B. alle 3–10 Sekunden)
+- System-Health-Widget (z. B. alle 10–30 Sekunden)
+
+**MVP-Entscheidung:**  
+Polling ist die **erste Stufe** und wird als Standard für alle Live-Widgets im MVP verwendet.
+
+---
+
+#### 3.2 Push (SSE / WebSockets, spätere Ausbaustufe)
+
+**Beschreibung:**
+
+- Der Server schiebt Änderungen direkt zu den Clients, sobald im Backend ein Ereignis eintritt.
+- Technologien:
+  - Server-Sent Events (SSE)
+  - WebSockets (z. B. zusätzlicher leichtgewichtiger Client neben HTMX)
+
+**Eigenschaften:**
+
+- Nahezu Echtzeit, geringere Latenz als Polling
+- Effizient bei sehr vielen Events
+- Höhere Komplexität (Verbindungsmanagement, Reconnect, Auth, Fallbacks)
+
+**Einsatz (später):**
+
+- Kritische Live-Widgets (z. B. Download-Status bei vielen gleichzeitigen Transfers)
+- Eventgetriebene Anzeigen (z. B. Log-Feed / Activity-Stream)
+
+**Roadmap-Einstufung:**  
+Push wird als **Phase-2+ Feature** geführt (nach stabiler Polling-Implementierung).
+
+---
+
+### 4. Nutzererlebnis im Widget (Beispiel „Download-Status")
+
+**Inhaltliche Felder:**
+
+- Dateiname / Track / Artist
+- Download-Fortschritt (Prozent + Fortschrittsbalken)
+- Aktuelle Download-Geschwindigkeit
+- Geschätzte Restzeit (optional)
+- Status (wartend, aktiv, abgeschlossen, Fehler)
+
+**Interaktionen:**
+
+- Download pausieren
+- Download fortsetzen
+- Download abbrechen
+- Filter:
+  - „Nur aktive Downloads"
+  - „Abgeschlossene ein-/ausblenden"
+  - „Fehler hervorheben"
+
+**Visuelles Verhalten:**
+
+- Fortschrittsbalken wird in Polling-Intervallen aktualisiert.
+- Fertiggestellte Downloads wandern z. B. automatisch aus der „Aktiv"-Liste in eine Historie (eigenes Widget möglich).
+- Fehlerzustände werden neutral, aber klar erkennbar markiert (z. B. andere Farbe, Icon, Kurztext).
+
+---
+
+### 5. Roadmap-Schnitt: Live-Widgets
+
+#### 5.1 Phase L1 – MVP Live-Widgets (Polling)
+
+**Ziele:**
+
+- Basisfunktionalität für Live-Status mit Polling etablieren.
+- Ein erstes Set an Live-Widgets produktiv nutzbar machen.
+
+**Umfang:**
+
+- Definition des Begriffs **Live-Widget**:
+  - eigenes Attribut/Typ im Widget-System (z. B. `is_live = true`, `refresh_interval`)
+- Globale Polling-Strategie:
+  - sinnvolle Default-Intervalle je Widget-Kategorie (z. B. `downloads=3s`, `now_playing=5s`, `system_health=15s`)
+- Umsetzung konkreter Widgets:
+  - Download-Status-Widget (Basis-Ansicht)
+  - Now-Playing-Widget
+  - System-Health-Widget (z. B. `slskd` online/offline, Spotify-Token gültig/abgelaufen)
+- Fehler-Handling:
+  - wenn Datenquelle nicht erreichbar → dezente Statusmeldung im Widget („Datenquelle momentan nicht erreichbar")
+  - kein harter UI-Bruch
+
+**Ergebnis:**
+
+- Nutzer sehen Zustände (Downloads, Playback, Health) in wiederkehrenden Intervallen aktualisiert.
+- Implementation bleibt rein HTMX-/Polling-basiert.
+
+---
+
+#### 5.2 Phase L2 – User-Control & Performance-Feintuning
+
+**Ziele:**
+
+- Nutzer*innen mehr Kontrolle geben.
+- Systemlast begrenzen.
+
+**Umfang:**
+
+- **Konfigurierbarer Refresh** pro Widget:
+  - Optionen im Widget-Config-Dialog (z. B. 2s, 5s, 10s, 30s)
+  - Off-Schalter: „Live-Updates pausieren"
+- Globale Limits:
+  - definierter Minimal-Intervall (z. B. nicht unter 2s)
+  - max. Parallel-Updates bei vielen Live-Widgets auf einer Seite
+- UI-Indikatoren:
+  - kleine Anzeige „Live" / „Pausiert"
+  - optional Timestamp der letzten Aktualisierung
+
+---
+
+#### 5.3 Phase L3 – Push-Modus (SSE / WebSockets)
+
+**Ziele:**
+
+- Latenz weiter senken.
+- Echtzeit-Verhalten für kritische Widgets ermöglichen.
+
+**Umfang:**
+
+- Architektur-Entscheidung: SSE vs WebSocket
+  - Vergleich Implementierungsaufwand, Browser-Kompatibilität, Server-Setup
+- Prototyp für ein Widget (z. B. Download-Status) mit Push:
+  - Fallback auf Polling, wenn Push nicht verfügbar ist
+- Konfiguration:
+  - Pro Widget-Typ definieren, ob Polling, Push oder „auto" verwendet wird.
+- Monitoring:
+  - Messung von Verbindungsstabilität, Fehlern, ggf. automatischer Rückfall auf Polling.
+
+**Hinweis:**
+
+- Diese Phase setzt stabile Polling-Implementierung voraus und ist optional, falls MVP ausreichend performant ist.
+
+---
+
+#### 5.4 Phase L4 – Observability & Stabilität
+
+**Ziele:**
+
+- Verhalten von Live-Widgets messbar machen.
+- Stabilität auch bei Problemen der Datenquellen sichern.
+
+**Umfang:**
+
+- Logging:
+  - Anzahl und Frequenz von Live-Updates pro Widget/Seite
+  - Fehler beim Abruf der Daten (HTTP-Fehler, Timeouts, API-Fehler)
+- Metriken:
+  - durchschnittliche Antwortzeiten der Live-Endpunkte
+  - Fehlerraten
+- Fallbacks:
+  - sinnvolle Default-Anzeige bei anhaltenden Fehlern (z. B. Platzhalter-Widget mit Info)
+  - klare, aber neutrale Statusmeldungen statt Stacktraces oder roher Fehler
+
+---
+
+### 6. Einbindung in den Page-Builder (GridStack + HTMX)
+
+**Idee:**
+
+- Live-Widgets sind **normale Widgets** im Page-Builder mit zusätzlichen Eigenschaften:
+  - `refresh_interval`
+  - `is_live`
+- Der Page-Builder selbst (GridStack) kümmert sich nur um Layout (Position, Größe).
+- HTMX-Attribute im Widget-Template definieren, wann und wie Live-Updates angestoßen werden.
+- Layout-Änderungen (Verschieben, Größe ändern) sind unabhängig vom Live-Verhalten.
+- Live-Verhalten funktioniert auf jeder Seite, egal an welcher Position das Widget liegt.
+
+---
+
+### 7. Zusammenfassung für die Roadmap
+
+- Ja, der Page-Builder kann Live-Anzeigen in Widgets darstellen (z. B. Download-Status).
+- Technische Basis:
+  - MVP: Polling über HTMX für regelmäßige Updates
+  - Später: optional Push (SSE/WebSockets) für echte Echtzeit
+- Live-Widgets werden strukturiert über Phasen eingeführt:
+  - L1: Polling-MVP
+  - L2: User-Controls & Performance-Limits
+  - L3: Push-Modus (optional)
+  - L4: Observability & Stabilität
+- Alles integriert sich sauber in das bestehende Konzept aus:
+  - GridStack.js (Layout/UI)
+  - HTMX (Datenfluss)
+  - Templates & Domain-Services (Datenquelle/Logik)
+
+---
 
 ### 📋 Meilensteine & Phasen
 
@@ -2590,6 +3101,64 @@ Diese Features sollten mit Users/Contributors diskutiert werden:
 ---
 
 ## 📝 Changelog
+
+### 2025-11-11: GridStack Page-Builder Detailed Roadmap Addition
+
+**Durchgeführt von:** Copilot Agent
+
+**Änderungen:**
+
+- ✅ **GridStack Page-Builder Roadmap erweitert** – Detaillierte Phasen P1-P11 und L1-L4 hinzugefügt
+- ✅ **Phase P1-P11: Grid-Based Page Builder** vollständig dokumentiert:
+  - P1: Basis-Layout & GridStack-Integration (Grid canvas, drag & drop)
+  - P2: Widget-System Backend (Registry, instances, rendering)
+  - P3: Page-Management (Multiple dashboards, CRUD)
+  - P4: Layout-Speicherung & Synchronisation (Persistent storage)
+  - P5: Widget-Katalog & Hinzufügen (Drag from catalog)
+  - P6: Bearbeitungs- und Ansichtsmodi (Edit/View toggle)
+  - P7: Widget-Konfiguration & Einstellungen (Settings modal)
+  - P8: UI-Komfort & Feinschliff (Visual helpers)
+  - P9: Layout-Templates & Wiederverwendbarkeit (Predefined dashboards)
+  - P10: Sicherheit, Stabilität & Fehlerfall-Strategien (Validation, permissions)
+  - P11: Performance & Optimierung (Lazy loading, caching)
+- ✅ **Phase L1-L4: Live-Widgets & Echtzeit-Status** vollständig dokumentiert:
+  - L1: MVP Live-Widgets mit Polling (Download status, now playing, health)
+  - L2: User-Control & Performance-Feintuning (Configurable refresh)
+  - L3: Push-Modus (SSE / WebSockets) (Optional real-time)
+  - L4: Observability & Stabilität (Logging, metrics, fallbacks)
+- ✅ **Datenquellen für Live-Widgets** spezifiziert:
+  - slskd API für Download-Status
+  - Spotify/Playback-Backend für Now-Playing
+  - System-/Health-Endpunkte für Service-Status
+- ✅ **Aktualisierungsstrategien** definiert:
+  - Polling (MVP, HTMX-freundlich) als erste Stufe
+  - Push (SSE/WebSockets) als spätere Ausbaustufe
+- ✅ **Nutzererlebnis-Konzepte** beschrieben:
+  - Download-Status Widget mit Interaktionen
+  - Fehlerbehandlung und visuelle Rückmeldung
+- ✅ **Inhaltsverzeichnis aktualisiert** – Links zu neuen Sections hinzugefügt
+- ✅ **Status-Header aktualisiert** – "GridStack Page-Builder Roadmap Complete"
+
+**Impact:**
+
+- Umfassende technische Spezifikation für GridStack Page-Builder
+- Klare Phasenaufteilung für schrittweise Implementierung
+- Basis für Issue-Erstellung und Sprint-Planung
+- Integration von Live-Widgets in Page-Builder-Architektur
+- Vollständige Roadmap für v2.0 Feature-Set
+- Ready for implementation start
+
+**Struktur:**
+
+- Neue Section "GridStack Page-Builder — Detaillierte Entwicklungs-Roadmap" nach MVP-Scope
+- Alle 11 Grid-Phasen (P1-P11) vollständig dokumentiert
+- Alle 4 Live-Widget-Phasen (L1-L4) vollständig dokumentiert
+- Inhaltsverzeichnis erweitert mit Subsections
+- ~508 neue Zeilen Dokumentation
+
+**Zeilen:** ~2692 (vorher) → ~3200 (nachher) – +~508 Zeilen für GridStack Details
+
+---
 
 ### 2025-11-11: v2.0 Dynamic Views & Widget-Palette Planning
 
