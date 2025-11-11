@@ -74,14 +74,128 @@
     <!-- Quick Actions Section -->
     <div class="mt-12">
         <h2 class="text-2xl font-semibold text-gray-800 mb-6">Quick Actions</h2>
+        
+        <!-- Session Status Check -->
+        <div id="session-status" 
+             hx-get="/api/v1/auth/session" 
+             hx-trigger="load"
+             hx-swap="innerHTML"
+             class="mb-6">
+            <div class="card bg-gray-50">
+                <div class="card-body">
+                    <p class="text-sm text-gray-600">Checking Spotify connection...</p>
+                </div>
+            </div>
+        </div>
+        
         <div class="flex flex-wrap gap-4">
             <a href="/ui/playlists/import" class="btn btn-primary btn-lg">
                 Import Playlist
             </a>
-            <a href="/ui/auth" class="btn btn-secondary btn-lg">
-                Connect Spotify
+            <a href="/ui/playlists" class="btn btn-secondary btn-lg">
+                View Playlists
             </a>
         </div>
     </div>
 </div>
+
+<script>
+// Handle session status display on dashboard
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'session-status') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            const statusDiv = document.getElementById('session-status');
+            
+            if (response.has_access_token && !response.token_expired) {
+                statusDiv.innerHTML = `
+                    <div class="card bg-success-50 border-success-200">
+                        <div class="card-body">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-6 h-6 text-success-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div>
+                                        <p class="text-sm font-semibold text-success-900">✅ Spotify Connected</p>
+                                        <p class="text-xs text-success-700">Ready to import playlists and download tracks</p>
+                                    </div>
+                                </div>
+                                <a href="/api/v1/auth/logout" class="btn btn-secondary btn-sm">
+                                    Disconnect
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (response.token_expired) {
+                statusDiv.innerHTML = `
+                    <div class="card bg-warning-50 border-warning-200">
+                        <div class="card-body">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-6 h-6 text-warning-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div>
+                                        <p class="text-sm font-semibold text-warning-900">⚠️ Spotify Token Expired</p>
+                                        <p class="text-xs text-warning-700">Will auto-refresh when needed, or reconnect manually</p>
+                                    </div>
+                                </div>
+                                <a href="/ui/auth" class="btn btn-warning btn-sm">
+                                    Reconnect
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="card bg-info-50 border-info-200">
+                        <div class="card-body">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-6 h-6 text-info-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <div>
+                                        <p class="text-sm font-semibold text-info-900">🎵 Connect Spotify</p>
+                                        <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
+                                    </div>
+                                </div>
+                                <a href="/ui/auth" class="btn btn-primary btn-sm">
+                                    Connect Spotify
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            // If session endpoint returns error (no session), show connect button
+            const statusDiv = document.getElementById('session-status');
+            statusDiv.innerHTML = `
+                <div class="card bg-info-50 border-info-200">
+                    <div class="card-body">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-6 h-6 text-info-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                                <div>
+                                    <p class="text-sm font-semibold text-info-900">🎵 Connect Spotify</p>
+                                    <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
+                                </div>
+                            </div>
+                            <a href="/ui/auth" class="btn btn-primary btn-sm">
+                                Connect Spotify
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+});
+</script>
 {% endblock %}
