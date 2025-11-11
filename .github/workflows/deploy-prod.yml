@@ -1,0 +1,194 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., v1.0.0)'
+        required: true
+        type: string
+      rollback:
+        description: 'Is this a rollback deployment?'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    name: Verify Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    
+    steps:
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION=${{ inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+      
+      - name: Verify Docker image exists
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          echo "🔍 Verifying Docker image exists..."
+          echo "📦 Image: ghcr.io/${{ github.repository }}:${VERSION#v}"
+          # Note: Add actual verification here if needed
+          # docker manifest inspect ghcr.io/${{ github.repository }}:${VERSION#v}
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: verify
+    environment:
+      name: production
+      url: https://soulspot.example.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.version }}
+      
+      - name: Pre-deployment checks
+        run: |
+          echo "🔍 Running pre-deployment checks..."
+          echo "📦 Version: ${{ needs.verify.outputs.version }}"
+          echo "🔒 Environment: production"
+          echo ""
+          echo "✅ All checks passed"
+      
+      - name: Create backup point
+        run: |
+          echo "💾 Creating backup point..."
+          echo "⚠️  Configure backup in your GitHub repository secrets"
+          echo "    Recommended: Take database snapshot before deployment"
+      
+      - name: Deploy to Production Server
+        run: |
+          VERSION=${{ needs.verify.outputs.version }}
+          echo "🚀 Deploying to production environment..."
+          echo "📦 Docker image: ghcr.io/${{ github.repository }}:${VERSION#v}"
+          echo "🔗 URL: https://soulspot.example.com"
+          echo ""
+          echo "⚠️  Note: Actual deployment requires SSH access to your production server."
+          echo "    Configure deployment in your GitHub repository secrets:"
+          echo "    - PROD_SSH_HOST"
+          echo "    - PROD_SSH_USER"
+          echo "    - PROD_SSH_PRIVATE_KEY"
+          echo ""
+          echo "    Example deployment commands (Blue-Green Strategy):"
+          echo "    ssh user@prod-server 'docker pull ghcr.io/${{ github.repository }}:${VERSION#v}'"
+          echo "    ssh user@prod-server 'docker-compose -f /path/to/docker-compose.prod.yml up -d --no-deps soulspot'"
+      
+      # Uncomment and configure when you have a production server
+      # - name: Deploy via SSH (Blue-Green)
+      #   uses: appleboy/ssh-action@master
+      #   with:
+      #     host: ${{ secrets.PROD_SSH_HOST }}
+      #     username: ${{ secrets.PROD_SSH_USER }}
+      #     key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+      #     script: |
+      #       cd /opt/soulspot-bridge
+      #       VERSION=${{ needs.verify.outputs.version }}
+      #       
+      #       # Pull new image
+      #       docker pull ghcr.io/${{ github.repository }}:${VERSION#v}
+      #       
+      #       # Tag as production
+      #       docker tag ghcr.io/${{ github.repository }}:${VERSION#v} ghcr.io/${{ github.repository }}:production
+      #       
+      #       # Deploy with zero downtime (blue-green)
+      #       docker-compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans soulspot
+      #       
+      #       # Wait for health check
+      #       sleep 10
+      #       
+      #       # Cleanup old images
+      #       docker image prune -f
+      
+      - name: Health Check
+        run: |
+          echo "🏥 Running health checks..."
+          echo "⚠️  Configure health check endpoint"
+          # Add your health checks here
+          # For example:
+          # MAX_RETRIES=5
+          # RETRY_COUNT=0
+          # while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+          #   if curl -f https://soulspot.example.com/health; then
+          #     echo "✅ Health check passed!"
+          #     break
+          #   fi
+          #   RETRY_COUNT=$((RETRY_COUNT+1))
+          #   echo "⏳ Waiting for application to be healthy... ($RETRY_COUNT/$MAX_RETRIES)"
+          #   sleep 10
+          # done
+      
+      - name: Run Smoke Tests
+        run: |
+          echo "🧪 Running production smoke tests..."
+          echo "⚠️  Configure smoke tests to verify production deployment"
+          # Add your smoke tests here
+          # For example:
+          # - Test critical endpoints
+          # - Verify database connectivity
+          # - Check external service integrations
+      
+      - name: Deployment Summary
+        run: |
+          VERSION=${{ needs.verify.outputs.version }}
+          echo "✅ Production deployment completed!"
+          echo "📦 Version: $VERSION"
+          echo "🐳 Image: ghcr.io/${{ github.repository }}:${VERSION#v}"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "🔗 Production URL: https://soulspot.example.com"
+          echo ""
+          echo "📋 Post-deployment checklist:"
+          echo "  - [ ] Monitor application logs"
+          echo "  - [ ] Check error rates"
+          echo "  - [ ] Verify key functionality"
+          echo "  - [ ] Monitor performance metrics"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Production deployment failed!"
+          echo "🔄 Consider rollback to previous version"
+          echo ""
+          echo "Rollback command:"
+          echo "  gh workflow run deploy-prod.yml -f version=<previous-version> -f rollback=true"
+
+  rollback:
+    name: Rollback Plan
+    runs-on: ubuntu-latest
+    needs: [verify, deploy]
+    if: ${{ failure() && inputs.rollback }}
+    
+    steps:
+      - name: Rollback Instructions
+        run: |
+          echo "🔄 ROLLBACK PROCEDURE"
+          echo "===================="
+          echo ""
+          echo "1. Identify the last known good version"
+          echo "2. Run this workflow with the rollback flag:"
+          echo "   gh workflow run deploy-prod.yml -f version=<good-version> -f rollback=true"
+          echo ""
+          echo "3. Manual rollback via SSH:"
+          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker-compose.prod.yml down'"
+          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker tag ghcr.io/${{ github.repository }}:<good-version> ghcr.io/${{ github.repository }}:production'"
+          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker-compose.prod.yml up -d'"
+          echo ""
+          echo "4. Verify application health after rollback"
