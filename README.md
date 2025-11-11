@@ -67,7 +67,7 @@ Aktueller Stand:
 - ✅ Session Management und OAuth Flow
 - 🔄 Ready for Phase 6: Production Readiness
 
-**Nächste Schritte:** Production-Ready Features (Observability, CI/CD, Deployment) - See [Roadmap](docs/development-roadmap.md)
+**Nächste Schritte:** Continue enhancing production-ready features (CI/CD improvements, deployment automation) - See [Roadmap](docs/development-roadmap.md)
 
 ## 📚 Dokumentation
 

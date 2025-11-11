@@ -322,12 +322,9 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Request/Response Logging Middleware | ✅ Done | LOW |
 | Enhanced Health Checks (Liveness, Readiness) | ✅ Done | LOW |
 | Dependency Health Checks (DB, APIs) | ✅ Done | MEDIUM |
-| Prometheus Metrics Endpoint | 📋 Planned | MEDIUM |
-| Key Performance Indicators (Response Time, Queue) | 📋 Planned | MEDIUM |
-| Business Metrics (Downloads, Imports) | 📋 Planned | LOW |
-| OpenTelemetry Integration | 📋 Planned | HIGH |
-| Distributed Tracing | 📋 Planned | HIGH |
 | Circuit Breaker Patterns | 📋 Planned | MEDIUM |
+
+> **Note:** Advanced monitoring features (Prometheus Metrics Endpoint, OpenTelemetry Integration, Distributed Tracing, KPI/Business Metrics) were removed from v2.0 scope as they have not been implemented. These may be reconsidered for future versions if needed.
 
 #### 6.2 CI/CD Pipeline 🚀
 

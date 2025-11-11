@@ -416,8 +416,8 @@ tests/
 1. **Observability-Lücken**
    - **Risiko:** Keine Monitoring/Logging-Infrastruktur definiert
    - **Impact:** Schwierige Fehlerdiagnose, keine Performance-Metriken
-   - **Mitigation:** Strukturiertes Logging, Metrics (Prometheus), Tracing
-   - **Frage:** Welches Observability-Stack ist vorgesehen?
+   - **Mitigation:** Strukturiertes Logging, Health Checks
+   - **Status (v2.0):** Basis-Observability implementiert (Logging mit Correlation IDs, Health Checks)
 
 2. **Backup-Strategie**
    - **Risiko:** Keine Backup-Strategie für Datenbank und Downloads definiert
@@ -1470,10 +1470,9 @@ Phase 6: Production-Ready (Wochen 19-20)
 2. **MVP-Scope:** Was ist der minimale Funktionsumfang für v0.1.0?
 3. **Python-Version:** Strikte 3.12-Anforderung oder auch 3.11-Support?
 4. **Deployment-Strategie:** Docker, Kubernetes, oder VM-basiert?
-5. **Monitoring-Stack:** Prometheus/Grafana oder andere Lösung?
-6. **Secrets-Management:** Welches System in Production?
-7. **Backup-Strategie:** Wie werden Daten gesichert?
-8. **Release-Cadence:** Wie oft werden neue Versionen veröffentlicht?
+5. **Secrets-Management:** Welches System in Production?
+6. **Backup-Strategie:** Wie werden Daten gesichert?
+7. **Release-Cadence:** Wie oft werden neue Versionen veröffentlicht?
 
 ---
 
