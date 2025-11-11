@@ -1,13 +1,13 @@
 """Tests for session-based Spotify token dependency."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
 
 from soulspot.api.dependencies import get_spotify_token_from_session
-from soulspot.application.services.session_store import Session, SessionStore
+from soulspot.application.services.session_store import SessionStore
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
 
@@ -212,10 +212,10 @@ async def test_get_token_updates_session_on_successful_refresh(
     assert updated_session is not None
     assert updated_session.access_token == "new_access_token"
     assert updated_session.refresh_token == "new_refresh_token"
-    
+
     # Verify new token is not expired
     assert not updated_session.is_token_expired()
-    
+
     # Verify expiration time is in the future
     assert updated_session.token_expires_at is not None
     assert updated_session.token_expires_at > datetime.now(UTC)
