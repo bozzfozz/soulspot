@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -14,18 +15,18 @@ class Database:
     def __init__(self, settings: Settings) -> None:
         """Initialize database with settings."""
         self.settings = settings
-        
+
         # Configure connection pool for PostgreSQL
-        engine_kwargs = {
+        engine_kwargs: dict[str, Any] = {
             "echo": settings.database.echo,
             "pool_pre_ping": True,
         }
-        
+
         # Only apply pool settings for PostgreSQL
         if "postgresql" in settings.database.url:
             engine_kwargs["pool_size"] = settings.database.pool_size
             engine_kwargs["max_overflow"] = settings.database.max_overflow
-        
+
         self._engine = create_async_engine(
             settings.database.url,
             **engine_kwargs,

@@ -1,6 +1,6 @@
 """Tests for circuit breaker wrapper implementations."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -70,9 +70,7 @@ class TestCircuitBreakerSlskdClient:
         result = await wrapper.search("test query")
 
         assert result == [{"file": "test.mp3"}]
-        mock_slskd_client.search.assert_called_once_with(
-            query="test query", timeout=30
-        )
+        mock_slskd_client.search.assert_called_once_with(query="test query", timeout=30)
 
     async def test_download_success(
         self, mock_slskd_client: AsyncMock, settings: Settings

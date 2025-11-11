@@ -1,6 +1,7 @@
 """Pagination schemas for API responses."""
 
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")

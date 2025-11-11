@@ -113,26 +113,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         description="""
         ## SoulSpot Bridge API
-        
+
         Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation und Soulseek-Integration.
-        
+
         ### Features
         - 🎵 **Spotify Integration**: OAuth PKCE authentication and playlist management
         - ⬇️ **Automated Downloads**: Soulseek downloads via slskd
         - 📊 **Metadata Enrichment**: MusicBrainz and CoverArtArchive integration
         - 🗂️ **File Organization**: Automatic file management and tagging
         - 🔄 **Worker System**: Asynchronous job processing
-        
+
         ### Authentication
         Most endpoints require Spotify OAuth authentication. Use the `/auth/spotify/login` endpoint to start the OAuth flow.
-        
+
         ### Rate Limiting
         - MusicBrainz: 1 request per second (enforced by circuit breaker)
         - Spotify: API-dependent (handled with exponential backoff)
-        
+
         ### Error Handling
         All errors include a `correlation_id` for debugging. Check logs with this ID for detailed information.
-        
+
         ### Documentation
         - [GitHub Repository](https://github.com/bozzfozz/soulspot-bridge)
         - [Setup Guide](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/setup-guide.md)
@@ -189,10 +189,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     async def health_check() -> dict[str, Any]:
         """Health check endpoint.
-        
+
         Returns:
             dict: Health status including app name, environment, and profile.
-            
+
         Example response:
             {
                 "status": "healthy",
@@ -218,10 +218,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     async def readiness_check() -> dict[str, Any]:
         """Readiness check endpoint with database and dependency connectivity checks.
-        
+
         Returns:
             dict: Readiness status with detailed health checks for all dependencies.
-            
+
         Example response:
             {
                 "status": "ready",

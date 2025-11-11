@@ -2,7 +2,6 @@
 
 import asyncio
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -66,6 +65,7 @@ class TestCircuitBreakerClosed:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test successful call in CLOSED state."""
+
         async def success_func() -> str:
             return "success"
 
@@ -79,6 +79,7 @@ class TestCircuitBreakerClosed:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test failed call in CLOSED state."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 
@@ -93,6 +94,7 @@ class TestCircuitBreakerClosed:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test transition to OPEN after failure threshold."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 
@@ -108,6 +110,7 @@ class TestCircuitBreakerClosed:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test that failure count is reset on success."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 
@@ -133,6 +136,7 @@ class TestCircuitBreakerOpen:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test that calls are blocked in OPEN state."""
+
         # Force transition to OPEN
         async def failure_func() -> None:
             raise ValueError("test error")
@@ -157,6 +161,7 @@ class TestCircuitBreakerOpen:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test transition to HALF_OPEN after timeout."""
+
         # Force transition to OPEN
         async def failure_func() -> None:
             raise ValueError("test error")
@@ -182,10 +187,9 @@ class TestCircuitBreakerOpen:
 class TestCircuitBreakerHalfOpen:
     """Test circuit breaker in HALF_OPEN state."""
 
-    async def _transition_to_half_open(
-        self, circuit_breaker: CircuitBreaker
-    ) -> None:
+    async def _transition_to_half_open(self, circuit_breaker: CircuitBreaker) -> None:
         """Helper to transition circuit to HALF_OPEN state."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 
@@ -240,6 +244,7 @@ class TestCircuitBreakerStats:
 
     async def test_stats_track_requests(self, circuit_breaker: CircuitBreaker) -> None:
         """Test that statistics track all requests."""
+
         async def success_func() -> str:
             return "success"
 
@@ -282,6 +287,7 @@ class TestCircuitBreakerReset:
 
     async def test_manual_reset(self, circuit_breaker: CircuitBreaker) -> None:
         """Test manual reset of circuit breaker."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 
@@ -326,6 +332,7 @@ class TestCircuitBreakerWithSyncFunctions:
 
     async def test_sync_function_success(self, circuit_breaker: CircuitBreaker) -> None:
         """Test circuit breaker with synchronous function."""
+
         def sync_func() -> str:
             return "sync success"
 
@@ -335,6 +342,7 @@ class TestCircuitBreakerWithSyncFunctions:
 
     async def test_sync_function_failure(self, circuit_breaker: CircuitBreaker) -> None:
         """Test circuit breaker with failing synchronous function."""
+
         def sync_failure() -> None:
             raise ValueError("sync error")
 
@@ -351,6 +359,7 @@ class TestCircuitBreakerResetTimeout:
         self, circuit_breaker: CircuitBreaker
     ) -> None:
         """Test that failure count is reset after reset_timeout in CLOSED state."""
+
         async def failure_func() -> None:
             raise ValueError("test error")
 

@@ -836,7 +836,9 @@ class DownloadRepository(IDownloadRepository):
             updated_at=model.updated_at,
         )
 
-    async def list_by_status(self, status: str, limit: int = 100, offset: int = 0) -> list[Download]:
+    async def list_by_status(
+        self, status: str, limit: int = 100, offset: int = 0
+    ) -> list[Download]:
         """List downloads with a specific status, with pagination and eager loading."""
         stmt = (
             select(DownloadModel)
@@ -909,7 +911,9 @@ class DownloadRepository(IDownloadRepository):
 
     async def count_by_status(self, status: str) -> int:
         """Count downloads by status."""
-        stmt = select(func.count(DownloadModel.id)).where(DownloadModel.status == status)
+        stmt = select(func.count(DownloadModel.id)).where(
+            DownloadModel.status == status
+        )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
