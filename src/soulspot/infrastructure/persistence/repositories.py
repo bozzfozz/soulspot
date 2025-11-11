@@ -885,7 +885,6 @@ class DownloadRepository(IDownloadRepository):
             .limit(limit)
             .offset(offset)
         )
-        )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
