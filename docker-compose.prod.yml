@@ -1,0 +1,129 @@
+# Docker Compose configuration for Production environment
+# This configuration is optimized for production with security and reliability
+
+services:
+  soulspot:
+    image: ghcr.io/bozzfozz/soulspot-bridge:${VERSION:-latest}
+    container_name: soulspot-bridge-prod
+    ports:
+      - "8765:8765"
+    volumes:
+      - /opt/soulspot/downloads:/downloads
+      - /opt/soulspot/music:/music
+      - /opt/soulspot/config:/config
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - UMASK=002
+      - TZ=${TZ:-Europe/Berlin}
+      
+      # Production environment
+      - APP_ENV=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # Spotify Configuration (from secrets)
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      
+      # slskd Configuration (from secrets)
+      - SLSKD_BASE_URL=http://slskd:5030
+      - SLSKD_URL=http://slskd:5030
+      - SLSKD_API_KEY=${SLSKD_API_KEY}
+      - SLSKD_USERNAME=${SLSKD_USERNAME}
+      - SLSKD_PASSWORD=${SLSKD_PASSWORD}
+      
+      # Database
+      - DATABASE_URL=sqlite+aiosqlite:///config/soulspot.db
+      
+      # Storage Paths
+      - STORAGE__DOWNLOAD_PATH=/downloads
+      - STORAGE__MUSIC_PATH=/music
+      - STORAGE__ARTWORK_PATH=/config/artwork
+      - STORAGE__TEMP_PATH=/config/tmp
+      
+      # Security (from secrets - MUST be set)
+      - SECRET_KEY=${SECRET_KEY}
+      
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8765
+      - API_SECURE_COOKIES=true
+      
+      # Observability (production settings)
+      - OBSERVABILITY__LOG_JSON_FORMAT=true
+      - OBSERVABILITY__ENABLE_DEPENDENCY_HEALTH_CHECKS=true
+      - OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
+      
+      # Circuit Breaker (production tuning)
+      - CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+      - CIRCUIT_BREAKER_SUCCESS_THRESHOLD=2
+      - CIRCUIT_BREAKER_TIMEOUT=60.0
+      - CIRCUIT_BREAKER_RESET_TIMEOUT=300.0
+    restart: always
+    depends_on:
+      - slskd
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - soulspot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=soulspot,env=production"
+    # Production security: read-only root filesystem
+    # read_only: true
+    # tmpfs:
+    #   - /tmp
+    #   - /config/tmp
+
+  slskd:
+    image: slskd/slskd:latest
+    container_name: soulspot-slskd-prod
+    ports:
+      - "5030:5030"
+      - "5031:5031"
+    volumes:
+      - /opt/soulspot/slskd/config:/app/config
+      - /opt/soulspot/slskd/state:/app/state
+      - /opt/soulspot/downloads:/downloads
+      - /opt/soulspot/music:/music
+    environment:
+      - SLSKD_REMOTE_CONFIGURATION=true
+      - SLSKD_HTTP_PORT=5030
+      - SLSKD_SLSK_LISTEN_PORT=5031
+      - SLSKD_NO_AUTH=false
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5030/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - soulspot-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        labels: "service=slskd,env=production"
+
+networks:
+  soulspot-network:
+    driver: bridge
+
+# Production deployment notes:
+# 1. Store secrets in a .env.prod file (never commit to git)
+# 2. Use proper SSL/TLS termination (nginx or traefik)
+# 3. Set up automated backups for /opt/soulspot/config
+# 4. Monitor logs with centralized logging (ELK, Loki, etc.)
+# 5. Set up alerting for health check failures
+# 6. Consider using Docker secrets or vault for sensitive data

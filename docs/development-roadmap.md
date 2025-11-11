@@ -58,7 +58,7 @@
 
 **Phase 6: Production Readiness** (In Progress)
 
-**Fortschritt:** ~60% (6/10 Hauptkomponenten abgeschlossen)
+**Fortschritt:** ~80% (8/10 Hauptkomponenten abgeschlossen)
 
 **Abgeschlossen:**
 - ✅ Structured Logging (JSON, Correlation IDs)
@@ -67,14 +67,17 @@
 - ✅ Docker Compose Configuration (slskd Integration, Volume Management)
 - ✅ Docker Entrypoint Script (Directory Validation, PUID/PGID)
 - ✅ Auto Music Import Service (Background File Moving)
+- ✅ CI/CD Pipeline (GitHub Actions)
+- ✅ Automated Release Process
+- ✅ Deployment Automation (Dev, Staging, Prod)
 
 **In Arbeit:**
-- 🔄 CI/CD Pipeline (GitHub Actions)
-- 🔄 Automated Release Process
 - 🔄 Performance Optimization
-- 🔄 Security Hardening
+- 🔄 Operations Documentation
 
 **Nächste Schritte:** [Phase 6 Details](#phase-6-production-readiness-priority-high)
+
+> **Note:** Advanced features originally planned for Phase 6 (v3.0 features such as Production Profile with PostgreSQL/Redis/nginx, Kubernetes, OWASP security hardening) have been moved to the dedicated [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) to keep Phase 6 focused and achievable.
 
 ---
 
@@ -341,7 +344,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Changelog Generation | ✅ Done | LOW |
 | Docker Image Building | ✅ Done | MEDIUM |
 | GitHub Releases | ✅ Done | LOW |
-| Deployment Automation (Dev, Staging, Prod) | 📋 Planned | HIGH |
+| Deployment Automation (Dev, Staging, Prod) | ✅ Done | HIGH |
 
 #### 6.3 Docker & Deployment 🐳
 
@@ -354,19 +357,12 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | PUID/PGID Support | ✅ Done | LOW |
 | UMASK Configuration | ✅ Done | LOW |
 | Docker Documentation | ✅ Done | LOW |
-| Production Profile (PostgreSQL, Redis, nginx) | 🔮 v3.0 | HIGH |
-| Kubernetes Manifests | 🔮 v3.0 | VERY HIGH |
+
+> **Note:** Advanced deployment features (Production Profile with PostgreSQL/Redis/nginx, Kubernetes Manifests) have been moved to v3.0 scope as they are not required for current production readiness. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for details.
 
 #### 6.4 Security Hardening 🔒
 
-| Task | Status | Complexity |
-|------|--------|-----------|
-| OWASP Top 10 Compliance Check | 🔮 v3.0 | MEDIUM |
-| Input Validation Hardening | 🔮 v3.0 | MEDIUM |
-| Secrets Management (Environment-based) | 🔮 v3.0 | MEDIUM |
-| Rate Limiting for Auth Endpoints | 🔮 v3.0 | LOW |
-| Brute Force Protection | 🔮 v3.0 | MEDIUM |
-| Session Timeout Configuration | 🔮 v3.0 | LOW |
+> **Note:** Advanced security features (OWASP Top 10 Compliance, Input Validation Hardening, Secrets Management, Rate Limiting, Brute Force Protection, Session Timeout) have been moved to v3.0 scope. Basic security measures are implemented in Phase 6. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for enterprise-grade security features.
 
 #### 6.5 Performance Optimization ⚡
 
@@ -375,11 +371,12 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Database Query Optimization | 📋 Planned | MEDIUM |
 | Missing Index Analysis | 📋 Planned | LOW |
 | Connection Pool Tuning | 📋 Planned | MEDIUM |
-| Redis Integration (Distributed Cache) | 🔮 v3.0 | HIGH |
 | Response Compression | 📋 Planned | LOW |
 | Pagination for Large Results | 📋 Planned | LOW |
 | Query Batching | 📋 Planned | MEDIUM |
 | Async Heavy Operations | 📋 Planned | MEDIUM |
+
+> **Note:** Advanced performance features (Redis Integration for Distributed Cache) have been moved to v3.0 scope. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for details.
 
 #### 6.6 Operations Documentation 📚
 
@@ -388,9 +385,9 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Docker Setup Guide | ✅ Done | LOW |
 | Troubleshooting Guide | ✅ Done | LOW |
 | Operations Runbook | 📋 Planned | MEDIUM |
-| Backup & Recovery Procedures | 🔮 v3.0 | MEDIUM |
-| Rollback Procedures | 🔮 v3.0 | LOW |
 | API Documentation Enhancements | 📋 Planned | LOW |
+
+> **Note:** Advanced operational features (Backup & Recovery Procedures, Rollback Procedures) have been moved to v3.0 scope. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for enterprise operational excellence features.
 
 #### Acceptance Criteria
 

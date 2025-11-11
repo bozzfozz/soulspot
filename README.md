@@ -67,12 +67,13 @@ Aktueller Stand:
 - ✅ Session Management und OAuth Flow
 - 🔄 Ready for Phase 6: Production Readiness
 
-**Nächste Schritte:** Continue enhancing production-ready features (CI/CD improvements, deployment automation) - See [Roadmap](docs/development-roadmap.md)
+**Nächste Schritte:** Phase 6 Production Readiness continues with performance optimization and operations documentation - See [Roadmap](docs/development-roadmap.md)
 
 ## 📚 Dokumentation
 
 ### Getting Started
 - **[Docker Setup Guide](docs/docker-setup.md)** - Vollständige Docker-Deployment-Anleitung ⭐
+- **[Deployment Guide](docs/deployment-guide.md)** - Automated deployment for Dev, Staging, and Production ⭐
 - **[Setup Guide](docs/setup-guide.md)** - Umfassende Installations- und Konfigurationsanleitung
 - **[Contributing Guide](docs/contributing.md)** - Wie man zum Projekt beiträgt
 - **[Testing Guide](docs/testing-guide.md)** - Test-Strategie und Best Practices
