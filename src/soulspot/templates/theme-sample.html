@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Harmony Theme Sample - SoulSpot Bridge</title>
+    <meta name="description" content="Harmony-v1 inspired theme demonstration for SoulSpot Bridge">
+    {% include 'includes/_theme.html' %}
+    <style>
+        /* Demo-specific styles */
+        .demo-section {
+            margin-bottom: var(--space-2xl);
+        }
+        .demo-section-title {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin-bottom: var(--space-lg);
+            color: var(--color-text);
+            padding-bottom: var(--space-sm);
+            border-bottom: 2px solid var(--color-primary);
+        }
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-lg);
+            margin-bottom: var(--space-lg);
+        }
+        .color-swatch {
+            padding: var(--space-lg);
+            border-radius: var(--radius-md);
+            text-align: center;
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+        }
+        .theme-toggle-btn {
+            position: fixed;
+            top: var(--space-lg);
+            right: var(--space-lg);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <!-- Theme Toggle Button -->
+    <button onclick="toggleHarmonyTheme()" class="harmony-btn harmony-btn-secondary theme-toggle-btn">
+        🌓 Toggle Theme
+    </button>
+
+    <div class="harmony-container" style="padding-top: var(--space-2xl); padding-bottom: var(--space-2xl);">
+        <!-- Header -->
+        <header style="margin-bottom: var(--space-2xl);">
+            <h1 class="harmony-heading-1" style="color: var(--color-primary);">
+                🎵 Harmony Theme Sample
+            </h1>
+            <p class="harmony-text-muted" style="font-size: var(--font-size-lg);">
+                Design tokens extracted from harmony-v1 backup project (Wizarr-inspired theme)
+            </p>
+        </header>
+
+        <!-- Colors Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Color Palette</h2>
+            
+            <h3 class="harmony-heading-3">Brand Colors</h3>
+            <div class="demo-grid">
+                <div class="color-swatch" style="background: var(--color-primary); color: white;">
+                    Primary<br>#fe4155
+                </div>
+                <div class="color-swatch" style="background: var(--color-secondary); color: white;">
+                    Secondary<br>#533c5b
+                </div>
+                <div class="color-swatch" style="background: var(--color-blue-primary); color: white;">
+                    Blue Primary<br>#3b82f6
+                </div>
+            </div>
+
+            <h3 class="harmony-heading-3">Semantic Colors</h3>
+            <div class="demo-grid">
+                <div class="color-swatch" style="background: var(--color-success); color: white;">
+                    Success<br>var(--color-success)
+                </div>
+                <div class="color-swatch" style="background: var(--color-warning); color: white;">
+                    Warning<br>var(--color-warning)
+                </div>
+                <div class="color-swatch" style="background: var(--color-danger); color: white;">
+                    Danger<br>var(--color-danger)
+                </div>
+                <div class="color-swatch" style="background: var(--color-info); color: white;">
+                    Info<br>var(--color-info)
+                </div>
+            </div>
+        </section>
+
+        <!-- Typography Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Typography</h2>
+            
+            <h1 class="harmony-heading-1">Heading 1 (2.25rem)</h1>
+            <h2 class="harmony-heading-2">Heading 2 (1.875rem)</h2>
+            <h3 class="harmony-heading-3">Heading 3 (1.5rem)</h3>
+            
+            <p style="font-size: var(--font-size-base); margin: var(--space-md) 0;">
+                This is body text using the Inter font family. The harmony-v1 theme uses Inter as the primary font,
+                falling back to system fonts for better performance and compatibility.
+            </p>
+            
+            <p class="harmony-text-muted" style="font-size: var(--font-size-sm);">
+                This is muted text, often used for secondary information or metadata.
+            </p>
+            
+            <p class="harmony-text-primary" style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold);">
+                This is emphasized text using the primary color.
+            </p>
+        </section>
+
+        <!-- Buttons Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Buttons</h2>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-md); margin-bottom: var(--space-lg);">
+                <button class="harmony-btn harmony-btn-primary">Primary Button</button>
+                <button class="harmony-btn harmony-btn-secondary">Secondary Button</button>
+                <button class="harmony-btn harmony-btn-outline">Outline Button</button>
+                <button class="harmony-btn harmony-btn-danger">Danger Button</button>
+                <button class="harmony-btn harmony-btn-primary" disabled>Disabled Button</button>
+            </div>
+            
+            <h3 class="harmony-heading-3">Button Sizes</h3>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md);">
+                <button class="harmony-btn harmony-btn-primary harmony-btn-sm">Small</button>
+                <button class="harmony-btn harmony-btn-primary">Medium (Default)</button>
+                <button class="harmony-btn harmony-btn-primary harmony-btn-lg">Large</button>
+            </div>
+        </section>
+
+        <!-- Cards Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Cards</h2>
+            
+            <div class="demo-grid">
+                <div class="harmony-card">
+                    <div class="harmony-card-header">
+                        <h3 class="harmony-card-title">Card Title</h3>
+                    </div>
+                    <div class="harmony-card-body">
+                        <p>This is a basic card component with header and body. Cards are great for organizing content into distinct sections.</p>
+                    </div>
+                </div>
+                
+                <div class="harmony-card">
+                    <div class="harmony-card-header">
+                        <h3 class="harmony-card-title">Card with Footer</h3>
+                    </div>
+                    <div class="harmony-card-body">
+                        <p>This card includes a footer section with action buttons.</p>
+                    </div>
+                    <div class="harmony-card-footer">
+                        <button class="harmony-btn harmony-btn-primary harmony-btn-sm">Action</button>
+                        <button class="harmony-btn harmony-btn-secondary harmony-btn-sm">Cancel</button>
+                    </div>
+                </div>
+                
+                <div class="harmony-card">
+                    <h3 class="harmony-card-title" style="margin-bottom: var(--space-md);">Simple Card</h3>
+                    <p>Cards without explicit headers work well for simpler content layouts.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Badges Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Badges</h2>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: var(--space-md);">
+                <span class="harmony-badge harmony-badge-success">Success</span>
+                <span class="harmony-badge harmony-badge-warning">Warning</span>
+                <span class="harmony-badge harmony-badge-danger">Danger</span>
+                <span class="harmony-badge harmony-badge-info">Info</span>
+                <span class="harmony-badge harmony-badge-muted">Muted</span>
+            </div>
+        </section>
+
+        <!-- Alerts Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Alerts</h2>
+            
+            <div class="harmony-alert harmony-alert-success">
+                <span style="font-size: var(--font-size-xl);">✅</span>
+                <div>
+                    <strong>Success!</strong> Your operation completed successfully.
+                </div>
+            </div>
+            
+            <div class="harmony-alert harmony-alert-warning">
+                <span style="font-size: var(--font-size-xl);">⚠️</span>
+                <div>
+                    <strong>Warning:</strong> Please review this information carefully.
+                </div>
+            </div>
+            
+            <div class="harmony-alert harmony-alert-danger">
+                <span style="font-size: var(--font-size-xl);">❌</span>
+                <div>
+                    <strong>Error:</strong> Something went wrong. Please try again.
+                </div>
+            </div>
+            
+            <div class="harmony-alert harmony-alert-info">
+                <span style="font-size: var(--font-size-xl);">ℹ️</span>
+                <div>
+                    <strong>Info:</strong> Here's some helpful information for you.
+                </div>
+            </div>
+        </section>
+
+        <!-- Forms Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Form Elements</h2>
+            
+            <div class="harmony-card" style="max-width: 600px;">
+                <form>
+                    <div style="margin-bottom: var(--space-lg);">
+                        <label style="display: block; font-weight: var(--font-weight-medium); margin-bottom: var(--space-sm);">
+                            Text Input
+                        </label>
+                        <input type="text" class="harmony-input" placeholder="Enter text here...">
+                    </div>
+                    
+                    <div style="margin-bottom: var(--space-lg);">
+                        <label style="display: block; font-weight: var(--font-weight-medium); margin-bottom: var(--space-sm);">
+                            Email Input
+                        </label>
+                        <input type="email" class="harmony-input" placeholder="your.email@example.com">
+                    </div>
+                    
+                    <div style="margin-bottom: var(--space-lg);">
+                        <label style="display: block; font-weight: var(--font-weight-medium); margin-bottom: var(--space-sm);">
+                            Textarea
+                        </label>
+                        <textarea class="harmony-input" rows="4" placeholder="Enter your message..."></textarea>
+                    </div>
+                    
+                    <div class="harmony-flex" style="justify-content: flex-end;">
+                        <button type="button" class="harmony-btn harmony-btn-secondary">Cancel</button>
+                        <button type="submit" class="harmony-btn harmony-btn-primary">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Design Tokens Section -->
+        <section class="demo-section">
+            <h2 class="demo-section-title">Design Tokens Reference</h2>
+            
+            <div class="harmony-card">
+                <h3 class="harmony-card-title">Spacing Scale</h3>
+                <div style="margin-top: var(--space-md);">
+                    <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                        <div style="width: var(--space-xs); height: var(--space-xs); background: var(--color-primary);"></div>
+                        <code style="margin-left: var(--space-md); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">
+                            --space-xs: 0.25rem (4px)
+                        </code>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                        <div style="width: var(--space-sm); height: var(--space-sm); background: var(--color-primary);"></div>
+                        <code style="margin-left: var(--space-md); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">
+                            --space-sm: 0.5rem (8px)
+                        </code>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                        <div style="width: var(--space-md); height: var(--space-md); background: var(--color-primary);"></div>
+                        <code style="margin-left: var(--space-md); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">
+                            --space-md: 1rem (16px)
+                        </code>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                        <div style="width: var(--space-lg); height: var(--space-lg); background: var(--color-primary);"></div>
+                        <code style="margin-left: var(--space-md); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">
+                            --space-lg: 1.5rem (24px)
+                        </code>
+                    </div>
+                    <div style="display: flex; align-items: center; margin-bottom: var(--space-sm);">
+                        <div style="width: var(--space-xl); height: var(--space-xl); background: var(--color-primary);"></div>
+                        <code style="margin-left: var(--space-md); font-family: var(--font-family-mono); font-size: var(--font-size-sm);">
+                            --space-xl: 2rem (32px)
+                        </code>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer style="margin-top: var(--space-2xl); padding-top: var(--space-xl); border-top: 1px solid var(--color-border); text-align: center;">
+            <p class="harmony-text-muted" style="font-size: var(--font-size-sm);">
+                Harmony-v1 Inspired Theme for SoulSpot Bridge<br>
+                Design tokens extracted from harmony-v1 backup project
+            </p>
+            <div style="margin-top: var(--space-md);">
+                <a href="/ui/" class="harmony-btn harmony-btn-outline harmony-btn-sm">Back to SoulSpot</a>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

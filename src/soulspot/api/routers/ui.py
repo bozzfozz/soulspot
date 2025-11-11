@@ -113,3 +113,9 @@ async def downloads(
 async def auth(request: Request) -> Any:
     """Auth page."""
     return templates.TemplateResponse("auth.html", {"request": request})
+
+
+@router.get("/theme-sample", response_class=HTMLResponse)
+async def theme_sample(request: Request) -> Any:
+    """Harmony theme sample page with component showcase."""
+    return templates.TemplateResponse("theme-sample.html", {"request": request})

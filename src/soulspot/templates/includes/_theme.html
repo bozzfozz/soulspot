@@ -1,0 +1,46 @@
+{# 
+  Harmony-v1 Theme Include
+  
+  Include this file in your template's <head> section to enable the Harmony theme:
+  
+  {% include 'includes/_theme.html' %}
+  
+  This will load:
+  - Inter font from Google Fonts
+  - Harmony theme CSS with design tokens
+  - Optional theme switcher support
+#}
+
+{# Load Harmony theme CSS #}
+<link rel="stylesheet" href="/static/css/theme.css">
+
+{# Optional: Add theme switcher support #}
+<script>
+  // Theme switcher functionality (optional)
+  function initHarmonyTheme() {
+    // Check for saved theme preference or use system preference
+    const savedTheme = localStorage.getItem('harmony-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  }
+  
+  // Toggle theme (call this from your UI)
+  function toggleHarmonyTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    if (newTheme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    
+    localStorage.setItem('harmony-theme', newTheme);
+  }
+  
+  // Initialize theme on page load
+  initHarmonyTheme();
+</script>
