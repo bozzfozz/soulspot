@@ -6,6 +6,7 @@ This guide explains how to use the observability features in SoulSpot Bridge.
 
 - [Overview](#overview)
 - [Structured Logging](#structured-logging)
+- [Circuit Breaker](#circuit-breaker)
 - [Health Checks](#health-checks)
 - [Configuration](#configuration)
 - [Best Practices](#best-practices)
@@ -15,6 +16,7 @@ This guide explains how to use the observability features in SoulSpot Bridge.
 SoulSpot Bridge includes observability features to help you monitor and debug your application:
 
 - **Structured Logging**: JSON-formatted logs with correlation IDs for request tracking
+- **Circuit Breaker**: Resilience pattern to protect external service integrations
 - **Health Checks**: Liveness and readiness probes with dependency monitoring
 
 ## Structured Logging
@@ -76,6 +78,64 @@ logger.info("Processing request", extra={"user_id": 123})
 # Get current correlation ID
 correlation_id = get_correlation_id()
 ```
+
+## Circuit Breaker
+
+The circuit breaker pattern protects external service integrations from cascading failures by temporarily blocking requests to failing services.
+
+### Quick Start
+
+Circuit breakers are automatically applied to all external service clients (Spotify, MusicBrainz, slskd). No code changes required!
+
+### Configuration
+
+```env
+# Number of failures before opening circuit (default: 5)
+CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+
+# Seconds to wait in OPEN state before testing recovery (default: 60)
+CIRCUIT_BREAKER_TIMEOUT=60.0
+
+# Number of successes needed to close circuit (default: 2)
+CIRCUIT_BREAKER_SUCCESS_THRESHOLD=2
+
+# Seconds before resetting failure counter (default: 300)
+CIRCUIT_BREAKER_RESET_TIMEOUT=300.0
+```
+
+### States
+
+- **CLOSED**: Normal operation, all requests pass through
+- **OPEN**: Service failing, requests are blocked immediately
+- **HALF_OPEN**: Testing recovery, limited requests allowed
+
+### Error Handling
+
+When a circuit is open, clients raise `CircuitBreakerError`:
+
+```python
+from soulspot.infrastructure.observability.circuit_breaker import CircuitBreakerError
+
+try:
+    playlist = await spotify_client.get_playlist(playlist_id, token)
+except CircuitBreakerError as e:
+    logger.warning(f"Service {e.service_name} unavailable, retry after {e.retry_after}s")
+```
+
+### Monitoring
+
+Circuit breakers emit structured logs with state transitions:
+
+```json
+{
+  "level": "WARNING",
+  "message": "Circuit breaker spotify-api is OPEN, blocking request.",
+  "circuit_breaker": "spotify-api",
+  "state": "open"
+}
+```
+
+**📖 For detailed information, see [Circuit Breaker Documentation](features/circuit-breaker.md)**
 
 ## Health Checks
 
@@ -193,6 +253,12 @@ OBSERVABILITY__LOG_JSON_FORMAT=true
 # Observability - Health Checks
 OBSERVABILITY__ENABLE_DEPENDENCY_HEALTH_CHECKS=true
 OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
+
+# Observability - Circuit Breaker
+CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+CIRCUIT_BREAKER_SUCCESS_THRESHOLD=2
+CIRCUIT_BREAKER_TIMEOUT=60.0
+CIRCUIT_BREAKER_RESET_TIMEOUT=300.0
 ```
 
 ## Best Practices
@@ -226,9 +292,18 @@ OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
 3. **Use readiness for dependencies**: Liveness for application health only
 4. **Test health checks regularly**: Ensure they accurately reflect system state
 
+### Circuit Breaker
+
+1. **Tune thresholds for service type**: Critical services should open faster
+2. **Monitor state transitions**: Track patterns in circuit opening/closing
+3. **Implement graceful degradation**: Handle `CircuitBreakerError` appropriately
+4. **Alert on prolonged OPEN state**: Indicates ongoing service issues
+5. **Test circuit behavior**: Verify circuit opens under failure conditions
+
 ---
 
 For more information about the application architecture and deployment, see:
 - [Architecture Guide](architecture.md)
+- [Circuit Breaker Pattern](features/circuit-breaker.md)
 - [Setup Guide](setup-guide.md)
 - [Development Roadmap](development-roadmap.md)
