@@ -1,8 +1,8 @@
 # SoulSpot Bridge – Development Roadmap
 
-> **Letzte Aktualisierung:** 2025-11-10  
+> **Letzte Aktualisierung:** 2025-11-11  
 > **Version:** 0.1.0 (Alpha)  
-> **Status:** Phase 6 In Progress - Production Readiness
+> **Status:** Phase 6 In Progress - Production Readiness + v2.0 Planning Complete
 
 ---
 
@@ -12,11 +12,12 @@
 2. [Aktueller Status](#-aktueller-status)
 3. [Kernkonzepte & Architektur](#-kernkonzepte--architektur)
 4. [Entwicklungsphasen](#-entwicklungsphasen)
-5. [Feature-Kategorien](#-feature-kategorien)
-6. [Prioritäts-Matrix](#-prioritäts-matrix)
-7. [Release-Plan](#-release-plan)
-8. [Contributing](#-contributing)
-9. [Offene Fragen](#-offene-fragen)
+5. [v2.0 — Dynamic Views & Widget-Palette](#-v20--dynamic-views--widget-palette-geplant)
+6. [Feature-Kategorien](#-feature-kategorien)
+7. [Prioritäts-Matrix](#-prioritäts-matrix)
+8. [Release-Plan](#-release-plan)
+9. [Contributing](#-contributing)
+10. [Offene Fragen](#-offene-fragen)
 
 ---
 
@@ -798,6 +799,1162 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 
 ---
 
+## 🎨 v2.0 — Dynamic Views & Widget-Palette (Geplant)
+
+**Status:** 📋 Planned  
+**Zeitrahmen:** Q3-Q4 2025 (nach Phase 9)  
+**Priorität:** 🔵 STRATEGIC (Next Major Release)  
+**Gesamtaufwand:** ~20-26 Dev Days (aufteilbar in 3-5 Sprints)
+
+### 🎯 Vision & Ziele
+
+**v2.0 Dynamic Views & Widget-Palette** transformiert SoulSpot Bridge von einem funktionalen Tool zu einer flexiblen, personalisierbaren Arbeitsumgebung. Nutzer können ihre Arbeitsoberfläche individuell gestalten, relevante Widgets per Drag & Drop anordnen, konfigurieren und als wiederverwendbare Views speichern.
+
+**Kernprinzipien:**
+- 🎨 **User-Centric Design:** Nutzer definieren ihre optimale Arbeitsumgebung
+- 🧩 **Modularität:** Widgets sind unabhängige, konfigurierbare Komponenten
+- 🔄 **Wiederverwendbarkeit:** Views können gespeichert, geteilt und exportiert werden
+- 🚫 **Keine Telemetrie:** Kein Tracking, keine Performance-Metriken, keine Datensammlung
+- 🔒 **Security-First:** Alle Aktionen serverseitig validiert und autorisiert
+
+### 🎯 MVP-Scope & Abgrenzungen
+
+**✅ Im Scope (MVP):**
+- Grid-basiertes Canvas für Widget-Platzierung (Drag & Drop)
+- Widget-Palette mit vorkonfigurierten Standard-Widgets
+- Widget-Konfiguration via Settings-Modal (settingsSchema)
+- Speichern/Laden von Views (pro User, DB-persistiert)
+- Composite Widgets (Parent mit children, selection-sync)
+- Berechtigungsprüfung für destruktive Widget-Aktionen
+- 5 Core Widgets (Active Jobs, Spotify Search, Missing Tracks, Quick Actions, Metadata Manager)
+
+**❌ Explizit NICHT im Scope:**
+- ❌ Performance-Metriken, Telemetrie oder Analytics
+- ❌ Widget-in-Browser-Extension oder Mobile-App
+- ❌ Echtzeit-Kollaboration (Team-Views)
+- ❌ Automatisches Widget-Layout-Optimization
+- ❌ AI-basierte Widget-Recommendations
+- ❌ Widget-Marketplace oder Plugin-System (siehe Phase 9)
+
+### 📋 Meilensteine & Phasen
+
+| Phase | Ziel | Aufwand | Dependencies |
+|-------|------|---------|--------------|
+| **A: Design & Architektur** | Wireframes, Widget-Registry-Schema, Settings-Schema | 1-2 days | Design-System v1.0 |
+| **B: Infrastructure MVP** | Grid Canvas, Widget Palette, Drag & Drop, Save/Load Views | 5 days | Phase A complete |
+| **C: Widgets MVP** | 5 Core Widgets (Active Jobs, Spotify Search, Missing Tracks, Quick Actions, Metadata Manager) | 7-10 days | Phase B complete |
+| **D: Composite Widgets & Permissions** | Widget-in-widget, Role checks, Server-side validation | 4-6 days | Phase C complete |
+| **E: Polish & Docs** | Settings-Schemas, Examples, Usage Docs, Testing | 2-3 days | Phase D complete |
+| **F: Optional Extensions** | Sharing/Team-Views, Templates, Export/Import (optional) | 3-5 days | Phase E complete |
+
+**Kritischer Pfad:** A → B → C → D → E (Minimal: ~19 days)  
+**Mit Optional Features:** A → B → C → D → E → F (~24 days)
+
+---
+
+### 🏗️ Architektur & Technische Konzepte
+
+#### Widget-Registry (Serverseitig)
+
+Die **Widget-Registry** ist die zentrale Verwaltung aller verfügbaren Widgets. Sie definiert:
+- Widget-ID und Metadaten (Name, Beschreibung, Kategorie, Icon)
+- Settings-Schema (JSON Schema) für Konfiguration
+- Verfügbare Actions mit Required Permissions
+- Standard-Größe und Layout-Constraints
+
+**Beispiel Widget-Definition:**
+
+```json
+{
+  "id": "active-jobs-widget",
+  "name": "Active Jobs",
+  "description": "Zeigt laufende Download- und Processing-Jobs",
+  "category": "monitoring",
+  "icon": "activity",
+  "defaultSize": { "w": 4, "h": 3 },
+  "minSize": { "w": 2, "h": 2 },
+  "maxSize": { "w": 12, "h": 6 },
+  "settingsSchema": {
+    "type": "object",
+    "properties": {
+      "showCompleted": { "type": "boolean", "default": false },
+      "maxItems": { "type": "integer", "default": 10, "minimum": 5, "maximum": 50 },
+      "refreshInterval": { "type": "integer", "default": 5, "minimum": 1, "maximum": 60 }
+    }
+  },
+  "actions": [
+    { "id": "pause", "label": "Pause Job", "permission": "jobs:write" },
+    { "id": "cancel", "label": "Cancel Job", "permission": "jobs:write" },
+    { "id": "retry", "label": "Retry Job", "permission": "jobs:write" }
+  ],
+  "supportedEvents": ["job.created", "job.updated", "job.completed"]
+}
+```
+
+#### Saved View (Persistierung)
+
+Ein **Saved View** ist die persistierte Konfiguration einer User-View:
+
+```json
+{
+  "id": "view_123",
+  "userId": "user_456",
+  "name": "My Dashboard",
+  "description": "Custom dashboard for music management",
+  "isDefault": false,
+  "createdAt": "2025-11-11T12:00:00Z",
+  "updatedAt": "2025-11-11T14:30:00Z",
+  "layout": {
+    "gridColumns": 12,
+    "gridRows": "auto",
+    "gap": 16
+  },
+  "widgets": [
+    {
+      "instanceId": "widget_inst_001",
+      "widgetId": "active-jobs-widget",
+      "position": { "x": 0, "y": 0, "w": 6, "h": 3 },
+      "settings": {
+        "showCompleted": true,
+        "maxItems": 20,
+        "refreshInterval": 10
+      }
+    },
+    {
+      "instanceId": "widget_inst_002",
+      "widgetId": "spotify-search-widget",
+      "position": { "x": 6, "y": 0, "w": 6, "h": 3 },
+      "settings": {
+        "searchMode": "tracks",
+        "autoDownload": false
+      }
+    },
+    {
+      "instanceId": "widget_inst_003",
+      "widgetId": "composite-dashboard-widget",
+      "position": { "x": 0, "y": 3, "w": 12, "h": 4 },
+      "settings": {
+        "title": "Library Overview"
+      },
+      "children": [
+        {
+          "instanceId": "widget_inst_004",
+          "widgetId": "missing-tracks-widget",
+          "position": { "x": 0, "y": 0, "w": 6, "h": 4 },
+          "settings": { "playlistId": "playlist_789" }
+        },
+        {
+          "instanceId": "widget_inst_005",
+          "widgetId": "metadata-manager-widget",
+          "position": { "x": 6, "y": 0, "w": 6, "h": 4 },
+          "settings": { "scope": "untagged" }
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Composite Widgets
+
+**Composite Widgets** sind Container-Widgets, die andere Widgets (children) enthalten können:
+
+- **Parent Widget:** Verwaltet Layout und Kontext für Children
+- **Children:** Normale Widgets, die im Parent-Kontext laufen
+- **Selection-Sync:** Wenn ein Child eine Auswahl trifft, können andere Children darauf reagieren
+- **Event-Propagation:** Parent kann Events an Children weiterleiten
+
+**Beispiel: Composite Dashboard Widget**
+```
+┌─────────────────────────────────────────────────────┐
+│ Composite: Library Overview                         │
+├────────────────────┬────────────────────────────────┤
+│ Missing Tracks     │ Metadata Manager               │
+│ - Track A (Album)  │ - Untagged Files: 45           │
+│ - Track B (Album)  │ - Missing Artwork: 12          │
+│ - Track C (Single) │ - Conflicts: 3                 │
+│                    │                                │
+│ [Select All]       │ [Fix Selected]                 │
+└────────────────────┴────────────────────────────────┘
+```
+
+Wenn User im "Missing Tracks" Widget einen Track auswählt, kann "Metadata Manager" automatisch die Metadaten dieses Tracks laden.
+
+---
+
+### 🔌 API-Contracts & Endpoints
+
+#### 1. Widget Registry
+
+**GET /api/widgets**
+
+Liefert alle verfügbaren Widgets mit Schemas:
+
+```http
+GET /api/widgets HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "widgets": [
+    {
+      "id": "active-jobs-widget",
+      "name": "Active Jobs",
+      "description": "...",
+      "category": "monitoring",
+      "icon": "activity",
+      "defaultSize": { "w": 4, "h": 3 },
+      "settingsSchema": { ... },
+      "actions": [ ... ]
+    },
+    { ... }
+  ]
+}
+```
+
+**Status Codes:**
+- `200 OK` – Registry erfolgreich geladen
+- `401 Unauthorized` – Fehlende/ungültige Authentifizierung
+- `403 Forbidden` – User hat keine Berechtigung
+
+---
+
+#### 2. Views Management
+
+**GET /api/views**
+
+Listet alle gespeicherten Views des aktuellen Users:
+
+```http
+GET /api/views HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "views": [
+    {
+      "id": "view_123",
+      "name": "My Dashboard",
+      "description": "Custom dashboard",
+      "isDefault": true,
+      "createdAt": "2025-11-11T12:00:00Z",
+      "updatedAt": "2025-11-11T14:30:00Z",
+      "widgetCount": 5
+    },
+    { ... }
+  ]
+}
+```
+
+---
+
+**GET /api/views/:id**
+
+Lädt eine spezifische View mit vollständiger Konfiguration:
+
+```http
+GET /api/views/view_123 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Response:** Vollständiges View-JSON (siehe "Saved View" oben)
+
+**Status Codes:**
+- `200 OK` – View erfolgreich geladen
+- `404 Not Found` – View existiert nicht oder User hat keine Berechtigung
+- `401 Unauthorized` – Fehlende Authentifizierung
+
+---
+
+**POST /api/views**
+
+Erstellt oder aktualisiert eine View:
+
+```http
+POST /api/views HTTP/1.1
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "id": "view_123",  // Optional: wenn vorhanden, wird Update durchgeführt
+  "name": "My Dashboard",
+  "description": "Custom dashboard for music management",
+  "isDefault": false,
+  "layout": { ... },
+  "widgets": [ ... ]
+}
+```
+
+**Response:**
+```json
+{
+  "id": "view_123",
+  "name": "My Dashboard",
+  "createdAt": "2025-11-11T12:00:00Z",
+  "updatedAt": "2025-11-11T14:35:00Z"
+}
+```
+
+**Validierung (Serverseitig):**
+- Widget-IDs müssen in Registry existieren
+- Settings müssen gegen settingsSchema validiert werden
+- Position-Constraints (minSize, maxSize) prüfen
+- User darf nur eigene Views erstellen/ändern (oder Admin-Rolle)
+
+**Status Codes:**
+- `200 OK` – View erfolgreich aktualisiert
+- `201 Created` – View erfolgreich erstellt
+- `400 Bad Request` – Validierungsfehler (ungültiges Schema, fehlende Felder)
+- `403 Forbidden` – User darf View nicht ändern
+- `401 Unauthorized` – Fehlende Authentifizierung
+
+---
+
+**DELETE /api/views/:id**
+
+Löscht eine View:
+
+```http
+DELETE /api/views/view_123 HTTP/1.1
+Authorization: Bearer <token>
+```
+
+**Status Codes:**
+- `204 No Content` – View erfolgreich gelöscht
+- `404 Not Found` – View existiert nicht
+- `403 Forbidden` – User darf View nicht löschen
+- `401 Unauthorized` – Fehlende Authentifizierung
+
+---
+
+#### 3. Widget Actions
+
+**POST /api/widgets/:instanceId/action**
+
+Führt eine Widget-Action aus (z. B. "Pause Job", "Download Track"):
+
+```http
+POST /api/widgets/widget_inst_001/action HTTP/1.1
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "actionId": "pause",
+  "payload": {
+    "jobId": "job_789"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Job paused successfully",
+  "result": {
+    "jobId": "job_789",
+    "status": "paused"
+  }
+}
+```
+
+**Validierung (Serverseitig):**
+- Widget-Instance muss existieren und User gehören
+- Action muss für Widget-Type verfügbar sein
+- User muss erforderliche Permission haben (z. B. `jobs:write`)
+- Payload muss gültiges Format haben
+
+**Status Codes:**
+- `200 OK` – Action erfolgreich ausgeführt
+- `400 Bad Request` – Ungültige Action oder Payload
+- `403 Forbidden` – Fehlende Permission für Action
+- `404 Not Found` – Widget-Instance existiert nicht
+- `401 Unauthorized` – Fehlende Authentifizierung
+
+---
+
+#### 4. Real-Time Events (WebSocket)
+
+**WebSocket /ws/events**
+
+Subscribe zu Events (Job-Updates, Download-Progress, etc.):
+
+```javascript
+// Client-Side
+const ws = new WebSocket('ws://localhost:8765/ws/events?token=<auth_token>');
+
+ws.onopen = () => {
+  // Subscribe zu spezifischen Events
+  ws.send(JSON.stringify({
+    type: 'subscribe',
+    events: ['job.created', 'job.updated', 'job.completed']
+  }));
+};
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log('Event received:', data);
+  
+  // Beispiel Event:
+  // {
+  //   "type": "job.updated",
+  //   "payload": {
+  //     "jobId": "job_789",
+  //     "status": "downloading",
+  //     "progress": 45
+  //   },
+  //   "timestamp": "2025-11-11T14:45:00Z"
+  // }
+};
+```
+
+**Unterstützte Events:**
+- `job.created` – Neuer Job erstellt
+- `job.updated` – Job-Status geändert (Progress, Status)
+- `job.completed` – Job abgeschlossen
+- `job.failed` – Job fehlgeschlagen
+- `library.updated` – Bibliothek aktualisiert (neue Tracks)
+- `metadata.updated` – Metadaten aktualisiert
+
+---
+
+### 🔒 Security & Governance
+
+#### Role Model
+
+**Rollen:**
+- `admin` – Volle Kontrolle, kann alle Views/Widgets verwalten
+- `curator` – Kann eigene Views verwalten, Read-Access auf shared Views
+- `user` – Kann eigene Views verwalten, Read-Access auf shared Views
+- `readOnly` – Nur Lesezugriff, keine Änderungen
+
+**Permissions:**
+- `views:read` – Views lesen (eigene + shared)
+- `views:write` – Views erstellen/ändern (nur eigene, außer admin)
+- `views:delete` – Views löschen (nur eigene, außer admin)
+- `views:share` – Views teilen (Phase F optional)
+- `jobs:read` – Jobs lesen
+- `jobs:write` – Jobs steuern (pause, cancel, retry)
+- `library:read` – Bibliothek lesen
+- `library:write` – Bibliothek ändern (Metadaten, Dateien)
+- `settings:read` – Einstellungen lesen
+- `settings:write` – Einstellungen ändern (nur admin)
+
+#### Berechtigungsprüfung (Server-Side)
+
+**Alle destruktiven Widget-Actions MÜSSEN serverseitig validiert werden:**
+
+```python
+# Beispiel: Pseudo-Code für Action-Validierung
+def execute_widget_action(user: User, widget_instance_id: str, action_id: str, payload: dict):
+    # 1. Widget-Instance laden und User-Zugehörigkeit prüfen
+    widget_instance = get_widget_instance(widget_instance_id)
+    if widget_instance.user_id != user.id and not user.is_admin:
+        raise PermissionDenied("Widget instance does not belong to user")
+    
+    # 2. Action-Definition aus Registry laden
+    widget_def = get_widget_definition(widget_instance.widget_id)
+    action = next((a for a in widget_def.actions if a.id == action_id), None)
+    if not action:
+        raise InvalidAction("Action not found")
+    
+    # 3. Permission prüfen
+    if not user.has_permission(action.permission):
+        raise PermissionDenied(f"Missing permission: {action.permission}")
+    
+    # 4. Payload validieren
+    validate_action_payload(action, payload)
+    
+    # 5. Action ausführen
+    result = execute_action(widget_instance, action, payload)
+    
+    return result
+```
+
+#### Keine Telemetrie/Performance-Metriken
+
+**Explizit NICHT erlaubt:**
+- ❌ Tracking von User-Interaktionen (Clicks, Widget-Usage)
+- ❌ Performance-Metriken (Load-Times, Response-Times) in DB speichern
+- ❌ Analytics-Integration (Google Analytics, Mixpanel, etc.)
+- ❌ Automatisches Fehler-Reporting (Sentry, etc.) mit User-Context
+
+**Erlaubt:**
+- ✅ Server-seitige Logs für Debugging (strukturiertes Logging, Correlation IDs)
+- ✅ Health Checks und System-Metriken (ohne User-Context)
+- ✅ Audit-Logs für Security-Vorfälle (explizit, opt-in)
+
+#### Sharing & Team-Views (Optional Phase F)
+
+**Default:** Views sind privat (nur User hat Zugriff)
+
+**Optional (Phase F):**
+- Read-only Share Links (zeitlich begrenzt, revocable)
+- Team-Views (mehrere Users mit Read/Write-Access)
+- View-Templates (Admin erstellt, User können klonen)
+
+**Keine automatische Synchronisation** zwischen Users (kein "Real-Time Collaboration").
+
+---
+
+### 📊 5 Core Widgets (MVP)
+
+#### 1. Active Jobs Widget
+
+**Beschreibung:** Zeigt laufende Download- und Processing-Jobs in Echtzeit.
+
+**Features:**
+- Liste aller aktiven Jobs (Download, Processing, Metadata Enrichment)
+- Progress Bar mit Percentage
+- Status-Badges (Downloading, Processing, Completed, Failed)
+- Actions: Pause, Cancel, Retry
+- Auto-Refresh via WebSocket (job.updated events)
+
+**Settings:**
+- `showCompleted`: Abgeschlossene Jobs anzeigen (bool, default: false)
+- `maxItems`: Max. Anzahl Jobs (int, default: 10, min: 5, max: 50)
+- `refreshInterval`: Refresh-Interval in Sekunden (int, default: 5, min: 1, max: 60)
+
+**Actions:**
+- `pause` (Permission: `jobs:write`)
+- `cancel` (Permission: `jobs:write`)
+- `retry` (Permission: `jobs:write`)
+
+---
+
+#### 2. Spotify Search Widget
+
+**Beschreibung:** Direkter Spotify-Search mit Download-Integration.
+
+**Features:**
+- Suchfeld für Tracks, Albums, Artists
+- Ergebnisliste mit Preview (Cover, Name, Artist, Duration)
+- Quick-Download Button (fügt zu Queue hinzu)
+- Integration mit Job-Queue
+
+**Settings:**
+- `searchMode`: Suchtyp (enum: "tracks", "albums", "artists", default: "tracks")
+- `autoDownload`: Automatischer Download bei Click (bool, default: false)
+- `maxResults`: Max. Anzahl Ergebnisse (int, default: 10, min: 5, max: 50)
+
+**Actions:**
+- `download` (Permission: `jobs:write`)
+- `addToPlaylist` (Permission: `library:write`)
+
+---
+
+#### 3. Missing Tracks Widget
+
+**Beschreibung:** Zeigt fehlende Tracks aus Spotify-Playlists.
+
+**Features:**
+- Dropdown zur Playlist-Auswahl
+- Liste fehlender Tracks (in Spotify, aber nicht lokal)
+- Bulk-Download Button
+- Export als CSV/JSON
+
+**Settings:**
+- `playlistId`: Spotify-Playlist ID (string, optional)
+- `autoDetect`: Automatische Erkennung fehlender Tracks (bool, default: true)
+- `showFoundTracks`: Gefundene Tracks auch anzeigen (bool, default: false)
+
+**Actions:**
+- `downloadMissing` (Permission: `jobs:write`)
+- `exportCSV` (Permission: `library:read`)
+
+---
+
+#### 4. Quick Actions Widget
+
+**Beschreibung:** Schnellzugriff auf häufige Aktionen.
+
+**Features:**
+- Konfigurierbares Button-Grid
+- Vordefinierte Actions:
+  - Scan Library
+  - Import Playlist
+  - Fix Metadata
+  - Rescan Media Server
+  - Clear Cache
+
+**Settings:**
+- `actions`: Array von Action-IDs (array of strings, default: ["scan", "import", "fix"])
+- `layout`: Layout-Typ (enum: "grid", "list", default: "grid")
+
+**Actions:**
+- `execute` (Permission: abhängig von Action)
+
+---
+
+#### 5. Metadata Manager Widget
+
+**Beschreibung:** Verwaltet Metadaten-Konflikte und fehlende Tags.
+
+**Features:**
+- Liste von Tracks mit Metadaten-Problemen:
+  - Fehlende Artwork
+  - Fehlende Tags (Artist, Album, etc.)
+  - Konflikte (mehrere Quellen, unterschiedliche Daten)
+- Quick-Fix Buttons
+- Batch-Operations
+
+**Settings:**
+- `scope`: Filter-Scope (enum: "all", "untagged", "conflicts", default: "all")
+- `autoFix`: Automatisches Fix bei eindeutigen Problemen (bool, default: false)
+- `maxItems`: Max. Anzahl Items (int, default: 20, min: 5, max: 100)
+
+**Actions:**
+- `fixMetadata` (Permission: `library:write`)
+- `downloadArtwork` (Permission: `library:write`)
+- `resolveConflict` (Permission: `library:write`)
+
+---
+
+### 🧪 Acceptance Criteria (Epic v2.0)
+
+#### Funktionale Anforderungen
+
+- [ ] **Grid Canvas:** Nutzer kann leere View erstellen und Widgets aus Palette per Drag & Drop platzieren
+- [ ] **Widget-Konfiguration:** Nutzer kann Widget-Settings via Modal ändern (validiert gegen settingsSchema)
+- [ ] **Save/Load:** Views werden in DB persistiert und können geladen/gespeichert werden
+- [ ] **User-Isolation:** Jeder User sieht nur eigene Views (außer Admin oder Shared Views)
+- [ ] **5 Core Widgets:** Active Jobs, Spotify Search, Missing Tracks, Quick Actions, Metadata Manager funktionieren vollständig
+- [ ] **Widget Actions:** Alle Actions (Pause, Cancel, Download, etc.) funktionieren und sind serverseitig validiert
+- [ ] **Composite Widgets:** Parent-Widgets können Children enthalten und Selection-Sync funktioniert
+- [ ] **Permissions:** Destruktive Aktionen werden serverseitig gegen User-Permissions geprüft
+- [ ] **WebSocket Events:** Real-Time Updates für Jobs und Library-Changes funktionieren
+
+#### Non-Funktionale Anforderungen
+
+- [ ] **Performance:** View-Load < 1s, Widget-Render < 500ms
+- [ ] **Accessibility:** WCAG AA konform (Keyboard-Navigation, Screen-Reader)
+- [ ] **Responsive:** Mobile-First, funktioniert auf Tablet und Desktop
+- [ ] **Security:** Alle API-Endpoints sind authentifiziert und autorisiert
+- [ ] **No Telemetry:** Keine Performance-Metriken, keine User-Tracking-Daten in DB/Logs
+- [ ] **Documentation:** Vollständige API-Docs, Widget-Schema-Examples, Quickstart-Guide
+
+#### Definition of Done
+
+- [ ] Alle 5 Core Widgets implementiert und getestet
+- [ ] Grid Canvas mit Drag & Drop funktioniert
+- [ ] Save/Load Persistence funktioniert
+- [ ] Permissions & Security vollständig implementiert
+- [ ] Unit-Tests für alle API-Endpoints (Coverage > 80%)
+- [ ] Integration-Tests für Widget-Actions
+- [ ] E2E-Tests für kritische User-Flows (Create View, Add Widget, Save)
+- [ ] API-Dokumentation vollständig (OpenAPI/Swagger)
+- [ ] User-Documentation (README, Quickstart, Widget-Schema-Examples)
+- [ ] Code-Review abgeschlossen
+- [ ] Security-Review abgeschlossen (keine High/Critical Vulnerabilities)
+
+---
+
+### 📋 Issue-Templates & Tasks
+
+#### Epic: v2.0 Dynamic Views & Widget-Palette
+
+**Epic Description:**
+Implementiere Dynamic Views & Widget-Palette als neue Hauptfunktionalität für SoulSpot v2.0. Ermöglicht Nutzern, personalisierte Dashboards mit konfigurierbaren Widgets zu erstellen.
+
+**Labels:** `epic`, `v2.0`, `feature`, `ui`, `api`
+
+---
+
+#### Phase A: Design & Architektur (1-2 days)
+
+**Issue: `v2.0/design: Wireframes & Widget-Registry Schema`**
+
+**Beschreibung:**
+Erstelle Wireframes für Grid-Canvas UI und definiere Widget-Registry Schema.
+
+**Acceptance Criteria:**
+- [ ] Wireframes für Grid Canvas (Empty State, mit Widgets, Edit Mode)
+- [ ] Widget-Palette Design (Kategorie-Filter, Search)
+- [ ] Settings-Modal Design (verschiedene Field-Types)
+- [ ] Widget-Registry Schema (JSON Schema Definition)
+- [ ] Saved View Schema (JSON Structure)
+- [ ] Design-Review mit Maintainer
+
+**Definition of Done:**
+- [ ] Wireframes in `docs/design/v2.0-wireframes.md` dokumentiert
+- [ ] JSON-Schemas in `docs/api/v2.0-schemas.json` dokumentiert
+- [ ] Design-System-Tokens erweitert (neue Farben, Spacing für Grid)
+
+**Estimated Effort:** 1-2 days  
+**Priority:** CRITICAL (Blocker für Phase B)
+
+---
+
+#### Phase B: Infrastructure MVP (5 days)
+
+**Issue: `v2.0/infra: Grid Canvas + Widget-Palette (MVP infra)`**
+
+**Beschreibung:**
+Implementiere Grid-Canvas UI mit Drag & Drop und Widget-Palette Backend/Frontend.
+
+**Scope:**
+- Grid-Canvas Component (HTML/CSS/JS)
+- Drag & Drop Integration (mit Collision Detection)
+- Widget-Palette Component (Backend: GET /api/widgets)
+- Save/Load Views (Backend: GET/POST /api/views, Frontend-Integration)
+
+**API Contracts:**
+- `GET /api/widgets` – Widget-Registry laden
+- `GET /api/views` – User-Views laden
+- `GET /api/views/:id` – View laden
+- `POST /api/views` – View speichern/aktualisieren
+- `DELETE /api/views/:id` – View löschen
+
+**Acceptance Criteria:**
+- [ ] Grid-Canvas rendert korrekt (12-column Grid)
+- [ ] Widgets können per Drag & Drop platziert werden
+- [ ] Widget-Palette zeigt alle verfügbaren Widgets
+- [ ] View kann gespeichert und geladen werden (DB-Persistierung)
+- [ ] Grid-Layout ist responsive (Tablet/Desktop)
+
+**Definition of Done:**
+- [ ] Backend-Endpoints implementiert und getestet (Unit + Integration)
+- [ ] Frontend-Components implementiert
+- [ ] DB-Schema für Views erstellt (Alembic Migration)
+- [ ] API-Dokumentation aktualisiert (OpenAPI)
+- [ ] E2E-Test: Create View, Add Widget, Save, Load
+
+**Estimated Effort:** 5 days  
+**Priority:** CRITICAL (Blocker für Phase C)  
+**Dependencies:** Phase A complete
+
+---
+
+#### Phase C: Widgets MVP (7-10 days)
+
+**Issue: `v2.0/widgets: Implement Active Jobs widget (MVP)`**
+
+**Beschreibung:**
+Implementiere Active Jobs Widget mit Real-Time Job-Monitoring.
+
+**Scope:**
+- Frontend Widget Component (HTML/CSS/JS)
+- Settings Modal Integration
+- WebSocket Integration für Real-Time Updates
+- Widget Actions (Pause, Cancel, Retry)
+
+**API Contracts:**
+- WebSocket `/ws/events` – Subscribe to `job.*` events
+- `POST /api/widgets/:instanceId/action` – Execute actions
+
+**Acceptance Criteria:**
+- [ ] Widget zeigt laufende Jobs in Echtzeit
+- [ ] Progress Bars aktualisieren sich automatisch
+- [ ] Actions (Pause, Cancel, Retry) funktionieren
+- [ ] Settings-Modal kann konfigurieren (showCompleted, maxItems, refreshInterval)
+- [ ] Widget ist responsive
+
+**Definition of Done:**
+- [ ] Widget Component vollständig implementiert
+- [ ] WebSocket-Integration funktioniert
+- [ ] Actions serverseitig validiert (Permission: `jobs:write`)
+- [ ] Unit-Tests für Widget-Actions
+- [ ] E2E-Test für Widget-Usage
+
+**Estimated Effort:** 2 days  
+**Priority:** HIGH  
+**Dependencies:** Phase B complete
+
+---
+
+**Issue: `v2.0/widgets: Implement Spotify Search widget (MVP)`**
+
+**Beschreibung:**
+Implementiere Spotify Search Widget mit Download-Integration.
+
+**Scope:**
+- Frontend Widget Component
+- Spotify API Integration (Search Proxy)
+- Download Button Integration (Queue)
+
+**API Contracts:**
+- `GET /api/spotify/search` – Proxy zu Spotify API
+- `POST /api/widgets/:instanceId/action` – Execute `download` action
+
+**Acceptance Criteria:**
+- [ ] Suchfeld funktioniert (Tracks, Albums, Artists)
+- [ ] Ergebnisliste mit Preview (Cover, Name, Artist)
+- [ ] Download Button fügt zu Queue hinzu
+- [ ] Settings-Modal funktioniert (searchMode, autoDownload, maxResults)
+
+**Definition of Done:**
+- [ ] Widget Component implementiert
+- [ ] Spotify Search Proxy implementiert (Backend)
+- [ ] Download-Integration funktioniert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 2 days  
+**Priority:** HIGH  
+**Dependencies:** Phase B complete
+
+---
+
+**Issue: `v2.0/widgets: Missing Tracks widget (MVP)`**
+
+**Beschreibung:**
+Implementiere Missing Tracks Widget für Playlist-Sync.
+
+**Scope:**
+- Frontend Widget Component
+- Backend: Missing Tracks Detection (Spotify Playlist vs. Local Library)
+- Bulk-Download Integration
+- CSV/JSON Export
+
+**API Contracts:**
+- `GET /api/playlists/:id/missing` – Get missing tracks
+- `POST /api/widgets/:instanceId/action` – Execute `downloadMissing` action
+
+**Acceptance Criteria:**
+- [ ] Dropdown zur Playlist-Auswahl
+- [ ] Liste fehlender Tracks
+- [ ] Bulk-Download funktioniert
+- [ ] CSV/JSON Export funktioniert
+
+**Definition of Done:**
+- [ ] Widget Component implementiert
+- [ ] Backend Missing-Tracks-Detection implementiert
+- [ ] Bulk-Download funktioniert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 2-3 days  
+**Priority:** HIGH  
+**Dependencies:** Phase B complete
+
+---
+
+**Issue: `v2.0/widgets: Quick Actions widget (MVP)`**
+
+**Beschreibung:**
+Implementiere Quick Actions Widget für Schnellzugriff.
+
+**Scope:**
+- Frontend Widget Component
+- Konfigurierbares Button-Grid
+- Integration mit bestehenden Use-Cases (Scan Library, Import Playlist, etc.)
+
+**Acceptance Criteria:**
+- [ ] Button-Grid rendert korrekt
+- [ ] Actions sind konfigurierbar (Settings-Modal)
+- [ ] Actions funktionieren (Scan, Import, Fix, etc.)
+
+**Definition of Done:**
+- [ ] Widget Component implementiert
+- [ ] Actions serverseitig validiert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 1-2 days  
+**Priority:** MEDIUM  
+**Dependencies:** Phase B complete
+
+---
+
+**Issue: `v2.0/widgets: Metadata Manager widget (MVP)`**
+
+**Beschreibung:**
+Implementiere Metadata Manager Widget für Metadaten-Probleme.
+
+**Scope:**
+- Frontend Widget Component
+- Backend: Metadaten-Problem-Detection (Missing Artwork, Tags, Conflicts)
+- Quick-Fix Actions
+- Batch-Operations
+
+**API Contracts:**
+- `GET /api/library/metadata-issues` – Get metadata issues
+- `POST /api/widgets/:instanceId/action` – Execute fix actions
+
+**Acceptance Criteria:**
+- [ ] Liste von Metadaten-Problemen
+- [ ] Filter-Scope funktioniert (all, untagged, conflicts)
+- [ ] Quick-Fix Actions funktionieren
+- [ ] Batch-Operations funktionieren
+
+**Definition of Done:**
+- [ ] Widget Component implementiert
+- [ ] Backend Metadata-Issues-Detection implementiert
+- [ ] Fix-Actions serverseitig validiert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 2-3 days  
+**Priority:** HIGH  
+**Dependencies:** Phase B complete
+
+---
+
+#### Phase D: Composite Widgets & Permissions (4-6 days)
+
+**Issue: `v2.0/composite: Composite Widgets support (widget-in-widget)`**
+
+**Beschreibung:**
+Implementiere Composite-Widget-Support (Parent mit children).
+
+**Scope:**
+- Backend: Widget-Registry erweitern (supportChildren flag)
+- Frontend: Composite Widget Component
+- Selection-Sync zwischen Children
+- Event-Propagation
+
+**Acceptance Criteria:**
+- [ ] Composite Widget kann Children enthalten
+- [ ] Children können im Parent-Kontext laufen
+- [ ] Selection-Sync funktioniert (Child A auswählen → Child B reagiert)
+- [ ] Event-Propagation funktioniert
+
+**Definition of Done:**
+- [ ] Backend Composite-Support implementiert
+- [ ] Frontend Composite Component implementiert
+- [ ] Example Composite Widget (Library Overview) implementiert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 3-4 days  
+**Priority:** MEDIUM  
+**Dependencies:** Phase C complete
+
+---
+
+**Issue: `v2.0/security: Permissions & role checks for widget actions`**
+
+**Beschreibung:**
+Implementiere vollständige Permission-Prüfung für alle Widget-Actions.
+
+**Scope:**
+- Role Model definieren (admin, curator, user, readOnly)
+- Permission-System erweitern
+- Serverseitige Validierung für alle Actions
+- Frontend: Permission-basiertes UI (Buttons disablen)
+
+**Acceptance Criteria:**
+- [ ] Role Model dokumentiert und implementiert
+- [ ] Alle Widget-Actions prüfen Permissions
+- [ ] Frontend zeigt nur erlaubte Actions
+- [ ] Audit-Log für Permission-Denied-Fälle
+
+**Definition of Done:**
+- [ ] Permission-System vollständig implementiert
+- [ ] Unit-Tests für Permission-Checks (alle Actions)
+- [ ] Security-Review abgeschlossen
+- [ ] Dokumentation aktualisiert
+
+**Estimated Effort:** 2-3 days  
+**Priority:** CRITICAL  
+**Dependencies:** Phase C complete
+
+---
+
+#### Phase E: Polish & Docs (2-3 days)
+
+**Issue: `v2.0/docs: Roadmap docs, widget JSON schemas & examples`**
+
+**Beschreibung:**
+Vollständige Dokumentation für v2.0 Dynamic Views & Widget-Palette.
+
+**Scope:**
+- API-Dokumentation (OpenAPI/Swagger)
+- Widget-Schema-Examples (für alle 5 Core Widgets)
+- Quickstart-Guide für User
+- Developer-Guide für neue Widgets
+
+**Deliverables:**
+- [ ] `docs/api/v2.0-api.md` – Vollständige API-Dokumentation
+- [ ] `docs/widgets/` – Widget-Schema-Examples
+- [ ] `docs/quickstart-v2.0.md` – User-Quickstart
+- [ ] `docs/dev/widget-development.md` – Developer-Guide
+
+**Definition of Done:**
+- [ ] Alle Dokumente erstellt und reviewed
+- [ ] Examples für alle Widgets
+- [ ] Quickstart getestet (User kann View erstellen)
+
+**Estimated Effort:** 2-3 days  
+**Priority:** HIGH  
+**Dependencies:** Phase D complete
+
+---
+
+#### Phase F: Optional Extensions (3-5 days)
+
+**Issue: `v2.0/sharing: View sharing & templates (optional)`**
+
+**Beschreibung:**
+Implementiere optionale View-Sharing-Features.
+
+**Scope:**
+- Read-only Share Links (zeitlich begrenzt, revocable)
+- View-Templates (Admin erstellt, User klonen)
+- Export/Import Views (JSON)
+
+**Acceptance Criteria:**
+- [ ] Share Links funktionieren (Read-only, zeitlich begrenzt)
+- [ ] Templates können erstellt und geklont werden
+- [ ] Export/Import funktioniert (JSON)
+
+**Definition of Done:**
+- [ ] Share-Link-System implementiert
+- [ ] Template-System implementiert
+- [ ] Export/Import funktioniert
+- [ ] Unit-Tests + E2E-Test
+
+**Estimated Effort:** 3-5 days  
+**Priority:** LOW  
+**Dependencies:** Phase E complete
+
+---
+
+### 🗓️ Zeitplan & Sprint-Aufteilung
+
+**Gesamtaufwand:** ~20-26 Dev Days (ohne Phase F: ~19 days)
+
+#### Sprint 1: Foundation (1 Woche / 5 Arbeitstage)
+- **Phase A:** Design & Architektur (1-2 days)
+- **Phase B:** Infrastructure MVP (5 days, parallel zu Phase A Ende)
+- **Deliverables:** Grid Canvas, Widget Palette, Save/Load Views
+
+#### Sprint 2: Core Widgets (2 Wochen / 10 Arbeitstage)
+- **Phase C:** Widgets MVP (7-10 days)
+  - Active Jobs Widget (2 days)
+  - Spotify Search Widget (2 days)
+  - Missing Tracks Widget (2-3 days)
+  - Quick Actions Widget (1-2 days)
+  - Metadata Manager Widget (2-3 days)
+- **Deliverables:** 5 funktionsfähige Widgets
+
+#### Sprint 3: Advanced Features (1 Woche / 5 Arbeitstage)
+- **Phase D:** Composite Widgets & Permissions (4-6 days)
+  - Composite Widget Support (3-4 days)
+  - Permission-System (2-3 days, parallel)
+- **Deliverables:** Composite Widgets, Security vollständig
+
+#### Sprint 4: Polish & Docs (1 Woche / 5 Arbeitstage)
+- **Phase E:** Polish & Docs (2-3 days)
+- **Buffer:** Testing, Bug-Fixing, Performance-Optimization (2-3 days)
+- **Deliverables:** Vollständige Dokumentation, Release-Ready
+
+#### Optional Sprint 5: Extensions (1 Woche / 5 Arbeitstage)
+- **Phase F:** Sharing & Templates (3-5 days)
+- **Deliverables:** Share Links, Templates, Export/Import
+
+**Total Timeline:** 4-5 Sprints (je 1 Woche) = ~4-5 Wochen
+
+---
+
+### 📈 Release-Integration
+
+**Update für Release-Plan (aus Haupt-Roadmap):**
+
+| Version | Target Date | Focus | Key Features |
+|---------|-------------|-------|--------------|
+| **2.0.0** | Q3-Q4 2025 | **Dynamic Views & Widget-Palette** | **Grid Canvas, 5 Core Widgets, Composite Widgets, Permissions** |
+| 2.1.0 | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
+| 2.5.0 | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) + Phase F (Sharing) |
+
+**Breaking Changes (2.0.0):**
+- Neue API-Endpoints: `/api/views`, `/api/widgets`
+- WebSocket-API: `/ws/events`
+- Neue Permissions: `views:read`, `views:write`, `jobs:write`, etc.
+- Frontend: Neue Navigation (Views-Tab)
+
+**Migration Path:**
+- Bestehende Features bleiben unverändert
+- Nutzer können optional zu Dynamic Views migrieren
+- Legacy-UI bleibt verfügbar (Fallback)
+
+---
+
+### 🎯 Success Metrics (Definition)
+
+**User-Focused Metrics (keine Telemetrie!):**
+- [ ] User kann in < 5 Minuten erste View erstellen und speichern
+- [ ] User kann in < 2 Minuten Widget hinzufügen und konfigurieren
+- [ ] 80%+ der Power-User nutzen mindestens 3 Widgets
+- [ ] Feedback: "Dynamic Views verbessern Workflow signifikant"
+
+**Technical Metrics:**
+- [ ] View-Load < 1s (p95)
+- [ ] Widget-Render < 500ms (p95)
+- [ ] API-Response < 200ms (p95)
+- [ ] Zero Critical Security Vulnerabilities
+- [ ] Test Coverage > 80%
+
+**Documentation Quality:**
+- [ ] User kann ohne Hilfe erste View erstellen (Quickstart)
+- [ ] Developer kann ohne Hilfe neues Widget erstellen (Dev-Guide)
+- [ ] Alle API-Endpoints dokumentiert (OpenAPI)
+
+---
+
+### ❓ Offene Fragen & Entscheidungen
+
+#### 1. Widget-Interaktion: Direkt vs. Event-basiert?
+
+**Frage:** Sollen Widgets direkt miteinander kommunizieren oder Event-basiert?
+
+**Optionen:**
+- **Direkt:** Widget A ruft Widget B direkt auf (einfacher, aber tight coupling)
+- **Event-basiert:** Widget A sendet Event, Widget B subscribed (loosely coupled, komplexer)
+
+**Empfehlung:** Event-basiert (Widget-Instance → Parent → Children), vereinfacht Testing und Erweiterbarkeit
+
+---
+
+#### 2. Grid-Layout: Feste Slots vs. Frei positionierbar?
+
+**Frage:** Fixed Grid (12-column) oder Free Positioning?
+
+**Optionen:**
+- **Fixed Grid:** Widgets snappen zu Grid (einfacher, konsistenter)
+- **Free Positioning:** Pixel-genaue Platzierung (flexibler, komplexer)
+
+**Empfehlung:** Fixed Grid (12-column, ähnlich Bootstrap) für MVP, Free Positioning optional für v2.1
+
+---
+
+#### 3. WebSocket vs. Polling für Real-Time Updates?
+
+**Frage:** WebSocket oder HTTP-Polling?
+
+**Optionen:**
+- **WebSocket:** Bidirektional, Real-Time (effizienter, aber Overhead)
+- **HTTP-Polling:** Unidirektional, Intervall-basiert (einfacher, aber ineffizient)
+
+**Empfehlung:** WebSocket für MVP (bessere UX, Standard für Real-Time)
+
+---
+
+#### 4. Composite Widget Depth: 1 Level oder nested?
+
+**Frage:** Nur 1 Level (Parent → Children) oder beliebig nested (Parent → Child → GrandChild)?
+
+**Optionen:**
+- **1 Level:** Einfacher, vermeidet Komplexität
+- **Nested:** Flexibler, aber deutlich komplexer
+
+**Empfehlung:** 1 Level für MVP, Nested optional für v2.1
+
+---
+
+### 🚀 Nächste Schritte
+
+1. **Maintainer Review:** Review dieser Roadmap-Planung
+2. **Issue Creation:** Issues in GitHub erstellen (mit Labels `v2.0`, `epic`, etc.)
+3. **Sprint Planning:** Sprint 1 planen (Phase A + B)
+4. **Design Phase:** Wireframes und Schemas erstellen
+5. **Implementation:** Sprint 1 starten
+
+---
+
+**🎉 v2.0 Dynamic Views & Widget-Palette ist eine strategische Feature-Erweiterung, die SoulSpot Bridge zu einer hochgradig personalisierbaren Plattform macht. Mit klarer Planung, Phasen-Aufteilung und Security-First-Approach ist das Feature in 4-5 Sprints umsetzbar.**
+
+---
+
 ## 🔄 Continuous Improvements
 
 ### Technical Debt
@@ -854,6 +2011,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | **Phase 7: Feature Enhancements** | 🟡 MEDIUM | MEDIUM | HIGH | LOW | Q2 2025 |
 | **Phase 8: Advanced Features** | 🟢 LOW | HIGH | MEDIUM | MEDIUM | Q2-Q3 2025 |
 | **Phase 9: Enterprise Features** | ⚪ VERY LOW | VERY HIGH | LOW | HIGH | Q3-Q4 2025 |
+| **v2.0: Dynamic Views & Widget-Palette** | 🔵 STRATEGIC | HIGH | VERY HIGH | MEDIUM | Q3-Q4 2025 |
 
 ### Complexity Legend
 
@@ -878,6 +2036,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Ratings Sync | SoulSpot Ideas | 📋 Phase 7-8 |
 | Advanced Search/Matching | SoulSpot Ideas | 📋 Phase 7 |
 | Library Self-Healing | SoulSpot Ideas | 📋 Phase 7 |
+| **Dynamic Views & Widget-Palette** | **v2.0 Roadmap Plan** | **📋 Q3-Q4 2025** |
 | Plugin System | SoulSpot Ideas | 📋 Phase 9 |
 | Multi-Library Support | SoulSpot Ideas | 📋 Phase 9 |
 | AI/ML Features | SoulSpot Ideas | 🔬 Phase 9+ (Research) |
@@ -932,8 +2091,9 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | **1.0.0** | Q2 2025 | Stable Release | Phase 6-7 Complete |
 | **1.1.0** | Q2 2025 | Feature Enhancements | Automation, Ratings, Advanced Search |
 | **1.5.0** | Q3 2025 | Advanced Features | Phase 8 Complete |
-| **2.0.0** | Q3-Q4 2025 | Major Release | Mobile, AI Features (if viable) |
-| **2.5.0** | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) |
+| **2.0.0** | Q3-Q4 2025 | Major Release | **Dynamic Views & Widget-Palette (Grid Canvas, 5 Core Widgets, Composite Widgets, Permissions)** |
+| **2.1.0** | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
+| **2.5.0** | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) + Sharing/Templates |
 
 ### Versioning Strategy
 
@@ -1156,6 +2316,60 @@ Diese Features sollten mit Users/Contributors diskutiert werden:
 ---
 
 ## 📝 Changelog
+
+### 2025-11-11: v2.0 Dynamic Views & Widget-Palette Planning
+
+**Durchgeführt von:** Copilot Agent
+
+**Änderungen:**
+
+- ✅ **v2.0 Section hinzugefügt** – Vollständige Planung für Dynamic Views & Widget-Palette
+- ✅ **Vision & Ziele** definiert – User-centric Design, Modularität, Security-First
+- ✅ **MVP-Scope & Abgrenzungen** klar formuliert – Was ist drin, was nicht
+- ✅ **Meilensteine & Phasen** strukturiert (A-F) mit Aufwand und Dependencies
+- ✅ **Architektur & Technische Konzepte** dokumentiert:
+  - Widget-Registry Schema mit Settings-Schema und Actions
+  - Saved View Persistierung (JSON-Model)
+  - Composite Widgets (Parent mit children, selection-sync)
+- ✅ **API-Contracts & Endpoints** vollständig spezifiziert:
+  - GET /api/widgets – Widget-Registry
+  - GET/POST/DELETE /api/views – Views Management
+  - POST /api/widgets/:instanceId/action – Widget Actions
+  - WebSocket /ws/events – Real-Time Events
+- ✅ **5 Core Widgets** detailliert beschrieben (Active Jobs, Spotify Search, Missing Tracks, Quick Actions, Metadata Manager)
+- ✅ **Security & Governance** vollständig definiert:
+  - Role Model (admin, curator, user, readOnly)
+  - Permission-System (views:*, jobs:*, library:*, settings:*)
+  - Serverseitige Validierung für alle Actions
+  - Explizit: Keine Telemetrie/Performance-Metriken
+- ✅ **Acceptance Criteria & Definition of Done** formuliert
+- ✅ **Issue-Templates & Tasks** erstellt für alle Phasen (A-F)
+- ✅ **Zeitplan & Sprint-Aufteilung** definiert (~20-26 Dev Days, 4-5 Sprints)
+- ✅ **Release-Integration** in Release-Plan aktualisiert (v2.0.0 Q3-Q4 2025)
+- ✅ **Success Metrics** definiert (User-Focused, Technical, Documentation)
+- ✅ **Offene Fragen** dokumentiert (Widget-Interaktion, Grid-Layout, WebSocket, Composite Depth)
+
+**Impact:**
+
+- v2.0 Dynamic Views & Widget-Palette vollständig geplant und spezifiziert
+- Klare Roadmap für Implementation (keine Implementierung jetzt – nur Planung)
+- Issue-Templates ready für GitHub
+- API-Contracts definiert und dokumentiert
+- Security-Anforderungen klar formuliert
+- Sprint-Planung und Zeitschätzung verfügbar
+- Ready für Maintainer-Review und Implementation-Start
+
+**Struktur:**
+
+- Neuer Top-Level-Section zwischen Phase 9 und Continuous Improvements
+- Inhaltsverzeichnis aktualisiert
+- Prioritäts-Matrix erweitert (🔵 STRATEGIC)
+- Feature-Kategorien aktualisiert
+- Release-Schedule angepasst (v2.0.0 Focus auf Dynamic Views)
+
+**Zeilen:** ~1204 (vorher) → ~2364 (nachher) – +~1160 Zeilen für v2.0 Planning
+
+---
 
 ### 2025-11-10: Major Roadmap Redesign
 
