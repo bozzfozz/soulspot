@@ -2,7 +2,7 @@
 
 > **Letzte Aktualisierung:** 2025-11-11  
 > **Version:** 0.1.0 (Alpha)  
-> **Status:** Phase 6 In Progress - Production Readiness + v2.0 Planning Complete
+> **Status:** Phase 6 In Progress - Production Readiness + v2.0 Planning Complete + v3.0 Roadmap Defined
 
 ---
 
@@ -12,12 +12,13 @@
 2. [Aktueller Status](#-aktueller-status)
 3. [Kernkonzepte & Architektur](#-kernkonzepte--architektur)
 4. [Entwicklungsphasen](#-entwicklungsphasen)
-5. [v2.0 — Dynamic Views & Widget-Palette](#-v20--dynamic-views--widget-palette-geplant)
-6. [Feature-Kategorien](#-feature-kategorien)
-7. [Prioritäts-Matrix](#-prioritäts-matrix)
-8. [Release-Plan](#-release-plan)
-9. [Contributing](#-contributing)
-10. [Offene Fragen](#-offene-fragen)
+5. [v3.0 — Production Hardening & Enterprise Deployment](#-version-30--production-hardening--enterprise-deployment-geplant)
+6. [v2.0 — Dynamic Views & Widget-Palette](#-v20--dynamic-views--widget-palette-geplant)
+7. [Feature-Kategorien](#-feature-kategorien)
+8. [Prioritäts-Matrix](#-prioritäts-matrix)
+9. [Release-Plan](#-release-plan)
+10. [Contributing](#-contributing)
+11. [Offene Fragen](#-offene-fragen)
 
 ---
 
@@ -353,19 +354,19 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | PUID/PGID Support | ✅ Done | LOW |
 | UMASK Configuration | ✅ Done | LOW |
 | Docker Documentation | ✅ Done | LOW |
-| Production Profile (PostgreSQL, Redis, nginx) | 📋 Planned | HIGH |
-| Kubernetes Manifests | 📋 Planned | VERY HIGH |
+| Production Profile (PostgreSQL, Redis, nginx) | 🔮 v3.0 | HIGH |
+| Kubernetes Manifests | 🔮 v3.0 | VERY HIGH |
 
 #### 6.4 Security Hardening 🔒
 
 | Task | Status | Complexity |
 |------|--------|-----------|
-| OWASP Top 10 Compliance Check | 📋 Planned | MEDIUM |
-| Input Validation Hardening | 📋 Planned | MEDIUM |
-| Secrets Management (Environment-based) | 📋 Planned | MEDIUM |
-| Rate Limiting for Auth Endpoints | 📋 Planned | LOW |
-| Brute Force Protection | 📋 Planned | MEDIUM |
-| Session Timeout Configuration | 📋 Planned | LOW |
+| OWASP Top 10 Compliance Check | 🔮 v3.0 | MEDIUM |
+| Input Validation Hardening | 🔮 v3.0 | MEDIUM |
+| Secrets Management (Environment-based) | 🔮 v3.0 | MEDIUM |
+| Rate Limiting for Auth Endpoints | 🔮 v3.0 | LOW |
+| Brute Force Protection | 🔮 v3.0 | MEDIUM |
+| Session Timeout Configuration | 🔮 v3.0 | LOW |
 
 #### 6.5 Performance Optimization ⚡
 
@@ -374,7 +375,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Database Query Optimization | 📋 Planned | MEDIUM |
 | Missing Index Analysis | 📋 Planned | LOW |
 | Connection Pool Tuning | 📋 Planned | MEDIUM |
-| Redis Integration (Distributed Cache) | 📋 Planned | HIGH |
+| Redis Integration (Distributed Cache) | 🔮 v3.0 | HIGH |
 | Response Compression | 📋 Planned | LOW |
 | Pagination for Large Results | 📋 Planned | LOW |
 | Query Batching | 📋 Planned | MEDIUM |
@@ -387,8 +388,8 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Docker Setup Guide | ✅ Done | LOW |
 | Troubleshooting Guide | ✅ Done | LOW |
 | Operations Runbook | 📋 Planned | MEDIUM |
-| Backup & Recovery Procedures | 📋 Planned | MEDIUM |
-| Rollback Procedures | 📋 Planned | LOW |
+| Backup & Recovery Procedures | 🔮 v3.0 | MEDIUM |
+| Rollback Procedures | 🔮 v3.0 | LOW |
 | API Documentation Enhancements | 📋 Planned | LOW |
 
 #### Acceptance Criteria
@@ -793,6 +794,283 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - PWA support | MEDIUM | LOW |
 | - Offline-first architecture | HIGH | LOW |
 | - Real-time collaboration | VERY HIGH | LOW |
+
+---
+
+## 🔒 Version 3.0 — Production Hardening & Enterprise Deployment (Geplant)
+
+**Status:** 🔮 Planned for Version 3.0  
+**Zeitrahmen:** 2026+ (nach Phase 9 und v2.x)  
+**Priorität:** 🔴 HIGH (Next Major Production Release)  
+**Gesamtaufwand:** ~15-20 Dev Days
+
+### 🎯 Vision & Ziele
+
+**Version 3.0 Production Hardening & Enterprise Deployment** transformiert SoulSpot Bridge von einer funktionalen Anwendung zu einer hochverfügbaren, produktionsreifen Enterprise-Lösung mit vollständiger Sicherheitshärtung, skalierbarer Infrastruktur und operationeller Exzellenz.
+
+**Kernprinzipien:**
+- 🔒 **Security-First:** OWASP Top 10 Compliance, Input Validation, Secrets Management
+- 🚀 **Production-Ready:** PostgreSQL, Redis, nginx für skalierbaren Betrieb
+- ☸️ **Cloud-Native:** Kubernetes-Support für Container-Orchestrierung
+- 🔄 **Operational Excellence:** Backup/Recovery, Rollback-Procedures
+- 📊 **Enterprise-Grade:** Rate Limiting, Brute Force Protection, Session Management
+
+### 📋 Feature-Übersicht
+
+#### 3.1 Production Profile (PostgreSQL, Redis, nginx) 🐘
+
+**Beschreibung:** Vollständiges Production-Deployment-Profil mit skalierbarer Infrastruktur.
+
+**Komponenten:**
+
+| Komponente | Zweck | Complexity |
+|------------|-------|-----------|
+| **PostgreSQL Integration** | Production-ready relational database | HIGH |
+| - Database connection pooling | Efficient connection management | MEDIUM |
+| - Migration strategy from SQLite | Data migration tools | HIGH |
+| - Backup & restore procedures | Data protection | MEDIUM |
+| **Redis Integration** | Distributed caching & session storage | HIGH |
+| - Session management | Centralized session store | MEDIUM |
+| - Cache layer | Performance optimization | MEDIUM |
+| - Queue management | Distributed job processing | HIGH |
+| **nginx Reverse Proxy** | Production web server | MEDIUM |
+| - SSL/TLS termination | Secure connections | MEDIUM |
+| - Load balancing | Traffic distribution | HIGH |
+| - Rate limiting | DDoS protection | MEDIUM |
+| - Static file serving | Performance optimization | LOW |
+
+**Status:** 🔮 v3.0  
+**Aufwand:** 5-7 days
+
+---
+
+#### 3.2 Kubernetes Manifests ☸️
+
+**Beschreibung:** Container-Orchestrierung für Cloud-Native Deployments.
+
+**Features:**
+
+| Feature | Beschreibung | Complexity |
+|---------|--------------|-----------|
+| **Deployment Manifests** | | |
+| - Application deployment | StatefulSet/Deployment configs | HIGH |
+| - Database StatefulSet | Persistent PostgreSQL | HIGH |
+| - Redis StatefulSet | Distributed cache | MEDIUM |
+| - ConfigMaps & Secrets | Configuration management | MEDIUM |
+| **Service & Networking** | | |
+| - Service definitions | Internal/external services | MEDIUM |
+| - Ingress configuration | External access & routing | MEDIUM |
+| - Network policies | Security & isolation | MEDIUM |
+| **Persistence & Storage** | | |
+| - PersistentVolumeClaims | Storage provisioning | MEDIUM |
+| - StorageClass definitions | Storage tiers | LOW |
+| - Backup volumes | Data protection | MEDIUM |
+| **Scaling & Monitoring** | | |
+| - HorizontalPodAutoscaler | Auto-scaling rules | HIGH |
+| - Resource limits & requests | Resource management | MEDIUM |
+| - Liveness & readiness probes | Health monitoring | LOW |
+| **Helm Charts** | | |
+| - Chart structure | Package management | HIGH |
+| - Values files | Environment configs | MEDIUM |
+| - Release management | Version control | MEDIUM |
+
+**Status:** 🔮 v3.0  
+**Aufwand:** 6-8 days
+
+---
+
+#### 3.3 Security Hardening 🔒
+
+**Beschreibung:** Umfassende Sicherheitshärtung nach OWASP Best Practices.
+
+**Features:**
+
+| Feature | Beschreibung | Complexity |
+|---------|--------------|-----------|
+| **OWASP Top 10 Compliance Check** | | |
+| - Injection prevention | SQL/Command/Code injection | MEDIUM |
+| - Broken authentication | Auth mechanism review | MEDIUM |
+| - Sensitive data exposure | Data protection audit | MEDIUM |
+| - XML external entities (XXE) | XML parsing security | LOW |
+| - Broken access control | Authorization review | MEDIUM |
+| - Security misconfiguration | Config hardening | LOW |
+| - Cross-site scripting (XSS) | Input sanitization | MEDIUM |
+| - Insecure deserialization | Data validation | MEDIUM |
+| - Using components with known vulnerabilities | Dependency scanning | LOW |
+| - Insufficient logging & monitoring | Audit logging | LOW |
+| **Input Validation Hardening** | | |
+| - Request validation middleware | Schema validation | MEDIUM |
+| - Sanitization layer | XSS/Injection prevention | MEDIUM |
+| - File upload validation | Safe file handling | MEDIUM |
+| - Path traversal protection | Directory access control | LOW |
+| **Secrets Management** | | |
+| - Environment-based secrets | Config externalization | MEDIUM |
+| - Vault integration (optional) | Secure secret storage | HIGH |
+| - Secret rotation | Key management | MEDIUM |
+| - Encrypted storage | Data protection | MEDIUM |
+| **Rate Limiting for Auth Endpoints** | | |
+| - Login rate limiting | Brute force prevention | LOW |
+| - Token refresh limits | Token abuse prevention | LOW |
+| - API key rate limits | Usage control | LOW |
+| **Brute Force Protection** | | |
+| - Account lockout | Failed login limits | MEDIUM |
+| - CAPTCHA integration | Bot prevention | MEDIUM |
+| - IP-based throttling | Distributed attack prevention | MEDIUM |
+| **Session Timeout Configuration** | | |
+| - Idle timeout | Automatic logout | LOW |
+| - Absolute timeout | Max session duration | LOW |
+| - Concurrent session limits | Multi-login control | LOW |
+
+**Status:** 🔮 v3.0  
+**Aufwand:** 4-5 days
+
+---
+
+#### 3.4 Operational Excellence 🔄
+
+**Beschreibung:** Best Practices für Betrieb und Wartung.
+
+**Features:**
+
+| Feature | Beschreibung | Complexity |
+|---------|--------------|-----------|
+| **Backup & Recovery Procedures** | | |
+| - Automated database backups | Scheduled backup jobs | MEDIUM |
+| - File system backups | User data protection | MEDIUM |
+| - Point-in-time recovery | Restore to specific moment | HIGH |
+| - Backup validation | Ensure backup integrity | LOW |
+| - Disaster recovery plan | Full system recovery | MEDIUM |
+| **Rollback Procedures** | | |
+| - Database rollback scripts | Schema version control | LOW |
+| - Application version rollback | Container rollback | LOW |
+| - Configuration rollback | Config version control | LOW |
+| - Automated rollback triggers | Failure detection | MEDIUM |
+
+**Status:** 🔮 v3.0  
+**Aufwand:** 2-3 days
+
+---
+
+### 🧪 Acceptance Criteria (Version 3.0)
+
+#### Funktionale Anforderungen
+
+- [ ] **Production Profile:** PostgreSQL + Redis + nginx vollständig konfiguriert und getestet
+- [ ] **Kubernetes:** Alle Manifests funktionieren in Minikube und produktiven Clustern
+- [ ] **Security:** OWASP Top 10 Compliance erreicht (Security Audit bestanden)
+- [ ] **Rate Limiting:** Auth-Endpoints sind geschützt (max 5 requests/minute)
+- [ ] **Brute Force:** Account-Lockout nach 5 fehlgeschlagenen Versuchen
+- [ ] **Session Management:** Idle/Absolute Timeouts konfigurierbar
+- [ ] **Backup/Recovery:** Automatische Backups funktionieren, Recovery getestet
+- [ ] **Rollback:** Zero-downtime Rollback für App und DB
+
+#### Non-Funktionale Anforderungen
+
+- [ ] **Performance:** PostgreSQL + Redis < 50ms p95 Latency
+- [ ] **Scalability:** Horizontal Scaling auf 3+ Replicas getestet
+- [ ] **Availability:** 99.9% Uptime in Testumgebung über 1 Woche
+- [ ] **Security:** Zero Critical/High Vulnerabilities (Bandit, Safety, OWASP ZAP)
+- [ ] **Documentation:** Vollständige Deployment-Docs, Runbooks, Security-Guidelines
+- [ ] **Compliance:** OWASP Top 10 Compliance nachgewiesen
+
+#### Definition of Done
+
+- [ ] Production Profile vollständig implementiert und dokumentiert
+- [ ] Kubernetes Manifests + Helm Charts erstellt und getestet
+- [ ] OWASP Top 10 Compliance erreicht (Audit-Report)
+- [ ] Input Validation & Secrets Management implementiert
+- [ ] Rate Limiting & Brute Force Protection aktiv
+- [ ] Session Timeout konfigurierbar
+- [ ] Backup/Recovery-Procedures dokumentiert und getestet
+- [ ] Rollback-Procedures dokumentiert und getestet
+- [ ] Unit-Tests für alle Security-Features (Coverage > 90%)
+- [ ] Integration-Tests für Production Profile
+- [ ] E2E-Tests für kritische Security-Flows
+- [ ] Security-Review abgeschlossen (Penetration-Test empfohlen)
+- [ ] Operations-Runbook vollständig
+- [ ] Migration-Guide von v2.x zu v3.0 erstellt
+
+---
+
+### 🗓️ Zeitplan & Sprint-Aufteilung
+
+**Gesamtaufwand:** ~15-20 Dev Days
+
+#### Sprint 1: Infrastructure (1 Woche / 5 Arbeitstage)
+- **Production Profile:** PostgreSQL + Redis + nginx (5-7 days)
+  - PostgreSQL Integration (2 days)
+  - Redis Integration (2 days)
+  - nginx Configuration (1-2 days)
+  - Migration Scripts (1 day)
+- **Deliverables:** Funktionierendes Production Profile
+
+#### Sprint 2: Cloud-Native (1-2 Wochen / 6-8 Arbeitstage)
+- **Kubernetes Manifests:** (6-8 days)
+  - Deployment Manifests (2 days)
+  - Service & Networking (1 day)
+  - Persistence & Storage (1 day)
+  - Scaling & Monitoring (1 day)
+  - Helm Charts (2-3 days)
+- **Deliverables:** Funktionierendes K8s Deployment
+
+#### Sprint 3: Security Hardening (1 Woche / 4-5 Arbeitstage)
+- **Security Features:** (4-5 days)
+  - OWASP Compliance (2 days)
+  - Input Validation & Secrets (1 day)
+  - Rate Limiting & Brute Force (1 day)
+  - Session Management (0.5 day)
+  - Security Testing (0.5 day)
+- **Deliverables:** OWASP-compliant Application
+
+#### Sprint 4: Operations & Polish (1 Woche / 2-3 Arbeitstage)
+- **Operational Excellence:** (2-3 days)
+  - Backup & Recovery (1.5 days)
+  - Rollback Procedures (0.5 day)
+  - Documentation & Runbooks (1 day)
+  - Final Testing & Validation (1 day)
+- **Deliverables:** Production-Ready v3.0
+
+**Total Timeline:** 3-4 Sprints (je 1 Woche) = ~3-4 Wochen
+
+---
+
+### 📈 Release-Integration
+
+**Breaking Changes (3.0.0):**
+- Neue Production Profile Requirements (PostgreSQL, Redis)
+- Geänderte Deployment-Architektur (Kubernetes-native)
+- Erweiterte Security-Anforderungen (OWASP-konform)
+- Neue Environment-Variables für Secrets Management
+
+**Migration Path von 2.x zu 3.0:**
+- SQLite → PostgreSQL Migration-Tool
+- Simple Profile → Production Profile Upgrade-Guide
+- Session-Storage Migration zu Redis
+- Security-Settings Review & Update
+
+---
+
+### 🎯 Success Metrics
+
+**Production Metrics:**
+- [ ] PostgreSQL Uptime > 99.9%
+- [ ] Redis Cache Hit Rate > 80%
+- [ ] nginx Request Latency < 10ms p95
+- [ ] Kubernetes Pod Startup Time < 30s
+- [ ] Auto-Scaling funktioniert (Load-Test bestanden)
+
+**Security Metrics:**
+- [ ] OWASP Top 10 Compliance: 10/10
+- [ ] Zero Critical/High Vulnerabilities
+- [ ] Rate Limiting: 100% Auth-Endpoint-Abdeckung
+- [ ] Brute Force Prevention: 0 erfolgreiche Angriffe im Test
+- [ ] Session Timeout: 100% konfigurierbar
+
+**Operational Metrics:**
+- [ ] Backup Success Rate: 100%
+- [ ] Recovery Time Objective (RTO): < 15 minutes
+- [ ] Recovery Point Objective (RPO): < 5 minutes
+- [ ] Rollback Success Rate: 100%
 
 ---
 
@@ -2008,6 +2286,7 @@ Implementiere optionale View-Sharing-Features.
 | **Phase 8: Advanced Features** | 🟢 LOW | HIGH | MEDIUM | MEDIUM | Q2-Q3 2025 |
 | **Phase 9: Enterprise Features** | ⚪ VERY LOW | VERY HIGH | LOW | HIGH | Q3-Q4 2025 |
 | **v2.0: Dynamic Views & Widget-Palette** | 🔵 STRATEGIC | HIGH | VERY HIGH | MEDIUM | Q3-Q4 2025 |
+| **v3.0: Production Hardening & Enterprise Deployment** | 🔴 CRITICAL | HIGH | VERY HIGH | HIGH | 2026+ |
 
 ### Complexity Legend
 
@@ -2033,6 +2312,7 @@ Implementiere optionale View-Sharing-Features.
 | Advanced Search/Matching | SoulSpot Ideas | 📋 Phase 7 |
 | Library Self-Healing | SoulSpot Ideas | 📋 Phase 7 |
 | **Dynamic Views & Widget-Palette** | **v2.0 Roadmap Plan** | **📋 Q3-Q4 2025** |
+| **Production Hardening & Enterprise Deployment** | **v3.0 Roadmap Plan** | **🔮 2026+** |
 | Plugin System | SoulSpot Ideas | 📋 Phase 9 |
 | Multi-Library Support | SoulSpot Ideas | 📋 Phase 9 |
 | AI/ML Features | SoulSpot Ideas | 🔬 Phase 9+ (Research) |
@@ -2090,6 +2370,7 @@ Implementiere optionale View-Sharing-Features.
 | **2.0.0** | Q3-Q4 2025 | Major Release | **Dynamic Views & Widget-Palette (Grid Canvas, 5 Core Widgets, Composite Widgets, Permissions)** |
 | **2.1.0** | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
 | **2.5.0** | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) + Sharing/Templates |
+| **3.0.0** | 2026+ | Production Hardening | **Production Profile (PostgreSQL, Redis, nginx), Kubernetes, Security Hardening (OWASP, Input Validation, Secrets Management, Rate Limiting, Brute Force Protection, Session Timeout), Redis Integration, Backup & Recovery, Rollback Procedures** |
 
 ### Versioning Strategy
 
