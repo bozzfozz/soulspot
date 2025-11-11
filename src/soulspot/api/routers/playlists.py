@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from soulspot.api.dependencies import (
     get_import_playlist_use_case,
     get_playlist_repository,
+    get_spotify_token_from_session,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistRequest,
@@ -21,16 +22,21 @@ router = APIRouter()
 @router.post("/import")
 async def import_playlist(
     playlist_id: str = Query(..., description="Spotify playlist ID"),
-    access_token: str = Query(..., description="Spotify access token"),
     fetch_all_tracks: bool = Query(True, description="Fetch all tracks in playlist"),
+    access_token: str = Depends(get_spotify_token_from_session),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
 ) -> dict[str, Any]:
-    """Import a Spotify playlist.
+    """Import a Spotify playlist using session-based authentication.
+
+    The access token is automatically retrieved from your session.
+    If your token is expired, it will be automatically refreshed.
+    If you don't have a valid session, you'll receive a 401 error
+    and need to authenticate at /ui/auth first.
 
     Args:
         playlist_id: Spotify playlist ID
-        access_token: Valid Spotify access token
         fetch_all_tracks: Whether to fetch all tracks
+        access_token: Automatically retrieved from session
         use_case: Import playlist use case
 
     Returns:

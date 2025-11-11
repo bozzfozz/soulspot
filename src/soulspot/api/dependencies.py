@@ -1,8 +1,9 @@
 """Dependency injection for API endpoints."""
 
 from collections.abc import AsyncGenerator
+from typing import cast
 
-from fastapi import Depends, Request
+from fastapi import Cookie, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.services.session_store import SessionStore
@@ -54,6 +55,82 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
 def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyClient:
     """Get Spotify client instance."""
     return SpotifyClient(settings.spotify)
+
+
+async def get_spotify_token_from_session(
+    session_id: str | None = Cookie(None),
+    session_store: SessionStore = Depends(get_session_store),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+) -> str:
+    """Get valid Spotify access token from session with automatic refresh.
+
+    This dependency automatically retrieves the Spotify access token from the
+    user's session. If the token is expired, it will automatically refresh it
+    using the refresh token.
+
+    Args:
+        session_id: Session ID from cookie
+        session_store: Session store instance
+        spotify_client: Spotify client for token refresh
+
+    Returns:
+        Valid Spotify access token
+
+    Raises:
+        HTTPException: 401 if no session or token found, or if refresh fails
+    """
+    # Check if session exists
+    if not session_id:
+        raise HTTPException(
+            status_code=401,
+            detail="No session found. Please authenticate with Spotify first.",
+        )
+
+    session = session_store.get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session. Please authenticate with Spotify again.",
+        )
+
+    # Check if we have a token
+    if not session.access_token:
+        raise HTTPException(
+            status_code=401,
+            detail="No Spotify token in session. Please authenticate with Spotify.",
+        )
+
+    # Check if token is expired and refresh if needed
+    if session.is_token_expired():
+        if not session.refresh_token:
+            raise HTTPException(
+                status_code=401,
+                detail="Token expired and no refresh token available. Please re-authenticate with Spotify.",
+            )
+
+        try:
+            # Refresh the token
+            token_data = await spotify_client.refresh_token(session.refresh_token)
+
+            # Update session with new token
+            session.set_tokens(
+                access_token=token_data["access_token"],
+                refresh_token=token_data.get(
+                    "refresh_token", session.refresh_token
+                ),  # Use old refresh token if not provided
+                expires_in=token_data.get("expires_in", 3600),
+            )
+
+            return cast(str, token_data["access_token"])
+        except Exception as e:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Failed to refresh token. Please re-authenticate with Spotify: {str(e)}",
+            ) from e
+
+    # At this point we know session.access_token is not None (checked above)
+    assert session.access_token is not None  # nosec B101
+    return session.access_token
 
 
 def get_slskd_client(settings: Settings = Depends(get_settings)) -> SlskdClient:
