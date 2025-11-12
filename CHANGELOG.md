@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Enhanced Download Queue System (2025-11-12)
+
+#### Download Management Features
+- **Priority-based Queue**: 
+  - Added priority field to Job dataclass, Download entity, and database model
+  - Implemented asyncio.PriorityQueue for efficient priority-based job processing
+  - Higher priority jobs (higher number) are processed first with FIFO for same priority
+  - Database migration for priority column with efficient indexing
+
+- **Exponential Backoff Retry Logic**: 
+  - Retry delays of 1s, 2s, and 4s for failed downloads
+  - Configurable max retries (default 3)
+  - Automatic re-queuing with proper logging
+  - Improved reliability for transient failures
+
+- **Configurable Concurrent Download Limits**: 
+  - New DownloadSettings configuration section
+  - max_concurrent_downloads setting (default 3, range 1-10)
+  - Dynamic configuration via set_max_concurrent_jobs() API
+  - Proper worker loop concurrency control
+
+- **Pause/Resume Functionality**: 
+  - Global pause/resume methods for download queue
+  - Workers respect pause state and wait appropriately
+  - Jobs safely returned to queue when paused
+  - API endpoints: POST /api/v1/downloads/pause, POST /api/v1/downloads/resume
+
+- **Batch Operations**: 
+  - POST /api/v1/downloads/batch endpoint for multiple tracks
+  - Consistent priority across batch downloads
+  - Input validation for track lists
+
+- **Queue Status API**: 
+  - GET /api/v1/downloads/status endpoint
+  - Returns paused state, max concurrent settings, active and queued counts
+
+#### Testing & Quality
+- 27 comprehensive job queue tests with 83.66% coverage (exceeds 80% requirement)
+- All 320 existing tests continue to pass
+- New test coverage for priority ordering, retry logic, pause/resume, and concurrency limits
+- Security scan passed with zero vulnerabilities
+- Full type checking and linting compliance
+
 ### Added - CI/CD & Automated Releases (2025-11-10)
 
 #### CI/CD Pipeline
