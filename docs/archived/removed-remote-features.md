@@ -667,3 +667,96 @@ Die gesamte Version 3.0 Sektion wurde entfernt, da sie ausschließlich Features 
 
 ---
 
+
+## Zusammenfassung der Änderungen
+
+**Datum:** 2025-11-12  
+**Änderungen:** Umfassende Entfernung aller Remote/Multi-User/Internet-Access Features aus der Dokumentation
+
+### Betroffene Bereiche
+
+1. **Multi-User Support** - Komplett entfernt
+   - RBAC (Role-Based Access Control)
+   - Admin vs. Read-only Rollen
+   - Mehrbenutzer-Authentifizierung
+   - User-spezifische Features
+
+2. **Produktions-Infrastruktur** - Komplett entfernt
+   - PostgreSQL Integration & Migration
+   - Redis Integration (Caching, Sessions, Queue)
+   - nginx Reverse Proxy
+   - Kubernetes Deployment & Orchestrierung
+
+3. **Media-Server-Integrationen** - Teilweise entfernt
+   - ❌ Jellyfin (Rescan, Ratings Sync)
+   - ❌ Navidrome (Rescan, Path Mapping)
+   - ❌ Subsonic API Integration
+   - ✅ Plex bleibt (optional, lokal nutzbar)
+
+4. **External/Remote Access** - Komplett entfernt
+   - Ingress Configuration
+   - Internet Accessibility
+   - Public Access
+   - Remote Access Features
+
+### Verbleibende Architektur
+
+**SoulSpot ist jetzt ausschließlich für lokalen Betrieb ausgelegt:**
+- SQLite als Datenbank (kein PostgreSQL)
+- In-Memory Caching (kein Redis)
+- Kein Reverse Proxy (kein nginx)
+- Kein Container-Orchestrierung (kein Kubernetes)
+- Single-User (kein Multi-User Support)
+- Lokales Netzwerk only (kein Internet-Zugriff)
+- Docker Compose für einfaches lokales Deployment
+
+### Bearbeitete Dateien (Hauptdokumente)
+
+1. ✅ docs/docker-setup.md
+2. ✅ docs/backend-development-roadmap.md
+3. ✅ docs/archive/development-roadmap-archived.md (inkl. 315-Zeilen v3.0 Sektion)
+4. ✅ docs/roadmap-crosscutting.md
+5. ✅ docs/development-roadmap.md
+6. ✅ docs/deployment-guide.md
+7. ✅ docs/roadmap
+8. ✅ docs/history/PHASE1_SUMMARY.md
+9. ✅ docs/history/PHASE2_SUMMARY.md
+10. ✅ docs/history/PHASE4_SUMMARY.md
+11. ✅ docs/history/PR10_SUMMARY.md
+12. ✅ docs/features/soulspot-ideas.md
+13. ✅ docs/analysis/initial-assessment.md
+
+### Verbleibende Referenzen
+
+Einige technische Dokumente enthalten noch Referenzen in historischen/technischen Kontexten:
+- `docs/architecture.md` - Architektur-Beschreibungen (historisch/technisch)
+- `docs/setup-guide.md` - Setup-Anleitung mit optionalen Sektionen
+- `docs/operations-runbook.md` - Operations-Runbook mit optionalen Szenarien
+- `docs/troubleshooting-guide.md` - Troubleshooting für verschiedene Setups
+- `docs/spotify-auth-improvement.md` - Feature-Planung (historisch)
+- `docs/PHASE6_COMPLETION_SUMMARY.md` - Phase-Zusammenfassung (historisch)
+- `docs/achievements-verification.md` - Achievements-Liste (historisch)
+- `docs/issues/*.md` - Issue-Templates (Archiv)
+
+Diese Dokumente bleiben teilweise unverändert, da sie:
+1. Historische Dokumentation darstellen
+2. Technische Optionen für Fortgeschrittene beschreiben
+3. Issue-Templates/Planungsdokumente sind
+
+### Empfehlungen für Benutzer
+
+**Für neue Benutzer:**
+- Lesen Sie `docs/setup-guide.md` Abschnitt "Simple Profile" (SQLite)
+- Ignorieren Sie alle "Standard Profile" oder "PostgreSQL"-Sektionen
+- Verwenden Sie Docker Compose für lokales Deployment
+- SoulSpot ist ausschließlich für Ihr lokales Netzwerk gedacht
+
+**Für Entwickler:**
+- Die Architektur ist auf Single-User optimiert
+- SQLite ist die einzige unterstützte Datenbank
+- Keine externen Services erforderlich (außer slskd)
+- Deployment erfolgt ausschließlich lokal
+
+---
+
+**Ende der Dokumentation**
