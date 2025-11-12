@@ -88,13 +88,11 @@ Cross-cutting concerns affect both backend and frontend, ensuring:
 
 ### Planned Technologies (v3.0)
 
+> **Hinweis:** PostgreSQL, Redis, nginx und Kubernetes wurden entfernt (lokal-only Betrieb mit SQLite).
+
 | Component | Technology | Status |
 |-----------|-----------|--------|
-| **Database (prod)** | PostgreSQL | 📋 v3.0 |
-| **Cache (prod)** | Redis | 📋 v3.0 |
-| **Reverse Proxy** | nginx | 📋 v3.0 |
-| **Orchestration** | Kubernetes | 📋 v3.0 |
-| **Secrets** | Vault (optional) | 📋 v3.0 |
+| **Secrets** | Vault (optional) | 🔮 Future |
 | **Monitoring** | Prometheus/Grafana | 🔮 Future |
 | **Tracing** | OpenTelemetry | 🔮 Future |
 
@@ -116,19 +114,19 @@ Cross-cutting concerns affect both backend and frontend, ensuring:
 | **Session Management** | Improve session handling | P1 | Medium | 📋 Planned |
 | **Token Encryption** | Encrypt tokens at rest | P1 | Small | 📋 Planned |
 | **Token Revocation** | Proper logout with API call | P1 | Small | 📋 Planned |
-| **Multi-User Prep** | Groundwork for multi-user | P2 | Medium | 📋 Planned |
 | **Session Monitoring** | Activity-based timeout | P2 | Small | 📋 Planned |
 
 **Acceptance Criteria:**
 - [ ] Sessions survive application restart (persistent storage)
-- [ ] Tokens encrypted in database/Redis
+- [ ] Tokens encrypted in database
 - [ ] Logout revokes Spotify tokens via API
-- [ ] User model supports multiple users
 - [ ] Session timeout configurable
 - [ ] Comprehensive audit logging
 
 **Dependencies:**
-- Redis or database-backed sessions (optional for Phase 7, required for v3.0)
+- Database-backed sessions (optional for Phase 7)
+
+> **Hinweis:** Multi-User Prep und Redis-Integration entfernt (Single-User lokal-only).
 
 **Risks:**
 - Session storage migration complexity
@@ -252,86 +250,9 @@ Cross-cutting concerns affect both backend and frontend, ensuring:
 
 ### Priority: CRITICAL (v3.0)
 
-#### 7. Production Infrastructure (v3.0)
+> **Hinweis:** Die Sektionen "Production Infrastructure (PostgreSQL, Redis, nginx)", "Kubernetes Deployment" und "OWASP Security Compliance" (v3.0) wurden entfernt, da SoulSpot als lokaler Single-User Dienst im privaten Netzwerk betrieben wird. Falls diese Enterprise-Features später benötigt werden, siehe Archiv `docs/archived/removed-remote-features.md`.
 
-**Epic:** Production Hardening  
-**Owner:** Platform Team  
-**Priority:** P0 (v3.0)  
-**Effort:** Very Large (4-6 weeks)
-
-| Component | Description | Priority | Effort | Status |
-|-----------|-------------|----------|--------|--------|
-| **PostgreSQL Integration** | Production-ready database | P0 | Large | 📋 v3.0 |
-| **Redis Integration** | Distributed cache & sessions | P0 | Large | 📋 v3.0 |
-| **nginx Setup** | Reverse proxy, SSL, load balancing | P1 | Medium | 📋 v3.0 |
-| **Database Migration** | SQLite → PostgreSQL tooling | P0 | Large | 📋 v3.0 |
-| **Connection Pooling** | Optimized pool configuration | P1 | Medium | 📋 v3.0 |
-
-**Acceptance Criteria:**
-- [ ] PostgreSQL fully integrated and tested
-- [ ] Redis for caching and sessions
-- [ ] nginx configured with SSL/TLS
-- [ ] Migration tool for existing data
-- [ ] Connection pooling optimized
-- [ ] Performance benchmarks meet targets
-
----
-
-#### 8. Kubernetes Deployment (v3.0)
-
-**Epic:** Cloud-Native Orchestration  
-**Owner:** Platform Team  
-**Priority:** P1 (v3.0)  
-**Effort:** Very Large (4-5 weeks)
-
-| Component | Description | Priority | Effort | Status |
-|-----------|-------------|----------|--------|--------|
-| **Deployment Manifests** | K8s deployment configs | P1 | Large | 📋 v3.0 |
-| **Service Definitions** | Internal/external services | P1 | Medium | 📋 v3.0 |
-| **Ingress Configuration** | External access routing | P1 | Medium | 📋 v3.0 |
-| **StatefulSets** | Database persistence | P1 | Large | 📋 v3.0 |
-| **Helm Charts** | Package management | P1 | Large | 📋 v3.0 |
-| **HPA** | Horizontal Pod Autoscaling | P1 | Medium | 📋 v3.0 |
-
-**Acceptance Criteria:**
-- [ ] Complete K8s manifests
-- [ ] Helm chart for easy deployment
-- [ ] Auto-scaling configured and tested
-- [ ] Persistent volumes for data
-- [ ] Ingress with SSL termination
-- [ ] Tested in minikube and production cluster
-
----
-
-#### 9. OWASP Security Compliance (v3.0)
-
-**Epic:** Enterprise Security  
-**Owner:** Security Team  
-**Priority:** P0 (v3.0)  
-**Effort:** Large (3-4 weeks)
-
-| Item | Description | Priority | Effort | Status |
-|------|-------------|----------|--------|--------|
-| **Injection Prevention** | SQL/Command/Code injection | P0 | Medium | 📋 v3.0 |
-| **Broken Authentication** | Auth mechanism review | P0 | Medium | 📋 v3.0 |
-| **Sensitive Data Exposure** | Data protection audit | P0 | Medium | 📋 v3.0 |
-| **Broken Access Control** | Authorization review | P0 | Medium | 📋 v3.0 |
-| **Security Misconfiguration** | Config hardening | P0 | Low | 📋 v3.0 |
-| **XSS Prevention** | Input sanitization | P0 | Medium | 📋 v3.0 |
-| **Insecure Deserialization** | Data validation | P0 | Medium | 📋 v3.0 |
-| **Brute Force Protection** | Account lockout, CAPTCHA | P0 | Medium | 📋 v3.0 |
-| **Session Management** | Idle/absolute timeouts | P0 | Small | 📋 v3.0 |
-
-**Acceptance Criteria:**
-- [ ] OWASP Top 10 compliance achieved
-- [ ] Security audit passed
-- [ ] Penetration testing completed
-- [ ] All critical/high vulnerabilities fixed
-- [ ] Security documentation complete
-
----
-
-#### 10. Operational Excellence (v3.0)
+#### 7. Operational Excellence (v3.0)
 
 **Epic:** Production Operations  
 **Owner:** DevOps Team  
@@ -356,9 +277,8 @@ Cross-cutting concerns affect both backend and frontend, ensuring:
 |------------|--------|------------|------------|
 | **GitHub Actions** | CI/CD pipeline | CRITICAL | Self-hosted runners as fallback |
 | **Docker Hub** | Container images | HIGH | Alternative registries (GHCR) |
-| **PostgreSQL** | Production database | CRITICAL | Regular backups, replication |
-| **Redis** | Cache & sessions | HIGH | Persistent storage, fallback to DB |
-| **Kubernetes** | Orchestration | HIGH | Docker Compose fallback |
+
+> **Hinweis:** PostgreSQL, Redis und Kubernetes entfernt (lokal-only mit SQLite und Docker Compose).
 
 ### Technical Risks
 
@@ -381,12 +301,11 @@ Phase 7 (Enhancements)
     ├─→ CI/CD Improvements
     └─→ Observability
     ↓
-v3.0 (Production Hardening)
-    ├─→ PostgreSQL + Redis (Infrastructure)
-    ├─→ Kubernetes (Orchestration)
-    ├─→ OWASP Compliance (Security)
-    └─→ Operational Excellence
+v3.0 (Operational Excellence)
+    └─→ Backup & Recovery, Incident Response
 ```
+
+> **Hinweis:** v3.0 Infrastructure (PostgreSQL, Redis, nginx, Kubernetes) entfernt.
 
 ---
 
@@ -411,10 +330,9 @@ v3.0 (Production Hardening)
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Redis Documentation](https://redis.io/documentation)
+
+> **Hinweis:** Links zu Kubernetes, PostgreSQL und Redis Dokumentation entfernt.
 
 ---
 

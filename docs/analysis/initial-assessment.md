@@ -45,7 +45,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 - Layered Architecture (Presentation, Application, Domain, Infrastructure)
 - Architektur-Prinzipien (DDD, SOLID, 12-Factor-App, Dependency Inversion)
 - Detaillierte Ordnerstruktur für Backend und UI
-- Technologie-Stack (Python 3.12+, FastAPI, SQLite/PostgreSQL, etc.)
+- Technologie-Stack (Python 3.12+, FastAPI, SQLite, etc.)
 - UI/UX Architektur (Component-Driven, Design-System-First, HTMX)
 - Erweiterbarkeits-Richtlinien und Anti-Patterns
 
@@ -184,7 +184,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 2. **Externe Abhängigkeiten**
    - slskd Installation und Konfiguration
    - Spotify Developer Account Setup
-   - Datenbank-Setup (SQLite für Development, PostgreSQL für Production)
+   - Datenbank-Setup (SQLite für lokale Entwicklung)
 
 3. **Secrets und Konfiguration**
    - Keine .env.example Datei

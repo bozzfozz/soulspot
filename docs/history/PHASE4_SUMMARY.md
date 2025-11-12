@@ -470,7 +470,6 @@ src/soulspot/application/
 - No external dependencies
 - Fast operation
 - Easy to understand
-**Note:** Can be replaced with Redis/Celery for production
 
 ### 3. In-Memory Caching
 **Rationale:** Simple implementation with configurable TTL.  
@@ -478,7 +477,6 @@ src/soulspot/application/
 - No external dependencies
 - Fast access
 - Type-safe
-**Note:** Can be replaced with Redis/Memcached for production
 
 ### 4. Separate Cache per API
 **Rationale:** Different APIs have different caching requirements.  
@@ -680,17 +678,14 @@ Ready for Phase 5 implementation:
 - **Metadata Enrichment:** No conflict resolution for mismatched data
 
 ### Worker System
-- **In-Memory Queue:** Lost on application restart
-  - Consider Redis for persistence
-- **No Distributed Processing:** Single instance only
-  - Consider Celery for distributed workers
+- **In-Memory Queue:** Lost on application restart (acceptable for local deployment)
+- **No Distributed Processing:** Single instance only (local-only)
 - **No Priority Queue:** FIFO only
 
 ### Caching
-- **In-Memory Storage:** Limited by RAM
-  - Consider Redis for larger caches
-- **No Persistence:** Lost on restart
-- **No Distributed Cache:** Single instance only
+- **In-Memory Storage:** Limited by RAM (sufficient for local use)
+- **No Persistence:** Lost on restart (acceptable for caching)
+- **No Distributed Cache:** Single instance only (local-only)
 
 ---
 
