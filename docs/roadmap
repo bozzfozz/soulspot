@@ -50,12 +50,7 @@ Wichtig: Keine sensiblen Daten in Repos/Docs.
 - Storage: lokales Dateisystem für Artworks/Downloads.  
 - Einschränkungen: kein horizontales Scaling; geringere Durchsatz-Garantien.
 
-### standard
-- DB: PostgreSQL (Async-client).  
-- Broker: Redis (oder RabbitMQ) + Dramatiq/Celery.  
-- Storage: S3 / MinIO oder lokales FS mit Backup.  
-- Worker: dedizierte Prozesse für Download, Metadata, Artwork.  
-- DLQ: persistent im Broker/DB, Metriken & Alerts aktiv.
+> **Hinweis:** "standard" Profil mit PostgreSQL, Redis entfernt. SoulSpot ist lokal-only mit SQLite.
 
 Hinweis: Profile sind Implementierungs-Konfigurationen – Features selbst bleiben fachlich gleich.
 

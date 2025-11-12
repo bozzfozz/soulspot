@@ -208,16 +208,16 @@ SECRET_KEY=<generate-random-key>
 ```
 
 ### Empfehlungen
-1. **Redis-Integration:** In-Memory SessionStore durch Redis ersetzen
-2. **Monitoring:** Session-Metriken überwachen
-3. **Cleanup-Job:** Periodische Bereinigung abgelaufener Sessions
-4. **HTTPS:** Obligatorisch in Production
+1. **Monitoring:** Session-Metriken überwachen
+2. **Cleanup-Job:** Periodische Bereinigung abgelaufener Sessions
+3. **HTTPS:** Obligatorisch in Production
+
+> **Hinweis:** Redis-Integration entfernt (lokal-only mit In-Memory SessionStore).
 
 ## 📝 Verbleibende optionale Verbesserungen
 
 ### Niedrige Priorität
 - [ ] Integrationstests mit echten API-Credentials
-- [ ] Redis-Backend für SessionStore
 - [ ] Poetry-Firewall-Problem (Alternative: pip works)
 - [ ] Erweiterte Fehlerbehandlung
 

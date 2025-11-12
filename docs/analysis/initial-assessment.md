@@ -45,7 +45,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 - Layered Architecture (Presentation, Application, Domain, Infrastructure)
 - Architektur-Prinzipien (DDD, SOLID, 12-Factor-App, Dependency Inversion)
 - Detaillierte Ordnerstruktur für Backend und UI
-- Technologie-Stack (Python 3.12+, FastAPI, SQLite/PostgreSQL, etc.)
+- Technologie-Stack (Python 3.12+, FastAPI, SQLite, etc.)
 - UI/UX Architektur (Component-Driven, Design-System-First, HTMX)
 - Erweiterbarkeits-Richtlinien und Anti-Patterns
 
@@ -184,7 +184,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 2. **Externe Abhängigkeiten**
    - slskd Installation und Konfiguration
    - Spotify Developer Account Setup
-   - Datenbank-Setup (SQLite für Development, PostgreSQL für Production)
+   - Datenbank-Setup (SQLite für lokale Entwicklung)
 
 3. **Secrets und Konfiguration**
    - Keine .env.example Datei
@@ -294,11 +294,11 @@ soulspot-bridge/
    - Rate-Limiting beachten
 
 #### Datenbanken
-- **simple Profile:** SQLite (mit WAL-Mode)
-- **standard Profile:** PostgreSQL mit async Driver
+- **simple Profile:** SQLite (mit WAL-Mode) für lokalen Betrieb
 
-#### Message Broker (standard Profile)
-- Redis oder RabbitMQ für Celery/Dramatiq
+> **Hinweis:** PostgreSQL "standard Profile" entfernt (lokal-only).
+
+> **Hinweis:** Message Broker (Redis/RabbitMQ) nicht erforderlich für lokalen Betrieb.
 
 ### 2.4 Test-Infrastruktur
 
@@ -339,11 +339,12 @@ tests/
    - **Mitigation:** Docker Compose Setup mit slskd, gute Dokumentation
    - **Frage:** Gibt es einen Mock/Stub für slskd für Entwicklung ohne echten Service?
 
-3. **Keine Profil-Migrations-Strategie**
-   - **Risiko:** Wechsel von simple zu standard Profile unklar
-   - **Impact:** Lock-in auf simple Profile oder komplizierte Migration
-   - **Mitigation:** Migrations-Strategie dokumentieren, Test-Cases definieren
-   - **Frage:** Wie migriert man Daten von SQLite zu PostgreSQL?
+3. **Profil-Strategie**
+   - **Risiko:** Nur SQLite-basiertes simple Profile verfügbar
+   - **Impact:** Optimiert für lokalen Single-User Betrieb
+   - **Mitigation:** Gut für geplanten lokalen Einsatz
+
+> **Hinweis:** PostgreSQL Migration entfernt (lokal-only SQLite).
 
 #### 🟡 Mittel
 
@@ -573,18 +574,18 @@ class Track:
 **Aufwand:** M (4-5 Tage)
 
 #### Beschreibung
-Lokale Entwicklungsumgebung mit Docker Compose für alle benötigten Services (slskd, PostgreSQL, Redis) aufsetzen.
+Lokale Entwicklungsumgebung mit Docker Compose für benötigte Services (slskd) aufsetzen.
 
 #### Akzeptanzkriterien
 - [ ] `docker-compose.yml` für Development erstellt
 - [ ] slskd Service konfiguriert und erreichbar
-- [ ] PostgreSQL Service für standard Profile
-- [ ] Redis Service für Queue (standard Profile)
 - [ ] `.env.example` mit allen notwendigen Environment Variables
 - [ ] Health-Checks für alle Services implementiert
 - [ ] Dokumentation in README.md für `docker-compose up`
 - [ ] Makefile oder Justfile mit häufigen Commands
 - [ ] Volume-Mapping für lokale Entwicklung
+
+> **Hinweis:** PostgreSQL und Redis Services entfernt (lokal-only SQLite).
 
 #### Technische Details
 ```yaml
@@ -599,15 +600,9 @@ services:
     environment:
       - SLSKD_USERNAME=${SLSKD_USERNAME}
       - SLSKD_PASSWORD=${SLSKD_PASSWORD}
-  
-  postgres:
-    image: postgres:16
-    environment:
-      - POSTGRES_DB=soulspot
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    # ...
 ```
+
+> **Hinweis:** PostgreSQL Service entfernt (lokal-only SQLite).
 
 #### Abhängigkeiten
 - Task 1 (Projekt-Setup) muss abgeschlossen sein
@@ -688,7 +683,7 @@ SQLAlchemy 2.0 Async ORM Setup mit Alembic für Migrations, Repository-Pattern f
 - [ ] Repository-Interfaces in `domain/ports/` definiert
 - [ ] Repository-Implementierungen in `infrastructure/persistence/repositories/`
 - [ ] Unit-of-Work Pattern implementiert
-- [ ] Profil-basierte DB-Konfiguration (SQLite vs. PostgreSQL)
+- [ ] DB-Konfiguration für SQLite (lokaler Betrieb)
 - [ ] Connection-Pooling für Async Sessions
 - [ ] Integration-Tests für Repositories
 
@@ -716,7 +711,8 @@ class TrackModel(Base):
 
 #### Risiken
 - SQLAlchemy 2.0 Async noch relativ neu, weniger Community-Support
-- Migration-Strategie zwischen SQLite und PostgreSQL komplex
+
+> **Hinweis:** PostgreSQL Migration entfernt (nur SQLite für lokalen Betrieb).
 
 ---
 
@@ -1113,14 +1109,15 @@ Ordnerstruktur und Domain-Entities gemäß DDD-Prinzipien implementieren.
 **Labels:** P0, docker, infrastructure
 
 **Beschreibung:**
-Docker Compose Setup mit allen benötigten Services (slskd, PostgreSQL, Redis).
+Docker Compose Setup mit benötigten Services (slskd) für lokale Entwicklung.
 
 **Akzeptanzkriterien:**
 - [ ] docker-compose.yml erstellt
 - [ ] slskd Service konfiguriert
-- [ ] PostgreSQL und Redis Services
 - [ ] .env.example mit allen Variables
 - [ ] README.md mit Docker-Anleitung
+
+> **Hinweis:** PostgreSQL und Redis Services entfernt (lokal-only).
 
 **Aufwand:** M (4-5 Tage)
 
@@ -1184,7 +1181,8 @@ Da noch keine Code-Implementierung vorhanden ist, beschreibt dieser Abschnitt da
 **Optional:**
 - Poetry (empfohlen für Dependency-Management)
 - Visual Studio Code oder PyCharm
-- PostgreSQL Client (psql) für DB-Debugging
+
+> **Hinweis:** PostgreSQL Client entfernt (SQLite-basiert).
 
 ### 6.2 Geplante Setup-Schritte (nach Implementierung)
 
@@ -1211,10 +1209,10 @@ cp .env.example .env
 
 **Minimal-Konfiguration (.env.example):**
 ```bash
-# Profile (simple oder standard)
+# Profile (simple for local deployment)
 PROFILE=simple
 
-# Database (SQLite für simple, PostgreSQL für standard)
+# Database (SQLite for local deployment)
 DATABASE_URL=sqlite:///./soulspot.db
 
 # slskd Configuration
@@ -1233,12 +1231,11 @@ SECRET_KEY=generate_a_random_secret_key_here
 
 #### Schritt 4: Services mit Docker starten
 ```bash
-# Alle Services starten (slskd, PostgreSQL, Redis)
-docker-compose up -d
-
-# Nur slskd für simple Profile
+# Service starten (slskd)
 docker-compose up -d slskd
 ```
+
+> **Hinweis:** PostgreSQL und Redis entfernt (lokal-only).
 
 #### Schritt 5: Database Migrations ausführen
 ```bash
@@ -1342,15 +1339,14 @@ docker-compose restart slskd
 
 **Problem:** Database-Connection-Error
 ```bash
-# PostgreSQL-Status prüfen
-docker-compose ps postgres
-
-# Verbindung testen
-psql postgresql://user:password@localhost:5432/soulspot
-
 # SQLite-Datei prüfen
 ls -lh soulspot.db
+
+# SQLite Datei-Integrität testen
+sqlite3 soulspot.db "PRAGMA integrity_check;"
 ```
+
+> **Hinweis:** PostgreSQL Debugging entfernt (nur SQLite).
 
 **Problem:** Import-Errors in Python
 ```bash

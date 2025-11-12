@@ -427,15 +427,7 @@ docker-compose up -d
 
 ## Advanced Configuration
 
-### Using External PostgreSQL
-
-To use PostgreSQL instead of SQLite, update your `.env`:
-
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/soulspot
-```
-
-And add a PostgreSQL service to your `docker-compose.yml`.
+> **Hinweis:** Funktionen/Instruktionen zu PostgreSQL, Redis, nginx und externen Datenbankdiensten wurden entfernt, da SoulSpot als lokaler Dienst im privaten Netzwerk mit SQLite betrieben wird und nicht über das Internet erreichbar sein soll.
 
 ### Custom Port Mapping
 

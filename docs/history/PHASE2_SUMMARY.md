@@ -20,7 +20,7 @@ Implemented Pydantic-based configuration system with comprehensive profile suppo
 - `tests/unit/config/test_settings.py` (155 lines)
 
 **Features:**
-- **Profile Support:** Simple (SQLite) and Standard (PostgreSQL + Redis) profiles
+- **Profile Support:** Simple (SQLite) profile for local deployment
 - **Nested Configuration:** Modular settings for Database, API, Storage, Slskd, Spotify, MusicBrainz
 - **Environment Variables:** Full support with nested delimiter (`__`)
 - **Validation:** Production secret key validation, port range validation
@@ -160,8 +160,7 @@ alembic history        # ✅ Shows history
 - **Dependency Inversion:** Depend on abstractions
 
 ### Profile Support ✅
-- `simple`: SQLite, no external services
-- `standard`: PostgreSQL + Redis (ready for Phase 3+)
+- `simple`: SQLite, no external services (local-only deployment)
 
 ---
 
@@ -345,9 +344,8 @@ mypy src/
 - **Recommendation:** Replace with `datetime.now(timezone.utc)` in Phase 3
 
 ### SQLite Limitations
-- Limited to simple profile only
 - Expression-based indexes not reflected
-- **Mitigation:** Use PostgreSQL for production (standard profile)
+- Optimized for local-only single-user deployment
 
 ---
 

@@ -23,8 +23,10 @@ Inhalt
   - Soulseek: slskd-API (Search, Download, Status, Auth), Anzeige Quelle/Username/Speed/File-Infos
   - Externe Metadaten & Artwork: MusicBrainz, Discogs, Last.fm, CoverArtArchive, Fanart.tv
   - Lyrics: LRClib, Musixmatch, Genius
-  - Media-Server: Plex / Jellyfin / Navidrome (Rescan, Mapping)
+  - Media-Server: Plex (Rescan, Mapping)
   - Sonstiges: Last.fm Scrobbling, Telegram/Discord-Bot, Smart-Home/Webhooks
+
+> **Hinweis:** Jellyfin und Navidrome Integration entfernt (lokal-only Betrieb).
 
 - Suche & Matching
   - Kombinierte Suche (Spotify + Soulseek) mit klarer Quellenkennzeichnung
@@ -61,8 +63,10 @@ Inhalt
   - Metadata-Cache (SQLite), Hash-/Fingerprint-Keying
 
 - Bewertungen / Nutzersignale & Ratings
-  - Ratings-Sync (Plex/Jellyfin/Navidrome ↔ Datei/DB), Mapping & Konfliktregeln
+  - Ratings-Sync (Plex ↔ Datei/DB), Mapping & Konfliktregeln
   - Nutzersignale (Playcount, Skips, Likes) für Auto-Playlists und Priorisierung
+
+> **Hinweis:** Jellyfin/Navidrome Ratings-Sync entfernt.
 
 - Library-Management & Self-Healing
   - Duplikaterkennung (hash + fingerprint), „Smart-Unify"
@@ -78,15 +82,18 @@ Inhalt
   - Extras: Browser-Extension „Add to SoulSpot", System-Tray, Minimal/Terminal-View
 
 - Playlists & Cross-Provider-Sync
-  - Playlist-Sync zwischen Spotify, Plex, Navidrome, Jellyfin (A→B oder bidirektional)
+  - Playlist-Sync zwischen Spotify und Plex
   - Playlist-Versionierung / Snapshots / Rollback
   - Export/Import & Playlist-Rebuilder mit Matching
+
+> **Hinweis:** Jellyfin/Navidrome Playlist-Sync entfernt.
 
 - Konfiguration, Sicherheit & Legal
   - YAML/JSON-Konfiguration, Trennung Pfade/Secrets/Policies
   - Opt-in Legal-Hinweis vor automatischen Downloads, Legal Mode
   - Auth: OAuth / API-Key, IP-Restriktion optional, Audit-Logs
-  - Multi-User / Rechteverwaltung (Admin vs Read-only)
+
+> **Hinweis:** Multi-User / Rechteverwaltung entfernt (Single-User lokal-only).
 
 - API, Erweiterbarkeit & Automation
   - REST API + WebSocket für live updates
@@ -158,7 +165,9 @@ Mittelfristig (Phase 2)
 - Missing-song-discovery, batch-downloads, ratings-sync connector (Plex), Discogs/Last.fm enrichers, batch-fixer UI
 
 Langfristig (Phase 3)
-- AcoustID, KI-Features, plugin-architecture, multi-user support, production infra
+- AcoustID, KI-Features, plugin-architecture
+
+> **Hinweis:** Multi-User support und Production Infra entfernt (lokal-only).
 
 ---
 

@@ -135,18 +135,18 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 **Timeline:** 2026+  
 **Priority:** 🔴 CRITICAL
 
-**Vision:** Transform SoulSpot Bridge into an enterprise-grade, highly available system with comprehensive security and operational excellence.
+**Vision:** Transform SoulSpot Bridge into a reliable, feature-rich system with comprehensive security and operational excellence for local deployment.
 
 **Key Features:**
-- Production infrastructure (PostgreSQL, Redis, nginx)
-- Kubernetes orchestration
+- Local SQLite infrastructure
 - OWASP Top 10 compliance
 - Input validation & secrets management
 - Rate limiting & brute force protection
 - Backup & recovery procedures
-- Blue-green deployments
 
-**Roadmap:** See [Cross-Cutting Roadmap – v3.0 Section](roadmap-crosscutting.md#7-production-infrastructure-v30)
+> **Hinweis:** PostgreSQL, Redis, nginx, Kubernetes entfernt (lokal-only).
+
+**Roadmap:** See [Cross-Cutting Roadmap – v3.0 Section](roadmap-crosscutting.md#7-operational-excellence-v30)
 
 ---
 
@@ -161,8 +161,9 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 | **1.5.0** | Q3 2025 | Advanced Features | Phase 8 Complete |
 | **2.0.0** | Q3-Q4 2025 | Major Release | Dynamic Views & Widget-Palette |
 | **2.1.0** | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
-| **2.5.0** | Q4 2025+ | Enterprise Features | Multi-user, Plugins, Sharing |
-| **3.0.0** | 2026+ | Production Hardening | PostgreSQL, Redis, K8s, OWASP Compliance |
+| **2.5.0** | Q4 2025+ | Enterprise Features | Plugins, Sharing |
+
+> **Hinweis:** Version 3.0.0 mit PostgreSQL, Redis, K8s, Multi-User entfernt.
 
 ---
 

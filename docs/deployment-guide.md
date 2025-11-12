@@ -66,7 +66,8 @@ Each environment has its own Docker Compose configuration and environment variab
 3. **Environment Configuration**:
    - Create `.env` files for each environment
    - Configure volume paths for data persistence
-   - Set up reverse proxy (nginx/traefik) for SSL/TLS
+
+> **Hinweis:** Reverse Proxy (nginx/traefik) entfernt (lokal-only Betrieb).
 
 ---
 
