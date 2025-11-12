@@ -731,6 +731,7 @@ class DownloadRepository(IDownloadRepository):
             id=str(download.id.value),
             track_id=str(download.track_id.value),
             status=download.status.value,
+            priority=download.priority,
             target_path=str(download.target_path) if download.target_path else None,
             source_url=download.source_url,
             progress_percent=download.progress_percent,
@@ -753,6 +754,7 @@ class DownloadRepository(IDownloadRepository):
 
         model.track_id = str(download.track_id.value)
         model.status = download.status.value
+        model.priority = download.priority
         model.target_path = str(download.target_path) if download.target_path else None
         model.source_url = download.source_url
         model.progress_percent = download.progress_percent
@@ -789,6 +791,7 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
+            priority=model.priority,
             target_path=FilePath.from_string(model.target_path)
             if model.target_path
             else None,
@@ -824,6 +827,7 @@ class DownloadRepository(IDownloadRepository):
             id=DownloadId.from_string(model.id),
             track_id=TrackId.from_string(model.track_id),
             status=status,
+            priority=model.priority,
             target_path=FilePath.from_string(model.target_path)
             if model.target_path
             else None,
@@ -856,6 +860,7 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
+                priority=model.priority,
                 target_path=FilePath.from_string(model.target_path)
                 if model.target_path
                 else None,
@@ -895,6 +900,7 @@ class DownloadRepository(IDownloadRepository):
                 id=DownloadId.from_string(model.id),
                 track_id=TrackId.from_string(model.track_id),
                 status=DownloadStatus(model.status),
+                priority=model.priority,
                 target_path=FilePath.from_string(model.target_path)
                 if model.target_path
                 else None,

@@ -228,6 +228,29 @@ class ObservabilitySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_")
 
 
+class DownloadSettings(BaseSettings):
+    """Download queue and worker configuration."""
+
+    max_concurrent_downloads: int = Field(
+        default=3,
+        description="Maximum number of concurrent downloads (1-3 recommended)",
+        ge=1,
+        le=10,
+    )
+    default_max_retries: int = Field(
+        default=3,
+        description="Default maximum retry attempts for failed downloads",
+        ge=1,
+        le=10,
+    )
+    enable_priority_queue: bool = Field(
+        default=True,
+        description="Enable priority-based download queue",
+    )
+
+    model_config = SettingsConfigDict(env_prefix="DOWNLOAD_")
+
+
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -288,6 +311,10 @@ class Settings(BaseSettings):
     observability: ObservabilitySettings = Field(
         default_factory=ObservabilitySettings,
         description="Observability configuration",
+    )
+    download: DownloadSettings = Field(
+        default_factory=DownloadSettings,
+        description="Download queue configuration",
     )
 
     model_config = SettingsConfigDict(

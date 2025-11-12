@@ -38,6 +38,7 @@ class Job:
     job_type: JobType
     payload: dict[str, Any]
     status: JobStatus = JobStatus.PENDING
+    priority: int = 0  # Higher value = higher priority
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -87,13 +88,15 @@ class JobQueue:
         Args:
             max_concurrent_jobs: Maximum number of jobs to run concurrently
         """
-        self._queue: asyncio.Queue[Job] = asyncio.Queue()
+        self._queue: asyncio.PriorityQueue[tuple[int, int, Job]] = asyncio.PriorityQueue()
         self._jobs: dict[str, Job] = {}
         self._running_jobs: set[str] = set()
         self._max_concurrent = max_concurrent_jobs
         self._workers: list[asyncio.Task[None]] = []
         self._shutdown = False
+        self._paused = False
         self._handlers: dict[JobType, Callable[[Job], Coroutine[Any, Any, Any]]] = {}
+        self._counter = 0  # Counter for stable sorting
 
     def register_handler(
         self,
@@ -113,6 +116,7 @@ class JobQueue:
         job_type: JobType,
         payload: dict[str, Any],
         max_retries: int = 3,
+        priority: int = 0,
     ) -> str:
         """Add a job to the queue.
 
@@ -120,6 +124,7 @@ class JobQueue:
             job_type: Type of job
             payload: Job data
             max_retries: Maximum retry attempts
+            priority: Job priority (higher value = higher priority)
 
         Returns:
             Job ID
@@ -129,10 +134,14 @@ class JobQueue:
             job_type=job_type,
             payload=payload,
             max_retries=max_retries,
+            priority=priority,
         )
 
         self._jobs[job.id] = job
-        await self._queue.put(job)
+        # Use negative priority for max heap behavior (higher priority first)
+        # Use counter for stable sorting (FIFO for same priority)
+        await self._queue.put((-job.priority, self._counter, job))
+        self._counter += 1
 
         return job.id
 
@@ -165,6 +174,32 @@ class JobQueue:
 
         job.mark_cancelled()
         return True
+
+    async def pause(self) -> None:
+        """Pause job processing globally."""
+        self._paused = True
+
+    async def resume(self) -> None:
+        """Resume job processing globally."""
+        self._paused = False
+
+    def is_paused(self) -> bool:
+        """Check if queue is paused."""
+        return self._paused
+
+    def set_max_concurrent_jobs(self, max_concurrent: int) -> None:
+        """Set maximum concurrent jobs.
+
+        Args:
+            max_concurrent: Maximum number of concurrent jobs (1-3 recommended)
+        """
+        if max_concurrent < 1:
+            raise ValueError("max_concurrent must be at least 1")
+        self._max_concurrent = max_concurrent
+
+    def get_max_concurrent_jobs(self) -> int:
+        """Get maximum concurrent jobs."""
+        return self._max_concurrent
 
     async def list_jobs(
         self,
@@ -221,9 +256,22 @@ class JobQueue:
             error_msg = str(e)
             job.mark_failed(error_msg)
 
-            # Re-queue if should retry
+            # Re-queue with exponential backoff if should retry
             if job.should_retry():
-                await self._queue.put(job)
+                # Calculate backoff delay: 1s, 2s, 4s for retries 1, 2, 3
+                backoff_delay = 2 ** (job.retries - 1)
+                logger.info(
+                    "Job %s failed (retry %d/%d), retrying in %ds: %s",
+                    job.id,
+                    job.retries,
+                    job.max_retries,
+                    backoff_delay,
+                    error_msg,
+                )
+                await asyncio.sleep(backoff_delay)
+                # Re-queue with same priority
+                await self._queue.put((-job.priority, self._counter, job))
+                self._counter += 1
 
         finally:
             self._running_jobs.discard(job.id)
@@ -232,15 +280,31 @@ class JobQueue:
         """Worker loop to process jobs from queue."""
         while not self._shutdown:
             try:
-                # Wait for job with timeout to allow checking shutdown flag
-                job = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                # Skip processing if paused
+                if self._paused:
+                    await asyncio.sleep(0.5)
+                    continue
 
-                # Wait if too many jobs running
-                while len(self._running_jobs) >= self._max_concurrent:
+                # Wait for available slot
+                while len(self._running_jobs) >= self._max_concurrent and not self._shutdown:
                     await asyncio.sleep(0.1)
 
-                # Process job
-                asyncio.create_task(self._process_job(job))
+                if self._shutdown:
+                    break
+
+                # Wait for job with timeout to allow checking shutdown flag
+                priority_tuple = await asyncio.wait_for(self._queue.get(), timeout=1.0)
+                _, _, job = priority_tuple  # Extract job from priority tuple
+
+                # Skip if paused while waiting
+                if self._paused:
+                    # Put job back in queue
+                    await self._queue.put(priority_tuple)
+                    await asyncio.sleep(0.5)
+                    continue
+
+                # Process job directly (not as a new task) to respect concurrency limit
+                await self._process_job(job)
 
             except TimeoutError:
                 continue

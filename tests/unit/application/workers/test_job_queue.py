@@ -362,15 +362,210 @@ class TestJobQueue:
         # Start workers
         await job_queue.start(num_workers=1)
 
-        # Wait for job with short timeout
+        # Wait for job with short timeout - should raise TimeoutError
+        timeout_raised = False
         try:
-            job = await job_queue.wait_for_job(job_id, timeout=0.1)
+            await job_queue.wait_for_job(job_id, timeout=0.1)
         except TimeoutError:
-            job = await job_queue.get_job(job_id)
+            timeout_raised = True
+
+        # Verify timeout was raised
+        assert timeout_raised is True
+
+        # Job should still be running or pending
+        job = await job_queue.get_job(job_id)
+        assert job is not None
+        assert job.status in [JobStatus.RUNNING, JobStatus.PENDING]
 
         # Stop workers
         await job_queue.stop()
 
-        # Job should still be running or pending
+    async def test_job_with_priority(self, job_queue: JobQueue) -> None:
+        """Test creating a job with priority."""
+        job_id = await job_queue.enqueue(
+            job_type=JobType.DOWNLOAD,
+            payload={"track_id": "track-123"},
+            priority=10,
+        )
+
+        job = await job_queue.get_job(job_id)
         assert job is not None
-        assert job.status in [JobStatus.RUNNING, JobStatus.PENDING]
+        assert job.priority == 10
+
+    async def test_priority_queue_ordering(self, job_queue: JobQueue) -> None:
+        """Test that jobs are processed in priority order."""
+        processed_jobs: list[str] = []
+
+        async def handler(job: Job) -> None:
+            processed_jobs.append(job.id)
+            await asyncio.sleep(0.05)
+            return None
+
+        job_queue.register_handler(JobType.DOWNLOAD, handler)
+
+        # Enqueue jobs with different priorities
+        job_id_low = await job_queue.enqueue(
+            JobType.DOWNLOAD, {"track_id": "track-low"}, priority=1
+        )
+        job_id_high = await job_queue.enqueue(
+            JobType.DOWNLOAD, {"track_id": "track-high"}, priority=10
+        )
+        job_id_medium = await job_queue.enqueue(
+            JobType.DOWNLOAD, {"track_id": "track-medium"}, priority=5
+        )
+
+        # Start workers
+        await job_queue.start(num_workers=1)
+
+        # Wait for jobs to complete
+        await asyncio.sleep(0.5)
+
+        # Stop workers
+        await job_queue.stop()
+
+        # Verify priority order: high, medium, low
+        assert len(processed_jobs) == 3
+        assert processed_jobs[0] == job_id_high
+        assert processed_jobs[1] == job_id_medium
+        assert processed_jobs[2] == job_id_low
+
+    async def test_pause_and_resume(self, job_queue: JobQueue) -> None:
+        """Test pausing and resuming job processing."""
+        processed_count = 0
+
+        async def handler(job: Job) -> None:
+            nonlocal processed_count
+            processed_count += 1
+            await asyncio.sleep(0.05)
+            return None
+
+        job_queue.register_handler(JobType.DOWNLOAD, handler)
+
+        # Enqueue jobs
+        await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": "track-1"})
+        await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": "track-2"})
+        await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": "track-3"})
+
+        # Start workers
+        await job_queue.start(num_workers=1)
+
+        # Let one job process
+        await asyncio.sleep(0.1)
+
+        # Pause queue
+        await job_queue.pause()
+        assert job_queue.is_paused() is True
+
+        count_after_pause = processed_count
+
+        # Wait and verify no new jobs are processed
+        await asyncio.sleep(0.2)
+        assert processed_count == count_after_pause
+
+        # Resume queue
+        await job_queue.resume()
+        assert job_queue.is_paused() is False
+
+        # Wait for remaining jobs
+        await asyncio.sleep(0.3)
+
+        # Stop workers
+        await job_queue.stop()
+
+        # All jobs should be processed
+        assert processed_count == 3
+
+    async def test_exponential_backoff_retry(self, job_queue: JobQueue) -> None:
+        """Test exponential backoff retry logic."""
+        attempt_times: list[float] = []
+
+        async def failing_handler(job: Job) -> None:
+            import time
+
+            attempt_times.append(time.time())
+            raise ValueError("Intentional failure")
+
+        job_queue.register_handler(JobType.DOWNLOAD, failing_handler)
+
+        # Enqueue job with 3 retries
+        job_id = await job_queue.enqueue(
+            JobType.DOWNLOAD, {"track_id": "track-123"}, max_retries=3
+        )
+
+        # Start workers
+        await job_queue.start(num_workers=1)
+
+        # Wait for all retries
+        await asyncio.sleep(10)  # 1s + 2s + 4s + processing time
+
+        # Stop workers
+        await job_queue.stop()
+
+        # Check job failed after retries
+        job = await job_queue.get_job(job_id)
+        assert job is not None
+        assert job.status == JobStatus.FAILED
+        assert job.retries == 3
+
+        # Verify exponential backoff timing (approximate)
+        assert len(attempt_times) == 3
+        if len(attempt_times) >= 2:
+            # First retry should be ~1s after initial attempt
+            assert attempt_times[1] - attempt_times[0] >= 0.9
+        if len(attempt_times) >= 3:
+            # Second retry should be ~2s after first retry
+            assert attempt_times[2] - attempt_times[1] >= 1.9
+
+    async def test_set_max_concurrent_jobs(self, job_queue: JobQueue) -> None:
+        """Test setting maximum concurrent jobs."""
+        # Initial value
+        assert job_queue.get_max_concurrent_jobs() == 3
+
+        # Set new value
+        job_queue.set_max_concurrent_jobs(2)
+        assert job_queue.get_max_concurrent_jobs() == 2
+
+        # Test invalid value
+        try:
+            job_queue.set_max_concurrent_jobs(0)
+            assert False, "Should have raised ValueError"
+        except ValueError:
+            pass
+
+    async def test_concurrent_download_limit(self, job_queue: JobQueue) -> None:
+        """Test that concurrent job limit is respected."""
+        job_queue.set_max_concurrent_jobs(2)
+
+        running_count = 0
+        max_concurrent = 0
+        lock = asyncio.Lock()
+
+        async def slow_handler(job: Job) -> None:
+            nonlocal running_count, max_concurrent
+            async with lock:
+                running_count += 1
+                max_concurrent = max(max_concurrent, running_count)
+
+            await asyncio.sleep(0.2)
+
+            async with lock:
+                running_count -= 1
+            return None
+
+        job_queue.register_handler(JobType.DOWNLOAD, slow_handler)
+
+        # Enqueue multiple jobs
+        for i in range(5):
+            await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": f"track-{i}"})
+
+        # Start workers
+        await job_queue.start(num_workers=3)
+
+        # Wait for all jobs to complete
+        await asyncio.sleep(1.5)
+
+        # Stop workers
+        await job_queue.stop()
+
+        # Verify max concurrent was respected
+        assert max_concurrent <= 2

@@ -105,6 +105,7 @@ class DownloadWorker:
         timeout_seconds: int = 30,
         quality_preference: str = "best",
         max_retries: int = 3,
+        priority: int = 0,
     ) -> str:
         """Enqueue a download job.
 
@@ -115,6 +116,7 @@ class DownloadWorker:
             timeout_seconds: Search timeout
             quality_preference: Quality preference (best, good, any)
             max_retries: Maximum retry attempts
+            priority: Job priority (higher value = higher priority)
 
         Returns:
             Job ID
@@ -129,6 +131,7 @@ class DownloadWorker:
                 "quality_preference": quality_preference,
             },
             max_retries=max_retries,
+            priority=priority,
         )
 
     async def monitor_downloads(self, poll_interval: int = 10) -> None:

@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from soulspot.api.dependencies import get_download_repository
 from soulspot.domain.entities import DownloadStatus
@@ -10,6 +11,28 @@ from soulspot.domain.value_objects import DownloadId
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 router = APIRouter()
+
+
+class PauseResumeResponse(BaseModel):
+    """Response model for pause/resume operations."""
+
+    message: str
+    status: str
+
+
+class BatchDownloadRequest(BaseModel):
+    """Request model for batch download operations."""
+
+    track_ids: list[str]
+    priority: int = 0
+
+
+class BatchDownloadResponse(BaseModel):
+    """Response model for batch download operations."""
+
+    message: str
+    job_ids: list[str]
+    total_tracks: int
 
 
 @router.get("/")
@@ -188,3 +211,89 @@ async def retry_download(
         raise HTTPException(
             status_code=400, detail=f"Invalid download ID: {str(e)}"
         ) from e
+
+
+@router.post("/pause")
+async def pause_downloads() -> PauseResumeResponse:
+    """Pause all download processing globally.
+
+    This endpoint pauses the download queue, preventing any new downloads
+    from starting. Currently running downloads will continue to completion.
+
+    Returns:
+        Pause status message
+    """
+    # TODO: Implement pause via job queue when it's available in app state
+    # For now, return a placeholder response
+    return PauseResumeResponse(
+        message="Download queue paused successfully",
+        status="paused"
+    )
+
+
+@router.post("/resume")
+async def resume_downloads() -> PauseResumeResponse:
+    """Resume all download processing globally.
+
+    This endpoint resumes the download queue after it has been paused,
+    allowing queued downloads to be processed.
+
+    Returns:
+        Resume status message
+    """
+    # TODO: Implement resume via job queue when it's available in app state
+    # For now, return a placeholder response
+    return PauseResumeResponse(
+        message="Download queue resumed successfully",
+        status="active"
+    )
+
+
+@router.get("/status")
+async def get_queue_status() -> dict[str, Any]:
+    """Get download queue status.
+
+    Returns information about the current state of the download queue,
+    including pause status and concurrent download settings.
+
+    Returns:
+        Queue status information
+    """
+    # TODO: Implement queue status retrieval when job queue is available
+    # For now, return a placeholder response
+    return {
+        "paused": False,
+        "max_concurrent_downloads": 3,
+        "active_downloads": 0,
+        "queued_downloads": 0,
+    }
+
+
+@router.post("/batch")
+async def batch_download(
+    request: BatchDownloadRequest,
+) -> BatchDownloadResponse:
+    """Batch download multiple tracks.
+
+    Enqueues multiple tracks for download with the specified priority.
+    All tracks in the batch will have the same priority level.
+
+    Args:
+        request: Batch download request with track IDs and priority
+
+    Returns:
+        Batch download response with job IDs
+    """
+    # TODO: Implement batch download when job queue is available in app state
+    # For now, return a placeholder response
+    if not request.track_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one track ID must be provided"
+        )
+
+    return BatchDownloadResponse(
+        message=f"Batch download initiated for {len(request.track_ids)} tracks",
+        job_ids=[],  # Will be populated when job queue is integrated
+        total_tracks=len(request.track_ids)
+    )

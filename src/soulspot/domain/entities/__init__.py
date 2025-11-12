@@ -173,6 +173,7 @@ class Download:
     id: DownloadId
     track_id: TrackId
     status: DownloadStatus = DownloadStatus.PENDING
+    priority: int = 0  # Higher value = higher priority
     target_path: FilePath | None = None
     source_url: str | None = None
     progress_percent: float = 0.0
