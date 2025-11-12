@@ -208,6 +208,9 @@ class DownloadModel(Base):
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="PENDING", index=True
     )
+    priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, index=True
+    )
     target_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     progress_percent: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
@@ -222,4 +225,7 @@ class DownloadModel(Base):
     # Relationships
     track: Mapped["TrackModel"] = relationship("TrackModel", back_populates="download")
 
-    __table_args__ = (Index("ix_downloads_status_created", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_downloads_status_created", "status", "created_at"),
+        Index("ix_downloads_priority_created", "priority", "created_at"),
+    )
