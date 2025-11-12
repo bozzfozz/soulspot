@@ -600,6 +600,46 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - Auto-cleanup temp files | LOW | HIGH |
 | - Audiofingerprint generation | HIGH | LOW |
 
+#### 7.9 Spotify Auth — Future Enhancements 🔐
+
+**Beschreibung:** Verbesserungen rund um Session-Handling und Token-Sicherheit für Spotify-Integration.
+
+**Quelle:** [docs/spotify-auth-improvement.md](spotify-auth-improvement.md)
+
+| Feature | Complexity | Priority | Target | Effort |
+|---------|-----------|----------|--------|--------|
+| **1. Persistent Session Storage** | MEDIUM | P1 | v2.1 | Small (2-3 days) |
+| - Current: In-memory sessions (lost on restart) | | | | |
+| - Future: Redis or database-backed sessions | | | | |
+| - Benefit: Sessions survive application restarts | | | | |
+| - Issue: TBD | | | | |
+| **2. Token Encryption** | MEDIUM | P1 | v2.1 | Small (2-3 days) |
+| - Current: Tokens in plain text in memory | | | | |
+| - Future: Encrypt tokens at rest (DB/Redis encryption or KMS) | | | | |
+| - Benefit: Additional security layer | | | | |
+| - Issue: TBD | | | | |
+| **3. Multi-User Support** | HIGH | P2 | v2.2 | Medium (5-7 days) |
+| - Current: Single-user session management | | | | |
+| - Future: User accounts with persistent authentication | | | | |
+| - Benefit: Multiple users can authenticate independently | | | | |
+| - Issue: TBD | | | | |
+| **4. Token Revocation** | LOW | P1 | v2.1 | Small (1-2 days) |
+| - Current: Manual logout deletes session | | | | |
+| - Future: Revoke Spotify tokens on logout via API | | | | |
+| - Benefit: Proper OAuth cleanup | | | | |
+| - Issue: TBD | | | | |
+| **5. Session Monitoring** | MEDIUM | P2 | v2.2 | Medium (3-4 days) |
+| - Current: Basic session timeout | | | | |
+| - Future: Activity-based timeout, session analytics | | | | |
+| - Benefit: Better security and user insights | | | | |
+| - Issue: TBD | | | | |
+
+**Implementation Notes:**
+- Consider KMS or environment-based secrets for encryption keys
+- Session storage backend configurable via `SESSION_BACKEND` env variable
+- Multi-user requires RBAC implementation (see Phase 9.1)
+- Token revocation calls Spotify API endpoint on logout
+
 ---
 
 ### Phase 8: Advanced Features (Priority: LOW) 📋
