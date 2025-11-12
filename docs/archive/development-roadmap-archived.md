@@ -32,8 +32,9 @@
 - 🎵 **Spotify & Soulseek intelligent verbindet** – automatische Synchronisation zwischen Streaming und lokalem Download
 - ⬇️ **Musik automatisch findet, herunterlädt und sauber taggt** – keine manuelle Arbeit mehr
 - 🗂️ **Sich selbst organisiert** – konsistente Tags, Cover, Ordnerstruktur und Metadaten
-- 🔄 **Mit Media-Servern synchronisiert** – Plex, Jellyfin, Navidrome, Subsonic Integration
 - 🤖 **Langfristig lernfähig und modular bleibt** – KI-gestützt, Plugin-System, erweiterbar
+
+> **Hinweis:** Media-Server-Integrationen (Jellyfin, Navidrome, Subsonic) wurden entfernt, da SoulSpot als lokaler Dienst im privaten Netzwerk betrieben wird.
 
 ### 🎯 Kernnutzen
 
@@ -78,7 +79,7 @@
 
 **Nächste Schritte:** Phase 7 Feature Enhancements - See [Phase 7 Details](#phase-7-feature-enhancements-priority-medium)
 
-> **Note:** Advanced features originally planned for Phase 6 (v3.0 features such as Production Profile with PostgreSQL/Redis/nginx, Kubernetes, OWASP security hardening) have been moved to the dedicated [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) to keep Phase 6 focused and achievable.
+> **Hinweis:** PostgreSQL, Redis, nginx, Kubernetes und erweiterte Produktions-Features wurden entfernt, da SoulSpot als lokaler Dienst im privaten Netzwerk betrieben wird.
 
 ---
 
@@ -113,12 +114,7 @@ SoulSpot Bridge verbindet mehrere Datenquellen zu einem einheitlichen System:
 
 #### 🖥️ Media-Server-Integrationen
 
-| Server | Funktionen | Status | Phase |
-|--------|-----------|--------|-------|
-| **Plex** | Rescan Trigger, Ratings Sync, Path Mapping | 📋 Planned | Phase 8 |
-| **Jellyfin** | Rescan Trigger, Ratings Sync, Path Mapping | 📋 Planned | Phase 8 |
-| **Navidrome** | Rescan Trigger, Path Mapping | 📋 Planned | Phase 8 |
-| **Subsonic** | API Integration | 📋 Planned | Phase 8 |
+> **Hinweis:** Media-Server-Integrationen (Plex, Jellyfin, Navidrome, Subsonic) wurden entfernt, da SoulSpot als lokaler Dienst betrieben wird.
 
 #### 🔔 Benachrichtigungen & Webhooks
 
@@ -193,9 +189,7 @@ Download Complete
     ↓
 7. Audio Analysis (BPM, Key, Loudness, optional)
     ↓
-8. Media Server Rescan (Plex, Jellyfin, Navidrome Trigger)
-    ↓
-9. Cleanup (Temp Files, Empty Directories)
+8. Cleanup (Temp Files, Empty Directories)
 ```
 
 **Status:**
@@ -285,12 +279,12 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Feature | Beschreibung | Status | Phase |
 |---------|--------------|--------|-------|
 | **Plex Sync** | Ratings ↔ ID3v2 POPM | 📋 Planned | Phase 7 |
-| **Jellyfin Sync** | Ratings ↔ ID3v2 POPM | 📋 Planned | Phase 7-8 |
-| **Navidrome Sync** | Ratings ↔ ID3v2 POPM | 📋 Planned | Phase 8 |
 | **Two-Way Sync** | Bidirektionale Synchronisation | 📋 Planned | Phase 7 |
 | **Conflict Resolution** | Server gewinnt / Datei gewinnt | 📋 Planned | Phase 7 |
 | **Play Count Sync** | Wiedergabezähler | 📋 Planned | Phase 7 |
 | **Dry-Run Mode** | Preview vor Sync | 📋 Planned | Phase 7 |
+
+> **Hinweis:** Jellyfin und Navidrome Sync-Features wurden entfernt (lokal-only Betrieb).
 
 ---
 
@@ -359,7 +353,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | UMASK Configuration | ✅ Done | LOW |
 | Docker Documentation | ✅ Done | LOW |
 
-> **Note:** Advanced deployment features (Production Profile with PostgreSQL/Redis/nginx, Kubernetes Manifests) have been moved to v3.0 scope as they are not required for current production readiness. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for details.
+> **Hinweis:** PostgreSQL, Redis, nginx und Kubernetes-Features wurden entfernt (lokal-only Betrieb).
 
 #### 6.4 Security Hardening 🔒
 
@@ -378,7 +372,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | Async Heavy Operations | ✅ Done | MEDIUM |
 
 **Implemented:**
-- Connection pool configuration for PostgreSQL with configurable pool_size and max_overflow
+- Connection pool configuration for SQLite with configurable settings
 - Response compression middleware (GZip) for API responses
 - Pagination schemas and helper classes for consistent API pagination
 - Eager loading with `selectinload()` for Track and Download repositories
@@ -386,7 +380,7 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 - Optimized query patterns with proper indexing
 - Async operations throughout repository layer
 
-> **Note:** Advanced performance features (Redis Integration for Distributed Cache) have been moved to v3.0 scope. See [Version 3.0 section](#-version-30--production-hardening--enterprise-deployment-geplant) for details.
+> **Hinweis:** Redis-Integration wurde entfernt (lokal-only, SQLite-basiert).
 
 #### 6.6 Operations Documentation 📚
 
@@ -520,7 +514,6 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - Auto-sync with Spotify | MEDIUM | HIGH |
 | - Sync frequency config | LOW | MEDIUM |
 | - Conflict resolution | MEDIUM | MEDIUM |
-| - Cross-provider sync (Spotify↔Plex↔Navidrome) | HIGH | MEDIUM |
 | - Versioning/snapshots/rollback | MEDIUM | MEDIUM |
 | **Playlist Export/Import** | LOW | HIGH |
 | - M3U, PLS export | LOW | HIGH |
@@ -576,8 +569,6 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 |---------|-----------|----------|
 | **Ratings Synchronization** | MEDIUM | MEDIUM |
 | - Plex ratings sync | MEDIUM | MEDIUM |
-| - Jellyfin ratings sync | MEDIUM | MEDIUM |
-| - Navidrome ratings sync | MEDIUM | LOW |
 | - Bidirectional sync | MEDIUM | MEDIUM |
 | - Conflict resolution | MEDIUM | MEDIUM |
 | **User Signals** | LOW | LOW |
@@ -585,6 +576,8 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - Skip tracking | LOW | LOW |
 | - Like/dislike signals | LOW | LOW |
 | - Auto-playlist generation | MEDIUM | LOW |
+
+> **Hinweis:** Jellyfin und Navidrome Ratings-Sync entfernt (lokal-only).
 
 #### 7.8 Post-Processing Pipeline 🔄
 
@@ -610,20 +603,15 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 |---------|-----------|----------|--------|--------|
 | **1. Persistent Session Storage** | MEDIUM | P1 | v2.1 | Small (2-3 days) |
 | - Current: In-memory sessions (lost on restart) | | | | |
-| - Future: Redis or database-backed sessions | | | | |
+| - Future: Database-backed sessions | | | | |
 | - Benefit: Sessions survive application restarts | | | | |
 | - Issue: TBD | | | | |
 | **2. Token Encryption** | MEDIUM | P1 | v2.1 | Small (2-3 days) |
 | - Current: Tokens in plain text in memory | | | | |
-| - Future: Encrypt tokens at rest (DB/Redis encryption or KMS) | | | | |
+| - Future: Encrypt tokens at rest (DB encryption) | | | | |
 | - Benefit: Additional security layer | | | | |
 | - Issue: TBD | | | | |
-| **3. Multi-User Support** | HIGH | P2 | v2.2 | Medium (5-7 days) |
-| - Current: Single-user session management | | | | |
-| - Future: User accounts with persistent authentication | | | | |
-| - Benefit: Multiple users can authenticate independently | | | | |
-| - Issue: TBD | | | | |
-| **4. Token Revocation** | LOW | P1 | v2.1 | Small (1-2 days) |
+| **3. Token Revocation** | LOW | P1 | v2.1 | Small (1-2 days) |
 | - Current: Manual logout deletes session | | | | |
 | - Future: Revoke Spotify tokens on logout via API | | | | |
 | - Benefit: Proper OAuth cleanup | | | | |
@@ -637,7 +625,6 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 **Implementation Notes:**
 - Consider KMS or environment-based secrets for encryption keys
 - Session storage backend configurable via `SESSION_BACKEND` env variable
-- Multi-user requires RBAC implementation (see Phase 9.1)
 - Token revocation calls Spotify API endpoint on logout
 
 ---
@@ -666,14 +653,14 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - YouTube Music integration | HIGH | LOW |
 | **Media Servers** | | |
 | - Plex (rescan, ratings) | MEDIUM | MEDIUM |
-| - Jellyfin (rescan, ratings) | MEDIUM | MEDIUM |
-| - Navidrome (rescan, mapping) | MEDIUM | LOW |
-| - Subsonic API | MEDIUM | LOW |
 | **Notifications** | | |
 | - Discord webhooks | LOW | MEDIUM |
 | - Telegram bot | LOW | MEDIUM |
 | - Email (SMTP) | LOW | LOW |
 | - Smart home integration | MEDIUM | LOW |
+
+> **Hinweis:** Jellyfin, Navidrome und Subsonic entfernt (lokal-only Betrieb).
+
 | **Last.fm** | | |
 | - Scrobbling support | MEDIUM | LOW |
 | - Metadata enrichment | LOW | LOW |
@@ -750,20 +737,16 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 **Zeitrahmen:** Q3-Q4 2025 (4-6+ Wochen)  
 **Ziel:** Long-term features for advanced users and enterprise deployments.
 
-#### 9.1 Multi-User & Security 👥
+> **Hinweis:** Multi-User Support wurde entfernt, da SoulSpot als Single-User lokaler Dienst betrieben wird.
+
+#### 9.1 Security & Compliance 🔒
 
 | Feature | Complexity | Priority |
 |---------|-----------|----------|
 | **Advanced Authentication** | | |
-| - Multi-user support (RBAC) | HIGH | LOW |
-| - Admin vs. Read-only roles | MEDIUM | LOW |
 | - OAuth/API Key auth | MEDIUM | LOW |
 | - IP restriction (optional) | LOW | LOW |
 | - Comprehensive audit logs | MEDIUM | LOW |
-| **User-specific Features** | | |
-| - Per-user download quotas | MEDIUM | LOW |
-| - User-specific playlists/libraries | HIGH | LOW |
-| - Individual preferences | MEDIUM | LOW |
 | **Legal Compliance** | | |
 | - Legal mode (restricted features) | MEDIUM | MEDIUM |
 | - Opt-in legal notice | LOW | MEDIUM |
@@ -851,319 +834,9 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 
 ---
 
-## 🔒 Version 3.0 — Production Hardening & Enterprise Deployment (Geplant)
+## 🔒 Version 3.0 — Production Hardening & Enterprise Deployment
 
-**Status:** 🔮 Planned for Version 3.0  
-**Zeitrahmen:** 2026+ (nach Phase 9 und v2.x)  
-**Priorität:** 🔴 HIGH (Next Major Production Release)  
-**Gesamtaufwand:** ~15-20 Dev Days
-
-### 🎯 Vision & Ziele
-
-**Version 3.0 Production Hardening & Enterprise Deployment** transformiert SoulSpot Bridge von einer funktionalen Anwendung zu einer hochverfügbaren, produktionsreifen Enterprise-Lösung mit vollständiger Sicherheitshärtung, skalierbarer Infrastruktur und operationeller Exzellenz.
-
-**Kernprinzipien:**
-- 🔒 **Security-First:** OWASP Top 10 Compliance, Input Validation, Secrets Management
-- 🚀 **Production-Ready:** PostgreSQL, Redis, nginx für skalierbaren Betrieb
-- ☸️ **Cloud-Native:** Kubernetes-Support für Container-Orchestrierung
-- 🔄 **Operational Excellence:** Backup/Recovery, Rollback-Procedures
-- 📊 **Enterprise-Grade:** Rate Limiting, Brute Force Protection, Session Management
-
-### 📋 Feature-Übersicht
-
-#### 3.1 Production Profile (PostgreSQL, Redis, nginx) 🐘
-
-**Beschreibung:** Vollständiges Production-Deployment-Profil mit skalierbarer Infrastruktur.
-
-**Komponenten:**
-
-| Komponente | Zweck | Complexity |
-|------------|-------|-----------|
-| **PostgreSQL Integration** | Production-ready relational database | HIGH |
-| - Database connection pooling | Efficient connection management | MEDIUM |
-| - Migration strategy from SQLite | Data migration tools | HIGH |
-| - Backup & restore procedures | Data protection | MEDIUM |
-| **Redis Integration** | Distributed caching & session storage | HIGH |
-| - Session management | Centralized session store | MEDIUM |
-| - Cache layer | Performance optimization | MEDIUM |
-| - Queue management | Distributed job processing | HIGH |
-| **nginx Reverse Proxy** | Production web server | MEDIUM |
-| - SSL/TLS termination | Secure connections | MEDIUM |
-| - Load balancing | Traffic distribution | HIGH |
-| - Rate limiting | DDoS protection | MEDIUM |
-| - Static file serving | Performance optimization | LOW |
-
-**Status:** 🔮 v3.0  
-**Aufwand:** 5-7 days
-
----
-
-#### 3.2 Kubernetes Manifests ☸️
-
-**Beschreibung:** Container-Orchestrierung für Cloud-Native Deployments.
-
-**Features:**
-
-| Feature | Beschreibung | Complexity |
-|---------|--------------|-----------|
-| **Deployment Manifests** | | |
-| - Application deployment | StatefulSet/Deployment configs | HIGH |
-| - Database StatefulSet | Persistent PostgreSQL | HIGH |
-| - Redis StatefulSet | Distributed cache | MEDIUM |
-| - ConfigMaps & Secrets | Configuration management | MEDIUM |
-| **Service & Networking** | | |
-| - Service definitions | Internal/external services | MEDIUM |
-| - Ingress configuration | External access & routing | MEDIUM |
-| - Network policies | Security & isolation | MEDIUM |
-| **Persistence & Storage** | | |
-| - PersistentVolumeClaims | Storage provisioning | MEDIUM |
-| - StorageClass definitions | Storage tiers | LOW |
-| - Backup volumes | Data protection | MEDIUM |
-| **Scaling & Monitoring** | | |
-| - HorizontalPodAutoscaler | Auto-scaling rules | HIGH |
-| - Resource limits & requests | Resource management | MEDIUM |
-| - Liveness & readiness probes | Health monitoring | LOW |
-| **Helm Charts** | | |
-| - Chart structure | Package management | HIGH |
-| - Values files | Environment configs | MEDIUM |
-| - Release management | Version control | MEDIUM |
-
-**Status:** 🔮 v3.0  
-**Aufwand:** 6-8 days
-
----
-
-#### 3.3 Security Hardening 🔒
-
-**Beschreibung:** Umfassende Sicherheitshärtung nach OWASP Best Practices.
-
-**Features:**
-
-| Feature | Beschreibung | Complexity |
-|---------|--------------|-----------|
-| **OWASP Top 10 Compliance Check** | | |
-| - Injection prevention | SQL/Command/Code injection | MEDIUM |
-| - Broken authentication | Auth mechanism review | MEDIUM |
-| - Sensitive data exposure | Data protection audit | MEDIUM |
-| - XML external entities (XXE) | XML parsing security | LOW |
-| - Broken access control | Authorization review | MEDIUM |
-| - Security misconfiguration | Config hardening | LOW |
-| - Cross-site scripting (XSS) | Input sanitization | MEDIUM |
-| - Insecure deserialization | Data validation | MEDIUM |
-| - Using components with known vulnerabilities | Dependency scanning | LOW |
-| - Insufficient logging & monitoring | Audit logging | LOW |
-| **Input Validation Hardening** | | |
-| - Request validation middleware | Schema validation | MEDIUM |
-| - Sanitization layer | XSS/Injection prevention | MEDIUM |
-| - File upload validation | Safe file handling | MEDIUM |
-| - Path traversal protection | Directory access control | LOW |
-| **Secrets Management** | | |
-| - Environment-based secrets | Config externalization | MEDIUM |
-| - Vault integration (optional) | Secure secret storage | HIGH |
-| - Secret rotation | Key management | MEDIUM |
-| - Encrypted storage | Data protection | MEDIUM |
-| **Rate Limiting for Auth Endpoints** | | |
-| - Login rate limiting | Brute force prevention | LOW |
-| - Token refresh limits | Token abuse prevention | LOW |
-| - API key rate limits | Usage control | LOW |
-| **Brute Force Protection** | | |
-| - Account lockout | Failed login limits | MEDIUM |
-| - CAPTCHA integration | Bot prevention | MEDIUM |
-| - IP-based throttling | Distributed attack prevention | MEDIUM |
-| **Session Timeout Configuration** | | |
-| - Idle timeout | Automatic logout | LOW |
-| - Absolute timeout | Max session duration | LOW |
-| - Concurrent session limits | Multi-login control | LOW |
-
-**Status:** 🔮 v3.0  
-**Aufwand:** 4-5 days
-
----
-
-#### 3.4 Operational Excellence 🔄
-
-**Beschreibung:** Best Practices für Betrieb und Wartung.
-
-**Features:**
-
-| Feature | Beschreibung | Complexity |
-|---------|--------------|-----------|
-| **Backup & Recovery Procedures** | | |
-| - Automated database backups | Scheduled backup jobs | MEDIUM |
-| - File system backups | User data protection | MEDIUM |
-| - Point-in-time recovery | Restore to specific moment | HIGH |
-| - Backup validation | Ensure backup integrity | LOW |
-| - Disaster recovery plan | Full system recovery | MEDIUM |
-| **Rollback Procedures** | | |
-| - Database rollback scripts | Schema version control | LOW |
-| - Application version rollback | Container rollback | LOW |
-| - Configuration rollback | Config version control | LOW |
-| - Automated rollback triggers | Failure detection | MEDIUM |
-
-**Status:** 🔮 v3.0  
-**Aufwand:** 2-3 days
-
----
-
-### 🧪 Acceptance Criteria (Version 3.0)
-
-#### Funktionale Anforderungen
-
-- [ ] **Production Profile:** PostgreSQL + Redis + nginx vollständig konfiguriert und getestet
-- [ ] **Kubernetes:** Alle Manifests funktionieren in Minikube und produktiven Clustern
-- [ ] **Security:** OWASP Top 10 Compliance erreicht (Security Audit bestanden)
-- [ ] **Rate Limiting:** Auth-Endpoints sind geschützt (max 5 requests/minute)
-- [ ] **Brute Force:** Account-Lockout nach 5 fehlgeschlagenen Versuchen
-- [ ] **Session Management:** Idle/Absolute Timeouts konfigurierbar
-- [ ] **Backup/Recovery:** Automatische Backups funktionieren, Recovery getestet
-- [ ] **Rollback:** Zero-downtime Rollback für App und DB
-
-#### Non-Funktionale Anforderungen
-
-- [ ] **Performance:** PostgreSQL + Redis < 50ms p95 Latency
-- [ ] **Scalability:** Horizontal Scaling auf 3+ Replicas getestet
-- [ ] **Availability:** 99.9% Uptime in Testumgebung über 1 Woche
-- [ ] **Security:** Zero Critical/High Vulnerabilities (Bandit, Safety, OWASP ZAP)
-- [ ] **Documentation:** Vollständige Deployment-Docs, Runbooks, Security-Guidelines
-- [ ] **Compliance:** OWASP Top 10 Compliance nachgewiesen
-
-#### Definition of Done
-
-- [ ] Production Profile vollständig implementiert und dokumentiert
-- [ ] Kubernetes Manifests + Helm Charts erstellt und getestet
-- [ ] OWASP Top 10 Compliance erreicht (Audit-Report)
-- [ ] Input Validation & Secrets Management implementiert
-- [ ] Rate Limiting & Brute Force Protection aktiv
-- [ ] Session Timeout konfigurierbar
-- [ ] Backup/Recovery-Procedures dokumentiert und getestet
-- [ ] Rollback-Procedures dokumentiert und getestet
-- [ ] Unit-Tests für alle Security-Features (Coverage > 90%)
-- [ ] Integration-Tests für Production Profile
-- [ ] E2E-Tests für kritische Security-Flows
-- [ ] Security-Review abgeschlossen (Penetration-Test empfohlen)
-- [ ] Operations-Runbook vollständig
-- [ ] Migration-Guide von v2.x zu v3.0 erstellt
-
----
-
-### 🗓️ Zeitplan & Sprint-Aufteilung
-
-**Gesamtaufwand:** ~15-20 Dev Days
-
-#### Sprint 1: Infrastructure (1 Woche / 5 Arbeitstage)
-- **Production Profile:** PostgreSQL + Redis + nginx (5-7 days)
-  - PostgreSQL Integration (2 days)
-  - Redis Integration (2 days)
-  - nginx Configuration (1-2 days)
-  - Migration Scripts (1 day)
-- **Deliverables:** Funktionierendes Production Profile
-
-#### Sprint 2: Cloud-Native (1-2 Wochen / 6-8 Arbeitstage)
-- **Kubernetes Manifests:** (6-8 days)
-  - Deployment Manifests (2 days)
-  - Service & Networking (1 day)
-  - Persistence & Storage (1 day)
-  - Scaling & Monitoring (1 day)
-  - Helm Charts (2-3 days)
-- **Deliverables:** Funktionierendes K8s Deployment
-
-#### Sprint 3: Security Hardening (1 Woche / 4-5 Arbeitstage)
-- **Security Features:** (4-5 days)
-  - OWASP Compliance (2 days)
-  - Input Validation & Secrets (1 day)
-  - Rate Limiting & Brute Force (1 day)
-  - Session Management (0.5 day)
-  - Security Testing (0.5 day)
-- **Deliverables:** OWASP-compliant Application
-
-#### Sprint 4: Operations & Polish (1 Woche / 2-3 Arbeitstage)
-- **Operational Excellence:** (2-3 days)
-  - Backup & Recovery (1.5 days)
-  - Rollback Procedures (0.5 day)
-  - Documentation & Runbooks (1 day)
-  - Final Testing & Validation (1 day)
-- **Deliverables:** Production-Ready v3.0
-
-**Total Timeline:** 3-4 Sprints (je 1 Woche) = ~3-4 Wochen
-
----
-
-### 📈 Release-Integration
-
-**Breaking Changes (3.0.0):**
-- Neue Production Profile Requirements (PostgreSQL, Redis)
-- Geänderte Deployment-Architektur (Kubernetes-native)
-- Erweiterte Security-Anforderungen (OWASP-konform)
-- Neue Environment-Variables für Secrets Management
-
-**Migration Path von 2.x zu 3.0:**
-- SQLite → PostgreSQL Migration-Tool
-- Simple Profile → Production Profile Upgrade-Guide
-- Session-Storage Migration zu Redis
-- Security-Settings Review & Update
-
----
-
-### 🎯 Success Metrics
-
-**Production Metrics:**
-- [ ] PostgreSQL Uptime > 99.9%
-- [ ] Redis Cache Hit Rate > 80%
-- [ ] nginx Request Latency < 10ms p95
-- [ ] Kubernetes Pod Startup Time < 30s
-- [ ] Auto-Scaling funktioniert (Load-Test bestanden)
-
-**Security Metrics:**
-- [ ] OWASP Top 10 Compliance: 10/10
-- [ ] Zero Critical/High Vulnerabilities
-- [ ] Rate Limiting: 100% Auth-Endpoint-Abdeckung
-- [ ] Brute Force Prevention: 0 erfolgreiche Angriffe im Test
-- [ ] Session Timeout: 100% konfigurierbar
-
-**Operational Metrics:**
-- [ ] Backup Success Rate: 100%
-- [ ] Recovery Time Objective (RTO): < 15 minutes
-- [ ] Recovery Point Objective (RPO): < 5 minutes
-- [ ] Rollback Success Rate: 100%
-
----
-
-## 🎨 v2.0 — Dynamic Views & Widget-Palette (Geplant)
-
-**Status:** 📋 Planned  
-**Zeitrahmen:** Q3-Q4 2025 (nach Phase 9)  
-**Priorität:** 🔵 STRATEGIC (Next Major Release)  
-**Gesamtaufwand:** ~20-26 Dev Days (aufteilbar in 3-5 Sprints)
-
-### 🎯 Vision & Ziele
-
-**v2.0 Dynamic Views & Widget-Palette** transformiert SoulSpot Bridge von einem funktionalen Tool zu einer flexiblen, personalisierbaren Arbeitsumgebung. Nutzer können ihre Arbeitsoberfläche individuell gestalten, relevante Widgets per Drag & Drop anordnen, konfigurieren und als wiederverwendbare Views speichern.
-
-**Kernprinzipien:**
-- 🎨 **User-Centric Design:** Nutzer definieren ihre optimale Arbeitsumgebung
-- 🧩 **Modularität:** Widgets sind unabhängige, konfigurierbare Komponenten
-- 🔄 **Wiederverwendbarkeit:** Views können gespeichert, geteilt und exportiert werden
-- 🚫 **Keine Telemetrie:** Kein Tracking, keine Performance-Metriken, keine Datensammlung
-- 🔒 **Security-First:** Alle Aktionen serverseitig validiert und autorisiert
-
-### 🎯 MVP-Scope & Abgrenzungen
-
-**✅ Im Scope (MVP):**
-- Grid-basiertes Canvas für Widget-Platzierung (Drag & Drop)
-- Widget-Palette mit vorkonfigurierten Standard-Widgets
-- Widget-Konfiguration via Settings-Modal (settingsSchema)
-- Speichern/Laden von Views (pro User, DB-persistiert)
-- Composite Widgets (Parent mit children, selection-sync)
-- Berechtigungsprüfung für destruktive Widget-Aktionen
-- 5 Core Widgets (Active Jobs, Spotify Search, Missing Tracks, Quick Actions, Metadata Manager)
-
-**❌ Explizit NICHT im Scope:**
-- ❌ Performance-Metriken, Telemetrie oder Analytics
-- ❌ Widget-in-Browser-Extension oder Mobile-App
-- ❌ Echtzeit-Kollaboration (Team-Views)
-- ❌ Automatisches Widget-Layout-Optimization
-- ❌ AI-basierte Widget-Recommendations
-- ❌ Widget-Marketplace oder Plugin-System (siehe Phase 9)
+> **Hinweis:** Die komplette Version 3.0 Sektion (PostgreSQL, Redis, nginx, Kubernetes, Multi-User Support, External Access) wurde entfernt, da SoulSpot als lokaler Single-User Dienst im privaten Netzwerk betrieben wird. Falls diese Enterprise-Features später wieder benötigt werden, können sie aus dem Archiv `docs/archived/removed-remote-features.md` wiederhergestellt werden.
 
 ---
 
@@ -2691,7 +2364,7 @@ Implementiere optionale View-Sharing-Features.
 |---------|-------------|-------|--------------|
 | **2.0.0** | Q3-Q4 2025 | **Dynamic Views & Widget-Palette** | **Grid Canvas, 5 Core Widgets, Composite Widgets, Permissions** |
 | 2.1.0 | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
-| 2.5.0 | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) + Phase F (Sharing) |
+| 2.5.0 | Q4 2025+ | Enterprise Features | Phase 9 (Plugins) + Phase F (Sharing) |
 
 **Breaking Changes (2.0.0):**
 - Neue API-Endpoints: `/api/views`, `/api/widgets`
@@ -2903,7 +2576,7 @@ Implementiere optionale View-Sharing-Features.
 #### 🟢 Medium (Phase 7-8)
 
 - Additional Metadata Sources (Discogs, Last.fm)
-- Media Server Integrations (Plex, Jellyfin)
+- Media Server Integrations (Plex)
 - Ratings Synchronization
 - Automation & Watchlists
 - Advanced Search
@@ -2931,8 +2604,9 @@ Implementiere optionale View-Sharing-Features.
 | **1.5.0** | Q3 2025 | Advanced Features | Phase 8 Complete |
 | **2.0.0** | Q3-Q4 2025 | Major Release | **Dynamic Views & Widget-Palette (Grid Canvas, 5 Core Widgets, Composite Widgets, Permissions)** |
 | **2.1.0** | Q4 2025 | Widget Extensions | Additional Widgets (Charts, Reports) |
-| **2.5.0** | Q4 2025+ | Enterprise Features | Phase 9 (Multi-user, Plugins) + Sharing/Templates |
-| **3.0.0** | 2026+ | Production Hardening | **Production Profile (PostgreSQL, Redis, nginx), Kubernetes, Security Hardening (OWASP, Input Validation, Secrets Management, Rate Limiting, Brute Force Protection, Session Timeout), Redis Integration, Backup & Recovery, Rollback Procedures** |
+| **2.5.0** | Q4 2025+ | Enterprise Features | Phase 9 (Plugins) + Sharing/Templates |
+
+> **Hinweis:** Version 3.0.0 mit PostgreSQL, Redis, nginx, Kubernetes wurde entfernt (lokal-only Betrieb).
 
 ### Versioning Strategy
 
@@ -3134,12 +2808,9 @@ Vor jedem Release:
 - **Security:** Implications of arbitrary plugins
 - **Empfehlung:** Phase 9, with careful security review
 
-#### 6. Multi-User Implementation
+> **Hinweis:** Multi-User Implementation Sektion entfernt (Single-User lokal-only Betrieb).
 
-**Frage:** Simple RBAC oder full multi-tenancy?
-
-- **Libraries:** Shared vs. private?
-- **Empfehlung:** Start with simple RBAC (admin/user), evolve based on demand
+#### 6. Live-Widgets & Real-Time Updates
 
 ### Community Input Needed
 

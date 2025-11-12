@@ -24,7 +24,7 @@
 
 The backend of SoulSpot Bridge is responsible for:
 
-- 🗄️ **Data Management** – SQLite/PostgreSQL database layer, Alembic migrations, robust data persistence
+- 🗄️ **Data Management** – SQLite database layer, Alembic migrations, robust data persistence
 - 🔌 **External Integrations** – Spotify API, slskd client, MusicBrainz, metadata providers
 - ⚙️ **Business Logic** – Use cases, domain services, download queue management, post-processing pipeline
 - 🔄 **Worker System** – Background job processing, async operations, retry logic
@@ -327,32 +327,18 @@ The backend of SoulSpot Bridge is responsible for:
 | Feature | Description | Priority | Effort | Phase |
 |---------|-------------|----------|--------|-------|
 | **Audio Fingerprinting** | AcoustID/Chromaprint matching | P2 | Very Large | Phase 8-9 |
-| **PostgreSQL Support** | Production database option | P1 | Large | v3.0 |
-| **Redis Integration** | Distributed cache & sessions | P1 | Large | v3.0 |
 | **Plugin System** | Extensible architecture | P3 | Very Large | Phase 9 |
 | **Multi-Library Support** | Multiple library locations | P2 | Large | Phase 9 |
 
----
-
-#### 9. Media Server Integrations
-
-| Integration | Features | Priority | Effort | Phase |
-|-------------|----------|----------|--------|-------|
-| **Plex** | Rescan trigger, ratings sync | P2 | Medium | Phase 8 |
-| **Jellyfin** | Rescan trigger, ratings sync | P2 | Medium | Phase 8 |
-| **Navidrome** | Rescan trigger, path mapping | P2 | Medium | Phase 8 |
-| **Subsonic** | API integration | P3 | Medium | Phase 8 |
+> **Hinweis:** Features zu PostgreSQL, Redis, Jellyfin, Navidrome und Subsonic wurden entfernt, da SoulSpot als lokaler Dienst im privaten Netzwerk betrieben wird.
 
 ---
 
-#### 10. Enterprise Features (v3.0)
+#### 9. Enterprise Features (v3.0)
 
 | Feature | Description | Priority | Effort |
 |---------|-------------|----------|--------|
-| **PostgreSQL Integration** | Production-ready RDBMS | P1 | Large |
 | **Database Connection Pooling** | Efficient connection management | P1 | Medium |
-| **Migration from SQLite** | Data migration tools | P1 | Large |
-| **Redis Integration** | Distributed caching & session storage | P1 | Large |
 | **Rate Limiting** | Backend rate limiting for APIs | P0 | Medium |
 | **Secrets Management** | Vault integration (optional) | P1 | Large |
 | **OWASP Compliance** | Security hardening | P0 | Large |
@@ -393,12 +379,9 @@ Phase 7 (Feature Enhancements)
     └─→ Advanced Search → Automation & Watchlists
     ↓
 Phase 8 (Advanced Features)
-    ├─→ Media Server Integrations
     └─→ Audio Fingerprinting
     ↓
 v3.0 (Production Hardening)
-    ├─→ PostgreSQL Integration
-    ├─→ Redis Integration
     └─→ Security Hardening
 ```
 
