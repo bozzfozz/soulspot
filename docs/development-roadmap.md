@@ -28,7 +28,7 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 
 **Key Areas:**
 - Database layer (SQLAlchemy, Alembic migrations)
-- External integrations (Spotify, slskd, MusicBrainz, Discogs, Last.fm)
+- External integrations (Spotify, slskd, MusicBrainz, Last.fm)
 - Worker system & job queue
 - Use cases & business logic
 - API endpoints (FastAPI)

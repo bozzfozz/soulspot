@@ -21,7 +21,7 @@ Inhalt
 - Quellen & Integrationen
   - Spotify: OAuth PKCE, Playlists, Liked Songs, Artists, Suche, Buttons: „Queue Album/Playlist/Artist Download"
   - Soulseek: slskd-API (Search, Download, Status, Auth), Anzeige Quelle/Username/Speed/File-Infos
-  - Externe Metadaten & Artwork: MusicBrainz, Discogs, Last.fm, CoverArtArchive, Fanart.tv
+  - Externe Metadaten & Artwork: MusicBrainz, Last.fm, CoverArtArchive, Fanart.tv
   - Lyrics: LRClib, Musixmatch, Genius
   - Media-Server: Plex (Rescan, Mapping)
   - Sonstiges: Last.fm Scrobbling, Telegram/Discord-Bot, Smart-Home/Webhooks
@@ -56,8 +56,8 @@ Inhalt
   - Optional: Auto-Convert (Archiv ↔ Mobil), Auto-Cleanup
 
 - Metadaten & Tagging
-  - Multi-Source-Tagging & Merge-Logik (Spotify, MusicBrainz, Discogs, Last.fm)
-  - Authority-Hierarchie (manual > Spotify > MusicBrainz > Discogs > Last.fm > fallback)
+  - Multi-Source-Tagging & Merge-Logik (Spotify, MusicBrainz, Last.fm)
+  - Authority-Hierarchie (manual > Spotify > MusicBrainz > Last.fm > fallback)
   - Tag-Merging, Schreibweisen-Normalisierung (feat./ft.), Batch-Fixer UI (Dry-Run + Commit)
   - Artwork: mehrere Quellen, mehrere Auflösungen, embed + cover.jpg
   - Metadata-Cache (SQLite), Hash-/Fingerprint-Keying
@@ -130,7 +130,7 @@ Should (Phase 2 — Automatisierung + Library)
 1. Missing-Song-Discovery & Library Scanner (mittel) [help wanted]  
 2. Artist-/Album-Watcher + Scheduler (CRON) (mittel) [help wanted]  
 3. Batch-Download (CSV/JSON/M3U) + Batch-UI (mittel) [help wanted]  
-4. Metadata enrichment Discogs + Last.fm + merge-logic (mittel) [help wanted]  
+4. Metadata enrichment Last.fm + merge-logic (mittel) [help wanted]  
 5. Ratings-Sync (Plex ↔ Files/DB) (mittel) [help wanted]  
 6. Smart-Match heuristics + fuzzy matching (mittel) [help wanted]  
 7. Auto-Cleanup & Smart-Delete policies (klein–mittel) [good first issue]  
@@ -162,7 +162,7 @@ Kurzfristig (1–2 Sprints)
   - Akzeptanzkriterien: single-track enrichment dry-run + commit, UI zeigt job status + progress
 
 Mittelfristig (Phase 2)
-- Missing-song-discovery, batch-downloads, ratings-sync connector (Plex), Discogs/Last.fm enrichers, batch-fixer UI
+- Missing-song-discovery, batch-downloads, ratings-sync connector (Plex), Last.fm enrichers, batch-fixer UI
 
 Langfristig (Phase 3)
 - AcoustID, KI-Features, plugin-architecture
@@ -177,7 +177,7 @@ Wichtige Metriken:
 
 Policies / Defaults (vorschlagen):
 - MusicBrainz rate-limit: 1 req/sec (beachten + worker-queue)  
-- Default merge-priorität: manual > MusicBrainz > Discogs > Spotify > fallback  
+- Default merge-priorität: manual > MusicBrainz > Spotify > fallback  
 - Default parallel downloads: 2 (configurable)  
 - Retry policy: 3 retries with exponential backoff
 

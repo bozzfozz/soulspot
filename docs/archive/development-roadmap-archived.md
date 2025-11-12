@@ -39,7 +39,7 @@
 ### 🎯 Kernnutzen
 
 - **Vollautomatische Bibliotheks-Ergänzung** – fehlende Songs werden erkannt und heruntergeladen
-- **Konsistente, perfekte Metadaten** – kombiniert aus Spotify, MusicBrainz, Discogs, Last.fm
+- **Konsistente, perfekte Metadaten** – kombiniert aus Spotify, MusicBrainz, Last.fm
 - **Kein manuelles Suchen, Sortieren oder Taggen** – Post-Processing-Pipeline automatisiert alles
 - **Self-Healing Library** – erkennt Defekte, Duplikate, fehlende Dateien und behebt sie automatisch
 - **Plattformübergreifende Synchronisation** – Playlists, Ratings, Play-Counts bleiben überall aktuell
@@ -106,7 +106,6 @@ SoulSpot Bridge verbindet mehrere Datenquellen zu einem einheitlichen System:
 |--------|-------|--------|-------|
 | **MusicBrainz** | IDs, Labels, Releases, Canonical Data | ✅ Implemented | Phase 3 |
 | **Spotify** | Artist/Track Names, Popularity, ISRC | ✅ Implemented | Phase 3 |
-| **Discogs** | Release Details, Year, Edition, Label | 📋 Planned | Phase 7 |
 | **Last.fm** | Genre Tags, Mood, Hörerzahlen | 📋 Planned | Phase 7 |
 | **CoverArtArchive** | Cover-Art (various resolutions) | ✅ Implemented | Phase 4 |
 | **Fanart.tv** | High-res Artwork | 📋 Planned | Phase 7 |
@@ -175,7 +174,7 @@ Match Score = (Title Similarity × 0.4)
 ```
 Download Complete
     ↓
-1. Metadata Enrichment (Spotify + MusicBrainz + Discogs + Last.fm)
+1. Metadata Enrichment (Spotify + MusicBrainz + Last.fm)
     ↓
 2. Cover Art Download (Multi-Source, Multi-Resolution)
     ↓
@@ -213,10 +212,9 @@ Download Complete
 ```
 1. Manual User Edits      (Höchste Priorität)
 2. MusicBrainz           (Canonical Data)
-3. Discogs               (Release Details)
-4. Spotify               (User-facing Names, Popularity)
-5. Last.fm               (Genre, Mood)
-6. File Tags             (Fallback)
+3. Spotify               (User-facing Names, Popularity)
+4. Last.fm               (Genre, Mood)
+5. File Tags             (Fallback)
 ```
 
 **Features:**
@@ -463,10 +461,9 @@ Library Scan → Missing Detection → Soulseek Search → Quality Check → Aut
 | - Source preference settings | LOW | HIGH |
 | - Metadata versioning | MEDIUM | LOW |
 | **Authority Hierarchy** | MEDIUM | HIGH |
-| - Manual > MusicBrainz > Discogs > Spotify | LOW | HIGH |
+| - Manual > MusicBrainz > Spotify | LOW | HIGH |
 | - Field-wise priority | MEDIUM | MEDIUM |
 | **Additional Sources** | MEDIUM | MEDIUM |
-| - Discogs integration | MEDIUM | MEDIUM |
 | - Last.fm integration | MEDIUM | MEDIUM |
 | - Lyrics (LRClib, Musixmatch, Genius) | MEDIUM | MEDIUM |
 | - Fanart.tv artwork | LOW | LOW |
@@ -2575,7 +2572,7 @@ Implementiere optionale View-Sharing-Features.
 
 #### 🟢 Medium (Phase 7-8)
 
-- Additional Metadata Sources (Discogs, Last.fm)
+- Additional Metadata Sources (Last.fm)
 - Media Server Integrations (Plex)
 - Ratings Synchronization
 - Automation & Watchlists
@@ -2648,10 +2645,9 @@ Vor jedem Release:
 ```
 1. Manual User Edits      (Höchste Priorität)
 2. MusicBrainz           (Canonical Data)
-3. Discogs               (Release Details)
-4. Spotify               (Popularity, Modern Names)
-5. Last.fm               (Fallback)
-6. File Tags             (Niedrigste Priorität)
+3. Spotify               (Popularity, Modern Names)
+4. Last.fm               (Fallback)
+5. File Tags             (Niedrigste Priorität)
 ```
 
 **Offene Frage:** Should Spotify be prioritized higher for certain fields like popularity or user-facing names?

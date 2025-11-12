@@ -109,7 +109,6 @@ The backend of SoulSpot Bridge is responsible for:
 | **Spotify API** | OAuth, playlists, metadata | ✅ Implemented |
 | **slskd** | Download client, search | ✅ Implemented |
 | **MusicBrainz** | Canonical music metadata | ✅ Implemented |
-| **Discogs** | Release details (planned) | 📋 Phase 7 |
 | **Last.fm** | Genre tags, stats (planned) | 📋 Phase 7 |
 
 #### 3. Worker System
@@ -176,21 +175,19 @@ The backend of SoulSpot Bridge is responsible for:
 | **Multi-Source Merge** | Combine metadata from multiple sources | P0 | Large | 📋 Planned |
 | **Authority Hierarchy** | Configure source priority per field | P0 | Medium | 📋 Planned |
 | **Conflict Resolution** | API for resolving metadata conflicts | P1 | Medium | 📋 Planned |
-| **Discogs Integration** | Add Discogs as metadata source | P1 | Medium | 📋 Planned |
 | **Last.fm Integration** | Add Last.fm for genres/tags | P1 | Medium | 📋 Planned |
 | **Tag Normalization** | Standardize artist names (feat./ft.) | P1 | Small | 📋 Planned |
 
 **Acceptance Criteria:**
 - [ ] Metadata merger with configurable source priority
-- [ ] Authority hierarchy: Manual > MusicBrainz > Discogs > Spotify > Last.fm
+- [ ] Authority hierarchy: Manual > MusicBrainz > Spotify > Last.fm
 - [ ] Conflict resolution API endpoints
-- [ ] Discogs API integration complete
 - [ ] Last.fm API integration complete
 - [ ] Tag normalization rules implemented
 - [ ] Unit + integration tests
 
 **Dependencies:**
-- External API rate limits (MusicBrainz: 1 req/sec, Discogs: TBD)
+- External API rate limits (MusicBrainz: 1 req/sec)
 
 **Risks:**
 - API rate limit handling complexity
@@ -354,7 +351,6 @@ The backend of SoulSpot Bridge is responsible for:
 | **MusicBrainz API** | Metadata quality | HIGH | Respect rate limits (1 req/sec), implement caching |
 | **Spotify API** | OAuth, playlists | HIGH | Handle token refresh, graceful degradation |
 | **slskd** | Download functionality | CRITICAL | Health checks, fallback error handling |
-| **Discogs API** | Metadata enrichment | MEDIUM | Optional feature, graceful fallback |
 | **Last.fm API** | Genre tags | LOW | Optional feature, cache results |
 
 ### Technical Risks
