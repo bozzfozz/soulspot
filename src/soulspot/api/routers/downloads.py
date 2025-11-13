@@ -474,7 +474,9 @@ async def batch_action(
             results.append({"id": download_id, "status": "success"})
 
         except ValueError as e:
-            errors.append({"id": download_id, "error": str(e)})
+            # Sanitize error message to avoid exposing internal details
+            error_msg = "Invalid operation or download ID"
+            errors.append({"id": download_id, "error": error_msg})
 
     return {
         "message": f"Batch action '{request.action}' completed",
