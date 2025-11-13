@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% from "includes/_skeleton.html" import list_skeleton, spinner %}
+
+{% block title %}Search - SoulSpot Bridge{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Smooth transitions for collapsible sections */
+    .filter-section {
+        transition: max-height 0.3s ease-out;
+        overflow: hidden;
+    }
+    .filter-section.collapsed {
+        max-height: 0;
+    }
+    .filter-section:not(.collapsed) {
+        max-height: 500px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-page space-y-6">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-900 leading-tight">Search Music</h1>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Left Sidebar - Advanced Filters -->
+        <div class="lg:col-span-1">
+            <div class="card sticky top-4">
+                <div class="card-header">
+                    <h3 class="card-title flex items-center justify-between">
+                        <span>Filters</span>
+                        <button 
+                            id="clear-filters-btn"
+                            class="btn btn-ghost btn-sm focus-ring"
+                            onclick="SearchManager.clearFilters()"
+                            aria-label="Clear all filters">
+                            Clear All
+                        </button>
+                    </h3>
+                </div>
+                <div class="card-body space-y-4">
+                    <!-- Quality Filter -->
+                    <div>
+                        <button 
+                            class="w-full text-left font-medium text-gray-700 flex items-center justify-between py-2 focus-ring"
+                            onclick="toggleFilterSection('quality')"
+                            aria-expanded="true"
+                            aria-controls="quality-filter">
+                            Quality
+                            <svg class="w-4 h-4 transition-transform" id="quality-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <div id="quality-filter" class="filter-section space-y-2 mt-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="quality" value="flac" class="focus-ring" />
+                                <span class="text-sm">FLAC (Lossless)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="quality" value="320" class="focus-ring" />
+                                <span class="text-sm">320kbps MP3</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="quality" value="256" class="focus-ring" />
+                                <span class="text-sm">256kbps+</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="quality" value="any" class="focus-ring" checked />
+                                <span class="text-sm">Any Quality</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Artist Filter -->
+                    <div class="border-t border-gray-200 pt-4">
+                        <button 
+                            class="w-full text-left font-medium text-gray-700 flex items-center justify-between py-2 focus-ring"
+                            onclick="toggleFilterSection('artist')"
+                            aria-expanded="false"
+                            aria-controls="artist-filter">
+                            Artist
+                            <svg class="w-4 h-4 transition-transform" id="artist-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <div id="artist-filter" class="filter-section collapsed mt-2">
+                            <input 
+                                type="text" 
+                                id="artist-filter-input"
+                                placeholder="Filter by artist..."
+                                class="form-input w-full focus-ring"
+                                oninput="SearchManager.updateFilters()"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Album Filter -->
+                    <div class="border-t border-gray-200 pt-4">
+                        <button 
+                            class="w-full text-left font-medium text-gray-700 flex items-center justify-between py-2 focus-ring"
+                            onclick="toggleFilterSection('album')"
+                            aria-expanded="false"
+                            aria-controls="album-filter">
+                            Album
+                            <svg class="w-4 h-4 transition-transform" id="album-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <div id="album-filter" class="filter-section collapsed mt-2">
+                            <input 
+                                type="text" 
+                                id="album-filter-input"
+                                placeholder="Filter by album..."
+                                class="form-input w-full focus-ring"
+                                oninput="SearchManager.updateFilters()"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Duration Filter -->
+                    <div class="border-t border-gray-200 pt-4">
+                        <button 
+                            class="w-full text-left font-medium text-gray-700 flex items-center justify-between py-2 focus-ring"
+                            onclick="toggleFilterSection('duration')"
+                            aria-expanded="false"
+                            aria-controls="duration-filter">
+                            Duration
+                            <svg class="w-4 h-4 transition-transform" id="duration-icon" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                            </svg>
+                        </button>
+                        <div id="duration-filter" class="filter-section collapsed space-y-2 mt-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="duration" value="short" class="focus-ring" />
+                                <span class="text-sm">Short (&lt; 3 min)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="duration" value="medium" class="focus-ring" />
+                                <span class="text-sm">Medium (3-5 min)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="duration" value="long" class="focus-ring" />
+                                <span class="text-sm">Long (&gt; 5 min)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search History -->
+            <div class="card mt-6">
+                <div class="card-header">
+                    <h3 class="card-title flex items-center justify-between">
+                        <span>Recent Searches</span>
+                        <button 
+                            class="btn btn-ghost btn-sm focus-ring"
+                            onclick="SearchManager.clearHistory()"
+                            aria-label="Clear search history">
+                            Clear
+                        </button>
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div id="search-history" class="space-y-2">
+                        <p class="text-sm text-gray-500">No recent searches</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content - Search and Results -->
+        <div class="lg:col-span-3 space-y-6">
+            <!-- Search Bar with Autocomplete -->
+            <div class="card">
+                <div class="card-body">
+                    <form onsubmit="SearchManager.performSearch(event)" class="space-y-4">
+                        <div class="relative">
+                            <label for="search-input" class="sr-only">Search for music</label>
+                            <input 
+                                type="text" 
+                                id="search-input"
+                                placeholder="Search for artists, albums, or tracks..."
+                                class="form-input w-full text-lg focus-ring"
+                                autocomplete="off"
+                                oninput="SearchManager.handleSearchInput(event)"
+                                aria-describedby="search-helper"
+                                aria-autocomplete="list"
+                                aria-controls="autocomplete-results"
+                            />
+                            <!-- Autocomplete Dropdown -->
+                            <div 
+                                id="autocomplete-results" 
+                                class="absolute w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 hidden z-10"
+                                role="listbox"
+                            ></div>
+                            <p id="search-helper" class="text-xs text-gray-500 mt-2">
+                                Press Enter to search, or select a suggestion
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg focus-ring">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                Search
+                            </button>
+                            <button type="button" class="btn btn-secondary focus-ring" onclick="SearchManager.clearSearch()">
+                                Clear
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Bulk Actions Bar (hidden by default) -->
+            <div id="bulk-actions-bar" class="card bg-primary-50 border-primary-200 hidden">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-medium text-primary-900" id="selected-count">0 selected</span>
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    id="select-all-checkbox"
+                                    class="focus-ring"
+                                    onchange="SearchManager.toggleSelectAll(this.checked)"
+                                />
+                                <span class="text-sm text-primary-900">Select All</span>
+                            </label>
+                        </div>
+                        <div class="flex gap-2">
+                            <button 
+                                class="btn btn-primary focus-ring"
+                                onclick="SearchManager.bulkDownload()"
+                                id="bulk-download-btn">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                                </svg>
+                                Download Selected
+                            </button>
+                            <button 
+                                class="btn btn-secondary focus-ring"
+                                onclick="SearchManager.clearSelection()">
+                                Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div id="search-results" class="space-y-4">
+                <!-- Empty state -->
+                <div class="card text-center py-12">
+                    <div class="card-body">
+                        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Start Your Search</h3>
+                        <p class="text-gray-600">Search for your favorite artists, albums, or tracks</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/search.js"></script>
+{% endblock %}

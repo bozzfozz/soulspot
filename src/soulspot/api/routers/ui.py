@@ -115,6 +115,12 @@ async def auth(request: Request) -> Any:
     return templates.TemplateResponse("auth.html", {"request": request})
 
 
+@router.get("/search", response_class=HTMLResponse)
+async def search(request: Request) -> Any:
+    """Advanced search page."""
+    return templates.TemplateResponse("search.html", {"request": request})
+
+
 @router.get("/theme-sample", response_class=HTMLResponse)
 async def theme_sample(request: Request) -> Any:
     """Harmony theme sample page with component showcase."""
