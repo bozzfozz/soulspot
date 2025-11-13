@@ -1,10 +1,9 @@
 # SoulSpot Bridge – Frontend Development Roadmap
 
 > **Last Updated:** 2025-11-13  
-> **Version:** 0.2.0 (Alpha → Beta Preparation)  
-> **Status:** Phase 7 Complete | V2.0 Planning Complete (HTMX-Only Approach) | Ready for Implementation  
-> **Owner:** Frontend Team  
-> **Next:** V2.0 Dashboard Builder (HTMX-Only, 12-18 days)
+> **Version:** 0.1.0 (Alpha)  
+> **Status:** Phase 7 In Progress - UI/UX Enhancements Complete | Advanced Search Complete  
+> **Owner:** Frontend Team
 
 ---
 
@@ -274,294 +273,89 @@ templates/
 
 ### Priority: STRATEGIC (P0 for v2.0)
 
-#### 5. v2.0 Dynamic Views & Widget-Palette ⭐ HTMX-ONLY APPROACH
+#### 5. v2.0 Dynamic Views & Widget-Palette
 
-**Epic:** HTMX-Only Dashboard Builder (Button-Based Layout)  
+**Epic:** Grid-Based Page Builder  
 **Owner:** Frontend Team  
 **Priority:** P0 (Strategic)  
-**Effort:** Medium (12-18 days / 2.5-3.5 weeks)  
-**Status:** 📋 Planned (Evaluation Complete)
-
-> **Architecture Decision:** Pure HTMX approach with button-based layout controls instead of GridStack drag-and-drop.  
-> **Rationale:** Superior accessibility, faster development (12-18 days vs 25-35), zero custom JS, mobile-friendly.  
-> **See:** `docs/frontend-roadmap-htmx-evaluation.md` for complete evaluation.
+**Effort:** Very Large (4-5 weeks)
 
 | Phase | Description | Priority | Effort | Status |
 |-------|-------------|----------|--------|--------|
-| **Phase 0: Foundation** | Database schema, migrations | P0 | 2 days | 📋 Planned |
-| **Phase 1: Canvas & Widgets** | Widget partials, CSS Grid layout | P0 | 4-5 days | 📋 Planned |
-| **Phase 2: Core Features** | Add/remove, movement, resize | P0 | 3-4 days | 📋 Planned |
-| **Phase 3: Advanced** | Edit/view mode, config, pages | P0 | 2-3 days | 📋 Planned |
-| **Phase 4: Launch** | Testing, polish, rollout | P0 | 3-4 days | 📋 Planned |
-
-**Total Effort:** 12-18 days (vs 25-35 for GridStack hybrid)
-
----
+| **Phase A: Design** | Wireframes & component design | P0 | Small | 📋 Planned |
+| **Phase B: Infrastructure** | Grid canvas + widget palette | P0 | Large | 📋 Planned |
+| **Phase C: Core Widgets** | 5 essential widgets | P0 | Large | 📋 Planned |
+| **Phase D: Composite** | Widget-in-widget support | P1 | Medium | 📋 Planned |
+| **Phase E: Polish** | UX refinements, docs | P1 | Medium | 📋 Planned |
 
 **Key Features:**
 
-##### Layout System: Button-Based (No Drag-and-Drop)
-- **CSS Grid (12 columns)** – Responsive grid with Tailwind
-- **Button Controls** – ↑ ↓ ← → for movement, ⬌ for resize
-- **Row-Based Stacking** – Widgets stack in rows, move via button clicks
-- **Zero JavaScript** – 100% HTMX attributes + Jinja2 templates
+##### Grid Canvas
+- **GridStack.js Integration** – 12-column responsive grid
+- **Drag & Drop** – Free widget placement
+- **Resize Support** – Visual resize handles
+- **Responsive Layout** – Mobile, tablet, desktop breakpoints
 - **Edit/View Modes** – Toggle between editing and viewing
-- **Mobile Friendly** – Standard button taps (no complex gestures)
-
-**Why Buttons Instead of Drag-and-Drop?**
-✅ **Accessibility First** – Keyboard/screen-reader friendly by default  
-✅ **Mobile Friendly** – Works perfectly on touch devices  
-✅ **Zero Custom JS** – Pure HTMX (no GridStack integration)  
-✅ **Faster Development** – 12-18 days vs 25-35 days  
-✅ **Easy Testing** – Standard HTTP request/response  
-❌ **Trade-off:** No free drag positioning (acceptable)
 
 ##### Widget System
-- **Widget Catalog Modal** – HTMX modal with widget selection (`hx-get`)
-- **Add Widget** – `hx-post` to create instance, returns HTML
-- **Remove Widget** – `hx-delete` removes from canvas
-- **Widget Configuration** – Modal forms with `hx-post`
-- **Live Updates** – `hx-trigger="every 5s"` polling (Phase 1), SSE (Phase 2)
-- **Page Management** – Multiple dashboards with save/load
+- **Widget Palette** – Catalog of available widgets
+- **Widget Configuration** – Settings modal per widget
+- **Widget Actions** – Interactive buttons within widgets
+- **Real-Time Updates** – WebSocket or polling for live data
+- **Save/Load Views** – Persistent user layouts
 
 ##### 5 Core Widgets (MVP)
 
 1. **Active Jobs Widget**
-   - Real-time job monitoring via polling
+   - Real-time job monitoring
    - Progress bars with ETA
-   - Pause/cancel/retry buttons (HTMX)
-   - Configurable refresh interval (config modal)
+   - Pause/cancel/retry actions
+   - Configurable refresh interval
 
 2. **Spotify Search Widget**
-   - Inline search with `hx-get` + debounce
+   - Inline search interface
    - Result preview cards
-   - Quick download via `hx-post`
-   - Filter settings modal
+   - Quick download button
+   - Settings for search mode
 
 3. **Missing Tracks Widget**
-   - Playlist comparison display
+   - Playlist comparison
    - Missing track list
-   - Bulk download action (`hx-post`)
-   - CSV/JSON export button
+   - Bulk download action
+   - CSV/JSON export
 
 4. **Quick Actions Widget**
    - Configurable button grid
-   - Common actions (scan, import, fix) via `hx-post`
-   - Visual feedback (toast notifications)
-   - Keyboard shortcuts (existing KeyboardNav)
+   - Common actions (scan, import, fix)
+   - Keyboard shortcuts
+   - Visual feedback
 
 5. **Metadata Manager Widget**
    - Metadata issue list
-   - Filter controls via `hx-get`
-   - Quick-fix actions (`hx-post`)
+   - Filter by problem type
+   - Quick-fix actions
    - Batch operations
 
----
-
-**Acceptance Criteria (Definition of Done):**
-
-**Phase 0: Foundation**
-- [x] Database migration created (`widgets`, `pages`, `widget_instances` tables)
-- [x] Widget registry seeded (5 core widgets)
-- [x] API endpoint stubs created
-
-**Phase 1: Canvas & Widgets**
-- [ ] CSS Grid layout system (12 columns, responsive)
-- [ ] Widget partial templates created (5 widgets)
-- [ ] Canvas rendering endpoint (`GET /api/pages/{id}/canvas`)
-- [ ] Widget card wrapper template
-- [ ] Responsive breakpoints (mobile: 4 cols, tablet: 8 cols, desktop: 12 cols)
-
-**Phase 2: Core Features**
-- [ ] Widget catalog modal (`GET /api/widgets/catalog`)
-- [ ] Add widget endpoint (`POST /api/widgets/instances`)
-- [ ] Remove widget endpoint (`DELETE /api/widgets/instances/{id}`)
-- [ ] Move up/down buttons (`POST /api/widgets/instances/{id}/move-{direction}`)
-- [ ] Resize button (`POST /api/widgets/instances/{id}/resize`)
-- [ ] Position swap logic (move widgets between rows)
-
-**Phase 3: Advanced**
-- [ ] Edit/view mode toggle (show/hide controls)
-- [ ] Widget configuration modal (`GET /api/widgets/instances/{id}/config`)
-- [ ] Save widget config (`POST /api/widgets/instances/{id}/config`)
-- [ ] Page management (create/rename/delete pages)
-- [ ] Page switcher sidebar
-- [ ] Default page setting
-
-**Phase 4: Launch**
-- [ ] Integration tests (80%+ coverage)
-- [ ] E2E tests (critical paths with Playwright)
-- [ ] Accessibility audit (WCAG 2.1 AA with axe-core)
-- [ ] Performance benchmarks (<1s load, <300ms actions)
-- [ ] Feature flag deployment
-- [ ] Beta testing (10 users, 1 week)
-- [ ] Staged rollout (10% → 50% → 100%)
-
-**Quality Gates:**
-- [ ] All 5 widgets functional with live updates
-- [ ] Mobile responsive (tested on iPhone, Android)
-- [ ] Keyboard navigation works (tab, enter, escape)
-- [ ] Screen reader compatible (tested with NVDA/VoiceOver)
-- [ ] No console errors or warnings
-- [ ] Performance: Initial load <1s, actions <300ms
-
----
-
-**Technical Implementation:**
-
-**Database Schema:**
-```sql
-CREATE TABLE widgets (
-    id INTEGER PRIMARY KEY,
-    type VARCHAR(50) UNIQUE NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    template_path VARCHAR(200) NOT NULL,
-    default_config JSON
-);
-
-CREATE TABLE pages (
-    id INTEGER PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    slug VARCHAR(100) UNIQUE NOT NULL,
-    is_default BOOLEAN DEFAULT FALSE
-);
-
-CREATE TABLE widget_instances (
-    id INTEGER PRIMARY KEY,
-    page_id INTEGER NOT NULL REFERENCES pages(id),
-    widget_type VARCHAR(50) NOT NULL REFERENCES widgets(type),
-    position_row INTEGER NOT NULL DEFAULT 0,
-    position_col INTEGER NOT NULL DEFAULT 0,
-    span_cols INTEGER NOT NULL DEFAULT 6,
-    config JSON,
-    UNIQUE(page_id, position_row, position_col)
-);
-```
-
-**HTMX Patterns Used:**
-- `hx-get` – Load widget content, catalog modal
-- `hx-post` – Add widget, move, resize, config save
-- `hx-delete` – Remove widget
-- `hx-trigger="load"` – Load widget on canvas render
-- `hx-trigger="every 5s"` – Polling for live updates
-- `hx-swap="innerHTML"` – Replace content
-- `hx-swap="outerHTML"` – Replace entire element
-- `hx-swap="beforeend"` – Append to canvas
-- `hx-target` – Specify swap target element
-- `hx-vals` – Send JSON data with request
-- `hx-confirm` – Confirmation dialog
-
-**Example Widget Card Template:**
-```html
-<div class="widget-card widget-col-6" id="widget-instance-42">
-  {% include "partials/widgets/active_jobs.html" %}
-  
-  {% if edit_mode %}
-  <div class="widget-controls">
-    <button hx-post="/api/widgets/instances/42/move-up"
-            hx-target="#widget-canvas"
-            hx-swap="innerHTML"
-            aria-label="Move up">↑</button>
-    <button hx-post="/api/widgets/instances/42/move-down"
-            aria-label="Move down">↓</button>
-    <button hx-delete="/api/widgets/instances/42"
-            hx-confirm="Remove widget?"
-            aria-label="Remove">✕</button>
-  </div>
-  {% endif %}
-</div>
-```
-
----
+**Acceptance Criteria:**
+- [ ] Grid canvas with GridStack.js
+- [ ] Drag & drop widget placement
+- [ ] Widget palette with category filter
+- [ ] Settings modal for widget config
+- [ ] All 5 core widgets functional
+- [ ] Save/load view persistence
+- [ ] Edit/view mode toggle
+- [ ] Responsive on mobile/tablet/desktop
+- [ ] WCAG AA accessibility compliance
 
 **Dependencies:**
+- Backend API endpoints for widgets
+- WebSocket or SSE for real-time updates
+- Database schema for saved views
 
-**Backend:**
-- [ ] FastAPI endpoints (13 new routes)
-- [ ] Database migrations (Alembic)
-- [ ] Widget registry seeder
-- [ ] Template rendering helpers
-
-**Frontend:**
-- [ ] Widget partial templates (5 widgets)
-- [ ] CSS Grid styles (Tailwind utilities)
-- [ ] Modal container in base.html
-- [ ] Existing: HTMX (already integrated ✅)
-- [ ] Existing: Toast notifications (already implemented ✅)
-- [ ] Existing: Loading states (already implemented ✅)
-
-**External:**
-- None! (No GridStack, no additional libraries)
-
----
-
-**Risks & Mitigations:**
-
-| Risk | Probability | Impact | Mitigation |
-|------|------------|--------|------------|
-| **User resistance to buttons** | LOW | MEDIUM | User testing, clear labels, tooltips |
-| **Performance (many widgets)** | MEDIUM | MEDIUM | Lazy loading, pagination, caching |
-| **Mobile layout complexity** | LOW | MEDIUM | Mobile-first CSS, extensive testing |
-| **Backend load (polling)** | MEDIUM | MEDIUM | Rate limiting, upgrade to SSE in Phase 2 |
-| **Browser compatibility** | LOW | LOW | HTMX works on all modern browsers |
-
-**Overall Risk:** ✅ LOW (proven technology stack, no complex integration)
-
----
-
-**Migration Path:**
-
-**Week 1-2: Development**
-- Phase 0-1: Foundation & Canvas (6-7 days)
-
-**Week 2-3: Feature Complete**
-- Phase 2-3: Core Features & Advanced (5-7 days)
-
-**Week 3-4: Testing & Launch**
-- Phase 4: Testing, polish, rollout (3-4 days)
-
-**Rollback Plan:**
-- Feature flag toggle (instant rollback to current UI)
-- Database rollback (drop widget tables)
-- No breaking changes to existing pages
-
----
-
-**Success Metrics:**
-
-**Development:**
-- Actual time vs estimate (target: within 20%)
-- Bug count during development (target: <10 critical)
-- Test coverage (target: >80%)
-
-**Post-Launch:**
-- User adoption rate (target: 70% within 2 weeks)
-- Average widgets per dashboard (target: 3-5)
-- Dashboard creation rate (target: 1+ per user)
-- User satisfaction (target: 4+/5 stars)
-- Performance: P95 load time (target: <1.5s)
-
----
-
-**Documentation:**
-
-**For Developers:**
-- [x] `docs/frontend-htmx-inventory.md` – Current HTMX usage inventory
-- [x] `docs/frontend-roadmap-htmx-evaluation.md` – Complete evaluation & design (1000+ lines)
-- [ ] API documentation (OpenAPI/Swagger)
-- [ ] Widget development guide
-
-**For Users:**
-- [ ] Dashboard builder user guide
-- [ ] Widget configuration guide
-- [ ] Video tutorial (optional)
-
----
-
-**References:**
-- See: `docs/frontend-roadmap-htmx-evaluation.md` for complete architecture analysis
-- See: `docs/frontend-htmx-inventory.md` for current state inventory
-- See: `docs/frontend-development-roadmap-archived-gridstack.md` for original GridStack plan
+**Risks:**
+- GridStack.js + HTMX integration complexity
+- Performance with many widgets
+- Mobile responsiveness challenges
 
 ---
 
@@ -645,50 +439,40 @@ CREATE TABLE widget_instances (
 
 | Dependency | Impact | Risk Level | Mitigation |
 |------------|--------|------------|------------|
-| **HTMX Library** | Core interactivity | CRITICAL | Pin version (v1.9.10), CDN fallback |
+| **HTMX Library** | Core interactivity | CRITICAL | Pin version, CDN fallback |
 | **Tailwind CSS** | Styling framework | HIGH | Self-hosted, build process |
-| **~GridStack.js~** | ~~Widget grid~~ **REMOVED** | ~~HIGH~~ NONE | ✅ Replaced with HTMX-only button-based layout |
+| **GridStack.js (v2.0)** | Widget grid system | HIGH | Evaluate alternatives, fallback layout |
 | **Heroicons** | Icon library | LOW | Local copy, SVG fallback |
-
-**Note:** GridStack.js dependency removed in favor of pure HTMX approach with button-based layout controls.
 
 ### Technical Risks
 
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|------------|
-| **~HTMX + GridStack Conflicts~** | ~~MEDIUM~~ **ELIMINATED** | ~~HIGH~~ NONE | ✅ No GridStack = No conflicts |
-| **Performance (many widgets)** | MEDIUM | MEDIUM | Lazy loading, pagination, caching |
-| **Mobile Responsiveness** | LOW | MEDIUM | ✅ Button-based layout = mobile-friendly by design |
-| **Accessibility Gaps** | LOW | LOW | ✅ Native button accessibility, automated testing (axe) |
-| **Browser Compatibility** | LOW | LOW | Progressive enhancement, HTMX polyfills |
-| **User Resistance (buttons)** | LOW | MEDIUM | Clear labels, tooltips, user testing |
-| **Backend Load (polling)** | MEDIUM | MEDIUM | Rate limiting, caching, upgrade to SSE in Phase 2 |
-
-**Overall Risk Profile:** ✅ **LOW** (significantly reduced by eliminating GridStack)
+| **HTMX + GridStack Conflicts** | MEDIUM | HIGH | Careful event handling, testing |
+| **Performance (many widgets)** | MEDIUM | MEDIUM | Lazy loading, virtualization |
+| **Mobile Responsiveness** | MEDIUM | HIGH | Mobile-first design, extensive testing |
+| **Accessibility Gaps** | MEDIUM | MEDIUM | Automated testing (axe), manual audit |
+| **Browser Compatibility** | LOW | MEDIUM | Progressive enhancement, polyfills |
 
 ### Dependencies Between Features
 
 ```
 Phase 5 (Basic UI) ✅
     ↓
-Phase 7 (UI Enhancements) ✅
-    ├─→ Advanced Search UI ✅
-    ├─→ Queue Management UI (partial)
+Phase 7 (UI Enhancements)
+    ├─→ Advanced Search UI
+    ├─→ Queue Management UI
     ├─→ Settings UI
-    └─→ Loading/Error States ✅
+    └─→ Loading/Error States
     ↓
-v2.0 (Dynamic Views) - HTMX-ONLY APPROACH
-    ├─→ Phase 0: Foundation (database, migrations)
-    ├─→ Phase 1: Canvas & Widget Partials (CSS Grid, templates)
-    ├─→ Phase 2: Core Features (add/remove/move/resize)
-    ├─→ Phase 3: Advanced (edit/view mode, config, pages)
-    └─→ Phase 4: Launch (testing, rollout)
+v2.0 (Dynamic Views)
+    ├─→ Grid Canvas (Phase B)
+    ├─→ Widget System (Phase B)
+    ├─→ 5 Core Widgets (Phase C)
+    └─→ Composite Widgets (Phase D)
     ↓
 Phase 8 (Advanced Features)
     ├─→ Mobile App / PWA
-    ├─→ Browser Extension
-    └─→ Analytics UI
-```
     ├─→ Browser Extension
     └─→ Analytics UI
 ```
@@ -713,10 +497,8 @@ Phase 8 (Advanced Features)
 ### External Resources
 
 - [HTMX Documentation](https://htmx.org/docs/)
-- [HTMX SSE Extension](https://htmx.org/extensions/server-sent-events/)
-- [HTMX Examples](https://htmx.org/examples/)
-- [Hypermedia Systems Book](https://hypermedia.systems/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [GridStack.js Documentation](https://gridstackjs.com/)
 - [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [Jinja2 Documentation](https://jinja.palletsprojects.com/)
 
@@ -724,42 +506,12 @@ Phase 8 (Advanced Features)
 
 ## 📝 Changelog
 
-### 2025-11-13: V2.0 HTMX-Only Architecture Decision
-
-**Major Changes:**
-- ✅ **Architecture Decision:** HTMX-Only with button-based layout (NO GridStack)
-- ✅ Created comprehensive evaluation: `docs/frontend-roadmap-htmx-evaluation.md` (1000+ lines)
-- ✅ Created inventory report: `docs/frontend-htmx-inventory.md` (567 lines)
-- ✅ Updated v2.0 section with complete HTMX-only implementation plan
-- ✅ Archived original GridStack plan: `docs/frontend-development-roadmap-archived-gridstack.md`
-- ✅ Reduced development effort: 12-18 days (vs 25-35 for GridStack)
-- ✅ Eliminated GridStack.js dependency and integration complexity
-- ✅ Improved accessibility (WCAG 2.1 AA native compliance)
-- ✅ Simplified mobile support (button-based vs drag-and-drop)
-- ✅ Updated technical risks (LOW overall, eliminated GridStack conflicts)
-
-**Rationale:**
-Pure HTMX with button-based layout controls delivers superior accessibility, faster development, zero custom JavaScript, and mobile-friendly UX while accepting the trade-off of no free drag positioning.
-
-**Implementation Ready:**
-- Database schema designed (widgets, pages, widget_instances)
-- API endpoints specified (13 routes)
-- Template structure defined
-- CSS Grid layout system designed
-- HTMX patterns documented
-- Effort estimate: 12-18 days across 4 phases
-
-**Documentation:**
-- `docs/frontend-roadmap-htmx-evaluation.md` - Complete evaluation with research, architecture options, API specs, code examples (26KB, 1001 lines)
-- `docs/frontend-htmx-inventory.md` - Current HTMX usage inventory with readiness assessment (16KB, 567 lines)
-- `docs/frontend-development-roadmap-archived-gridstack.md` - Original GridStack plan (archived for reference)
-
 ### 2025-11-12: Frontend Roadmap Created
 
 **Changes:**
 - ✅ Split from monolithic development roadmap
 - ✅ Frontend-specific focus areas defined
-- ✅ v2.0 Dynamic Views detailed planning (GridStack approach)
+- ✅ v2.0 Dynamic Views detailed planning
 - ✅ Priorities and effort estimates added
 - ✅ Dependencies and risks documented
 - ✅ Now/Next/Later structure implemented
