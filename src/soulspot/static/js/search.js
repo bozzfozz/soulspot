@@ -91,7 +91,7 @@ const SearchManager = {
                 return;
             }
 
-            const response = await fetch(`/api/v1/tracks/search?query=${encodeURIComponent(query)}&limit=5&access_token=${accessToken}`);
+            const response = await fetch(`/api/tracks/search?query=${encodeURIComponent(query)}&limit=5&access_token=${accessToken}`);
             
             if (!response.ok) {
                 throw new Error('Failed to fetch suggestions');
@@ -183,7 +183,7 @@ const SearchManager = {
                 throw new Error('Please authenticate with Spotify first');
             }
 
-            const response = await fetch(`/api/v1/tracks/search?query=${encodeURIComponent(query)}&limit=50&access_token=${accessToken}`);
+            const response = await fetch(`/api/tracks/search?query=${encodeURIComponent(query)}&limit=50&access_token=${accessToken}`);
             
             if (!response.ok) {
                 throw new Error('Search failed');
@@ -385,7 +385,7 @@ const SearchManager = {
         try {
             LoadingManager.showOverlay(document.querySelector(`#track-${trackId}`));
             
-            const response = await fetch(`/api/v1/tracks/${trackId}/download?quality=${this.state.filters.quality}`, {
+            const response = await fetch(`/api/tracks/${trackId}/download?quality=${this.state.filters.quality}`, {
                 method: 'POST'
             });
 
@@ -419,7 +419,7 @@ const SearchManager = {
 
         for (const trackId of selectedIds) {
             try {
-                const response = await fetch(`/api/v1/tracks/${trackId}/download?quality=${this.state.filters.quality}`, {
+                const response = await fetch(`/api/tracks/${trackId}/download?quality=${this.state.filters.quality}`, {
                     method: 'POST'
                 });
 

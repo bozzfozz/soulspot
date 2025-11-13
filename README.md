@@ -56,8 +56,8 @@ Weitere Konfigurationsmöglichkeiten (z. B. Benutzer-IDs, Zeitzone, geheime Sc
 ## Zugriff nach dem Start
 | Dienst | URL | Beschreibung |
 | --- | --- | --- |
-| Web-App | http://localhost:8765/ui | Hauptoberfläche zum Verwalten deiner Musik |
-| API | http://localhost:8765 | Basis-Endpoint der Anwendung |
+| Web-App | http://localhost:8765 | Hauptoberfläche zum Verwalten deiner Musik |
+| API | http://localhost:8765/api | API-Endpoints der Anwendung |
 | API-Dokumentation | http://localhost:8765/docs | Technische API-Ansicht (optional) |
 | slskd Web UI | http://localhost:5030 | Verwaltung des Soulseek-Dienstes |
 

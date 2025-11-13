@@ -12,13 +12,13 @@
         <!-- Global Queue Controls -->
         <div class="flex gap-2">
             <button id="pause-all-btn" class="btn btn-secondary btn-sm focus-ring"
-                    hx-post="/api/v1/downloads/pause"
+                    hx-post="/api/downloads/pause"
                     hx-swap="none"
                     aria-label="Pause all downloads">
                 ⏸️ Pause All
             </button>
             <button id="resume-all-btn" class="btn btn-secondary btn-sm focus-ring"
-                    hx-post="/api/v1/downloads/resume"
+                    hx-post="/api/downloads/resume"
                     hx-swap="none"
                     aria-label="Resume all downloads">
                 ▶️ Resume All
@@ -200,7 +200,7 @@
                     <div class="flex flex-col gap-2">
                         {% if download.status == 'downloading' %}
                         <button class="btn btn-secondary btn-sm focus-ring" 
-                                hx-post="/api/v1/downloads/{{ download.id }}/pause"
+                                hx-post="/api/downloads/{{ download.id }}/pause"
                                 hx-swap="outerHTML"
                                 hx-target="[data-download-id='{{ download.id }}']"
                                 aria-label="Pause download">
@@ -210,7 +210,7 @@
                         
                         {% if download.status == 'queued' %}
                         <button class="btn btn-primary btn-sm focus-ring" 
-                                hx-post="/api/v1/downloads/{{ download.id }}/resume"
+                                hx-post="/api/downloads/{{ download.id }}/resume"
                                 hx-swap="outerHTML"
                                 hx-target="[data-download-id='{{ download.id }}']"
                                 aria-label="Resume download">
@@ -220,7 +220,7 @@
                         
                         {% if download.status == 'failed' %}
                         <button class="btn btn-secondary btn-sm focus-ring" 
-                                hx-post="/api/v1/downloads/{{ download.id }}/retry"
+                                hx-post="/api/downloads/{{ download.id }}/retry"
                                 hx-swap="outerHTML"
                                 hx-target="[data-download-id='{{ download.id }}']"
                                 aria-label="Retry download">
@@ -230,7 +230,7 @@
                         
                         {% if download.status in ['queued', 'downloading', 'pending'] %}
                         <button class="btn btn-danger btn-sm focus-ring" 
-                                hx-post="/api/v1/downloads/{{ download.id }}/cancel"
+                                hx-post="/api/downloads/{{ download.id }}/cancel"
                                 hx-swap="outerHTML"
                                 hx-target="[data-download-id='{{ download.id }}']"
                                 aria-label="Cancel download">
@@ -323,7 +323,7 @@ async function batchSetPriority() {
     if (downloadIds.length === 0) return;
     
     try {
-        const response = await fetch('/api/v1/downloads/batch-action', {
+        const response = await fetch('/api/downloads/batch-action', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -381,7 +381,7 @@ function sortDownloads(sortBy) {
 // Priority Update
 async function updatePriority(downloadId, priority) {
     try {
-        const response = await fetch(`/api/v1/downloads/${downloadId}/priority`, {
+        const response = await fetch(`/api/downloads/${downloadId}/priority`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ priority: parseInt(priority) })

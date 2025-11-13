@@ -8,7 +8,7 @@
     <!-- Page Header -->
     <div class="flex justify-between items-center">
         <h1 class="text-3xl font-bold text-gray-900 leading-tight">Playlists</h1>
-        <a href="/ui/playlists/import" class="btn btn-primary focus-ring">
+        <a href="/playlists/import" class="btn btn-primary focus-ring">
             Import Playlist
         </a>
     </div>
@@ -37,7 +37,7 @@
                 </div>
                 <div class="card-footer gap-2">
                     <button class="btn btn-secondary btn-sm focus-ring" 
-                            hx-post="/api/v1/playlists/{{ playlist.id }}/sync"
+                            hx-post="/api/playlists/{{ playlist.id }}/sync"
                             hx-swap="outerHTML"
                             aria-label="Sync playlist {{ playlist.name }}">
                         Sync
@@ -58,7 +58,7 @@
                         </svg>
                         <h3 class="text-lg font-medium text-gray-900 mb-2">No playlists yet</h3>
                         <p class="text-gray-600 mb-6">Import a Spotify playlist to get started!</p>
-                        <a href="/ui/playlists/import" class="btn btn-primary focus-ring">
+                        <a href="/playlists/import" class="btn btn-primary focus-ring">
                             Import Your First Playlist
                         </a>
                     </div>

@@ -31,7 +31,7 @@ async def import_playlist(
     The access token is automatically retrieved from your session.
     If your token is expired, it will be automatically refreshed.
     If you don't have a valid session, you'll receive a 401 error
-    and need to authenticate at /ui/auth first.
+    and need to authenticate at /auth first.
 
     Args:
         playlist_id: Spotify playlist ID

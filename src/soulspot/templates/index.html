@@ -27,7 +27,7 @@
                 </p>
             </div>
             <div class="card-footer">
-                <a href="/ui/playlists" class="btn btn-primary btn-sm focus-ring">
+                <a href="/playlists" class="btn btn-primary btn-sm focus-ring">
                     View Playlists
                 </a>
             </div>
@@ -54,7 +54,7 @@
                 </p>
             </div>
             <div class="card-footer">
-                <a href="/ui/downloads" class="btn btn-primary btn-sm focus-ring">
+                <a href="/downloads" class="btn btn-primary btn-sm focus-ring">
                     View Downloads
                 </a>
             </div>
@@ -78,7 +78,7 @@
         
         <!-- Session Status Check -->
         <div id="session-status" 
-             hx-get="/api/v1/auth/session" 
+             hx-get="/api/auth/session" 
              hx-trigger="load"
              hx-swap="innerHTML"
              class="mb-6">
@@ -90,10 +90,10 @@
         </div>
         
         <div class="flex flex-wrap gap-4">
-            <a href="/ui/playlists/import" class="btn btn-primary btn-lg focus-ring">
+            <a href="/playlists/import" class="btn btn-primary btn-lg focus-ring">
                 Import Playlist
             </a>
-            <a href="/ui/playlists" class="btn btn-secondary btn-lg focus-ring">
+            <a href="/playlists" class="btn btn-secondary btn-lg focus-ring">
                 View Playlists
             </a>
         </div>
@@ -122,7 +122,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                                         <p class="text-xs text-success-700">Ready to import playlists and download tracks</p>
                                     </div>
                                 </div>
-                                <a href="/api/v1/auth/logout" class="btn btn-secondary btn-sm focus-ring">
+                                <a href="/api/auth/logout" class="btn btn-secondary btn-sm focus-ring">
                                     Disconnect
                                 </a>
                             </div>
@@ -143,7 +143,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                                         <p class="text-xs text-warning-700">Will auto-refresh when needed, or reconnect manually</p>
                                     </div>
                                 </div>
-                                <a href="/ui/auth" class="btn btn-warning btn-sm focus-ring">
+                                <a href="/auth" class="btn btn-warning btn-sm focus-ring">
                                     Reconnect
                                 </a>
                             </div>
@@ -164,7 +164,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                                         <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
                                     </div>
                                 </div>
-                                <a href="/ui/auth" class="btn btn-primary btn-sm focus-ring">
+                                <a href="/auth" class="btn btn-primary btn-sm focus-ring">
                                     Connect Spotify
                                 </a>
                             </div>
@@ -188,7 +188,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                                     <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
                                 </div>
                             </div>
-                            <a href="/ui/auth" class="btn btn-primary btn-sm focus-ring">
+                            <a href="/auth" class="btn btn-primary btn-sm focus-ring">
                                 Connect Spotify
                             </a>
                         </div>

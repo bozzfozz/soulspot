@@ -24,7 +24,7 @@
             
             <button id="auth-btn" 
                     class="btn btn-primary"
-                    hx-get="/api/v1/auth/authorize"
+                    hx-get="/api/auth/authorize"
                     hx-target="#auth-result">
                 Get Authorization URL
             </button>
@@ -55,7 +55,7 @@
         </div>
         <div class="card-body">
             <form id="token-form" 
-                  hx-get="/api/v1/auth/callback"
+                  hx-get="/api/auth/callback"
                   hx-target="#token-result"
                   class="space-y-4">
                 

@@ -111,13 +111,13 @@ class TestThemeRoute:
 
     def test_theme_sample_route_accessible(self, client):
         """Test that theme sample page is accessible."""
-        response = client.get("/ui/theme-sample")
+        response = client.get("/theme-sample")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
 
     def test_theme_sample_contains_harmony_elements(self, client):
         """Test that theme sample page contains Harmony elements."""
-        response = client.get("/ui/theme-sample")
+        response = client.get("/theme-sample")
         content = response.text
 
         # Check for key Harmony components
@@ -129,7 +129,7 @@ class TestThemeRoute:
 
     def test_theme_sample_includes_theme_css(self, client):
         """Test that theme sample includes theme.css."""
-        response = client.get("/ui/theme-sample")
+        response = client.get("/theme-sample")
         content = response.text
         assert "/static/css/theme.css" in content
 

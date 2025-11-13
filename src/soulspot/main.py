@@ -174,10 +174,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         logger.warning("Static directory not found: %s", static_dir)
 
     # Include API routers
-    app.include_router(api_router, prefix="/api/v1")
+    app.include_router(api_router, prefix="/api")
 
-    # Include UI router
-    app.include_router(ui.router, prefix="/ui", tags=["UI"])
+    # Include UI router at root
+    app.include_router(ui.router, tags=["UI"])
 
     # Health check endpoint
     @app.get(
@@ -325,20 +325,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Liveness check endpoint - returns OK if application is running."""
         return {"status": "alive"}
 
-    # Root endpoint
-    @app.get("/", tags=["Root"])
-    async def root() -> dict[str, str]:
-        """Root endpoint with API information."""
-        return {
-            "message": "Welcome to SoulSpot Bridge API",
-            "version": "0.1.0",
-            "docs": "/docs",
-            "health": "/health",
-            "ready": "/ready",
-            "live": "/live",
-            "api": "/api/v1",
-            "ui": "/ui",
-        }
+
 
     return app
 
