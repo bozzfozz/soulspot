@@ -151,6 +151,59 @@
     @apply badge bg-error-500 text-white;
   }
 
+  .status-pending {
+    @apply badge bg-gray-300 text-gray-700;
+  }
+
+  .status-cancelled {
+    @apply badge bg-gray-400 text-gray-700;
+  }
+
+  /* Priority Badges */
+  .priority-badge {
+    @apply inline-flex items-center rounded px-2 py-1 text-xs font-semibold;
+  }
+
+  .priority-p0 {
+    @apply priority-badge bg-error-500 text-white;
+  }
+
+  .priority-p1 {
+    @apply priority-badge bg-warning-500 text-white;
+  }
+
+  .priority-p2 {
+    @apply priority-badge bg-info-500 text-white;
+  }
+
+  /* Checkbox Styles */
+  .checkbox {
+    @apply h-4 w-4 rounded border-gray-300 text-primary-600 
+           focus:ring-2 focus:ring-primary-500 focus:ring-offset-0
+           cursor-pointer;
+  }
+
+  .checkbox:checked {
+    @apply bg-primary-600 border-primary-600;
+  }
+
+  /* Download Card Styles */
+  .download-card {
+    @apply card hover:shadow-md transition-all duration-200;
+  }
+
+  .download-card.selected {
+    @apply ring-2 ring-primary-500 bg-primary-50;
+  }
+
+  .download-card.dragging {
+    @apply opacity-50 cursor-move;
+  }
+
+  .download-card.drag-over {
+    @apply border-t-4 border-primary-500;
+  }
+
   /* Form Components */
   .form-group {
     @apply space-y-1;

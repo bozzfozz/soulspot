@@ -205,3 +205,57 @@ class TestDownload:
 
         with pytest.raises(ValueError):
             download.update_progress(150.0)
+
+    def test_update_priority(self) -> None:
+        """Test updating download priority."""
+        download = Download(id=DownloadId.generate(), track_id=TrackId.generate())
+        old_updated_at = download.updated_at
+
+        download.update_priority(1)
+        assert download.priority == 1
+        assert download.updated_at > old_updated_at
+
+    def test_invalid_priority_raises_error(self) -> None:
+        """Test that invalid priority raises error."""
+        download = Download(id=DownloadId.generate(), track_id=TrackId.generate())
+
+        with pytest.raises(ValueError):
+            download.update_priority(-1)
+
+        with pytest.raises(ValueError):
+            download.update_priority(3)
+
+    def test_pause_download(self) -> None:
+        """Test pausing a download."""
+        download = Download(id=DownloadId.generate(), track_id=TrackId.generate())
+        download.start()
+        old_status = download.status
+
+        download.pause()
+        assert download.status == DownloadStatus.QUEUED
+        assert old_status == DownloadStatus.DOWNLOADING
+
+    def test_pause_invalid_status_raises_error(self) -> None:
+        """Test that pausing non-downloading download raises error."""
+        download = Download(id=DownloadId.generate(), track_id=TrackId.generate())
+
+        with pytest.raises(ValueError):
+            download.pause()
+
+    def test_resume_download(self) -> None:
+        """Test resuming a paused download."""
+        download = Download(
+            id=DownloadId.generate(),
+            track_id=TrackId.generate(),
+            status=DownloadStatus.QUEUED,
+        )
+
+        download.resume()
+        assert download.status == DownloadStatus.DOWNLOADING
+
+    def test_resume_invalid_status_raises_error(self) -> None:
+        """Test that resuming non-queued download raises error."""
+        download = Download(id=DownloadId.generate(), track_id=TrackId.generate())
+
+        with pytest.raises(ValueError):
+            download.resume()

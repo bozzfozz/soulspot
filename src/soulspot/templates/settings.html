@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - SoulSpot Bridge{% endblock %}
+
+{% block extra_head %}
+<style>
+    .tab-button {
+        @apply px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300 transition-colors;
+    }
+    .tab-button.active {
+        @apply text-primary-600 border-primary-600;
+    }
+    .input-with-icon {
+        @apply relative;
+    }
+    .input-with-icon input {
+        @apply pr-10;
+    }
+    .input-with-icon button {
+        @apply absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-900">Settings</h1>
+        <div class="flex gap-2">
+            <button id="reset-btn" class="btn btn-secondary btn-sm focus-ring" onclick="confirmReset()">
+                🔄 Reset to Defaults
+            </button>
+            <button id="save-btn" class="btn btn-primary btn-sm focus-ring" onclick="saveSettings()">
+                💾 Save Changes
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="border-b border-gray-200">
+        <nav class="flex space-x-1" aria-label="Settings tabs">
+            <button class="tab-button active" data-tab="general" onclick="switchTab('general')">
+                General
+            </button>
+            <button class="tab-button" data-tab="integration" onclick="switchTab('integration')">
+                Integration
+            </button>
+            <button class="tab-button" data-tab="download" onclick="switchTab('download')">
+                Downloads
+            </button>
+            <button class="tab-button" data-tab="appearance" onclick="switchTab('appearance')">
+                Appearance
+            </button>
+            <button class="tab-button" data-tab="advanced" onclick="switchTab('advanced')">
+                Advanced
+            </button>
+        </nav>
+    </div>
+
+    <!-- Settings Form -->
+    <form id="settings-form" class="space-y-6" onsubmit="saveSettings(event)">
+        <!-- General Settings Tab -->
+        <div id="tab-general" class="tab-content">
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">General Settings</h2>
+                
+                <div class="space-y-4">
+                    <div class="form-group">
+                        <label for="app-name" class="form-label">Application Name</label>
+                        <input type="text" id="app-name" name="general.app_name" class="form-input" value="SoulSpot Bridge" required>
+                        <p class="form-helper">Display name for the application</p>
+                        <p class="form-error hidden" id="app-name-error">Application name is required</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="log-level" class="form-label">Log Level</label>
+                        <select id="log-level" name="general.log_level" class="form-input" required>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO" selected>INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                        <p class="form-helper">Logging verbosity level</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" id="debug-mode" name="general.debug" class="checkbox">
+                            <span class="text-sm font-medium text-gray-700">Enable Debug Mode</span>
+                        </label>
+                        <p class="form-helper ml-6">Show detailed debug information (not recommended for production)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integration Settings Tab -->
+        <div id="tab-integration" class="tab-content hidden">
+            <div class="card space-y-6">
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">🎵 Spotify Configuration</h2>
+                    <div class="space-y-4">
+                        <div class="form-group">
+                            <label for="spotify-client-id" class="form-label">Client ID</label>
+                            <input type="text" id="spotify-client-id" name="integration.spotify_client_id" class="form-input" placeholder="Your Spotify Client ID">
+                            <p class="form-helper">Get this from <a href="https://developer.spotify.com/dashboard" target="_blank" class="text-primary-600 hover:underline">Spotify Developer Dashboard</a></p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="spotify-client-secret" class="form-label">Client Secret</label>
+                            <div class="input-with-icon">
+                                <input type="password" id="spotify-client-secret" name="integration.spotify_client_secret" class="form-input" placeholder="Your Spotify Client Secret">
+                                <button type="button" onclick="togglePassword('spotify-client-secret')" tabindex="-1">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="spotify-redirect-uri" class="form-label">Redirect URI</label>
+                            <input type="url" id="spotify-redirect-uri" name="integration.spotify_redirect_uri" class="form-input" value="http://localhost:8000/api/v1/auth/callback">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-200 pt-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">🌐 slskd Configuration</h2>
+                    <div class="space-y-4">
+                        <div class="form-group">
+                            <label for="slskd-url" class="form-label">slskd URL</label>
+                            <input type="url" id="slskd-url" name="integration.slskd_url" class="form-input" value="http://localhost:5030" required>
+                            <p class="form-helper">Base URL for your slskd instance</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slskd-username" class="form-label">Username</label>
+                            <input type="text" id="slskd-username" name="integration.slskd_username" class="form-input" value="admin" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slskd-password" class="form-label">Password</label>
+                            <div class="input-with-icon">
+                                <input type="password" id="slskd-password" name="integration.slskd_password" class="form-input" placeholder="slskd password">
+                                <button type="button" onclick="togglePassword('slskd-password')" tabindex="-1">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slskd-api-key" class="form-label">API Key (Optional)</label>
+                            <div class="input-with-icon">
+                                <input type="password" id="slskd-api-key" name="integration.slskd_api_key" class="form-input" placeholder="Optional API key">
+                                <button type="button" onclick="togglePassword('slskd-api-key')" tabindex="-1">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-200 pt-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">🎼 MusicBrainz Configuration</h2>
+                    <div class="space-y-4">
+                        <div class="form-group">
+                            <label for="musicbrainz-app-name" class="form-label">Application Name</label>
+                            <input type="text" id="musicbrainz-app-name" name="integration.musicbrainz_app_name" class="form-input" value="SoulSpot-Bridge" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="musicbrainz-contact" class="form-label">Contact Email</label>
+                            <input type="email" id="musicbrainz-contact" name="integration.musicbrainz_contact" class="form-input" placeholder="your@email.com">
+                            <p class="form-helper">MusicBrainz requires a contact email for API access</p>
+                            <p class="form-error hidden" id="musicbrainz-contact-error">Please enter a valid email address</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Settings Tab -->
+        <div id="tab-download" class="tab-content hidden">
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Download Queue Configuration</h2>
+                
+                <div class="space-y-4">
+                    <div class="form-group">
+                        <label for="max-concurrent-downloads" class="form-label">Maximum Concurrent Downloads</label>
+                        <input type="number" id="max-concurrent-downloads" name="download.max_concurrent_downloads" class="form-input" value="3" min="1" max="10" required>
+                        <p class="form-helper">Number of downloads that can run simultaneously (1-10, recommended: 3)</p>
+                        <p class="form-error hidden" id="max-concurrent-downloads-error">Must be between 1 and 10</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="default-max-retries" class="form-label">Default Maximum Retries</label>
+                        <input type="number" id="default-max-retries" name="download.default_max_retries" class="form-input" value="3" min="1" max="10" required>
+                        <p class="form-helper">Number of retry attempts for failed downloads (1-10)</p>
+                        <p class="form-error hidden" id="default-max-retries-error">Must be between 1 and 10</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" id="enable-priority-queue" name="download.enable_priority_queue" class="checkbox" checked>
+                            <span class="text-sm font-medium text-gray-700">Enable Priority Queue</span>
+                        </label>
+                        <p class="form-helper ml-6">Allow downloads to be prioritized (P0/P1/P2)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Appearance Settings Tab -->
+        <div id="tab-appearance" class="tab-content hidden">
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Theme & Appearance</h2>
+                
+                <div class="space-y-4">
+                    <div class="form-group">
+                        <label class="form-label">Theme</label>
+                        <div class="grid grid-cols-3 gap-4">
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="appearance.theme" value="light" class="peer sr-only" onclick="applyTheme('light')">
+                                <div class="border-2 border-gray-300 peer-checked:border-primary-600 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                    <div class="text-3xl mb-2">☀️</div>
+                                    <div class="font-medium">Light</div>
+                                </div>
+                            </label>
+                            
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="appearance.theme" value="dark" class="peer sr-only" onclick="applyTheme('dark')">
+                                <div class="border-2 border-gray-300 peer-checked:border-primary-600 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                    <div class="text-3xl mb-2">🌙</div>
+                                    <div class="font-medium">Dark</div>
+                                </div>
+                            </label>
+                            
+                            <label class="relative cursor-pointer">
+                                <input type="radio" name="appearance.theme" value="auto" class="peer sr-only" checked onclick="applyTheme('auto')">
+                                <div class="border-2 border-gray-300 peer-checked:border-primary-600 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                    <div class="text-3xl mb-2">🔄</div>
+                                    <div class="font-medium">Auto</div>
+                                </div>
+                            </label>
+                        </div>
+                        <p class="form-helper mt-2">Choose how the application looks. Auto follows your system preferences.</p>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="alert-content">
+                            <strong>Theme Persistence:</strong> Your theme preference is saved in your browser and will be remembered on future visits.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Settings Tab -->
+        <div id="tab-advanced" class="tab-content hidden">
+            <div class="card">
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">Advanced Configuration</h2>
+                
+                <div class="alert alert-warning mb-4">
+                    <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    <div class="alert-content">
+                        <strong>Warning:</strong> Changing these settings may affect application stability. Proceed with caution.
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">API Server</h3>
+                        <div class="space-y-4">
+                            <div class="form-group">
+                                <label for="api-host" class="form-label">API Host</label>
+                                <input type="text" id="api-host" name="advanced.api_host" class="form-input" value="0.0.0.0" required>
+                                <p class="form-helper">Host address to bind the API server to</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="api-port" class="form-label">API Port</label>
+                                <input type="number" id="api-port" name="advanced.api_port" class="form-input" value="8000" min="1" max="65535" required>
+                                <p class="form-helper">Port number for the API server (1-65535)</p>
+                                <p class="form-error hidden" id="api-port-error">Port must be between 1 and 65535</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" id="secure-cookies" name="advanced.secure_cookies" class="checkbox">
+                                    <span class="text-sm font-medium text-gray-700">Use Secure Cookies</span>
+                                </label>
+                                <p class="form-helper ml-6">Enable for HTTPS deployments (production only)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-200 pt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-3">Circuit Breaker</h3>
+                        <div class="space-y-4">
+                            <div class="form-group">
+                                <label for="circuit-breaker-failure-threshold" class="form-label">Failure Threshold</label>
+                                <input type="number" id="circuit-breaker-failure-threshold" name="advanced.circuit_breaker_failure_threshold" class="form-input" value="5" min="1" required>
+                                <p class="form-helper">Number of failures before opening the circuit</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="circuit-breaker-timeout" class="form-label">Timeout (seconds)</label>
+                                <input type="number" id="circuit-breaker-timeout" name="advanced.circuit_breaker_timeout" class="form-input" value="60" min="1" step="0.1" required>
+                                <p class="form-helper">Time to wait before attempting recovery</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Success/Error Messages -->
+    <div id="message-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+</div>
+
+<script>
+// Tab Switching
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+}
+
+// Password Toggle
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    field.type = field.type === 'password' ? 'text' : 'password';
+}
+
+// Theme Management
+function applyTheme(theme) {
+    localStorage.setItem('theme', theme);
+    
+    if (theme === 'auto') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', prefersDark);
+    } else {
+        document.documentElement.classList.toggle('dark', theme === 'dark');
+    }
+    
+    showMessage(`Theme changed to ${theme}`, 'success');
+}
+
+// Load Settings
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/v1/settings/');
+        if (!response.ok) throw new Error('Failed to load settings');
+        
+        const settings = await response.json();
+        
+        // Populate form fields
+        document.getElementById('app-name').value = settings.general.app_name;
+        document.getElementById('log-level').value = settings.general.log_level;
+        document.getElementById('debug-mode').checked = settings.general.debug;
+        
+        // Integration
+        document.getElementById('spotify-client-id').value = settings.integration.spotify_client_id;
+        document.getElementById('spotify-redirect-uri').value = settings.integration.spotify_redirect_uri;
+        document.getElementById('slskd-url').value = settings.integration.slskd_url;
+        document.getElementById('slskd-username').value = settings.integration.slskd_username;
+        document.getElementById('musicbrainz-app-name').value = settings.integration.musicbrainz_app_name;
+        document.getElementById('musicbrainz-contact').value = settings.integration.musicbrainz_contact;
+        
+        // Download
+        document.getElementById('max-concurrent-downloads').value = settings.download.max_concurrent_downloads;
+        document.getElementById('default-max-retries').value = settings.download.default_max_retries;
+        document.getElementById('enable-priority-queue').checked = settings.download.enable_priority_queue;
+        
+        // Appearance
+        const savedTheme = localStorage.getItem('theme') || settings.appearance.theme;
+        document.querySelector(`input[name="appearance.theme"][value="${savedTheme}"]`).checked = true;
+        applyTheme(savedTheme);
+        
+        // Advanced
+        document.getElementById('api-host').value = settings.advanced.api_host;
+        document.getElementById('api-port').value = settings.advanced.api_port;
+        document.getElementById('secure-cookies').checked = settings.advanced.secure_cookies;
+        document.getElementById('circuit-breaker-failure-threshold').value = settings.advanced.circuit_breaker_failure_threshold;
+        document.getElementById('circuit-breaker-timeout').value = settings.advanced.circuit_breaker_timeout;
+        
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        showMessage('Failed to load settings. Using defaults.', 'error');
+    }
+}
+
+// Save Settings
+async function saveSettings(event) {
+    if (event) event.preventDefault();
+    
+    const form = document.getElementById('settings-form');
+    if (!validateForm(form)) {
+        showMessage('Please fix validation errors before saving', 'error');
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const settings = {
+        general: {
+            app_name: formData.get('general.app_name'),
+            log_level: formData.get('general.log_level'),
+            debug: formData.get('general.debug') === 'on',
+        },
+        integration: {
+            spotify_client_id: formData.get('integration.spotify_client_id'),
+            spotify_client_secret: formData.get('integration.spotify_client_secret'),
+            spotify_redirect_uri: formData.get('integration.spotify_redirect_uri'),
+            slskd_url: formData.get('integration.slskd_url'),
+            slskd_username: formData.get('integration.slskd_username'),
+            slskd_password: formData.get('integration.slskd_password'),
+            slskd_api_key: formData.get('integration.slskd_api_key') || null,
+            musicbrainz_app_name: formData.get('integration.musicbrainz_app_name'),
+            musicbrainz_contact: formData.get('integration.musicbrainz_contact'),
+        },
+        download: {
+            max_concurrent_downloads: parseInt(formData.get('download.max_concurrent_downloads')),
+            default_max_retries: parseInt(formData.get('download.default_max_retries')),
+            enable_priority_queue: formData.get('download.enable_priority_queue') === 'on',
+        },
+        appearance: {
+            theme: formData.get('appearance.theme'),
+        },
+        advanced: {
+            api_host: formData.get('advanced.api_host'),
+            api_port: parseInt(formData.get('advanced.api_port')),
+            secure_cookies: formData.get('advanced.secure_cookies') === 'on',
+            circuit_breaker_failure_threshold: parseInt(formData.get('advanced.circuit_breaker_failure_threshold')),
+            circuit_breaker_timeout: parseFloat(formData.get('advanced.circuit_breaker_timeout')),
+        },
+    };
+    
+    try {
+        const response = await fetch('/api/v1/settings/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings),
+        });
+        
+        if (!response.ok) throw new Error('Failed to save settings');
+        
+        const result = await response.json();
+        showMessage(result.message, 'success');
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showMessage('Failed to save settings. Please try again.', 'error');
+    }
+}
+
+// Confirm Reset
+async function confirmReset() {
+    if (!confirm('Are you sure you want to reset all settings to their default values? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/v1/settings/reset', {method: 'POST'});
+        if (!response.ok) throw new Error('Failed to reset settings');
+        
+        const result = await response.json();
+        showMessage(result.message, 'success');
+        
+        // Reload defaults
+        const defaultsResponse = await fetch('/api/v1/settings/defaults');
+        if (defaultsResponse.ok) {
+            await loadSettings();
+        }
+    } catch (error) {
+        console.error('Failed to reset settings:', error);
+        showMessage('Failed to reset settings. Please try again.', 'error');
+    }
+}
+
+// Form Validation
+function validateForm(form) {
+    let isValid = true;
+    
+    // Validate email
+    const emailField = document.getElementById('musicbrainz-contact');
+    const emailError = document.getElementById('musicbrainz-contact-error');
+    if (emailField.value && !emailField.validity.valid) {
+        emailError.classList.remove('hidden');
+        isValid = false;
+    } else {
+        emailError.classList.add('hidden');
+    }
+    
+    // Validate number ranges
+    const maxDownloads = document.getElementById('max-concurrent-downloads');
+    const maxDownloadsError = document.getElementById('max-concurrent-downloads-error');
+    const downloadValue = parseInt(maxDownloads.value);
+    if (downloadValue < 1 || downloadValue > 10) {
+        maxDownloadsError.classList.remove('hidden');
+        isValid = false;
+    } else {
+        maxDownloadsError.classList.add('hidden');
+    }
+    
+    const maxRetries = document.getElementById('default-max-retries');
+    const maxRetriesError = document.getElementById('default-max-retries-error');
+    const retriesValue = parseInt(maxRetries.value);
+    if (retriesValue < 1 || retriesValue > 10) {
+        maxRetriesError.classList.remove('hidden');
+        isValid = false;
+    } else {
+        maxRetriesError.classList.add('hidden');
+    }
+    
+    const apiPort = document.getElementById('api-port');
+    const apiPortError = document.getElementById('api-port-error');
+    const portValue = parseInt(apiPort.value);
+    if (portValue < 1 || portValue > 65535) {
+        apiPortError.classList.remove('hidden');
+        isValid = false;
+    } else {
+        apiPortError.classList.add('hidden');
+    }
+    
+    return isValid;
+}
+
+// Show Message
+function showMessage(message, type) {
+    const container = document.getElementById('message-container');
+    const messageEl = document.createElement('div');
+    messageEl.className = `alert alert-${type} shadow-lg animate-fade-in`;
+    messageEl.innerHTML = `
+        <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+            ${type === 'success' 
+                ? '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>'
+                : '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>'
+            }
+        </svg>
+        <div class="alert-content">${message}</div>
+    `;
+    
+    container.appendChild(messageEl);
+    
+    setTimeout(() => {
+        messageEl.classList.add('animate-fade-out');
+        setTimeout(() => messageEl.remove(), 300);
+    }, 5000);
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    
+    // Apply saved theme
+    const savedTheme = localStorage.getItem('theme') || 'auto';
+    applyTheme(savedTheme);
+});
+</script>
+{% endblock %}

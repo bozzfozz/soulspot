@@ -226,6 +226,31 @@ class Download:
         self.status = DownloadStatus.CANCELLED
         self.updated_at = datetime.now(UTC)
 
+    def update_priority(self, priority: int) -> None:
+        """Update download priority.
+
+        Args:
+            priority: New priority value (0-2, where 0=P0 highest, 1=P1 medium, 2=P2 low)
+        """
+        if priority < 0 or priority > 2:
+            raise ValueError("Priority must be between 0 (P0) and 2 (P2)")
+        self.priority = priority
+        self.updated_at = datetime.now(UTC)
+
+    def pause(self) -> None:
+        """Pause the download."""
+        if self.status != DownloadStatus.DOWNLOADING:
+            raise ValueError(f"Cannot pause download in status {self.status}")
+        self.status = DownloadStatus.QUEUED
+        self.updated_at = datetime.now(UTC)
+
+    def resume(self) -> None:
+        """Resume a paused download."""
+        if self.status != DownloadStatus.QUEUED:
+            raise ValueError(f"Cannot resume download in status {self.status}")
+        self.status = DownloadStatus.DOWNLOADING
+        self.updated_at = datetime.now(UTC)
+
     def is_finished(self) -> bool:
         """Check if download is in a terminal state."""
         return self.status in (

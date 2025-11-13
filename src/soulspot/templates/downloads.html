@@ -6,56 +6,155 @@
 {% block content %}
 <div class="space-y-6">
     <!-- Page Header -->
-    <div>
-        <h1 class="text-3xl font-bold text-gray-900 leading-tight mb-4">Downloads</h1>
+    <div class="flex justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-900 leading-tight">Download Queue</h1>
         
-        <!-- Filters -->
-        <div class="flex flex-wrap gap-2" role="group" aria-label="Filter downloads">
-            <button class="btn btn-secondary btn-sm focus-ring" 
-                    hx-get="/api/v1/downloads?status=all"
-                    hx-target="#downloads-list"
-                    aria-label="Show all downloads">
-                All
+        <!-- Global Queue Controls -->
+        <div class="flex gap-2">
+            <button id="pause-all-btn" class="btn btn-secondary btn-sm focus-ring"
+                    hx-post="/api/v1/downloads/pause"
+                    hx-swap="none"
+                    aria-label="Pause all downloads">
+                ⏸️ Pause All
             </button>
-            <button class="btn btn-secondary btn-sm focus-ring" 
-                    hx-get="/api/v1/downloads?status=queued"
-                    hx-target="#downloads-list"
-                    aria-label="Show queued downloads">
-                Queued
-            </button>
-            <button class="btn btn-secondary btn-sm focus-ring" 
-                    hx-get="/api/v1/downloads?status=downloading"
-                    hx-target="#downloads-list"
-                    aria-label="Show downloading">
-                Downloading
-            </button>
-            <button class="btn btn-secondary btn-sm focus-ring" 
-                    hx-get="/api/v1/downloads?status=completed"
-                    hx-target="#downloads-list"
-                    aria-label="Show completed downloads">
-                Completed
-            </button>
-            <button class="btn btn-secondary btn-sm focus-ring" 
-                    hx-get="/api/v1/downloads?status=failed"
-                    hx-target="#downloads-list"
-                    aria-label="Show failed downloads">
-                Failed
+            <button id="resume-all-btn" class="btn btn-secondary btn-sm focus-ring"
+                    hx-post="/api/v1/downloads/resume"
+                    hx-swap="none"
+                    aria-label="Resume all downloads">
+                ▶️ Resume All
             </button>
         </div>
     </div>
 
+    <!-- Batch Operations Bar (Hidden by default) -->
+    <div id="batch-operations-bar" class="hidden card bg-primary-50 border-primary-200">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <span id="selected-count" class="font-semibold text-gray-900">0 selected</span>
+                <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Clear</button>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-secondary btn-sm focus-ring" onclick="batchAction('pause')">
+                    ⏸️ Pause
+                </button>
+                <button class="btn btn-secondary btn-sm focus-ring" onclick="batchAction('resume')">
+                    ▶️ Resume
+                </button>
+                <button class="btn btn-danger btn-sm focus-ring" onclick="batchAction('cancel')">
+                    ❌ Cancel
+                </button>
+                <div class="border-l border-gray-300 mx-2"></div>
+                <select id="batch-priority" class="form-input py-1 text-sm w-24">
+                    <option value="">Priority</option>
+                    <option value="0">P0</option>
+                    <option value="1">P1</option>
+                    <option value="2">P2</option>
+                </select>
+                <button class="btn btn-secondary btn-sm focus-ring" onclick="batchSetPriority()">
+                    Set Priority
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and View Options -->
+    <div class="flex flex-wrap gap-4 items-center justify-between">
+        <!-- Status Filters -->
+        <div class="flex flex-wrap gap-2" role="group" aria-label="Filter downloads">
+            <button class="btn btn-secondary btn-sm focus-ring filter-btn active" 
+                    data-status="all"
+                    onclick="filterDownloads('all')"
+                    aria-label="Show all downloads">
+                All
+            </button>
+            <button class="btn btn-secondary btn-sm focus-ring filter-btn" 
+                    data-status="queued"
+                    onclick="filterDownloads('queued')"
+                    aria-label="Show queued downloads">
+                Queued
+            </button>
+            <button class="btn btn-secondary btn-sm focus-ring filter-btn" 
+                    data-status="downloading"
+                    onclick="filterDownloads('downloading')"
+                    aria-label="Show downloading">
+                Downloading
+            </button>
+            <button class="btn btn-secondary btn-sm focus-ring filter-btn" 
+                    data-status="completed"
+                    onclick="filterDownloads('completed')"
+                    aria-label="Show completed downloads">
+                Completed
+            </button>
+            <button class="btn btn-secondary btn-sm focus-ring filter-btn" 
+                    data-status="failed"
+                    onclick="filterDownloads('failed')"
+                    aria-label="Show failed downloads">
+                Failed
+            </button>
+        </div>
+
+        <!-- Sort/View Options -->
+        <div class="flex gap-2 items-center">
+            <label for="sort-select" class="text-sm text-gray-600">Sort:</label>
+            <select id="sort-select" class="form-input py-1 text-sm" onchange="sortDownloads(this.value)">
+                <option value="created">Date Added</option>
+                <option value="priority">Priority</option>
+                <option value="progress">Progress</option>
+                <option value="status">Status</option>
+            </select>
+        </div>
+    </div>
+
     <!-- Downloads List -->
-    <div class="space-y-4" id="downloads-list">
+    <div class="space-y-3" id="downloads-list">
         {% if downloads %}
             {% for download in downloads %}
-            <div class="card hover:shadow-md transition-shadow">
-                <div class="flex justify-between items-start gap-4">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <h3 class="text-lg font-medium text-gray-900">
+            <div class="download-card" 
+                 data-download-id="{{ download.id }}"
+                 data-status="{{ download.status }}"
+                 data-priority="{{ download.priority }}"
+                 draggable="true"
+                 ondragstart="handleDragStart(event)"
+                 ondragover="handleDragOver(event)"
+                 ondrop="handleDrop(event)"
+                 ondragend="handleDragEnd(event)">
+                <div class="flex items-start gap-4">
+                    <!-- Selection Checkbox -->
+                    <div class="flex items-center pt-1">
+                        <input type="checkbox" 
+                               class="checkbox download-checkbox" 
+                               data-download-id="{{ download.id }}"
+                               onchange="updateSelection()"
+                               aria-label="Select download">
+                    </div>
+
+                    <!-- Drag Handle -->
+                    <div class="flex items-center pt-1 cursor-move text-gray-400 hover:text-gray-600" 
+                         title="Drag to reorder">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Download Info -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-2 flex-wrap">
+                            <!-- Priority Badge -->
+                            <span class="priority-p{{ download.priority }}" 
+                                  role="status" 
+                                  aria-label="Priority {{ download.priority }}">
+                                P{{ download.priority }}
+                            </span>
+                            
+                            <!-- Title -->
+                            <h3 class="text-lg font-medium text-gray-900 truncate">
                                 Track ID: {{ download.track_id }}
                             </h3>
-                            <span class="status-{{ download.status }}" role="status" aria-label="Status: {{ download.status }}">
+                            
+                            <!-- Status Badge -->
+                            <span class="status-{{ download.status }}" 
+                                  role="status" 
+                                  aria-label="Status: {{ download.status }}">
                                 {{ download.status }}
                             </span>
                         </div>
@@ -71,44 +170,82 @@
                         </div>
                         {% endif %}
                         
+                        <!-- Enhanced Progress Bar with Percentage and ETA -->
+                        <div class="mb-2">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs text-gray-600">Progress</span>
+                                <div class="flex gap-2 text-xs">
+                                    <span class="text-gray-600 font-semibold">{{ download.progress_percent|round(1) }}%</span>
+                                    {% if download.status == 'downloading' %}
+                                    <span class="text-gray-500">• ETA: ~2 min</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="progress-bar" role="progressbar" 
+                                 aria-valuenow="{{ download.progress_percent|round }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100"
+                                 aria-label="Download progress">
+                                <div class="progress-fill" style="width: {{ download.progress_percent }}%"></div>
+                            </div>
+                        </div>
+                        
                         <div class="text-xs text-gray-500 space-y-1">
                             <p>Started: {{ download.started_at or 'Not started' }}</p>
                             <p>Created: {{ download.created_at }}</p>
                         </div>
                     </div>
                     
-                    <div class="flex flex-col items-end gap-3">
-                        <!-- Progress Bar -->
-                        <div class="w-48">
-                            <div class="progress-bar mb-1" role="progressbar" 
-                                 aria-valuenow="{{ download.progress_percent or 0 }}" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="100"
-                                 aria-label="Download progress">
-                                <div class="progress-fill" style="width: {{ download.progress_percent or 0 }}%"></div>
-                            </div>
-                            <span class="text-xs text-gray-600">{{ download.progress_percent or 0 }}%</span>
-                        </div>
+                    <!-- Actions -->
+                    <div class="flex flex-col gap-2">
+                        {% if download.status == 'downloading' %}
+                        <button class="btn btn-secondary btn-sm focus-ring" 
+                                hx-post="/api/v1/downloads/{{ download.id }}/pause"
+                                hx-swap="outerHTML"
+                                hx-target="[data-download-id='{{ download.id }}']"
+                                aria-label="Pause download">
+                            ⏸️ Pause
+                        </button>
+                        {% endif %}
                         
-                        <!-- Actions -->
-                        <div class="flex gap-2">
-                            {% if download.status == 'failed' %}
-                            <button class="btn btn-secondary btn-sm focus-ring" 
-                                    hx-post="/api/v1/downloads/{{ download.id }}/retry"
-                                    hx-swap="outerHTML"
-                                    aria-label="Retry download">
-                                Retry
-                            </button>
-                            {% endif %}
-                            {% if download.status in ['queued', 'downloading', 'pending'] %}
-                            <button class="btn btn-danger btn-sm focus-ring" 
-                                    hx-post="/api/v1/downloads/{{ download.id }}/cancel"
-                                    hx-swap="outerHTML"
-                                    aria-label="Cancel download">
-                                Cancel
-                            </button>
-                            {% endif %}
-                        </div>
+                        {% if download.status == 'queued' %}
+                        <button class="btn btn-primary btn-sm focus-ring" 
+                                hx-post="/api/v1/downloads/{{ download.id }}/resume"
+                                hx-swap="outerHTML"
+                                hx-target="[data-download-id='{{ download.id }}']"
+                                aria-label="Resume download">
+                            ▶️ Resume
+                        </button>
+                        {% endif %}
+                        
+                        {% if download.status == 'failed' %}
+                        <button class="btn btn-secondary btn-sm focus-ring" 
+                                hx-post="/api/v1/downloads/{{ download.id }}/retry"
+                                hx-swap="outerHTML"
+                                hx-target="[data-download-id='{{ download.id }}']"
+                                aria-label="Retry download">
+                            🔄 Retry
+                        </button>
+                        {% endif %}
+                        
+                        {% if download.status in ['queued', 'downloading', 'pending'] %}
+                        <button class="btn btn-danger btn-sm focus-ring" 
+                                hx-post="/api/v1/downloads/{{ download.id }}/cancel"
+                                hx-swap="outerHTML"
+                                hx-target="[data-download-id='{{ download.id }}']"
+                                aria-label="Cancel download">
+                            ❌ Cancel
+                        </button>
+                        {% endif %}
+
+                        <!-- Priority Selector -->
+                        <select class="form-input py-1 text-xs"
+                                onchange="updatePriority('{{ download.id }}', this.value)"
+                                aria-label="Set priority">
+                            <option value="0" {% if download.priority == 0 %}selected{% endif %}>P0</option>
+                            <option value="1" {% if download.priority == 1 %}selected{% endif %}>P1</option>
+                            <option value="2" {% if download.priority == 2 %}selected{% endif %}>P2</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -130,4 +267,227 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+// Selection Management
+let selectedDownloads = new Set();
+
+function updateSelection() {
+    const checkboxes = document.querySelectorAll('.download-checkbox');
+    selectedDownloads.clear();
+    
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            selectedDownloads.add(cb.dataset.downloadId);
+            cb.closest('.download-card').classList.add('selected');
+        } else {
+            cb.closest('.download-card').classList.remove('selected');
+        }
+    });
+    
+    const count = selectedDownloads.size;
+    document.getElementById('selected-count').textContent = count + ' selected';
+    document.getElementById('batch-operations-bar').classList.toggle('hidden', count === 0);
+}
+
+function clearSelection() {
+    document.querySelectorAll('.download-checkbox').forEach(cb => cb.checked = false);
+    updateSelection();
+}
+
+// Batch Operations
+async function batchAction(action) {
+    const downloadIds = Array.from(selectedDownloads);
+    if (downloadIds.length === 0) return;
+    
+    try {
+        const response = await fetch('/api/v1/downloads/batch-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ download_ids: downloadIds, action: action })
+        });
+        
+        if (response.ok) {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Batch action failed:', error);
+    }
+}
+
+async function batchSetPriority() {
+    const priority = document.getElementById('batch-priority').value;
+    if (!priority) return;
+    
+    const downloadIds = Array.from(selectedDownloads);
+    if (downloadIds.length === 0) return;
+    
+    try {
+        const response = await fetch('/api/v1/downloads/batch-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                download_ids: downloadIds, 
+                action: 'priority',
+                priority: parseInt(priority)
+            })
+        });
+        
+        if (response.ok) {
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Batch priority update failed:', error);
+    }
+}
+
+// Filter Management
+function filterDownloads(status) {
+    const cards = document.querySelectorAll('.download-card');
+    const buttons = document.querySelectorAll('.filter-btn');
+    
+    buttons.forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    
+    cards.forEach(card => {
+        const cardStatus = card.dataset.status;
+        if (status === 'all' || cardStatus === status) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Sort Management
+function sortDownloads(sortBy) {
+    const container = document.getElementById('downloads-list');
+    const cards = Array.from(container.querySelectorAll('.download-card'));
+    
+    cards.sort((a, b) => {
+        switch(sortBy) {
+            case 'priority':
+                return parseInt(a.dataset.priority) - parseInt(b.dataset.priority);
+            case 'status':
+                return a.dataset.status.localeCompare(b.dataset.status);
+            default:
+                return 0;
+        }
+    });
+    
+    cards.forEach(card => container.appendChild(card));
+}
+
+// Priority Update
+async function updatePriority(downloadId, priority) {
+    try {
+        const response = await fetch(`/api/v1/downloads/${downloadId}/priority`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority: parseInt(priority) })
+        });
+        
+        if (response.ok) {
+            const card = document.querySelector(`[data-download-id="${downloadId}"]`);
+            card.dataset.priority = priority;
+            
+            // Update priority badge
+            const badge = card.querySelector('[class^="priority-"]');
+            badge.className = `priority-p${priority}`;
+            badge.textContent = `P${priority}`;
+        }
+    } catch (error) {
+        console.error('Priority update failed:', error);
+    }
+}
+
+// Drag and Drop for Reordering
+let draggedElement = null;
+
+function handleDragStart(e) {
+    draggedElement = e.currentTarget;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.currentTarget.innerHTML);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    
+    const target = e.currentTarget;
+    if (draggedElement && draggedElement !== target) {
+        target.classList.add('drag-over');
+    }
+    
+    return false;
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+    
+    const target = e.currentTarget;
+    target.classList.remove('drag-over');
+    
+    if (draggedElement && draggedElement !== target) {
+        // Reorder in DOM
+        const container = document.getElementById('downloads-list');
+        const allCards = Array.from(container.querySelectorAll('.download-card'));
+        const draggedIndex = allCards.indexOf(draggedElement);
+        const targetIndex = allCards.indexOf(target);
+        
+        if (draggedIndex < targetIndex) {
+            target.parentNode.insertBefore(draggedElement, target.nextSibling);
+        } else {
+            target.parentNode.insertBefore(draggedElement, target);
+        }
+        
+        // Calculate new priority based on position
+        updatePriorityFromPosition(draggedElement);
+    }
+    
+    return false;
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.download-card').forEach(card => {
+        card.classList.remove('drag-over');
+    });
+}
+
+function updatePriorityFromPosition(element) {
+    const container = document.getElementById('downloads-list');
+    const cards = Array.from(container.querySelectorAll('.download-card'));
+    const position = cards.indexOf(element);
+    
+    // Top third = P0, middle third = P1, bottom third = P2
+    const third = Math.floor(cards.length / 3);
+    let priority = 0;
+    if (position > third && position <= third * 2) {
+        priority = 1;
+    } else if (position > third * 2) {
+        priority = 2;
+    }
+    
+    const downloadId = element.dataset.downloadId;
+    updatePriority(downloadId, priority);
+}
+
+// Add active class styling
+document.addEventListener('DOMContentLoaded', function() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .filter-btn.active {
+            background-color: rgb(59 130 246);
+            color: white;
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
 {% endblock %}

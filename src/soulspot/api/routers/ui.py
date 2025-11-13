@@ -94,6 +94,7 @@ async def downloads(
             "id": str(download.id.value),
             "track_id": str(download.track_id.value),
             "status": download.status.value,
+            "priority": download.priority,
             "progress_percent": download.progress_percent,
             "error_message": download.error_message,
             "started_at": download.started_at.isoformat()
@@ -125,3 +126,9 @@ async def search(request: Request) -> Any:
 async def theme_sample(request: Request) -> Any:
     """Harmony theme sample page with component showcase."""
     return templates.TemplateResponse("theme-sample.html", {"request": request})
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings(request: Request) -> Any:
+    """Settings configuration page."""
+    return templates.TemplateResponse("settings.html", {"request": request})
