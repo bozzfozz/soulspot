@@ -194,11 +194,11 @@ async def get_default_settings() -> AllSettings:
         ),
         integration=IntegrationSettings(
             spotify_client_id=spotify_defaults.client_id,
-            spotify_client_secret="",
+            spotify_client_secret="",  # nosec B106 - empty string default, not a password
             spotify_redirect_uri=spotify_defaults.redirect_uri,
             slskd_url=slskd_defaults.url,
             slskd_username=slskd_defaults.username,
-            slskd_password="",
+            slskd_password="",  # nosec B106 - empty string default, not a password
             slskd_api_key=slskd_defaults.api_key,
             musicbrainz_app_name=musicbrainz_defaults.app_name,
             musicbrainz_contact=musicbrainz_defaults.contact,
