@@ -54,7 +54,7 @@ jobs:
         id: current_version
         run: |
           CURRENT=$(poetry version -s)
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "Current version: $CURRENT"
       
       - name: Calculate new version
@@ -67,7 +67,7 @@ jobs:
             NEW_VERSION=$(poetry version -s)
           fi
           
-          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "New version: $NEW_VERSION"
       
       - name: Update version in pyproject.toml
@@ -115,11 +115,11 @@ jobs:
       - name: Create release branch
         run: |
           BRANCH_NAME="release/v${{ steps.new_version.outputs.new }}"
-          git checkout -b $BRANCH_NAME
+          git checkout -b "$BRANCH_NAME"
           git add pyproject.toml package.json CHANGELOG.md
           git commit -m "chore: bump version to ${{ steps.new_version.outputs.new }}"
-          git push origin $BRANCH_NAME
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          git push origin "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
         id: create_branch
       
       - name: Create Pull Request

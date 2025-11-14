@@ -27,7 +27,7 @@ jobs:
         id: get_version
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION"
       
       - name: Extract changelog for version
@@ -45,9 +45,11 @@ jobs:
           
           # Save to file for multiline output
           echo "$CHANGELOG" > /tmp/changelog.txt
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat /tmp/changelog.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "changelog<<EOF"
+            cat /tmp/changelog.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
   build-and-push-docker:
     name: Build and Push Docker Images
@@ -91,6 +93,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}

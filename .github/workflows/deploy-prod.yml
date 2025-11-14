@@ -35,7 +35,7 @@ jobs:
           else
             VERSION=${{ inputs.version }}
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Deploying version: $VERSION"
       
       - name: Verify Docker image exists
