@@ -52,6 +52,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: docker/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -74,7 +75,7 @@ jobs:
           echo ""
           echo "    Example deployment commands:"
           echo "    ssh user@dev-server 'docker pull ghcr.io/${{ github.repository }}:dev-latest'"
-          echo "    ssh user@dev-server 'docker-compose -f /path/to/docker-compose.dev.yml up -d'"
+          echo "    ssh user@dev-server 'cd /opt/soulspot-bridge && docker-compose -f docker/docker-compose.dev.yml up -d'"
       
       # Uncomment and configure when you have a development server
       # - name: Deploy via SSH
@@ -86,7 +87,7 @@ jobs:
       #     script: |
       #       cd /opt/soulspot-bridge
       #       docker pull ghcr.io/${{ github.repository }}:dev-latest
-      #       docker-compose -f docker-compose.dev.yml up -d
+      #       docker-compose -f docker/docker-compose.dev.yml up -d
       #       docker system prune -f
       
       - name: Deployment Summary

@@ -156,7 +156,7 @@ slskd is required for Soulseek downloads.
 
 **Step 1: Start slskd with Docker**
 ```bash
-docker-compose up -d slskd
+docker-compose -f docker/docker-compose.yml up -d slskd
 ```
 
 **Step 2: Access slskd Web UI**
@@ -369,10 +369,10 @@ pip install -r requirements.txt
 docker ps | grep slskd
 
 # Start slskd if not running
-docker-compose up -d slskd
+docker-compose -f docker/docker-compose.yml up -d slskd
 
 # Check slskd logs
-docker-compose logs slskd
+docker-compose -f docker/docker-compose.yml logs slskd
 
 # Verify URL in .env matches container port
 SLSKD_URL=http://localhost:5030

@@ -115,7 +115,7 @@ jobs:
           echo ""
           echo "    Example deployment commands:"
           echo "    ssh user@staging-server 'docker pull ghcr.io/${{ github.repository }}:staging-latest'"
-          echo "    ssh user@staging-server 'docker-compose -f /path/to/docker-compose.staging.yml up -d'"
+          echo "    ssh user@staging-server 'docker-compose -f docker/docker-compose.staging.yml up -d'"
       
       # Uncomment and configure when you have a staging server
       # - name: Deploy via SSH
@@ -127,7 +127,7 @@ jobs:
       #     script: |
       #       cd /opt/soulspot-bridge
       #       docker pull ghcr.io/${{ github.repository }}:staging-latest
-      #       docker-compose -f docker-compose.staging.yml up -d
+      #       docker-compose -f docker/docker-compose.staging.yml up -d
       #       docker system prune -f
       
       - name: Run Smoke Tests

@@ -110,13 +110,13 @@ Test the development configuration locally:
 docker pull ghcr.io/bozzfozz/soulspot-bridge:dev-latest
 
 # Start services
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f docker/docker-compose.dev.yml up -d
 
 # View logs
-docker-compose -f docker-compose.dev.yml logs -f
+docker-compose -f docker/docker-compose.dev.yml logs -f
 
 # Stop services
-docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker/docker-compose.dev.yml down
 ```
 
 ---
@@ -180,7 +180,7 @@ Deploy to staging server:
 # On staging server
 cd /opt/soulspot-bridge
 docker pull ghcr.io/bozzfozz/soulspot-bridge:staging-latest
-docker-compose -f docker-compose.staging.yml --env-file .env.staging up -d
+docker-compose -f docker/docker-compose.staging.yml --env-file .env.staging up -d
 ```
 
 ---
@@ -262,11 +262,11 @@ docker pull ghcr.io/bozzfozz/soulspot-bridge:1.0.0
 # Tag as production
 docker tag ghcr.io/bozzfozz/soulspot-bridge:1.0.0 ghcr.io/bozzfozz/soulspot-bridge:production
 
-# Update docker-compose.yml to use the production tag
+# Update docker/docker-compose.yml to use the production tag
 export VERSION=1.0.0
 
 # Deploy with zero downtime
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-deps --remove-orphans soulspot
+docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d --no-deps --remove-orphans soulspot
 
 # Wait for health check
 sleep 10
@@ -322,7 +322,7 @@ To rollback to a previous version:
    cd /opt/soulspot-bridge
    
    # Stop current version
-   docker-compose -f docker-compose.prod.yml down
+   docker-compose -f docker/docker-compose.prod.yml down
    
    # Pull and tag previous version
    docker pull ghcr.io/bozzfozz/soulspot-bridge:0.9.0
@@ -330,7 +330,7 @@ To rollback to a previous version:
    
    # Start previous version
    export VERSION=0.9.0
-   docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+   docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
    
    # Verify health
    docker logs -f soulspot-bridge-prod
@@ -409,7 +409,7 @@ ls -la /opt/soulspot/
 # Fix ownership (use your PUID/PGID)
 sudo chown -R 1000:1000 /opt/soulspot/
 
-# Verify in docker-compose.yml
+# Verify in docker/docker-compose.yml
 grep -A 2 PUID docker-compose.prod.yml
 ```
 
@@ -423,7 +423,7 @@ Enable debug mode temporarily:
 # Set: LOG_LEVEL=DEBUG
 
 # Restart container
-docker-compose -f docker-compose.prod.yml restart soulspot
+docker-compose -f docker/docker-compose.prod.yml restart soulspot
 
 # View detailed logs
 docker logs -f soulspot-bridge-prod

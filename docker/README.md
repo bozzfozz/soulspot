@@ -29,7 +29,7 @@ Before you begin, ensure you have:
 
 ```bash
 docker --version
-docker-compose --version
+docker-compose -f docker/docker-compose.yml --version
 ```
 
 ---
@@ -40,7 +40,13 @@ SoulSpot Bridge requires a specific directory structure for bind mounts:
 
 ```
 your-project/
-├── docker-compose.yml
+├── docker/
+│   ├── docker-compose.yml      # Main compose file
+│   ├── docker-compose.dev.yml  # Development compose file
+│   ├── docker-compose.prod.yml # Production compose file
+│   ├── Dockerfile              # Docker image definition
+│   ├── docker-entrypoint.sh    # Container startup script
+│   └── README.md               # This file
 ├── .env
 ├── mnt/
 │   ├── downloads/      # Downloads from slskd (must exist before starting)
@@ -165,20 +171,20 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ```bash
 # Build and start in detached mode
-docker-compose up -d --build
+docker-compose -f docker/docker-compose.yml up -d --build
 
 # View logs
-docker-compose logs -f
+docker-compose -f docker/docker-compose.yml logs -f
 
 # View logs for specific service
-docker-compose logs -f soulspot
+docker-compose -f docker/docker-compose.yml logs -f soulspot
 ```
 
 ### 2. Verify Services are Running
 
 ```bash
 # Check service status
-docker-compose ps
+docker-compose -f docker/docker-compose.yml ps
 
 # Expected output:
 # NAME                  STATUS              PORTS
@@ -260,7 +266,7 @@ To adjust the poll interval, you can modify the `main.py` file or set it via env
 Monitor the auto-import service:
 
 ```bash
-docker-compose logs -f soulspot | grep -i "auto-import\|importing"
+docker-compose -f docker/docker-compose.yml logs -f soulspot | grep -i "auto-import\|importing"
 ```
 
 ---
@@ -340,8 +346,8 @@ echo "PGID=$(id -g)" >> .env
 3. Restart the container:
 
 ```bash
-docker-compose down
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml down
+docker-compose -f docker/docker-compose.yml up -d
 ```
 
 ### Database Issues
@@ -353,7 +359,7 @@ docker-compose up -d
 1. Stop all containers:
 
 ```bash
-docker-compose down
+docker-compose -f docker/docker-compose.yml down
 ```
 
 2. Fix database file permissions:
@@ -365,7 +371,7 @@ sudo chown -R $(id -u):$(id -g) mnt/soulspot/
 3. Restart:
 
 ```bash
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml up -d
 ```
 
 ### Auto-Import Not Working
@@ -373,7 +379,7 @@ docker-compose up -d
 **Check logs:**
 
 ```bash
-docker-compose logs -f soulspot | grep -i "auto-import"
+docker-compose -f docker/docker-compose.yml logs -f soulspot | grep -i "auto-import"
 ```
 
 **Common issues:**
@@ -386,41 +392,41 @@ docker-compose logs -f soulspot | grep -i "auto-import"
 
 ```bash
 # All services
-docker-compose logs -f
+docker-compose -f docker/docker-compose.yml logs -f
 
 # Specific service
-docker-compose logs -f soulspot
-docker-compose logs -f slskd
+docker-compose -f docker/docker-compose.yml logs -f soulspot
+docker-compose -f docker/docker-compose.yml logs -f slskd
 
 # Last 100 lines
-docker-compose logs --tail=100 soulspot
+docker-compose -f docker/docker-compose.yml logs --tail=100 soulspot
 ```
 
 ### Restarting Services
 
 ```bash
 # Restart all services
-docker-compose restart
+docker-compose -f docker/docker-compose.yml restart
 
 # Restart specific service
-docker-compose restart soulspot
+docker-compose -f docker/docker-compose.yml restart soulspot
 
 # Stop all services
-docker-compose down
+docker-compose -f docker/docker-compose.yml down
 
 # Stop and remove volumes
-docker-compose down -v
+docker-compose -f docker/docker-compose.yml down -v
 ```
 
 ### Rebuilding After Code Changes
 
 ```bash
 # Rebuild and restart
-docker-compose up -d --build
+docker-compose -f docker/docker-compose.yml up -d --build
 
 # Force rebuild without cache
-docker-compose build --no-cache
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml build --no-cache
+docker-compose -f docker/docker-compose.yml up -d
 ```
 
 ---

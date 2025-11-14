@@ -716,7 +716,7 @@ docker-compose restart soulspot
 
 ## 📚 Additional Resources
 
-- [Docker Setup Guide](docker-setup.md)
+- [Docker Setup Guide](docker/README.md)
 - [Troubleshooting Guide](troubleshooting-guide.md)
 - [Architecture Documentation](architecture.md)
 - [API Documentation](http://localhost:8765/docs)

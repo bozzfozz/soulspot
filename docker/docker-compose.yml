@@ -2,8 +2,8 @@ services:
   # SoulSpot Bridge - Main application
   soulspot:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: soulspot-bridge
     ports:
       - "8765:8765"      # Web UI and API
