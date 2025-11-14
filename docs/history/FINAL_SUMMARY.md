@@ -104,7 +104,7 @@ Analysis Result for 'python'. Found 0 alerts
 ### 5. Dokumentation
 
 Erstellt:
-- ✅ **REVIEW_FIXES_REPORT.md**: Detaillierter Bericht mit Code-Beispielen
+- ✅ **docs/history/REVIEW_FIXES_REPORT.md**: Detaillierter Bericht mit Code-Beispielen
 - ✅ **CHANGELOG.md**: Aktualisiert mit allen Änderungen
 - ✅ **PR Description**: Vollständige Beschreibung der Änderungen
 
@@ -160,7 +160,7 @@ Erstellt:
 10. `examples/example_phase4.py`
 
 ### Dokumentation (2 Dateien)
-11. `REVIEW_FIXES_REPORT.md` (NEU)
+11. `docs/history/REVIEW_FIXES_REPORT.md` (NEU)
 12. `CHANGELOG.md` (aktualisiert)
 
 ## Zusammenfassung für den Changelog

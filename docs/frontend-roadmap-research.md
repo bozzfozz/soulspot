@@ -154,7 +154,7 @@ Key entities:
 ### C. Existing GridStack Documentation
 
 **Files:**
-- `GRIDSTACK_IMPLEMENTATION_NOTES.md` (443 lines)
+- `docs/history/GRIDSTACK_IMPLEMENTATION_NOTES.md` (443 lines)
 - `docs/gridstack-page-builder-quick-ref.md` (410 lines)
 
 **Key Findings:**
