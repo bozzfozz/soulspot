@@ -394,7 +394,7 @@ curl -X POST http://localhost:8765/api/v1/tracks/{track_id}/download?quality=bes
 
 3. **Switch to PostgreSQL for production:**
    - SQLite not recommended for high concurrency
-   - See [Docker Setup Guide](docker-setup.md) for PostgreSQL setup
+   - See [Docker Setup Guide](docker/README.md) for PostgreSQL setup
 
 ---
 
@@ -783,7 +783,7 @@ Collect the following information:
 ## 📚 Related Documentation
 
 - [Operations Runbook](operations-runbook.md) - Operational procedures
-- [Docker Setup Guide](docker-setup.md) - Installation and setup
+- [Docker Setup Guide](docker/README.md) - Installation and setup
 - [Architecture Guide](architecture.md) - System architecture
 - [API Documentation](http://localhost:8765/docs) - Interactive API docs
 

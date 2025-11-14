@@ -449,32 +449,32 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 up: ## Start all services
-	docker-compose up -d
+	docker-compose -f docker/docker-compose.yml up -d
 	@echo "Services started. slskd UI: http://localhost:5030"
 
 down: ## Stop all services
-	docker-compose down
+	docker-compose -f docker/docker-compose.yml down
 
 logs: ## Show logs from all services
-	docker-compose logs -f
+	docker-compose -f docker/docker-compose.yml logs -f
 
 restart: ## Restart all services
-	docker-compose restart
+	docker-compose -f docker/docker-compose.yml restart
 
 clean: ## Stop services and remove volumes
-	docker-compose down -v
+	docker-compose -f docker/docker-compose.yml down -v
 	@echo "Warning: This removes all data volumes!"
 
 build: ## Rebuild all services
-	docker-compose build --no-cache
+	docker-compose -f docker/docker-compose.yml build --no-cache
 
 test: ## Run tests with Docker services
-	docker-compose up -d postgres redis
+	docker-compose -f docker/docker-compose.yml up -d postgres redis
 	poetry run pytest
-	docker-compose down
+	docker-compose -f docker/docker-compose.yml down
 
 health: ## Check health of all services
-	@docker-compose ps
+	@docker-compose -f docker/docker-compose.yml ps
 ```
 
 ## Referenzen

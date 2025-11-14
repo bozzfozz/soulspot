@@ -48,15 +48,15 @@ clean:
 
 # Start Docker services
 docker-up:
-    docker-compose up -d
+    docker-compose -f docker/docker-compose.yml up -d
 
 # Stop Docker services
 docker-down:
-    docker-compose down
+    docker-compose -f docker/docker-compose.yml down
 
 # Show Docker logs
 docker-logs:
-    docker-compose logs -f
+    docker-compose -f docker/docker-compose.yml logs -f
 
 # Run database migrations
 db-upgrade:

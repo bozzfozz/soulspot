@@ -223,7 +223,7 @@ See also: [Contributing Guide](contributing.md)
 
 ### Operations & Deployment
 - [Deployment Guide](deployment-guide.md)
-- [Docker Setup](docker-setup.md)
+- [Docker Setup](docker/README.md)
 - [Operations Runbook](operations-runbook.md)
 - [Troubleshooting Guide](troubleshooting-guide.md)
 

@@ -44,14 +44,14 @@ SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Di
    ```
 4. Container starten:
    ```bash
-   docker-compose up -d --build
+   docker-compose -f docker/docker-compose.yml up -d --build
    ```
 5. Logs prüfen (optional):
    ```bash
-   docker-compose logs -f
+   docker-compose -f docker/docker-compose.yml logs -f
    ```
 
-Weitere Konfigurationsmöglichkeiten (z. B. Benutzer-IDs, Zeitzone, geheime Schlüssel) findest du im [Docker Setup Guide](docs/docker-setup.md).
+Weitere Konfigurationsmöglichkeiten (z. B. Benutzer-IDs, Zeitzone, geheime Schlüssel) findest du im [Docker Setup Guide](docker/README.md).
 
 ## Zugriff nach dem Start
 | Dienst | URL | Beschreibung |
@@ -70,7 +70,7 @@ Weitere Konfigurationsmöglichkeiten (z. B. Benutzer-IDs, Zeitzone, geheime Sc
 Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien in regelmäßigen Abständen aus `mnt/downloads` nach `mnt/music`. Unterstützte Formate sind u. a. MP3, FLAC, M4A und OGG.
 
 ## Hilfe & Support
-- Ausführliche Schritt-für-Schritt-Anleitung: [Docker Setup Guide](docs/docker-setup.md)
+- Ausführliche Schritt-für-Schritt-Anleitung: [Docker Setup Guide](docker/README.md)
 - Hinweise zur Fehlerbehebung: Abschnitt „Troubleshooting“ im Docker Guide
 - Versionshinweise: [CHANGELOG](CHANGELOG.md)
 

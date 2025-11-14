@@ -906,7 +906,7 @@ Music download application with Spotify playlist sync and Soulseek integration.
 
 ## Quick Start
 \`\`\`bash
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml up -d
 poetry install
 poetry run uvicorn soulspot.main:app
 \`\`\`
@@ -1232,7 +1232,7 @@ SECRET_KEY=generate_a_random_secret_key_here
 #### Schritt 4: Services mit Docker starten
 ```bash
 # Service starten (slskd)
-docker-compose up -d slskd
+docker-compose -f docker/docker-compose.yml up -d slskd
 ```
 
 > **Hinweis:** PostgreSQL und Redis entfernt (lokal-only).
@@ -1311,16 +1311,16 @@ poetry run alembic current
 #### Docker-Management
 ```bash
 # Services stoppen
-docker-compose down
+docker-compose -f docker/docker-compose.yml down
 
 # Services mit Volume-Cleanup stoppen
-docker-compose down -v
+docker-compose -f docker/docker-compose.yml down -v
 
 # Logs anzeigen
-docker-compose logs -f slskd
+docker-compose -f docker/docker-compose.yml logs -f slskd
 
 # Service neu starten
-docker-compose restart slskd
+docker-compose -f docker/docker-compose.yml restart slskd
 ```
 
 ### 6.4 Geplante Troubleshooting-Tipps
@@ -1328,13 +1328,13 @@ docker-compose restart slskd
 **Problem:** slskd startet nicht
 ```bash
 # Logs prüfen
-docker-compose logs slskd
+docker-compose -f docker/docker-compose.yml logs slskd
 
 # Ports prüfen
 lsof -i :5030
 
 # slskd neu starten
-docker-compose restart slskd
+docker-compose -f docker/docker-compose.yml restart slskd
 ```
 
 **Problem:** Database-Connection-Error

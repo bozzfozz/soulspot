@@ -89,7 +89,7 @@ jobs:
           echo ""
           echo "    Example deployment commands (Blue-Green Strategy):"
           echo "    ssh user@prod-server 'docker pull ghcr.io/${{ github.repository }}:${VERSION#v}'"
-          echo "    ssh user@prod-server 'docker-compose -f /path/to/docker-compose.prod.yml up -d --no-deps soulspot'"
+          echo "    ssh user@prod-server 'docker-compose -f /path/to/docker/docker-compose.prod.yml up -d --no-deps soulspot'"
       
       # Uncomment and configure when you have a production server
       # - name: Deploy via SSH (Blue-Green)
@@ -109,7 +109,7 @@ jobs:
       #       docker tag ghcr.io/${{ github.repository }}:${VERSION#v} ghcr.io/${{ github.repository }}:production
       #       
       #       # Deploy with zero downtime (blue-green)
-      #       docker-compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans soulspot
+      #       docker-compose -f docker/docker-compose.prod.yml up -d --no-deps --remove-orphans soulspot
       #       
       #       # Wait for health check
       #       sleep 10
@@ -187,8 +187,8 @@ jobs:
           echo "   gh workflow run deploy-prod.yml -f version=<good-version> -f rollback=true"
           echo ""
           echo "3. Manual rollback via SSH:"
-          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker-compose.prod.yml down'"
+          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker/docker-compose.prod.yml down'"
           echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker tag ghcr.io/${{ github.repository }}:<good-version> ghcr.io/${{ github.repository }}:production'"
-          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker-compose.prod.yml up -d'"
+          echo "   ssh user@prod-server 'cd /opt/soulspot-bridge && docker-compose -f docker/docker-compose.prod.yml up -d'"
           echo ""
           echo "4. Verify application health after rollback"

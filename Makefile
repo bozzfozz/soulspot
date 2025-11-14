@@ -39,13 +39,13 @@ clean: ## Clean generated files
 	rm -rf htmlcov/ .coverage
 
 docker-up: ## Start Docker services
-	docker-compose up -d
+	docker-compose -f docker/docker-compose.yml up -d
 
 docker-down: ## Stop Docker services
-	docker-compose down
+	docker-compose -f docker/docker-compose.yml down
 
 docker-logs: ## Show Docker logs
-	docker-compose logs -f
+	docker-compose -f docker/docker-compose.yml logs -f
 
 db-upgrade: ## Run database migrations
 	alembic upgrade head
