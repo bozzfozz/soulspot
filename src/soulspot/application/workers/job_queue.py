@@ -88,7 +88,9 @@ class JobQueue:
         Args:
             max_concurrent_jobs: Maximum number of jobs to run concurrently
         """
-        self._queue: asyncio.PriorityQueue[tuple[int, int, Job]] = asyncio.PriorityQueue()
+        self._queue: asyncio.PriorityQueue[tuple[int, int, Job]] = (
+            asyncio.PriorityQueue()
+        )
         self._jobs: dict[str, Job] = {}
         self._running_jobs: set[str] = set()
         self._max_concurrent = max_concurrent_jobs
@@ -286,7 +288,10 @@ class JobQueue:
                     continue
 
                 # Wait for available slot
-                while len(self._running_jobs) >= self._max_concurrent and not self._shutdown:
+                while (
+                    len(self._running_jobs) >= self._max_concurrent
+                    and not self._shutdown
+                ):
                     await asyncio.sleep(0.1)
 
                 if self._shutdown:

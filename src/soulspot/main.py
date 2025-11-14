@@ -325,8 +325,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Liveness check endpoint - returns OK if application is running."""
         return {"status": "alive"}
 
-
-
     return app
 
 

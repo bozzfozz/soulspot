@@ -528,7 +528,7 @@ class TestJobQueue:
         # Test invalid value
         try:
             job_queue.set_max_concurrent_jobs(0)
-            assert False, "Should have raised ValueError"
+            raise AssertionError("Should have raised ValueError")
         except ValueError:
             pass
 

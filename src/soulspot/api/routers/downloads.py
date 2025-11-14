@@ -242,8 +242,7 @@ async def pause_downloads() -> PauseResumeResponse:
     # TODO: Implement pause via job queue when it's available in app state
     # For now, return a placeholder response
     return PauseResumeResponse(
-        message="Download queue paused successfully",
-        status="paused"
+        message="Download queue paused successfully", status="paused"
     )
 
 
@@ -260,8 +259,7 @@ async def resume_downloads() -> PauseResumeResponse:
     # TODO: Implement resume via job queue when it's available in app state
     # For now, return a placeholder response
     return PauseResumeResponse(
-        message="Download queue resumed successfully",
-        status="active"
+        message="Download queue resumed successfully", status="active"
     )
 
 
@@ -304,14 +302,13 @@ async def batch_download(
     # For now, return a placeholder response
     if not request.track_ids:
         raise HTTPException(
-            status_code=400,
-            detail="At least one track ID must be provided"
+            status_code=400, detail="At least one track ID must be provided"
         )
 
     return BatchDownloadResponse(
         message=f"Batch download initiated for {len(request.track_ids)} tracks",
         job_ids=[],  # Will be populated when job queue is integrated
-        total_tracks=len(request.track_ids)
+        total_tracks=len(request.track_ids),
     )
 
 
@@ -441,8 +438,7 @@ async def batch_action(
     """
     if not request.download_ids:
         raise HTTPException(
-            status_code=400,
-            detail="At least one download ID must be provided"
+            status_code=400, detail="At least one download ID must be provided"
         )
 
     results = []
@@ -473,7 +469,7 @@ async def batch_action(
             await download_repository.update(download)
             results.append({"id": download_id, "status": "success"})
 
-        except ValueError as e:
+        except ValueError:
             # Sanitize error message to avoid exposing internal details
             error_msg = "Invalid operation or download ID"
             errors.append({"id": download_id, "error": error_msg})
