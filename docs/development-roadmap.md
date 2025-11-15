@@ -84,6 +84,8 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 - ✅ Loading states & skeleton screens
 - ✅ Toast notification system
 - ✅ Keyboard navigation & accessibility
+
+> **📌 Neu:** Für eine detaillierte **Version 1.0 Roadmap** mit Feature-Freeze-Kriterien, Meilensteinen und Qualitätssicherung, siehe [Frontend Development Roadmap v1.0](../frontend-development-roadmap.md).
 - ✅ Advanced search with filters & autocomplete
 
 [📖 Read Frontend Roadmap →](frontend-development-roadmap.md)
