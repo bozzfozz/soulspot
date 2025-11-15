@@ -2,7 +2,15 @@
 
 from fastapi import APIRouter
 
-from soulspot.api.routers import auth, downloads, library, metadata, playlists, settings, tracks
+from soulspot.api.routers import (
+    auth,
+    downloads,
+    library,
+    metadata,
+    playlists,
+    settings,
+    tracks,
+)
 
 api_router = APIRouter()
 

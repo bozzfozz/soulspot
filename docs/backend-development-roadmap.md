@@ -1,6 +1,6 @@
 # SoulSpot Bridge – Backend Development Roadmap
 
-> **Last Updated:** 2025-11-13  
+> **Last Updated:** 2025-11-15  
 > **Version:** 0.1.0 (Alpha)  
 > **Status:** Phase 6 Complete - Production Ready | Phase 7 Feature Enhancements In Progress  
 > **Owner:** Backend Team
@@ -56,13 +56,19 @@ The backend of SoulSpot Bridge is responsible for:
 
 ### 🔄 Current Phase: Phase 7 – Feature Enhancements
 
-**Progress:** Planning & Initial Development
+**Progress:** Active Development - 50% Complete
 
 **Focus Areas:**
-- Enhanced download management (priority queues, retry logic)
-- Advanced metadata management (multi-source merging, conflict resolution)
-- Post-processing pipeline improvements
-- Library scanning and self-healing features
+- ✅ Enhanced download management (priority queues, retry logic)
+- ✅ Advanced metadata management (multi-source merging, conflict resolution)
+- 🔄 Post-processing pipeline improvements (in progress)
+- ✅ Library scanning and self-healing features (core implementation complete)
+
+**Recent Completions:**
+- Library scanner with SHA256 hashing and progress tracking
+- Duplicate file detection and broken file identification
+- Library management API endpoints
+- Comprehensive test coverage for scanner service
 
 ---
 
@@ -244,28 +250,40 @@ The backend of SoulSpot Bridge is responsible for:
 
 | Task | Description | Priority | Effort | Status |
 |------|-------------|----------|--------|--------|
-| **Library Scanner** | Full library scan (files, tags, structure) | P1 | Large | 📋 Planned |
-| **Hash-Based Duplicate Detection** | MD5/SHA1 indexing | P1 | Medium | 📋 Planned |
-| **Broken File Detection** | Identify corrupted/incomplete files | P1 | Medium | 📋 Planned |
+| **Library Scanner** | Full library scan (files, tags, structure) | P1 | Large | ✅ Done |
+| **Hash-Based Duplicate Detection** | SHA256 indexing | P1 | Medium | ✅ Done |
+| **Broken File Detection** | Identify corrupted/incomplete files | P1 | Medium | ✅ Done |
 | **Album Completeness Check** | Detect missing tracks | P1 | Medium | 📋 Planned |
 | **Auto Re-Download** | Re-download corrupted files | P2 | Medium | 📋 Planned |
 
 **Acceptance Criteria:**
-- [ ] Library scanner with progress tracking
-- [ ] Hash index for all files in database
-- [ ] Duplicate detection with smart unification
-- [ ] Broken file detection (validation)
+- [x] Library scanner with progress tracking
+- [x] Hash index for all files in database
+- [x] Duplicate detection with smart unification
+- [x] Broken file detection (validation)
 - [ ] Album completeness reporting
-- [ ] API endpoints for scan results
-- [ ] Unit + integration tests
+- [x] API endpoints for scan results
+- [x] Unit tests (17 tests for scanner service)
+- [ ] Integration tests
 
 **Dependencies:**
 - Large file operations (performance considerations)
-- Database schema for hash index
+- Database schema for hash index ✅ Complete
 
 **Risks:**
-- Performance with large libraries (>100k files)
-- False positive duplicate detection
+- Performance with large libraries (>100k files) - Mitigated with batch processing
+- False positive duplicate detection - Mitigated with SHA256 hash
+
+**Implementation Notes:**
+- Created `LibraryScannerService` for file scanning and validation
+- Implemented `ScanLibraryUseCase` for orchestrating library scans
+- Added database schema with `library_scans`, `file_duplicates` tables
+- Extended `tracks` table with file integrity fields (file_hash, file_size, audio_bitrate, etc.)
+- Created REST endpoints: `/api/library/scan`, `/api/library/scan/{id}`, `/api/library/duplicates`, `/api/library/broken-files`, `/api/library/stats`
+- Uses mutagen for audio file validation and metadata extraction
+- SHA256 hashing for duplicate detection
+- Progress tracking with real-time updates
+- Comprehensive unit test coverage for scanner service
 
 ---
 

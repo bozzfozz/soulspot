@@ -119,7 +119,7 @@ class TrackModel(Base):
         String(12), nullable=True, unique=True, index=True
     )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    
+
     # File integrity and library management fields
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
@@ -129,7 +129,7 @@ class TrackModel(Base):
     audio_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     audio_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
     audio_sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    
+
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
