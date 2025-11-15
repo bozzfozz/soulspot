@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import APIC, ID3, ID3NoHeaderError, USLT
+from mutagen.id3 import APIC, ID3, USLT, ID3NoHeaderError
 from mutagen.mp3 import MP3
 
 from soulspot.config import Settings

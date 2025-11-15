@@ -141,7 +141,6 @@ def test_process_image_no_resize_small(artwork_service: ArtworkService) -> None:
     small_img = PILImage.new("RGB", (400, 400), color="green")
     img_bytes = BytesIO()
     small_img.save(img_bytes, format="JPEG", quality=100)
-    original_size = len(img_bytes.getvalue())
 
     # Process image
     img_bytes.seek(0)

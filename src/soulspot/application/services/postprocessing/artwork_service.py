@@ -143,7 +143,9 @@ class ArtworkService:
             # This would require access token - stub for now
             # In production, this would call spotify_client.get_album()
             # and extract image URL from response
-            logger.debug("Spotify artwork download not yet implemented for: %s", album_uri)
+            logger.debug(
+                "Spotify artwork download not yet implemented for: %s", album_uri
+            )
             return None
         except Exception as e:
             logger.exception("Error downloading artwork from Spotify: %s", e)
@@ -166,7 +168,9 @@ class ArtworkService:
             # track_id = str(track_uri).split(":")[-1]
 
             # Stub for Spotify track artwork
-            logger.debug("Spotify track artwork download not yet implemented for: %s", track_uri)
+            logger.debug(
+                "Spotify track artwork download not yet implemented for: %s", track_uri
+            )
             return None
         except Exception as e:
             logger.exception("Error downloading track artwork from Spotify: %s", e)

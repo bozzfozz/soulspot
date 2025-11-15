@@ -73,9 +73,7 @@ def test_renaming_service_initialization(
 ) -> None:
     """Test renaming service initializes correctly."""
     assert renaming_service._settings == mock_settings
-    assert (
-        renaming_service._template == "{artist}/{album}/{track_number:02d} - {title}"
-    )
+    assert renaming_service._template == "{artist}/{album}/{track_number:02d} - {title}"
 
 
 def test_generate_filename_basic(

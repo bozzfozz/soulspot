@@ -88,19 +88,19 @@ class RenamingService:
         """
         # Split into path components to handle directories
         parts = filename.split("/")
-        
+
         # Sanitize each part separately
         sanitized_parts = []
         for part in parts:
             # Replace illegal characters with underscore (except /)
             sanitized = re.sub(self.ILLEGAL_CHARS, "_", part)
-            
+
             # Replace multiple underscores with single
             sanitized = re.sub(r"_+", "_", sanitized)
-            
+
             # Remove leading/trailing spaces and dots
             sanitized = sanitized.strip(" .")
-            
+
             sanitized_parts.append(sanitized)
 
         # Rejoin with /
