@@ -279,6 +279,49 @@ class DownloadSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOWNLOAD_")
 
 
+class PostProcessingSettings(BaseSettings):
+    """Post-processing pipeline configuration."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable automatic post-processing after download",
+    )
+    artwork_enabled: bool = Field(
+        default=True,
+        description="Enable artwork download and embedding",
+    )
+    artwork_max_size: int = Field(
+        default=1200,
+        description="Maximum artwork dimension in pixels",
+        ge=300,
+        le=3000,
+    )
+    artwork_quality: int = Field(
+        default=95,
+        description="JPEG quality for artwork (1-100)",
+        ge=1,
+        le=100,
+    )
+    lyrics_enabled: bool = Field(
+        default=True,
+        description="Enable lyrics fetching and embedding",
+    )
+    id3_tagging_enabled: bool = Field(
+        default=True,
+        description="Enable ID3 tag writing",
+    )
+    file_renaming_enabled: bool = Field(
+        default=True,
+        description="Enable file renaming based on templates",
+    )
+    file_naming_template: str = Field(
+        default="{Artist CleanName} - {Album Type} - {Release Year} - {Album CleanTitle}/{medium:02d}{track:02d} - {Track CleanTitle}",
+        description="File naming template",
+    )
+
+    model_config = SettingsConfigDict(env_prefix="POSTPROCESSING_")
+
+
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -347,6 +390,10 @@ class Settings(BaseSettings):
     download: DownloadSettings = Field(
         default_factory=DownloadSettings,
         description="Download queue configuration",
+    )
+    postprocessing: PostProcessingSettings = Field(
+        default_factory=PostProcessingSettings,
+        description="Post-processing pipeline configuration",
     )
 
     model_config = SettingsConfigDict(

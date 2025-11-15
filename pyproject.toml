@@ -45,6 +45,9 @@ passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-dotenv = "^1.0.0"
 # Observability & Monitoring
 python-json-logger = "^3.2.0"
+# Audio & Image Processing
+mutagen = "^1.47.0"
+pillow = "^11.0.0"
 
 [tool.poetry.group.dev.dependencies]
 # Testing
@@ -128,6 +131,7 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = [
     "pythonjsonlogger.*",
+    "mutagen.*",
 ]
 ignore_missing_imports = true
 

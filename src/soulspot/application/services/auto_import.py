@@ -6,7 +6,13 @@ import shutil
 import time
 from pathlib import Path
 
+from soulspot.application.services.postprocessing.pipeline import (
+    PostProcessingPipeline,
+)
 from soulspot.config import Settings
+from soulspot.domain.entities import Track
+from soulspot.domain.ports import IAlbumRepository, IArtistRepository, ITrackRepository
+from soulspot.domain.value_objects import FilePath
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +27,40 @@ class AutoImportService:
     def __init__(
         self,
         settings: Settings,
+        track_repository: ITrackRepository,
+        artist_repository: IArtistRepository,
+        album_repository: IAlbumRepository,
         poll_interval: int = 60,
+        post_processing_pipeline: PostProcessingPipeline | None = None,
     ) -> None:
         """Initialize auto-import service.
 
         Args:
             settings: Application settings containing path configuration
+            track_repository: Repository for track data
+            artist_repository: Repository for artist data
+            album_repository: Repository for album data
             poll_interval: Seconds between directory scans (default: 60)
+            post_processing_pipeline: Optional post-processing pipeline
         """
         self._settings = settings
+        self._track_repository = track_repository
+        self._artist_repository = artist_repository
+        self._album_repository = album_repository
         self._poll_interval = poll_interval
         self._download_path = settings.storage.download_path
         self._music_path = settings.storage.music_path
         self._running = False
+
+        # Initialize post-processing pipeline if not provided
+        if post_processing_pipeline:
+            self._pipeline = post_processing_pipeline
+        else:
+            self._pipeline = PostProcessingPipeline(
+                settings=settings,
+                artist_repository=artist_repository,
+                album_repository=album_repository,
+            )
 
         # Supported audio file extensions
         self._audio_extensions = {
@@ -175,38 +202,101 @@ class AutoImportService:
     async def _import_file(self, file_path: Path) -> None:
         """Import a single file to the music library.
 
+        This method:
+        1. Finds the associated track in the database
+        2. Runs post-processing pipeline (if enabled)
+        3. Moves file to final destination (if post-processing didn't already)
+
         Args:
             file_path: Path to file to import
         """
         try:
-            # Determine destination path
-            # Keep the relative path structure from downloads directory
-            relative_path = file_path.relative_to(self._download_path)
-            dest_path = self._music_path / relative_path
+            # Try to find the associated track by file path
+            # We need to search for tracks that don't have a file_path yet
+            # or have a file_path matching this download location
+            track = await self._find_track_for_file(file_path)
 
-            # Create destination directory if it doesn't exist
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            if track and self._settings.postprocessing.enabled:
+                # Run post-processing pipeline
+                logger.info("Running post-processing for: %s", file_path)
+                result = await self._pipeline.process(file_path, track)
 
-            # Handle existing file at destination
-            if dest_path.exists():
-                logger.warning(
-                    "File already exists at destination, skipping: %s", dest_path
-                )
-                # Remove source file to avoid processing it again
-                file_path.unlink()
-                return
+                if result.success:
+                    logger.info(
+                        "Post-processing completed successfully for: %s", file_path
+                    )
+                    # Update track file path if it changed
+                    if result.final_path and result.final_path != file_path:
+                        file_path = result.final_path
+                else:
+                    logger.warning(
+                        "Post-processing completed with errors: %s",
+                        ", ".join(result.errors),
+                    )
+                    # Continue with import even if post-processing had errors
 
-            # Move file to music library (use asyncio.to_thread to avoid blocking event loop)
-            logger.info("Importing: %s -> %s", file_path, dest_path)
-            await asyncio.to_thread(shutil.move, str(file_path), str(dest_path))
-            logger.info("Successfully imported: %s", dest_path)
+            # If post-processing didn't rename the file, use the original logic
+            if file_path.parent == self._download_path or file_path.is_relative_to(
+                self._download_path
+            ):
+                # Determine destination path
+                # Keep the relative path structure from downloads directory
+                try:
+                    relative_path = file_path.relative_to(self._download_path)
+                except ValueError:
+                    # File might already be in a subdirectory
+                    relative_path = file_path.name
 
-            # Clean up empty parent directories in downloads
-            self._cleanup_empty_dirs(file_path.parent)
+                dest_path = self._music_path / relative_path
+
+                # Create destination directory if it doesn't exist
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Handle existing file at destination
+                if dest_path.exists():
+                    logger.warning(
+                        "File already exists at destination, skipping: %s", dest_path
+                    )
+                    # Remove source file to avoid processing it again
+                    file_path.unlink()
+                    return
+
+                # Move file to music library
+                logger.info("Importing: %s -> %s", file_path, dest_path)
+                await asyncio.to_thread(shutil.move, str(file_path), str(dest_path))
+                logger.info("Successfully imported: %s", dest_path)
+
+                # Update track with final path
+                if track:
+                    track.update_file_path(FilePath(dest_path))
+                    await self._track_repository.update(track)
+
+                # Clean up empty parent directories in downloads
+                self._cleanup_empty_dirs(file_path.parent)
 
         except Exception as e:
             logger.exception("Error importing file %s: %s", file_path, e)
             raise
+
+    async def _find_track_for_file(self, file_path: Path) -> Track | None:
+        """Find the track entity associated with a downloaded file.
+
+        This is a simplified implementation. In production, you might:
+        1. Store the track_id in the download metadata
+        2. Use file naming patterns to match tracks
+        3. Use audio fingerprinting
+
+        Args:
+            file_path: Path to the downloaded file
+
+        Returns:
+            Track entity or None
+        """
+        # For now, return None - in a real implementation,
+        # we would need to track which download corresponds to which track
+        # This could be done by adding metadata files or database lookups
+        logger.debug("Track lookup not implemented for: %s", file_path)
+        return None
 
     def _cleanup_empty_dirs(self, directory: Path) -> None:
         """Remove empty directories recursively up to downloads root.

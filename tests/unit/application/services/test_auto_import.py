@@ -1,7 +1,7 @@
 """Tests for auto-import service."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -39,7 +39,19 @@ def mock_settings(tmp_path: Path) -> Settings:
 @pytest.fixture
 def auto_import_service(mock_settings: Settings) -> AutoImportService:
     """Create auto-import service with mock settings."""
-    return AutoImportService(mock_settings, poll_interval=1)
+    # Create mock repositories
+    mock_track_repo = Mock()
+    mock_track_repo.update = AsyncMock()
+    mock_artist_repo = Mock()
+    mock_album_repo = Mock()
+
+    return AutoImportService(
+        mock_settings,
+        track_repository=mock_track_repo,
+        artist_repository=mock_artist_repo,
+        album_repository=mock_album_repo,
+        poll_interval=1,
+    )
 
 
 def test_auto_import_service_initialization(
