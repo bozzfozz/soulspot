@@ -185,7 +185,7 @@ The backend of SoulSpot Bridge is responsible for:
 - [x] Conflict resolution API endpoints
 - [x] Last.fm API integration complete
 - [x] Tag normalization rules implemented
-- [ ] Unit + integration tests
+- [x] Unit + integration tests
 
 **Dependencies:**
 - External API rate limits (MusicBrainz: 1 req/sec)

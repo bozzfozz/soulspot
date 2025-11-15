@@ -54,7 +54,10 @@ class LastfmClient(ILastfmClient):
         sig_string = "".join(f"{k}{v}" for k, v in sorted_params)
         sig_string += self.settings.api_secret
 
-        return hashlib.md5(sig_string.encode("utf-8")).hexdigest()
+        # MD5 is used for Last.fm API signature, not for security purposes
+        return hashlib.md5(  # nosec B324
+            sig_string.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
 
     async def _make_request(
         self, method: str, params: dict[str, Any], auth_required: bool = False
