@@ -360,7 +360,7 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 - [CSS Custom Properties](https://developer.mozilla.org/en-US/docs/Web/CSS/--*)
 
 ### SoulSpot Bridge Dokumentation
-- [Frontend Development Roadmap v1.0](../frontend-development-roadmap.md) – Detaillierte Planung für Version 1.0
+- [Frontend Development Roadmap v1.0](../frontend-development-roadmap-v1.0.md) – Detaillierte Planung für Version 1.0
 - [Architecture Documentation](../architecture.md) – System-Architektur
 - [Design Guidelines](../design-guidelines.md) – Design-Prinzipien für SoulSpot Bridge
 - [Keyboard Navigation Guide](../keyboard-navigation.md) – Tastaturnavigation

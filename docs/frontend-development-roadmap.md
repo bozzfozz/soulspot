@@ -6,7 +6,7 @@
 > **Owner:** Frontend Team  
 > **Next:** V2.0 Dashboard Builder (HTMX-Only, 12-18 days)
 
-> **📌 Hinweis:** Für eine detaillierte **Version 1.0 Roadmap** mit Feature-Freeze-Kriterien, Meilensteinen und Qualitätssicherung, siehe [Frontend Development Roadmap v1.0](../frontend-development-roadmap.md).
+> **📌 Hinweis:** Für eine detaillierte **Version 1.0 Roadmap** mit Feature-Freeze-Kriterien, Meilensteinen und Qualitätssicherung, siehe [Frontend Development Roadmap v1.0](frontend-development-roadmap-v1.0.md).
 
 ---
 
