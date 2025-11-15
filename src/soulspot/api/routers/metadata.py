@@ -6,6 +6,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from soulspot.api.dependencies import (
+    get_album_repository,
+    get_artist_repository,
+    get_lastfm_client,
+    get_musicbrainz_client,
+    get_spotify_client,
+    get_track_repository,
+)
 from soulspot.api.schemas.metadata import (
     EnrichMetadataMultiSourceRequest,
     MetadataEnrichmentResponse,
@@ -21,15 +29,15 @@ from soulspot.application.use_cases.enrich_metadata_multi_source import (
     EnrichMetadataMultiSourceUseCase,
 )
 from soulspot.domain.entities import Album, Artist, MetadataSource, Track
-from soulspot.domain.ports import (
-    IAlbumRepository,
-    IArtistRepository,
-    ILastfmClient,
-    IMusicBrainzClient,
-    ISpotifyClient,
-    ITrackRepository,
-)
 from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
+from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
+from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
+from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+from soulspot.infrastructure.persistence.repositories import (
+    AlbumRepository,
+    ArtistRepository,
+    TrackRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +49,13 @@ def get_metadata_merger() -> MetadataMerger:
     return MetadataMerger()
 
 
-async def get_enrich_use_case(
-    track_repository: ITrackRepository = Depends(),
-    artist_repository: IArtistRepository = Depends(),
-    album_repository: IAlbumRepository = Depends(),
-    musicbrainz_client: IMusicBrainzClient = Depends(),
-    lastfm_client: ILastfmClient = Depends(),
-    spotify_client: ISpotifyClient | None = Depends(),
+def get_enrich_use_case(
+    track_repository: TrackRepository = Depends(get_track_repository),
+    artist_repository: ArtistRepository = Depends(get_artist_repository),
+    album_repository: AlbumRepository = Depends(get_album_repository),
+    musicbrainz_client: MusicBrainzClient = Depends(get_musicbrainz_client),
+    lastfm_client: LastfmClient = Depends(get_lastfm_client),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
     metadata_merger: MetadataMerger = Depends(get_metadata_merger),
 ) -> EnrichMetadataMultiSourceUseCase:
     """Get metadata enrichment use case instance."""
@@ -136,9 +144,9 @@ async def enrich_metadata(
 )
 async def resolve_conflict(
     request: ResolveConflictRequest,
-    track_repository: ITrackRepository = Depends(),
-    artist_repository: IArtistRepository = Depends(),
-    album_repository: IAlbumRepository = Depends(),
+    track_repository: TrackRepository = Depends(get_track_repository),
+    artist_repository: ArtistRepository = Depends(get_artist_repository),
+    album_repository: AlbumRepository = Depends(get_album_repository),
 ) -> dict[str, Any]:
     """
     Resolve a metadata conflict by selecting a source or providing custom value.
