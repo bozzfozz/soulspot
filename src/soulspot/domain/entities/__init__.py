@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from soulspot.domain.value_objects import (
     AlbumId,
@@ -16,6 +16,15 @@ from soulspot.domain.value_objects import (
 )
 
 
+class MetadataSource(str, Enum):
+    """Source of metadata."""
+
+    MANUAL = "manual"  # User-provided overrides
+    MUSICBRAINZ = "musicbrainz"
+    SPOTIFY = "spotify"
+    LASTFM = "lastfm"
+
+
 @dataclass
 class Artist:
     """Artist entity representing a music artist."""
@@ -24,6 +33,10 @@ class Artist:
     name: str
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
+    lastfm_url: str | None = None
+    genres: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    metadata_sources: dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -51,6 +64,9 @@ class Album:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     artwork_path: FilePath | None = None
+    genres: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    metadata_sources: dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -84,6 +100,9 @@ class Track:
     musicbrainz_id: str | None = None
     isrc: str | None = None
     file_path: FilePath | None = None
+    genres: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    metadata_sources: dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 

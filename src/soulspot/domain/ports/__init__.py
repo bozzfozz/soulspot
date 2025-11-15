@@ -414,3 +414,57 @@ class IMusicBrainzClient(ABC):
             Artist information or None if not found
         """
         pass
+
+
+class ILastfmClient(ABC):
+    """Port for Last.fm API client operations."""
+
+    @abstractmethod
+    async def get_track_info(
+        self, artist: str, track: str, mbid: str | None = None
+    ) -> dict[str, Any] | None:
+        """
+        Get track information including tags.
+
+        Args:
+            artist: Artist name
+            track: Track title
+            mbid: Optional MusicBrainz ID
+
+        Returns:
+            Track information or None if not found
+        """
+        pass
+
+    @abstractmethod
+    async def get_artist_info(
+        self, artist: str, mbid: str | None = None
+    ) -> dict[str, Any] | None:
+        """
+        Get artist information including tags.
+
+        Args:
+            artist: Artist name
+            mbid: Optional MusicBrainz ID
+
+        Returns:
+            Artist information or None if not found
+        """
+        pass
+
+    @abstractmethod
+    async def get_album_info(
+        self, artist: str, album: str, mbid: str | None = None
+    ) -> dict[str, Any] | None:
+        """
+        Get album information including tags.
+
+        Args:
+            artist: Artist name
+            album: Album title
+            mbid: Optional MusicBrainz ID
+
+        Returns:
+            Album information or None if not found
+        """
+        pass

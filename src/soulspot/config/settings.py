@@ -100,6 +100,21 @@ class MusicBrainzSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MUSICBRAINZ_")
 
 
+class LastfmSettings(BaseSettings):
+    """Last.fm API configuration."""
+
+    api_key: str = Field(
+        default="",
+        description="Last.fm API key",
+    )
+    api_secret: str = Field(
+        default="",
+        description="Last.fm API secret",
+    )
+
+    model_config = SettingsConfigDict(env_prefix="LASTFM_")
+
+
 class StorageSettings(BaseSettings):
     """File storage configuration."""
 
@@ -299,6 +314,10 @@ class Settings(BaseSettings):
     musicbrainz: MusicBrainzSettings = Field(
         default_factory=MusicBrainzSettings,
         description="MusicBrainz configuration",
+    )
+    lastfm: LastfmSettings = Field(
+        default_factory=LastfmSettings,
+        description="Last.fm configuration",
     )
     storage: StorageSettings = Field(
         default_factory=StorageSettings,

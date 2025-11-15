@@ -173,18 +173,18 @@ The backend of SoulSpot Bridge is responsible for:
 
 | Task | Description | Priority | Effort | Status |
 |------|-------------|----------|--------|--------|
-| **Multi-Source Merge** | Combine metadata from multiple sources | P0 | Large | 📋 Planned |
-| **Authority Hierarchy** | Configure source priority per field | P0 | Medium | 📋 Planned |
-| **Conflict Resolution** | API for resolving metadata conflicts | P1 | Medium | 📋 Planned |
-| **Last.fm Integration** | Add Last.fm for genres/tags | P1 | Medium | 📋 Planned |
-| **Tag Normalization** | Standardize artist names (feat./ft.) | P1 | Small | 📋 Planned |
+| **Multi-Source Merge** | Combine metadata from multiple sources | P0 | Large | ✅ Done |
+| **Authority Hierarchy** | Configure source priority per field | P0 | Medium | ✅ Done |
+| **Conflict Resolution** | API for resolving metadata conflicts | P1 | Medium | ✅ Done |
+| **Last.fm Integration** | Add Last.fm for genres/tags | P1 | Medium | ✅ Done |
+| **Tag Normalization** | Standardize artist names (feat./ft.) | P1 | Small | ✅ Done |
 
 **Acceptance Criteria:**
-- [ ] Metadata merger with configurable source priority
-- [ ] Authority hierarchy: Manual > MusicBrainz > Spotify > Last.fm
-- [ ] Conflict resolution API endpoints
-- [ ] Last.fm API integration complete
-- [ ] Tag normalization rules implemented
+- [x] Metadata merger with configurable source priority
+- [x] Authority hierarchy: Manual > MusicBrainz > Spotify > Last.fm
+- [x] Conflict resolution API endpoints
+- [x] Last.fm API integration complete
+- [x] Tag normalization rules implemented
 - [ ] Unit + integration tests
 
 **Dependencies:**
@@ -193,6 +193,14 @@ The backend of SoulSpot Bridge is responsible for:
 **Risks:**
 - API rate limit handling complexity
 - Data quality inconsistencies across sources
+
+**Implementation Notes:**
+- Created `LastfmClient` for Last.fm API integration
+- Implemented `MetadataMerger` service with authority hierarchy
+- Added `EnrichMetadataMultiSourceUseCase` for multi-source enrichment
+- Created `/api/metadata` REST endpoints for conflict resolution
+- Added `genres`, `tags`, and `metadata_sources` fields to Track, Artist, and Album entities
+- Implemented tag normalization for artist names (feat./ft. standardization)
 
 ---
 
