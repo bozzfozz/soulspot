@@ -69,9 +69,9 @@ class TestThemeFiles:
         """Test that tailwind.theme.js exists."""
         tailwind_theme = Path("design/tailwind.theme.js")
         assert tailwind_theme.exists(), "tailwind.theme.js should exist"
-        assert (
-            tailwind_theme.stat().st_size > 0
-        ), "tailwind.theme.js should not be empty"
+        assert tailwind_theme.stat().st_size > 0, (
+            "tailwind.theme.js should not be empty"
+        )
 
     def test_theme_include_exists(self):
         """Test that theme include template exists."""

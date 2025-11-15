@@ -323,7 +323,7 @@ async def batch_download(
         Batch download response with job IDs
     """
     from soulspot.domain.exceptions import ValidationException
-    
+
     if not request.track_ids:
         raise HTTPException(
             status_code=400, detail="At least one track ID must be provided"

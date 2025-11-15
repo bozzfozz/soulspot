@@ -1,8 +1,9 @@
 """Integration tests for download management endpoints."""
 
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, Mock
 
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.config import Settings
@@ -59,9 +60,9 @@ def mock_download_worker():
 def app_with_mocks(test_settings, mock_job_queue, mock_download_worker):
     """Create app with mocked dependencies."""
     from contextlib import asynccontextmanager
-    
+
     app = create_app(test_settings)
-    
+
     # Override the lifespan to inject mocks instead of real instances
     @asynccontextmanager
     async def mock_lifespan(app_instance):
@@ -69,11 +70,11 @@ def app_with_mocks(test_settings, mock_job_queue, mock_download_worker):
         app_instance.state.job_queue = mock_job_queue
         app_instance.state.download_worker = mock_download_worker
         app_instance.state.db = Mock()
-        
+
         yield
-        
+
         # Cleanup (mocks don't need cleanup)
-    
+
     app.router.lifespan_context = mock_lifespan
     return app
 
@@ -111,7 +112,7 @@ class TestDownloadQueueManagement:
         response = client.get("/api/downloads/status")
         assert response.status_code == 200
         data = response.json()
-        
+
         # Verify status structure
         assert "paused" in data
         assert "max_concurrent_downloads" in data
@@ -121,14 +122,14 @@ class TestDownloadQueueManagement:
         assert "completed" in data
         assert "failed" in data
         assert "cancelled" in data
-        
+
         # Verify values
         assert data["paused"] is False
         assert data["max_concurrent_downloads"] == 3
         assert data["active_downloads"] == 1
         assert data["queued_downloads"] == 2
         assert data["total_jobs"] == 5
-        
+
         mock_job_queue.is_paused.assert_called_once()
         mock_job_queue.get_max_concurrent_jobs.assert_called_once()
         mock_job_queue.get_stats.assert_called_once()
@@ -140,25 +141,26 @@ class TestBatchDownloads:
     def test_batch_download_success(self, client, mock_download_worker):
         """Test batch download with valid track IDs."""
         from uuid import uuid4
+
         track_ids = [str(uuid4()), str(uuid4()), str(uuid4())]
-        
+
         # Mock multiple job IDs
         mock_download_worker.enqueue_download = AsyncMock(
             side_effect=["job-1", "job-2", "job-3"]
         )
-        
+
         response = client.post(
             "/api/downloads/batch",
             json={"track_ids": track_ids, "priority": 1},
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["total_tracks"] == 3
         assert len(data["job_ids"]) == 3
         assert data["job_ids"] == ["job-1", "job-2", "job-3"]
         assert "batch download initiated" in data["message"].lower()
-        
+
         # Verify enqueue_download was called for each track
         assert mock_download_worker.enqueue_download.call_count == 3
 
@@ -168,19 +170,19 @@ class TestBatchDownloads:
             "/api/downloads/batch",
             json={"track_ids": [], "priority": 0},
         )
-        
+
         assert response.status_code == 400
         assert "at least one track" in response.json()["detail"].lower()
 
     def test_batch_download_invalid_track_id(self, client, mock_download_worker):
         """Test batch download with invalid track ID."""
         track_ids = ["invalid-track-id"]
-        
+
         response = client.post(
             "/api/downloads/batch",
             json={"track_ids": track_ids, "priority": 0},
         )
-        
+
         # Should return 400 for invalid track ID
         assert response.status_code == 400
         assert "invalid track id" in response.json()["detail"].lower()
@@ -188,16 +190,17 @@ class TestBatchDownloads:
     def test_batch_download_with_priority(self, client, mock_download_worker):
         """Test batch download with custom priority."""
         from uuid import uuid4
+
         track_ids = [str(uuid4())]
         mock_download_worker.enqueue_download = AsyncMock(return_value="job-1")
-        
+
         response = client.post(
             "/api/downloads/batch",
             json={"track_ids": track_ids, "priority": 2},
         )
-        
+
         assert response.status_code == 200
-        
+
         # Verify priority was passed correctly
         mock_download_worker.enqueue_download.assert_called_once()
         call_kwargs = mock_download_worker.enqueue_download.call_args[1]
@@ -211,7 +214,7 @@ class TestDownloadQueueIntegration:
         """Test that queue status reflects paused state."""
         # Set queue to paused
         mock_job_queue.is_paused.return_value = True
-        
+
         response = client.get("/api/downloads/status")
         assert response.status_code == 200
         data = response.json()
@@ -220,7 +223,7 @@ class TestDownloadQueueIntegration:
     def test_concurrent_downloads_configuration(self, client, mock_job_queue):
         """Test that max concurrent downloads is properly configured."""
         mock_job_queue.get_max_concurrent_jobs.return_value = 2
-        
+
         response = client.get("/api/downloads/status")
         assert response.status_code == 200
         data = response.json()

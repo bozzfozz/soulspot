@@ -172,7 +172,9 @@ async def resolve_conflict(
             entity = await track_repository.get_by_id(TrackId(UUID(request.track_id)))
             entity_type = "track"
         elif request.artist_id:
-            entity = await artist_repository.get_by_id(ArtistId(UUID(request.artist_id)))
+            entity = await artist_repository.get_by_id(
+                ArtistId(UUID(request.artist_id))
+            )
             entity_type = "artist"
         elif request.album_id:
             entity = await album_repository.get_by_id(AlbumId(UUID(request.album_id)))

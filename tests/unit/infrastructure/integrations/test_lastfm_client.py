@@ -1,8 +1,6 @@
 """Tests for Last.fm client."""
 
-from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -25,9 +23,7 @@ def lastfm_client(lastfm_settings):
 class TestLastfmClient:
     """Tests for LastfmClient."""
 
-    async def test_get_track_info_success(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_track_info_success(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test successful track info retrieval."""
         # Arrange
         mock_response = {
@@ -54,9 +50,7 @@ class TestLastfmClient:
         assert result["name"] == "Test Track"
         assert result["artist"]["name"] == "Test Artist"
 
-    async def test_get_track_info_by_mbid(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_track_info_by_mbid(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test track info retrieval by MusicBrainz ID."""
         # Arrange
         mock_response = {
@@ -76,9 +70,7 @@ class TestLastfmClient:
         assert result is not None
         assert result["mbid"] == "test-mbid-123"
 
-    async def test_get_track_info_not_found(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_track_info_not_found(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test track info when track not found."""
         # Arrange
         httpx_mock.add_response(status_code=404)
@@ -91,9 +83,7 @@ class TestLastfmClient:
         # Assert
         assert result is None
 
-    async def test_get_track_info_api_error(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_track_info_api_error(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test track info when API returns error."""
         # Arrange
         mock_response = {"error": 6, "message": "Track not found"}
@@ -107,9 +97,7 @@ class TestLastfmClient:
         # Assert
         assert result is None
 
-    async def test_get_artist_info_success(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_artist_info_success(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test successful artist info retrieval."""
         # Arrange
         mock_response = {
@@ -133,9 +121,7 @@ class TestLastfmClient:
         assert result["name"] == "Test Artist"
         assert "tags" in result
 
-    async def test_get_artist_info_by_mbid(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_artist_info_by_mbid(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test artist info retrieval by MusicBrainz ID."""
         # Arrange
         mock_response = {
@@ -147,17 +133,13 @@ class TestLastfmClient:
         httpx_mock.add_response(json=mock_response)
 
         # Act
-        result = await lastfm_client.get_artist_info(
-            artist="", mbid="artist-mbid-456"
-        )
+        result = await lastfm_client.get_artist_info(artist="", mbid="artist-mbid-456")
 
         # Assert
         assert result is not None
         assert result["mbid"] == "artist-mbid-456"
 
-    async def test_get_album_info_success(
-        self, lastfm_client, httpx_mock: HTTPXMock
-    ):
+    async def test_get_album_info_success(self, lastfm_client, httpx_mock: HTTPXMock):
         """Test successful album info retrieval."""
         # Arrange
         mock_response = {
