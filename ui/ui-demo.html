@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI 1.0 Design System - Component Showcase</title>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="layout.css">
+  <style>
+    /* Demo-specific styles */
+    .demo-section {
+      margin-bottom: var(--ui-space-12);
+    }
+    
+    .demo-section-title {
+      padding-bottom: var(--ui-space-4);
+      border-bottom: 2px solid var(--ui-border);
+      margin-bottom: var(--ui-space-6);
+    }
+    
+    .demo-grid {
+      display: grid;
+      gap: var(--ui-space-4);
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    
+    .demo-color-swatch {
+      padding: var(--ui-space-4);
+      border-radius: var(--ui-radius-lg);
+      text-align: center;
+      font-size: var(--ui-text-sm);
+      font-weight: var(--ui-font-semibold);
+      box-shadow: var(--ui-shadow-sm);
+    }
+    
+    .demo-spacing-box {
+      background: var(--ui-primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--ui-text-xs);
+      border-radius: var(--ui-radius-base);
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="ui-skip-link">Skip to main content</a>
+
+  <!-- Header -->
+  <div class="ui-page-header">
+    <div class="ui-container">
+      <div class="ui-flex ui-items-center ui-justify-between">
+        <h1 class="ui-heading-3 ui-m-0">UI 1.0 Design System</h1>
+        <div class="ui-flex ui-items-center">
+          <span class="ui-badge ui-badge-info">v1.0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main id="main-content" class="ui-page-content">
+    <div class="ui-container">
+      
+      <!-- Introduction -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Introduction</h2>
+        <div class="ui-card-static ui-p-6">
+          <p class="ui-mb-4">
+            This is the <strong>UI 1.0 Design System</strong> – a neutral, reusable UI foundation 
+            based on the visual design language from the Wizarr project (MIT License).
+          </p>
+          <p class="ui-mb-4">
+            All branding elements (logos, product names, marketing content) have been removed 
+            to create a clean, generic design system that can be integrated into any project.
+          </p>
+          <div class="ui-alert ui-alert-info">
+            <div class="ui-alert-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="ui-alert-content">
+              <div class="ui-alert-title">Design Attribution</div>
+              Visual design derived from <a href="https://github.com/wizarrrr/wizarr" style="color: var(--ui-primary); text-decoration: underline;">Wizarr</a> 
+              (MIT License) – Copyright © Wizarr Team
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Colors -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Color Palette</h2>
+        
+        <h3 class="ui-heading-4 ui-mb-3">Brand Colors</h3>
+        <div class="demo-grid ui-mb-6">
+          <div class="demo-color-swatch" style="background: var(--ui-primary); color: white;">
+            Primary<br><code>--ui-primary</code>
+          </div>
+          <div class="demo-color-swatch" style="background: var(--ui-secondary); color: white;">
+            Secondary<br><code>--ui-secondary</code>
+          </div>
+          <div class="demo-color-swatch" style="background: var(--ui-blue-primary); color: white;">
+            Blue<br><code>--ui-blue-primary</code>
+          </div>
+        </div>
+
+        <h3 class="ui-heading-4 ui-mb-3">Semantic Colors</h3>
+        <div class="demo-grid">
+          <div class="demo-color-swatch" style="background: var(--ui-success); color: white;">
+            Success<br><code>--ui-success</code>
+          </div>
+          <div class="demo-color-swatch" style="background: var(--ui-warning); color: white;">
+            Warning<br><code>--ui-warning</code>
+          </div>
+          <div class="demo-color-swatch" style="background: var(--ui-danger); color: white;">
+            Danger<br><code>--ui-danger</code>
+          </div>
+          <div class="demo-color-swatch" style="background: var(--ui-info); color: white;">
+            Info<br><code>--ui-info</code>
+          </div>
+        </div>
+      </section>
+
+      <!-- Typography -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Typography</h2>
+        <div class="ui-card-static ui-p-6">
+          <h1 class="ui-heading-1">Heading 1 - Page Title</h1>
+          <h2 class="ui-heading-2">Heading 2 - Section Title</h2>
+          <h3 class="ui-heading-3">Heading 3 - Subsection Title</h3>
+          <h4 class="ui-heading-4">Heading 4 - Card Title</h4>
+          <p style="margin-bottom: var(--ui-space-4);">
+            <strong>Body text (base):</strong> The quick brown fox jumps over the lazy dog. 
+            This is regular paragraph text with normal weight and line height.
+          </p>
+          <p class="ui-text-muted" style="margin-bottom: var(--ui-space-4);">
+            <strong>Muted text:</strong> This text uses the muted color for secondary information 
+            that should be less prominent than primary content.
+          </p>
+          <p style="font-size: var(--ui-text-sm);">
+            <strong>Small text:</strong> Used for captions, labels, and fine print.
+          </p>
+        </div>
+      </section>
+
+      <!-- Buttons -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Buttons</h2>
+        
+        <h3 class="ui-heading-4 ui-mb-3">Button Variants</h3>
+        <div class="ui-flex ui-flex-wrap ui-mb-6">
+          <button class="ui-btn ui-btn-primary">Primary Button</button>
+          <button class="ui-btn ui-btn-secondary">Secondary Button</button>
+          <button class="ui-btn ui-btn-outline">Outline Button</button>
+          <button class="ui-btn ui-btn-ghost">Ghost Button</button>
+          <button class="ui-btn ui-btn-danger">Danger Button</button>
+          <button class="ui-btn ui-btn-success">Success Button</button>
+        </div>
+
+        <h3 class="ui-heading-4 ui-mb-3">Button Sizes</h3>
+        <div class="ui-flex ui-items-center ui-flex-wrap ui-mb-6">
+          <button class="ui-btn ui-btn-primary ui-btn-sm">Small Button</button>
+          <button class="ui-btn ui-btn-primary">Regular Button</button>
+          <button class="ui-btn ui-btn-primary ui-btn-lg">Large Button</button>
+        </div>
+
+        <h3 class="ui-heading-4 ui-mb-3">Button States</h3>
+        <div class="ui-flex ui-flex-wrap">
+          <button class="ui-btn ui-btn-primary" disabled>Disabled Primary</button>
+          <button class="ui-btn ui-btn-secondary" disabled>Disabled Secondary</button>
+          <button class="ui-btn ui-btn-primary">
+            <span class="ui-spinner ui-spinner-sm" style="border-top-color: white; border-color: rgba(255,255,255,0.3);"></span>
+            Loading...
+          </button>
+        </div>
+      </section>
+
+      <!-- Cards -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Cards</h2>
+        <div class="ui-grid ui-grid-cols-3">
+          <div class="ui-card">
+            <div class="ui-card-header">
+              <h3 class="ui-card-title">Card with Header</h3>
+              <p class="ui-card-subtitle">Optional subtitle text</p>
+            </div>
+            <div class="ui-card-body">
+              <p>This is the card body content. Cards can contain any type of content including text, images, forms, or other components.</p>
+            </div>
+            <div class="ui-card-footer">
+              <button class="ui-btn ui-btn-primary ui-btn-sm">Action</button>
+              <button class="ui-btn ui-btn-ghost ui-btn-sm">Cancel</button>
+            </div>
+          </div>
+
+          <div class="ui-card">
+            <div class="ui-card-body">
+              <h3 class="ui-card-title">Simple Card</h3>
+              <p>Cards without headers or footers for simpler layouts. Perfect for dashboard widgets or content blocks.</p>
+            </div>
+          </div>
+
+          <div class="ui-card">
+            <div class="ui-card-header">
+              <h3 class="ui-card-title">Stats Card</h3>
+            </div>
+            <div class="ui-card-body">
+              <div class="ui-flex ui-items-center ui-justify-center" style="flex-direction: column; padding: var(--ui-space-4) 0;">
+                <div style="font-size: var(--ui-text-4xl); font-weight: var(--ui-font-bold); color: var(--ui-primary);">1,234</div>
+                <div class="ui-text-muted" style="font-size: var(--ui-text-sm);">Total Items</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Badges -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Badges & Status Indicators</h2>
+        <div class="ui-flex ui-flex-wrap">
+          <span class="ui-badge ui-badge-success">Success</span>
+          <span class="ui-badge ui-badge-warning">Warning</span>
+          <span class="ui-badge ui-badge-danger">Danger</span>
+          <span class="ui-badge ui-badge-info">Info</span>
+          <span class="ui-badge ui-badge-neutral">Neutral</span>
+          <span class="ui-badge ui-badge-success ui-badge-pulse">Active</span>
+        </div>
+      </section>
+
+      <!-- Alerts -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Alerts & Notifications</h2>
+        
+        <div class="ui-alert ui-alert-success">
+          <div class="ui-alert-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="ui-alert-content">
+            <div class="ui-alert-title">Success!</div>
+            Your changes have been saved successfully.
+          </div>
+        </div>
+
+        <div class="ui-alert ui-alert-warning">
+          <div class="ui-alert-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div class="ui-alert-content">
+            <div class="ui-alert-title">Warning!</div>
+            Please review your settings before proceeding.
+          </div>
+        </div>
+
+        <div class="ui-alert ui-alert-danger">
+          <div class="ui-alert-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="ui-alert-content">
+            <div class="ui-alert-title">Error!</div>
+            An error occurred while processing your request.
+          </div>
+        </div>
+
+        <div class="ui-alert ui-alert-info">
+          <div class="ui-alert-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div class="ui-alert-content">
+            <div class="ui-alert-title">Information</div>
+            Here's some helpful information about this feature.
+          </div>
+        </div>
+      </section>
+
+      <!-- Forms -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Form Elements</h2>
+        <div class="ui-card-static ui-p-6">
+          <form>
+            <div class="ui-form-group">
+              <label class="ui-label ui-label-required">Text Input</label>
+              <input type="text" class="ui-input" placeholder="Enter text here...">
+              <div class="ui-form-help">This is helper text for the input field.</div>
+            </div>
+
+            <div class="ui-form-group">
+              <label class="ui-label">Email Input</label>
+              <input type="email" class="ui-input" placeholder="user@example.com">
+            </div>
+
+            <div class="ui-form-group">
+              <label class="ui-label">Select Dropdown</label>
+              <select class="ui-select">
+                <option>Select an option...</option>
+                <option>Option 1</option>
+                <option>Option 2</option>
+                <option>Option 3</option>
+              </select>
+            </div>
+
+            <div class="ui-form-group">
+              <label class="ui-label">Textarea</label>
+              <textarea class="ui-textarea" placeholder="Enter longer text here..."></textarea>
+            </div>
+
+            <div class="ui-form-group">
+              <label class="ui-flex ui-items-center" style="cursor: pointer; gap: var(--ui-space-2);">
+                <input type="checkbox" class="ui-checkbox">
+                <span>I agree to the terms and conditions</span>
+              </label>
+            </div>
+
+            <div class="ui-form-group">
+              <div class="ui-label">Radio Buttons</div>
+              <label class="ui-flex ui-items-center ui-mb-2" style="cursor: pointer; gap: var(--ui-space-2);">
+                <input type="radio" name="option" class="ui-radio">
+                <span>Option A</span>
+              </label>
+              <label class="ui-flex ui-items-center" style="cursor: pointer; gap: var(--ui-space-2);">
+                <input type="radio" name="option" class="ui-radio">
+                <span>Option B</span>
+              </label>
+            </div>
+
+            <div class="ui-btn-group">
+              <button type="submit" class="ui-btn ui-btn-primary">Submit Form</button>
+              <button type="reset" class="ui-btn ui-btn-ghost">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Tables -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Tables</h2>
+        <div class="ui-table-wrapper">
+          <table class="ui-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Role</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>John Doe</td>
+                <td>john@example.com</td>
+                <td><span class="ui-badge ui-badge-success">Active</span></td>
+                <td>Admin</td>
+                <td>
+                  <button class="ui-btn ui-btn-ghost ui-btn-sm">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Jane Smith</td>
+                <td>jane@example.com</td>
+                <td><span class="ui-badge ui-badge-success">Active</span></td>
+                <td>User</td>
+                <td>
+                  <button class="ui-btn ui-btn-ghost ui-btn-sm">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Bob Johnson</td>
+                <td>bob@example.com</td>
+                <td><span class="ui-badge ui-badge-warning">Pending</span></td>
+                <td>User</td>
+                <td>
+                  <button class="ui-btn ui-btn-ghost ui-btn-sm">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Alice Williams</td>
+                <td>alice@example.com</td>
+                <td><span class="ui-badge ui-badge-danger">Inactive</span></td>
+                <td>User</td>
+                <td>
+                  <button class="ui-btn ui-btn-ghost ui-btn-sm">Edit</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Navigation -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Navigation</h2>
+        
+        <h3 class="ui-heading-4 ui-mb-3">Horizontal Navigation</h3>
+        <nav class="ui-nav ui-mb-6">
+          <a href="#" class="ui-nav-item ui-nav-item-active">Dashboard</a>
+          <a href="#" class="ui-nav-item">Library</a>
+          <a href="#" class="ui-nav-item">Downloads</a>
+          <a href="#" class="ui-nav-item">Settings</a>
+        </nav>
+
+        <h3 class="ui-heading-4 ui-mb-3">Tabs</h3>
+        <div class="ui-tabs ui-mb-6">
+          <ul class="ui-tabs-list">
+            <li><button class="ui-tab ui-tab-active">Overview</button></li>
+            <li><button class="ui-tab">Details</button></li>
+            <li><button class="ui-tab">Statistics</button></li>
+            <li><button class="ui-tab">Settings</button></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Loading States -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Loading States</h2>
+        
+        <h3 class="ui-heading-4 ui-mb-3">Spinners</h3>
+        <div class="ui-flex ui-items-center ui-mb-6">
+          <div class="ui-spinner ui-spinner-sm"></div>
+          <div class="ui-spinner"></div>
+          <div class="ui-spinner ui-spinner-lg"></div>
+        </div>
+
+        <h3 class="ui-heading-4 ui-mb-3">Progress Bar</h3>
+        <div class="ui-progress ui-mb-6">
+          <div class="ui-progress-bar" style="width: 65%;"></div>
+        </div>
+
+        <h3 class="ui-heading-4 ui-mb-3">Skeleton Loading</h3>
+        <div class="ui-card-static ui-p-6">
+          <div class="ui-skeleton" style="height: 1.5rem; width: 60%; margin-bottom: var(--ui-space-3);"></div>
+          <div class="ui-skeleton" style="height: 1rem; width: 100%; margin-bottom: var(--ui-space-2);"></div>
+          <div class="ui-skeleton" style="height: 1rem; width: 90%; margin-bottom: var(--ui-space-2);"></div>
+          <div class="ui-skeleton" style="height: 1rem; width: 75%;"></div>
+        </div>
+      </section>
+
+      <!-- Spacing Scale -->
+      <section class="demo-section">
+        <h2 class="ui-heading-2 demo-section-title">Spacing Scale</h2>
+        <div class="ui-grid ui-grid-cols-4">
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-1);">1 (4px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-2);">2 (8px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-3);">3 (12px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-4);">4 (16px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-6);">6 (24px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-8);">8 (32px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-10);">10 (40px)</div>
+          </div>
+          <div>
+            <div class="demo-spacing-box" style="height: var(--ui-space-12);">12 (48px)</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="ui-page-footer">
+    <div class="ui-container">
+      <div class="ui-flex ui-items-center ui-justify-between">
+        <p class="ui-text-muted" style="font-size: var(--ui-text-sm); margin: 0;">
+          UI 1.0 Design System • Based on <a href="https://github.com/wizarrrr/wizarr" style="color: var(--ui-primary);">Wizarr</a> (MIT License)
+        </p>
+        <div class="ui-flex">
+          <a href="#" class="ui-btn ui-btn-ghost ui-btn-sm">Documentation</a>
+          <a href="https://github.com/wizarrrr/wizarr" class="ui-btn ui-btn-ghost ui-btn-sm">Source</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Dark mode toggle example (optional)
+    function toggleDarkMode() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    // Load saved theme
+    if (localStorage.getItem('theme') === 'dark' || 
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+</body>
+</html>
