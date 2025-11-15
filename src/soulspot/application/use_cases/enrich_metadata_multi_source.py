@@ -237,7 +237,9 @@ class EnrichMetadataMultiSourceUseCase(
                 # Fetch artist-specific data
                 mb_artist_data = None
                 if musicbrainz_data and "artist-credit" in musicbrainz_data:
-                    artist_mbid = musicbrainz_data["artist-credit"][0].get("artist", {}).get("id")
+                    artist_mbid = (
+                        musicbrainz_data["artist-credit"][0].get("artist", {}).get("id")
+                    )
                     if artist_mbid:
                         mb_artist_data = await self._musicbrainz_client.lookup_artist(
                             artist_mbid

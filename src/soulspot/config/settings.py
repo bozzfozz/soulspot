@@ -120,7 +120,12 @@ class LastfmSettings(BaseSettings):
         Returns:
             True if both API key and secret are provided, False otherwise
         """
-        return bool(self.api_key and self.api_key.strip() and self.api_secret and self.api_secret.strip())
+        return bool(
+            self.api_key
+            and self.api_key.strip()
+            and self.api_secret
+            and self.api_secret.strip()
+        )
 
 
 class StorageSettings(BaseSettings):

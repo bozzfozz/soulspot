@@ -59,18 +59,15 @@ class TestMetadataMerger:
     def test_authority_hierarchy(self, metadata_merger):
         """Test authority hierarchy order."""
         # Assert
-        assert (
-            metadata_merger._get_source_priority(MetadataSource.MANUAL)
-            < metadata_merger._get_source_priority(MetadataSource.MUSICBRAINZ)
-        )
-        assert (
-            metadata_merger._get_source_priority(MetadataSource.MUSICBRAINZ)
-            < metadata_merger._get_source_priority(MetadataSource.SPOTIFY)
-        )
-        assert (
-            metadata_merger._get_source_priority(MetadataSource.SPOTIFY)
-            < metadata_merger._get_source_priority(MetadataSource.LASTFM)
-        )
+        assert metadata_merger._get_source_priority(
+            MetadataSource.MANUAL
+        ) < metadata_merger._get_source_priority(MetadataSource.MUSICBRAINZ)
+        assert metadata_merger._get_source_priority(
+            MetadataSource.MUSICBRAINZ
+        ) < metadata_merger._get_source_priority(MetadataSource.SPOTIFY)
+        assert metadata_merger._get_source_priority(
+            MetadataSource.SPOTIFY
+        ) < metadata_merger._get_source_priority(MetadataSource.LASTFM)
 
     def test_select_best_value_higher_priority(self, metadata_merger):
         """Test selecting value with higher priority source."""
@@ -179,9 +176,7 @@ class TestMetadataMerger:
         # Assert
         assert result == name
 
-    def test_merge_track_metadata_from_musicbrainz(
-        self, metadata_merger, sample_track
-    ):
+    def test_merge_track_metadata_from_musicbrainz(self, metadata_merger, sample_track):
         """Test merging track metadata from MusicBrainz."""
         # Arrange
         musicbrainz_data = {
@@ -201,11 +196,11 @@ class TestMetadataMerger:
         assert result.isrc == "GBRC12345678"
         assert "rock" in result.tags
         assert "indie" in result.tags
-        assert result.metadata_sources["duration_ms"] == MetadataSource.MUSICBRAINZ.value
+        assert (
+            result.metadata_sources["duration_ms"] == MetadataSource.MUSICBRAINZ.value
+        )
 
-    def test_merge_track_metadata_from_lastfm(
-        self, metadata_merger, sample_track
-    ):
+    def test_merge_track_metadata_from_lastfm(self, metadata_merger, sample_track):
         """Test merging track metadata from Last.fm."""
         # Arrange
         lastfm_data = {
@@ -305,11 +300,11 @@ class TestMetadataMerger:
         assert result.release_year == 2022
         assert "rock" in result.tags
         assert "indie" in result.tags
-        assert result.metadata_sources["release_year"] == MetadataSource.MUSICBRAINZ.value
+        assert (
+            result.metadata_sources["release_year"] == MetadataSource.MUSICBRAINZ.value
+        )
 
-    def test_merge_album_metadata_invalid_date(
-        self, metadata_merger, sample_album
-    ):
+    def test_merge_album_metadata_invalid_date(self, metadata_merger, sample_album):
         """Test merging album metadata with invalid date."""
         # Arrange
         musicbrainz_data = {

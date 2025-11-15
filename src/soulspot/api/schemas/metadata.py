@@ -59,9 +59,7 @@ class ResolveConflictRequest(BaseModel):
     """Request schema for resolving metadata conflicts."""
 
     track_id: str | None = Field(default=None, description="Track ID (if applicable)")
-    artist_id: str | None = Field(
-        default=None, description="Artist ID (if applicable)"
-    )
+    artist_id: str | None = Field(default=None, description="Artist ID (if applicable)")
     album_id: str | None = Field(default=None, description="Album ID (if applicable)")
     field_name: str = Field(..., description="Field name to resolve")
     selected_source: MetadataSourceEnum = Field(
@@ -81,7 +79,9 @@ class MetadataEnrichmentResponse(BaseModel):
     conflicts: list[MetadataConflict] = Field(
         default_factory=list, description="Detected metadata conflicts"
     )
-    errors: list[str] = Field(default_factory=list, description="Any errors encountered")
+    errors: list[str] = Field(
+        default_factory=list, description="Any errors encountered"
+    )
 
 
 class TagNormalizationResult(BaseModel):
