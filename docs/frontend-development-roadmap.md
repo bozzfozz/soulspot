@@ -6,6 +6,8 @@
 > **Owner:** Frontend Team  
 > **Next:** V2.0 Dashboard Builder (HTMX-Only, 12-18 days)
 
+> **📌 Hinweis:** Für eine detaillierte **Version 1.0 Roadmap** mit Feature-Freeze-Kriterien, Meilensteinen und Qualitätssicherung, siehe [Frontend Development Roadmap v1.0](../frontend-development-roadmap.md).
+
 ---
 
 ## 📑 Table of Contents
@@ -169,7 +171,7 @@ templates/
 
 **Delivered Artifacts:**
 
-1. **`ui/theme.css`** (8.8 KB)
+1. **`docs/ui/theme.css`** (8.8 KB)
    - CSS custom properties for all design tokens
    - Color palette (primary, secondary, semantic colors)
    - Typography scale (font families, sizes, weights, line heights)
@@ -178,7 +180,7 @@ templates/
    - Dark mode support with automatic detection
    - Accessibility features (focus states, reduced motion)
 
-2. **`ui/components.css`** (15 KB)
+2. **`docs/ui/components.css`** (15 KB)
    - **Buttons**: Primary, secondary, outline, ghost, danger, success variants with sizes (sm, base, lg)
    - **Cards**: Header, body, footer with hover effects
    - **Badges**: Success, warning, danger, info, neutral with pulse animation
@@ -190,7 +192,7 @@ templates/
    - **Loading**: Spinners (3 sizes), progress bars, skeleton screens
    - **Utility Classes**: Text colors, backgrounds
 
-3. **`ui/layout.css`** (12 KB)
+3. **`docs/ui/layout.css`** (12 KB)
    - **Container**: Responsive max-width containers (sm, md, lg, xl, full)
    - **Grid**: CSS Grid utilities (1-12 columns, auto-fit)
    - **Flexbox**: Flex direction, alignment, justification
@@ -203,7 +205,7 @@ templates/
    - **Position**: Relative, absolute, fixed, sticky
    - **Overflow**: Auto, hidden, x-auto, y-auto
 
-4. **`ui/ui-demo.html`** (21 KB)
+4. **`docs/ui/ui-demo.html`** (21 KB)
    - Complete showcase of all components and utilities
    - Interactive examples with live previews
    - Color palette swatches
@@ -218,7 +220,7 @@ templates/
    - Spacing scale visualization
    - Dark mode toggle example
 
-5. **`ui/README_UI_1_0.md`** (10.7 KB)
+5. **`docs/ui/README_UI_1_0.md`** (10.7 KB)
    - Comprehensive usage documentation
    - Installation and integration guide
    - Component usage examples with code snippets

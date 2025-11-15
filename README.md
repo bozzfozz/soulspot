@@ -73,9 +73,11 @@ Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien
 - Ausführliche Schritt-für-Schritt-Anleitung: [Docker Setup Guide](docker/README.md)
 - Hinweise zur Fehlerbehebung: Abschnitt „Troubleshooting“ im Docker Guide
 - Versionshinweise: [CHANGELOG](CHANGELOG.md)
+- Frontend Entwicklung: [Frontend Development Roadmap v1.0](frontend-development-roadmap.md)
+- UI Design System: [UI 1.0 Design System](docs/ui/README_UI_1_0.md)
 
 ## Lizenz
 Die Lizenz ist noch in Arbeit und wird vor dem ersten Stable-Release veröffentlicht.
 
 ---
-**Version:** 0.1.0 (Alpha) · **Status:** Active Development · **Letzte Aktualisierung:** 2025-11-09
+**Version:** 0.1.0 (Alpha) · **Status:** Active Development · **Letzte Aktualisierung:** 2025-11-15

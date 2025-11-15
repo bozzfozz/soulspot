@@ -1,10 +1,17 @@
 # UI 1.0 Design System
 
+> **Version:** 1.0.0  
+> **Status:** Production Ready  
+> **Lokation:** `/docs/ui/` (SoulSpot Bridge Repository)  
+> **Letzte Aktualisierung:** 2025-11-15
+
 A neutral, reusable UI design system based on the visual design language from the [Wizarr](https://github.com/wizarrrr/wizarr) project (MIT License).
 
 ## 📋 Overview
 
 This design system provides a complete set of design tokens, component styles, and layout utilities that can be integrated into any web application. All branding elements (logos, product names, marketing content) have been removed to create a clean, generic foundation.
+
+**Integration in SoulSpot Bridge:** Dieses Design System bildet die Grundlage für die Web-Oberfläche von SoulSpot Bridge Version 1.0. Alle UI-Komponenten verwenden diese Styles für eine konsistente und moderne Benutzererfahrung.
 
 ## 🎯 Purpose
 
@@ -64,17 +71,23 @@ Comprehensive showcase of all components and utilities with live examples.
 
 ### Installation
 
+#### Für SoulSpot Bridge
+Das Design System ist bereits in SoulSpot Bridge integriert. Die CSS-Dateien befinden sich in `/docs/ui/` und werden von den Jinja2-Templates referenziert.
+
+#### Für externe Projekte
 1. Copy the UI files to your project:
 ```bash
-cp -r ui/ /path/to/your/project/
+cp -r docs/ui/ /path/to/your/project/ui/
 ```
 
 2. Include the CSS files in your HTML:
 ```html
-<link rel="stylesheet" href="ui/theme.css">
-<link rel="stylesheet" href="ui/components.css">
-<link rel="stylesheet" href="ui/layout.css">
+<link rel="stylesheet" href="/path/to/ui/theme.css">
+<link rel="stylesheet" href="/path/to/ui/components.css">
+<link rel="stylesheet" href="/path/to/ui/layout.css">
 ```
+
+**Hinweis:** Die Pfade müssen entsprechend Ihrer Projektstruktur angepasst werden.
 
 ### Basic Usage
 
@@ -328,12 +341,30 @@ When using this design system in your project:
 3. Do not introduce project-specific branding into the core files
 4. Create your customizations in separate CSS files
 
+### Für SoulSpot Bridge Contributors
+
+Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
+
+1. Verwenden Sie die vorhandenen Design-Token aus `theme.css`
+2. Erweitern Sie `components.css` nur, wenn neue generische Komponenten benötigt werden
+3. Projektspezifische Styles sollten in separaten Dateien (z.B. `soulspot-custom.css`) liegen
+4. Testen Sie Ihre Änderungen mit `ui-demo.html` auf Konsistenz
+5. Stellen Sie sicher, dass alle neuen Komponenten WCAG 2.1 AA konform sind
+
 ## 📚 Resources
 
-- [Wizarr Project](https://github.com/wizarrrr/wizarr)
+### Externe Ressourcen
+- [Wizarr Project](https://github.com/wizarrrr/wizarr) – Original Design Source
 - [MIT License](https://opensource.org/licenses/MIT)
 - [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [CSS Custom Properties](https://developer.mozilla.org/en-US/docs/Web/CSS/--*)
+
+### SoulSpot Bridge Dokumentation
+- [Frontend Development Roadmap v1.0](../frontend-development-roadmap.md) – Detaillierte Planung für Version 1.0
+- [Architecture Documentation](../architecture.md) – System-Architektur
+- [Design Guidelines](../design-guidelines.md) – Design-Prinzipien für SoulSpot Bridge
+- [Keyboard Navigation Guide](../keyboard-navigation.md) – Tastaturnavigation
+- [UI/UX Testing Report](../ui-ux-testing-report.md) – Test-Ergebnisse
 
 ## 🆘 Support
 
@@ -345,6 +376,42 @@ This is a neutral design system extraction. For questions about:
 
 ---
 
-**Version**: 1.0  
+## 🔄 Version History
+
+### Version 1.0.0 (2025-11-15)
+- ✅ Initial Release – Complete Design System
+- ✅ Moved to `/docs/ui/` in SoulSpot Bridge Repository
+- ✅ Integration mit SoulSpot Bridge Frontend
+- ✅ Vollständige Dokumentation mit Beispielen
+- ✅ WCAG 2.1 AA konform
+- ✅ Dark Mode Support
+- ✅ Responsive Design (Mobile-First)
+- ✅ 48 UI-Komponenten
+- ✅ Demo-Seite mit interaktiven Beispielen
+
+**Komponenten:**
+- Buttons (6 Varianten × 3 Größen)
+- Cards (Header, Body, Footer)
+- Badges & Alerts (4 Semantic Colors)
+- Forms (Input, Textarea, Select, Checkbox, Radio)
+- Tables (Responsive, Hover, Striped)
+- Navigation (Horizontal, Vertical, Tabs)
+- Modals (Backdrop, Container, Header, Body, Footer)
+- Loading States (Spinner, Progress Bar, Skeleton)
+
+**Design Tokens:**
+- 18 Farb-Variablen (Primary, Secondary, Semantic, Neutrals)
+- 13 Typografie-Variablen (Font-Familien, -Größen, -Gewichte)
+- 20 Spacing-Variablen (4px-Schritte)
+- 5 Border-Radius-Variablen
+- 6 Shadow-Variablen
+- 3 Transition-Variablen
+- 5 Z-Index-Variablen
+
+---
+
+**Version**: 1.0.0  
 **Last Updated**: 2025-11-15  
-**Status**: Production Ready
+**Status**: Production Ready  
+**Lokation**: `/docs/ui/` (SoulSpot Bridge)  
+**Lizenz**: MIT (basierend auf Wizarr)
