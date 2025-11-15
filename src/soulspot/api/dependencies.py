@@ -18,6 +18,7 @@ from soulspot.application.use_cases.search_and_download import (
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.config import Settings, get_settings
+from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
@@ -145,6 +146,15 @@ def get_musicbrainz_client(
 ) -> MusicBrainzClient:
     """Get MusicBrainz client instance."""
     return MusicBrainzClient(settings.musicbrainz)
+
+
+def get_lastfm_client(
+    settings: Settings = Depends(get_settings),
+) -> LastfmClient | None:
+    """Get Last.fm client instance if configured, None otherwise."""
+    if not settings.lastfm.is_configured():
+        return None
+    return LastfmClient(settings.lastfm)
 
 
 def get_token_manager(
