@@ -114,6 +114,14 @@ class LastfmSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="LASTFM_")
 
+    def is_configured(self) -> bool:
+        """Check if Last.fm credentials are configured.
+
+        Returns:
+            True if both API key and secret are provided, False otherwise
+        """
+        return bool(self.api_key and self.api_key.strip() and self.api_secret and self.api_secret.strip())
+
 
 class StorageSettings(BaseSettings):
     """File storage configuration."""

@@ -66,7 +66,7 @@ class EnrichMetadataMultiSourceUseCase(
         artist_repository: IArtistRepository,
         album_repository: IAlbumRepository,
         musicbrainz_client: IMusicBrainzClient,
-        lastfm_client: ILastfmClient,
+        lastfm_client: ILastfmClient | None = None,
         spotify_client: ISpotifyClient | None = None,
         metadata_merger: MetadataMerger | None = None,
     ) -> None:
@@ -77,7 +77,7 @@ class EnrichMetadataMultiSourceUseCase(
             artist_repository: Repository for artist persistence
             album_repository: Repository for album persistence
             musicbrainz_client: Client for MusicBrainz API operations
-            lastfm_client: Client for Last.fm API operations
+            lastfm_client: Optional client for Last.fm API operations (None if not configured)
             spotify_client: Optional client for Spotify API operations
             metadata_merger: Optional metadata merger service
         """
@@ -144,6 +144,8 @@ class EnrichMetadataMultiSourceUseCase(
         self, track: Track, artist: Artist | None
     ) -> dict[str, Any] | None:
         """Fetch metadata from Last.fm."""
+        if not self._lastfm_client:
+            return None
         try:
             artist_name = artist.name if artist else ""
             return await self._lastfm_client.get_track_info(
@@ -251,7 +253,7 @@ class EnrichMetadataMultiSourceUseCase(
                     spotify_artist_data = spotify_data["artists"][0]
 
                 lastfm_artist_data = None
-                if artist.musicbrainz_id:
+                if self._lastfm_client and artist.musicbrainz_id:
                     lastfm_artist_data = await self._lastfm_client.get_artist_info(
                         artist=artist.name, mbid=artist.musicbrainz_id
                     )
@@ -286,7 +288,7 @@ class EnrichMetadataMultiSourceUseCase(
                         spotify_album_data = spotify_data["album"]
 
                     lastfm_album_data = None
-                    if artist and album.musicbrainz_id:
+                    if self._lastfm_client and artist and album.musicbrainz_id:
                         lastfm_album_data = await self._lastfm_client.get_album_info(
                             artist=artist.name,
                             album=album.title,

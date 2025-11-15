@@ -150,8 +150,10 @@ def get_musicbrainz_client(
 
 def get_lastfm_client(
     settings: Settings = Depends(get_settings),
-) -> LastfmClient:
-    """Get Last.fm client instance."""
+) -> LastfmClient | None:
+    """Get Last.fm client instance if configured, None otherwise."""
+    if not settings.lastfm.is_configured():
+        return None
     return LastfmClient(settings.lastfm)
 
 

@@ -54,7 +54,7 @@ def get_enrich_use_case(
     artist_repository: ArtistRepository = Depends(get_artist_repository),
     album_repository: AlbumRepository = Depends(get_album_repository),
     musicbrainz_client: MusicBrainzClient = Depends(get_musicbrainz_client),
-    lastfm_client: LastfmClient = Depends(get_lastfm_client),
+    lastfm_client: LastfmClient | None = Depends(get_lastfm_client),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
     metadata_merger: MetadataMerger = Depends(get_metadata_merger),
 ) -> EnrichMetadataMultiSourceUseCase:
