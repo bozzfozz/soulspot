@@ -5,7 +5,6 @@
 > **Lokation:** `/docs/ui/` (SoulSpot Bridge Repository)
 > **Letzte Aktualisierung:** 2025-11-15
 
-A neutral, reusable UI design system based on the visual design language from the [Wizarr](https://github.com/wizarrrr/wizarr) project (MIT License).
 
 ## 📋 Overview
 
@@ -307,39 +306,8 @@ Built-in accessibility features:
 - Mobile Safari (iOS 12+)
 - Chrome Mobile (latest)
 
-## 📄 License & Attribution
 
-This design system is derived from the visual design of [Wizarr](https://github.com/wizarrrr/wizarr), which is licensed under the MIT License.
 
-**Original Project**: Wizarr
-**Copyright**: © Wizarr Team
-**License**: MIT License
-**Repository**: https://github.com/wizarrrr/wizarr
-
-### Changes Made
-
-- Removed all Wizarr branding (logos, product names, marketing content)
-- Extracted design tokens into reusable CSS custom properties
-- Created neutral component classes with `ui-` prefix
-- Added comprehensive documentation and examples
-- Renamed all project-specific references to generic placeholders
-
-### MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-## 🤝 Contributing
-
-When using this design system in your project:
-
-1. Maintain the attribution to Wizarr in the license comments
-2. Keep the MIT license intact
-3. Do not introduce project-specific branding into the core files
-4. Create your customizations in separate CSS files
 
 ### Für SoulSpot Bridge Contributors
 
@@ -354,8 +322,6 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 ## 📚 Resources
 
 ### Externe Ressourcen
-- [Wizarr Project](https://github.com/wizarrrr/wizarr) – Original Design Source
-- [MIT License](https://opensource.org/licenses/MIT)
 - [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [CSS Custom Properties](https://developer.mozilla.org/en-US/docs/Web/CSS/--*)
 
@@ -365,14 +331,6 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 - [Design Guidelines](../design-guidelines.md) – Design-Prinzipien für SoulSpot Bridge
 - [Keyboard Navigation Guide](../keyboard-navigation.md) – Tastaturnavigation
 - [UI/UX Testing Report](../ui-ux-testing-report.md) – Test-Ergebnisse
-
-## 🆘 Support
-
-This is a neutral design system extraction. For questions about:
-
-- **The original Wizarr design**: See the [Wizarr repository](https://github.com/wizarrrr/wizarr)
-- **Using this design system**: Refer to the demo page (`ui-demo.html`) and this README
-- **Customization**: Override CSS custom properties and extend classes as shown above
 
 ---
 
@@ -414,4 +372,3 @@ This is a neutral design system extraction. For questions about:
 **Last Updated**: 2025-11-15
 **Status**: Production Ready
 **Lokation**: `/docs/ui/` (SoulSpot Bridge)
-**Lizenz**: MIT (basierend auf Wizarr)
