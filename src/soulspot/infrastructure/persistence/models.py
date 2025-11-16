@@ -254,7 +254,7 @@ class LibraryScanModel(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
     scan_path: Mapped[str] = mapped_column(String(512), nullable=False)
     total_files: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     scanned_files: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -284,14 +284,14 @@ class FileDuplicateModel(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    file_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_hash_algorithm: Mapped[str] = mapped_column(String(20), nullable=False)
     primary_track_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=True
     )
     duplicate_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     total_size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    resolved: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
+    resolved: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -318,10 +318,9 @@ class ArtistWatchlistModel(Base):
         String(36),
         ForeignKey("artists.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="active", index=True
+        String(20), nullable=False, default="active"
     )
     check_frequency_hours: Mapped[int] = mapped_column(
         Integer, default=24, nullable=False
@@ -370,9 +369,9 @@ class FilterRuleModel(Base):
     )  # keyword, user, format, bitrate
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
     is_regex: Mapped[bool] = mapped_column(default=False, nullable=False)
-    enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
+    enabled: Mapped[bool] = mapped_column(default=True, nullable=False)
     priority: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False, index=True
+        Integer, default=0, nullable=False
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
@@ -401,9 +400,9 @@ class AutomationRuleModel(Base):
     action: Mapped[str] = mapped_column(
         String(50), nullable=False
     )  # search_and_download, notify_only, add_to_queue
-    enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
+    enabled: Mapped[bool] = mapped_column(default=True, nullable=False)
     priority: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False, index=True
+        Integer, default=0, nullable=False
     )
     quality_profile: Mapped[str] = mapped_column(
         String(20), default="high", nullable=False
@@ -440,7 +439,6 @@ class QualityUpgradeCandidateModel(Base):
         String(36),
         ForeignKey("tracks.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     current_bitrate: Mapped[int] = mapped_column(Integer, nullable=False)
     current_format: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -448,7 +446,7 @@ class QualityUpgradeCandidateModel(Base):
     target_format: Mapped[str] = mapped_column(String(20), nullable=False)
     improvement_score: Mapped[float] = mapped_column(Float, nullable=False)
     detected_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    processed: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
+    processed: Mapped[bool] = mapped_column(default=False, nullable=False)
     download_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("downloads.id", ondelete="SET NULL"), nullable=True
     )
