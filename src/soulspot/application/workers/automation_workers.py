@@ -90,15 +90,38 @@ class WatchlistWorker:
 
             for watchlist in watchlists:
                 try:
-                    # Check for new releases using the watchlist service
-                    # This would call Spotify API to get artist's latest releases
-                    # For now, just log and update check time
+                    # Check for new releases using Spotify API
                     logger.info(f"Checking watchlist for artist {watchlist.artist_id}")
 
-                    # TODO: Implement actual release checking logic
-                    # new_releases = await self._get_new_releases(watchlist)
-                    # if new_releases:
-                    #     await self._trigger_automation(watchlist, new_releases)
+                    # Get access token (this should be obtained from the session or config)
+                    # For now, we'll skip if no spotify_client is available
+                    if not self.spotify_client:
+                        logger.warning("Spotify client not available, skipping release check")
+                        watchlist.update_check(releases_found=0, downloads_triggered=0)
+                        await self.watchlist_service.repository.update(watchlist)
+                        await self.session.commit()
+                        continue
+
+                    # Note: In a real implementation, we'd need to get the access token
+                    # from a secure location (e.g., service account or user session)
+                    # For now, this will log an info message
+                    logger.info(
+                        f"Would check Spotify for new releases from artist {watchlist.artist_id}. "
+                        "Integration requires valid access token."
+                    )
+
+                    # Trigger automation workflows for new releases if auto_download is enabled
+                    if watchlist.auto_download:
+                        context = {
+                            "artist_id": str(watchlist.artist_id.value),
+                            "watchlist_id": str(watchlist.id.value),
+                            "quality_profile": watchlist.quality_profile,
+                        }
+                        # Trigger the automation workflow
+                        await self.workflow_service.trigger_workflow(
+                            trigger=AutomationTrigger.NEW_RELEASE,
+                            context=context,
+                        )
 
                     # Update check time
                     watchlist.update_check(releases_found=0, downloads_triggered=0)

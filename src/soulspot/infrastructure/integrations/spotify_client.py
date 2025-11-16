@@ -241,6 +241,39 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
+    async def get_artist_albums(
+        self, artist_id: str, access_token: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """
+        Get albums for an artist.
+
+        Args:
+            artist_id: Spotify artist ID
+            access_token: OAuth access token
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of album objects
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        params: dict[str, str | int] = {
+            "include_groups": "album,single",
+            "limit": limit,
+        }
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/artists/{artist_id}/albums",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        result = cast(dict[str, Any], response.json())
+        return cast(list[dict[str, Any]], result.get("items", []))
+
     async def __aenter__(self) -> "SpotifyClient":
         """Async context manager entry."""
         return self
