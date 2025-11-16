@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Automation & Watchlists System (Epic 6) - 2025-11-16
+
+#### Automation Features (60% Complete)
+- **Artist Watchlist System**: Monitor artists for new album releases
+  - Create, manage, pause, and delete artist watchlists
+  - Automatic checking for new releases via Spotify API
+  - Configurable check frequency (default 24h) and quality profiles
+  - Auto-download toggle for new releases
+  - Track statistics (releases found, downloads triggered)
+  
+- **Discography Completion**: Detect missing albums in your library
+  - Compare owned albums with artist's complete discography
+  - Identify missing albums with release dates and track counts
+  - Calculate discography completeness percentage
+  - Bulk checking for all artists in library
+  
+- **Quality Upgrade Detection**: Identify tracks that could be upgraded
+  - Support for quality profiles (low/medium/high/lossless)
+  - Calculate improvement scores based on bitrate and format
+  - Track upgrade candidates with processing status
+  - Prioritize candidates by improvement potential
+
+- **Automation API Endpoints**: `/api/automation/*`
+  - `POST /automation/watchlist` - Create artist watchlist
+  - `GET /automation/watchlist` - List all watchlists
+  - `GET /automation/watchlist/{id}` - Get specific watchlist
+  - `POST /automation/watchlist/{id}/check` - Check for new releases
+  - `DELETE /automation/watchlist/{id}` - Delete watchlist
+  - `POST /automation/discography/check` - Check artist discography
+  - `GET /automation/discography/missing` - Get missing albums for all artists
+  - `POST /automation/quality-upgrades/identify` - Identify upgrade candidates
+  - `GET /automation/quality-upgrades/unprocessed` - Get unprocessed upgrades
+
+- **Database Schema**: New tables for automation features
+  - `artist_watchlists` - Track monitored artists with check frequency
+  - `filter_rules` - Whitelist/blacklist filter rules (planned)
+  - `automation_rules` - Automated workflow rules (planned)
+  - `quality_upgrade_candidates` - Track quality upgrade opportunities
+  - Alembic migration `bb16770eeg26` with proper indexes
+
+- **Domain Model**: Full clean architecture implementation
+  - Domain entities: `ArtistWatchlist`, `FilterRule`, `AutomationRule`, `QualityUpgradeCandidate`
+  - Value objects: `WatchlistId`, `FilterRuleId`, `AutomationRuleId`
+  - Enums: `WatchlistStatus`, `FilterType`, `FilterTarget`, `AutomationTrigger`, `AutomationAction`
+  - Repository interfaces and implementations
+  - Service layer: `WatchlistService`, `DiscographyService`, `QualityUpgradeService`
+
+### Changed
+- Updated backend development roadmap to reflect Epic 6 progress
+
 ### Added - Enhanced Download Queue System (2025-11-12)
 
 #### Download Management Features
