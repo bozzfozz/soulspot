@@ -270,7 +270,6 @@ templates/
    - Contributing guidelines
 
 **Design Source:**
-- Based on [Wizarr](https://github.com/wizarrrr/wizarr) (MIT License)
 - Visual design language extracted and neutralized
 - All branding removed (logos, names, marketing content)
 - Design tokens converted to reusable CSS custom properties
