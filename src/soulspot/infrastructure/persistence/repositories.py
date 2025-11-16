@@ -935,3 +935,226 @@ class DownloadRepository(IDownloadRepository):
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+
+class ArtistWatchlistRepository:
+    """SQLAlchemy implementation of Artist Watchlist repository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, watchlist: Any) -> None:
+        """Add a new watchlist."""
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import WatchlistStatus
+
+        model = ArtistWatchlistModel(
+            id=str(watchlist.id.value),
+            artist_id=str(watchlist.artist_id.value),
+            status=watchlist.status.value,
+            check_frequency_hours=watchlist.check_frequency_hours,
+            auto_download=watchlist.auto_download,
+            quality_profile=watchlist.quality_profile,
+            last_checked_at=watchlist.last_checked_at,
+            last_release_date=watchlist.last_release_date,
+            total_releases_found=watchlist.total_releases_found,
+            total_downloads_triggered=watchlist.total_downloads_triggered,
+            created_at=watchlist.created_at,
+            updated_at=watchlist.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, watchlist_id: Any) -> Any:
+        """Get a watchlist by ID."""
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
+        from soulspot.domain.value_objects import WatchlistId
+
+        stmt = select(ArtistWatchlistModel).where(
+            ArtistWatchlistModel.id == str(watchlist_id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return ArtistWatchlist(
+            id=WatchlistId.from_string(model.id),
+            artist_id=ArtistId.from_string(model.artist_id),
+            status=WatchlistStatus(model.status),
+            check_frequency_hours=model.check_frequency_hours,
+            auto_download=model.auto_download,
+            quality_profile=model.quality_profile,
+            last_checked_at=model.last_checked_at,
+            last_release_date=model.last_release_date,
+            total_releases_found=model.total_releases_found,
+            total_downloads_triggered=model.total_downloads_triggered,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_artist_id(self, artist_id: ArtistId) -> Any:
+        """Get watchlist for an artist."""
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
+        from soulspot.domain.value_objects import WatchlistId
+
+        stmt = select(ArtistWatchlistModel).where(
+            ArtistWatchlistModel.artist_id == str(artist_id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return ArtistWatchlist(
+            id=WatchlistId.from_string(model.id),
+            artist_id=ArtistId.from_string(model.artist_id),
+            status=WatchlistStatus(model.status),
+            check_frequency_hours=model.check_frequency_hours,
+            auto_download=model.auto_download,
+            quality_profile=model.quality_profile,
+            last_checked_at=model.last_checked_at,
+            last_release_date=model.last_release_date,
+            total_releases_found=model.total_releases_found,
+            total_downloads_triggered=model.total_downloads_triggered,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all watchlists with pagination."""
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
+        from soulspot.domain.value_objects import WatchlistId
+
+        stmt = select(ArtistWatchlistModel).limit(limit).offset(offset)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            ArtistWatchlist(
+                id=WatchlistId.from_string(model.id),
+                artist_id=ArtistId.from_string(model.artist_id),
+                status=WatchlistStatus(model.status),
+                check_frequency_hours=model.check_frequency_hours,
+                auto_download=model.auto_download,
+                quality_profile=model.quality_profile,
+                last_checked_at=model.last_checked_at,
+                last_release_date=model.last_release_date,
+                total_releases_found=model.total_releases_found,
+                total_downloads_triggered=model.total_downloads_triggered,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_active(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List active watchlists."""
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
+        from soulspot.domain.value_objects import WatchlistId
+
+        stmt = (
+            select(ArtistWatchlistModel)
+            .where(ArtistWatchlistModel.status == "active")
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            ArtistWatchlist(
+                id=WatchlistId.from_string(model.id),
+                artist_id=ArtistId.from_string(model.artist_id),
+                status=WatchlistStatus(model.status),
+                check_frequency_hours=model.check_frequency_hours,
+                auto_download=model.auto_download,
+                quality_profile=model.quality_profile,
+                last_checked_at=model.last_checked_at,
+                last_release_date=model.last_release_date,
+                total_releases_found=model.total_releases_found,
+                total_downloads_triggered=model.total_downloads_triggered,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_due_for_check(self, limit: int = 100) -> list[Any]:
+        """List watchlists that are due for checking."""
+        from datetime import UTC, datetime, timedelta
+        from .models import ArtistWatchlistModel
+        from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
+        from soulspot.domain.value_objects import WatchlistId
+
+        # Active watchlists that haven't been checked or are due for check
+        now = datetime.now(UTC)
+        stmt = (
+            select(ArtistWatchlistModel)
+            .where(ArtistWatchlistModel.status == "active")
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        # Filter in Python for simpler logic
+        due_watchlists = []
+        for model in models:
+            watchlist = ArtistWatchlist(
+                id=WatchlistId.from_string(model.id),
+                artist_id=ArtistId.from_string(model.artist_id),
+                status=WatchlistStatus(model.status),
+                check_frequency_hours=model.check_frequency_hours,
+                auto_download=model.auto_download,
+                quality_profile=model.quality_profile,
+                last_checked_at=model.last_checked_at,
+                last_release_date=model.last_release_date,
+                total_releases_found=model.total_releases_found,
+                total_downloads_triggered=model.total_downloads_triggered,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            if watchlist.should_check():
+                due_watchlists.append(watchlist)
+
+        return due_watchlists[:limit]
+
+    async def update(self, watchlist: Any) -> None:
+        """Update an existing watchlist."""
+        from .models import ArtistWatchlistModel
+
+        stmt = select(ArtistWatchlistModel).where(
+            ArtistWatchlistModel.id == str(watchlist.id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("ArtistWatchlist", watchlist.id.value)
+
+        model.status = watchlist.status.value
+        model.check_frequency_hours = watchlist.check_frequency_hours
+        model.auto_download = watchlist.auto_download
+        model.quality_profile = watchlist.quality_profile
+        model.last_checked_at = watchlist.last_checked_at
+        model.last_release_date = watchlist.last_release_date
+        model.total_releases_found = watchlist.total_releases_found
+        model.total_downloads_triggered = watchlist.total_downloads_triggered
+        model.updated_at = watchlist.updated_at
+
+    async def delete(self, watchlist_id: Any) -> None:
+        """Delete a watchlist."""
+        from .models import ArtistWatchlistModel
+
+        stmt = delete(ArtistWatchlistModel).where(
+            ArtistWatchlistModel.id == str(watchlist_id.value)
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("ArtistWatchlist", watchlist_id.value)

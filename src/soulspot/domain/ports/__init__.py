@@ -468,3 +468,166 @@ class ILastfmClient(ABC):
             Album information or None if not found
         """
         pass
+
+
+class IArtistWatchlistRepository(ABC):
+    """Repository interface for ArtistWatchlist entities."""
+
+    @abstractmethod
+    async def add(self, watchlist: Any) -> None:
+        """Add a new watchlist."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, watchlist_id: Any) -> Any:
+        """Get a watchlist by ID."""
+        pass
+
+    @abstractmethod
+    async def get_by_artist_id(self, artist_id: ArtistId) -> Any:
+        """Get watchlist for an artist."""
+        pass
+
+    @abstractmethod
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all watchlists with pagination."""
+        pass
+
+    @abstractmethod
+    async def list_active(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List active watchlists."""
+        pass
+
+    @abstractmethod
+    async def list_due_for_check(self, limit: int = 100) -> list[Any]:
+        """List watchlists that are due for checking."""
+        pass
+
+    @abstractmethod
+    async def update(self, watchlist: Any) -> None:
+        """Update an existing watchlist."""
+        pass
+
+    @abstractmethod
+    async def delete(self, watchlist_id: Any) -> None:
+        """Delete a watchlist."""
+        pass
+
+
+class IFilterRuleRepository(ABC):
+    """Repository interface for FilterRule entities."""
+
+    @abstractmethod
+    async def add(self, filter_rule: Any) -> None:
+        """Add a new filter rule."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, rule_id: Any) -> Any:
+        """Get a filter rule by ID."""
+        pass
+
+    @abstractmethod
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all filter rules with pagination."""
+        pass
+
+    @abstractmethod
+    async def list_by_type(self, filter_type: str) -> list[Any]:
+        """List filter rules by type (whitelist/blacklist)."""
+        pass
+
+    @abstractmethod
+    async def list_enabled(self) -> list[Any]:
+        """List all enabled filter rules."""
+        pass
+
+    @abstractmethod
+    async def update(self, filter_rule: Any) -> None:
+        """Update an existing filter rule."""
+        pass
+
+    @abstractmethod
+    async def delete(self, rule_id: Any) -> None:
+        """Delete a filter rule."""
+        pass
+
+
+class IAutomationRuleRepository(ABC):
+    """Repository interface for AutomationRule entities."""
+
+    @abstractmethod
+    async def add(self, rule: Any) -> None:
+        """Add a new automation rule."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, rule_id: Any) -> Any:
+        """Get an automation rule by ID."""
+        pass
+
+    @abstractmethod
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all automation rules with pagination."""
+        pass
+
+    @abstractmethod
+    async def list_by_trigger(self, trigger: str) -> list[Any]:
+        """List automation rules by trigger type."""
+        pass
+
+    @abstractmethod
+    async def list_enabled(self) -> list[Any]:
+        """List all enabled automation rules."""
+        pass
+
+    @abstractmethod
+    async def update(self, rule: Any) -> None:
+        """Update an existing automation rule."""
+        pass
+
+    @abstractmethod
+    async def delete(self, rule_id: Any) -> None:
+        """Delete an automation rule."""
+        pass
+
+
+class IQualityUpgradeCandidateRepository(ABC):
+    """Repository interface for QualityUpgradeCandidate entities."""
+
+    @abstractmethod
+    async def add(self, candidate: Any) -> None:
+        """Add a new quality upgrade candidate."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, candidate_id: str) -> Any:
+        """Get a candidate by ID."""
+        pass
+
+    @abstractmethod
+    async def get_by_track_id(self, track_id: TrackId) -> Any:
+        """Get upgrade candidate for a track."""
+        pass
+
+    @abstractmethod
+    async def list_unprocessed(self, limit: int = 100) -> list[Any]:
+        """List unprocessed upgrade candidates."""
+        pass
+
+    @abstractmethod
+    async def list_by_improvement_score(
+        self, min_score: float, limit: int = 100
+    ) -> list[Any]:
+        """List candidates by minimum improvement score."""
+        pass
+
+    @abstractmethod
+    async def update(self, candidate: Any) -> None:
+        """Update an existing candidate."""
+        pass
+
+    @abstractmethod
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a candidate."""
+        pass
