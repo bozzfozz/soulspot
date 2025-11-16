@@ -7,6 +7,12 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import get_db_session
+from soulspot.application.use_cases.check_album_completeness import (
+    CheckAlbumCompletenessUseCase,
+)
+from soulspot.application.use_cases.re_download_broken import (
+    ReDownloadBrokenFilesUseCase,
+)
 from soulspot.application.use_cases.scan_library import (
     GetBrokenFilesUseCase,
     GetDuplicatesUseCase,
@@ -33,6 +39,13 @@ class ScanResponse(BaseModel):
     broken_files: int
     duplicate_files: int
     progress_percent: float
+
+
+class ReDownloadRequest(BaseModel):
+    """Request to re-download broken files."""
+
+    priority: int = 0
+    max_files: int | None = None
 
 
 @router.post("/scan")
@@ -209,3 +222,138 @@ async def get_library_stats(
             (tracks_with_files / total_tracks * 100) if total_tracks > 0 else 0
         ),
     }
+
+
+@router.get("/incomplete-albums")
+async def get_incomplete_albums(
+    incomplete_only: bool = Query(
+        True, description="Only return incomplete albums (default: true)"
+    ),
+    min_track_count: int = Query(
+        3, description="Minimum track count to consider (filters out singles)"
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Get albums with missing tracks.
+
+    Args:
+        incomplete_only: Only return incomplete albums
+        min_track_count: Minimum track count to consider
+        session: Database session
+
+    Returns:
+        List of albums with completeness information
+    """
+    try:
+        # Note: This endpoint requires Spotify client configuration
+        # For now, it returns empty results without credentials
+        use_case = CheckAlbumCompletenessUseCase(
+            session=session,
+            spotify_client=None,
+            musicbrainz_client=None,
+            access_token=None,
+        )
+        albums = await use_case.execute(
+            incomplete_only=incomplete_only, min_track_count=min_track_count
+        )
+
+        return {
+            "albums": albums,
+            "total_count": len(albums),
+            "incomplete_count": sum(1 for a in albums if not a["is_complete"]),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check album completeness: {str(e)}"
+        ) from e
+
+
+@router.get("/incomplete-albums/{album_id}")
+async def get_album_completeness(
+    album_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Get completeness information for a specific album.
+
+    Args:
+        album_id: Album ID
+        session: Database session
+
+    Returns:
+        Album completeness information
+    """
+    try:
+        use_case = CheckAlbumCompletenessUseCase(
+            session=session,
+            spotify_client=None,
+            musicbrainz_client=None,
+            access_token=None,
+        )
+        result = await use_case.check_single_album(album_id)
+
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="Album not found or cannot determine expected track count",
+            )
+
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check album completeness: {str(e)}"
+        ) from e
+
+
+@router.post("/re-download-broken")
+async def re_download_broken_files(
+    request: ReDownloadRequest = ReDownloadRequest(),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Queue re-download of broken/corrupted files.
+
+    Args:
+        request: Re-download request with options
+        session: Database session
+
+    Returns:
+        Summary of queued downloads
+    """
+    try:
+        use_case = ReDownloadBrokenFilesUseCase(session)
+        result = await use_case.execute(
+            priority=request.priority, max_files=request.max_files
+        )
+
+        return {
+            **result,
+            "message": f"Queued {result['queued_count']} broken files for re-download",
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to queue re-downloads: {str(e)}"
+        ) from e
+
+
+@router.get("/broken-files-summary")
+async def get_broken_files_summary(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Get summary of broken files and their download status.
+
+    Args:
+        session: Database session
+
+    Returns:
+        Summary of broken files
+    """
+    try:
+        use_case = ReDownloadBrokenFilesUseCase(session)
+        summary = await use_case.get_broken_files_summary()
+
+        return summary
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get broken files summary: {str(e)}"
+        ) from e
