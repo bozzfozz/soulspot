@@ -1,0 +1,100 @@
+{#
+  Download Item Partial
+  
+  Reusable download queue item with status and controls
+#}
+
+{% from "includes/_components.html" import status_indicator, priority_badge, progress_bar %}
+
+<div class="card download-item hover:shadow-md transition-shadow" 
+     data-download-id="{{ download.id }}"
+     data-status="{{ download.status }}">
+    <div class="card-body">
+        <div class="flex items-start gap-4">
+            <!-- Selection Checkbox -->
+            <input type="checkbox" 
+                   class="download-checkbox mt-1 focus-ring" 
+                   value="{{ download.id }}"
+                   onchange="updateBatchSelection()"
+                   aria-label="Select download">
+            
+            <!-- Download Info -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-semibold text-gray-900 truncate">{{ download.track_title or 'Track ' + download.track_id }}</h3>
+                        <p class="text-sm text-gray-600 truncate">{{ download.artist or 'Unknown Artist' }}</p>
+                    </div>
+                    <div class="flex gap-2 ml-4">
+                        {{ priority_badge(download.priority) }}
+                        {{ status_indicator(download.status) }}
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                {% if download.status in ['downloading', 'queued'] and download.progress_percent %}
+                {{ progress_bar(download.progress_percent, 100, '') }}
+                {% endif %}
+                
+                <!-- Metadata -->
+                <div class="flex gap-4 text-xs text-gray-500 mt-2">
+                    {% if download.started_at %}
+                    <span>Started: {{ download.started_at }}</span>
+                    {% endif %}
+                    {% if download.created_at %}
+                    <span>Added: {{ download.created_at }}</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Error Message -->
+                {% if download.error_message %}
+                <div class="mt-2 text-sm text-danger-600 bg-danger-50 border border-danger-200 rounded px-3 py-2">
+                    {{ download.error_message }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex gap-1">
+                {% if download.status == 'downloading' %}
+                <button class="btn btn-ghost btn-sm focus-ring"
+                        hx-post="/api/downloads/{{ download.id }}/pause"
+                        hx-swap="outerHTML"
+                        hx-target="closest .download-item"
+                        aria-label="Pause download">
+                    ⏸️
+                </button>
+                {% elif download.status in ['paused', 'queued'] %}
+                <button class="btn btn-ghost btn-sm focus-ring"
+                        hx-post="/api/downloads/{{ download.id }}/resume"
+                        hx-swap="outerHTML"
+                        hx-target="closest .download-item"
+                        aria-label="Resume download">
+                    ▶️
+                </button>
+                {% endif %}
+                
+                {% if download.status == 'failed' %}
+                <button class="btn btn-ghost btn-sm focus-ring"
+                        hx-post="/api/downloads/{{ download.id }}/retry"
+                        hx-swap="outerHTML"
+                        hx-target="closest .download-item"
+                        aria-label="Retry download">
+                    🔄
+                </button>
+                {% endif %}
+                
+                {% if download.status not in ['completed'] %}
+                <button class="btn btn-ghost btn-sm text-danger-600 hover:bg-danger-50 focus-ring"
+                        hx-delete="/api/downloads/{{ download.id }}"
+                        hx-confirm="Are you sure you want to cancel this download?"
+                        hx-swap="outerHTML swap:1s"
+                        hx-target="closest .download-item"
+                        aria-label="Cancel download">
+                    ❌
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

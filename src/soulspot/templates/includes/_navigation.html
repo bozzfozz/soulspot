@@ -1,0 +1,92 @@
+{#
+  Navigation Component
+  
+  Main navigation bar with mobile responsiveness
+#}
+
+{% macro main_nav(current_page='') %}
+<nav class="bg-gray-900 border-b border-gray-800" role="navigation" aria-label="Main navigation">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center py-4">
+            <!-- Logo -->
+            <a href="/" class="text-2xl font-bold text-primary-500 hover:text-primary-400 transition-colors focus-ring">
+                🎵 SoulSpot Bridge
+            </a>
+            
+            <!-- Mobile Menu Button -->
+            <button id="mobile-menu-button" 
+                    class="lg:hidden text-gray-300 hover:text-white focus-ring"
+                    onclick="toggleMobileMenu()"
+                    aria-expanded="false"
+                    aria-controls="mobile-menu"
+                    aria-label="Toggle navigation menu">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            
+            <!-- Desktop Navigation Menu -->
+            <ul class="hidden lg:flex gap-6 list-none">
+                {{ nav_item('/', 'Dashboard', current_page == 'dashboard') }}
+                {{ nav_item('/search', 'Search', current_page == 'search') }}
+                {{ nav_item('/playlists', 'Playlists', current_page == 'playlists') }}
+                {{ nav_item('/downloads', 'Downloads', current_page == 'downloads') }}
+                {{ nav_item('/settings', 'Settings', current_page == 'settings') }}
+                {{ nav_item('/auth', 'Auth', current_page == 'auth') }}
+            </ul>
+        </div>
+        
+        <!-- Mobile Navigation Menu -->
+        <div id="mobile-menu" class="hidden lg:hidden pb-4" role="menu">
+            <ul class="flex flex-col gap-2 list-none">
+                {{ mobile_nav_item('/', 'Dashboard', current_page == 'dashboard') }}
+                {{ mobile_nav_item('/search', 'Search', current_page == 'search') }}
+                {{ mobile_nav_item('/playlists', 'Playlists', current_page == 'playlists') }}
+                {{ mobile_nav_item('/downloads', 'Downloads', current_page == 'downloads') }}
+                {{ mobile_nav_item('/settings', 'Settings', current_page == 'settings') }}
+                {{ mobile_nav_item('/auth', 'Auth', current_page == 'auth') }}
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<script>
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const button = document.getElementById('mobile-menu-button');
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    
+    menu.classList.toggle('hidden');
+    button.setAttribute('aria-expanded', !isExpanded);
+}
+
+// Close mobile menu on window resize to desktop
+window.addEventListener('resize', function() {
+    if (window.innerWidth >= 1024) {
+        document.getElementById('mobile-menu').classList.add('hidden');
+        document.getElementById('mobile-menu-button').setAttribute('aria-expanded', 'false');
+    }
+});
+</script>
+{% endmacro %}
+
+{% macro nav_item(href, text, active=false) %}
+<li>
+    <a href="{{ href }}" 
+       class="text-gray-300 hover:text-white transition-colors text-sm font-medium focus-ring {% if active %}text-white border-b-2 border-primary-500{% endif %}"
+       {% if active %}aria-current="page"{% endif %}>
+        {{ text }}
+    </a>
+</li>
+{% endmacro %}
+
+{% macro mobile_nav_item(href, text, active=false) %}
+<li>
+    <a href="{{ href }}" 
+       class="block py-2 px-4 text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors focus-ring {% if active %}text-white bg-gray-800{% endif %}"
+       {% if active %}aria-current="page"{% endif %}
+       role="menuitem">
+        {{ text }}
+    </a>
+</li>
+{% endmacro %}

@@ -80,4 +80,4 @@ Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien
 Die Lizenz ist noch in Arbeit und wird vor dem ersten Stable-Release veröffentlicht.
 
 ---
-**Version:** 0.1.0 (Alpha) · **Status:** Active Development · **Letzte Aktualisierung:** 2025-11-15
+**Version:** 0.1.0 (Alpha) · **Status:** Active Development · **Frontend:** v1.0 Complete · **Letzte Aktualisierung:** 2025-11-16

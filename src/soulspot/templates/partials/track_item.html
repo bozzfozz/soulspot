@@ -1,0 +1,65 @@
+{#
+  Track Item Partial
+  
+  Reusable track card for search results, playlists, etc.
+#}
+
+<div class="card track-item hover:shadow-md transition-shadow" data-track-id="{{ track.id }}">
+    <div class="card-body">
+        <div class="flex gap-4">
+            <!-- Album Art -->
+            {% if track.album_art %}
+            <img src="{{ track.album_art }}" 
+                 alt="Album art for {{ track.title }}"
+                 class="w-16 h-16 rounded object-cover flex-shrink-0">
+            {% else %}
+            <div class="w-16 h-16 rounded bg-gray-200 flex items-center justify-center flex-shrink-0">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                </svg>
+            </div>
+            {% endif %}
+            
+            <!-- Track Info -->
+            <div class="flex-1 min-w-0">
+                <h3 class="font-semibold text-gray-900 truncate">{{ track.title }}</h3>
+                <p class="text-sm text-gray-600 truncate">{{ track.artist }}</p>
+                {% if track.album %}
+                <p class="text-xs text-gray-500 truncate">{{ track.album }}</p>
+                {% endif %}
+                
+                <!-- Metadata -->
+                <div class="flex gap-2 mt-2 flex-wrap">
+                    {% if track.duration %}
+                    <span class="text-xs text-gray-500">{{ track.duration }}</span>
+                    {% endif %}
+                    {% if track.quality %}
+                    <span class="badge badge-sm badge-info">{{ track.quality }}</span>
+                    {% endif %}
+                    {% if track.year %}
+                    <span class="text-xs text-gray-500">{{ track.year }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex flex-col gap-2 justify-center">
+                <button class="btn btn-primary btn-sm focus-ring"
+                        hx-post="/api/downloads"
+                        hx-vals='{"track_id": "{{ track.id }}"}'
+                        hx-swap="none"
+                        hx-on::after-request="showToast('Track added to download queue', 'success')"
+                        aria-label="Download {{ track.title }}">
+                    ⬇️ Download
+                </button>
+                {% if show_details %}
+                <button class="btn btn-ghost btn-sm focus-ring"
+                        onclick="showTrackDetails('{{ track.id }}')"
+                        aria-label="View details for {{ track.title }}">
+                    ℹ️ Details
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

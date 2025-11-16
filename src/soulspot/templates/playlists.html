@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "includes/_skeleton.html" import card_skeleton, spinner %}
+{% from "includes/_components.html" import empty_state, badge %}
 
 {% block title %}Playlists - SoulSpot Bridge{% endblock %}
 
@@ -32,7 +33,7 @@
                             </svg>
                             <span aria-label="{{ playlist.track_count or 0 }} tracks">{{ playlist.track_count or 0 }} tracks</span>
                         </span>
-                        <span class="badge badge-gray mt-2">{{ playlist.source }}</span>
+                        {{ badge(playlist.source, 'neutral') }}
                     </div>
                 </div>
                 <div class="card-footer gap-2">
@@ -49,20 +50,14 @@
             {# Loading state - show skeletons #}
             {{ card_skeleton(6) }}
         {% else %}
-            {# Empty state #}
+            {# Empty state using component #}
             <div class="col-span-full">
-                <div class="card text-center py-12">
-                    <div class="card-body">
-                        <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                        </svg>
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">No playlists yet</h3>
-                        <p class="text-gray-600 mb-6">Import a Spotify playlist to get started!</p>
-                        <a href="/playlists/import" class="btn btn-primary focus-ring">
-                            Import Your First Playlist
-                        </a>
-                    </div>
-                </div>
+                {% set icon %}
+                <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                </svg>
+                {% endset %}
+                {{ empty_state(icon, 'No playlists yet', 'Import a Spotify playlist to get started!', 'Import Your First Playlist', '/playlists/import') }}
             </div>
         {% endif %}
     </div>

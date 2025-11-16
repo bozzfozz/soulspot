@@ -1,0 +1,299 @@
+{# 
+  Reusable UI Components
+  
+  Common UI components used across multiple pages
+#}
+
+{# Alert/Notification Component #}
+{% macro alert(type='info', title='', message='', icon=true, dismissible=false) %}
+<div class="alert alert-{{ type }} {% if dismissible %}relative pr-12{% endif %}" role="alert">
+    {% if icon %}
+    <div class="alert-icon">
+        {% if type == 'success' %}
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+        {% elif type == 'warning' %}
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+        </svg>
+        {% elif type == 'danger' or type == 'error' %}
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        {% else %}
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+        </svg>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="alert-content flex-1">
+        {% if title %}
+        <div class="alert-title">{{ title }}</div>
+        {% endif %}
+        {{ message }}
+    </div>
+    {% if dismissible %}
+    <button class="absolute top-3 right-3 text-gray-400 hover:text-gray-600" 
+            onclick="this.parentElement.remove()"
+            aria-label="Dismiss alert">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+    </button>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Badge Component #}
+{% macro badge(text, type='neutral', pulse=false) %}
+<span class="badge badge-{{ type }} {% if pulse %}badge-pulse{% endif %}">
+    {{ text }}
+</span>
+{% endmacro %}
+
+{# Button Group #}
+{% macro button_group(buttons, size='base') %}
+<div class="flex gap-2" role="group">
+    {% for button in buttons %}
+    <button class="btn btn-{{ button.variant or 'secondary' }} btn-{{ size }} focus-ring"
+            {% if button.action %}onclick="{{ button.action }}"{% endif %}
+            {% if button.hx_post %}hx-post="{{ button.hx_post }}"{% endif %}
+            {% if button.hx_get %}hx-get="{{ button.hx_get }}"{% endif %}
+            {% if button.hx_target %}hx-target="{{ button.hx_target }}"{% endif %}
+            {% if button.hx_swap %}hx-swap="{{ button.hx_swap }}"{% endif %}
+            {% if button.disabled %}disabled{% endif %}
+            aria-label="{{ button.label }}">
+        {{ button.icon|safe if button.icon else '' }} {{ button.text }}
+    </button>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# Progress Bar #}
+{% macro progress_bar(value, max=100, label='', show_percentage=true, color='primary') %}
+<div class="w-full" role="progressbar" aria-valuenow="{{ value }}" aria-valuemin="0" aria-valuemax="{{ max }}">
+    {% if label or show_percentage %}
+    <div class="flex justify-between items-center mb-1">
+        {% if label %}
+        <span class="text-sm font-medium text-gray-700">{{ label }}</span>
+        {% endif %}
+        {% if show_percentage %}
+        <span class="text-sm text-gray-600">{{ (value / max * 100)|round|int }}%</span>
+        {% endif %}
+    </div>
+    {% endif %}
+    <div class="w-full bg-gray-200 rounded-full h-2">
+        <div class="bg-{{ color }}-500 h-2 rounded-full transition-all duration-300" 
+             style="width: {{ (value / max * 100)|round }}%"></div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Empty State #}
+{% macro empty_state(icon, title, description, action_text='', action_href='') %}
+<div class="card text-center py-12">
+    <div class="card-body">
+        {{ icon|safe }}
+        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ title }}</h3>
+        <p class="text-gray-600 mb-6">{{ description }}</p>
+        {% if action_text and action_href %}
+        <a href="{{ action_href }}" class="btn btn-primary focus-ring">
+            {{ action_text }}
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Modal Container #}
+{% macro modal(id, title, content, footer_buttons=[]) %}
+<div id="{{ id }}" class="modal hidden" role="dialog" aria-labelledby="{{ id }}-title" aria-modal="true">
+    <div class="modal-backdrop" onclick="document.getElementById('{{ id }}').classList.add('hidden')"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h3 id="{{ id }}-title" class="modal-title">{{ title }}</h3>
+            <button class="text-gray-400 hover:text-gray-600" 
+                    onclick="document.getElementById('{{ id }}').classList.add('hidden')"
+                    aria-label="Close modal">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            {{ content }}
+        </div>
+        {% if footer_buttons %}
+        <div class="modal-footer">
+            {{ button_group(footer_buttons) }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Status Indicator #}
+{% macro status_indicator(status) %}
+{% set status_config = {
+    'success': {'color': 'success', 'icon': '✓', 'label': 'Success'},
+    'pending': {'color': 'warning', 'icon': '⏳', 'label': 'Pending'},
+    'queued': {'color': 'info', 'icon': '📋', 'label': 'Queued'},
+    'downloading': {'color': 'primary', 'icon': '⬇️', 'label': 'Downloading'},
+    'completed': {'color': 'success', 'icon': '✓', 'label': 'Completed'},
+    'failed': {'color': 'danger', 'icon': '✗', 'label': 'Failed'},
+    'cancelled': {'color': 'neutral', 'icon': '⊘', 'label': 'Cancelled'}
+} %}
+{% set config = status_config.get(status, {'color': 'neutral', 'icon': '•', 'label': status|capitalize}) %}
+<span class="badge badge-{{ config.color }}" aria-label="{{ config.label }}">
+    {{ config.icon }} {{ config.label }}
+</span>
+{% endmacro %}
+
+{# Priority Badge #}
+{% macro priority_badge(priority) %}
+{% if priority == 0 %}
+<span class="badge badge-danger" title="High Priority">P0</span>
+{% elif priority == 1 %}
+<span class="badge badge-warning" title="Medium Priority">P1</span>
+{% elif priority == 2 %}
+<span class="badge badge-info" title="Low Priority">P2</span>
+{% else %}
+<span class="badge badge-neutral" title="Priority {{ priority }}">P{{ priority }}</span>
+{% endif %}
+{% endmacro %}
+
+{# Data Table Wrapper #}
+{% macro data_table(headers, rows, actions=[], empty_message='No data available') %}
+<div class="overflow-x-auto">
+    {% if rows %}
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                {% for header in headers %}
+                <th>{{ header }}</th>
+                {% endfor %}
+                {% if actions %}
+                <th class="text-right">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                {% for cell in row %}
+                <td>{{ cell|safe }}</td>
+                {% endfor %}
+                {% if actions %}
+                <td class="text-right">
+                    <div class="flex gap-1 justify-end">
+                        {% for action in actions %}
+                        <button class="btn btn-{{ action.variant or 'ghost' }} btn-sm focus-ring"
+                                {% if action.hx_post %}hx-post="{{ action.hx_post }}"{% endif %}
+                                {% if action.hx_get %}hx-get="{{ action.hx_get }}"{% endif %}
+                                {% if action.hx_delete %}hx-delete="{{ action.hx_delete }}"{% endif %}
+                                aria-label="{{ action.label }}">
+                            {{ action.icon|safe if action.icon else action.text }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="text-center py-12 text-gray-500">
+        {{ empty_message }}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Form Field with Validation #}
+{% macro form_field(type='text', name='', label='', value='', placeholder='', required=false, help_text='', error='') %}
+<div class="form-group">
+    {% if label %}
+    <label for="{{ name }}" class="form-label {% if required %}form-label-required{% endif %}">
+        {{ label }}
+    </label>
+    {% endif %}
+    
+    {% if type == 'textarea' %}
+    <textarea 
+        id="{{ name }}" 
+        name="{{ name }}" 
+        class="form-input {% if error %}border-danger-500{% endif %}"
+        placeholder="{{ placeholder }}"
+        {% if required %}required{% endif %}
+    >{{ value }}</textarea>
+    {% elif type == 'select' %}
+    <select 
+        id="{{ name }}" 
+        name="{{ name }}" 
+        class="form-input {% if error %}border-danger-500{% endif %}"
+        {% if required %}required{% endif %}
+    >
+        {{ caller() }}
+    </select>
+    {% else %}
+    <input 
+        type="{{ type }}" 
+        id="{{ name }}" 
+        name="{{ name }}" 
+        class="form-input {% if error %}border-danger-500{% endif %}"
+        value="{{ value }}"
+        placeholder="{{ placeholder }}"
+        {% if required %}required{% endif %}
+    />
+    {% endif %}
+    
+    {% if help_text %}
+    <p class="form-helper">{{ help_text }}</p>
+    {% endif %}
+    {% if error %}
+    <p class="form-error">{{ error }}</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Pagination Component #}
+{% macro pagination(current_page, total_pages, base_url) %}
+{% if total_pages > 1 %}
+<nav class="flex justify-center items-center gap-2 mt-6" aria-label="Pagination">
+    {% if current_page > 1 %}
+    <a href="{{ base_url }}?page={{ current_page - 1 }}" 
+       class="btn btn-secondary btn-sm focus-ring"
+       aria-label="Previous page">
+        ← Previous
+    </a>
+    {% endif %}
+    
+    <div class="flex gap-1">
+        {% for page in range(1, total_pages + 1) %}
+        {% if page == current_page %}
+        <span class="btn btn-primary btn-sm" aria-current="page">{{ page }}</span>
+        {% elif page == 1 or page == total_pages or (page >= current_page - 2 and page <= current_page + 2) %}
+        <a href="{{ base_url }}?page={{ page }}" 
+           class="btn btn-secondary btn-sm focus-ring"
+           aria-label="Go to page {{ page }}">
+            {{ page }}
+        </a>
+        {% elif page == 2 or page == total_pages - 1 %}
+        <span class="text-gray-500 px-2">...</span>
+        {% endif %}
+        {% endfor %}
+    </div>
+    
+    {% if current_page < total_pages %}
+    <a href="{{ base_url }}?page={{ current_page + 1 }}" 
+       class="btn btn-secondary btn-sm focus-ring"
+       aria-label="Next page">
+        Next →
+    </a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
