@@ -1,6 +1,6 @@
 """Repository implementations for domain entities."""
 
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession

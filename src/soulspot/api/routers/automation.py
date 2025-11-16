@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_spotify_access_token
+from soulspot.api.dependencies import get_db_session, get_spotify_token_from_session
 from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
@@ -191,7 +191,7 @@ async def get_watchlist(
 @router.post("/watchlist/{watchlist_id}/check")
 async def check_watchlist_releases(
     watchlist_id: str,
-    access_token: str = Depends(get_spotify_access_token),
+    access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Check for new releases for a watchlist.
@@ -264,7 +264,7 @@ async def delete_watchlist(
 @router.post("/discography/check")
 async def check_discography(
     request: DiscographyCheckRequest,
-    access_token: str = Depends(get_spotify_access_token),
+    access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Check discography completeness for an artist.
@@ -295,7 +295,7 @@ async def check_discography(
 @router.get("/discography/missing")
 async def get_missing_albums(
     limit: int = 10,
-    access_token: str = Depends(get_spotify_access_token),
+    access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get missing albums for all artists.
