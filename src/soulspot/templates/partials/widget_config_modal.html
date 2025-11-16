@@ -1,0 +1,124 @@
+{# Widget Configuration Modal #}
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+     id="widget-config-modal">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    {# Modal Header #}
+    <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Configure {{ widget.name }}</h2>
+      <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              onclick="document.getElementById('modal-container').innerHTML = ''"
+              aria-label="Close">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    
+    {# Modal Body #}
+    <form hx-post="/api/ui/widgets/instances/{{ instance.id }}/config"
+          hx-target="#config-result"
+          hx-swap="innerHTML">
+      <div class="p-6 overflow-y-auto max-h-[calc(90vh-220px)] space-y-4">
+        <div id="config-result"></div>
+        
+        {# Widget-specific configuration fields #}
+        {% if widget.type == 'active_jobs' %}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Refresh Interval (seconds)
+            </label>
+            <input type="number" 
+                   name="refresh_interval" 
+                   value="{{ instance.config.refresh_interval if instance.config else 5 }}"
+                   min="1"
+                   max="60"
+                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+          </div>
+        {% elif widget.type == 'spotify_search' %}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Max Results
+            </label>
+            <select name="max_results" 
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+              <option value="5" {% if instance.config and instance.config.max_results == 5 %}selected{% endif %}>5</option>
+              <option value="10" {% if instance.config and instance.config.max_results == 10 %}selected{% endif %}>10</option>
+              <option value="20" {% if instance.config and instance.config.max_results == 20 %}selected{% endif %}>20</option>
+              <option value="50" {% if instance.config and instance.config.max_results == 50 %}selected{% endif %}>50</option>
+            </select>
+          </div>
+        {% elif widget.type == 'missing_tracks' %}
+          <div>
+            <label class="flex items-center">
+              <input type="checkbox" 
+                     name="show_all"
+                     {% if instance.config and instance.config.show_all %}checked{% endif %}
+                     class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+              <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                Show all playlists (even those with no missing tracks)
+              </span>
+            </label>
+          </div>
+        {% elif widget.type == 'quick_actions' %}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Available Actions
+            </label>
+            <div class="space-y-2">
+              {% set actions = instance.config.actions if instance.config and instance.config.actions else ['scan', 'import', 'fix', 'sync'] %}
+              <label class="flex items-center">
+                <input type="checkbox" name="actions" value="scan" 
+                       {% if 'scan' in actions %}checked{% endif %}
+                       class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                <span class="ml-2 text-sm">Scan Library</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="actions" value="import"
+                       {% if 'import' in actions %}checked{% endif %}
+                       class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                <span class="ml-2 text-sm">Import Playlist</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="actions" value="fix"
+                       {% if 'fix' in actions %}checked{% endif %}
+                       class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                <span class="ml-2 text-sm">Fix Metadata</span>
+              </label>
+              <label class="flex items-center">
+                <input type="checkbox" name="actions" value="sync"
+                       {% if 'sync' in actions %}checked{% endif %}
+                       class="rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                <span class="ml-2 text-sm">Sync Playlists</span>
+              </label>
+            </div>
+          </div>
+        {% elif widget.type == 'metadata_manager' %}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Default Filter
+            </label>
+            <select name="filter" 
+                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+              <option value="all" {% if instance.config and instance.config.filter == 'all' %}selected{% endif %}>All Issues</option>
+              <option value="missing" {% if instance.config and instance.config.filter == 'missing' %}selected{% endif %}>Missing Data</option>
+              <option value="incorrect" {% if instance.config and instance.config.filter == 'incorrect' %}selected{% endif %}>Incorrect Data</option>
+            </select>
+          </div>
+        {% endif %}
+      </div>
+      
+      {# Modal Footer #}
+      <div class="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <button type="button"
+                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                onclick="document.getElementById('modal-container').innerHTML = ''">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          Save Configuration
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

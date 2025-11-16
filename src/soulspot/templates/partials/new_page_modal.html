@@ -1,0 +1,82 @@
+{# New Page Modal #}
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+     id="new-page-modal">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full">
+    {# Modal Header #}
+    <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Create New Page</h2>
+      <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              onclick="document.getElementById('modal-container').innerHTML = ''"
+              aria-label="Close">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    
+    {# Modal Body #}
+    <form hx-post="/api/ui/pages"
+          hx-target="#modal-container"
+          hx-swap="innerHTML">
+      <div class="p-6 space-y-4">
+        <div>
+          <label for="page-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Page Name
+          </label>
+          <input type="text" 
+                 id="page-name"
+                 name="name" 
+                 required
+                 placeholder="My New Dashboard"
+                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                 oninput="generateSlug(this.value)">
+        </div>
+        
+        <div>
+          <label for="page-slug" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Slug (URL identifier)
+          </label>
+          <input type="text" 
+                 id="page-slug"
+                 name="slug" 
+                 required
+                 pattern="[a-z0-9_-]+"
+                 placeholder="my-new-dashboard"
+                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-white
+                        focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Only lowercase letters, numbers, hyphens, and underscores allowed
+          </p>
+        </div>
+      </div>
+      
+      {# Modal Footer #}
+      <div class="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+        <button type="button"
+                class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                onclick="document.getElementById('modal-container').innerHTML = ''">
+          Cancel
+        </button>
+        <button type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          Create Page
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function generateSlug(name) {
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-_]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+    document.getElementById('page-slug').value = slug;
+  }
+</script>

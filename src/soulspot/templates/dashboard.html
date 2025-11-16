@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SoulSpot Bridge{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/dashboard.css">
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+  {# Page Header #}
+  <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <div class="max-w-full px-4 sm:px-6 lg:px-8 py-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+            {{ page.name if page else 'My Dashboard' }}
+          </h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Customize your dashboard with widgets
+          </p>
+        </div>
+        
+        <div class="flex items-center gap-3">
+          {# Edit/View Mode Toggle #}
+          <button id="edit-mode-toggle"
+                  class="px-4 py-2 rounded-lg font-medium transition-colors
+                         {% if edit_mode %}
+                           bg-blue-600 text-white hover:bg-blue-700
+                         {% else %}
+                           bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600
+                         {% endif %}"
+                  hx-post="/api/ui/dashboard/toggle-edit-mode"
+                  hx-target="#dashboard-container"
+                  hx-swap="innerHTML">
+            {% if edit_mode %}
+              <svg class="inline w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Done Editing
+            {% else %}
+              <svg class="inline w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit Dashboard
+            {% endif %}
+          </button>
+          
+          {# Add Widget Button (only in edit mode) #}
+          {% if edit_mode %}
+            <button class="px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                    hx-get="/api/ui/widgets/catalog"
+                    hx-target="#modal-container"
+                    hx-swap="innerHTML">
+              <svg class="inline w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Add Widget
+            </button>
+          {% endif %}
+          
+          {# Page Switcher Toggle #}
+          <button class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  onclick="togglePageSwitcher()"
+                  aria-label="Toggle page switcher">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {# Dashboard Container #}
+  <div id="dashboard-container" class="{% if edit_mode %}edit-mode-active{% endif %}">
+    {# Widget Canvas #}
+    <div id="widget-canvas" 
+         class="widget-canvas"
+         hx-get="/api/ui/pages/{{ page.id if page else 'default' }}/canvas"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+      {# Loading skeleton #}
+      <div class="widget-card widget-col-6 widget-skeleton">
+        <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
+        <div class="space-y-2">
+          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-4/6"></div>
+        </div>
+      </div>
+      <div class="widget-card widget-col-6 widget-skeleton">
+        <div class="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-4"></div>
+        <div class="space-y-2">
+          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {# Page Switcher Sidebar #}
+  <aside id="page-switcher" class="page-switcher">
+    <div class="mb-4">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Your Pages</h2>
+      <button class="w-full px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              hx-get="/api/ui/pages/new"
+              hx-target="#modal-container"
+              hx-swap="innerHTML">
+        + New Page
+      </button>
+    </div>
+    
+    <ul class="page-list"
+        hx-get="/api/ui/pages/list"
+        hx-trigger="load"
+        hx-swap="innerHTML">
+      {# Page list will be loaded here #}
+      <li class="page-list-item active">
+        <div class="font-medium text-sm">My Dashboard</div>
+        <div class="text-xs text-gray-500 dark:text-gray-400">Default</div>
+      </li>
+    </ul>
+  </aside>
+  
+  {# Page Switcher Toggle Button #}
+  <button class="page-switcher-toggle" onclick="togglePageSwitcher()">
+    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+    </svg>
+  </button>
+</div>
+
+{# Modal Container (for catalog, config, page management) #}
+<div id="modal-container"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Page switcher toggle
+  function togglePageSwitcher() {
+    const switcher = document.getElementById('page-switcher');
+    switcher.classList.toggle('collapsed');
+  }
+  
+  // Auto-collapse page switcher on mobile
+  if (window.innerWidth < 1024) {
+    document.getElementById('page-switcher').classList.add('collapsed');
+  }
+  
+  // HTMX event listeners for better UX
+  document.body.addEventListener('htmx:afterSwap', function(event) {
+    // Update edit mode state after toggle
+    if (event.detail.target.id === 'dashboard-container') {
+      const isEditMode = event.detail.target.classList.contains('edit-mode-active');
+      console.log('Edit mode:', isEditMode);
+    }
+  });
+  
+  document.body.addEventListener('htmx:responseError', function(event) {
+    // Show error toast
+    if (window.ToastManager) {
+      ToastManager.error('Failed to load content. Please try again.');
+    }
+  });
+</script>
+{% endblock %}

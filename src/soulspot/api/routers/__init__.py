@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from soulspot.api.routers import (
     auth,
     automation,
+    dashboard,
     downloads,
     library,
     metadata,
@@ -24,11 +25,13 @@ api_router.include_router(settings.router, prefix="/settings", tags=["Settings"]
 api_router.include_router(metadata.router, prefix="/metadata", tags=["Metadata"])
 api_router.include_router(library.router, tags=["Library"])
 api_router.include_router(automation.router, tags=["Automation"])
+api_router.include_router(dashboard.router, tags=["Dashboard"])
 
 __all__ = [
     "api_router",
     "auth",
     "automation",
+    "dashboard",
     "downloads",
     "library",
     "metadata",

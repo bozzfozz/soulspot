@@ -1,0 +1,71 @@
+{# Missing Tracks Widget - Shows tracks missing from playlists #}
+<div class="widget-content">
+  <div class="widget-header">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Missing Tracks</h3>
+    <span class="text-sm text-gray-500 dark:text-gray-400">{{ missing_count|default(0) }} missing</span>
+  </div>
+  
+  <div class="widget-body mt-4">
+    {% if playlists and playlists|length > 0 %}
+      <div class="space-y-3">
+        {% for playlist in playlists[:3] %}
+          <div class="playlist-missing-group p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                {{ playlist.name }}
+              </h4>
+              <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 rounded">
+                {{ playlist.missing_count|default(0) }} missing
+              </span>
+            </div>
+            
+            {% if playlist.missing_tracks and playlist.missing_tracks|length > 0 %}
+              <ul class="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                {% for track in playlist.missing_tracks[:3] %}
+                  <li class="truncate">
+                    • {{ track.title }} - {{ track.artist }}
+                  </li>
+                {% endfor %}
+                {% if playlist.missing_tracks|length > 3 %}
+                  <li class="text-gray-500 dark:text-gray-500">
+                    + {{ playlist.missing_tracks|length - 3 }} more...
+                  </li>
+                {% endif %}
+              </ul>
+              
+              <div class="mt-2 flex gap-2">
+                <button class="text-xs px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                        hx-post="/api/playlists/{{ playlist.id }}/download-missing"
+                        hx-target="closest .playlist-missing-group"
+                        hx-swap="outerHTML">
+                  Download All
+                </button>
+                <button class="text-xs px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                        hx-get="/api/ui/playlists/{{ playlist.id }}/missing-details"
+                        hx-target="#modal-container"
+                        hx-swap="innerHTML">
+                  View Details
+                </button>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+        
+        {% if playlists|length > 3 %}
+          <a href="/ui/playlists?filter=missing" 
+             class="block text-center text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2">
+            View all playlists with missing tracks →
+          </a>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+        <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p class="mt-2 text-sm">All tracks downloaded!</p>
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">No missing tracks in your playlists</p>
+      </div>
+    {% endif %}
+  </div>
+</div>

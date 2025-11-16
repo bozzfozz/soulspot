@@ -621,3 +621,36 @@ class QualityUpgradeCandidate:
         self.processed = True
         self.download_id = download_id
         self.updated_at = datetime.now(UTC)
+
+
+# Import widget entities
+from soulspot.domain.entities.widget import Page, Widget, WidgetInstance
+
+__all__ = [
+    # Existing entities
+    "Artist",
+    "Album",
+    "Track",
+    "Playlist",
+    "Download",
+    "LibraryScan",
+    "FileDuplicate",
+    "ArtistWatchlist",
+    "FilterRule",
+    "AutomationRule",
+    "QualityUpgradeCandidate",
+    # Enums
+    "MetadataSource",
+    "PlaylistSource",
+    "DownloadStatus",
+    "ScanStatus",
+    "WatchlistStatus",
+    "FilterType",
+    "FilterTarget",
+    "AutomationTrigger",
+    "AutomationAction",
+    # Widget entities (new)
+    "Widget",
+    "Page",
+    "WidgetInstance",
+]

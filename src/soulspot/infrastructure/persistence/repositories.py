@@ -1878,3 +1878,317 @@ class QualityUpgradeCandidateRepository:
         )
         result = await self.session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined, return-value]
+
+
+class WidgetRepository:
+    """Repository for Widget entities (widget registry)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def get_all(self) -> list[Any]:
+        """Get all registered widgets."""
+        from .models import WidgetModel
+        from soulspot.domain.entities import Widget
+
+        stmt = select(WidgetModel)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Widget(
+                id=model.id,
+                type=model.type,
+                name=model.name,
+                template_path=model.template_path,
+                default_config=model.default_config,
+            )
+            for model in models
+        ]
+
+    async def get_by_type(self, widget_type: str) -> Any | None:
+        """Get widget by type."""
+        from .models import WidgetModel
+        from soulspot.domain.entities import Widget
+
+        stmt = select(WidgetModel).where(WidgetModel.type == widget_type)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Widget(
+            id=model.id,
+            type=model.type,
+            name=model.name,
+            template_path=model.template_path,
+            default_config=model.default_config,
+        )
+
+
+class PageRepository:
+    """Repository for Page entities (dashboard pages)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, page: Any) -> None:
+        """Add a new page."""
+        from .models import PageModel
+
+        model = PageModel(
+            name=page.name,
+            slug=page.slug,
+            is_default=page.is_default,
+            created_at=page.created_at,
+            updated_at=page.updated_at,
+        )
+        self.session.add(model)
+        await self.session.flush()
+        page.id = model.id
+
+    async def update(self, page: Any) -> None:
+        """Update an existing page."""
+        from .models import PageModel
+
+        stmt = select(PageModel).where(PageModel.id == page.id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("Page", page.id)
+
+        model.name = page.name
+        model.slug = page.slug
+        model.is_default = page.is_default
+        model.updated_at = page.updated_at
+
+    async def delete(self, page_id: int) -> None:
+        """Delete a page."""
+        from .models import PageModel
+
+        stmt = delete(PageModel).where(PageModel.id == page_id)
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("Page", page_id)
+
+    async def get_by_id(self, page_id: int) -> Any | None:
+        """Get a page by ID."""
+        from .models import PageModel
+        from soulspot.domain.entities import Page
+
+        stmt = select(PageModel).where(PageModel.id == page_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Page(
+            id=model.id,
+            name=model.name,
+            slug=model.slug,
+            is_default=model.is_default,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_slug(self, slug: str) -> Any | None:
+        """Get a page by slug."""
+        from .models import PageModel
+        from soulspot.domain.entities import Page
+
+        stmt = select(PageModel).where(PageModel.slug == slug)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Page(
+            id=model.id,
+            name=model.name,
+            slug=model.slug,
+            is_default=model.is_default,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_default(self) -> Any | None:
+        """Get the default page."""
+        from .models import PageModel
+        from soulspot.domain.entities import Page
+
+        stmt = select(PageModel).where(PageModel.is_default == True)  # noqa: E712
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Page(
+            id=model.id,
+            name=model.name,
+            slug=model.slug,
+            is_default=model.is_default,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_all(self) -> list[Any]:
+        """Get all pages."""
+        from .models import PageModel
+        from soulspot.domain.entities import Page
+
+        stmt = select(PageModel).order_by(PageModel.is_default.desc(), PageModel.name)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Page(
+                id=model.id,
+                name=model.name,
+                slug=model.slug,
+                is_default=model.is_default,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+
+class WidgetInstanceRepository:
+    """Repository for WidgetInstance entities (placed widgets on pages)."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, instance: Any) -> None:
+        """Add a new widget instance."""
+        from .models import WidgetInstanceModel
+
+        model = WidgetInstanceModel(
+            page_id=instance.page_id,
+            widget_type=instance.widget_type,
+            position_row=instance.position_row,
+            position_col=instance.position_col,
+            span_cols=instance.span_cols,
+            config=instance.config,
+            created_at=instance.created_at,
+            updated_at=instance.updated_at,
+        )
+        self.session.add(model)
+        await self.session.flush()
+        instance.id = model.id
+
+    async def update(self, instance: Any) -> None:
+        """Update an existing widget instance."""
+        from .models import WidgetInstanceModel
+
+        stmt = select(WidgetInstanceModel).where(WidgetInstanceModel.id == instance.id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("WidgetInstance", instance.id)
+
+        model.position_row = instance.position_row
+        model.position_col = instance.position_col
+        model.span_cols = instance.span_cols
+        model.config = instance.config
+        model.updated_at = instance.updated_at
+
+    async def delete(self, instance_id: int) -> None:
+        """Delete a widget instance."""
+        from .models import WidgetInstanceModel
+
+        stmt = delete(WidgetInstanceModel).where(WidgetInstanceModel.id == instance_id)
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("WidgetInstance", instance_id)
+
+    async def get_by_id(self, instance_id: int) -> Any | None:
+        """Get a widget instance by ID."""
+        from .models import WidgetInstanceModel
+        from soulspot.domain.entities import WidgetInstance
+
+        stmt = select(WidgetInstanceModel).where(WidgetInstanceModel.id == instance_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return WidgetInstance(
+            id=model.id,
+            page_id=model.page_id,
+            widget_type=model.widget_type,
+            position_row=model.position_row,
+            position_col=model.position_col,
+            span_cols=model.span_cols,
+            config=model.config,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_page(self, page_id: int) -> list[Any]:
+        """Get all widget instances for a page."""
+        from .models import WidgetInstanceModel
+        from soulspot.domain.entities import WidgetInstance
+
+        stmt = (
+            select(WidgetInstanceModel)
+            .where(WidgetInstanceModel.page_id == page_id)
+            .order_by(WidgetInstanceModel.position_row, WidgetInstanceModel.position_col)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            WidgetInstance(
+                id=model.id,
+                page_id=model.page_id,
+                widget_type=model.widget_type,
+                position_row=model.position_row,
+                position_col=model.position_col,
+                span_cols=model.span_cols,
+                config=model.config,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def get_at_position(
+        self, page_id: int, row: int, col: int
+    ) -> Any | None:
+        """Get widget instance at specific position."""
+        from .models import WidgetInstanceModel
+        from soulspot.domain.entities import WidgetInstance
+
+        stmt = select(WidgetInstanceModel).where(
+            WidgetInstanceModel.page_id == page_id,
+            WidgetInstanceModel.position_row == row,
+            WidgetInstanceModel.position_col == col,
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return WidgetInstance(
+            id=model.id,
+            page_id=model.page_id,
+            widget_type=model.widget_type,
+            position_row=model.position_row,
+            position_col=model.position_col,
+            span_cols=model.span_cols,
+            config=model.config,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
