@@ -134,6 +134,19 @@ async def settings(request: Request) -> Any:
     return templates.TemplateResponse("settings.html", {"request": request})
 
 
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request) -> Any:
+    """Dynamic dashboard with customizable widgets."""
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "page": None,  # Will be loaded via HTMX
+            "edit_mode": False,
+        },
+    )
+
+
 @router.get("/onboarding", response_class=HTMLResponse)
 async def onboarding(request: Request) -> Any:
     """First-run onboarding page for new users."""

@@ -12,6 +12,7 @@ from soulspot.api.routers import (
     playlists,
     settings,
     tracks,
+    widgets,
 )
 
 api_router = APIRouter()
@@ -26,6 +27,7 @@ api_router.include_router(metadata.router, prefix="/metadata", tags=["Metadata"]
 api_router.include_router(library.router, tags=["Library"])
 api_router.include_router(automation.router, tags=["Automation"])
 api_router.include_router(dashboard.router, tags=["Dashboard"])
+api_router.include_router(widgets.router, tags=["Widgets"])
 
 __all__ = [
     "api_router",
@@ -38,4 +40,5 @@ __all__ = [
     "playlists",
     "settings",
     "tracks",
+    "widgets",
 ]
