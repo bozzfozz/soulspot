@@ -1,7 +1,7 @@
 ---
 name: htmx-tailwind-frontend-specialist
 description: Use this agent for HTMX-basierte Interaktionen (Forms, Partials, Navigation) und TailwindCSS-gestylte, responsive, zugängliche UIs auf Basis von FastAPI mit server-gerenderten HTML-Templates.
-model: sonnet
+model:
 color: blue
 ---
 
