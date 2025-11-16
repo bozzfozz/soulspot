@@ -537,15 +537,52 @@ All domain entities have corresponding repository implementations:
 **Epic:** arr-Style Automation  
 **Owner:** Backend Team  
 **Priority:** P2  
-**Effort:** Very Large (4-6 weeks)
+**Effort:** Very Large (4-6 weeks)  
+**Status:** 🔄 In Progress (60% Complete)
 
-| Feature | Description | Priority | Effort |
-|---------|-------------|----------|--------|
-| **Artist Watchlist** | Auto-download new releases | P2 | Large |
-| **Discography Completion** | Detect missing albums | P2 | Medium |
-| **Quality Upgrade** | Replace lower-quality versions | P2 | Medium |
-| **Automated Workflow** | Detect→Search→Download→Process | P1 | Very Large |
-| **Whitelist/Blacklist** | User/keyword filters | P2 | Small |
+| Feature | Description | Priority | Effort | Status |
+|---------|-------------|----------|--------|--------|
+| **Artist Watchlist** | Auto-download new releases | P2 | Large | ✅ Done |
+| **Discography Completion** | Detect missing albums | P2 | Medium | ✅ Done |
+| **Quality Upgrade** | Replace lower-quality versions | P2 | Medium | ✅ Done |
+| **Automated Workflow** | Detect→Search→Download→Process | P1 | Very Large | 🔄 In Progress |
+| **Whitelist/Blacklist** | User/keyword filters | P2 | Small | 📋 Planned |
+
+**Acceptance Criteria:**
+- [x] Database schema for watchlists, filters, automation rules, and quality upgrades
+- [x] Domain entities with business logic
+- [x] Repository layer for data access
+- [x] Watchlist service for monitoring artists
+- [x] Discography service for detecting missing albums
+- [x] Quality upgrade service for identifying upgrade opportunities
+- [ ] Filter service for whitelist/blacklist filtering
+- [ ] Automation workflow service for orchestrating workflows
+- [ ] REST API endpoints for all features
+- [ ] Background workers for periodic checks
+- [ ] Unit tests (>80% coverage)
+- [ ] Integration tests
+
+**Dependencies:**
+- Phase 7 completion (✅ Done)
+- Spotify API integration (✅ Done)
+- Download queue system (✅ Done)
+
+**Implementation Notes:**
+- Created comprehensive domain model for automation features
+- Database schema includes `artist_watchlists`, `filter_rules`, `automation_rules`, and `quality_upgrade_candidates` tables
+- Alembic migration `bb16770eeg26` for new tables
+- `WatchlistService` monitors artists and checks for new releases via Spotify API
+- `DiscographyService` compares owned albums with artist's complete discography
+- `QualityUpgradeService` identifies tracks that could be upgraded to better quality
+- Services follow async-first pattern with structured logging
+- Repository layer implements clean separation between domain and infrastructure
+
+**Next Steps:**
+- Implement filter service for whitelist/blacklist rules
+- Create automation workflow orchestrator
+- Add REST API endpoints
+- Implement background workers for periodic checks
+- Add comprehensive test coverage
 
 ---
 
