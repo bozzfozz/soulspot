@@ -117,15 +117,3 @@ Wenn du dieses UI entwirfst, liefere IMMER:
    - Nur Vorschlag als Text, keine direkte Änderung/Erweiterung von `theme.css`.
 
 ---
-
-## Konkreter Auftrag (zum Ausfüllen)
-
-> Erstelle auf Basis des UI 1.0 Design Systems ein modernes, card-basiertes, übersichtliches UI für:
->
-> - Seite/Feature: `<hier eintragen>`
-> - Hauptziel der Seite: `<hier eintragen>`
-> - Wichtigste Aktionen (3): `<hier eintragen>`
-> - Wichtigste Informationen (5): `<hier eintragen>`
->
-> Verwende nur `ui-` Klassen aus `theme.css`, `components.css` und `layout.css`.  
-> Liefere: (1) HTML-Template, (2) UI-Beschreibung, (3) Liste verwendeter `ui-` Komponenten, (4) optional Token-Vorschläge als Text.
