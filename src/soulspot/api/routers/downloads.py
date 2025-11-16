@@ -112,6 +112,122 @@ async def list_downloads(
     }
 
 
+@router.post("/pause")
+async def pause_downloads(
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> PauseResumeResponse:
+    """Pause all download processing globally.
+
+    This endpoint pauses the download queue, preventing any new downloads
+    from starting. Currently running downloads will continue to completion.
+
+    Args:
+        job_queue: Job queue dependency
+
+    Returns:
+        Pause status message
+    """
+    await job_queue.pause()
+    return PauseResumeResponse(
+        message="Download queue paused successfully", status="paused"
+    )
+
+
+@router.post("/resume")
+async def resume_downloads(
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> PauseResumeResponse:
+    """Resume all download processing globally.
+
+    This endpoint resumes the download queue after it has been paused,
+    allowing queued downloads to be processed.
+
+    Args:
+        job_queue: Job queue dependency
+
+    Returns:
+        Resume status message
+    """
+    await job_queue.resume()
+    return PauseResumeResponse(
+        message="Download queue resumed successfully", status="active"
+    )
+
+
+@router.get("/status")
+async def get_queue_status(
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> dict[str, Any]:
+    """Get download queue status.
+
+    Returns information about the current state of the download queue,
+    including pause status and concurrent download settings.
+
+    Args:
+        job_queue: Job queue dependency
+
+    Returns:
+        Queue status information
+    """
+    stats = job_queue.get_stats()
+    return {
+        "paused": job_queue.is_paused(),
+        "max_concurrent_downloads": job_queue.get_max_concurrent_jobs(),
+        "active_downloads": stats.get("running", 0),
+        "queued_downloads": stats.get("pending", 0),
+        "total_jobs": stats.get("total_jobs", 0),
+        "completed": stats.get("completed", 0),
+        "failed": stats.get("failed", 0),
+        "cancelled": stats.get("cancelled", 0),
+    }
+
+
+@router.post("/batch")
+async def batch_download(
+    request: BatchDownloadRequest,
+    download_worker: DownloadWorker = Depends(get_download_worker),
+) -> BatchDownloadResponse:
+    """Batch download multiple tracks.
+
+    Enqueues multiple tracks for download with the specified priority.
+    All tracks in the batch will have the same priority level.
+
+    Args:
+        request: Batch download request with track IDs and priority
+        download_worker: Download worker dependency
+
+    Returns:
+        Batch download response with job IDs
+    """
+    from soulspot.domain.exceptions import ValidationException
+
+    if not request.track_ids:
+        raise HTTPException(
+            status_code=400, detail="At least one track ID must be provided"
+        )
+
+    job_ids = []
+    for track_id_str in request.track_ids:
+        try:
+            track_id = TrackId.from_string(track_id_str)
+            job_id = await download_worker.enqueue_download(
+                track_id=track_id,
+                priority=request.priority,
+            )
+            job_ids.append(job_id)
+        except (ValueError, ValidationException) as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid track ID '{track_id_str}': {str(e)}",
+            ) from e
+
+    return BatchDownloadResponse(
+        message=f"Batch download initiated for {len(request.track_ids)} tracks",
+        job_ids=job_ids,
+        total_tracks=len(request.track_ids),
+    )
+
+
 @router.get("/{download_id}")
 async def get_download_status(
     download_id: str,
@@ -233,122 +349,6 @@ async def retry_download(
         raise HTTPException(
             status_code=400, detail=f"Invalid download ID: {str(e)}"
         ) from e
-
-
-@router.post("/pause")
-async def pause_downloads(
-    job_queue: JobQueue = Depends(get_job_queue),
-) -> PauseResumeResponse:
-    """Pause all download processing globally.
-
-    This endpoint pauses the download queue, preventing any new downloads
-    from starting. Currently running downloads will continue to completion.
-
-    Args:
-        job_queue: Job queue dependency
-
-    Returns:
-        Pause status message
-    """
-    await job_queue.pause()
-    return PauseResumeResponse(
-        message="Download queue paused successfully", status="paused"
-    )
-
-
-@router.post("/resume")
-async def resume_downloads(
-    job_queue: JobQueue = Depends(get_job_queue),
-) -> PauseResumeResponse:
-    """Resume all download processing globally.
-
-    This endpoint resumes the download queue after it has been paused,
-    allowing queued downloads to be processed.
-
-    Args:
-        job_queue: Job queue dependency
-
-    Returns:
-        Resume status message
-    """
-    await job_queue.resume()
-    return PauseResumeResponse(
-        message="Download queue resumed successfully", status="active"
-    )
-
-
-@router.get("/status")
-async def get_queue_status(
-    job_queue: JobQueue = Depends(get_job_queue),
-) -> dict[str, Any]:
-    """Get download queue status.
-
-    Returns information about the current state of the download queue,
-    including pause status and concurrent download settings.
-
-    Args:
-        job_queue: Job queue dependency
-
-    Returns:
-        Queue status information
-    """
-    stats = job_queue.get_stats()
-    return {
-        "paused": job_queue.is_paused(),
-        "max_concurrent_downloads": job_queue.get_max_concurrent_jobs(),
-        "active_downloads": stats.get("running", 0),
-        "queued_downloads": stats.get("pending", 0),
-        "total_jobs": stats.get("total_jobs", 0),
-        "completed": stats.get("completed", 0),
-        "failed": stats.get("failed", 0),
-        "cancelled": stats.get("cancelled", 0),
-    }
-
-
-@router.post("/batch")
-async def batch_download(
-    request: BatchDownloadRequest,
-    download_worker: DownloadWorker = Depends(get_download_worker),
-) -> BatchDownloadResponse:
-    """Batch download multiple tracks.
-
-    Enqueues multiple tracks for download with the specified priority.
-    All tracks in the batch will have the same priority level.
-
-    Args:
-        request: Batch download request with track IDs and priority
-        download_worker: Download worker dependency
-
-    Returns:
-        Batch download response with job IDs
-    """
-    from soulspot.domain.exceptions import ValidationException
-
-    if not request.track_ids:
-        raise HTTPException(
-            status_code=400, detail="At least one track ID must be provided"
-        )
-
-    job_ids = []
-    for track_id_str in request.track_ids:
-        try:
-            track_id = TrackId.from_string(track_id_str)
-            job_id = await download_worker.enqueue_download(
-                track_id=track_id,
-                priority=request.priority,
-            )
-            job_ids.append(job_id)
-        except (ValueError, ValidationException) as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid track ID '{track_id_str}': {str(e)}",
-            ) from e
-
-    return BatchDownloadResponse(
-        message=f"Batch download initiated for {len(request.track_ids)} tracks",
-        job_ids=job_ids,
-        total_tracks=len(request.track_ids),
-    )
 
 
 @router.post("/{download_id}/priority")

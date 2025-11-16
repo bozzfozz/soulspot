@@ -104,11 +104,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         # Start auto-import service in the background
         from soulspot.application.services import AutoImportService
+        from soulspot.infrastructure.persistence.repositories import (
+            AlbumRepository,
+            ArtistRepository,
+        )
 
-        auto_import_service = AutoImportService(settings, poll_interval=60)
-        app.state.auto_import = auto_import_service
-        auto_import_task = asyncio.create_task(auto_import_service.start())
-        logger.info("Auto-import service started")
+        # Create repositories for auto-import service
+        async for session in db.get_session():
+            auto_import_service = AutoImportService(
+                settings=settings,
+                track_repository=track_repository,
+                artist_repository=ArtistRepository(session),
+                album_repository=AlbumRepository(session),
+                poll_interval=60,
+            )
+            app.state.auto_import = auto_import_service
+            auto_import_task = asyncio.create_task(auto_import_service.start())
+            logger.info("Auto-import service started")
+            break
 
         yield
 

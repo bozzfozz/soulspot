@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soulspot.application.services.advanced_search import AdvancedSearchService
 from soulspot.application.use_cases.search_and_download import (
     DownloadStatus,
     SearchAndDownloadTrackRequest,

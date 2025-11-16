@@ -1,6 +1,6 @@
 """Integration tests for download management endpoints."""
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -66,10 +66,22 @@ def app_with_mocks(test_settings, mock_job_queue, mock_download_worker):
     # Override the lifespan to inject mocks instead of real instances
     @asynccontextmanager
     async def mock_lifespan(app_instance):
+        # Create a mock DB with async generator support
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_db = MagicMock()
+        mock_session = AsyncMock()
+
+        # Make get_session return an async generator
+        async def mock_get_session():
+            yield mock_session
+
+        mock_db.get_session = mock_get_session
+
         # Set up mocks
         app_instance.state.job_queue = mock_job_queue
         app_instance.state.download_worker = mock_download_worker
-        app_instance.state.db = Mock()
+        app_instance.state.db = mock_db
 
         yield
 

@@ -162,7 +162,7 @@ async def reset_settings() -> dict[str, Any]:
     """Reset all settings to defaults.
 
     Returns settings to factory defaults by reloading from default Settings() instances.
-    
+
     Implementation needed:
     - Clear any database-stored settings
     - Remove custom .env overrides
