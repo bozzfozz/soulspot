@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
+from fastapi.responses import RedirectResponse
 
 from soulspot.api.dependencies import get_session_store
 from soulspot.application.services.session_store import SessionStore
@@ -67,10 +68,11 @@ async def authorize(
 async def callback(
     code: str = Query(..., description="Authorization code from Spotify"),
     state: str = Query(..., description="State parameter for CSRF protection"),
+    redirect_to: str = Query("/", description="Redirect URL after success"),
     session_id: str | None = Cookie(None),
     settings: Settings = Depends(get_settings),
     session_store: SessionStore = Depends(get_session_store),
-) -> dict[str, Any]:
+) -> RedirectResponse | dict[str, Any]:
     """Handle OAuth callback from Spotify with session verification.
 
     Verifies the OAuth state matches the stored session state (CSRF protection),
@@ -79,12 +81,13 @@ async def callback(
     Args:
         code: Authorization code from Spotify
         state: CSRF protection state
+        redirect_to: URL to redirect to after successful authentication
         session_id: Session ID from cookie
         settings: Application settings
         session_store: Session store
 
     Returns:
-        Success message with token info
+        Redirect to specified URL or success message with token info
 
     Raises:
         HTTPException: If session or state verification fails
@@ -132,11 +135,8 @@ async def callback(
         session.oauth_state = None
         session.code_verifier = None
 
-        return {
-            "message": "Successfully authenticated. Tokens stored in session.",
-            "expires_in": token_data.get("expires_in", 3600),
-            "token_type": token_data.get("token_type", "Bearer"),
-        }
+        # Redirect to specified URL (default: dashboard)
+        return RedirectResponse(url=redirect_to, status_code=302)
     except Exception as e:
         raise HTTPException(
             status_code=400, detail=f"Failed to exchange code: {str(e)}"
@@ -259,3 +259,76 @@ async def logout(
         return {"message": "Logged out successfully"}
 
     return {"message": "No active session"}
+
+
+@router.get("/spotify/status")
+async def spotify_status(
+    session_id: str | None = Cookie(None),
+    session_store: SessionStore = Depends(get_session_store),
+) -> dict[str, Any]:
+    """Get Spotify connection status for onboarding flow.
+
+    Args:
+        session_id: Session ID from cookie
+        session_store: Session store
+
+    Returns:
+        Connection status information
+    """
+    if not session_id:
+        return {
+            "connected": False,
+            "provider": "spotify",
+            "message": "No session found",
+        }
+
+    session = session_store.get_session(session_id)
+    if not session:
+        return {
+            "connected": False,
+            "provider": "spotify",
+            "message": "Invalid or expired session",
+        }
+
+    # Check if we have a valid, non-expired access token
+    has_token = session.access_token is not None
+    is_expired = session.is_token_expired()
+
+    return {
+        "connected": has_token and not is_expired,
+        "provider": "spotify",
+        "expires_at": session.token_expires_at.isoformat()
+        if session.token_expires_at
+        else None,
+        "token_expired": is_expired,
+    }
+
+
+@router.post("/onboarding/skip")
+async def skip_onboarding(
+    response: Response,
+    session_id: str | None = Cookie(None),
+    session_store: SessionStore = Depends(get_session_store),
+) -> dict[str, Any]:
+    """Skip onboarding and proceed to dashboard.
+
+    Args:
+        response: FastAPI response
+        session_id: Session ID from cookie
+        session_store: Session store
+
+    Returns:
+        Skip confirmation
+    """
+    # Mark onboarding as skipped in session if exists
+    if session_id:
+        session = session_store.get_session(session_id)
+        if session:
+            # We could add a flag here if needed in the future
+            # For now, just acknowledge the skip
+            pass
+
+    return {
+        "ok": True,
+        "message": "Onboarding skipped. You can connect Spotify later in settings.",
+    }

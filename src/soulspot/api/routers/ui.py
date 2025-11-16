@@ -132,3 +132,9 @@ async def theme_sample(request: Request) -> Any:
 async def settings(request: Request) -> Any:
     """Settings configuration page."""
     return templates.TemplateResponse("settings.html", {"request": request})
+
+
+@router.get("/onboarding", response_class=HTMLResponse)
+async def onboarding(request: Request) -> Any:
+    """First-run onboarding page for new users."""
+    return templates.TemplateResponse("onboarding.html", {"request": request})

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Willkommen bei SoulSpot Bridge</title>
+    <meta name="description" content="Erste Schritte mit SoulSpot Bridge - Verbinde Spotify und starte durch">
+    <!-- UI 1.0 Design System -->
+    <link rel="stylesheet" href="/static/css/ui-theme.css">
+    <link rel="stylesheet" href="/static/css/ui-components.css">
+    <link rel="stylesheet" href="/static/css/ui-layout.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="ui-skip-link">Zum Hauptinhalt springen</a>
+
+    <!-- Main Content -->
+    <div class="ui-page">
+        <main id="main-content" class="ui-page-content" role="main">
+            <div class="ui-container ui-container-md">
+                <!-- Onboarding Card -->
+                <div class="ui-card-static" style="margin-top: 5rem;">
+                    <!-- Logo & Header -->
+                    <div class="ui-card-header" style="text-align: center; padding: 2.5rem 1.5rem 1.5rem;">
+                        <!-- Logo (using emoji as placeholder, can be replaced with actual logo) -->
+                        <div style="font-size: 4rem; margin-bottom: 1rem;" aria-hidden="true">🎵</div>
+                        <h1 class="ui-heading-2" style="margin-bottom: 0.5rem;">Willkommen bei SoulSpot</h1>
+                        <p class="ui-card-subtitle">Verbinde Spotify, um Songs und Playlists zu synchronisieren.</p>
+                    </div>
+
+                    <!-- Status Area (HTMX Target) -->
+                    <div id="onboarding-status" class="ui-card-body" aria-live="polite" aria-atomic="true">
+                        <!-- Initial loading state -->
+                        <div class="ui-flex ui-flex-col ui-items-center ui-gap-4">
+                            <div class="ui-spinner ui-spinner-lg" role="status">
+                                <span class="ui-sr-only">Status wird geprüft...</span>
+                            </div>
+                            <p class="ui-text-muted" style="text-align: center;">Verbindungsstatus wird geprüft...</p>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div id="onboarding-actions" class="ui-card-footer" style="justify-content: center; padding: 1.5rem;">
+                        <button 
+                            id="continueBtn"
+                            class="ui-btn ui-btn-primary"
+                            hx-get="/api/spotify/status"
+                            hx-target="#onboarding-status"
+                            hx-swap="innerHTML"
+                            hx-trigger="click"
+                            disabled
+                        >
+                            Weiter
+                        </button>
+                        <button 
+                            id="skipBtn"
+                            class="ui-btn ui-btn-ghost"
+                            hx-post="/api/onboarding/skip"
+                            hx-swap="none"
+                        >
+                            Nicht jetzt
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Help Text -->
+                <div style="text-align: center; margin-top: 2rem; padding: 0 1rem;">
+                    <p class="ui-text-muted" style="font-size: 0.875rem;">
+                        Die Spotify-Verbindung ist erforderlich, um Playlists zu synchronisieren und Songs herunterzuladen.
+                        Du kannst diesen Schritt auch später in den Einstellungen durchführen.
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Enable continue button after page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const continueBtn = document.getElementById('continueBtn');
+                if (continueBtn) {
+                    continueBtn.disabled = false;
+                }
+            }, 1000);
+        });
+
+        // Handle status check response
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'onboarding-status') {
+                const xhr = evt.detail.xhr;
+                
+                try {
+                    const response = JSON.parse(xhr.response);
+                    const statusDiv = document.getElementById('onboarding-status');
+                    
+                    // Connected - show success and redirect
+                    if (response.connected === true) {
+                        statusDiv.innerHTML = `
+                            <div class="ui-alert ui-alert-success">
+                                <div class="ui-alert-icon">
+                                    <svg class="ui-alert-icon" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="ui-alert-content">
+                                    <div class="ui-alert-title">Spotify ist bereits verbunden!</div>
+                                    Weiterleitung zum Dashboard...
+                                </div>
+                            </div>
+                        `;
+                        
+                        setTimeout(function() {
+                            window.location.href = '/';
+                        }, 1500);
+                    } 
+                    // Not connected - show connect button
+                    else {
+                        statusDiv.innerHTML = `
+                            <div class="ui-alert ui-alert-info">
+                                <div class="ui-alert-icon">
+                                    <svg class="ui-alert-icon" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="ui-alert-content">
+                                    <div class="ui-alert-title">Spotify noch nicht verbunden</div>
+                                    Klicke auf "Spotify verbinden", um fortzufahren.
+                                </div>
+                            </div>
+                            <div class="ui-flex ui-justify-center" style="margin-top: 1.5rem;">
+                                <a href="/api/auth/authorize" class="ui-btn ui-btn-success">
+                                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                                    </svg>
+                                    Spotify verbinden
+                                </a>
+                            </div>
+                        `;
+                    }
+                } catch (e) {
+                    // Error or no session
+                    const statusDiv = document.getElementById('onboarding-status');
+                    statusDiv.innerHTML = `
+                        <div class="ui-alert ui-alert-info">
+                            <div class="ui-alert-icon">
+                                <svg class="ui-alert-icon" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ui-alert-content">
+                                <div class="ui-alert-title">Verbinde dein Spotify-Konto</div>
+                                Um Playlists zu synchronisieren und Songs herunterzuladen, benötigen wir Zugriff auf dein Spotify-Konto.
+                            </div>
+                        </div>
+                        <div class="ui-flex ui-justify-center" style="margin-top: 1.5rem;">
+                            <a href="/api/auth/authorize" class="ui-btn ui-btn-success">
+                                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                                </svg>
+                                Spotify verbinden
+                            </a>
+                        </div>
+                    `;
+                }
+            }
+        });
+
+        // Handle skip button
+        document.body.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.pathInfo.requestPath === '/api/onboarding/skip') {
+                if (evt.detail.successful) {
+                    // Redirect to dashboard
+                    window.location.href = '/';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

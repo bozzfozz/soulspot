@@ -1,0 +1,539 @@
+/*
+ * UI 1.0 Layout - Neutral Design System
+ * 
+ * Layout utilities and page structures derived from Wizarr
+ */
+
+/* ========================================================================
+   CONTAINER & GRID
+   ======================================================================== */
+
+.ui-container {
+  width: 100%;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--ui-space-4);
+  padding-right: var(--ui-space-4);
+}
+
+.ui-container-sm {
+  max-width: 640px;
+}
+
+.ui-container-md {
+  max-width: 768px;
+}
+
+.ui-container-lg {
+  max-width: 1024px;
+}
+
+.ui-container-xl {
+  max-width: 1280px;
+}
+
+.ui-container-full {
+  max-width: 100%;
+}
+
+/* CSS Grid Utilities */
+.ui-grid {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+.ui-grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.ui-grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ui-grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ui-grid-cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ui-grid-cols-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ui-grid-cols-12 {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+/* Responsive Auto-fit Grid */
+.ui-grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.ui-grid-auto-sm {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.ui-grid-auto-lg {
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+}
+
+/* Gap Utilities */
+.ui-gap-1 {
+  gap: var(--ui-space-1);
+}
+
+.ui-gap-2 {
+  gap: var(--ui-space-2);
+}
+
+.ui-gap-3 {
+  gap: var(--ui-space-3);
+}
+
+.ui-gap-4 {
+  gap: var(--ui-space-4);
+}
+
+.ui-gap-6 {
+  gap: var(--ui-space-6);
+}
+
+.ui-gap-8 {
+  gap: var(--ui-space-8);
+}
+
+/* ========================================================================
+   FLEXBOX UTILITIES
+   ======================================================================== */
+
+.ui-flex {
+  display: flex;
+  gap: var(--ui-space-4);
+}
+
+.ui-flex-col {
+  flex-direction: column;
+}
+
+.ui-flex-row {
+  flex-direction: row;
+}
+
+.ui-flex-wrap {
+  flex-wrap: wrap;
+}
+
+.ui-flex-nowrap {
+  flex-wrap: nowrap;
+}
+
+/* Alignment */
+.ui-items-start {
+  align-items: flex-start;
+}
+
+.ui-items-center {
+  align-items: center;
+}
+
+.ui-items-end {
+  align-items: flex-end;
+}
+
+.ui-items-stretch {
+  align-items: stretch;
+}
+
+.ui-justify-start {
+  justify-content: flex-start;
+}
+
+.ui-justify-center {
+  justify-content: center;
+}
+
+.ui-justify-end {
+  justify-content: flex-end;
+}
+
+.ui-justify-between {
+  justify-content: space-between;
+}
+
+.ui-justify-around {
+  justify-content: space-around;
+}
+
+/* Flex Grow/Shrink */
+.ui-flex-1 {
+  flex: 1 1 0%;
+}
+
+.ui-flex-auto {
+  flex: 1 1 auto;
+}
+
+.ui-flex-none {
+  flex: none;
+}
+
+/* ========================================================================
+   PAGE LAYOUTS
+   ======================================================================== */
+
+/* Basic Page Structure */
+.ui-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-bg);
+}
+
+.ui-page-header {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  padding: var(--ui-space-4) 0;
+  position: sticky;
+  top: 0;
+  z-index: var(--ui-z-sticky);
+}
+
+.ui-page-content {
+  flex: 1;
+  padding: var(--ui-space-6) 0;
+}
+
+.ui-page-footer {
+  background: var(--ui-surface);
+  border-top: 1px solid var(--ui-border);
+  padding: var(--ui-space-6) 0;
+  margin-top: auto;
+}
+
+/* Sidebar Layout */
+.ui-layout-sidebar {
+  display: flex;
+  min-height: 100vh;
+}
+
+.ui-sidebar {
+  width: 16rem;
+  background: var(--ui-surface);
+  border-right: 1px solid var(--ui-border);
+  padding: var(--ui-space-6);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.ui-sidebar-content {
+  flex: 1;
+  padding: var(--ui-space-6);
+}
+
+/* Dashboard Grid Layout */
+.ui-dashboard {
+  display: grid;
+  gap: var(--ui-space-6);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.ui-dashboard-widget {
+  grid-column: span 12;
+}
+
+/* ========================================================================
+   SPACING UTILITIES
+   ======================================================================== */
+
+/* Padding */
+.ui-p-0 { padding: var(--ui-space-0) !important; }
+.ui-p-1 { padding: var(--ui-space-1) !important; }
+.ui-p-2 { padding: var(--ui-space-2) !important; }
+.ui-p-3 { padding: var(--ui-space-3) !important; }
+.ui-p-4 { padding: var(--ui-space-4) !important; }
+.ui-p-6 { padding: var(--ui-space-6) !important; }
+.ui-p-8 { padding: var(--ui-space-8) !important; }
+
+/* Padding X (horizontal) */
+.ui-px-0 { padding-left: var(--ui-space-0) !important; padding-right: var(--ui-space-0) !important; }
+.ui-px-1 { padding-left: var(--ui-space-1) !important; padding-right: var(--ui-space-1) !important; }
+.ui-px-2 { padding-left: var(--ui-space-2) !important; padding-right: var(--ui-space-2) !important; }
+.ui-px-3 { padding-left: var(--ui-space-3) !important; padding-right: var(--ui-space-3) !important; }
+.ui-px-4 { padding-left: var(--ui-space-4) !important; padding-right: var(--ui-space-4) !important; }
+.ui-px-6 { padding-left: var(--ui-space-6) !important; padding-right: var(--ui-space-6) !important; }
+
+/* Padding Y (vertical) */
+.ui-py-0 { padding-top: var(--ui-space-0) !important; padding-bottom: var(--ui-space-0) !important; }
+.ui-py-1 { padding-top: var(--ui-space-1) !important; padding-bottom: var(--ui-space-1) !important; }
+.ui-py-2 { padding-top: var(--ui-space-2) !important; padding-bottom: var(--ui-space-2) !important; }
+.ui-py-3 { padding-top: var(--ui-space-3) !important; padding-bottom: var(--ui-space-3) !important; }
+.ui-py-4 { padding-top: var(--ui-space-4) !important; padding-bottom: var(--ui-space-4) !important; }
+.ui-py-6 { padding-top: var(--ui-space-6) !important; padding-bottom: var(--ui-space-6) !important; }
+
+/* Margin */
+.ui-m-0 { margin: var(--ui-space-0) !important; }
+.ui-m-1 { margin: var(--ui-space-1) !important; }
+.ui-m-2 { margin: var(--ui-space-2) !important; }
+.ui-m-3 { margin: var(--ui-space-3) !important; }
+.ui-m-4 { margin: var(--ui-space-4) !important; }
+.ui-m-6 { margin: var(--ui-space-6) !important; }
+.ui-m-8 { margin: var(--ui-space-8) !important; }
+.ui-m-auto { margin: auto !important; }
+
+/* Margin X (horizontal) */
+.ui-mx-auto { margin-left: auto !important; margin-right: auto !important; }
+.ui-mx-0 { margin-left: var(--ui-space-0) !important; margin-right: var(--ui-space-0) !important; }
+.ui-mx-1 { margin-left: var(--ui-space-1) !important; margin-right: var(--ui-space-1) !important; }
+.ui-mx-2 { margin-left: var(--ui-space-2) !important; margin-right: var(--ui-space-2) !important; }
+.ui-mx-4 { margin-left: var(--ui-space-4) !important; margin-right: var(--ui-space-4) !important; }
+
+/* Margin Y (vertical) */
+.ui-my-0 { margin-top: var(--ui-space-0) !important; margin-bottom: var(--ui-space-0) !important; }
+.ui-my-1 { margin-top: var(--ui-space-1) !important; margin-bottom: var(--ui-space-1) !important; }
+.ui-my-2 { margin-top: var(--ui-space-2) !important; margin-bottom: var(--ui-space-2) !important; }
+.ui-my-4 { margin-top: var(--ui-space-4) !important; margin-bottom: var(--ui-space-4) !important; }
+.ui-my-6 { margin-top: var(--ui-space-6) !important; margin-bottom: var(--ui-space-6) !important; }
+
+/* Margin Bottom */
+.ui-mb-0 { margin-bottom: var(--ui-space-0) !important; }
+.ui-mb-1 { margin-bottom: var(--ui-space-1) !important; }
+.ui-mb-2 { margin-bottom: var(--ui-space-2) !important; }
+.ui-mb-3 { margin-bottom: var(--ui-space-3) !important; }
+.ui-mb-4 { margin-bottom: var(--ui-space-4) !important; }
+.ui-mb-6 { margin-bottom: var(--ui-space-6) !important; }
+
+/* Margin Top */
+.ui-mt-0 { margin-top: var(--ui-space-0) !important; }
+.ui-mt-1 { margin-top: var(--ui-space-1) !important; }
+.ui-mt-2 { margin-top: var(--ui-space-2) !important; }
+.ui-mt-4 { margin-top: var(--ui-space-4) !important; }
+.ui-mt-6 { margin-top: var(--ui-space-6) !important; }
+
+/* ========================================================================
+   TYPOGRAPHY UTILITIES
+   ======================================================================== */
+
+.ui-heading-1 {
+  font-size: var(--ui-text-4xl);
+  font-weight: var(--ui-font-bold);
+  line-height: var(--ui-leading-tight);
+  margin: 0 0 var(--ui-space-6) 0;
+  color: var(--ui-text);
+}
+
+.ui-heading-2 {
+  font-size: var(--ui-text-3xl);
+  font-weight: var(--ui-font-bold);
+  line-height: var(--ui-leading-tight);
+  margin: 0 0 var(--ui-space-4) 0;
+  color: var(--ui-text);
+}
+
+.ui-heading-3 {
+  font-size: var(--ui-text-2xl);
+  font-weight: var(--ui-font-semibold);
+  line-height: var(--ui-leading-tight);
+  margin: 0 0 var(--ui-space-3) 0;
+  color: var(--ui-text);
+}
+
+.ui-heading-4 {
+  font-size: var(--ui-text-xl);
+  font-weight: var(--ui-font-semibold);
+  line-height: var(--ui-leading-tight);
+  margin: 0 0 var(--ui-space-3) 0;
+  color: var(--ui-text);
+}
+
+.ui-text-center {
+  text-align: center;
+}
+
+.ui-text-left {
+  text-align: left;
+}
+
+.ui-text-right {
+  text-align: right;
+}
+
+/* ========================================================================
+   DISPLAY UTILITIES
+   ======================================================================== */
+
+.ui-block {
+  display: block !important;
+}
+
+.ui-inline-block {
+  display: inline-block !important;
+}
+
+.ui-inline {
+  display: inline !important;
+}
+
+.ui-hidden {
+  display: none !important;
+}
+
+/* ========================================================================
+   RESPONSIVE UTILITIES
+   ======================================================================== */
+
+@media (max-width: 640px) {
+  .ui-hide-sm {
+    display: none !important;
+  }
+  
+  .ui-grid-cols-2,
+  .ui-grid-cols-3,
+  .ui-grid-cols-4 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  
+  .ui-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+  
+  .ui-layout-sidebar {
+    flex-direction: column;
+  }
+  
+  .ui-dashboard-widget {
+    grid-column: span 12;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  .ui-hide-md {
+    display: none !important;
+  }
+  
+  .ui-grid-cols-3,
+  .ui-grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .ui-hide-lg {
+    display: none !important;
+  }
+  
+  .ui-grid-cols-4 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1025px) {
+  .ui-hide-xl {
+    display: none !important;
+  }
+}
+
+/* Desktop specific */
+@media (min-width: 768px) {
+  .ui-show-mobile {
+    display: none !important;
+  }
+  
+  .ui-dashboard-widget-half {
+    grid-column: span 6;
+  }
+  
+  .ui-dashboard-widget-third {
+    grid-column: span 4;
+  }
+  
+  .ui-dashboard-widget-quarter {
+    grid-column: span 3;
+  }
+}
+
+/* Mobile specific */
+@media (max-width: 767px) {
+  .ui-show-desktop {
+    display: none !important;
+  }
+  
+  .ui-container {
+    padding-left: var(--ui-space-3);
+    padding-right: var(--ui-space-3);
+  }
+  
+  .ui-page-content {
+    padding: var(--ui-space-4) 0;
+  }
+}
+
+/* ========================================================================
+   OVERFLOW UTILITIES
+   ======================================================================== */
+
+.ui-overflow-auto {
+  overflow: auto;
+}
+
+.ui-overflow-hidden {
+  overflow: hidden;
+}
+
+.ui-overflow-x-auto {
+  overflow-x: auto;
+}
+
+.ui-overflow-y-auto {
+  overflow-y: auto;
+}
+
+/* ========================================================================
+   WIDTH & HEIGHT UTILITIES
+   ======================================================================== */
+
+.ui-w-full {
+  width: 100%;
+}
+
+.ui-w-auto {
+  width: auto;
+}
+
+.ui-h-full {
+  height: 100%;
+}
+
+.ui-h-auto {
+  height: auto;
+}
+
+.ui-min-h-screen {
+  min-height: 100vh;
+}
+
+/* ========================================================================
+   POSITION UTILITIES
+   ======================================================================== */
+
+.ui-relative {
+  position: relative;
+}
+
+.ui-absolute {
+  position: absolute;
+}
+
+.ui-fixed {
+  position: fixed;
+}
+
+.ui-sticky {
+  position: sticky;
+}
