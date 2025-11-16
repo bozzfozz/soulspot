@@ -8,11 +8,14 @@ from typing import Any, Optional
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
+    AutomationRuleId,
     DownloadId,
     FilePath,
+    FilterRuleId,
     PlaylistId,
     SpotifyUri,
     TrackId,
+    WatchlistId,
 )
 
 
@@ -386,4 +389,233 @@ class FileDuplicate:
         """Add a duplicate file."""
         self.duplicate_count += 1
         self.total_size_bytes += file_size
+        self.updated_at = datetime.now(UTC)
+
+
+class WatchlistStatus(str, Enum):
+    """Status of an artist watchlist."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    DISABLED = "disabled"
+
+
+@dataclass
+class ArtistWatchlist:
+    """Artist watchlist entity for monitoring new releases."""
+
+    id: WatchlistId
+    artist_id: ArtistId
+    status: WatchlistStatus = WatchlistStatus.ACTIVE
+    check_frequency_hours: int = 24  # How often to check for new releases
+    auto_download: bool = True  # Automatically download new releases
+    quality_profile: str = "high"  # Quality preference (low, medium, high, lossless)
+    last_checked_at: datetime | None = None
+    last_release_date: datetime | None = None
+    total_releases_found: int = 0
+    total_downloads_triggered: int = 0
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate watchlist data."""
+        if self.check_frequency_hours < 1:
+            raise ValueError("Check frequency must be at least 1 hour")
+        if self.quality_profile not in ("low", "medium", "high", "lossless"):
+            raise ValueError(
+                "Quality profile must be one of: low, medium, high, lossless"
+            )
+
+    def pause(self) -> None:
+        """Pause the watchlist."""
+        if self.status == WatchlistStatus.DISABLED:
+            raise ValueError("Cannot pause a disabled watchlist")
+        self.status = WatchlistStatus.PAUSED
+        self.updated_at = datetime.now(UTC)
+
+    def resume(self) -> None:
+        """Resume the watchlist."""
+        if self.status == WatchlistStatus.DISABLED:
+            raise ValueError("Cannot resume a disabled watchlist")
+        self.status = WatchlistStatus.ACTIVE
+        self.updated_at = datetime.now(UTC)
+
+    def disable(self) -> None:
+        """Disable the watchlist."""
+        self.status = WatchlistStatus.DISABLED
+        self.updated_at = datetime.now(UTC)
+
+    def update_check(
+        self, releases_found: int = 0, downloads_triggered: int = 0
+    ) -> None:
+        """Update check statistics."""
+        self.last_checked_at = datetime.now(UTC)
+        self.total_releases_found += releases_found
+        self.total_downloads_triggered += downloads_triggered
+        self.updated_at = datetime.now(UTC)
+
+    def should_check(self) -> bool:
+        """Check if it's time to check for new releases."""
+        if self.status != WatchlistStatus.ACTIVE:
+            return False
+        if self.last_checked_at is None:
+            return True
+        hours_since_check = (datetime.now(UTC) - self.last_checked_at).total_seconds() / 3600
+        return hours_since_check >= self.check_frequency_hours
+
+
+class FilterType(str, Enum):
+    """Type of filter rule."""
+
+    WHITELIST = "whitelist"  # Allow only these
+    BLACKLIST = "blacklist"  # Block these
+
+
+class FilterTarget(str, Enum):
+    """Target of filter rule."""
+
+    KEYWORD = "keyword"  # Filter by keyword in title/artist
+    USER = "user"  # Filter by slskd user
+    FORMAT = "format"  # Filter by file format
+    BITRATE = "bitrate"  # Filter by minimum bitrate
+
+
+@dataclass
+class FilterRule:
+    """Filter rule entity for whitelist/blacklist filtering."""
+
+    id: FilterRuleId
+    name: str
+    filter_type: FilterType
+    target: FilterTarget
+    pattern: str  # Regex pattern or exact match
+    is_regex: bool = False
+    enabled: bool = True
+    priority: int = 0  # Higher priority rules evaluated first
+    description: str | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate filter rule data."""
+        if not self.name or not self.name.strip():
+            raise ValueError("Filter rule name cannot be empty")
+        if not self.pattern or not self.pattern.strip():
+            raise ValueError("Filter pattern cannot be empty")
+
+    def enable(self) -> None:
+        """Enable the filter rule."""
+        self.enabled = True
+        self.updated_at = datetime.now(UTC)
+
+    def disable(self) -> None:
+        """Disable the filter rule."""
+        self.enabled = False
+        self.updated_at = datetime.now(UTC)
+
+    def update_pattern(self, pattern: str, is_regex: bool = False) -> None:
+        """Update the filter pattern."""
+        if not pattern or not pattern.strip():
+            raise ValueError("Filter pattern cannot be empty")
+        self.pattern = pattern
+        self.is_regex = is_regex
+        self.updated_at = datetime.now(UTC)
+
+
+class AutomationTrigger(str, Enum):
+    """Trigger for automation rule."""
+
+    NEW_RELEASE = "new_release"  # Triggered when new release is detected
+    MISSING_ALBUM = "missing_album"  # Triggered for missing album in discography
+    QUALITY_UPGRADE = "quality_upgrade"  # Triggered for quality upgrade opportunity
+    MANUAL = "manual"  # Manually triggered
+
+
+class AutomationAction(str, Enum):
+    """Action to perform in automation rule."""
+
+    SEARCH_AND_DOWNLOAD = "search_and_download"
+    NOTIFY_ONLY = "notify_only"
+    ADD_TO_QUEUE = "add_to_queue"
+
+
+@dataclass
+class AutomationRule:
+    """Automation rule entity for automated workflows."""
+
+    id: AutomationRuleId
+    name: str
+    trigger: AutomationTrigger
+    action: AutomationAction
+    enabled: bool = True
+    priority: int = 0
+    quality_profile: str = "high"
+    apply_filters: bool = True  # Apply filter rules
+    auto_process: bool = True  # Run post-processing pipeline
+    description: str | None = None
+    last_triggered_at: datetime | None = None
+    total_executions: int = 0
+    successful_executions: int = 0
+    failed_executions: int = 0
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate automation rule data."""
+        if not self.name or not self.name.strip():
+            raise ValueError("Automation rule name cannot be empty")
+        if self.quality_profile not in ("low", "medium", "high", "lossless"):
+            raise ValueError(
+                "Quality profile must be one of: low, medium, high, lossless"
+            )
+
+    def enable(self) -> None:
+        """Enable the automation rule."""
+        self.enabled = True
+        self.updated_at = datetime.now(UTC)
+
+    def disable(self) -> None:
+        """Disable the automation rule."""
+        self.enabled = False
+        self.updated_at = datetime.now(UTC)
+
+    def record_execution(self, success: bool) -> None:
+        """Record an execution of this rule."""
+        self.last_triggered_at = datetime.now(UTC)
+        self.total_executions += 1
+        if success:
+            self.successful_executions += 1
+        else:
+            self.failed_executions += 1
+        self.updated_at = datetime.now(UTC)
+
+
+@dataclass
+class QualityUpgradeCandidate:
+    """Quality upgrade candidate entity for tracking upgrade opportunities."""
+
+    id: str
+    track_id: TrackId
+    current_bitrate: int
+    current_format: str
+    target_bitrate: int
+    target_format: str
+    improvement_score: float  # 0.0 to 1.0 indicating improvement potential
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    processed: bool = False
+    download_id: DownloadId | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate quality upgrade candidate data."""
+        if self.improvement_score < 0.0 or self.improvement_score > 1.0:
+            raise ValueError("Improvement score must be between 0.0 and 1.0")
+        if self.current_bitrate < 0 or self.target_bitrate < 0:
+            raise ValueError("Bitrate cannot be negative")
+
+    def mark_processed(self, download_id: DownloadId | None = None) -> None:
+        """Mark candidate as processed."""
+        self.processed = True
+        self.download_id = download_id
         self.updated_at = datetime.now(UTC)

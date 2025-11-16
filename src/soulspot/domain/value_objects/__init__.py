@@ -208,3 +208,72 @@ class SpotifyUri:
     def resource_id(self) -> str:
         """Get the resource ID."""
         return self.value.split(":")[2]
+
+
+@dataclass(frozen=True)
+class WatchlistId:
+    """Unique identifier for an Artist Watchlist."""
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> "WatchlistId":
+        """Generate a new WatchlistId."""
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> "WatchlistId":
+        """Create WatchlistId from string."""
+        try:
+            return cls(value=UUID(value))
+        except ValueError as e:
+            raise ValidationException(f"Invalid WatchlistId format: {value}") from e
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+@dataclass(frozen=True)
+class FilterRuleId:
+    """Unique identifier for a Filter Rule."""
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> "FilterRuleId":
+        """Generate a new FilterRuleId."""
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> "FilterRuleId":
+        """Create FilterRuleId from string."""
+        try:
+            return cls(value=UUID(value))
+        except ValueError as e:
+            raise ValidationException(f"Invalid FilterRuleId format: {value}") from e
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
+@dataclass(frozen=True)
+class AutomationRuleId:
+    """Unique identifier for an Automation Rule."""
+
+    value: UUID
+
+    @classmethod
+    def generate(cls) -> "AutomationRuleId":
+        """Generate a new AutomationRuleId."""
+        return cls(value=uuid4())
+
+    @classmethod
+    def from_string(cls, value: str) -> "AutomationRuleId":
+        """Create AutomationRuleId from string."""
+        try:
+            return cls(value=UUID(value))
+        except ValueError as e:
+            raise ValidationException(f"Invalid AutomationRuleId format: {value}") from e
+
+    def __str__(self) -> str:
+        return str(self.value)

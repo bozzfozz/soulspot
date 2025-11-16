@@ -300,3 +300,149 @@ class FileDuplicateModel(Base):
         Index("ix_file_duplicates_hash", "file_hash"),
         Index("ix_file_duplicates_resolved", "resolved"),
     )
+
+
+class ArtistWatchlistModel(Base):
+    """SQLAlchemy model for Artist Watchlist."""
+
+    __tablename__ = "artist_watchlists"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    artist_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="active", index=True
+    )
+    check_frequency_hours: Mapped[int] = mapped_column(
+        Integer, default=24, nullable=False
+    )
+    auto_download: Mapped[bool] = mapped_column(default=True, nullable=False)
+    quality_profile: Mapped[str] = mapped_column(
+        String(20), default="high", nullable=False
+    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_release_date: Mapped[datetime | None] = mapped_column(nullable=True)
+    total_releases_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_downloads_triggered: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    # Relationships
+    artist: Mapped["ArtistModel"] = relationship("ArtistModel")
+
+    __table_args__ = (
+        Index("ix_artist_watchlists_artist_id", "artist_id"),
+        Index("ix_artist_watchlists_status", "status"),
+        Index("ix_artist_watchlists_last_checked", "last_checked_at"),
+    )
+
+
+class FilterRuleModel(Base):
+    """SQLAlchemy model for Filter Rule."""
+
+    __tablename__ = "filter_rules"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    filter_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True
+    )  # whitelist, blacklist
+    target: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True
+    )  # keyword, user, format, bitrate
+    pattern: Mapped[str] = mapped_column(Text, nullable=False)
+    is_regex: Mapped[bool] = mapped_column(default=False, nullable=False)
+    enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_filter_rules_type_enabled", "filter_type", "enabled"),
+        Index("ix_filter_rules_priority", "priority"),
+    )
+
+
+class AutomationRuleModel(Base):
+    """SQLAlchemy model for Automation Rule."""
+
+    __tablename__ = "automation_rules"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    trigger: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )  # new_release, missing_album, quality_upgrade, manual
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # search_and_download, notify_only, add_to_queue
+    enabled: Mapped[bool] = mapped_column(default=True, nullable=False, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    quality_profile: Mapped[str] = mapped_column(
+        String(20), default="high", nullable=False
+    )
+    apply_filters: Mapped[bool] = mapped_column(default=True, nullable=False)
+    auto_process: Mapped[bool] = mapped_column(default=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    total_executions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    successful_executions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_executions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_automation_rules_trigger_enabled", "trigger", "enabled"),
+        Index("ix_automation_rules_priority", "priority"),
+    )
+
+
+class QualityUpgradeCandidateModel(Base):
+    """SQLAlchemy model for Quality Upgrade Candidate."""
+
+    __tablename__ = "quality_upgrade_candidates"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    track_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    current_bitrate: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_format: Mapped[str] = mapped_column(String(20), nullable=False)
+    target_bitrate: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_format: Mapped[str] = mapped_column(String(20), nullable=False)
+    improvement_score: Mapped[float] = mapped_column(Float, nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    processed: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
+    download_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("downloads.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    # Relationships
+    track: Mapped["TrackModel"] = relationship("TrackModel")
+    download: Mapped["DownloadModel | None"] = relationship("DownloadModel")
+
+    __table_args__ = (
+        Index("ix_quality_upgrade_candidates_track_id", "track_id"),
+        Index("ix_quality_upgrade_candidates_processed", "processed"),
+        Index("ix_quality_upgrade_candidates_improvement_score", "improvement_score"),
+    )
