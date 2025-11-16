@@ -43,6 +43,7 @@ python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 # Utilities
 python-dotenv = "^1.0.0"
+rapidfuzz = "^3.14.0"
 # Observability & Monitoring
 python-json-logger = "^3.2.0"
 # Audio & Image Processing
