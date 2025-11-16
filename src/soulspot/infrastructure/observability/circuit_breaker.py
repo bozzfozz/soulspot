@@ -340,6 +340,7 @@ def circuit_breaker(
         Returns:
             Wrapped function with circuit breaker protection
         """
+
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> T:
             """Async wrapper for circuit breaker call."""

@@ -10,6 +10,7 @@ from soulspot.api.dependencies import get_db_session, get_spotify_token_from_ses
 from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
+from soulspot.config import Settings, get_settings
 from soulspot.domain.value_objects import ArtistId, WatchlistId
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
@@ -193,6 +194,7 @@ async def check_watchlist_releases(
     watchlist_id: str,
     access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Check for new releases for a watchlist.
 
@@ -200,13 +202,14 @@ async def check_watchlist_releases(
         watchlist_id: Watchlist ID
         access_token: Spotify access token
         session: Database session
+        settings: Application settings
 
     Returns:
         New releases found
     """
     try:
         wid = WatchlistId.from_string(watchlist_id)
-        spotify_client = SpotifyClient()
+        spotify_client = SpotifyClient(settings.spotify)
         service = WatchlistService(session, spotify_client)
         watchlist = await service.get_watchlist(wid)
 
@@ -266,6 +269,7 @@ async def check_discography(
     request: DiscographyCheckRequest,
     access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Check discography completeness for an artist.
 
@@ -273,13 +277,14 @@ async def check_discography(
         request: Discography check request
         access_token: Spotify access token
         session: Database session
+        settings: Application settings
 
     Returns:
         Discography information
     """
     try:
         artist_id = ArtistId.from_string(request.artist_id)
-        spotify_client = SpotifyClient()
+        spotify_client = SpotifyClient(settings.spotify)
         service = DiscographyService(session, spotify_client)
         info = await service.check_discography(artist_id, access_token)
 
@@ -295,6 +300,7 @@ async def get_missing_albums(
     limit: int = 10,
     access_token: str = Depends(get_spotify_token_from_session),
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Get missing albums for all artists.
 
@@ -302,12 +308,13 @@ async def get_missing_albums(
         limit: Maximum number of artists to check
         access_token: Spotify access token
         session: Database session
+        settings: Application settings
 
     Returns:
         List of artists with missing albums
     """
     try:
-        spotify_client = SpotifyClient()
+        spotify_client = SpotifyClient(settings.spotify)
         service = DiscographyService(session, spotify_client)
         infos = await service.get_missing_albums_for_all_artists(access_token, limit)
 

@@ -1,7 +1,6 @@
 """Automation workflow service for orchestrating automated workflows."""
 
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,7 @@ from soulspot.domain.entities import (
     AutomationRule,
     AutomationTrigger,
 )
-from soulspot.domain.value_objects import AutomationRuleId, TrackId
+from soulspot.domain.value_objects import AutomationRuleId
 from soulspot.infrastructure.persistence.repositories import AutomationRuleRepository
 
 logger = logging.getLogger(__name__)

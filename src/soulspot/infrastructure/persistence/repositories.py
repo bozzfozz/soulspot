@@ -1019,8 +1019,8 @@ class ArtistWatchlistRepository:
 
     async def add(self, watchlist: Any) -> None:
         """Add a new watchlist."""
+
         from .models import ArtistWatchlistModel
-        from soulspot.domain.entities import WatchlistStatus
 
         model = ArtistWatchlistModel(
             id=str(watchlist.id.value),
@@ -1040,9 +1040,10 @@ class ArtistWatchlistRepository:
 
     async def get_by_id(self, watchlist_id: Any) -> Any:
         """Get a watchlist by ID."""
-        from .models import ArtistWatchlistModel
         from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
         from soulspot.domain.value_objects import WatchlistId
+
+        from .models import ArtistWatchlistModel
 
         stmt = select(ArtistWatchlistModel).where(
             ArtistWatchlistModel.id == str(watchlist_id.value)
@@ -1070,9 +1071,10 @@ class ArtistWatchlistRepository:
 
     async def get_by_artist_id(self, artist_id: ArtistId) -> Any:
         """Get watchlist for an artist."""
-        from .models import ArtistWatchlistModel
         from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
         from soulspot.domain.value_objects import WatchlistId
+
+        from .models import ArtistWatchlistModel
 
         stmt = select(ArtistWatchlistModel).where(
             ArtistWatchlistModel.artist_id == str(artist_id.value)
@@ -1100,9 +1102,10 @@ class ArtistWatchlistRepository:
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """List all watchlists with pagination."""
-        from .models import ArtistWatchlistModel
         from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
         from soulspot.domain.value_objects import WatchlistId
+
+        from .models import ArtistWatchlistModel
 
         stmt = select(ArtistWatchlistModel).limit(limit).offset(offset)
         result = await self.session.execute(stmt)
@@ -1128,9 +1131,10 @@ class ArtistWatchlistRepository:
 
     async def list_active(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """List active watchlists."""
-        from .models import ArtistWatchlistModel
         from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
         from soulspot.domain.value_objects import WatchlistId
+
+        from .models import ArtistWatchlistModel
 
         stmt = (
             select(ArtistWatchlistModel)
@@ -1161,13 +1165,14 @@ class ArtistWatchlistRepository:
 
     async def list_due_for_check(self, limit: int = 100) -> list[Any]:
         """List watchlists that are due for checking."""
-        from datetime import UTC, datetime, timedelta
-        from .models import ArtistWatchlistModel
+        from datetime import UTC, datetime
+
         from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
         from soulspot.domain.value_objects import WatchlistId
 
+        from .models import ArtistWatchlistModel
+
         # Active watchlists that haven't been checked or are due for check
-        now = datetime.now(UTC)
         stmt = (
             select(ArtistWatchlistModel)
             .where(ArtistWatchlistModel.status == "active")
@@ -1261,9 +1266,10 @@ class FilterRuleRepository:
 
     async def get_by_id(self, rule_id: Any) -> Any:
         """Get a filter rule by ID."""
-        from .models import FilterRuleModel
-        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.entities import FilterRule, FilterTarget, FilterType
         from soulspot.domain.value_objects import FilterRuleId
+
+        from .models import FilterRuleModel
 
         stmt = select(FilterRuleModel).where(FilterRuleModel.id == str(rule_id.value))
         result = await self.session.execute(stmt)
@@ -1288,9 +1294,10 @@ class FilterRuleRepository:
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """List all filter rules with pagination."""
-        from .models import FilterRuleModel
-        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.entities import FilterRule, FilterTarget, FilterType
         from soulspot.domain.value_objects import FilterRuleId
+
+        from .models import FilterRuleModel
 
         stmt = (
             select(FilterRuleModel)
@@ -1320,9 +1327,10 @@ class FilterRuleRepository:
 
     async def list_by_type(self, filter_type: str) -> list[Any]:
         """List filter rules by type (whitelist/blacklist)."""
-        from .models import FilterRuleModel
-        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.entities import FilterRule, FilterTarget, FilterType
         from soulspot.domain.value_objects import FilterRuleId
+
+        from .models import FilterRuleModel
 
         stmt = (
             select(FilterRuleModel)
@@ -1351,9 +1359,10 @@ class FilterRuleRepository:
 
     async def list_enabled(self) -> list[Any]:
         """List all enabled filter rules."""
-        from .models import FilterRuleModel
-        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.entities import FilterRule, FilterTarget, FilterType
         from soulspot.domain.value_objects import FilterRuleId
+
+        from .models import FilterRuleModel
 
         stmt = (
             select(FilterRuleModel)
@@ -1446,13 +1455,14 @@ class AutomationRuleRepository:
 
     async def get_by_id(self, rule_id: Any) -> Any:
         """Get an automation rule by ID."""
-        from .models import AutomationRuleModel
         from soulspot.domain.entities import (
+            AutomationAction,
             AutomationRule,
             AutomationTrigger,
-            AutomationAction,
         )
         from soulspot.domain.value_objects import AutomationRuleId
+
+        from .models import AutomationRuleModel
 
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.id == str(rule_id.value)
@@ -1484,13 +1494,14 @@ class AutomationRuleRepository:
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """List all automation rules with pagination."""
-        from .models import AutomationRuleModel
         from soulspot.domain.entities import (
+            AutomationAction,
             AutomationRule,
             AutomationTrigger,
-            AutomationAction,
         )
         from soulspot.domain.value_objects import AutomationRuleId
+
+        from .models import AutomationRuleModel
 
         stmt = (
             select(AutomationRuleModel)
@@ -1527,13 +1538,14 @@ class AutomationRuleRepository:
 
     async def list_by_trigger(self, trigger: str) -> list[Any]:
         """List automation rules by trigger type."""
-        from .models import AutomationRuleModel
         from soulspot.domain.entities import (
+            AutomationAction,
             AutomationRule,
             AutomationTrigger,
-            AutomationAction,
         )
         from soulspot.domain.value_objects import AutomationRuleId
+
+        from .models import AutomationRuleModel
 
         stmt = (
             select(AutomationRuleModel)
@@ -1569,13 +1581,14 @@ class AutomationRuleRepository:
 
     async def list_enabled(self) -> list[Any]:
         """List all enabled automation rules."""
-        from .models import AutomationRuleModel
         from soulspot.domain.entities import (
+            AutomationAction,
             AutomationRule,
             AutomationTrigger,
-            AutomationAction,
         )
         from soulspot.domain.value_objects import AutomationRuleId
+
+        from .models import AutomationRuleModel
 
         stmt = (
             select(AutomationRuleModel)
@@ -1680,9 +1693,10 @@ class QualityUpgradeCandidateRepository:
 
     async def get_by_id(self, candidate_id: str) -> Any:
         """Get a quality upgrade candidate by ID."""
-        from .models import QualityUpgradeCandidateModel
         from soulspot.domain.entities import QualityUpgradeCandidate
-        from soulspot.domain.value_objects import TrackId, DownloadId
+        from soulspot.domain.value_objects import DownloadId, TrackId
+
+        from .models import QualityUpgradeCandidateModel
 
         stmt = select(QualityUpgradeCandidateModel).where(
             QualityUpgradeCandidateModel.id == candidate_id
@@ -1712,9 +1726,10 @@ class QualityUpgradeCandidateRepository:
 
     async def get_by_track_id(self, track_id: Any) -> Any:
         """Get quality upgrade candidate for a track."""
-        from .models import QualityUpgradeCandidateModel
         from soulspot.domain.entities import QualityUpgradeCandidate
-        from soulspot.domain.value_objects import TrackId, DownloadId
+        from soulspot.domain.value_objects import DownloadId, TrackId
+
+        from .models import QualityUpgradeCandidateModel
 
         stmt = select(QualityUpgradeCandidateModel).where(
             QualityUpgradeCandidateModel.track_id == str(track_id.value)
@@ -1744,9 +1759,10 @@ class QualityUpgradeCandidateRepository:
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """List all quality upgrade candidates with pagination."""
-        from .models import QualityUpgradeCandidateModel
         from soulspot.domain.entities import QualityUpgradeCandidate
-        from soulspot.domain.value_objects import TrackId, DownloadId
+        from soulspot.domain.value_objects import DownloadId, TrackId
+
+        from .models import QualityUpgradeCandidateModel
 
         stmt = (
             select(QualityUpgradeCandidateModel)
@@ -1784,9 +1800,10 @@ class QualityUpgradeCandidateRepository:
         self, limit: int = 100, min_score: float = 0.0
     ) -> list[Any]:
         """List unprocessed quality upgrade candidates."""
-        from .models import QualityUpgradeCandidateModel
         from soulspot.domain.entities import QualityUpgradeCandidate
-        from soulspot.domain.value_objects import TrackId, DownloadId
+        from soulspot.domain.value_objects import DownloadId, TrackId
+
+        from .models import QualityUpgradeCandidateModel
 
         stmt = (
             select(QualityUpgradeCandidateModel)
