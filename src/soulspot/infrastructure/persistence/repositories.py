@@ -1158,3 +1158,618 @@ class ArtistWatchlistRepository:
         result = await self.session.execute(stmt)
         if result.rowcount == 0:  # type: ignore[attr-defined]
             raise EntityNotFoundException("ArtistWatchlist", watchlist_id.value)
+
+
+class FilterRuleRepository:
+    """SQLAlchemy implementation of Filter Rule repository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, filter_rule: Any) -> None:
+        """Add a new filter rule."""
+        from .models import FilterRuleModel
+
+        model = FilterRuleModel(
+            id=str(filter_rule.id.value),
+            name=filter_rule.name,
+            filter_type=filter_rule.filter_type.value,
+            target=filter_rule.target.value,
+            pattern=filter_rule.pattern,
+            is_regex=filter_rule.is_regex,
+            enabled=filter_rule.enabled,
+            priority=filter_rule.priority,
+            description=filter_rule.description,
+            created_at=filter_rule.created_at,
+            updated_at=filter_rule.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, rule_id: Any) -> Any:
+        """Get a filter rule by ID."""
+        from .models import FilterRuleModel
+        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.value_objects import FilterRuleId
+
+        stmt = select(FilterRuleModel).where(FilterRuleModel.id == str(rule_id.value))
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return FilterRule(
+            id=FilterRuleId.from_string(model.id),
+            name=model.name,
+            filter_type=FilterType(model.filter_type),
+            target=FilterTarget(model.target),
+            pattern=model.pattern,
+            is_regex=model.is_regex,
+            enabled=model.enabled,
+            priority=model.priority,
+            description=model.description,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all filter rules with pagination."""
+        from .models import FilterRuleModel
+        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.value_objects import FilterRuleId
+
+        stmt = (
+            select(FilterRuleModel)
+            .order_by(FilterRuleModel.priority.desc(), FilterRuleModel.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            FilterRule(
+                id=FilterRuleId.from_string(model.id),
+                name=model.name,
+                filter_type=FilterType(model.filter_type),
+                target=FilterTarget(model.target),
+                pattern=model.pattern,
+                is_regex=model.is_regex,
+                enabled=model.enabled,
+                priority=model.priority,
+                description=model.description,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_by_type(self, filter_type: str) -> list[Any]:
+        """List filter rules by type (whitelist/blacklist)."""
+        from .models import FilterRuleModel
+        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.value_objects import FilterRuleId
+
+        stmt = (
+            select(FilterRuleModel)
+            .where(FilterRuleModel.filter_type == filter_type)
+            .order_by(FilterRuleModel.priority.desc(), FilterRuleModel.created_at)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            FilterRule(
+                id=FilterRuleId.from_string(model.id),
+                name=model.name,
+                filter_type=FilterType(model.filter_type),
+                target=FilterTarget(model.target),
+                pattern=model.pattern,
+                is_regex=model.is_regex,
+                enabled=model.enabled,
+                priority=model.priority,
+                description=model.description,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_enabled(self) -> list[Any]:
+        """List all enabled filter rules."""
+        from .models import FilterRuleModel
+        from soulspot.domain.entities import FilterRule, FilterType, FilterTarget
+        from soulspot.domain.value_objects import FilterRuleId
+
+        stmt = (
+            select(FilterRuleModel)
+            .where(FilterRuleModel.enabled == True)  # noqa: E712
+            .order_by(FilterRuleModel.priority.desc(), FilterRuleModel.created_at)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            FilterRule(
+                id=FilterRuleId.from_string(model.id),
+                name=model.name,
+                filter_type=FilterType(model.filter_type),
+                target=FilterTarget(model.target),
+                pattern=model.pattern,
+                is_regex=model.is_regex,
+                enabled=model.enabled,
+                priority=model.priority,
+                description=model.description,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def update(self, filter_rule: Any) -> None:
+        """Update an existing filter rule."""
+        from .models import FilterRuleModel
+
+        stmt = select(FilterRuleModel).where(
+            FilterRuleModel.id == str(filter_rule.id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("FilterRule", filter_rule.id.value)
+
+        model.name = filter_rule.name
+        model.filter_type = filter_rule.filter_type.value
+        model.target = filter_rule.target.value
+        model.pattern = filter_rule.pattern
+        model.is_regex = filter_rule.is_regex
+        model.enabled = filter_rule.enabled
+        model.priority = filter_rule.priority
+        model.description = filter_rule.description
+        model.updated_at = filter_rule.updated_at
+
+    async def delete(self, rule_id: Any) -> None:
+        """Delete a filter rule."""
+        from .models import FilterRuleModel
+
+        stmt = delete(FilterRuleModel).where(FilterRuleModel.id == str(rule_id.value))
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("FilterRule", rule_id.value)
+
+
+class AutomationRuleRepository:
+    """SQLAlchemy implementation of Automation Rule repository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, rule: Any) -> None:
+        """Add a new automation rule."""
+        from .models import AutomationRuleModel
+
+        model = AutomationRuleModel(
+            id=str(rule.id.value),
+            name=rule.name,
+            trigger=rule.trigger.value,
+            action=rule.action.value,
+            enabled=rule.enabled,
+            priority=rule.priority,
+            quality_profile=rule.quality_profile,
+            apply_filters=rule.apply_filters,
+            auto_process=rule.auto_process,
+            description=rule.description,
+            last_triggered_at=rule.last_triggered_at,
+            total_executions=rule.total_executions,
+            successful_executions=rule.successful_executions,
+            failed_executions=rule.failed_executions,
+            created_at=rule.created_at,
+            updated_at=rule.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, rule_id: Any) -> Any:
+        """Get an automation rule by ID."""
+        from .models import AutomationRuleModel
+        from soulspot.domain.entities import (
+            AutomationRule,
+            AutomationTrigger,
+            AutomationAction,
+        )
+        from soulspot.domain.value_objects import AutomationRuleId
+
+        stmt = select(AutomationRuleModel).where(
+            AutomationRuleModel.id == str(rule_id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return AutomationRule(
+            id=AutomationRuleId.from_string(model.id),
+            name=model.name,
+            trigger=AutomationTrigger(model.trigger),
+            action=AutomationAction(model.action),
+            enabled=model.enabled,
+            priority=model.priority,
+            quality_profile=model.quality_profile,
+            apply_filters=model.apply_filters,
+            auto_process=model.auto_process,
+            description=model.description,
+            last_triggered_at=model.last_triggered_at,
+            total_executions=model.total_executions,
+            successful_executions=model.successful_executions,
+            failed_executions=model.failed_executions,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all automation rules with pagination."""
+        from .models import AutomationRuleModel
+        from soulspot.domain.entities import (
+            AutomationRule,
+            AutomationTrigger,
+            AutomationAction,
+        )
+        from soulspot.domain.value_objects import AutomationRuleId
+
+        stmt = (
+            select(AutomationRuleModel)
+            .order_by(AutomationRuleModel.priority.desc(), AutomationRuleModel.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            AutomationRule(
+                id=AutomationRuleId.from_string(model.id),
+                name=model.name,
+                trigger=AutomationTrigger(model.trigger),
+                action=AutomationAction(model.action),
+                enabled=model.enabled,
+                priority=model.priority,
+                quality_profile=model.quality_profile,
+                apply_filters=model.apply_filters,
+                auto_process=model.auto_process,
+                description=model.description,
+                last_triggered_at=model.last_triggered_at,
+                total_executions=model.total_executions,
+                successful_executions=model.successful_executions,
+                failed_executions=model.failed_executions,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_by_trigger(self, trigger: str) -> list[Any]:
+        """List automation rules by trigger type."""
+        from .models import AutomationRuleModel
+        from soulspot.domain.entities import (
+            AutomationRule,
+            AutomationTrigger,
+            AutomationAction,
+        )
+        from soulspot.domain.value_objects import AutomationRuleId
+
+        stmt = (
+            select(AutomationRuleModel)
+            .where(AutomationRuleModel.trigger == trigger)
+            .order_by(AutomationRuleModel.priority.desc(), AutomationRuleModel.created_at)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            AutomationRule(
+                id=AutomationRuleId.from_string(model.id),
+                name=model.name,
+                trigger=AutomationTrigger(model.trigger),
+                action=AutomationAction(model.action),
+                enabled=model.enabled,
+                priority=model.priority,
+                quality_profile=model.quality_profile,
+                apply_filters=model.apply_filters,
+                auto_process=model.auto_process,
+                description=model.description,
+                last_triggered_at=model.last_triggered_at,
+                total_executions=model.total_executions,
+                successful_executions=model.successful_executions,
+                failed_executions=model.failed_executions,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_enabled(self) -> list[Any]:
+        """List all enabled automation rules."""
+        from .models import AutomationRuleModel
+        from soulspot.domain.entities import (
+            AutomationRule,
+            AutomationTrigger,
+            AutomationAction,
+        )
+        from soulspot.domain.value_objects import AutomationRuleId
+
+        stmt = (
+            select(AutomationRuleModel)
+            .where(AutomationRuleModel.enabled == True)  # noqa: E712
+            .order_by(AutomationRuleModel.priority.desc(), AutomationRuleModel.created_at)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            AutomationRule(
+                id=AutomationRuleId.from_string(model.id),
+                name=model.name,
+                trigger=AutomationTrigger(model.trigger),
+                action=AutomationAction(model.action),
+                enabled=model.enabled,
+                priority=model.priority,
+                quality_profile=model.quality_profile,
+                apply_filters=model.apply_filters,
+                auto_process=model.auto_process,
+                description=model.description,
+                last_triggered_at=model.last_triggered_at,
+                total_executions=model.total_executions,
+                successful_executions=model.successful_executions,
+                failed_executions=model.failed_executions,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def update(self, rule: Any) -> None:
+        """Update an existing automation rule."""
+        from .models import AutomationRuleModel
+
+        stmt = select(AutomationRuleModel).where(
+            AutomationRuleModel.id == str(rule.id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("AutomationRule", rule.id.value)
+
+        model.name = rule.name
+        model.trigger = rule.trigger.value
+        model.action = rule.action.value
+        model.enabled = rule.enabled
+        model.priority = rule.priority
+        model.quality_profile = rule.quality_profile
+        model.apply_filters = rule.apply_filters
+        model.auto_process = rule.auto_process
+        model.description = rule.description
+        model.last_triggered_at = rule.last_triggered_at
+        model.total_executions = rule.total_executions
+        model.successful_executions = rule.successful_executions
+        model.failed_executions = rule.failed_executions
+        model.updated_at = rule.updated_at
+
+    async def delete(self, rule_id: Any) -> None:
+        """Delete an automation rule."""
+        from .models import AutomationRuleModel
+
+        stmt = delete(AutomationRuleModel).where(
+            AutomationRuleModel.id == str(rule_id.value)
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("AutomationRule", rule_id.value)
+
+
+class QualityUpgradeCandidateRepository:
+    """SQLAlchemy implementation of Quality Upgrade Candidate repository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, candidate: Any) -> None:
+        """Add a new quality upgrade candidate."""
+        from .models import QualityUpgradeCandidateModel
+
+        model = QualityUpgradeCandidateModel(
+            id=candidate.id,
+            track_id=str(candidate.track_id.value),
+            current_bitrate=candidate.current_bitrate,
+            current_format=candidate.current_format,
+            target_bitrate=candidate.target_bitrate,
+            target_format=candidate.target_format,
+            improvement_score=candidate.improvement_score,
+            detected_at=candidate.detected_at,
+            processed=candidate.processed,
+            download_id=str(candidate.download_id.value) if candidate.download_id else None,
+            created_at=candidate.created_at,
+            updated_at=candidate.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, candidate_id: str) -> Any:
+        """Get a quality upgrade candidate by ID."""
+        from .models import QualityUpgradeCandidateModel
+        from soulspot.domain.entities import QualityUpgradeCandidate
+        from soulspot.domain.value_objects import TrackId, DownloadId
+
+        stmt = select(QualityUpgradeCandidateModel).where(
+            QualityUpgradeCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return QualityUpgradeCandidate(
+            id=model.id,
+            track_id=TrackId.from_string(model.track_id),
+            current_bitrate=model.current_bitrate,
+            current_format=model.current_format,
+            target_bitrate=model.target_bitrate,
+            target_format=model.target_format,
+            improvement_score=model.improvement_score,
+            detected_at=model.detected_at,
+            processed=model.processed,
+            download_id=DownloadId.from_string(model.download_id) if model.download_id else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_track_id(self, track_id: Any) -> Any:
+        """Get quality upgrade candidate for a track."""
+        from .models import QualityUpgradeCandidateModel
+        from soulspot.domain.entities import QualityUpgradeCandidate
+        from soulspot.domain.value_objects import TrackId, DownloadId
+
+        stmt = select(QualityUpgradeCandidateModel).where(
+            QualityUpgradeCandidateModel.track_id == str(track_id.value)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return QualityUpgradeCandidate(
+            id=model.id,
+            track_id=TrackId.from_string(model.track_id),
+            current_bitrate=model.current_bitrate,
+            current_format=model.current_format,
+            target_bitrate=model.target_bitrate,
+            target_format=model.target_format,
+            improvement_score=model.improvement_score,
+            detected_at=model.detected_at,
+            processed=model.processed,
+            download_id=DownloadId.from_string(model.download_id) if model.download_id else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Any]:
+        """List all quality upgrade candidates with pagination."""
+        from .models import QualityUpgradeCandidateModel
+        from soulspot.domain.entities import QualityUpgradeCandidate
+        from soulspot.domain.value_objects import TrackId, DownloadId
+
+        stmt = (
+            select(QualityUpgradeCandidateModel)
+            .order_by(
+                QualityUpgradeCandidateModel.improvement_score.desc(),
+                QualityUpgradeCandidateModel.detected_at.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            QualityUpgradeCandidate(
+                id=model.id,
+                track_id=TrackId.from_string(model.track_id),
+                current_bitrate=model.current_bitrate,
+                current_format=model.current_format,
+                target_bitrate=model.target_bitrate,
+                target_format=model.target_format,
+                improvement_score=model.improvement_score,
+                detected_at=model.detected_at,
+                processed=model.processed,
+                download_id=DownloadId.from_string(model.download_id) if model.download_id else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def list_unprocessed(
+        self, limit: int = 100, min_score: float = 0.0
+    ) -> list[Any]:
+        """List unprocessed quality upgrade candidates."""
+        from .models import QualityUpgradeCandidateModel
+        from soulspot.domain.entities import QualityUpgradeCandidate
+        from soulspot.domain.value_objects import TrackId, DownloadId
+
+        stmt = (
+            select(QualityUpgradeCandidateModel)
+            .where(
+                QualityUpgradeCandidateModel.processed == False,  # noqa: E712
+                QualityUpgradeCandidateModel.improvement_score >= min_score,
+            )
+            .order_by(
+                QualityUpgradeCandidateModel.improvement_score.desc(),
+                QualityUpgradeCandidateModel.detected_at.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            QualityUpgradeCandidate(
+                id=model.id,
+                track_id=TrackId.from_string(model.track_id),
+                current_bitrate=model.current_bitrate,
+                current_format=model.current_format,
+                target_bitrate=model.target_bitrate,
+                target_format=model.target_format,
+                improvement_score=model.improvement_score,
+                detected_at=model.detected_at,
+                processed=model.processed,
+                download_id=DownloadId.from_string(model.download_id) if model.download_id else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def update(self, candidate: Any) -> None:
+        """Update an existing quality upgrade candidate."""
+        from .models import QualityUpgradeCandidateModel
+
+        stmt = select(QualityUpgradeCandidateModel).where(
+            QualityUpgradeCandidateModel.id == candidate.id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("QualityUpgradeCandidate", candidate.id)
+
+        model.processed = candidate.processed
+        model.download_id = (
+            str(candidate.download_id.value) if candidate.download_id else None
+        )
+        model.updated_at = candidate.updated_at
+
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a quality upgrade candidate."""
+        from .models import QualityUpgradeCandidateModel
+
+        stmt = delete(QualityUpgradeCandidateModel).where(
+            QualityUpgradeCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("QualityUpgradeCandidate", candidate_id)
+
+    async def delete_processed(self) -> int:
+        """Delete all processed candidates and return count."""
+        from .models import QualityUpgradeCandidateModel
+
+        stmt = delete(QualityUpgradeCandidateModel).where(
+            QualityUpgradeCandidateModel.processed == True  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined, return-value]
