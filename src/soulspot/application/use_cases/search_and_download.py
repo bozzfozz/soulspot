@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from soulspot.application.services.advanced_search import (
+    AdvancedSearchService,
+    SearchFilters,
+)
 from soulspot.application.use_cases import UseCase
 from soulspot.domain.entities import Download, DownloadStatus, Track
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
@@ -19,6 +23,12 @@ class SearchAndDownloadTrackRequest:
     max_results: int = 10
     timeout_seconds: int = 30
     quality_preference: str = "best"  # best, good, any
+    # Advanced search options
+    min_bitrate: int | None = None  # Minimum bitrate in kbps
+    formats: list[str] | None = None  # Allowed formats (e.g., ["flac", "mp3"])
+    exclusion_keywords: list[str] | None = None  # Keywords to exclude
+    fuzzy_threshold: int = 80  # Fuzzy match threshold (0-100)
+    use_advanced_search: bool = True  # Enable advanced search features
 
 
 @dataclass
@@ -52,6 +62,7 @@ class SearchAndDownloadTrackUseCase(
         slskd_client: ISlskdClient,
         track_repository: ITrackRepository,
         download_repository: IDownloadRepository,
+        advanced_search_service: AdvancedSearchService | None = None,
     ) -> None:
         """Initialize the use case with required dependencies.
 
@@ -59,10 +70,14 @@ class SearchAndDownloadTrackUseCase(
             slskd_client: Client for Soulseek operations via slskd
             track_repository: Repository for track persistence
             download_repository: Repository for download persistence
+            advanced_search_service: Optional advanced search service
         """
         self._slskd_client = slskd_client
         self._track_repository = track_repository
         self._download_repository = download_repository
+        self._advanced_search_service = (
+            advanced_search_service or AdvancedSearchService()
+        )
 
     def _build_search_query(self, track: Track) -> str:
         """Build a search query from track metadata.
@@ -79,9 +94,57 @@ class SearchAndDownloadTrackUseCase(
     def _select_best_file(
         self,
         results: list[dict[str, Any]],
-        quality_preference: str,
+        request: SearchAndDownloadTrackRequest,
+        search_query: str,
     ) -> dict[str, Any] | None:
         """Select the best quality file from search results.
+
+        Args:
+            results: List of search results from slskd
+            request: Search request with preferences
+            search_query: The search query used
+
+        Returns:
+            Best file match or None
+        """
+        if not results:
+            return None
+
+        # Use advanced search if enabled
+        if request.use_advanced_search:
+            filters = SearchFilters(
+                min_bitrate=request.min_bitrate,
+                formats=request.formats,
+                exclusion_keywords=request.exclusion_keywords,
+                fuzzy_threshold=request.fuzzy_threshold,
+            )
+
+            best_match = self._advanced_search_service.select_best_match(
+                search_query, results, filters
+            )
+
+            if best_match:
+                # Convert SearchResult back to dict format
+                return {
+                    "username": best_match.username,
+                    "filename": best_match.filename,
+                    "size": best_match.size,
+                    "bitrate": best_match.bitrate,
+                    "length": best_match.length,
+                    "quality": best_match.quality,
+                }
+
+            return None
+
+        # Fallback to original logic for backward compatibility
+        return self._select_best_file_legacy(results, request.quality_preference)
+
+    def _select_best_file_legacy(
+        self,
+        results: list[dict[str, Any]],
+        quality_preference: str,
+    ) -> dict[str, Any] | None:
+        """Legacy file selection logic (kept for backward compatibility).
 
         Args:
             results: List of search results from slskd
@@ -179,7 +242,8 @@ class SearchAndDownloadTrackUseCase(
             search_results.get("results", [])
             if isinstance(search_results, dict)
             else search_results,
-            request.quality_preference,
+            request,
+            search_query,
         )
 
         if not selected_file:
