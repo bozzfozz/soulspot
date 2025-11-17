@@ -20,13 +20,17 @@
             {% for playlist in playlists %}
             <div class="card hover:shadow-md transition-shadow">
                 <div class="card-header">
-                    <h3 class="card-title">{{ playlist.name }}</h3>
+                    <h3 class="card-title">
+                        <a href="/ui/playlists/{{ playlist.id }}" class="hover:text-blue-600 dark:hover:text-blue-400">
+                            {{ playlist.name }}
+                        </a>
+                    </h3>
                 </div>
                 <div class="card-body">
-                    <p class="text-sm text-gray-600 mb-3">
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
                         {{ playlist.description or "No description" }}
                     </p>
-                    <div class="flex flex-col gap-1 text-sm text-gray-500">
+                    <div class="flex flex-col gap-1 text-sm text-gray-500 dark:text-gray-400">
                         <span class="flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
@@ -37,6 +41,9 @@
                     </div>
                 </div>
                 <div class="card-footer gap-2">
+                    <a href="/ui/playlists/{{ playlist.id }}" class="btn btn-primary btn-sm focus-ring">
+                        View Details
+                    </a>
                     <button class="btn btn-secondary btn-sm focus-ring" 
                             hx-post="/api/playlists/{{ playlist.id }}/sync"
                             hx-swap="outerHTML"

@@ -8,13 +8,17 @@ from soulspot.api.dependencies import (
     get_import_playlist_use_case,
     get_playlist_repository,
     get_spotify_token_from_session,
+    get_track_repository,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistRequest,
     ImportSpotifyPlaylistUseCase,
 )
 from soulspot.domain.value_objects import PlaylistId
-from soulspot.infrastructure.persistence.repositories import PlaylistRepository
+from soulspot.infrastructure.persistence.repositories import (
+    PlaylistRepository,
+    TrackRepository,
+)
 
 router = APIRouter()
 
@@ -137,6 +141,179 @@ async def get_playlist(
             "track_count": len(playlist.track_ids),
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
+
+
+@router.get("/{playlist_id}/export/m3u")
+async def export_playlist_m3u(
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Export playlist as M3U file.
+
+    Args:
+        playlist_id: Playlist ID
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+
+    Returns:
+        M3U file as plain text
+    """
+    from fastapi.responses import Response
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Build M3U content
+        m3u_lines = ["#EXTM3U"]
+        m3u_lines.append(f"#PLAYLIST:{playlist.name}")
+
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track and track.file_path:
+                duration = int(track.duration_ms / 1000) if track.duration_ms else -1
+                artist = track.artist or "Unknown Artist"
+                title = track.title or "Unknown Title"
+                m3u_lines.append(f"#EXTINF:{duration},{artist} - {title}")
+                m3u_lines.append(track.file_path)
+
+        m3u_content = "\n".join(m3u_lines)
+
+        return Response(
+            content=m3u_content,
+            media_type="audio/x-mpegurl",
+            headers={
+                "Content-Disposition": f'attachment; filename="{playlist.name}.m3u"'
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
+
+
+@router.get("/{playlist_id}/export/csv")
+async def export_playlist_csv(
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Export playlist as CSV file.
+
+    Args:
+        playlist_id: Playlist ID
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+
+    Returns:
+        CSV file
+    """
+    import csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Build CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Title", "Artist", "Album", "Duration (ms)", "File Path"])
+
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track:
+                writer.writerow(
+                    [
+                        track.title or "Unknown",
+                        track.artist or "Unknown",
+                        track.album or "Unknown",
+                        track.duration_ms or "",
+                        track.file_path or "",
+                    ]
+                )
+
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{playlist.name}.csv"'
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
+
+
+@router.get("/{playlist_id}/export/json")
+async def export_playlist_json(
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> dict[str, Any]:
+    """Export playlist as JSON.
+
+    Args:
+        playlist_id: Playlist ID
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+
+    Returns:
+        JSON with playlist and track details
+    """
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Build track list
+        tracks = []
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track:
+                tracks.append(
+                    {
+                        "id": str(track.id.value),
+                        "title": track.title,
+                        "artist": track.artist,
+                        "album": track.album,
+                        "duration_ms": track.duration_ms,
+                        "file_path": track.file_path,
+                        "spotify_uri": str(track.spotify_uri)
+                        if track.spotify_uri
+                        else None,
+                    }
+                )
+
+        return {
+            "playlist": {
+                "id": str(playlist.id.value),
+                "name": playlist.name,
+                "description": playlist.description,
+                "source": playlist.source.value,
+                "created_at": playlist.created_at.isoformat(),
+                "updated_at": playlist.updated_at.isoformat(),
+            },
+            "tracks": tracks,
+            "track_count": len(tracks),
         }
     except ValueError as e:
         raise HTTPException(

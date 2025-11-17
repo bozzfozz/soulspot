@@ -74,6 +74,92 @@ async def playlists(
     )
 
 
+@router.get("/playlists/{playlist_id}/export-modal", response_class=HTMLResponse)
+async def playlist_export_modal(
+    request: Request,
+    playlist_id: str,
+) -> Any:
+    """Return export modal partial."""
+    return templates.TemplateResponse(
+        "partials/export_modal.html",
+        {"request": request, "playlist_id": playlist_id},
+    )
+
+
+@router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
+async def playlist_detail(
+    request: Request,
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Playlist detail page with tracks."""
+    from soulspot.domain.value_objects import PlaylistId
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            # Return 404 page or redirect
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request,
+                    "error_code": 404,
+                    "error_message": "Playlist not found",
+                },
+                status_code=404,
+            )
+
+        # Get track details for the playlist
+        tracks = []
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track:
+                tracks.append(
+                    {
+                        "id": str(track.id.value),
+                        "title": track.title,
+                        "artist": track.artist,
+                        "album": track.album,
+                        "duration_ms": track.duration_ms,
+                        "spotify_uri": str(track.spotify_uri)
+                        if track.spotify_uri
+                        else None,
+                        "file_path": track.file_path,
+                        "is_broken": track.is_broken,
+                    }
+                )
+
+        playlist_data = {
+            "id": str(playlist.id.value),
+            "name": playlist.name,
+            "description": playlist.description,
+            "source": playlist.source.value,
+            "track_count": len(playlist.track_ids),
+            "tracks": tracks,
+            "created_at": playlist.created_at.isoformat(),
+            "updated_at": playlist.updated_at.isoformat(),
+            "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
+        }
+
+        return templates.TemplateResponse(
+            "playlist_detail.html", {"request": request, "playlist": playlist_data}
+        )
+
+    except ValueError:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error_code": 400,
+                "error_message": "Invalid playlist ID",
+            },
+            status_code=400,
+        )
+
+
 @router.get("/playlists/import", response_class=HTMLResponse)
 async def import_playlist(request: Request) -> Any:
     """Import playlist page."""
@@ -151,3 +237,141 @@ async def dashboard(request: Request) -> Any:
 async def onboarding(request: Request) -> Any:
     """First-run onboarding page for new users."""
     return templates.TemplateResponse("onboarding.html", {"request": request})
+
+
+@router.get("/library", response_class=HTMLResponse)
+async def library(
+    request: Request,
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Library browser page."""
+    tracks = await track_repository.list_all()
+
+    # Get unique artists and albums
+    artists_set = set()
+    albums_set = set()
+    for track in tracks:
+        if track.artist:
+            artists_set.add(track.artist)
+        if track.album:
+            albums_set.add(track.album)
+
+    stats = {
+        "total_tracks": len(tracks),
+        "total_artists": len(artists_set),
+        "total_albums": len(albums_set),
+        "tracks_with_files": sum(1 for t in tracks if t.file_path),
+        "broken_tracks": sum(1 for t in tracks if t.is_broken),
+    }
+
+    return templates.TemplateResponse(
+        "library.html", {"request": request, "stats": stats}
+    )
+
+
+@router.get("/library/artists", response_class=HTMLResponse)
+async def library_artists(
+    request: Request,
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Library artists browser page."""
+    tracks = await track_repository.list_all()
+
+    # Group tracks by artist
+    artists_dict: dict[str, dict[str, Any]] = {}
+    for track in tracks:
+        if not track.artist:
+            continue
+        if track.artist not in artists_dict:
+            artists_dict[track.artist] = {
+                "name": track.artist,
+                "track_count": 0,
+                "album_count": 0,
+                "albums": set(),
+            }
+        artists_dict[track.artist]["track_count"] += 1
+        if track.album:
+            artists_dict[track.artist]["albums"].add(track.album)
+
+    # Convert to list and calculate album counts
+    artists = [
+        {
+            "name": artist_data["name"],
+            "track_count": artist_data["track_count"],
+            "album_count": len(artist_data["albums"]),
+        }
+        for artist_data in artists_dict.values()
+    ]
+
+    # Sort by name
+    artists.sort(key=lambda x: x["name"].lower())
+
+    return templates.TemplateResponse(
+        "library_artists.html", {"request": request, "artists": artists}
+    )
+
+
+@router.get("/library/albums", response_class=HTMLResponse)
+async def library_albums(
+    request: Request,
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Library albums browser page."""
+    tracks = await track_repository.list_all()
+
+    # Group tracks by album
+    albums_dict: dict[str, dict[str, Any]] = {}
+    for track in tracks:
+        if not track.album:
+            continue
+        album_key = f"{track.artist or 'Unknown'}::{track.album}"
+        if album_key not in albums_dict:
+            albums_dict[album_key] = {
+                "title": track.album,
+                "artist": track.artist or "Unknown Artist",
+                "track_count": 0,
+                "year": None,  # Could be extracted from metadata
+            }
+        albums_dict[album_key]["track_count"] += 1
+
+    # Convert to list
+    albums = list(albums_dict.values())
+
+    # Sort by artist then album
+    albums.sort(key=lambda x: (x["artist"].lower(), x["title"].lower()))
+
+    return templates.TemplateResponse(
+        "library_albums.html", {"request": request, "albums": albums}
+    )
+
+
+@router.get("/library/tracks", response_class=HTMLResponse)
+async def library_tracks(
+    request: Request,
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Library tracks browser page."""
+    tracks = await track_repository.list_all()
+
+    # Convert to template-friendly format
+    tracks_data = [
+        {
+            "id": str(track.id.value),
+            "title": track.title,
+            "artist": track.artist or "Unknown Artist",
+            "album": track.album or "Unknown Album",
+            "duration_ms": track.duration_ms,
+            "file_path": track.file_path,
+            "is_broken": track.is_broken,
+        }
+        for track in tracks
+    ]
+
+    # Sort by artist, album, title
+    tracks_data.sort(
+        key=lambda x: (x["artist"].lower(), x["album"].lower(), x["title"].lower())
+    )
+
+    return templates.TemplateResponse(
+        "library_tracks.html", {"request": request, "tracks": tracks_data}
+    )
