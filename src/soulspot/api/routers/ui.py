@@ -74,6 +74,18 @@ async def playlists(
     )
 
 
+@router.get("/playlists/{playlist_id}/export-modal", response_class=HTMLResponse)
+async def playlist_export_modal(
+    request: Request,
+    playlist_id: str,
+) -> Any:
+    """Return export modal partial."""
+    return templates.TemplateResponse(
+        "partials/export_modal.html",
+        {"request": request, "playlist_id": playlist_id},
+    )
+
+
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
 async def playlist_detail(
     request: Request,
