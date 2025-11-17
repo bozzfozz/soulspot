@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "includes/_components.html" import empty_state %}
+
+{% block title %}Albums - SoulSpot Bridge{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <nav class="flex mb-2" aria-label="Breadcrumb">
+                <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                    <li class="inline-flex items-center">
+                        <a href="/ui/library" class="text-sm text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400">
+                            Library
+                        </a>
+                    </li>
+                    <li>
+                        <div class="flex items-center">
+                            <svg class="w-3 h-3 text-gray-400 mx-1" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <span class="text-sm text-gray-500 dark:text-gray-400" aria-current="page">Albums</span>
+                        </div>
+                    </li>
+                </ol>
+            </nav>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight">Albums</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Browse {{ albums|length }} albums in your library</p>
+        </div>
+        <div class="flex gap-2">
+            <input type="text" 
+                   id="album-search"
+                   placeholder="Search albums..."
+                   class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white"
+                   aria-label="Search albums">
+        </div>
+    </div>
+
+    <!-- Albums Grid -->
+    <div id="albums-list">
+        {% if albums %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {% for album in albums %}
+            <div class="card hover:shadow-md transition-shadow album-card">
+                <div class="card-body p-4">
+                    <!-- Album Cover Placeholder -->
+                    <div class="aspect-square mb-3 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <svg class="w-12 h-12 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white text-sm mb-1 truncate" title="{{ album.title }}">
+                        {{ album.title }}
+                    </h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 truncate mb-2" title="{{ album.artist }}">
+                        {{ album.artist }}
+                    </p>
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <span>{{ album.track_count }} tracks</span>
+                        {% if album.year %}
+                        <span>{{ album.year }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body p-12">
+                {% set icon %}
+                <svg class="w-16 h-16 mx-auto text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+                {% endset %}
+                {{ empty_state(icon, 'No albums found', 'Your library does not contain any albums yet. Import some playlists to get started!', 'Import Playlist', '/ui/playlists/import') }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Client-side search filter
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('album-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const albumCards = document.querySelectorAll('.album-card');
+            
+            albumCards.forEach(card => {
+                const albumTitle = card.querySelector('h3').textContent.toLowerCase();
+                const artistName = card.querySelector('p').textContent.toLowerCase();
+                
+                if (albumTitle.includes(searchTerm) || artistName.includes(searchTerm)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}
