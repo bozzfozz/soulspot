@@ -64,7 +64,7 @@ async def authorize(
     }
 
 
-@router.get("/callback")
+@router.get("/callback", response_model=None)
 async def callback(
     code: str = Query(..., description="Authorization code from Spotify"),
     state: str = Query(..., description="State parameter for CSRF protection"),

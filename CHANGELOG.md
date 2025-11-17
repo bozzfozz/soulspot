@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Server-Sent Events & Widget Template System - 2025-11-17
+
+#### Real-Time Updates Infrastructure
+- **Server-Sent Events (SSE) System**: Complete implementation for real-time dashboard updates
+  - FastAPI streaming endpoint at `/api/ui/sse/stream` with proper SSE formatting
+  - Event types: `connected`, `downloads_update`, `heartbeat`, `error`
+  - Connection health monitoring with 30-second heartbeat intervals
+  - Client disconnect detection and automatic cleanup
+  - Test endpoint at `/api/ui/sse/test` for debugging
+  
+- **SSE JavaScript Client**: Robust browser-side EventSource wrapper
+  - `SSEClient` class with automatic reconnection logic
+  - Exponential backoff reconnection strategy
+  - Heartbeat timeout detection (60s default)
+  - Event listener management system
+  - Connection status tracking
+  - Debug logging support
+  
+- **SSE-Enabled Widgets**: Real-time widget updates
+  - Active Jobs widget with SSE support (`active_jobs_sse.html`)
+  - Real-time progress bar updates without polling
+  - Automatic UI synchronization with backend state
+  - Graceful degradation to polling if SSE unavailable
+
+#### Widget Template System
+- **Custom Widget Development Framework**: JSON-based extensibility system
+  - `WidgetTemplate` and `WidgetTemplateConfig` domain entities
+  - JSON schema validation for widget configuration
+  - Template file format with comprehensive metadata
+  - Support for widget-specific configuration schemas
+  - Size constraints (4-12 column spans)
+  - Category and tag-based organization
+  
+- **Widget Template Registry**: Centralized template management
+  - `WidgetTemplateRegistry` service with in-memory caching
+  - Automatic discovery from file system (`widget_templates/`)
+  - 5 system widgets pre-registered:
+    - Active Jobs (monitoring, real-time)
+    - Spotify Search (search, music)
+    - Missing Tracks (monitoring, playlists)
+    - Quick Actions (utility, configurable)
+    - Metadata Manager (management, library)
+  - Search by query, category, and tags
+  - Enable/disable widget support
+  - System vs. custom widget differentiation
+  
+- **Widget Template API**: REST endpoints for template management
+  - `GET /api/widgets/templates` - List all templates
+  - `GET /api/widgets/templates/{id}` - Get specific template
+  - `GET /api/widgets/templates/category/{category}` - Filter by category
+  - `POST /api/widgets/templates/search` - Advanced search with filters
+  - `POST /api/widgets/templates/discover` - Discover and load custom templates
+  - `GET /api/widgets/templates/categories/list` - List all categories
+  - `GET /api/widgets/templates/tags/list` - List all tags
+  
+- **Example Custom Widget**: Complete reference implementation
+  - System Stats widget template (`system_stats.json`)
+  - Demonstrates configuration schema
+  - Shows category, tags, and permissions usage
+  - Includes config options (update interval, toggle features)
+
+### Fixed
+- FastAPI auth callback response model annotation to support `RedirectResponse | dict[str, Any]`
+
+### Changed
+- Dashboard widgets can now use SSE for real-time updates (eliminates polling overhead)
+- Widget system is now extensible through JSON-based template files
+- Widget discovery happens at application startup and can be triggered on-demand
+
+### Technical
+- Added 7 integration tests for SSE infrastructure (all passing)
+- Added 7 unit tests for widget template system (all passing)
+- Updated frontend roadmap with SSE and widget template documentation
+- Created comprehensive developer guide for custom widget development
+- SSE-enabled widgets coexist with polling-based widgets for flexibility
+
 ### Added - Automation & Watchlists System (Epic 6) - 2025-11-16
 
 #### Automation Features (100% Complete)

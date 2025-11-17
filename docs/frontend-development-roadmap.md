@@ -13,14 +13,18 @@
 - ✅ **v1.0** - All core pages, queue management, settings UI, search, authentication (Complete Nov 2025)
 - ✅ **UI 1.0 Design System** - Component library, design tokens, accessibility features
 - ✅ **v2.0 Phase 0-3** - Dashboard widget system fully implemented (Complete Nov 2025)
+- ✅ **Server-Sent Events (SSE)** - Real-time updates infrastructure (Complete Nov 2025)
+- ✅ **Widget Template System** - Custom widget development framework (Complete Nov 2025)
 
 **What's in progress:**
 - 🚧 **v2.0 Phase 4** - Testing, performance optimization, and final polish (In Progress)
+- 🚧 **Custom Widget API** - Plugin system and developer tools (In Progress)
 
 **What's next (Priority Order):**
-1. 🚧 **v2.0 Dashboard Testing & Launch** - Integration tests, E2E tests, performance (1-2 weeks)
-2. 📋 **Playlist Management** - Enhanced playlist features and missing track detection (2-3 weeks)
-3. 📚 **Library Browser** - Artist/album/track browsing and metadata editing (3-4 weeks)
+1. 🚧 **Custom Widget API & Documentation** - Complete plugin API and developer guide (1 week)
+2. 🚧 **v2.0 Dashboard Testing & Launch** - Integration tests, E2E tests, performance (1-2 weeks)
+3. 📋 **Playlist Management** - Enhanced playlist features and missing track detection (2-3 weeks)
+4. 📚 **Library Browser** - Artist/album/track browsing and metadata editing (3-4 weeks)
 
 ---
 
@@ -106,6 +110,113 @@ A customizable dashboard where users can:
 ❌ **Trade-off:** No free-form drag positioning (acceptable)
 
 **Full Details:** See [`docs/archived/frontend-roadmap-htmx-evaluation.md`](archived/frontend-roadmap-htmx-evaluation.md)
+
+---
+
+### Priority 1.5: Server-Sent Events & Widget Templates ⭐ COMPLETE
+
+**Epic: Real-Time Updates & Custom Widget System**  
+**Estimated Effort:** 8-10 days  
+**Status:** ✅ Complete (Nov 2025)  
+**Team:** Full-Stack
+
+#### What Was Built
+
+A comprehensive SSE infrastructure and widget template system that enables:
+- Real-time updates for dashboard widgets without polling
+- Custom widget development with JSON-based templates
+- Plugin architecture for community widgets
+- Automatic widget discovery and registration
+
+#### Key Features Implemented
+
+**1. Server-Sent Events (SSE) Infrastructure**
+- ✅ FastAPI streaming endpoint (`/api/ui/sse/stream`)
+- ✅ SSE event encoding with proper formatting
+- ✅ Event types: `connected`, `downloads_update`, `heartbeat`, `error`
+- ✅ Connection health monitoring with 30s heartbeats
+- ✅ Client disconnect detection and cleanup
+- ✅ JavaScript `SSEClient` class with auto-reconnect
+- ✅ Configurable reconnection strategy (exponential backoff)
+- ✅ Heartbeat timeout detection
+- ✅ Debug logging and connection status tracking
+
+**2. Widget Template System**
+- ✅ `WidgetTemplate` and `WidgetTemplateConfig` domain entities
+- ✅ JSON schema for widget configuration
+- ✅ Template validation and error handling
+- ✅ `WidgetTemplateRegistry` service
+- ✅ File system discovery for custom templates
+- ✅ 5 system widgets registered (Active Jobs, Spotify Search, etc.)
+- ✅ Category and tag-based organization
+- ✅ Search and filtering capabilities
+
+**3. Widget Template API**
+- ✅ `GET /api/widgets/templates` - List all templates
+- ✅ `GET /api/widgets/templates/{id}` - Get specific template
+- ✅ `GET /api/widgets/templates/category/{category}` - Filter by category
+- ✅ `POST /api/widgets/templates/search` - Search with filters
+- ✅ `POST /api/widgets/templates/discover` - Discover custom templates
+- ✅ `GET /api/widgets/templates/categories/list` - List categories
+- ✅ `GET /api/widgets/templates/tags/list` - List all tags
+
+**4. SSE-Enabled Widgets**
+- ✅ Active Jobs widget with SSE updates (`active_jobs_sse.html`)
+- ✅ Real-time progress bar updates
+- ✅ Automatic UI synchronization
+- ✅ Graceful degradation to polling if SSE unavailable
+
+#### Technical Implementation
+
+**SSE Architecture:**
+```
+Client (EventSource) → /api/ui/sse/stream → StreamingResponse
+                     ↓
+                Event Generator (async)
+                     ↓
+            Repository Updates → SSE Events
+                     ↓
+            JavaScript SSEClient → DOM Updates
+```
+
+**Widget Template Structure:**
+```json
+{
+  "id": "widget_id",
+  "type": "widget_type",
+  "config": {
+    "name": "Widget Name",
+    "description": "Widget description",
+    "template_path": "partials/widgets/widget.html",
+    "supports_sse": true,
+    "sse_events": ["event_type"],
+    "config_schema": { /* JSON schema */ },
+    "default_config": { /* defaults */ }
+  }
+}
+```
+
+**Benefits:**
+- ✅ **Performance:** No polling overhead, instant updates
+- ✅ **Scalability:** One connection per client vs. polling every N seconds
+- ✅ **Extensibility:** Easy to add new widgets via JSON templates
+- ✅ **Developer Experience:** Clear API for custom widget development
+- ✅ **User Experience:** Real-time updates feel native and responsive
+
+#### Testing & Validation
+
+- ✅ 7 unit tests for widget template system (all passing)
+- ✅ 7 integration tests for SSE endpoints (all passing)
+- ✅ SSE event encoding validation
+- ✅ Connection lifecycle testing
+- ✅ Template validation and error handling
+- ✅ Registry search and filtering
+
+#### Example Custom Widget
+
+See `src/soulspot/templates/widget_templates/system_stats.json` for a complete example of a custom widget template.
+
+**Full Details:** See implementation in `src/soulspot/api/routers/sse.py` and `src/soulspot/domain/entities/widget_template.py`
 
 ---
 
@@ -380,6 +491,36 @@ Future Features (Phase 8+)
 ---
 
 ## 📝 Recent Changes
+
+### 2025-11-17: Server-Sent Events & Widget Template System Complete ✅
+- ✅ **SSE Infrastructure Implemented**
+  - FastAPI streaming endpoint with `text/event-stream`
+  - SSE event encoding (connected, downloads_update, heartbeat, error)
+  - JavaScript SSEClient class with auto-reconnect
+  - Heartbeat monitoring and timeout detection
+  - Client disconnect handling
+  - Test endpoint for debugging
+  - Comprehensive test coverage (7 integration tests)
+
+- ✅ **Widget Template System Implemented**
+  - Domain entities: `WidgetTemplate` and `WidgetTemplateConfig`
+  - JSON schema validation for configuration
+  - Template registry with discovery
+  - File system-based custom templates
+  - 5 system widgets registered
+  - Category and tag organization
+  - Search and filtering API
+  - REST endpoints for template management
+  - Example custom widget (system_stats.json)
+  - Unit tests (7 tests, all passing)
+
+- ✅ **SSE-Enabled Widgets**
+  - Active Jobs widget with real-time updates
+  - Progress bar synchronization
+  - Automatic UI updates without page reload
+  - Graceful degradation support
+
+**Impact:** Enables real-time dashboard updates and custom widget development, eliminating polling overhead and providing extensibility framework.
 
 ### 2025-11-17: v2.0 Phase 0-3 Complete - Dashboard Widget System Fully Implemented ✅
 - ✅ **Phase 0: Foundation Complete**
