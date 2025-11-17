@@ -4,20 +4,15 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 from soulspot.domain.entities import Download, DownloadId, DownloadStatus, TrackId
-from soulspot.main import app
 
 
 @pytest.mark.asyncio
-async def test_sse_stream_connection():
+async def test_sse_stream_connection(async_client: AsyncClient):
     """Test that SSE stream endpoint establishes a connection."""
-    transport = ASGITransport(app=app)
-    async with (
-        AsyncClient(transport=transport, base_url="http://test") as client,
-        client.stream("GET", "/api/ui/sse/stream") as response,
-    ):
+    async with async_client.stream("GET", "/api/ui/sse/stream") as response:
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
         assert response.headers["cache-control"] == "no-cache"
@@ -25,13 +20,9 @@ async def test_sse_stream_connection():
 
 
 @pytest.mark.asyncio
-async def test_sse_stream_receives_connected_event():
+async def test_sse_stream_receives_connected_event(async_client: AsyncClient):
     """Test that SSE stream sends a connected event."""
-    transport = ASGITransport(app=app)
-    async with (
-        AsyncClient(transport=transport, base_url="http://test") as client,
-        client.stream("GET", "/api/ui/sse/stream") as response,
-    ):
+    async with async_client.stream("GET", "/api/ui/sse/stream") as response:
         # Read first event (connected)
         event_data = b""
         async for line in response.aiter_lines():
@@ -46,13 +37,9 @@ async def test_sse_stream_receives_connected_event():
 
 
 @pytest.mark.asyncio
-async def test_sse_test_endpoint():
+async def test_sse_test_endpoint(async_client: AsyncClient):
     """Test the SSE test endpoint."""
-    transport = ASGITransport(app=app)
-    async with (
-        AsyncClient(transport=transport, base_url="http://test") as client,
-        client.stream("GET", "/api/ui/sse/test") as response,
-    ):
+    async with async_client.stream("GET", "/api/ui/sse/test") as response:
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
 
@@ -97,7 +84,7 @@ async def test_sse_event_encode():
 
 
 @pytest.mark.asyncio
-async def test_sse_downloads_update_event():
+async def test_sse_downloads_update_event(async_client: AsyncClient):
     """Test that SSE stream sends downloads_update events."""
     # Create mock downloads
     mock_downloads = [
@@ -125,11 +112,7 @@ async def test_sse_downloads_update_event():
         mock_repo.list_active = AsyncMock(return_value=mock_downloads)
         mock_get_repo.return_value = mock_repo
 
-        transport = ASGITransport(app=app)
-        async with (
-            AsyncClient(transport=transport, base_url="http://test") as client,
-            client.stream("GET", "/api/ui/sse/stream") as response,
-        ):
+        async with async_client.stream("GET", "/api/ui/sse/stream") as response:
             # Skip connected event
             event_count = 0
             async for line in response.aiter_lines():
@@ -146,13 +129,9 @@ async def test_sse_downloads_update_event():
 
 
 @pytest.mark.asyncio
-async def test_sse_heartbeat_event():
+async def test_sse_heartbeat_event(async_client: AsyncClient):
     """Test that SSE stream sends heartbeat events."""
-    transport = ASGITransport(app=app)
-    async with (
-        AsyncClient(transport=transport, base_url="http://test") as client,
-        client.stream("GET", "/api/ui/sse/stream") as response,
-    ):
+    async with async_client.stream("GET", "/api/ui/sse/stream") as response:
         # This test would need to wait ~30 seconds for heartbeat
         # For testing purposes, we'll just verify the stream stays open
         assert response.status_code == 200
@@ -165,11 +144,11 @@ async def test_sse_heartbeat_event():
             if event_count >= 2:  # Stop after reading a couple events
                 break
 
-            assert event_count >= 1
+        assert event_count >= 1
 
 
 @pytest.mark.asyncio
-async def test_sse_error_handling():
+async def test_sse_error_handling(async_client: AsyncClient):
     """Test SSE error handling when repository fails."""
     # Mock the download repository to raise an error
     with patch(
@@ -179,15 +158,11 @@ async def test_sse_error_handling():
         mock_repo.list_active = AsyncMock(side_effect=Exception("Test error"))
         mock_get_repo.return_value = mock_repo
 
-        transport = ASGITransport(app=app)
-        async with (
-            AsyncClient(transport=transport, base_url="http://test") as client,
-            client.stream("GET", "/api/ui/sse/stream") as response,
-        ):
-            # Should still connect successfully
+        async with async_client.stream("GET", "/api/ui/sse/stream") as response:
+            # Stream should still establish connection
             assert response.status_code == 200
 
-            # Look for error event
+            # Wait for error event (or connected event to ensure stream works)
             async for line in response.aiter_lines():
                 if "event: error" in line:
                     # Found error event

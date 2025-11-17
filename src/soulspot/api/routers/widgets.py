@@ -9,10 +9,12 @@ from fastapi.templating import Jinja2Templates
 from soulspot.api.dependencies import (
     get_download_repository,
     get_playlist_repository,
+    get_track_repository,
 )
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     PlaylistRepository,
+    TrackRepository,
 )
 
 templates = Jinja2Templates(directory="src/soulspot/templates")
@@ -116,13 +118,11 @@ async def spotify_search_results(
 async def missing_tracks_content(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
 ) -> Any:
     """Get missing tracks widget content."""
-    from soulspot.api.dependencies import get_track_repository
-
     # Get all playlists
     playlists = await playlist_repository.list_all()
-    track_repository = await anext(get_track_repository())
 
     # Build playlists with missing tracks info
     playlists_data = []
@@ -186,12 +186,9 @@ async def quick_actions_content(
 async def metadata_manager_content(
     request: Request,
     filter: str = "all",
+    track_repository: TrackRepository = Depends(get_track_repository),
 ) -> Any:
     """Get metadata manager widget content."""
-    from soulspot.api.dependencies import get_track_repository
-
-    track_repository = await anext(get_track_repository())
-
     # Get all tracks
     tracks = await track_repository.list_all()
 
