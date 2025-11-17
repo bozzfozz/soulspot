@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,7 +140,7 @@ class WatchlistWorker:
             logger.error(f"Error in watchlist checking: {e}", exc_info=True)
 
     async def _trigger_automation(
-        self, watchlist: any, new_releases: list[dict]
+        self, watchlist: Any, new_releases: list[dict[str, Any]]
     ) -> None:
         """Trigger automation workflows for new releases.
 

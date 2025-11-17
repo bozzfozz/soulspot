@@ -84,7 +84,8 @@ class AutomationWorkflowService:
 
     async def get_rule(self, rule_id: AutomationRuleId) -> AutomationRule | None:
         """Get automation rule by ID."""
-        return await self.repository.get_by_id(rule_id)
+        result: AutomationRule | None = await self.repository.get_by_id(rule_id)
+        return result
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[AutomationRule]:
         """List all automation rules."""
@@ -409,12 +410,12 @@ class AutomationWorkflowService:
         for rule_data in default_rules:
             try:
                 rule = await self.create_rule(
-                    name=rule_data["name"],
-                    trigger=rule_data["trigger"],
-                    action=rule_data["action"],
-                    priority=rule_data["priority"],
-                    quality_profile=rule_data["quality_profile"],
-                    description=rule_data["description"],
+                    name=str(rule_data["name"]),
+                    trigger=AutomationTrigger(rule_data["trigger"]),
+                    action=AutomationAction(rule_data["action"]),
+                    priority=rule_data["priority"],  # type: ignore[arg-type]
+                    quality_profile=str(rule_data["quality_profile"]),
+                    description=str(rule_data["description"]),
                 )
                 created_rules.append(rule)
             except Exception as e:

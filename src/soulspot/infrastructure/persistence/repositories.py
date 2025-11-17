@@ -1877,7 +1877,7 @@ class QualityUpgradeCandidateRepository:
             QualityUpgradeCandidateModel.processed == True  # noqa: E712
         )
         result = await self.session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined, return-value]
+        return result.rowcount  # type: ignore[attr-defined]
 
 
 class WidgetRepository:

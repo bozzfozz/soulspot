@@ -97,8 +97,8 @@ class DiscographyService:
             )
 
         # Get owned albums from database
-        stmt = select(AlbumModel).where(AlbumModel.artist_id == str(artist_id.value))
-        result = await self.session.execute(stmt)
+        stmt_albums = select(AlbumModel).where(AlbumModel.artist_id == str(artist_id.value))
+        result = await self.session.execute(stmt_albums)
         owned_albums = result.scalars().all()
         owned_spotify_uris = {
             album.spotify_uri for album in owned_albums if album.spotify_uri
@@ -131,7 +131,7 @@ class DiscographyService:
                 )
 
             all_albums = await self.spotify_client.get_artist_albums(
-                spotify_artist_id, access_token, include_groups="album"
+                spotify_artist_id, access_token
             )
 
             # Find missing albums
