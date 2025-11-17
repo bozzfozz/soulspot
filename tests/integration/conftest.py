@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.config import Settings
 from soulspot.infrastructure.persistence import Database
-from soulspot.main import create_app
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +39,8 @@ async def db(test_settings: Settings, test_db_path: Path) -> AsyncGenerator[Data
     test_db_path.touch(exist_ok=True)
 
     # Create tables using SQLAlchemy models (sync)
-    from sqlalchemy import create_engine
+    from sqlalchemy import text
+
     from soulspot.infrastructure.persistence.models import Base
 
     sync_url = f"sqlite:///{test_db_path}"
@@ -48,19 +48,35 @@ async def db(test_settings: Settings, test_db_path: Path) -> AsyncGenerator[Data
 
     # Create all tables
     Base.metadata.create_all(sync_engine)
+
+    # Seed widget registry and default page (from migration)
+    with sync_engine.connect() as conn:
+        # Insert default widgets (use INSERT OR IGNORE for test reruns)
+        conn.execute(
+            text("""
+                INSERT OR IGNORE INTO widgets (type, name, template_path, default_config) VALUES
+                ('active_jobs', 'Active Jobs', 'partials/widgets/active_jobs.html', '{"refresh_interval": 5}'),
+                ('spotify_search', 'Spotify Search', 'partials/widgets/spotify_search.html', '{"max_results": 10}'),
+                ('missing_tracks', 'Missing Tracks', 'partials/widgets/missing_tracks.html', '{"show_all": false}'),
+                ('quick_actions', 'Quick Actions', 'partials/widgets/quick_actions.html', '{"actions": ["scan", "import", "fix"]}'),
+                ('metadata_manager', 'Metadata Manager', 'partials/widgets/metadata_manager.html', '{"filter": "all"}')
+            """)
+        )
+
+        # Insert default page (use INSERT OR IGNORE for test reruns)
+        conn.execute(
+            text("""
+                INSERT OR IGNORE INTO pages (name, slug, is_default, created_at, updated_at) VALUES
+                ('My Dashboard', 'default', 1, datetime('now'), datetime('now'))
+            """)
+        )
+
+        conn.commit()
+
     sync_engine.dispose()
 
     # Now create async database
     database = Database(test_settings)
-
-    # Seed widget registry
-    from soulspot.infrastructure.persistence.widget_registry import (
-        initialize_widget_registry,
-    )
-
-    async for session in database.get_session():
-        await initialize_widget_registry(session)
-        break
 
     yield database
 
@@ -89,18 +105,10 @@ async def app_with_db(test_settings: Settings, db: Database):
     # Manually set db in app state for tests
     app.state.db = db
 
-    # Initialize widget registry
-    from soulspot.infrastructure.persistence.widget_registry import (
-        initialize_widget_registry,
-    )
-
-    async for session in db.get_session():
-        await initialize_widget_registry(session)
-        break
-
     # Include routes from main app
-    from soulspot.api.routers import api_router, ui
     from fastapi.staticfiles import StaticFiles
+
+    from soulspot.api.routers import api_router, ui
 
     # Mount static files if directory exists
     static_dir = Path(__file__).parent.parent.parent / "src" / "soulspot" / "static"
