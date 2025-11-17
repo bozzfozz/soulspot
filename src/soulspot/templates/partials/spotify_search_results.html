@@ -1,0 +1,57 @@
+{# Spotify Search Results Partial - HTMX loaded results #}
+{% if results and results|length > 0 %}
+  <div class="space-y-2">
+    {% for track in results %}
+      <div class="result-item p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+        <div class="flex items-start justify-between">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+              {{ track.name }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+              {{ track.artists|join(', ') }}
+            </p>
+            {% if track.album %}
+              <p class="text-xs text-gray-400 dark:text-gray-500 truncate">
+                {{ track.album }}
+              </p>
+            {% endif %}
+          </div>
+          
+          <button class="ml-2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 whitespace-nowrap"
+                  hx-post="/api/downloads"
+                  hx-vals='{"spotify_uri": "{{ track.uri }}", "title": "{{ track.name }}", "artist": "{{ track.artists[0] }}"}'
+                  hx-target="closest .result-item"
+                  hx-swap="innerHTML"
+                  hx-indicator="#download-{{ loop.index }}">
+            <span id="download-{{ loop.index }}" class="htmx-indicator">Downloading...</span>
+            <span class="htmx-indicator-off">Download</span>
+          </button>
+        </div>
+        
+        {% if track.duration_ms %}
+          <div class="flex items-center gap-2 mt-1">
+            <svg class="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              {{ (track.duration_ms / 60000)|round(0, 'floor') }}:{{ '%02d'|format((track.duration_ms / 1000)|int % 60) }}
+            </span>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% elif query %}
+  <div class="text-center py-6 text-gray-500 dark:text-gray-400">
+    <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <p class="mt-2 text-sm">No results found for "{{ query }}"</p>
+    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Try a different search term</p>
+  </div>
+{% else %}
+  <div class="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
+    Start typing to search...
+  </div>
+{% endif %}

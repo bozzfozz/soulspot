@@ -65,31 +65,106 @@ async def spotify_search_content(
     )
 
 
+@router.get("/spotify-search/results", response_class=HTMLResponse)
+async def spotify_search_results(
+    request: Request,
+    query: str = "",
+    search_type: str = "track",
+    limit: int = 10,
+) -> Any:
+    """Get Spotify search results for widget."""
+    from soulspot.config import get_settings
+    from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+
+    results = []
+
+    if query and len(query) >= 2:
+        try:
+            settings = get_settings()
+            spotify_client = SpotifyClient(settings.spotify)
+
+            if search_type == "track":
+                search_results = await spotify_client.search_track(query, limit=limit)
+                results = [
+                    {
+                        "name": track.name,
+                        "artists": track.artists,
+                        "album": track.album,
+                        "uri": track.uri,
+                        "duration_ms": track.duration_ms,
+                    }
+                    for track in search_results
+                ]
+        except Exception as e:
+            # Log error but don't crash - return empty results
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Spotify search failed: {e}")
+
+    return templates.TemplateResponse(
+        "partials/spotify_search_results.html",
+        {
+            "request": request,
+            "results": results,
+            "query": query,
+        },
+    )
+
+
 @router.get("/missing-tracks/content", response_class=HTMLResponse)
 async def missing_tracks_content(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
 ) -> Any:
     """Get missing tracks widget content."""
+    from soulspot.api.dependencies import get_track_repository
+
     # Get all playlists
     playlists = await playlist_repository.list_all()
+    track_repository = await anext(get_track_repository())
 
-    # Convert to template-friendly format
-    playlists_data = [
-        {
-            "id": str(playlist.id.value),
-            "name": playlist.name,
-            "track_count": len(playlist.track_ids),
-        }
-        for playlist in playlists
-    ]
+    # Build playlists with missing tracks info
+    playlists_data = []
+    total_missing = 0
+
+    for playlist in playlists[:10]:  # Limit to first 10 playlists for widget
+        missing_tracks = []
+        downloaded_count = 0
+
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track:
+                if track.file_path and not track.is_broken:
+                    downloaded_count += 1
+                else:
+                    missing_tracks.append(
+                        {
+                            "id": str(track.id.value),
+                            "title": track.title,
+                            "artist": track.artist,
+                        }
+                    )
+
+        if missing_tracks:  # Only include playlists with missing tracks
+            playlists_data.append(
+                {
+                    "id": str(playlist.id.value),
+                    "name": playlist.name,
+                    "track_count": len(playlist.track_ids),
+                    "downloaded_count": downloaded_count,
+                    "missing_count": len(missing_tracks),
+                    "missing_tracks": missing_tracks,
+                }
+            )
+            total_missing += len(missing_tracks)
 
     return templates.TemplateResponse(
         "partials/widgets/missing_tracks.html",
         {
             "request": request,
             "playlists": playlists_data,
-            "missing_tracks": [],  # TODO: Implement missing tracks detection
+            "missing_count": total_missing,
         },
     )
 
@@ -110,12 +185,97 @@ async def quick_actions_content(
 @router.get("/metadata-manager/content", response_class=HTMLResponse)
 async def metadata_manager_content(
     request: Request,
+    filter: str = "all",
 ) -> Any:
     """Get metadata manager widget content."""
+    from soulspot.api.dependencies import get_track_repository
+
+    track_repository = await anext(get_track_repository())
+
+    # Get all tracks
+    tracks = await track_repository.list_all()
+
+    # Detect metadata issues
+    issues = []
+    for track in tracks[:100]:  # Limit to first 100 for widget performance
+        track_issues = []
+
+        # Check for missing metadata
+        if not track.title or track.title.strip() == "":
+            track_issues.append(
+                {
+                    "issue_type": "missing_title",
+                    "description": "Missing track title",
+                    "severity": "high",
+                    "can_auto_fix": False,
+                }
+            )
+
+        if not track.artist or track.artist.strip() == "":
+            track_issues.append(
+                {
+                    "issue_type": "missing_artist",
+                    "description": "Missing artist name",
+                    "severity": "high",
+                    "can_auto_fix": False,
+                }
+            )
+
+        if not track.album or track.album.strip() == "":
+            track_issues.append(
+                {
+                    "issue_type": "missing_album",
+                    "description": "Missing album name",
+                    "severity": "medium",
+                    "can_auto_fix": track.spotify_uri is not None,
+                }
+            )
+
+        # Check for broken files
+        if track.is_broken:
+            track_issues.append(
+                {
+                    "issue_type": "broken_file",
+                    "description": "File is broken or corrupt",
+                    "severity": "high",
+                    "can_auto_fix": track.spotify_uri is not None,
+                }
+            )
+
+        # Check for missing file
+        if not track.file_path:
+            track_issues.append(
+                {
+                    "issue_type": "missing_file",
+                    "description": "File not downloaded",
+                    "severity": "medium",
+                    "can_auto_fix": track.spotify_uri is not None,
+                }
+            )
+
+        # Add issues to list
+        for issue in track_issues:
+            # Apply filter
+            if filter == "missing" and "missing" not in issue["issue_type"]:
+                continue
+            if filter == "incorrect" and issue["issue_type"] not in ["broken_file"]:
+                continue
+
+            issues.append(
+                {
+                    "track_id": str(track.id.value),
+                    "track_title": track.title or "Unknown",
+                    "track_artist": track.artist or "Unknown",
+                    **issue,
+                }
+            )
+
     return templates.TemplateResponse(
         "partials/widgets/metadata_manager.html",
         {
             "request": request,
-            "issues": [],  # TODO: Implement metadata issue detection
+            "issues": issues[:20],  # Limit to 20 for display
+            "issues_count": len(issues),
+            "filter": filter,
         },
     )
