@@ -29,13 +29,13 @@ async def dashboard_page(
 ) -> Any:
     """Render dashboard page."""
     page_repo = PageRepository(session)
-    
+
     # Get page by slug or default
     if page_slug == "default":
         page = await page_repo.get_default()
     else:
         page = await page_repo.get_by_slug(page_slug)
-    
+
     if not page:
         # Create default page if it doesn't exist
         page = Page(
@@ -46,7 +46,7 @@ async def dashboard_page(
         )
         await page_repo.add(page)
         await session.commit()
-    
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -68,31 +68,33 @@ async def get_canvas(
     page_repo = PageRepository(session)
     instance_repo = WidgetInstanceRepository(session)
     widget_repo = WidgetRepository(session)
-    
+
     # Get page
     if page_id == "default":
         page = await page_repo.get_default()
     else:
         page = await page_repo.get_by_id(int(page_id))
-    
+
     if not page:
         return HTMLResponse(
             '<div class="text-center py-8 text-red-500">Page not found</div>'
         )
-    
+
     # Get widget instances for page
     instances = await instance_repo.get_by_page(page.id)
-    
+
     # Get widget metadata for each instance
     widgets_with_meta = []
     for instance in instances:
         widget = await widget_repo.get_by_type(instance.widget_type)
         if widget:
-            widgets_with_meta.append({
-                "instance": instance,
-                "widget": widget,
-            })
-    
+            widgets_with_meta.append(
+                {
+                    "instance": instance,
+                    "widget": widget,
+                }
+            )
+
     return templates.TemplateResponse(
         "partials/widget_canvas.html",
         {
@@ -114,7 +116,7 @@ async def toggle_edit_mode(
     form_data = await request.form()
     current_edit_mode = form_data.get("edit_mode", "false") == "true"
     new_edit_mode = not current_edit_mode
-    
+
     # Return updated dashboard container
     return HTMLResponse(
         f'<div id="dashboard-container" class="{"edit-mode-active" if new_edit_mode else ""}" '
@@ -132,7 +134,7 @@ async def widget_catalog(
     """Get widget catalog modal."""
     widget_repo = WidgetRepository(session)
     widgets = await widget_repo.get_all()
-    
+
     return templates.TemplateResponse(
         "partials/widget_catalog_modal.html",
         {
@@ -152,21 +154,23 @@ async def add_widget_instance(
     form_data = await request.form()
     page_id = int(form_data.get("page_id", 1))
     widget_type = form_data.get("widget_type", "")
-    
+
     instance_repo = WidgetInstanceRepository(session)
     widget_repo = WidgetRepository(session)
-    
+
     # Get widget metadata
     widget = await widget_repo.get_by_type(widget_type)
     if not widget:
-        return HTMLResponse('<div class="text-red-500">Widget not found</div>', status_code=404)
-    
+        return HTMLResponse(
+            '<div class="text-red-500">Widget not found</div>', status_code=404
+        )
+
     # Find next available position
     existing_instances = await instance_repo.get_by_page(page_id)
     next_row = 0
     if existing_instances:
         next_row = max(inst.position_row for inst in existing_instances) + 1
-    
+
     # Create widget instance
     instance = WidgetInstance(
         id=0,
@@ -177,10 +181,10 @@ async def add_widget_instance(
         span_cols=6,  # Default half-width
         config=widget.default_config,
     )
-    
+
     await instance_repo.add(instance)
     await session.commit()
-    
+
     # Return updated canvas
     return HTMLResponse(
         f'<div hx-get="/api/ui/pages/{page_id}/canvas?edit_mode=true" '
@@ -195,20 +199,22 @@ async def delete_widget_instance(
 ) -> Any:
     """Delete a widget instance."""
     instance_repo = WidgetInstanceRepository(session)
-    
+
     instance = await instance_repo.get_by_id(instance_id)
     if not instance:
         return HTMLResponse("", status_code=404)
-    
+
     page_id = instance.page_id
     await instance_repo.delete(instance_id)
     await session.commit()
-    
+
     # Return empty (widget will be removed from DOM)
     return HTMLResponse("")
 
 
-@router.post("/widgets/instances/{instance_id}/move-{direction}", response_class=HTMLResponse)
+@router.post(
+    "/widgets/instances/{instance_id}/move-{direction}", response_class=HTMLResponse
+)
 async def move_widget(
     instance_id: int,
     direction: str,
@@ -216,11 +222,11 @@ async def move_widget(
 ) -> Any:
     """Move widget in specified direction."""
     instance_repo = WidgetInstanceRepository(session)
-    
+
     instance = await instance_repo.get_by_id(instance_id)
     if not instance:
         return HTMLResponse("", status_code=404)
-    
+
     # Apply movement
     if direction == "up":
         instance.move_up()
@@ -232,10 +238,10 @@ async def move_widget(
         instance.move_right()
     else:
         return HTMLResponse("Invalid direction", status_code=400)
-    
+
     await instance_repo.update(instance)
     await session.commit()
-    
+
     # Return updated canvas
     page_id = instance.page_id
     return HTMLResponse(
@@ -251,17 +257,17 @@ async def resize_widget(
 ) -> Any:
     """Toggle widget size."""
     instance_repo = WidgetInstanceRepository(session)
-    
+
     instance = await instance_repo.get_by_id(instance_id)
     if not instance:
         return HTMLResponse("", status_code=404)
-    
+
     # Toggle size (4 -> 6 -> 12 -> 4)
     instance.toggle_size()
-    
+
     await instance_repo.update(instance)
     await session.commit()
-    
+
     # Return updated canvas
     page_id = instance.page_id
     return HTMLResponse(
@@ -279,13 +285,13 @@ async def get_widget_config(
     """Get widget configuration modal."""
     instance_repo = WidgetInstanceRepository(session)
     widget_repo = WidgetRepository(session)
-    
+
     instance = await instance_repo.get_by_id(instance_id)
     if not instance:
         return HTMLResponse("Widget not found", status_code=404)
-    
+
     widget = await widget_repo.get_by_type(instance.widget_type)
-    
+
     return templates.TemplateResponse(
         "partials/widget_config_modal.html",
         {
@@ -304,19 +310,19 @@ async def save_widget_config(
 ) -> Any:
     """Save widget configuration."""
     instance_repo = WidgetInstanceRepository(session)
-    
+
     instance = await instance_repo.get_by_id(instance_id)
     if not instance:
         return HTMLResponse("Widget not found", status_code=404)
-    
+
     form_data = await request.form()
     # Update config from form data
     config = dict(form_data)
     instance.update_config(config)
-    
+
     await instance_repo.update(instance)
     await session.commit()
-    
+
     return HTMLResponse('<div class="text-green-600">Configuration saved!</div>')
 
 
@@ -328,7 +334,7 @@ async def list_pages(
     """Get list of pages for sidebar."""
     page_repo = PageRepository(session)
     pages = await page_repo.get_all()
-    
+
     return templates.TemplateResponse(
         "partials/page_list.html",
         {
@@ -356,27 +362,27 @@ async def create_page(
     form_data = await request.form()
     name = form_data.get("name", "")
     slug = form_data.get("slug", "")
-    
+
     if not name or not slug:
         return HTMLResponse("Name and slug are required", status_code=400)
-    
+
     page_repo = PageRepository(session)
-    
+
     # Check if slug already exists
     existing = await page_repo.get_by_slug(slug)
     if existing:
         return HTMLResponse("Page with this slug already exists", status_code=400)
-    
+
     page = Page(
         id=0,
         name=name,
         slug=slug,
         is_default=False,
     )
-    
+
     await page_repo.add(page)
     await session.commit()
-    
+
     # Redirect to new page
     return HTMLResponse(
         f'<script>window.location.href="/api/ui/dashboard?page_slug={slug}";</script>'
@@ -390,19 +396,17 @@ async def delete_page(
 ) -> Any:
     """Delete a page."""
     page_repo = PageRepository(session)
-    
+
     page = await page_repo.get_by_id(page_id)
     if not page:
         return HTMLResponse("", status_code=404)
-    
+
     # Don't allow deleting default page
     if page.is_default:
         return HTMLResponse("Cannot delete default page", status_code=400)
-    
+
     await page_repo.delete(page_id)
     await session.commit()
-    
+
     # Redirect to default page
-    return HTMLResponse(
-        '<script>window.location.href="/api/ui/dashboard";</script>'
-    )
+    return HTMLResponse('<script>window.location.href="/api/ui/dashboard";</script>')

@@ -467,7 +467,9 @@ class WidgetModel(Base):
     __tablename__ = "widgets"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    type: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    type: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     template_path: Mapped[str] = mapped_column(String(200), nullable=False)
     default_config: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
@@ -485,7 +487,9 @@ class PageModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, index=True
+    )
     is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -508,7 +512,10 @@ class WidgetInstanceModel(Base):
         Integer, ForeignKey("pages.id", ondelete="CASCADE"), nullable=False, index=True
     )
     widget_type: Mapped[str] = mapped_column(
-        String(50), ForeignKey("widgets.type", ondelete="CASCADE"), nullable=False, index=True
+        String(50),
+        ForeignKey("widgets.type", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     position_row: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     position_col: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -520,9 +527,15 @@ class WidgetInstanceModel(Base):
     )
 
     # Relationships
-    page: Mapped["PageModel"] = relationship("PageModel", back_populates="widget_instances")
-    widget: Mapped["WidgetModel"] = relationship("WidgetModel", back_populates="instances")
+    page: Mapped["PageModel"] = relationship(
+        "PageModel", back_populates="widget_instances"
+    )
+    widget: Mapped["WidgetModel"] = relationship(
+        "WidgetModel", back_populates="instances"
+    )
 
     __table_args__ = (
-        sa.UniqueConstraint("page_id", "position_row", "position_col", name="uq_widget_position"),
+        sa.UniqueConstraint(
+            "page_id", "position_row", "position_col", name="uq_widget_position"
+        ),
     )

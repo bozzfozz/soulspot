@@ -116,6 +116,3 @@ class TestThemeStaticFiles:
         assert "--color-primary" in content
         assert "--font-family" in content
         assert "harmony-btn" in content
-
-
-

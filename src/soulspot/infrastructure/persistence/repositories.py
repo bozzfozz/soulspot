@@ -1889,8 +1889,9 @@ class WidgetRepository:
 
     async def get_all(self) -> list[Any]:
         """Get all registered widgets."""
-        from .models import WidgetModel
         from soulspot.domain.entities import Widget
+
+        from .models import WidgetModel
 
         stmt = select(WidgetModel)
         result = await self.session.execute(stmt)
@@ -1909,8 +1910,9 @@ class WidgetRepository:
 
     async def get_by_type(self, widget_type: str) -> Any | None:
         """Get widget by type."""
-        from .models import WidgetModel
         from soulspot.domain.entities import Widget
+
+        from .models import WidgetModel
 
         stmt = select(WidgetModel).where(WidgetModel.type == widget_type)
         result = await self.session.execute(stmt)
@@ -1977,8 +1979,9 @@ class PageRepository:
 
     async def get_by_id(self, page_id: int) -> Any | None:
         """Get a page by ID."""
-        from .models import PageModel
         from soulspot.domain.entities import Page
+
+        from .models import PageModel
 
         stmt = select(PageModel).where(PageModel.id == page_id)
         result = await self.session.execute(stmt)
@@ -1998,8 +2001,9 @@ class PageRepository:
 
     async def get_by_slug(self, slug: str) -> Any | None:
         """Get a page by slug."""
-        from .models import PageModel
         from soulspot.domain.entities import Page
+
+        from .models import PageModel
 
         stmt = select(PageModel).where(PageModel.slug == slug)
         result = await self.session.execute(stmt)
@@ -2019,8 +2023,9 @@ class PageRepository:
 
     async def get_default(self) -> Any | None:
         """Get the default page."""
-        from .models import PageModel
         from soulspot.domain.entities import Page
+
+        from .models import PageModel
 
         stmt = select(PageModel).where(PageModel.is_default == True)  # noqa: E712
         result = await self.session.execute(stmt)
@@ -2040,8 +2045,9 @@ class PageRepository:
 
     async def get_all(self) -> list[Any]:
         """Get all pages."""
-        from .models import PageModel
         from soulspot.domain.entities import Page
+
+        from .models import PageModel
 
         stmt = select(PageModel).order_by(PageModel.is_default.desc(), PageModel.name)
         result = await self.session.execute(stmt)
@@ -2113,8 +2119,9 @@ class WidgetInstanceRepository:
 
     async def get_by_id(self, instance_id: int) -> Any | None:
         """Get a widget instance by ID."""
-        from .models import WidgetInstanceModel
         from soulspot.domain.entities import WidgetInstance
+
+        from .models import WidgetInstanceModel
 
         stmt = select(WidgetInstanceModel).where(WidgetInstanceModel.id == instance_id)
         result = await self.session.execute(stmt)
@@ -2137,13 +2144,16 @@ class WidgetInstanceRepository:
 
     async def get_by_page(self, page_id: int) -> list[Any]:
         """Get all widget instances for a page."""
-        from .models import WidgetInstanceModel
         from soulspot.domain.entities import WidgetInstance
+
+        from .models import WidgetInstanceModel
 
         stmt = (
             select(WidgetInstanceModel)
             .where(WidgetInstanceModel.page_id == page_id)
-            .order_by(WidgetInstanceModel.position_row, WidgetInstanceModel.position_col)
+            .order_by(
+                WidgetInstanceModel.position_row, WidgetInstanceModel.position_col
+            )
         )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
@@ -2163,12 +2173,11 @@ class WidgetInstanceRepository:
             for model in models
         ]
 
-    async def get_at_position(
-        self, page_id: int, row: int, col: int
-    ) -> Any | None:
+    async def get_at_position(self, page_id: int, row: int, col: int) -> Any | None:
         """Get widget instance at specific position."""
-        from .models import WidgetInstanceModel
         from soulspot.domain.entities import WidgetInstance
+
+        from .models import WidgetInstanceModel
 
         stmt = select(WidgetInstanceModel).where(
             WidgetInstanceModel.page_id == page_id,

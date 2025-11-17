@@ -27,7 +27,8 @@
             
             <!-- Desktop Navigation Menu -->
             <ul class="hidden lg:flex gap-6 list-none">
-                {{ nav_item('/', 'Dashboard', current_page == 'dashboard') }}
+                {{ nav_item('/', 'Home', current_page == '' or current_page == 'dashboard') }}
+                {{ nav_item('/dashboard', 'Dashboard', current_page == 'dashboard-v2') }}
                 {{ nav_item('/search', 'Search', current_page == 'search') }}
                 {{ nav_item('/playlists', 'Playlists', current_page == 'playlists') }}
                 {{ nav_item('/downloads', 'Downloads', current_page == 'downloads') }}
@@ -39,7 +40,8 @@
         <!-- Mobile Navigation Menu -->
         <div id="mobile-menu" class="hidden lg:hidden pb-4" role="menu">
             <ul class="flex flex-col gap-2 list-none">
-                {{ mobile_nav_item('/', 'Dashboard', current_page == 'dashboard') }}
+                {{ mobile_nav_item('/', 'Home', current_page == '' or current_page == 'dashboard') }}
+                {{ mobile_nav_item('/dashboard', 'Dashboard', current_page == 'dashboard-v2') }}
                 {{ mobile_nav_item('/search', 'Search', current_page == 'search') }}
                 {{ mobile_nav_item('/playlists', 'Playlists', current_page == 'playlists') }}
                 {{ mobile_nav_item('/downloads', 'Downloads', current_page == 'downloads') }}

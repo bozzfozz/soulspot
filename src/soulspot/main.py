@@ -63,6 +63,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.db = db
         logger.info("Database initialized: %s", settings.database.url)
 
+        # Initialize widget registry
+        from soulspot.infrastructure.persistence.widget_registry import (
+            initialize_widget_registry,
+        )
+
+        async for session in db.get_session():
+            await initialize_widget_registry(session)
+            break
+        logger.info("Widget registry initialized")
+
         # Initialize job queue with configured max concurrent downloads
         from soulspot.application.workers.download_worker import DownloadWorker
         from soulspot.application.workers.job_queue import JobQueue
