@@ -205,12 +205,14 @@
 }
 
 .widget-catalog-item {
+  position: relative;
   padding: 1.5rem;
   border: 2px solid #e5e7eb;
   border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
+  background: white;
 }
 
 .widget-catalog-item:hover {
@@ -218,6 +220,16 @@
   background: #eff6ff;
   transform: translateY(-2px);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.widget-catalog-item:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-color: #3b82f6;
+}
+
+.widget-catalog-item:active {
+  transform: translateY(0);
 }
 
 :root.dark .widget-catalog-item {
@@ -396,6 +408,27 @@
 
 .widget-content.htmx-request .htmx-indicator {
   display: inline-block;
+}
+
+/* HTMX indicator styles for buttons */
+button .htmx-indicator {
+  display: none;
+}
+
+button.htmx-request .htmx-indicator {
+  display: inline-block;
+}
+
+/* Widget catalog item loading state */
+.widget-catalog-item .htmx-indicator {
+  display: none;
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+}
+
+.widget-catalog-item.htmx-request .htmx-indicator {
+  display: block;
 }
 
 /* Toast notification positioning (above widgets) */
