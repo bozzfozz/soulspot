@@ -17,7 +17,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 templates = Jinja2Templates(directory="src/soulspot/templates")
 
-router = APIRouter(prefix="/api/ui", tags=["dashboard-ui"])
+router = APIRouter(prefix="/ui", tags=["dashboard-ui"])
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

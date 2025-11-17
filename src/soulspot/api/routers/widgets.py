@@ -17,7 +17,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 templates = Jinja2Templates(directory="src/soulspot/templates")
 
-router = APIRouter(prefix="/api/ui/widgets", tags=["widget-content"])
+router = APIRouter(prefix="/ui/widgets", tags=["widget-content"])
 
 
 @router.get("/active-jobs/content", response_class=HTMLResponse)

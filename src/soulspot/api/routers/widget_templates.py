@@ -9,7 +9,7 @@ from soulspot.application.services.widget_template_registry import (
     get_widget_template_registry,
 )
 
-router = APIRouter(prefix="/api/widgets/templates", tags=["widget-templates"])
+router = APIRouter(prefix="/widgets/templates", tags=["widget-templates"])
 
 
 class WidgetTemplateResponse(BaseModel):

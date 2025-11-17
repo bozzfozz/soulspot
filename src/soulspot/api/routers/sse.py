@@ -16,7 +16,7 @@ from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ui/sse", tags=["sse"])
+router = APIRouter(prefix="/ui/sse", tags=["sse"])
 
 
 class SSEEvent:
