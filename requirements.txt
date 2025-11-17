@@ -22,12 +22,21 @@ passlib[bcrypt]>=1.7.4
 
 # Utilities
 python-dotenv>=1.0.0
+rapidfuzz>=3.14.0
+
+# Observability & Monitoring
+python-json-logger>=3.2.0
+
+# Audio & Image Processing
+mutagen>=1.47.0
+pillow>=11.0.0
 
 # Development dependencies
 pytest>=8.3.0
 pytest-asyncio>=0.24.0
 pytest-cov>=5.1.0
 pytest-mock>=3.14.0
+pytest-httpx>=0.35.0
 factory-boy>=3.3.0
 ruff>=0.7.0
 mypy>=1.13.0

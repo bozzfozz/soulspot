@@ -8,7 +8,7 @@ TRequest = TypeVar("TRequest")
 TResponse = TypeVar("TResponse")
 
 
-class UseCase(ABC, Generic[TRequest, TResponse]):
+class UseCase[TRequest, TResponse](ABC):
     """Base class for all use cases following command pattern."""
 
     @abstractmethod

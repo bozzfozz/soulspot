@@ -1,10 +1,12 @@
 """Tests for widget template system."""
 
-import pytest
 
-from soulspot.domain.entities.widget_template import WidgetTemplate, WidgetTemplateConfig
 from soulspot.application.services.widget_template_registry import (
     WidgetTemplateRegistry,
+)
+from soulspot.domain.entities.widget_template import (
+    WidgetTemplate,
+    WidgetTemplateConfig,
 )
 
 

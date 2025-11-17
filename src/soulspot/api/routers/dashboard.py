@@ -204,7 +204,6 @@ async def delete_widget_instance(
     if not instance:
         return HTMLResponse("", status_code=404)
 
-    page_id = instance.page_id
     await instance_repo.delete(instance_id)
     await session.commit()
 
