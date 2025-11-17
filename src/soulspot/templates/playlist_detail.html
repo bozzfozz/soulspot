@@ -109,11 +109,30 @@
         <div class="card-header">
             <h2 class="card-title">Tracks</h2>
             <div class="flex gap-2">
+                <button id="select-all-btn" 
+                        class="btn btn-sm btn-outline focus-ring"
+                        onclick="toggleSelectAll()"
+                        aria-label="Select all tracks">
+                    Select All
+                </button>
+                <button id="bulk-download-btn" 
+                        class="btn btn-sm btn-primary focus-ring hidden"
+                        onclick="bulkDownloadSelected()"
+                        aria-label="Download selected tracks">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Selected (<span id="selected-count">0</span>)
+                </button>
                 <button class="btn btn-sm btn-outline focus-ring"
-                        hx-post="/api/playlists/{{ playlist.id }}/download-missing"
-                        hx-confirm="Download all missing tracks?"
-                        aria-label="Download all missing tracks">
-                    Download Missing
+                        hx-get="/ui/playlists/{{ playlist.id }}/missing-tracks"
+                        hx-target="#missing-tracks-section"
+                        hx-swap="innerHTML"
+                        aria-label="View missing tracks">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                    Missing Tracks
                 </button>
             </div>
         </div>
@@ -123,6 +142,13 @@
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-50 dark:bg-gray-800">
                         <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                <input type="checkbox" 
+                                       id="select-all-checkbox"
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                       onclick="toggleSelectAll()"
+                                       aria-label="Select all tracks">
+                            </th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 #
                             </th>
@@ -146,9 +172,17 @@
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700" id="tracks-tbody">
                         {% for track in playlist.tracks %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors track-row" data-track-id="{{ track.id }}">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <input type="checkbox" 
+                                       class="track-checkbox rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                       data-track-id="{{ track.id }}"
+                                       data-status="{% if track.is_broken %}broken{% elif track.file_path %}downloaded{% else %}missing{% endif %}"
+                                       onchange="updateBulkActions()"
+                                       aria-label="Select track {{ track.title }}">
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 {{ loop.index }}
                             </td>
@@ -220,6 +254,103 @@
             {% endif %}
         </div>
     </div>
+
+    <!-- Missing Tracks Section -->
+    <div id="missing-tracks-section" class="mt-6"></div>
+
+    <script>
+    // Bulk selection functionality
+    function toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const trackCheckboxes = document.querySelectorAll('.track-checkbox');
+        const isChecked = selectAllCheckbox ? selectAllCheckbox.checked : 
+                         document.querySelectorAll('.track-checkbox:checked').length === 0;
+        
+        trackCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = isChecked;
+        }
+        
+        updateBulkActions();
+    }
+
+    function updateBulkActions() {
+        const checkedBoxes = document.querySelectorAll('.track-checkbox:checked');
+        const bulkDownloadBtn = document.getElementById('bulk-download-btn');
+        const selectedCount = document.getElementById('selected-count');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const allCheckboxes = document.querySelectorAll('.track-checkbox');
+        
+        if (selectedCount) {
+            selectedCount.textContent = checkedBoxes.length;
+        }
+        
+        if (bulkDownloadBtn) {
+            if (checkedBoxes.length > 0) {
+                bulkDownloadBtn.classList.remove('hidden');
+            } else {
+                bulkDownloadBtn.classList.add('hidden');
+            }
+        }
+        
+        // Update select all checkbox state
+        if (selectAllCheckbox && allCheckboxes.length > 0) {
+            selectAllCheckbox.checked = checkedBoxes.length === allCheckboxes.length;
+            selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkedBoxes.length < allCheckboxes.length;
+        }
+    }
+
+    function bulkDownloadSelected() {
+        const checkedBoxes = document.querySelectorAll('.track-checkbox:checked');
+        const trackIds = Array.from(checkedBoxes)
+            .filter(cb => cb.getAttribute('data-status') !== 'downloaded')
+            .map(cb => cb.getAttribute('data-track-id'));
+        
+        if (trackIds.length === 0) {
+            alert('No tracks to download. All selected tracks are already downloaded.');
+            return;
+        }
+        
+        if (confirm(`Download ${trackIds.length} track(s)?`)) {
+            // Queue downloads for selected tracks
+            trackIds.forEach(trackId => {
+                fetch(`/api/tracks/${trackId}/download`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        console.error(`Failed to queue download for track ${trackId}`);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error queuing download for track ${trackId}:`, error);
+                });
+            });
+            
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            successMsg.textContent = `Queued ${trackIds.length} track(s) for download`;
+            document.body.appendChild(successMsg);
+            setTimeout(() => successMsg.remove(), 3000);
+            
+            // Clear selections
+            document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = false);
+            updateBulkActions();
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateBulkActions();
+    });
+    </script>
 
     <!-- Export Modal Container -->
     <div id="export-modal"></div>

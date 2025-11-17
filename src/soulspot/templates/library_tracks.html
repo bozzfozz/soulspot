@@ -125,10 +125,11 @@
                                     </button>
                                     {% endif %}
                                     <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 focus-ring"
-                                            hx-get="/api/tracks/{{ track.id }}/metadata"
+                                            hx-get="/ui/tracks/{{ track.id }}/metadata-editor"
                                             hx-target="#metadata-modal"
-                                            aria-label="View metadata for {{ track.title }}">
-                                        Details
+                                            hx-swap="innerHTML"
+                                            aria-label="Edit metadata for {{ track.title }}">
+                                        Edit
                                     </button>
                                 </div>
                             </td>

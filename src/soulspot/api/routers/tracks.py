@@ -176,6 +176,70 @@ async def get_track(
     Returns:
         Track details
     """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.api.dependencies import get_db_session
+    from soulspot.infrastructure.persistence.models import TrackModel
+
+    try:
+        # Get session for direct DB query to include artist/album names
+        session: AsyncSession = await anext(get_db_session())
+
+        stmt = (
+            select(TrackModel)
+            .where(TrackModel.id == track_id)
+            .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+        )
+        result = await session.execute(stmt)
+        track_model = result.unique().scalar_one_or_none()
+
+        if not track_model:
+            raise HTTPException(status_code=404, detail="Track not found")
+
+        return {
+            "id": track_model.id,
+            "title": track_model.title,
+            "artist": track_model.artist.name if track_model.artist else None,
+            "album": track_model.album.title if track_model.album else None,
+            "album_artist": track_model.album.artist if track_model.album and hasattr(track_model.album, "artist") else None,
+            "genre": None,  # TODO: Add genre field to track model
+            "year": track_model.album.year if track_model.album and hasattr(track_model.album, "year") else None,
+            "artist_id": track_model.artist_id,
+            "album_id": track_model.album_id,
+            "duration_ms": track_model.duration_ms,
+            "track_number": track_model.track_number,
+            "disc_number": track_model.disc_number,
+            "spotify_uri": track_model.spotify_uri,
+            "musicbrainz_id": track_model.musicbrainz_id,
+            "isrc": track_model.isrc,
+            "file_path": track_model.file_path,
+            "created_at": track_model.created_at.isoformat(),
+            "updated_at": track_model.updated_at.isoformat(),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
+
+
+@router.patch("/{track_id}/metadata")
+async def update_track_metadata(
+    track_id: str,
+    metadata: dict[str, Any],
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> dict[str, Any]:
+    """Update track metadata.
+
+    Args:
+        track_id: Track ID
+        metadata: Dictionary of metadata fields to update
+        track_repository: Track repository
+
+    Returns:
+        Updated track details
+    """
     try:
         track_id_obj = TrackId.from_string(track_id)
         track = await track_repository.get_by_id(track_id_obj)
@@ -183,22 +247,71 @@ async def get_track(
         if not track:
             raise HTTPException(status_code=404, detail="Track not found")
 
+        # Update allowed metadata fields
+        allowed_fields = [
+            "title",
+            "artist",
+            "album",
+            "album_artist",
+            "genre",
+            "year",
+            "track_number",
+            "disc_number",
+        ]
+
+        for field in allowed_fields:
+            if field in metadata:
+                setattr(track, field, metadata[field])
+
+        # Save updated track
+        await track_repository.update(track)
+
+        # If file exists, update file metadata tags
+        if track.file_path and track.file_path.exists():
+            try:
+                # Import here to avoid circular dependencies
+                from mutagen.mp3 import MP3
+                from mutagen.id3 import ID3, TIT2, TPE1, TALB, TPE2, TCON, TDRC, TRCK, TPOS
+
+                audio = MP3(str(track.file_path), ID3=ID3)
+                
+                # Add ID3 tag if it doesn't exist
+                if audio.tags is None:
+                    audio.add_tags()
+
+                # Update tags
+                if "title" in metadata:
+                    audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
+                if "artist" in metadata:
+                    audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
+                if "album" in metadata:
+                    audio.tags.add(TALB(encoding=3, text=metadata["album"]))
+                if "album_artist" in metadata:
+                    audio.tags.add(TPE2(encoding=3, text=metadata["album_artist"]))
+                if "genre" in metadata:
+                    audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
+                if "year" in metadata:
+                    audio.tags.add(TDRC(encoding=3, text=str(metadata["year"])))
+                if "track_number" in metadata:
+                    audio.tags.add(TRCK(encoding=3, text=str(metadata["track_number"])))
+                if "disc_number" in metadata:
+                    audio.tags.add(TPOS(encoding=3, text=str(metadata["disc_number"])))
+
+                audio.save()
+            except Exception as e:
+                # Log error but don't fail the request
+                print(f"Warning: Failed to update file tags: {e}")
+
         return {
-            "id": str(track.id.value),
-            "title": track.title,
-            "artist_id": str(track.artist_id.value),
-            "album_id": str(track.album_id.value) if track.album_id else None,
-            "duration_ms": track.duration_ms,
-            "track_number": track.track_number,
-            "disc_number": track.disc_number,
-            "spotify_uri": str(track.spotify_uri) if track.spotify_uri else None,
-            "musicbrainz_id": track.musicbrainz_id,
-            "isrc": track.isrc,
-            "file_path": str(track.file_path) if track.file_path else None,
-            "created_at": track.created_at.isoformat(),
-            "updated_at": track.updated_at.isoformat(),
+            "message": "Metadata updated successfully",
+            "track_id": track_id,
+            "updated_fields": list(metadata.keys()),
         }
     except ValueError as e:
         raise HTTPException(
             status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update metadata: {str(e)}"
         ) from e

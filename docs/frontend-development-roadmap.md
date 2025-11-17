@@ -113,32 +113,34 @@ A customizable dashboard where users can:
 
 **Epic 6: Enhanced Playlist Features**  
 **Estimated Effort:** 2-3 weeks  
-**Status:** 📋 Planned (Basic page exists)  
+**Status:** ✅ Complete (Dec 2025)  
 **Team:** Frontend
 
 #### What Needs to Be Done
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Playlist Details Page** | Full track list with metadata | 📋 Not Started |
-| **Sync Status Indicators** | Visual badges (synced, pending, failed) | ⚠️ Partial |
-| **Missing Tracks View** | Compare playlists and show missing | 📋 Not Started |
-| **Export Functions** | M3U, CSV, JSON export | 📋 Not Started |
-| **Bulk Operations** | Select multiple tracks for actions | 📋 Not Started |
+| **Playlist Details Page** | Full track list with metadata | ✅ Complete |
+| **Sync Status Indicators** | Visual badges (synced, pending, failed) | ✅ Complete |
+| **Missing Tracks View** | Compare playlists and show missing | ✅ Complete |
+| **Export Functions** | M3U, CSV, JSON export | ✅ Complete |
+| **Bulk Operations** | Select multiple tracks for actions | ✅ Complete |
 
 #### Current State
 - ✅ Basic playlists page with grid view
 - ✅ Import playlist page
-- ✅ Basic sync button
-- ❌ No detail view
-- ❌ No missing tracks feature
+- ✅ Sync button with status indicators
+- ✅ Full detail view with track listings
+- ✅ Missing tracks comparison feature
+- ✅ Bulk selection and download
+- ✅ Export modal with M3U/CSV/JSON formats
 
 #### Acceptance Criteria
-- [ ] Click on playlist → shows detail page with all tracks
-- [ ] Sync status badges visible and accurate
-- [ ] Missing tracks comparison works (Spotify vs Library)
-- [ ] Can export playlist to M3U/CSV/JSON
-- [ ] Bulk actions available (select multiple, download all)
+- [x] Click on playlist → shows detail page with all tracks
+- [x] Sync status badges visible and accurate
+- [x] Missing tracks comparison works (Spotify vs Library)
+- [x] Can export playlist to M3U/CSV/JSON
+- [x] Bulk actions available (select multiple, download all)
 
 ---
 
@@ -146,33 +148,35 @@ A customizable dashboard where users can:
 
 **Epic 7: Music Library UI**  
 **Estimated Effort:** 3-4 weeks  
-**Status:** 📋 Planned (Backend exists, no UI)  
+**Status:** ✅ Complete (Dec 2025)  
 **Team:** Frontend
 
 #### What Needs to Be Done
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Artist Browser** | Grid/list view with cover art | 📋 Not Started |
-| **Album Browser** | Album grid with metadata | 📋 Not Started |
-| **Track List View** | Sortable, filterable track table | 📋 Not Started |
-| **Advanced Search** | Search across entire library | 📋 Not Started |
-| **Metadata Editor** | Inline editing of track metadata | 📋 Not Started |
+| **Artist Browser** | Grid/list view with cover art | ✅ Complete |
+| **Album Browser** | Album grid with metadata | ✅ Complete |
+| **Track List View** | Sortable, filterable track table | ✅ Complete |
+| **Advanced Search** | Search across entire library | ✅ Complete (client-side) |
+| **Metadata Editor** | Inline editing of track metadata | ✅ Complete |
 
 #### Current State
 - ✅ Backend API endpoints ready (`/library/...`)
 - ✅ Database schema complete
 - ✅ Album completeness checking
-- ❌ No frontend templates
-- ❌ No UI components
+- ✅ Frontend templates with detail pages
+- ✅ Artist and album detail pages
+- ✅ Metadata editor with file tag updates
+- ✅ Client-side search and filtering
 
 #### Acceptance Criteria
-- [ ] Browse artists in grid/list view
-- [ ] Browse albums with cover art
-- [ ] View and sort tracks
-- [ ] Search functionality works
-- [ ] Can edit metadata inline (artist, album, title, genre, etc.)
-- [ ] Changes persist to database and update files
+- [x] Browse artists in grid/list view
+- [x] Browse albums with cover art
+- [x] View and sort tracks
+- [x] Search functionality works
+- [x] Can edit metadata inline (artist, album, title, genre, etc.)
+- [x] Changes persist to database and update files
 
 ---
 

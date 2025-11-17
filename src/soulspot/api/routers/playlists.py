@@ -319,3 +319,76 @@ async def export_playlist_json(
         raise HTTPException(
             status_code=400, detail=f"Invalid playlist ID: {str(e)}"
         ) from e
+
+
+@router.get("/{playlist_id}/missing-tracks")
+async def get_missing_tracks(
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> dict[str, Any]:
+    """Get tracks that are in the playlist but not downloaded to the library.
+
+    Args:
+        playlist_id: Playlist ID
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+
+    Returns:
+        List of missing tracks
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.api.dependencies import get_db_session
+    from soulspot.infrastructure.persistence.models import TrackModel
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Get session for direct DB query
+        session: AsyncSession = await anext(get_db_session())
+
+        # Find tracks without file_path
+        missing_tracks = []
+        for track_id in playlist.track_ids:
+            stmt = (
+                select(TrackModel)
+                .where(TrackModel.id == str(track_id.value))
+                .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+            )
+            result = await session.execute(stmt)
+            track_model = result.unique().scalar_one_or_none()
+
+            if track_model and not track_model.file_path:
+                missing_tracks.append(
+                    {
+                        "id": track_model.id,
+                        "title": track_model.title,
+                        "artist": track_model.artist.name
+                        if track_model.artist
+                        else "Unknown Artist",
+                        "album": track_model.album.title
+                        if track_model.album
+                        else "Unknown Album",
+                        "duration_ms": track_model.duration_ms,
+                        "spotify_uri": track_model.spotify_uri,
+                    }
+                )
+
+        return {
+            "playlist_id": str(playlist.id.value),
+            "playlist_name": playlist.name,
+            "missing_tracks": missing_tracks,
+            "missing_count": len(missing_tracks),
+            "total_tracks": len(playlist.track_ids),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
