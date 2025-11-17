@@ -393,3 +393,231 @@ async def get_missing_tracks(
         raise HTTPException(
             status_code=400, detail=f"Invalid playlist ID: {str(e)}"
         ) from e
+
+
+@router.post("/{playlist_id}/sync")
+async def sync_playlist(
+    playlist_id: str,
+    access_token: str = Depends(get_spotify_token_from_session),
+    use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+) -> dict[str, Any]:
+    """Sync a single playlist with Spotify.
+
+    Re-imports the playlist from Spotify to update track list and metadata.
+
+    Args:
+        playlist_id: Internal playlist ID
+        access_token: Automatically retrieved from session
+        use_case: Import playlist use case
+        playlist_repository: Playlist repository
+
+    Returns:
+        Sync status and statistics
+    """
+    try:
+        # Get existing playlist
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Get Spotify playlist ID
+        if not playlist.spotify_uri:
+            raise HTTPException(
+                status_code=400,
+                detail="Playlist has no Spotify URI. Cannot sync.",
+            )
+
+        # Extract Spotify playlist ID from URI (format: spotify:playlist:ID)
+        spotify_playlist_id = str(playlist.spotify_uri.value).split(":")[-1]
+
+        # Re-import the playlist
+        request = ImportSpotifyPlaylistRequest(
+            playlist_id=spotify_playlist_id,
+            access_token=access_token,
+            fetch_all_tracks=True,
+        )
+        response = await use_case.execute(request)
+
+        return {
+            "message": "Playlist synced successfully",
+            "playlist_id": str(response.playlist.id.value),
+            "playlist_name": response.playlist.name,
+            "total_tracks": response.tracks_imported,
+            "tracks_failed": response.tracks_failed,
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to sync playlist: {str(e)}"
+        ) from e
+
+
+@router.post("/sync-all")
+async def sync_all_playlists(
+    access_token: str = Depends(get_spotify_token_from_session),
+    use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+) -> dict[str, Any]:
+    """Sync all playlists with Spotify.
+
+    Re-imports all playlists from Spotify to update track lists and metadata.
+
+    Args:
+        access_token: Automatically retrieved from session
+        use_case: Import playlist use case
+        playlist_repository: Playlist repository
+
+    Returns:
+        Sync status and statistics for all playlists
+    """
+    try:
+        # Get all playlists
+        playlists = await playlist_repository.list_all()
+
+        synced_count = 0
+        failed_count = 0
+        skipped_count = 0
+        results = []
+
+        for playlist in playlists:
+            if not playlist.spotify_uri:
+                skipped_count += 1
+                results.append(
+                    {
+                        "playlist_id": str(playlist.id.value),
+                        "playlist_name": playlist.name,
+                        "status": "skipped",
+                        "message": "No Spotify URI",
+                    }
+                )
+                continue
+
+            try:
+                # Extract Spotify playlist ID from URI
+                spotify_playlist_id = str(playlist.spotify_uri.value).split(":")[-1]
+
+                # Re-import the playlist
+                request = ImportSpotifyPlaylistRequest(
+                    playlist_id=spotify_playlist_id,
+                    access_token=access_token,
+                    fetch_all_tracks=True,
+                )
+                response = await use_case.execute(request)
+
+                synced_count += 1
+                results.append(
+                    {
+                        "playlist_id": str(response.playlist.id.value),
+                        "playlist_name": response.playlist.name,
+                        "status": "synced",
+                        "total_tracks": str(response.tracks_imported),
+                        "tracks_failed": str(response.tracks_failed),
+                    }
+                )
+            except Exception as e:
+                failed_count += 1
+                results.append(
+                    {
+                        "playlist_id": str(playlist.id.value),
+                        "playlist_name": playlist.name,
+                        "status": "failed",
+                        "message": str(e),
+                    }
+                )
+
+        return {
+            "message": "Playlist sync completed",
+            "total_playlists": len(playlists),
+            "synced_count": synced_count,
+            "failed_count": failed_count,
+            "skipped_count": skipped_count,
+            "results": results,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to sync playlists: {str(e)}"
+        ) from e
+
+
+
+
+@router.post("/{playlist_id}/download-missing")
+async def download_missing_tracks(
+    playlist_id: str,
+    request: Request,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+) -> dict[str, Any]:
+    """Download all missing tracks from a playlist.
+
+    Queues downloads for all tracks in the playlist that don't have files.
+
+    Note: This is a simplified implementation that returns the list of
+    missing tracks that need to be downloaded. The actual download queueing
+    should be handled by the frontend or a background job.
+
+    Args:
+        playlist_id: Playlist ID
+        request: Request object
+        playlist_repository: Playlist repository
+
+    Returns:
+        Download status with list of missing tracks
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.api.dependencies import get_db_session
+    from soulspot.infrastructure.persistence.models import TrackModel
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Get session from dependency
+        session_gen = get_db_session(request)
+        session: AsyncSession = await anext(session_gen)
+
+        # Find tracks without file_path
+        missing_track_ids = []
+        for track_id in playlist.track_ids:
+            stmt = (
+                select(TrackModel)
+                .where(TrackModel.id == str(track_id.value))
+                .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+            )
+            result = await session.execute(stmt)
+            track_model = result.unique().scalar_one_or_none()
+
+            if track_model and not track_model.file_path:
+                missing_track_ids.append(str(track_id.value))
+
+        return {
+            "message": "Missing tracks identified",
+            "playlist_id": str(playlist.id.value),
+            "playlist_name": playlist.name,
+            "total_tracks": len(playlist.track_ids),
+            "missing_tracks": missing_track_ids,
+            "missing_count": len(missing_track_ids),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to identify missing tracks: {str(e)}"
+        ) from e

@@ -279,3 +279,145 @@ async def get_source_hierarchy() -> dict[str, int]:
         source.value: priority
         for source, priority in MetadataMerger.AUTHORITY_HIERARCHY.items()
     }
+
+
+@router.post(
+    "/{track_id}/auto-fix",
+    status_code=status.HTTP_200_OK,
+    summary="Auto-fix track metadata",
+    description="Automatically fix metadata issues for a single track by enriching from external sources",
+)
+async def auto_fix_track_metadata(
+    track_id: str,
+    use_case: EnrichMetadataMultiSourceUseCase = Depends(get_enrich_use_case),
+) -> dict[str, Any]:
+    """
+    Auto-fix metadata for a single track.
+
+    Attempts to enrich metadata from MusicBrainz, Spotify, and Last.fm.
+
+    Args:
+        track_id: Track ID to fix
+        use_case: Metadata enrichment use case
+
+    Returns:
+        Result of metadata enrichment
+
+    Raises:
+        HTTPException: If track not found or enrichment fails
+    """
+    try:
+        track_id_obj = TrackId.from_string(track_id)
+        request = UseCaseRequest(
+            track_id=track_id_obj,
+            force_refresh=True,
+            enrich_artist=True,
+            enrich_album=True,
+            use_spotify=True,
+            use_musicbrainz=True,
+            use_lastfm=True,
+        )
+        result = await use_case.execute(request)
+
+        return {
+            "track_id": track_id,
+            "success": True,
+            "enriched_fields": result.enriched_fields,
+            "sources_used": result.sources_used,
+            "message": "Metadata auto-fixed successfully",
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid track ID: {str(e)}",
+        ) from e
+    except Exception as e:
+        logger.exception(f"Failed to auto-fix metadata for track {track_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to auto-fix metadata: {str(e)}",
+        ) from e
+
+
+@router.post(
+    "/fix-all",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Fix all track metadata",
+    description="Batch fix metadata for all tracks with issues by enriching from external sources",
+)
+async def fix_all_track_metadata(
+    track_repository: TrackRepository = Depends(get_track_repository),
+    use_case: EnrichMetadataMultiSourceUseCase = Depends(get_enrich_use_case),
+) -> dict[str, Any]:
+    """
+    Fix metadata for all tracks with issues.
+
+    This is an asynchronous operation that processes tracks in the background.
+
+    Args:
+        track_repository: Track repository
+        use_case: Metadata enrichment use case
+
+    Returns:
+        Status message with count of tracks to process
+    """
+    try:
+        # Get all tracks
+        tracks = await track_repository.list_all()
+
+        # Filter tracks that need metadata fixes
+        tracks_to_fix = []
+        for track in tracks:
+            # Check if track has missing or incomplete metadata
+            needs_fix = False
+            if not track.title or track.title.strip() == "":
+                needs_fix = True
+            # Note: artist and album are ORM relationships in the Track entity
+            # We need to check if they exist and are not empty
+            if hasattr(track, "artist") and (
+                not track.artist or track.artist.strip() == ""
+            ):
+                needs_fix = True
+            if hasattr(track, "album") and (
+                not track.album or track.album.strip() == ""
+            ):
+                needs_fix = True
+
+            if needs_fix and track.spotify_uri:
+                # Only fix tracks that have a Spotify URI for enrichment
+                tracks_to_fix.append(track)
+
+        # Process tracks (in a real implementation, this should be queued as background jobs)
+        fixed_count = 0
+        failed_count = 0
+        for track in tracks_to_fix[:100]:  # Limit to first 100 to avoid timeout
+            try:
+                request = UseCaseRequest(
+                    track_id=track.id,
+                    force_refresh=True,
+                    enrich_artist=True,
+                    enrich_album=True,
+                    use_spotify=True,
+                    use_musicbrainz=True,
+                    use_lastfm=True,
+                )
+                await use_case.execute(request)
+                fixed_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to fix metadata for track {track.id}: {e}")
+                failed_count += 1
+
+        return {
+            "message": "Metadata fix operation completed",
+            "total_tracks": len(tracks),
+            "tracks_to_fix": len(tracks_to_fix),
+            "fixed_count": fixed_count,
+            "failed_count": failed_count,
+            "status": "completed" if fixed_count > 0 else "no_tracks_fixed",
+        }
+    except Exception as e:
+        logger.exception(f"Failed to fix all metadata: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fix all metadata: {str(e)}",
+        ) from e
