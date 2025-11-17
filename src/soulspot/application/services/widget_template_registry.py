@@ -2,9 +2,11 @@
 
 import logging
 from pathlib import Path
-from typing import Any
 
-from soulspot.domain.entities.widget_template import WidgetTemplate, WidgetTemplateConfig
+from soulspot.domain.entities.widget_template import (
+    WidgetTemplate,
+    WidgetTemplateConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +16,13 @@ class WidgetTemplateRegistry:
 
     def __init__(self, template_dir: Path | None = None):
         """Initialize widget template registry.
-        
+
         Args:
             template_dir: Directory containing widget template files
         """
         self.templates: dict[str, WidgetTemplate] = {}
         self.template_dir = template_dir or Path("src/soulspot/templates/widget_templates")
-        
+
         # Initialize with built-in system widgets
         self._register_system_widgets()
 
@@ -233,22 +235,22 @@ class WidgetTemplateRegistry:
 
     def register(self, template: WidgetTemplate) -> None:
         """Register a widget template.
-        
+
         Args:
             template: Widget template to register
         """
         if template.id in self.templates:
             logger.warning(f"Overwriting existing template: {template.id}")
-        
+
         self.templates[template.id] = template
         logger.debug(f"Registered widget template: {template.id} ({template.config.name})")
 
     def unregister(self, template_id: str) -> bool:
         """Unregister a widget template.
-        
+
         Args:
             template_id: ID of template to unregister
-            
+
         Returns:
             True if unregistered, False if not found
         """
@@ -257,7 +259,7 @@ class WidgetTemplateRegistry:
             if self.templates[template_id].is_system:
                 logger.warning(f"Cannot unregister system widget: {template_id}")
                 return False
-                
+
             del self.templates[template_id]
             logger.info(f"Unregistered widget template: {template_id}")
             return True
@@ -265,10 +267,10 @@ class WidgetTemplateRegistry:
 
     def get(self, template_id: str) -> WidgetTemplate | None:
         """Get a widget template by ID.
-        
+
         Args:
             template_id: Template ID
-            
+
         Returns:
             Widget template or None if not found
         """
@@ -276,26 +278,26 @@ class WidgetTemplateRegistry:
 
     def get_all(self, enabled_only: bool = False) -> list[WidgetTemplate]:
         """Get all registered templates.
-        
+
         Args:
             enabled_only: If True, only return enabled templates
-            
+
         Returns:
             List of widget templates
         """
         templates = list(self.templates.values())
-        
+
         if enabled_only:
             templates = [t for t in templates if t.is_enabled]
-            
+
         return templates
 
     def get_by_category(self, category: str) -> list[WidgetTemplate]:
         """Get templates by category.
-        
+
         Args:
             category: Category name
-            
+
         Returns:
             List of matching templates
         """
@@ -311,20 +313,20 @@ class WidgetTemplateRegistry:
         tags: list[str] | None = None,
     ) -> list[WidgetTemplate]:
         """Search for templates.
-        
+
         Args:
             query: Search query (matches name and description)
             category: Filter by category
             tags: Filter by tags (any match)
-            
+
         Returns:
             List of matching templates
         """
         results = list(self.templates.values())
-        
+
         # Filter by enabled status
         results = [t for t in results if t.is_enabled]
-        
+
         # Filter by query
         if query:
             query_lower = query.lower()
@@ -333,30 +335,30 @@ class WidgetTemplateRegistry:
                 if query_lower in t.config.name.lower()
                 or query_lower in t.config.description.lower()
             ]
-        
+
         # Filter by category
         if category:
             results = [t for t in results if t.config.category == category]
-        
+
         # Filter by tags
         if tags:
             results = [
                 t for t in results
                 if any(tag in t.config.tags for tag in tags)
             ]
-        
+
         return results
 
     def discover_templates(self) -> int:
         """Discover and load custom templates from template directory.
-        
+
         Returns:
             Number of templates discovered
         """
         if not self.template_dir.exists():
             logger.warning(f"Template directory not found: {self.template_dir}")
             return 0
-        
+
         count = 0
         for template_file in self.template_dir.glob("*.json"):
             try:
@@ -365,7 +367,7 @@ class WidgetTemplateRegistry:
                 count += 1
             except Exception as e:
                 logger.error(f"Error loading template {template_file}: {e}")
-        
+
         logger.info(f"Discovered {count} custom widget templates")
         return count
 
@@ -376,7 +378,7 @@ _registry: WidgetTemplateRegistry | None = None
 
 def get_widget_template_registry() -> WidgetTemplateRegistry:
     """Get the global widget template registry.
-    
+
     Returns:
         WidgetTemplateRegistry instance
     """

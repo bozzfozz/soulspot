@@ -270,11 +270,21 @@ async def update_track_metadata(
         if track.file_path and track.file_path.exists():
             try:
                 # Import here to avoid circular dependencies
+                from mutagen.id3 import (
+                    ID3,
+                    TALB,
+                    TCON,
+                    TDRC,
+                    TIT2,
+                    TPE1,
+                    TPE2,
+                    TPOS,
+                    TRCK,
+                )
                 from mutagen.mp3 import MP3
-                from mutagen.id3 import ID3, TIT2, TPE1, TALB, TPE2, TCON, TDRC, TRCK, TPOS
 
                 audio = MP3(str(track.file_path), ID3=ID3)
-                
+
                 # Add ID3 tag if it doesn't exist
                 if audio.tags is None:
                     audio.add_tags()

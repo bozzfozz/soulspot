@@ -11,7 +11,7 @@ import asyncio
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -43,7 +43,7 @@ class CacheMetrics:
 
 
 @dataclass
-class LRUCacheEntry(Generic[V]):
+class LRUCacheEntry[V]:
     """Cache entry with value and metadata for LRU cache."""
 
     value: V
@@ -62,7 +62,7 @@ class LRUCacheEntry(Generic[V]):
         self.last_accessed = time.time()
 
 
-class LRUCache(Generic[K, V]):
+class LRUCache[K, V]:
     """LRU (Least Recently Used) cache implementation with metrics.
 
     This cache automatically evicts the least recently used items when
@@ -249,7 +249,7 @@ class LRUCache(Generic[K, V]):
         }
 
 
-class CacheWarmer(Generic[K, V]):
+class CacheWarmer[K, V]:
     """Utility for pre-warming caches with hot path data.
 
     This class helps populate caches proactively during application startup

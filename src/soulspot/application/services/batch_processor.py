@@ -13,14 +13,14 @@ Key features:
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
 @dataclass
-class BatchResult(Generic[R]):
+class BatchResult[R]:
     """Result of a batch operation.
 
     Attributes:
@@ -57,7 +57,7 @@ class BatchResult(Generic[R]):
         return (self.success_count / self.total_items) * 100
 
 
-class BatchProcessor(Generic[T, R]):
+class BatchProcessor[T, R]:
     """Generic batch processor for API operations.
 
     This class accumulates items and processes them in batches to reduce

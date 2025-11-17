@@ -1,6 +1,6 @@
 """Pagination schemas for API responses."""
 
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -26,7 +26,7 @@ class PaginationParams(BaseModel):
         return self.page_size
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Generic paginated response model."""
 
     items: list[T] = Field(description="List of items for current page")

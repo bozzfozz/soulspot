@@ -4,14 +4,14 @@ import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 K = TypeVar("K")  # Key type
 V = TypeVar("V")  # Value type
 
 
 @dataclass
-class CacheEntry(Generic[V]):
+class CacheEntry[V]:
     """Cache entry with value and metadata."""
 
     value: V
@@ -23,7 +23,7 @@ class CacheEntry(Generic[V]):
         return time.time() > (self.created_at + self.ttl_seconds)
 
 
-class BaseCache(ABC, Generic[K, V]):
+class BaseCache[K, V](ABC):
     """Base cache interface for all cache implementations."""
 
     @abstractmethod

@@ -3,14 +3,13 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from soulspot.application.services.widget_template_registry import (
     get_widget_template_registry,
 )
-from soulspot.domain.entities.widget_template import WidgetTemplateConfig
 
-router = APIRouter(prefix="/api/widgets/templates", tags=["widget-templates"])
+router = APIRouter(prefix="/widgets/templates", tags=["widget-templates"])
 
 
 class WidgetTemplateResponse(BaseModel):
@@ -55,16 +54,16 @@ async def list_widget_templates(
     enabled_only: bool = False,
 ) -> list[WidgetTemplateResponse]:
     """List all available widget templates.
-    
+
     Args:
         enabled_only: If True, only return enabled templates
-        
+
     Returns:
         List of widget templates
     """
     registry = get_widget_template_registry()
     templates = registry.get_all(enabled_only=enabled_only)
-    
+
     return [
         WidgetTemplateResponse(
             id=t.id,
@@ -99,25 +98,25 @@ async def list_widget_templates(
 @router.get("/{template_id}", response_model=WidgetTemplateResponse)
 async def get_widget_template(template_id: str) -> WidgetTemplateResponse:
     """Get a specific widget template by ID.
-    
+
     Args:
         template_id: Template ID
-        
+
     Returns:
         Widget template
-        
+
     Raises:
         HTTPException: If template not found
     """
     registry = get_widget_template_registry()
     template = registry.get(template_id)
-    
+
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Widget template not found: {template_id}",
         )
-    
+
     return WidgetTemplateResponse(
         id=template.id,
         type=template.type,
@@ -149,16 +148,16 @@ async def get_widget_template(template_id: str) -> WidgetTemplateResponse:
 @router.get("/category/{category}", response_model=list[WidgetTemplateResponse])
 async def get_templates_by_category(category: str) -> list[WidgetTemplateResponse]:
     """Get widget templates by category.
-    
+
     Args:
         category: Category name
-        
+
     Returns:
         List of matching templates
     """
     registry = get_widget_template_registry()
     templates = registry.get_by_category(category)
-    
+
     return [
         WidgetTemplateResponse(
             id=t.id,
@@ -195,10 +194,10 @@ async def search_widget_templates(
     request: WidgetTemplateSearchRequest,
 ) -> list[WidgetTemplateResponse]:
     """Search for widget templates.
-    
+
     Args:
         request: Search parameters
-        
+
     Returns:
         List of matching templates
     """
@@ -208,7 +207,7 @@ async def search_widget_templates(
         category=request.category,
         tags=request.tags,
     )
-    
+
     return [
         WidgetTemplateResponse(
             id=t.id,
@@ -243,13 +242,13 @@ async def search_widget_templates(
 @router.post("/discover")
 async def discover_widget_templates() -> dict[str, Any]:
     """Discover and load custom widget templates.
-    
+
     Returns:
         Discovery result with count of templates found
     """
     registry = get_widget_template_registry()
     count = registry.discover_templates()
-    
+
     return {
         "message": f"Discovered {count} widget templates",
         "count": count,
@@ -259,31 +258,31 @@ async def discover_widget_templates() -> dict[str, Any]:
 @router.get("/categories/list")
 async def list_categories() -> dict[str, list[str]]:
     """List all available widget categories.
-    
+
     Returns:
         Dictionary with list of categories
     """
     registry = get_widget_template_registry()
     templates = registry.get_all(enabled_only=True)
-    
-    categories = sorted(set(t.config.category for t in templates))
-    
+
+    categories = sorted({t.config.category for t in templates})
+
     return {"categories": categories}
 
 
 @router.get("/tags/list")
 async def list_tags() -> dict[str, list[str]]:
     """List all available widget tags.
-    
+
     Returns:
         Dictionary with list of tags
     """
     registry = get_widget_template_registry()
     templates = registry.get_all(enabled_only=True)
-    
+
     # Collect all tags
     all_tags = set()
     for template in templates:
         all_tags.update(template.config.tags)
-    
+
     return {"tags": sorted(all_tags)}

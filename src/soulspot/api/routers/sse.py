@@ -3,8 +3,9 @@
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -15,7 +16,7 @@ from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/ui/sse", tags=["sse"])
+router = APIRouter(prefix="/ui/sse", tags=["sse"])
 
 
 class SSEEvent:
