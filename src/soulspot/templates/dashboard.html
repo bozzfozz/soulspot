@@ -62,9 +62,20 @@
           {# Page Switcher Toggle #}
           <button class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   onclick="togglePageSwitcher()"
-                  aria-label="Toggle page switcher">
+                  aria-label="Toggle page switcher"
+                  title="Toggle page switcher (Ctrl+P)">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          {# Keyboard Shortcuts Help #}
+          <button class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                  onclick="toggleKeyboardShortcuts()"
+                  aria-label="Show keyboard shortcuts"
+                  title="Keyboard shortcuts (Ctrl+?)">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
         </div>
@@ -134,6 +145,96 @@
 {# Modal Container (for catalog, config, page management) #}
 <div id="modal-container"></div>
 
+{# Keyboard Shortcuts Help Modal #}
+<div id="keyboard-shortcuts-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+    <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Keyboard Shortcuts</h2>
+      <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              onclick="toggleKeyboardShortcuts()"
+              aria-label="Close">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    
+    <div class="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Dashboard Actions</h3>
+          <dl class="space-y-2">
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Toggle edit mode</dt>
+              <dd class="flex gap-1">
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Ctrl</kbd>
+                <span class="text-gray-500">+</span>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">E</kbd>
+              </dd>
+            </div>
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Add widget (edit mode)</dt>
+              <dd class="flex gap-1">
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Ctrl</kbd>
+                <span class="text-gray-500">+</span>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">A</kbd>
+              </dd>
+            </div>
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Toggle page switcher</dt>
+              <dd class="flex gap-1">
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Ctrl</kbd>
+                <span class="text-gray-500">+</span>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">P</kbd>
+              </dd>
+            </div>
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Close modal</dt>
+              <dd>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Esc</kbd>
+              </dd>
+            </div>
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Show keyboard shortcuts</dt>
+              <dd class="flex gap-1">
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Ctrl</kbd>
+                <span class="text-gray-500">+</span>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">?</kbd>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Widget Controls (Edit Mode)</h3>
+          <dl class="space-y-2">
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Navigate between controls</dt>
+              <dd>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Tab</kbd>
+              </dd>
+            </div>
+            <div class="flex justify-between items-center">
+              <dt class="text-gray-700 dark:text-gray-300">Activate control</dt>
+              <dd class="flex gap-1">
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Enter</kbd>
+                <span class="text-gray-500">or</span>
+                <kbd class="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-mono">Space</kbd>
+              </dd>
+            </div>
+          </dl>
+        </div>
+        
+        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <p class="text-sm text-blue-900 dark:text-blue-100">
+            <strong>Tip:</strong> All widget controls are fully keyboard accessible. Use Tab to navigate and Enter/Space to activate.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -156,13 +257,109 @@
       const isEditMode = event.detail.target.classList.contains('edit-mode-active');
       console.log('Edit mode:', isEditMode);
     }
+    
+    // Focus management after widget canvas updates
+    if (event.detail.target.id === 'widget-canvas') {
+      // Set focus to first focusable element in canvas after swap
+      const firstFocusable = event.detail.target.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (firstFocusable) {
+        setTimeout(() => firstFocusable.focus(), 100);
+      }
+    }
+    
+    // Close modal after successful config save
+    if (event.detail.target.id === 'config-result' && event.detail.xhr.status === 200) {
+      setTimeout(() => {
+        document.getElementById('modal-container').innerHTML = '';
+      }, 1500);
+    }
   });
   
   document.body.addEventListener('htmx:responseError', function(event) {
     // Show error toast
+    console.error('HTMX Error:', event.detail);
     if (window.ToastManager) {
       ToastManager.error('Failed to load content. Please try again.');
     }
   });
+  
+  // Keyboard shortcuts for dashboard
+  document.addEventListener('keydown', function(event) {
+    // Ctrl/Cmd + E: Toggle edit mode
+    if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+      event.preventDefault();
+      document.getElementById('edit-mode-toggle')?.click();
+    }
+    
+    // Ctrl/Cmd + A: Add widget (when in edit mode)
+    if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
+      const editToggle = document.getElementById('edit-mode-toggle');
+      if (editToggle && editToggle.classList.contains('bg-blue-600')) {
+        event.preventDefault();
+        const addWidgetBtn = document.querySelector('button[hx-get="/api/ui/widgets/catalog"]');
+        addWidgetBtn?.click();
+      }
+    }
+    
+    // Ctrl/Cmd + P: Toggle page switcher
+    if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
+      event.preventDefault();
+      togglePageSwitcher();
+    }
+    
+    // Ctrl/Cmd + ?: Show keyboard shortcuts
+    if ((event.ctrlKey || event.metaKey) && event.key === '?') {
+      event.preventDefault();
+      toggleKeyboardShortcuts();
+    }
+    
+    // Escape: Close modal
+    if (event.key === 'Escape') {
+      const modalContainer = document.getElementById('modal-container');
+      if (modalContainer && modalContainer.innerHTML.trim() !== '') {
+        modalContainer.innerHTML = '';
+        return;
+      }
+      
+      const shortcutsModal = document.getElementById('keyboard-shortcuts-modal');
+      if (shortcutsModal && !shortcutsModal.classList.contains('hidden')) {
+        toggleKeyboardShortcuts();
+      }
+    }
+  });
+  
+  // Toggle keyboard shortcuts modal
+  function toggleKeyboardShortcuts() {
+    const modal = document.getElementById('keyboard-shortcuts-modal');
+    modal.classList.toggle('hidden');
+    if (!modal.classList.contains('hidden')) {
+      // Focus the close button when opening
+      setTimeout(() => {
+        modal.querySelector('button')?.focus();
+      }, 100);
+    }
+  }
+  
+  // Announce dynamic updates to screen readers
+  function announceToScreenReader(message) {
+    const announcer = document.getElementById('sr-announcer');
+    if (announcer) {
+      announcer.textContent = message;
+    }
+  }
+  
+  // Listen for widget additions/removals
+  document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.pathInfo.path.includes('/widgets/instances')) {
+      if (event.detail.requestConfig.verb === 'post') {
+        announceToScreenReader('Widget added to dashboard');
+      } else if (event.detail.requestConfig.verb === 'delete') {
+        announceToScreenReader('Widget removed from dashboard');
+      }
+    }
+  });
 </script>
+
+{# Screen reader announcements #}
+<div id="sr-announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 {% endblock %}
