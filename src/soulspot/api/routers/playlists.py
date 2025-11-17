@@ -319,3 +319,57 @@ async def export_playlist_json(
         raise HTTPException(
             status_code=400, detail=f"Invalid playlist ID: {str(e)}"
         ) from e
+
+
+@router.get("/{playlist_id}/missing-tracks")
+async def get_missing_tracks(
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> dict[str, Any]:
+    """Get tracks that are in the playlist but not downloaded to the library.
+
+    Args:
+        playlist_id: Playlist ID
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+
+    Returns:
+        List of missing tracks
+    """
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Find tracks without file_path
+        missing_tracks = []
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track and not track.file_path:
+                missing_tracks.append(
+                    {
+                        "id": str(track.id.value),
+                        "title": track.title,
+                        "artist": track.artist,
+                        "album": track.album,
+                        "duration_ms": track.duration_ms,
+                        "spotify_uri": str(track.spotify_uri)
+                        if track.spotify_uri
+                        else None,
+                    }
+                )
+
+        return {
+            "playlist_id": str(playlist.id.value),
+            "playlist_name": playlist.name,
+            "missing_tracks": missing_tracks,
+            "missing_count": len(missing_tracks),
+            "total_tracks": len(playlist.track_ids),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
+        ) from e

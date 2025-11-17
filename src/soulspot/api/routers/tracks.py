@@ -186,6 +186,11 @@ async def get_track(
         return {
             "id": str(track.id.value),
             "title": track.title,
+            "artist": track.artist,
+            "album": track.album,
+            "album_artist": track.album_artist,
+            "genre": track.genre,
+            "year": track.year,
             "artist_id": str(track.artist_id.value),
             "album_id": str(track.album_id.value) if track.album_id else None,
             "duration_ms": track.duration_ms,
@@ -201,4 +206,97 @@ async def get_track(
     except ValueError as e:
         raise HTTPException(
             status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
+
+
+@router.patch("/{track_id}/metadata")
+async def update_track_metadata(
+    track_id: str,
+    metadata: dict[str, Any],
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> dict[str, Any]:
+    """Update track metadata.
+
+    Args:
+        track_id: Track ID
+        metadata: Dictionary of metadata fields to update
+        track_repository: Track repository
+
+    Returns:
+        Updated track details
+    """
+    try:
+        track_id_obj = TrackId.from_string(track_id)
+        track = await track_repository.get_by_id(track_id_obj)
+
+        if not track:
+            raise HTTPException(status_code=404, detail="Track not found")
+
+        # Update allowed metadata fields
+        allowed_fields = [
+            "title",
+            "artist",
+            "album",
+            "album_artist",
+            "genre",
+            "year",
+            "track_number",
+            "disc_number",
+        ]
+
+        for field in allowed_fields:
+            if field in metadata:
+                setattr(track, field, metadata[field])
+
+        # Save updated track
+        await track_repository.update(track)
+
+        # If file exists, update file metadata tags
+        if track.file_path and track.file_path.exists():
+            try:
+                # Import here to avoid circular dependencies
+                from mutagen.mp3 import MP3
+                from mutagen.id3 import ID3, TIT2, TPE1, TALB, TPE2, TCON, TDRC, TRCK, TPOS
+
+                audio = MP3(str(track.file_path), ID3=ID3)
+                
+                # Add ID3 tag if it doesn't exist
+                if audio.tags is None:
+                    audio.add_tags()
+
+                # Update tags
+                if "title" in metadata:
+                    audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
+                if "artist" in metadata:
+                    audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
+                if "album" in metadata:
+                    audio.tags.add(TALB(encoding=3, text=metadata["album"]))
+                if "album_artist" in metadata:
+                    audio.tags.add(TPE2(encoding=3, text=metadata["album_artist"]))
+                if "genre" in metadata:
+                    audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
+                if "year" in metadata:
+                    audio.tags.add(TDRC(encoding=3, text=str(metadata["year"])))
+                if "track_number" in metadata:
+                    audio.tags.add(TRCK(encoding=3, text=str(metadata["track_number"])))
+                if "disc_number" in metadata:
+                    audio.tags.add(TPOS(encoding=3, text=str(metadata["disc_number"])))
+
+                audio.save()
+            except Exception as e:
+                # Log error but don't fail the request
+                print(f"Warning: Failed to update file tags: {e}")
+
+        return {
+            "message": "Metadata updated successfully",
+            "track_id": track_id,
+            "updated_fields": list(metadata.keys()),
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid track ID: {str(e)}"
+        ) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update metadata: {str(e)}"
         ) from e

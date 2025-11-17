@@ -1,0 +1,165 @@
+{# Missing Tracks Comparison Partial #}
+{% from "includes/_components.html" import empty_state, badge %}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Missing Tracks Comparison</h3>
+        <button class="btn btn-sm btn-outline focus-ring"
+                onclick="document.getElementById('missing-tracks-section').innerHTML = ''"
+                aria-label="Close missing tracks view">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+    <div class="card-body">
+        {% if missing_tracks %}
+        <div class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="flex items-start">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                <div class="flex-1">
+                    <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                        {{ missing_tracks|length }} track{{ 's' if missing_tracks|length != 1 else '' }} not found in library
+                    </h4>
+                    <p class="text-sm text-blue-800 dark:text-blue-400">
+                        These tracks are in the Spotify playlist but not downloaded to your library yet.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-between items-center mb-4">
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                Showing {{ missing_tracks|length }} missing tracks
+            </div>
+            <button class="btn btn-primary focus-ring"
+                    onclick="downloadAllMissing()"
+                    aria-label="Download all missing tracks">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Download All Missing
+            </button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Title
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Artist
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Album
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Duration
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for track in missing_tracks %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" data-track-id="{{ track.id }}">
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ track.title or "Unknown Title" }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            {{ track.artist or "Unknown Artist" }}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                            {{ track.album or "Unknown Album" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {% if track.duration_ms %}
+                                {% set minutes = (track.duration_ms / 60000) | int %}
+                                {% set seconds = ((track.duration_ms % 60000) / 1000) | int %}
+                                {{ "%d:%02d" | format(minutes, seconds) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <button class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 focus-ring"
+                                    hx-post="/api/tracks/{{ track.id }}/download"
+                                    hx-target="closest tr"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#download-indicator-{{ track.id }}"
+                                    aria-label="Download track {{ track.title }}">
+                                Download
+                            </button>
+                            <span id="download-indicator-{{ track.id }}" class="htmx-indicator ml-2">
+                                <svg class="animate-spin h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12">
+            {% set icon %}
+            <svg class="w-16 h-16 mx-auto text-green-400 dark:text-green-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% endset %}
+            {{ empty_state(icon, 'All tracks downloaded!', 'All tracks from this playlist are available in your library.') }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function downloadAllMissing() {
+    const trackRows = document.querySelectorAll('[data-track-id]');
+    const trackIds = Array.from(trackRows).map(row => row.getAttribute('data-track-id'));
+    
+    if (trackIds.length === 0) {
+        return;
+    }
+    
+    if (confirm(`Download ${trackIds.length} missing track(s)?`)) {
+        let completed = 0;
+        trackIds.forEach(trackId => {
+            fetch(`/api/tracks/${trackId}/download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                completed++;
+                if (completed === trackIds.length) {
+                    // Show success message
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                    successMsg.textContent = `Queued ${trackIds.length} track(s) for download`;
+                    document.body.appendChild(successMsg);
+                    setTimeout(() => successMsg.remove(), 3000);
+                    
+                    // Refresh the missing tracks view after a delay
+                    setTimeout(() => {
+                        document.getElementById('missing-tracks-section').innerHTML = '';
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                console.error(`Error queuing download for track ${trackId}:`, error);
+            });
+        });
+    }
+}
+</script>

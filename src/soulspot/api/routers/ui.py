@@ -86,6 +86,66 @@ async def playlist_export_modal(
     )
 
 
+@router.get("/playlists/{playlist_id}/missing-tracks", response_class=HTMLResponse)
+async def playlist_missing_tracks(
+    request: Request,
+    playlist_id: str,
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Return missing tracks partial for a playlist."""
+    from soulspot.domain.value_objects import PlaylistId
+
+    try:
+        playlist_id_obj = PlaylistId.from_string(playlist_id)
+        playlist = await playlist_repository.get_by_id(playlist_id_obj)
+
+        if not playlist:
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request,
+                    "error_code": 404,
+                    "error_message": "Playlist not found",
+                },
+                status_code=404,
+            )
+
+        # Find tracks without file_path (missing tracks)
+        missing_tracks = []
+        for track_id in playlist.track_ids:
+            track = await track_repository.get_by_id(track_id)
+            if track and not track.file_path:
+                missing_tracks.append(
+                    {
+                        "id": str(track.id.value),
+                        "title": track.title,
+                        "artist": track.artist,
+                        "album": track.album,
+                        "duration_ms": track.duration_ms,
+                        "spotify_uri": str(track.spotify_uri)
+                        if track.spotify_uri
+                        else None,
+                    }
+                )
+
+        return templates.TemplateResponse(
+            "partials/missing_tracks.html",
+            {"request": request, "missing_tracks": missing_tracks},
+        )
+
+    except ValueError:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error_code": 400,
+                "error_message": "Invalid playlist ID",
+            },
+            status_code=400,
+        )
+
+
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
 async def playlist_detail(
     request: Request,
@@ -375,3 +435,57 @@ async def library_tracks(
     return templates.TemplateResponse(
         "library_tracks.html", {"request": request, "tracks": tracks_data}
     )
+
+
+@router.get("/tracks/{track_id}/metadata-editor", response_class=HTMLResponse)
+async def track_metadata_editor(
+    request: Request,
+    track_id: str,
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> Any:
+    """Return metadata editor modal for a track."""
+    from soulspot.domain.value_objects import TrackId
+
+    try:
+        track_id_obj = TrackId.from_string(track_id)
+        track = await track_repository.get_by_id(track_id_obj)
+
+        if not track:
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request,
+                    "error_code": 404,
+                    "error_message": "Track not found",
+                },
+                status_code=404,
+            )
+
+        track_data = {
+            "id": str(track.id.value),
+            "title": track.title,
+            "artist": track.artist,
+            "album": track.album,
+            "album_artist": track.album_artist,
+            "genre": track.genre,
+            "year": track.year,
+            "track_number": track.track_number,
+            "disc_number": track.disc_number,
+            "file_path": str(track.file_path) if track.file_path else None,
+        }
+
+        return templates.TemplateResponse(
+            "partials/metadata_editor.html",
+            {"request": request, "track": track_data},
+        )
+
+    except ValueError:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "error_code": 400,
+                "error_message": "Invalid track ID",
+            },
+            status_code=400,
+        )
