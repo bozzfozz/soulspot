@@ -7,51 +7,59 @@
     <div class="widget-card widget-col-{{ instance.span_cols }}" 
          id="widget-instance-{{ instance.id }}"
          data-widget-id="{{ instance.id }}"
-         data-widget-type="{{ instance.widget_type }}">
+         data-widget-type="{{ instance.widget_type }}"
+         role="region"
+         aria-label="{{ widget.name }} widget">
       
       {# Widget Controls (only in edit mode) #}
       {% if edit_mode %}
-        <div class="widget-controls">
+        <div class="widget-controls" role="toolbar" aria-label="Widget controls for {{ widget.name }}">
           <button hx-post="/api/ui/widgets/instances/{{ instance.id }}/move-up"
                   hx-target="#widget-canvas"
                   hx-swap="innerHTML"
-                  aria-label="Move up"
-                  title="Move up">
+                  aria-label="Move {{ widget.name }} widget up"
+                  title="Move up"
+                  tabindex="0">
             ↑
           </button>
           <button hx-post="/api/ui/widgets/instances/{{ instance.id }}/move-down"
                   hx-target="#widget-canvas"
                   hx-swap="innerHTML"
-                  aria-label="Move down"
-                  title="Move down">
+                  aria-label="Move {{ widget.name }} widget down"
+                  title="Move down"
+                  tabindex="0">
             ↓
           </button>
           <button hx-post="/api/ui/widgets/instances/{{ instance.id }}/move-left"
                   hx-target="#widget-canvas"
                   hx-swap="innerHTML"
-                  aria-label="Move left"
-                  title="Move left">
+                  aria-label="Move {{ widget.name }} widget left"
+                  title="Move left"
+                  tabindex="0">
             ←
           </button>
           <button hx-post="/api/ui/widgets/instances/{{ instance.id }}/move-right"
                   hx-target="#widget-canvas"
                   hx-swap="innerHTML"
-                  aria-label="Move right"
-                  title="Move right">
+                  aria-label="Move {{ widget.name }} widget right"
+                  title="Move right"
+                  tabindex="0">
             →
           </button>
           <button hx-post="/api/ui/widgets/instances/{{ instance.id }}/resize"
                   hx-target="#widget-canvas"
                   hx-swap="innerHTML"
-                  aria-label="Resize"
-                  title="Toggle size (4/6/12 columns)">
+                  aria-label="Resize {{ widget.name }} widget"
+                  title="Toggle size (4/6/12 columns)"
+                  tabindex="0">
             ⬌
           </button>
           <button hx-get="/api/ui/widgets/instances/{{ instance.id }}/config"
                   hx-target="#modal-container"
                   hx-swap="innerHTML"
-                  aria-label="Configure"
-                  title="Configure widget">
+                  aria-label="Configure {{ widget.name }} widget"
+                  title="Configure widget"
+                  tabindex="0">
             ⚙
           </button>
           <button class="btn-danger"
@@ -59,8 +67,9 @@
                   hx-confirm="Remove this widget?"
                   hx-target="#widget-instance-{{ instance.id }}"
                   hx-swap="outerHTML swap:300ms"
-                  aria-label="Remove"
-                  title="Remove widget">
+                  aria-label="Remove {{ widget.name }} widget"
+                  title="Remove widget"
+                  tabindex="0">
             ✕
           </button>
         </div>
