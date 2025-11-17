@@ -243,11 +243,11 @@ class SpotifyBatchProcessor:
             processor_func=self._fetch_artists_batch,
         )
 
-    async def _fetch_tracks_batch(self, track_ids: list[str]) -> list[Any]:
+    async def _fetch_tracks_batch(self, _track_ids: list[str]) -> list[Any]:
         """Fetch multiple tracks from Spotify API.
 
         Args:
-            track_ids: List of Spotify track IDs
+            _track_ids: List of Spotify track IDs
 
         Returns:
             List of track data from Spotify
@@ -257,11 +257,11 @@ class SpotifyBatchProcessor:
         # For now, returning empty list as placeholder
         return []
 
-    async def _fetch_albums_batch(self, album_ids: list[str]) -> list[Any]:
+    async def _fetch_albums_batch(self, _album_ids: list[str]) -> list[Any]:
         """Fetch multiple albums from Spotify API.
 
         Args:
-            album_ids: List of Spotify album IDs
+            _album_ids: List of Spotify album IDs
 
         Returns:
             List of album data from Spotify
@@ -269,7 +269,7 @@ class SpotifyBatchProcessor:
         # Spotify API supports fetching up to 20 albums at once
         return []
 
-    async def _fetch_artists_batch(self, artist_ids: list[str]) -> list[Any]:
+    async def _fetch_artists_batch(self, _artist_ids: list[str]) -> list[Any]:
         """Fetch multiple artists from Spotify API.
 
         Args:

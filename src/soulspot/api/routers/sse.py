@@ -86,7 +86,10 @@ async def event_generator(
 
     # Send initial connection event
     yield SSEEvent(
-        data={"message": "Connected to event stream", "timestamp": datetime.now(UTC).isoformat()},
+        data={
+            "message": "Connected to event stream",
+            "timestamp": datetime.now(UTC).isoformat(),
+        },
         event="connected",
         id=str(client_id),
     ).encode()
@@ -158,7 +161,7 @@ async def event_generator(
 @router.get("/stream")
 async def event_stream(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    _session: AsyncSession = Depends(get_db_session),
     download_repository: DownloadRepository = Depends(get_download_repository),
 ) -> StreamingResponse:
     """Server-Sent Events endpoint for real-time updates.
@@ -224,7 +227,10 @@ async def sse_test(request: Request) -> StreamingResponse:
             await asyncio.sleep(1)
 
         yield SSEEvent(
-            data={"message": "Test completed", "timestamp": datetime.now(UTC).isoformat()},
+            data={
+                "message": "Test completed",
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
             event="test_complete",
         ).encode()
 

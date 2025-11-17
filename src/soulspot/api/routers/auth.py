@@ -306,7 +306,7 @@ async def spotify_status(
 
 @router.post("/onboarding/skip")
 async def skip_onboarding(
-    response: Response,
+    _response: Response,
     session_id: str | None = Cookie(None),
     session_store: SessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:

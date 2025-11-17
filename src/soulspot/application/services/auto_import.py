@@ -245,7 +245,7 @@ class AutoImportService:
                     relative_path = file_path.relative_to(self._download_path)
                 except ValueError:
                     # File might already be in a subdirectory
-                    relative_path = file_path.name
+                    relative_path = Path(file_path.name)
 
                 dest_path = self._music_path / relative_path
 

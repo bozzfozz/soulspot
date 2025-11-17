@@ -109,7 +109,7 @@ async def get_canvas(
 @router.post("/dashboard/toggle-edit-mode", response_class=HTMLResponse)
 async def toggle_edit_mode(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    _session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Toggle edit mode for dashboard."""
     # Get current edit mode from form data or query param
@@ -128,7 +128,7 @@ async def toggle_edit_mode(
 @router.get("/widgets/catalog", response_class=HTMLResponse)
 async def widget_catalog(
     request: Request,
-    page_id: int = None,
+    page_id: int | None = None,
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Get widget catalog modal."""
@@ -152,8 +152,8 @@ async def add_widget_instance(
 ) -> Any:
     """Add a widget instance to a page."""
     form_data = await request.form()
-    page_id = int(form_data.get("page_id", 1))
-    widget_type = form_data.get("widget_type", "")
+    page_id = int(form_data.get("page_id", 1))  # type: ignore[arg-type]
+    widget_type = str(form_data.get("widget_type", ""))
 
     instance_repo = WidgetInstanceRepository(session)
     widget_repo = WidgetRepository(session)
@@ -359,8 +359,8 @@ async def create_page(
 ) -> Any:
     """Create a new page."""
     form_data = await request.form()
-    name = form_data.get("name", "")
-    slug = form_data.get("slug", "")
+    name = str(form_data.get("name", ""))
+    slug = str(form_data.get("slug", ""))
 
     if not name or not slug:
         return HTMLResponse("Name and slug are required", status_code=400)

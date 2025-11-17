@@ -74,9 +74,11 @@ async def test_dashboard_canvas_endpoint(async_client: AsyncClient):
     content = response.content.decode()
 
     # Should have canvas structure or empty state
-    assert ("widget-card" in content or
-            "No widgets yet" in content or
-            "widget-col-" in content)
+    assert (
+        "widget-card" in content
+        or "No widgets yet" in content
+        or "widget-col-" in content
+    )
 
 
 @pytest.mark.asyncio
@@ -84,11 +86,7 @@ async def test_widget_instance_crud(async_client: AsyncClient):
     """Test creating and deleting widget instances."""
     # Create a widget instance
     response = await async_client.post(
-        "/api/ui/widgets/instances",
-        data={
-            "page_id": "1",
-            "widget_type": "active_jobs"
-        }
+        "/api/ui/widgets/instances", data={"page_id": "1", "widget_type": "active_jobs"}
     )
     # Should succeed or return appropriate response
     assert response.status_code in [200, 201, 302]
@@ -124,14 +122,18 @@ async def test_dashboard_accessibility_features(async_client: AsyncClient):
     content = response.content.decode()
 
     # Check for ARIA attributes
-    assert 'role="region"' in content or 'role="dialog"' in content or 'aria-label' in content
+    assert (
+        'role="region"' in content
+        or 'role="dialog"' in content
+        or "aria-label" in content
+    )
 
     # Check for skip-to-content link (better accessibility test)
-    assert 'skip-to-content' in content or 'Skip to' in content
+    assert "skip-to-content" in content or "Skip to" in content
 
     # Check for keyboard shortcuts modal
-    assert 'keyboard-shortcuts-modal' in content
-    assert 'Keyboard Shortcuts' in content
+    assert "keyboard-shortcuts-modal" in content
+    assert "Keyboard Shortcuts" in content
 
 
 @pytest.mark.asyncio
@@ -139,12 +141,16 @@ async def test_spotify_search_widget_with_query(async_client: AsyncClient):
     """Test Spotify search widget with search query."""
     response = await async_client.get(
         "/api/ui/widgets/spotify-search/results",
-        params={"query": "test", "search_type": "track", "limit": "5"}
+        params={"query": "test", "search_type": "track", "limit": "5"},
     )
     assert response.status_code == 200
     content = response.content.decode()
     # Should return search results or empty state
-    assert "spotify" in content.lower() or "search" in content.lower() or "results" in content.lower()
+    assert (
+        "spotify" in content.lower()
+        or "search" in content.lower()
+        or "results" in content.lower()
+    )
 
 
 @pytest.mark.asyncio
@@ -152,8 +158,7 @@ async def test_metadata_manager_with_filter(async_client: AsyncClient):
     """Test metadata manager widget with different filters."""
     for filter_type in ["all", "missing", "incorrect"]:
         response = await async_client.get(
-            "/api/ui/widgets/metadata-manager/content",
-            params={"filter": filter_type}
+            "/api/ui/widgets/metadata-manager/content", params={"filter": filter_type}
         )
         assert response.status_code == 200
         content = response.content.decode()

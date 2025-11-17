@@ -67,11 +67,15 @@ class WatchlistService:
 
     async def get_watchlist(self, watchlist_id: WatchlistId) -> ArtistWatchlist | None:
         """Get watchlist by ID."""
-        return await self.repository.get_by_id(watchlist_id)
+        result: ArtistWatchlist | None = await self.repository.get_by_id(watchlist_id)
+        return result
 
     async def get_by_artist(self, artist_id: ArtistId) -> ArtistWatchlist | None:
         """Get watchlist for an artist."""
-        return await self.repository.get_by_artist_id(artist_id)
+        result: ArtistWatchlist | None = await self.repository.get_by_artist_id(
+            artist_id
+        )
+        return result
 
     async def list_all(
         self, limit: int = 100, offset: int = 0

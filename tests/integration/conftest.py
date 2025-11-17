@@ -33,7 +33,9 @@ def test_settings(test_db_path: Path) -> Settings:
 
 
 @pytest.fixture
-async def db(test_settings: Settings, test_db_path: Path) -> AsyncGenerator[Database, None]:
+async def db(
+    test_settings: Settings, test_db_path: Path
+) -> AsyncGenerator[Database, None]:
     """Create and initialize database with schema for tests."""
     # Ensure database file exists
     test_db_path.touch(exist_ok=True)

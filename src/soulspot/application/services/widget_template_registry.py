@@ -21,7 +21,9 @@ class WidgetTemplateRegistry:
             template_dir: Directory containing widget template files
         """
         self.templates: dict[str, WidgetTemplate] = {}
-        self.template_dir = template_dir or Path("src/soulspot/templates/widget_templates")
+        self.template_dir = template_dir or Path(
+            "src/soulspot/templates/widget_templates"
+        )
 
         # Initialize with built-in system widgets
         self._register_system_widgets()
@@ -158,7 +160,10 @@ class WidgetTemplateRegistry:
                                 "properties": {
                                     "label": {"type": "string"},
                                     "endpoint": {"type": "string"},
-                                    "method": {"type": "string", "enum": ["GET", "POST"]},
+                                    "method": {
+                                        "type": "string",
+                                        "enum": ["GET", "POST"],
+                                    },
                                     "icon": {"type": "string"},
                                 },
                             },
@@ -243,7 +248,9 @@ class WidgetTemplateRegistry:
             logger.warning(f"Overwriting existing template: {template.id}")
 
         self.templates[template.id] = template
-        logger.debug(f"Registered widget template: {template.id} ({template.config.name})")
+        logger.debug(
+            f"Registered widget template: {template.id} ({template.config.name})"
+        )
 
     def unregister(self, template_id: str) -> bool:
         """Unregister a widget template.
@@ -302,7 +309,8 @@ class WidgetTemplateRegistry:
             List of matching templates
         """
         return [
-            t for t in self.templates.values()
+            t
+            for t in self.templates.values()
             if t.config.category == category and t.is_enabled
         ]
 
@@ -331,7 +339,8 @@ class WidgetTemplateRegistry:
         if query:
             query_lower = query.lower()
             results = [
-                t for t in results
+                t
+                for t in results
                 if query_lower in t.config.name.lower()
                 or query_lower in t.config.description.lower()
             ]
@@ -342,10 +351,7 @@ class WidgetTemplateRegistry:
 
         # Filter by tags
         if tags:
-            results = [
-                t for t in results
-                if any(tag in t.config.tags for tag in tags)
-            ]
+            results = [t for t in results if any(tag in t.config.tags for tag in tags)]
 
         return results
 

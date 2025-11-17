@@ -96,8 +96,8 @@ class QualityUpgradeService:
             raise ValueError(f"Invalid quality profile: {quality_profile}")
 
         target_profile = self.QUALITY_PROFILES[quality_profile]
-        target_bitrate = target_profile["min_bitrate"]
-        target_formats = target_profile["formats"]
+        target_bitrate: int = target_profile["min_bitrate"]  # type: ignore[assignment]
+        target_formats: list[str] = target_profile["formats"]  # type: ignore[assignment]
 
         # Find tracks below target quality
         stmt = (

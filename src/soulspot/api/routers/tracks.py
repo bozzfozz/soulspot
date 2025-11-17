@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from soulspot.api.dependencies import (
     get_enrich_metadata_use_case,
@@ -164,8 +164,9 @@ async def search_tracks(
 
 @router.get("/{track_id}")
 async def get_track(
+    request: Request,
     track_id: str,
-    track_repository: TrackRepository = Depends(get_track_repository),
+    _track_repository: TrackRepository = Depends(get_track_repository),
 ) -> dict[str, Any]:
     """Get track details.
 
@@ -185,7 +186,7 @@ async def get_track(
 
     try:
         # Get session for direct DB query to include artist/album names
-        session: AsyncSession = await anext(get_db_session())
+        session: AsyncSession = await anext(get_db_session(request))
 
         stmt = (
             select(TrackModel)
@@ -203,9 +204,13 @@ async def get_track(
             "title": track_model.title,
             "artist": track_model.artist.name if track_model.artist else None,
             "album": track_model.album.title if track_model.album else None,
-            "album_artist": track_model.album.artist if track_model.album and hasattr(track_model.album, "artist") else None,
+            "album_artist": track_model.album.artist
+            if track_model.album and hasattr(track_model.album, "artist")
+            else None,
             "genre": None,  # TODO: Add genre field to track model
-            "year": track_model.album.year if track_model.album and hasattr(track_model.album, "year") else None,
+            "year": track_model.album.year
+            if track_model.album and hasattr(track_model.album, "year")
+            else None,
             "artist_id": track_model.artist_id,
             "album_id": track_model.album_id,
             "duration_ms": track_model.duration_ms,
@@ -270,7 +275,7 @@ async def update_track_metadata(
         if track.file_path and track.file_path.exists():
             try:
                 # Import here to avoid circular dependencies
-                from mutagen.id3 import (
+                from mutagen.id3 import (  # type: ignore[attr-defined]
                     ID3,
                     TALB,
                     TCON,
@@ -287,25 +292,25 @@ async def update_track_metadata(
 
                 # Add ID3 tag if it doesn't exist
                 if audio.tags is None:
-                    audio.add_tags()
+                    audio.add_tags()  # type: ignore[no-untyped-call]
 
                 # Update tags
                 if "title" in metadata:
-                    audio.tags.add(TIT2(encoding=3, text=metadata["title"]))
+                    audio.tags.add(TIT2(encoding=3, text=metadata["title"]))  # type: ignore[no-untyped-call]
                 if "artist" in metadata:
-                    audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))
+                    audio.tags.add(TPE1(encoding=3, text=metadata["artist"]))  # type: ignore[no-untyped-call]
                 if "album" in metadata:
-                    audio.tags.add(TALB(encoding=3, text=metadata["album"]))
+                    audio.tags.add(TALB(encoding=3, text=metadata["album"]))  # type: ignore[no-untyped-call]
                 if "album_artist" in metadata:
-                    audio.tags.add(TPE2(encoding=3, text=metadata["album_artist"]))
+                    audio.tags.add(TPE2(encoding=3, text=metadata["album_artist"]))  # type: ignore[no-untyped-call]
                 if "genre" in metadata:
-                    audio.tags.add(TCON(encoding=3, text=metadata["genre"]))
+                    audio.tags.add(TCON(encoding=3, text=metadata["genre"]))  # type: ignore[no-untyped-call]
                 if "year" in metadata:
-                    audio.tags.add(TDRC(encoding=3, text=str(metadata["year"])))
+                    audio.tags.add(TDRC(encoding=3, text=str(metadata["year"])))  # type: ignore[no-untyped-call]
                 if "track_number" in metadata:
-                    audio.tags.add(TRCK(encoding=3, text=str(metadata["track_number"])))
+                    audio.tags.add(TRCK(encoding=3, text=str(metadata["track_number"])))  # type: ignore[no-untyped-call]
                 if "disc_number" in metadata:
-                    audio.tags.add(TPOS(encoding=3, text=str(metadata["disc_number"])))
+                    audio.tags.add(TPOS(encoding=3, text=str(metadata["disc_number"])))  # type: ignore[no-untyped-call]
 
                 audio.save()
             except Exception as e:

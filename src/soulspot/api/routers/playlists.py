@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from soulspot.api.dependencies import (
     get_import_playlist_use_case,
@@ -181,10 +181,10 @@ async def export_playlist_m3u(
             track = await track_repository.get_by_id(track_id)
             if track and track.file_path:
                 duration = int(track.duration_ms / 1000) if track.duration_ms else -1
-                artist = track.artist or "Unknown Artist"
+                artist = track.artist or "Unknown Artist"  # type: ignore[attr-defined]
                 title = track.title or "Unknown Title"
                 m3u_lines.append(f"#EXTINF:{duration},{artist} - {title}")
-                m3u_lines.append(track.file_path)
+                m3u_lines.append(str(track.file_path))
 
         m3u_content = "\n".join(m3u_lines)
 
@@ -240,8 +240,8 @@ async def export_playlist_csv(
                 writer.writerow(
                     [
                         track.title or "Unknown",
-                        track.artist or "Unknown",
-                        track.album or "Unknown",
+                        track.artist or "Unknown",  # type: ignore[attr-defined]
+                        track.album or "Unknown",  # type: ignore[attr-defined]
                         track.duration_ms or "",
                         track.file_path or "",
                     ]
@@ -293,8 +293,8 @@ async def export_playlist_json(
                     {
                         "id": str(track.id.value),
                         "title": track.title,
-                        "artist": track.artist,
-                        "album": track.album,
+                        "artist": track.artist,  # type: ignore[attr-defined]
+                        "album": track.album,  # type: ignore[attr-defined]
                         "duration_ms": track.duration_ms,
                         "file_path": track.file_path,
                         "spotify_uri": str(track.spotify_uri)
@@ -323,9 +323,10 @@ async def export_playlist_json(
 
 @router.get("/{playlist_id}/missing-tracks")
 async def get_missing_tracks(
+    request: Request,
     playlist_id: str,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
+    _track_repository: TrackRepository = Depends(get_track_repository),
 ) -> dict[str, Any]:
     """Get tracks that are in the playlist but not downloaded to the library.
 
@@ -352,7 +353,7 @@ async def get_missing_tracks(
             raise HTTPException(status_code=404, detail="Playlist not found")
 
         # Get session for direct DB query
-        session: AsyncSession = await anext(get_db_session())
+        session: AsyncSession = await anext(get_db_session(request))
 
         # Find tracks without file_path
         missing_tracks = []

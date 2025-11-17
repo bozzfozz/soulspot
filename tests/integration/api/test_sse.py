@@ -105,9 +105,7 @@ async def test_sse_downloads_update_event(async_client: AsyncClient):
     ]
 
     # Mock the download repository
-    with patch(
-        "soulspot.api.routers.sse.get_download_repository"
-    ) as mock_get_repo:
+    with patch("soulspot.api.routers.sse.get_download_repository") as mock_get_repo:
         mock_repo = AsyncMock()
         mock_repo.list_active = AsyncMock(return_value=mock_downloads)
         mock_get_repo.return_value = mock_repo
@@ -151,9 +149,7 @@ async def test_sse_heartbeat_event(async_client: AsyncClient):
 async def test_sse_error_handling(async_client: AsyncClient):
     """Test SSE error handling when repository fails."""
     # Mock the download repository to raise an error
-    with patch(
-        "soulspot.api.routers.sse.get_download_repository"
-    ) as mock_get_repo:
+    with patch("soulspot.api.routers.sse.get_download_repository") as mock_get_repo:
         mock_repo = AsyncMock()
         mock_repo.list_active = AsyncMock(side_effect=Exception("Test error"))
         mock_get_repo.return_value = mock_repo

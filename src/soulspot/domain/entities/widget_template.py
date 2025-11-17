@@ -153,7 +153,9 @@ class WidgetTemplate:
         """Validate widget template after initialization."""
         errors = self.config.validate()
         if errors:
-            raise ValueError(f"Invalid widget template configuration: {', '.join(errors)}")
+            raise ValueError(
+                f"Invalid widget template configuration: {', '.join(errors)}"
+            )
 
     @classmethod
     def from_file(cls, template_file: Path) -> "WidgetTemplate":
@@ -191,9 +193,9 @@ class WidgetTemplate:
                 is_system=is_system,
             )
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in template file: {e}")
+            raise ValueError(f"Invalid JSON in template file: {e}") from e
         except Exception as e:
-            raise ValueError(f"Error loading template: {e}")
+            raise ValueError(f"Error loading template: {e}") from e
 
     def to_dict(self) -> dict[str, Any]:
         """Convert template to dictionary.

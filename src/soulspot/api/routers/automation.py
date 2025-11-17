@@ -91,10 +91,12 @@ async def create_watchlist(
             "created_at": watchlist.created_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create watchlist: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create watchlist: {e}"
+        ) from e
 
 
 @router.get("/watchlist")
@@ -143,7 +145,9 @@ async def list_watchlists(
             "offset": offset,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list watchlists: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list watchlists: {e}"
+        ) from e
 
 
 @router.get("/watchlist/{watchlist_id}")
@@ -182,11 +186,13 @@ async def get_watchlist(
             "total_downloads_triggered": watchlist.total_downloads_triggered,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get watchlist: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get watchlist: {e}"
+        ) from e
 
 
 @router.post("/watchlist/{watchlist_id}/check")
@@ -225,14 +231,14 @@ async def check_watchlist_releases(
             "releases": releases,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to check for releases: {e}"
-        )
+        ) from e
 
 
 @router.delete("/watchlist/{watchlist_id}")
@@ -257,10 +263,12 @@ async def delete_watchlist(
 
         return {"message": f"Watchlist {watchlist_id} deleted successfully"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete watchlist: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete watchlist: {e}"
+        ) from e
 
 
 # Discography endpoints
@@ -290,9 +298,11 @@ async def check_discography(
 
         return info.to_dict()
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check discography: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check discography: {e}"
+        ) from e
 
 
 @router.get("/discography/missing")
@@ -325,7 +335,7 @@ async def get_missing_albums(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get missing albums: {e}"
-        )
+        ) from e
 
 
 # Quality upgrade endpoints
@@ -358,9 +368,11 @@ async def identify_quality_upgrades(
             "min_improvement_score": request.min_improvement_score,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to identify upgrades: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to identify upgrades: {e}"
+        ) from e
 
 
 @router.get("/quality-upgrades/unprocessed")
@@ -385,7 +397,7 @@ async def get_unprocessed_upgrades(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get unprocessed upgrades: {e}"
-        )
+        ) from e
 
 
 # Filter management endpoints
@@ -451,10 +463,12 @@ async def create_filter(
             "created_at": filter_rule.created_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create filter: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create filter: {e}"
+        ) from e
 
 
 @router.get("/filters")
@@ -508,9 +522,11 @@ async def list_filters(
             "count": len(filters),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list filters: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list filters: {e}"
+        ) from e
 
 
 @router.get("/filters/{filter_id}")
@@ -553,7 +569,7 @@ async def get_filter(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get filter: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get filter: {e}") from e
 
 
 @router.post("/filters/{filter_id}/enable")
@@ -581,7 +597,9 @@ async def enable_filter(
         return {"message": "Filter enabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to enable filter: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enable filter: {e}"
+        ) from e
 
 
 @router.post("/filters/{filter_id}/disable")
@@ -609,7 +627,9 @@ async def disable_filter(
         return {"message": "Filter disabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to disable filter: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to disable filter: {e}"
+        ) from e
 
 
 @router.patch("/filters/{filter_id}")
@@ -643,7 +663,7 @@ async def update_filter_pattern(
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to update filter pattern: {e}"
-        )
+        ) from e
 
 
 @router.delete("/filters/{filter_id}")
@@ -671,7 +691,9 @@ async def delete_filter(
         return {"message": "Filter deleted successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete filter: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete filter: {e}"
+        ) from e
 
 
 # Automation rule management endpoints
@@ -735,12 +757,12 @@ async def create_automation_rule(
             "created_at": rule.created_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to create automation rule: {e}"
-        )
+        ) from e
 
 
 @router.get("/rules")
@@ -799,11 +821,11 @@ async def list_automation_rules(
             "count": len(rules),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to list automation rules: {e}"
-        )
+        ) from e
 
 
 @router.get("/rules/{rule_id}")
@@ -857,7 +879,7 @@ async def get_automation_rule(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get automation rule: {e}"
-        )
+        ) from e
 
 
 @router.post("/rules/{rule_id}/enable")
@@ -889,7 +911,7 @@ async def enable_automation_rule(
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to enable automation rule: {e}"
-        )
+        ) from e
 
 
 @router.post("/rules/{rule_id}/disable")
@@ -921,7 +943,7 @@ async def disable_automation_rule(
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to disable automation rule: {e}"
-        )
+        ) from e
 
 
 @router.delete("/rules/{rule_id}")
@@ -953,4 +975,4 @@ async def delete_automation_rule(
         await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to delete automation rule: {e}"
-        )
+        ) from e

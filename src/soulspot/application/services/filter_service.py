@@ -65,7 +65,7 @@ class FilterService:
 
     async def get_filter(self, filter_id: FilterRuleId) -> FilterRule | None:
         """Get filter rule by ID."""
-        return await self.repository.get_by_id(filter_id)
+        return await self.repository.get_by_id(filter_id)  # type: ignore[no-any-return]
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[FilterRule]:
         """List all filter rules."""
@@ -205,7 +205,7 @@ class FilterService:
                 bitrate = result.get("bitrate", 0)
                 try:
                     min_bitrate = int(filter_rule.pattern)
-                    return bitrate >= min_bitrate
+                    return bitrate >= min_bitrate  # type: ignore[no-any-return]
                 except ValueError:
                     logger.warning(f"Invalid bitrate pattern: {filter_rule.pattern}")
                     return False

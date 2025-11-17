@@ -1,6 +1,5 @@
 """Tests for widget template system."""
 
-
 from soulspot.application.services.widget_template_registry import (
     WidgetTemplateRegistry,
 )

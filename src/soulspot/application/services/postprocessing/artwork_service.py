@@ -205,7 +205,7 @@ class ArtworkService:
 
             # Convert to RGB if necessary
             if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGB")
+                img = img.convert("RGB")  # type: ignore[assignment]
 
             # Resize if larger than max size
             if max(img.size) > self._max_size:

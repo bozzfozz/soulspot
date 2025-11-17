@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 
+from soulspot.domain.entities.widget import Page, Widget, WidgetInstance
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
@@ -622,9 +623,6 @@ class QualityUpgradeCandidate:
         self.download_id = download_id
         self.updated_at = datetime.now(UTC)
 
-
-# Import widget entities
-from soulspot.domain.entities.widget import Page, Widget, WidgetInstance
 
 __all__ = [
     # Existing entities
