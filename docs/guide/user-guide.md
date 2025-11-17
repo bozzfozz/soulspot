@@ -1,7 +1,7 @@
 # SoulSpot Bridge - User Guide
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-11-16  
+> **Version:** 2.0  
+> **Last Updated:** 2025-11-17  
 > **Audience:** End Users
 
 ---
@@ -129,6 +129,7 @@ Browse and manage your Spotify playlists.
 **Features:**
 - **Playlist Grid**: View all imported playlists
 - **Playlist Cards**: Display name, description, track count, and source
+- **View Details**: Click on a playlist to see all tracks
 - **Sync Function**: Update playlist with latest tracks from Spotify
 - **Empty State**: Helpful message when no playlists exist
 
@@ -142,12 +143,18 @@ Browse and manage your Spotify playlists.
      - Track count
      - Source (Spotify)
 
-2. **Sync Playlist**
+2. **View Playlist Details**
+   - Click "View Details" on any playlist card
+   - See complete track list with metadata
+   - View download status for each track
+   - Export playlist to various formats
+
+3. **Sync Playlist**
    - Click "Sync" button on any playlist card
    - The playlist will update with latest tracks from Spotify
    - Status updates appear via toast notification
 
-3. **Import New Playlist**
+4. **Import New Playlist**
    - Click "Import Playlist" button (top right)
    - OR: Click "Import Your First Playlist" in empty state
    - You'll be taken to the import page
@@ -180,6 +187,195 @@ Import Spotify playlists into SoulSpot Bridge.
 4. **View Imported Playlist**
    - Navigate to Playlists page
    - Your new playlist appears in the grid
+
+---
+
+### Playlist Detail
+
+**URL:** `/playlists/{id}`
+
+View and manage a specific playlist with full track details.
+
+**Features:**
+- **Playlist Stats**: Total tracks, downloaded tracks, source
+- **Track Table**: Complete list of all tracks in the playlist
+- **Track Information**: Title, artist, album, duration for each track
+- **Status Indicators**: Downloaded (green), Missing (yellow), Broken (red)
+- **Track Actions**: Download individual tracks
+- **Export Options**: Export playlist to M3U, CSV, or JSON
+- **Sync Button**: Update playlist with latest tracks from Spotify
+
+**How to Use:**
+
+1. **Navigate to Detail Page**
+   - From Playlists page, click "View Details" on any playlist
+   - Or click on the playlist name
+
+2. **View Track Information**
+   - Browse complete track list in table format
+   - Check download status for each track
+   - See track metadata (artist, album, duration)
+
+3. **Download Missing Tracks**
+   - Click "Download" next to individual tracks
+   - Or click "Download Missing" to queue all missing tracks
+   - Tracks update to "Downloading" status
+
+4. **Export Playlist**
+   - Click "Export" button (top right)
+   - Choose export format:
+     - **M3U**: For media players (VLC, Winamp, etc.)
+     - **CSV**: For spreadsheets (Excel, Google Sheets)
+     - **JSON**: For programmatic access
+   - File downloads automatically
+
+5. **Sync Playlist**
+   - Click "Sync Now" to update with latest Spotify tracks
+   - Status appears below the button
+   - Useful when playlist has changed on Spotify
+
+---
+
+### Library
+
+**URL:** `/library`
+
+Overview of your music library with quick access to browse options.
+
+**Features:**
+- **Library Stats**: View total tracks, artists, albums, downloaded, and broken files
+- **Browse Options**: Quick links to view artists, albums, or tracks
+- **Scan Library**: Trigger a scan of your music folder
+- **Management Actions**: Access broken files, duplicates, and incomplete albums
+- **Re-download**: Queue broken files for re-download
+
+**How to Use:**
+
+1. **View Statistics**
+   - Check total tracks in your library
+   - See how many artists and albums you have
+   - Monitor downloaded and broken file counts
+
+2. **Browse Your Library**
+   - Click "Browse Artists" to see artist grid
+   - Click "Browse Albums" to see album grid
+   - Click "Browse Tracks" to see complete track list
+
+3. **Scan Library**
+   - Click "Scan Library" to analyze your music folder
+   - Status updates appear below
+   - Detects new files and checks for issues
+
+4. **Manage Library**
+   - **View Broken Files**: See corrupted or incomplete files
+   - **View Duplicates**: Find duplicate tracks
+   - **Incomplete Albums**: Check albums missing tracks
+   - **Re-download Broken**: Queue all broken files for re-download
+
+---
+
+### Library Artists
+
+**URL:** `/library/artists`
+
+Browse all artists in your library in a visual grid layout.
+
+**Features:**
+- **Artist Grid**: Visual cards for each artist
+- **Artist Avatars**: Color-coded initials for visual identification
+- **Track/Album Counts**: See how many albums and tracks per artist
+- **Search Filter**: Instantly filter artists by name
+- **Breadcrumb Navigation**: Easy navigation back to library
+
+**How to Use:**
+
+1. **Browse Artists**
+   - Scroll through the grid of artist cards
+   - Each card shows artist name, album count, and track count
+
+2. **Search for Artist**
+   - Type in the search box at top right
+   - Results filter instantly as you type
+   - Searches artist names
+
+3. **Navigate**
+   - Use breadcrumb navigation to return to Library
+   - Click on artist name (future: will show artist detail page)
+
+---
+
+### Library Albums
+
+**URL:** `/library/albums`
+
+Browse all albums in your library with visual cover art placeholders.
+
+**Features:**
+- **Album Grid**: Visual grid of album cards
+- **Cover Art Placeholders**: Gradient backgrounds with music icons
+- **Album Information**: Title, artist, track count, year
+- **Search Filter**: Filter albums by title or artist
+- **Breadcrumb Navigation**: Easy navigation back to library
+
+**How to Use:**
+
+1. **Browse Albums**
+   - Scroll through the grid of album cards
+   - Each card shows album cover, title, artist, and track count
+
+2. **Search for Album**
+   - Type in the search box at top right
+   - Results filter instantly as you type
+   - Searches both album titles and artist names
+
+3. **Navigate**
+   - Use breadcrumb navigation to return to Library
+   - Click on album (future: will show album detail page)
+
+---
+
+### Library Tracks
+
+**URL:** `/library/tracks`
+
+Browse and manage all tracks in your library with advanced filtering and sorting.
+
+**Features:**
+- **Track Table**: Complete list of all library tracks
+- **Search Filter**: Search across title, artist, and album
+- **Status Filter**: Filter by All, Downloaded, Missing, or Broken
+- **Sortable Columns**: Click headers to sort by title, artist, or album
+- **Track Actions**: Download missing/broken tracks, view details
+- **Status Badges**: Visual indicators for track status
+- **Breadcrumb Navigation**: Easy navigation back to library
+
+**How to Use:**
+
+1. **Browse Tracks**
+   - View complete track list in table format
+   - See title, artist, album, duration, and status for each track
+
+2. **Search for Tracks**
+   - Type in the search box at top right
+   - Searches title, artist, and album fields
+   - Results filter instantly
+
+3. **Filter by Status**
+   - Use status dropdown to filter:
+     - **All Tracks**: Show everything
+     - **Downloaded**: Only tracks with files
+     - **Missing**: Tracks without files
+     - **Broken**: Corrupted or incomplete files
+
+4. **Sort Tracks**
+   - Click column headers (Title, Artist, Album) to sort
+   - Click again to reverse sort order
+   - Visual indicators show sort direction
+
+5. **Manage Tracks**
+   - Click "Download" to download missing/broken tracks
+   - Click "Details" to view track metadata
+   - Status badges show current state
 
 ---
 

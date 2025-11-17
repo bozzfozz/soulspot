@@ -1,8 +1,8 @@
 # Page Reference - SoulSpot Bridge
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-11-16  
-> **Status:** Complete
+> **Version:** 2.0  
+> **Last Updated:** 2025-11-17  
+> **Status:** Complete (v2.0 Pages Added)
 
 ---
 
@@ -19,7 +19,12 @@ This document provides a comprehensive reference for every page in SoulSpot Brid
 | **Dashboard** | `/` | ✅ Complete | Yes | Stats cards, Session status | Main overview page |
 | **Search** | `/search` | ✅ Complete | Yes | Filters, Autocomplete, Bulk actions | Advanced track search |
 | **Playlists** | `/playlists` | ✅ Complete | Yes | Grid, Cards, Empty state | Browse all playlists |
+| **Playlist Detail** | `/playlists/{id}` | ✅ Complete | Yes | Table, Stats, Export modal | View playlist tracks |
 | **Import Playlist** | `/playlists/import` | ✅ Complete | Yes | Form | Import Spotify playlists |
+| **Library** | `/library` | ✅ Complete | Yes | Stats, Browse options | Music library overview |
+| **Library Artists** | `/library/artists` | ✅ Complete | No | Grid, Search | Browse artists |
+| **Library Albums** | `/library/albums` | ✅ Complete | No | Grid, Search | Browse albums |
+| **Library Tracks** | `/library/tracks` | ✅ Complete | No | Table, Search, Filter | Browse all tracks |
 | **Downloads** | `/downloads` | ✅ Complete | Yes | Queue, Progress bars, Batch ops | Download queue management |
 | **Auth** | `/auth` | ✅ Complete | Yes | OAuth flow | Spotify authentication |
 | **Settings** | `/settings` | ⚠️ Partial | Minimal | Tabs, Forms | Configuration interface |
@@ -258,6 +263,315 @@ Import Spotify playlists into SoulSpot Bridge.
 ### Validation
 - Client-side: URL format check
 - Server-side: Spotify API validation
+
+---
+
+## 📋 Playlist Detail (`/playlists/{id}`)
+
+### Purpose
+View detailed information about a specific playlist and manage its tracks.
+
+### Key Features
+- **Breadcrumb Navigation**: Easy navigation back to playlists
+- **Playlist Stats**: Total tracks, downloaded tracks, source
+- **Track Table**: Complete list with track info, status, actions
+- **Sync Button**: Sync playlist with Spotify
+- **Export Options**: Export to M3U, CSV, or JSON
+- **Track Actions**: Download missing/broken tracks
+- **Status Badges**: Downloaded, Missing, Broken indicators
+
+### Components Used
+- Card component (stats)
+- Table component (track list)
+- Badge component (status)
+- Button component (actions)
+- Modal component (export dialog)
+
+### HTMX Interactions
+- **Sync Playlist**:
+  - `hx-post="/api/playlists/{id}/sync"`
+  - `hx-target="#sync-status"`
+  - Updates sync status
+- **Export Modal**:
+  - `hx-get="/ui/playlists/{id}/export-modal"`
+  - `hx-target="#export-modal"`
+  - Opens export dialog
+- **Download Track**:
+  - `hx-post="/api/tracks/{id}/download"`
+  - `hx-target="closest tr"`
+  - Updates track row
+
+### Data Requirements
+```python
+{
+    "playlist": {
+        "id": str,
+        "name": str,
+        "description": str,
+        "source": str,
+        "track_count": int,
+        "tracks": [
+            {
+                "id": str,
+                "title": str,
+                "artist": str,
+                "album": str,
+                "duration_ms": int,
+                "file_path": str | None,
+                "is_broken": bool,
+                "spotify_uri": str | None
+            }
+        ],
+        "created_at": str,
+        "updated_at": str,
+        "spotify_uri": str | None
+    }
+}
+```
+
+### Export Formats
+
+**M3U Format:**
+- Standard playlist format
+- Compatible with most media players
+- Includes track metadata and file paths
+
+**CSV Format:**
+- Spreadsheet-compatible
+- Columns: Title, Artist, Album, Duration, File Path
+- Can be opened in Excel or Google Sheets
+
+**JSON Format:**
+- Machine-readable format
+- Complete playlist and track metadata
+- Useful for programmatic access
+
+### Accessibility
+- Breadcrumb navigation with semantic markup
+- Table with proper headers and ARIA labels
+- Status badges with appropriate colors
+- Keyboard-accessible export modal
+- All actions have descriptive aria-labels
+
+### Performance
+- Tracks loaded server-side
+- HTMX used for incremental updates
+- Export generates files on demand
+
+---
+
+## 📚 Library (`/library`)
+
+### Purpose
+Overview of the music library with quick access to browse artists, albums, and tracks.
+
+### Key Features
+- **Library Stats**: Total tracks, artists, albums, downloaded, broken
+- **Browse Options**: Quick links to artists, albums, tracks
+- **Library Scan**: Trigger library scan
+- **Management Actions**: Broken files, duplicates, incomplete albums, re-download
+
+### Components Used
+- Card component (stats, browse options)
+- Button component (actions)
+- Grid layout
+
+### HTMX Interactions
+- **Scan Library**:
+  - `hx-post="/api/library/scan"`
+  - `hx-target="#scan-status"`
+  - Starts library scan
+- **Re-download Broken**:
+  - `hx-post="/api/library/re-download-broken"`
+  - `hx-confirm="Re-download all broken files?"`
+  - Queues broken files for re-download
+
+### Data Requirements
+```python
+{
+    "stats": {
+        "total_tracks": int,
+        "total_artists": int,
+        "total_albums": int,
+        "tracks_with_files": int,
+        "broken_tracks": int
+    }
+}
+```
+
+### Accessibility
+- Stats cards with semantic structure
+- Action buttons with descriptive labels
+- Browse cards are keyboard navigable
+
+### Performance
+- Stats calculated server-side
+- Browse cards link to separate pages
+
+---
+
+## 🎤 Library Artists (`/library/artists`)
+
+### Purpose
+Browse all artists in the library in a visual grid layout.
+
+### Key Features
+- **Artist Grid**: Visual grid of all artists
+- **Avatar Placeholders**: Color-coded initials
+- **Artist Stats**: Album count, track count per artist
+- **Search Filter**: Client-side search by artist name
+- **Breadcrumb Navigation**: Back to library
+
+### Components Used
+- Card component (artist cards)
+- Grid layout
+- Input component (search)
+- Empty state
+
+### Client-Side Interactivity
+- **Search Filter**: Real-time JavaScript filtering by artist name
+- No HTMX needed (static grid with JS filter)
+
+### Data Requirements
+```python
+{
+    "artists": [
+        {
+            "name": str,
+            "album_count": int,
+            "track_count": int
+        }
+    ]
+}
+```
+
+### Accessibility
+- Breadcrumb navigation
+- Search input with aria-label
+- Artist cards with proper semantic structure
+
+### Performance
+- All artists loaded server-side
+- Client-side filtering for instant search
+- Responsive grid adjusts to screen size
+
+---
+
+## 💿 Library Albums (`/library/albums`)
+
+### Purpose
+Browse all albums in the library with cover art placeholders.
+
+### Key Features
+- **Album Grid**: Visual grid of all albums
+- **Cover Art Placeholders**: Gradient backgrounds with icons
+- **Album Info**: Title, artist, track count, year
+- **Search Filter**: Client-side search by album or artist
+- **Breadcrumb Navigation**: Back to library
+
+### Components Used
+- Card component (album cards)
+- Grid layout
+- Input component (search)
+- Empty state
+
+### Client-Side Interactivity
+- **Search Filter**: Real-time JavaScript filtering by album or artist name
+- Searches both album title and artist name
+
+### Data Requirements
+```python
+{
+    "albums": [
+        {
+            "title": str,
+            "artist": str,
+            "track_count": int,
+            "year": int | None
+        }
+    ]
+}
+```
+
+### Accessibility
+- Breadcrumb navigation
+- Search input with aria-label
+- Album cards with semantic structure
+- Cover art images have alt text
+
+### Performance
+- All albums loaded server-side
+- Client-side filtering for instant search
+- Responsive grid (2-6 columns)
+
+---
+
+## 🎵 Library Tracks (`/library/tracks`)
+
+### Purpose
+Browse and manage all tracks in the library with advanced filtering and sorting.
+
+### Key Features
+- **Track Table**: Complete track list with metadata
+- **Search Filter**: Client-side search across title, artist, album
+- **Status Filter**: All, Downloaded, Missing, Broken
+- **Sortable Columns**: Click headers to sort by title, artist, album
+- **Track Actions**: Download missing/broken tracks, view metadata
+- **Status Badges**: Visual status indicators
+- **Breadcrumb Navigation**: Back to library
+
+### Components Used
+- Table component (track list)
+- Badge component (status)
+- Input component (search)
+- Select component (filter)
+- Button component (actions)
+- Empty state
+
+### Client-Side Interactivity
+- **Search Filter**: Real-time JavaScript filtering
+- **Status Filter**: Filter by download status
+- **Column Sorting**: Click headers to sort ascending/descending
+- Combined filters work together
+
+### HTMX Interactions
+- **Download Track**:
+  - `hx-post="/api/tracks/{id}/download"`
+  - `hx-target="closest tr"`
+  - Updates track row
+- **View Metadata**:
+  - `hx-get="/api/tracks/{id}/metadata"`
+  - `hx-target="#metadata-modal"`
+  - Opens metadata modal
+
+### Data Requirements
+```python
+{
+    "tracks": [
+        {
+            "id": str,
+            "title": str,
+            "artist": str,
+            "album": str,
+            "duration_ms": int,
+            "file_path": str | None,
+            "is_broken": bool
+        }
+    ]
+}
+```
+
+### Accessibility
+- Breadcrumb navigation
+- Sortable headers with visual indicators
+- Status badges with appropriate colors
+- All filters have proper labels
+- Table with semantic structure
+
+### Performance
+- All tracks loaded server-side
+- Client-side filtering and sorting for instant feedback
+- Efficient row rendering
 
 ---
 
