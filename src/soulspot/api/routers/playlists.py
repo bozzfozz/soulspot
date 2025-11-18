@@ -547,8 +547,6 @@ async def sync_all_playlists(
         ) from e
 
 
-
-
 @router.post("/{playlist_id}/download-missing")
 async def download_missing_tracks(
     playlist_id: str,

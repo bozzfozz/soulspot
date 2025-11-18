@@ -5,7 +5,6 @@ to basic requests. It ensures 100% endpoint coverage and validates that all
 pages and features are reachable.
 """
 
-import pytest
 from httpx import AsyncClient
 
 
@@ -30,18 +29,14 @@ class TestAuthEndpoints:
         # Should redirect or return 200 with auth URL
         assert response.status_code in [200, 302, 307]
 
-    async def test_callback_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
+    async def test_callback_endpoint_accessible(self, async_client: AsyncClient):
         """Verify callback endpoint exists."""
         # This will fail without proper params, but endpoint should exist
         response = await async_client.get("/api/auth/callback")
         # Should return 422 (validation error) or other error, not 404
         assert response.status_code != 404
 
-    async def test_spotify_status_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
+    async def test_spotify_status_endpoint_accessible(self, async_client: AsyncClient):
         """Verify Spotify auth status endpoint is accessible."""
         response = await async_client.get("/api/auth/spotify/status")
         assert response.status_code == 200
@@ -62,9 +57,7 @@ class TestAuthEndpoints:
 class TestPlaylistEndpoints:
     """Test playlist management endpoints."""
 
-    async def test_list_playlists_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
+    async def test_list_playlists_endpoint_accessible(self, async_client: AsyncClient):
         """Verify playlists list endpoint is accessible."""
         response = await async_client.get("/api/playlists/")
         # Might require auth, but endpoint should exist
@@ -94,7 +87,9 @@ class TestPlaylistEndpoints:
         """Verify export endpoints exist."""
         playlist_id = "550e8400-e29b-41d4-a716-446655440000"
         for format in ["m3u", "csv", "json"]:
-            response = await async_client.get(f"/api/playlists/{playlist_id}/export/{format}")
+            response = await async_client.get(
+                f"/api/playlists/{playlist_id}/export/{format}"
+            )
             # Should return 404 for non-existent playlist, not route not found
             assert response.status_code in [200, 404]
 
@@ -130,9 +125,7 @@ class TestTracksEndpoints:
 class TestDownloadEndpoints:
     """Test download management endpoints."""
 
-    async def test_list_downloads_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
+    async def test_list_downloads_endpoint_accessible(self, async_client: AsyncClient):
         """Verify downloads list endpoint is accessible."""
         response = await async_client.get("/api/downloads/")
         assert response.status_code == 200
@@ -209,12 +202,16 @@ class TestLibraryEndpoints:
         response = await async_client.get("/api/library/duplicates")
         assert response.status_code == 200
 
-    async def test_get_broken_files_endpoint_accessible(self, async_client: AsyncClient):
+    async def test_get_broken_files_endpoint_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify get broken files endpoint is accessible."""
         response = await async_client.get("/api/library/broken-files")
         assert response.status_code == 200
 
-    async def test_incomplete_albums_endpoint_accessible(self, async_client: AsyncClient):
+    async def test_incomplete_albums_endpoint_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify incomplete albums endpoint is accessible."""
         response = await async_client.get("/api/library/incomplete-albums")
         assert response.status_code == 200
@@ -256,17 +253,23 @@ class TestDashboardEndpoints:
 class TestWidgetEndpoints:
     """Test widget endpoints."""
 
-    async def test_active_jobs_widget_content_accessible(self, async_client: AsyncClient):
+    async def test_active_jobs_widget_content_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify active jobs widget content is accessible."""
         response = await async_client.get("/api/ui/widgets/active-jobs/content")
         assert response.status_code == 200
 
-    async def test_spotify_search_widget_content_accessible(self, async_client: AsyncClient):
+    async def test_spotify_search_widget_content_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify Spotify search widget content is accessible."""
         response = await async_client.get("/api/ui/widgets/spotify-search/content")
         assert response.status_code == 200
 
-    async def test_missing_tracks_widget_content_accessible(self, async_client: AsyncClient):
+    async def test_missing_tracks_widget_content_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify missing tracks widget content is accessible."""
         response = await async_client.get("/api/ui/widgets/missing-tracks/content")
         assert response.status_code == 200
@@ -275,7 +278,9 @@ class TestWidgetEndpoints:
 class TestWidgetTemplateEndpoints:
     """Test widget template endpoints."""
 
-    async def test_list_widget_templates_endpoint_accessible(self, async_client: AsyncClient):
+    async def test_list_widget_templates_endpoint_accessible(
+        self, async_client: AsyncClient
+    ):
         """Verify list widget templates endpoint is accessible."""
         response = await async_client.get("/api/widgets/templates")
         assert response.status_code == 200
@@ -289,16 +294,12 @@ class TestWidgetTemplateEndpoints:
 class TestAutomationEndpoints:
     """Test automation endpoints."""
 
-    async def test_list_watchlist_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
+    async def test_list_watchlist_endpoint_accessible(self, async_client: AsyncClient):
         """Verify list watchlist endpoint is accessible."""
         response = await async_client.get("/api/automation/watchlist")
         assert response.status_code == 200
 
-    async def test_create_watchlist_endpoint_exists(
-        self, async_client: AsyncClient
-    ):
+    async def test_create_watchlist_endpoint_exists(self, async_client: AsyncClient):
         """Verify create watchlist endpoint exists."""
         response = await async_client.post("/api/automation/watchlist", json={})
         assert response.status_code != 404

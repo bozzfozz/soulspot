@@ -4,7 +4,6 @@ This module tests error handling, edge cases, and input validation across
 all API endpoints to ensure robust error responses and proper validation.
 """
 
-import pytest
 from httpx import AsyncClient
 
 
@@ -29,9 +28,7 @@ class TestInputValidation:
         )
         assert response.status_code in [400, 422]
 
-    async def test_missing_required_fields_returns_422(
-        self, async_client: AsyncClient
-    ):
+    async def test_missing_required_fields_returns_422(self, async_client: AsyncClient):
         """Verify missing required fields return validation errors."""
         response = await async_client.post("/api/downloads/batch", json={})
         assert response.status_code == 422
@@ -86,9 +83,7 @@ class TestNotFoundErrors:
 class TestAuthenticationErrors:
     """Test authentication-related errors."""
 
-    async def test_callback_without_code_returns_error(
-        self, async_client: AsyncClient
-    ):
+    async def test_callback_without_code_returns_error(self, async_client: AsyncClient):
         """Verify callback without code returns error."""
         response = await async_client.get("/api/auth/callback")
         assert response.status_code in [400, 422]
@@ -97,9 +92,7 @@ class TestAuthenticationErrors:
         self, async_client: AsyncClient
     ):
         """Verify callback with invalid state returns error."""
-        response = await async_client.get(
-            "/api/auth/callback?code=test&state=invalid"
-        )
+        response = await async_client.get("/api/auth/callback?code=test&state=invalid")
         # Should return error for invalid state
         assert response.status_code in [400, 401, 403, 422]
 
@@ -199,7 +192,6 @@ class TestCORSHeaders:
         """Verify CORS headers are included in responses."""
         response = await async_client.get("/api/library/stats")
         # Check if CORS headers might be present
-        headers = response.headers
         # CORS headers are optional depending on configuration
         # Just verify the request succeeds
         assert response.status_code == 200
@@ -208,9 +200,7 @@ class TestCORSHeaders:
 class TestContentTypeHandling:
     """Test different content types are handled."""
 
-    async def test_json_content_type_required_for_post(
-        self, async_client: AsyncClient
-    ):
+    async def test_json_content_type_required_for_post(self, async_client: AsyncClient):
         """Verify JSON content-type is handled for POST requests."""
         response = await async_client.post(
             "/api/downloads/pause",
