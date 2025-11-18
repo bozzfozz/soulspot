@@ -159,3 +159,6 @@ Plan → Implement (Bulk) → Validate & Fixⁿ → Auto-Code-Review & Auto-Fix�
 - Git-Tag `vX.Y.Z` erstellen oder CI-basiertes Auto-Tagging vorbereiten.  
 - Rollback-Plan und bekannte Risiken in den Release-Notes dokumentieren.  
 - Sicherstellen, dass alle Dokumente den veröffentlichten Zustand widerspiegeln (Single Source of Truth).
+
+
+All quality checks must pass: ruff, mypy, bandit, codeql.
