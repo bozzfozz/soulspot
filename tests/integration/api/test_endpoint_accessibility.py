@@ -326,7 +326,7 @@ class TestSSEEndpoints:
     async def test_sse_stream_endpoint_accessible(self, async_client: AsyncClient):
         """Verify SSE stream endpoint is accessible."""
         import asyncio
-        
+
         # SSE endpoints use streaming responses that never complete on their own
         # Use a timeout to prevent hanging
         try:
@@ -337,14 +337,14 @@ class TestSSEEndpoints:
                     # Read one chunk to ensure stream works
                     async for _ in response.aiter_bytes():
                         break  # Exit after first chunk
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Timeout is expected for SSE streams, endpoint is accessible
             pass
 
     async def test_sse_test_endpoint_accessible(self, async_client: AsyncClient):
         """Verify SSE test endpoint is accessible."""
         import asyncio
-        
+
         # SSE test endpoint also uses streaming
         try:
             async with asyncio.timeout(2.0):  # 2 second timeout
@@ -354,6 +354,6 @@ class TestSSEEndpoints:
                     # Read one chunk to ensure stream works
                     async for _ in response.aiter_bytes():
                         break  # Exit after first chunk
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Timeout is expected for SSE streams, endpoint is accessible
             pass
