@@ -114,10 +114,23 @@ class TestPriorityBasedQueue:
 class TestRetryLogic:
     """Test retry logic with exponential backoff."""
 
-    async def test_retry_with_exponential_backoff(self) -> None:
+    async def test_retry_with_exponential_backoff(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that jobs retry with exponential backoff (1s, 2s, 4s)."""
         job_queue = JobQueue(max_concurrent_jobs=1)
         attempt_times: list[float] = []
+        sleep_delays: list[float] = []
+
+        # Mock asyncio.sleep to track delays without waiting
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            sleep_delays.append(delay)
+            # Small delay to allow event loop processing
+            await original_sleep(0.01)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def failing_handler(job: Job) -> None:
             import time
@@ -135,8 +148,8 @@ class TestRetryLogic:
         # Start workers
         await job_queue.start(num_workers=1)
 
-        # Wait for all retries (1s + 2s + 4s + processing time)
-        await asyncio.sleep(10)
+        # Wait for all retries (using real sleep for synchronization)
+        await original_sleep(0.5)
 
         # Stop workers
         await job_queue.stop()
@@ -147,18 +160,29 @@ class TestRetryLogic:
         assert job.status == JobStatus.FAILED
         assert job.retries == 3
 
-        # Verify exponential backoff timing
+        # Verify exponential backoff delays were calculated correctly
         assert len(attempt_times) == 3
-        if len(attempt_times) >= 2:
-            # First retry should be ~1s after initial attempt
-            assert attempt_times[1] - attempt_times[0] >= 0.9
-        if len(attempt_times) >= 3:
-            # Second retry should be ~2s after first retry
-            assert attempt_times[2] - attempt_times[1] >= 1.9
+        backoff_delays = [d for d in sleep_delays if d in [1.0, 2.0, 4.0]]
+        assert len(backoff_delays) >= 2
+        assert 1.0 in backoff_delays
+        assert 2.0 in backoff_delays
 
-    async def test_max_retries_configurable(self) -> None:
+    async def test_max_retries_configurable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that max retries is configurable."""
         job_queue = JobQueue(max_concurrent_jobs=1)
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up retry delays
+            if delay >= 1.0:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def failing_handler(job: Job) -> None:
             raise ValueError("Test failure")
@@ -171,7 +195,7 @@ class TestRetryLogic:
         )
 
         await job_queue.start(num_workers=1)
-        await asyncio.sleep(5)
+        await original_sleep(0.3)
         await job_queue.stop()
 
         job = await job_queue.get_job(job_id)
@@ -198,13 +222,26 @@ class TestConcurrentDownloadLimits:
         job_queue.set_max_concurrent_jobs(1)
         assert job_queue.get_max_concurrent_jobs() == 1
 
-    async def test_concurrent_limit_respected(self) -> None:
+    async def test_concurrent_limit_respected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that concurrent job limit is respected."""
         job_queue = JobQueue(max_concurrent_jobs=2)
 
         running_count = 0
         max_concurrent = 0
         lock = asyncio.Lock()
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up sleep significantly
+            if delay >= 0.2:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def slow_handler(job: Job) -> None:
             nonlocal running_count, max_concurrent
@@ -225,7 +262,7 @@ class TestConcurrentDownloadLimits:
 
         # Start workers
         await job_queue.start(num_workers=3)
-        await asyncio.sleep(1.5)
+        await original_sleep(0.3)
         await job_queue.stop()
 
         # Verify max concurrent was respected
@@ -245,10 +282,23 @@ class TestConcurrentDownloadLimits:
 class TestPauseResumeAPI:
     """Test pause/resume functionality (global and individual)."""
 
-    async def test_global_pause_and_resume(self) -> None:
+    async def test_global_pause_and_resume(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test pausing and resuming the entire queue."""
         job_queue = JobQueue(max_concurrent_jobs=2)
         processed_count = 0
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up sleeps
+            if delay >= 0.05:
+                await original_sleep(0.005)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def handler(job: Job) -> None:
             nonlocal processed_count
@@ -265,7 +315,7 @@ class TestPauseResumeAPI:
         await job_queue.start(num_workers=1)
 
         # Let one job process
-        await asyncio.sleep(0.1)
+        await original_sleep(0.05)
 
         # Pause queue
         await job_queue.pause()
@@ -274,7 +324,7 @@ class TestPauseResumeAPI:
         count_after_pause = processed_count
 
         # Wait and verify no new jobs are processed
-        await asyncio.sleep(0.2)
+        await original_sleep(0.1)
         assert processed_count == count_after_pause
 
         # Resume queue
@@ -282,7 +332,7 @@ class TestPauseResumeAPI:
         assert job_queue.is_paused() is False
 
         # Wait for remaining jobs
-        await asyncio.sleep(0.5)
+        await original_sleep(0.2)
 
         # Stop workers
         await job_queue.stop()
@@ -383,10 +433,23 @@ class TestBatchOperations:
 class TestIntegrationScenarios:
     """Test realistic integration scenarios."""
 
-    async def test_high_priority_download_preempts_low_priority(self) -> None:
+    async def test_high_priority_download_preempts_low_priority(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that high priority downloads are processed before low priority."""
         job_queue = JobQueue(max_concurrent_jobs=1)
         processed_order: list[int] = []
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up sleeps
+            if delay >= 0.05:
+                await original_sleep(0.005)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def handler(job: Job) -> None:
             priority = job.priority
@@ -403,7 +466,7 @@ class TestIntegrationScenarios:
         await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": "track-3"}, priority=10)
 
         await job_queue.start(num_workers=1)
-        await asyncio.sleep(0.5)
+        await original_sleep(0.2)
         await job_queue.stop()
 
         # First job processed should be one of the P0 jobs (already in queue)
@@ -411,10 +474,23 @@ class TestIntegrationScenarios:
         assert len(processed_order) == 3
         assert 10 in processed_order
 
-    async def test_retry_after_failure_with_priority_maintained(self) -> None:
+    async def test_retry_after_failure_with_priority_maintained(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that retries maintain original priority."""
         job_queue = JobQueue(max_concurrent_jobs=1)
         attempts = 0
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up retry delays
+            if delay >= 1.0:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def handler_with_one_failure(job: Job) -> None:
             nonlocal attempts
@@ -431,7 +507,7 @@ class TestIntegrationScenarios:
         )
 
         await job_queue.start(num_workers=1)
-        await asyncio.sleep(2)
+        await original_sleep(0.3)
         await job_queue.stop()
 
         job = await job_queue.get_job(job_id)
@@ -440,12 +516,25 @@ class TestIntegrationScenarios:
         assert job.status == JobStatus.COMPLETED
         assert attempts == 2
 
-    async def test_pause_queue_with_concurrent_downloads(self) -> None:
+    async def test_pause_queue_with_concurrent_downloads(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test pausing queue while downloads are in progress."""
         job_queue = JobQueue(max_concurrent_jobs=2)
         started_jobs = 0
         completed_jobs = 0
         lock = asyncio.Lock()
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up sleeps
+            if delay >= 0.15:
+                await original_sleep(0.015)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def slow_handler(job: Job) -> None:
             nonlocal started_jobs, completed_jobs
@@ -462,19 +551,19 @@ class TestIntegrationScenarios:
             await job_queue.enqueue(JobType.DOWNLOAD, {"track_id": f"track-{i}"})
 
         await job_queue.start(num_workers=2)
-        await asyncio.sleep(0.15)  # Let some jobs start
+        await original_sleep(0.05)  # Let some jobs start
 
         # Pause
         await job_queue.pause()
         jobs_started_at_pause = started_jobs
 
         # Wait a bit - no new jobs should start
-        await asyncio.sleep(0.5)
+        await original_sleep(0.1)
         assert started_jobs == jobs_started_at_pause  # No new jobs started
 
         # Resume
         await job_queue.resume()
-        await asyncio.sleep(1.0)
+        await original_sleep(0.3)
         await job_queue.stop()
 
         # All jobs should eventually complete

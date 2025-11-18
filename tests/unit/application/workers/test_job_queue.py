@@ -317,8 +317,20 @@ class TestJobQueue:
         # Verify jobs were completed
         assert completed_count == 5
 
-    async def test_wait_for_job(self, job_queue: JobQueue) -> None:
+    async def test_wait_for_job(
+        self, job_queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test waiting for job completion."""
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Speed up sleep calls
+            if delay >= 0.1:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         # Register handler
         async def handler(job: Job) -> str:
@@ -346,8 +358,20 @@ class TestJobQueue:
         assert job.status == JobStatus.COMPLETED
         assert job.result == "done"
 
-    async def test_wait_for_job_timeout(self, job_queue: JobQueue) -> None:
+    async def test_wait_for_job_timeout(
+        self, job_queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test waiting for job with timeout."""
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Only mock long sleeps (>1s), use real sleep for short ones
+            if delay > 1.0:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         # Register slow handler
         async def handler(job: Job) -> None:
@@ -392,9 +416,22 @@ class TestJobQueue:
         assert job is not None
         assert job.priority == 10
 
-    async def test_priority_queue_ordering(self, job_queue: JobQueue) -> None:
+    async def test_priority_queue_ordering(
+        self, job_queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that jobs are processed in priority order."""
         processed_jobs: list[str] = []
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Significantly reduce sleep time for testing
+            if delay >= 0.05:
+                await original_sleep(0.005)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def handler(job: Job) -> None:
             processed_jobs.append(job.id)
@@ -418,7 +455,7 @@ class TestJobQueue:
         await job_queue.start(num_workers=1)
 
         # Wait for jobs to complete
-        await asyncio.sleep(0.5)
+        await original_sleep(0.2)
 
         # Stop workers
         await job_queue.stop()
@@ -475,9 +512,22 @@ class TestJobQueue:
         # All jobs should be processed
         assert processed_count == 3
 
-    async def test_exponential_backoff_retry(self, job_queue: JobQueue) -> None:
+    async def test_exponential_backoff_retry(
+        self, job_queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test exponential backoff retry logic."""
         attempt_times: list[float] = []
+        sleep_delays: list[float] = []
+
+        # Track sleep calls but don't actually wait
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            sleep_delays.append(delay)
+            # Small actual delay to allow event loop to process
+            await original_sleep(0.01)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def failing_handler(job: Job) -> None:
             import time
@@ -495,8 +545,8 @@ class TestJobQueue:
         # Start workers
         await job_queue.start(num_workers=1)
 
-        # Wait for all retries
-        await asyncio.sleep(10)  # 1s + 2s + 4s + processing time
+        # Wait for all retries (using real sleep for test synchronization)
+        await original_sleep(0.5)
 
         # Stop workers
         await job_queue.stop()
@@ -507,14 +557,13 @@ class TestJobQueue:
         assert job.status == JobStatus.FAILED
         assert job.retries == 3
 
-        # Verify exponential backoff timing (approximate)
+        # Verify exponential backoff delays were calculated correctly
         assert len(attempt_times) == 3
-        if len(attempt_times) >= 2:
-            # First retry should be ~1s after initial attempt
-            assert attempt_times[1] - attempt_times[0] >= 0.9
-        if len(attempt_times) >= 3:
-            # Second retry should be ~2s after first retry
-            assert attempt_times[2] - attempt_times[1] >= 1.9
+        # Check that the backoff delays were 1s, 2s (for first two retries)
+        backoff_delays = [d for d in sleep_delays if d in [1.0, 2.0, 4.0]]
+        assert len(backoff_delays) >= 2
+        assert 1.0 in backoff_delays
+        assert 2.0 in backoff_delays
 
     async def test_set_max_concurrent_jobs(self, job_queue: JobQueue) -> None:
         """Test setting maximum concurrent jobs."""
@@ -532,13 +581,26 @@ class TestJobQueue:
         except ValueError:
             pass
 
-    async def test_concurrent_download_limit(self, job_queue: JobQueue) -> None:
+    async def test_concurrent_download_limit(
+        self, job_queue: JobQueue, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test that concurrent job limit is respected."""
         job_queue.set_max_concurrent_jobs(2)
 
         running_count = 0
         max_concurrent = 0
         lock = asyncio.Lock()
+
+        original_sleep = asyncio.sleep
+
+        async def mock_sleep(delay: float) -> None:
+            # Reduce sleep time significantly for testing
+            if delay >= 0.2:
+                await original_sleep(0.01)
+            else:
+                await original_sleep(delay)
+
+        monkeypatch.setattr("asyncio.sleep", mock_sleep)
 
         async def slow_handler(job: Job) -> None:
             nonlocal running_count, max_concurrent
@@ -562,7 +624,7 @@ class TestJobQueue:
         await job_queue.start(num_workers=3)
 
         # Wait for all jobs to complete
-        await asyncio.sleep(1.5)
+        await original_sleep(0.3)
 
         # Stop workers
         await job_queue.stop()

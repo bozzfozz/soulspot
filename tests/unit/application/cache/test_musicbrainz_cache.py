@@ -131,7 +131,7 @@ class TestMusicBrainzCache:
         assert await cache.get_recording_by_isrc("ISRC123") is not None
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Should be expired
         assert await cache.get_recording_by_isrc("ISRC123") is None
@@ -149,7 +149,7 @@ class TestMusicBrainzCache:
         await cache.cache_recording_by_isrc("ISRC2", {"id": "rec2"})
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Cleanup should remove expired entries
         removed = await cache.cleanup_expired()

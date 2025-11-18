@@ -72,13 +72,13 @@ class TestInMemoryCache:
         cache = InMemoryCache[str, str]()
 
         # Set a value with 0.1 second TTL
-        await cache.set("key1", "value1", ttl_seconds=1)
+        await cache.set("key1", "value1", ttl_seconds=0.05)
 
         # Value should exist immediately
         assert await cache.get("key1") == "value1"
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Value should be gone
         assert await cache.get("key1") is None
@@ -88,14 +88,14 @@ class TestInMemoryCache:
         # Create cache
         cache = InMemoryCache[str, str]()
 
-        # Set value with custom 1 second TTL
-        await cache.set("key1", "value1", ttl_seconds=1)
+        # Set value with custom 0.05 second TTL
+        await cache.set("key1", "value1", ttl_seconds=0.05)
 
         # Value should exist immediately
         assert await cache.get("key1") == "value1"
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Value should be gone
         assert await cache.get("key1") is None
@@ -105,12 +105,12 @@ class TestInMemoryCache:
         # Create cache
         cache = InMemoryCache[str, str]()
 
-        # Set multiple values with 1 second TTL
-        await cache.set("key1", "value1", ttl_seconds=1)
-        await cache.set("key2", "value2", ttl_seconds=1)
+        # Set multiple values with 0.05 second TTL
+        await cache.set("key1", "value1", ttl_seconds=0.05)
+        await cache.set("key2", "value2", ttl_seconds=0.05)
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Cleanup expired entries
         count = await cache.cleanup_expired()

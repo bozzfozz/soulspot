@@ -168,7 +168,7 @@ class TestTrackFileCache:
         assert await cache.get_file_path(track_id) is not None
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Should be expired
         assert await cache.get_file_path(track_id) is None
@@ -189,7 +189,7 @@ class TestTrackFileCache:
         await cache.cache_file_path(track_id2, FilePath("/path/2.mp3"))
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Cleanup should remove expired entries
         removed = await cache.cleanup_expired()

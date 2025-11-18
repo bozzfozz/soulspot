@@ -19,7 +19,7 @@ def config() -> CircuitBreakerConfig:
     return CircuitBreakerConfig(
         failure_threshold=3,
         success_threshold=2,
-        timeout=1.0,  # Short timeout for tests
+        timeout=0.05,  # Very short timeout for fast tests
         reset_timeout=5.0,
     )
 
@@ -173,7 +173,7 @@ class TestCircuitBreakerOpen:
         assert circuit_breaker.state == CircuitState.OPEN
 
         # Wait for timeout
-        await asyncio.sleep(1.1)  # Slightly more than config timeout
+        await asyncio.sleep(0.06)  # Slightly more than config timeout
 
         # Next call should transition to HALF_OPEN
         async def success_func() -> str:
@@ -199,7 +199,7 @@ class TestCircuitBreakerHalfOpen:
                 await circuit_breaker.call(failure_func)
 
         # Wait for timeout
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # First success after timeout transitions to HALF_OPEN
         async def success_func() -> str:

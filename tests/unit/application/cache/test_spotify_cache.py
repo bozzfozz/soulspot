@@ -143,7 +143,7 @@ class TestSpotifyCache:
         assert await cache.get_track("track123") is not None
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Should be expired
         assert await cache.get_track("track123") is None
@@ -161,7 +161,7 @@ class TestSpotifyCache:
         await cache.cache_track("track2", {"id": "track2"})
 
         # Wait for expiration
-        await asyncio.sleep(1.1)
+        await asyncio.sleep(0.06)
 
         # Cleanup should remove expired entries
         removed = await cache.cleanup_expired()
