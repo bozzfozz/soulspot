@@ -97,8 +97,9 @@ async def db_session(db: Database) -> AsyncGenerator[AsyncSession, None]:
 async def app_with_db(test_settings: Settings, db: Database):
     """Create FastAPI app with initialized database (no lifespan)."""
     # Create app without lifespan to avoid automatic initialization
-    from fastapi import FastAPI
     from unittest.mock import AsyncMock
+
+    from fastapi import FastAPI
 
     app = FastAPI(
         title=test_settings.app_name,
@@ -109,9 +110,10 @@ async def app_with_db(test_settings: Settings, db: Database):
     app.state.db = db
 
     # Add mock job queue to avoid 503 errors in download endpoint tests
-    from soulspot.application.workers.job_queue import JobQueue
     from unittest.mock import MagicMock
-    
+
+    from soulspot.application.workers.job_queue import JobQueue
+
     mock_job_queue = AsyncMock(spec=JobQueue)
     mock_job_queue.enqueue = AsyncMock(return_value=None)
     mock_job_queue.pause = AsyncMock(return_value=None)
@@ -119,14 +121,16 @@ async def app_with_db(test_settings: Settings, db: Database):
     # Use MagicMock for synchronous methods
     mock_job_queue.is_paused = MagicMock(return_value=False)
     mock_job_queue.get_max_concurrent_jobs = MagicMock(return_value=3)
-    mock_job_queue.get_stats = MagicMock(return_value={
-        "running": 0,
-        "pending": 0,
-        "total_jobs": 0,
-        "completed": 0,
-        "failed": 0,
-        "cancelled": 0,
-    })
+    mock_job_queue.get_stats = MagicMock(
+        return_value={
+            "running": 0,
+            "pending": 0,
+            "total_jobs": 0,
+            "completed": 0,
+            "failed": 0,
+            "cancelled": 0,
+        }
+    )
     app.state.job_queue = mock_job_queue
 
     # Include routes from main app

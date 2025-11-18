@@ -4,7 +4,6 @@ This module tests that all UI pages are accessible and render correctly.
 Tests verify HTML responses, status codes, and basic content validation.
 """
 
-import pytest
 from httpx import AsyncClient
 
 

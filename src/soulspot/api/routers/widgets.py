@@ -89,7 +89,9 @@ async def spotify_search_results(
                 # Note: search_track requires access_token but we don't have it in widget context
                 # This needs to be refactored to use session-based auth
                 search_results = await spotify_client.search_track(
-                    query, access_token="", limit=limit
+                    query,
+                    access_token="",
+                    limit=limit,  # nosec B106
                 )
                 # search_results is a dict with structure: {"tracks": {"items": [...]}}
                 track_items = search_results.get("tracks", {}).get("items", [])
