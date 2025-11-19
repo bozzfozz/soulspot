@@ -1,9 +1,12 @@
 services:
   # SoulSpot Bridge - Main application (local single-user setup)
   soulspot:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+    # Use pre-built image from GitHub Container Registry
+    # For local development, uncomment the build section below and comment out the image line
+    image: ghcr.io/bozzfozz/soulspot-bridge:latest
+    # build:
+    #   context: ..
+    #   dockerfile: docker/Dockerfile
     container_name: soulspot-bridge
     ports:
       - "8765:8765"      # Web UI and API

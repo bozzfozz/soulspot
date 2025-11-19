@@ -44,7 +44,7 @@ SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Di
    ```
 4. Container starten:
    ```bash
-   docker-compose -f docker/docker-compose.yml up -d --build
+   docker-compose -f docker/docker-compose.yml up -d
    ```
 5. Logs prüfen (optional):
    ```bash
