@@ -173,11 +173,13 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ## Starting the Application
 
-### 1. Build and Start Services
+### 1. Pull and Start Services
+
+The docker-compose configuration uses the pre-built image from GitHub Container Registry for faster startup.
 
 ```bash
-# Build and start in detached mode
-docker-compose -f docker/docker-compose.yml up -d --build
+# Pull latest image and start in detached mode
+docker-compose -f docker/docker-compose.yml up -d
 
 # View logs
 docker-compose -f docker/docker-compose.yml logs -f
@@ -185,6 +187,8 @@ docker-compose -f docker/docker-compose.yml logs -f
 # View logs for specific service
 docker-compose -f docker/docker-compose.yml logs -f soulspot
 ```
+
+**For local development:** If you want to build the image locally instead of using the pre-built image, edit `docker/docker-compose.yml` and uncomment the `build` section while commenting out the `image` line.
 
 ### 2. Verify Services are Running
 
@@ -424,14 +428,26 @@ docker-compose -f docker/docker-compose.yml down
 docker-compose -f docker/docker-compose.yml down -v
 ```
 
-### Rebuilding After Code Changes
+### Rebuilding After Code Changes (Development Only)
+
+**Note:** This section is only relevant if you've modified the `docker-compose.yml` to use local builds instead of the pre-built image.
 
 ```bash
-# Rebuild and restart
+# First, uncomment the build section in docker-compose.yml and comment out the image line
+
+# Then rebuild and restart
 docker-compose -f docker/docker-compose.yml up -d --build
 
 # Force rebuild without cache
 docker-compose -f docker/docker-compose.yml build --no-cache
+docker-compose -f docker/docker-compose.yml up -d
+```
+
+**For regular users:** Simply pull the latest image:
+
+```bash
+# Pull latest image and restart
+docker-compose -f docker/docker-compose.yml pull
 docker-compose -f docker/docker-compose.yml up -d
 ```
 
