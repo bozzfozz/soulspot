@@ -24,8 +24,8 @@ services:
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/api/v1/auth/callback}
       
       # slskd Configuration
-      - SLSKD_BASE_URL=${SLSKD_BASE_URL:-http://slskd:5030}
-      - SLSKD_URL=${SLSKD_URL:-http://slskd:5030}
+      - SLSKD_BASE_URL=${SLSKD_BASE_URL:-http://host.docker.internal:5030}
+      - SLSKD_URL=${SLSKD_URL:-http://host.docker.internal:5030}
       - SLSKD_API_KEY=${SLSKD_API_KEY:-}
       - SLSKD_USERNAME=${SLSKD_USERNAME:-admin}
       # WARNING: You MUST set SLSKD_PASSWORD to a strong value in production!
@@ -52,37 +52,8 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8765
     restart: unless-stopped
-    depends_on:
-      - slskd
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - soulspot-network
-
-  # slskd - Soulseek daemon with HTTP API
-  slskd:
-    image: slskd/slskd:latest
-    container_name: soulspot-slskd
-    ports:
-      - "5030:5030"      # Web UI and API
-      - "5031:5031"      # Soulseek listening port
-    volumes:
-      - ./mnt/slskd/config:/app/config
-      - ./mnt/slskd/state:/app/state
-      - ./mnt/downloads:/downloads
-      - ./mnt/music:/music
-    environment:
-      - SLSKD_REMOTE_CONFIGURATION=true
-      - SLSKD_HTTP_PORT=5030
-      - SLSKD_SLSK_LISTEN_PORT=5031
-      - SLSKD_NO_AUTH=${SLSKD_NO_AUTH:-false}
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5030/health"]
       interval: 30s
       timeout: 10s
       retries: 3

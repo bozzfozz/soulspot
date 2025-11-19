@@ -291,7 +291,9 @@ Entwickler benötigen eine einfache Möglichkeit, alle externen Services lokal z
 
 ## Technische Details
 
-### docker-compose.yml
+> **Note:** This example is outdated. slskd is now expected to run on the host machine, not in Docker. See the current `docker/docker-compose.yml` for the updated configuration.
+
+### docker-compose.yml (ARCHIVED - for reference only)
 ```yaml
 version: '3.9'
 

@@ -278,17 +278,17 @@ docker-compose restart soulspot
 
 1. **Check slskd connection:**
    ```bash
-   # Test slskd directly
+   # Test slskd directly (running on host)
    curl http://localhost:5030/health
    
-   # Check slskd logs
-   docker-compose logs slskd | tail -20
+   # Check slskd logs (check slskd's installation directory for logs)
+   # Note: slskd is not running in Docker, so docker-compose logs won't show it
    ```
 
 2. **Verify slskd credentials:**
    ```bash
-   # In .env
-   SLSKD_URL=http://slskd:5030
+   # In .env (slskd runs on host, use host.docker.internal or host IP)
+   SLSKD_URL=http://host.docker.internal:5030
    SLSKD_USERNAME=admin
    SLSKD_PASSWORD=your_password
    

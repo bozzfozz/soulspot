@@ -69,4 +69,5 @@ db-downgrade:
 # Start development environment
 dev: docker-up
     @echo "Development environment started!"
-    @echo "slskd UI: http://localhost:5030"
+    @echo "SoulSpot Bridge UI: http://localhost:8765"
+    @echo "Note: Ensure slskd is running on the host at http://localhost:5030"

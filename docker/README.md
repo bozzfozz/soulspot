@@ -21,6 +21,10 @@ Before you begin, ensure you have:
 
 - **Docker** (version 20.10+)
 - **Docker Compose** (version 2.0+)
+- **slskd running on your host machine** (not in Docker)
+  - Download and install from: https://github.com/slskd/slskd
+  - Configure it to run on port 5030 (default)
+  - Ensure it's accessible from Docker containers
 - **Spotify API Credentials** (Client ID and Secret)
   - Get them from: https://developer.spotify.com/dashboard
 - **slskd API Key or credentials**
@@ -49,14 +53,13 @@ your-project/
 ├── mnt/
 │   ├── downloads/      # Downloads from slskd (must exist before starting)
 │   ├── music/          # Final music library (must exist before starting)
-│   ├── soulspot/       # SoulSpot config (auto-created)
-│   │   ├── soulspot.db
-│   │   ├── artwork/
-│   │   └── tmp/
-│   └── slskd/          # slskd config (auto-created)
-│       ├── config/
-│       └── state/
+│   └── soulspot/       # SoulSpot config (auto-created)
+│       ├── soulspot.db
+│       ├── artwork/
+│       └── tmp/
 ```
+
+**Note:** The `slskd` directories are not needed in the `mnt/` folder since slskd runs on the host machine, not in Docker.
 
 ### Creating Required Directories
 
@@ -66,10 +69,6 @@ your-project/
 # Create required directories
 mkdir -p mnt/downloads
 mkdir -p mnt/music
-
-# Optional: Create slskd directories (will be auto-created if missing)
-mkdir -p mnt/slskd/config
-mkdir -p mnt/slskd/state
 ```
 
 The `/config` directory (`mnt/soulspot`) will be automatically created by the container at startup.
@@ -98,15 +97,25 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/v1/auth/callback
 
 #### slskd Configuration
 
+**Important:** slskd must be running on your host machine before starting SoulSpot Bridge.
+
 ```env
-SLSKD_BASE_URL=http://slskd:5030
+# For Docker on Windows/Mac (use host.docker.internal)
+SLSKD_BASE_URL=http://host.docker.internal:5030
+SLSKD_API_KEY=your_slskd_api_key_here
+```
+
+For Linux, you may need to use your host IP address instead:
+```env
+# For Docker on Linux (use host IP, e.g., 192.168.1.100)
+SLSKD_BASE_URL=http://192.168.1.100:5030
 SLSKD_API_KEY=your_slskd_api_key_here
 ```
 
 Or if using username/password:
 
 ```env
-SLSKD_BASE_URL=http://slskd:5030
+SLSKD_BASE_URL=http://host.docker.internal:5030
 SLSKD_USERNAME=admin
 SLSKD_PASSWORD=your_password_here
 ```
@@ -186,7 +195,6 @@ docker-compose -f docker/docker-compose.yml ps
 # Expected output:
 # NAME                  STATUS              PORTS
 # soulspot-bridge       Up (healthy)        0.0.0.0:8765->8765/tcp
-# soulspot-slskd        Up (healthy)        0.0.0.0:5030->5030/tcp, 0.0.0.0:5031->5031/tcp
 ```
 
 ### 3. Check Health Status
@@ -195,7 +203,7 @@ docker-compose -f docker/docker-compose.yml ps
 # SoulSpot Bridge health
 curl http://localhost:8765/health
 
-# slskd health
+# slskd health (running on host)
 curl http://localhost:5030/health
 ```
 
@@ -210,7 +218,7 @@ Once the services are running:
 | **SoulSpot Bridge** | http://localhost:8765 | Main application |
 | **SoulSpot API Docs** | http://localhost:8765/docs | Interactive API documentation |
 | **SoulSpot UI** | http://localhost:8765/ui | Web interface |
-| **slskd Web UI** | http://localhost:5030 | Soulseek daemon interface |
+| **slskd Web UI** | http://localhost:5030 | Soulseek daemon interface (running on host) |
 
 ---
 
@@ -388,16 +396,17 @@ docker-compose -f docker/docker-compose.yml logs -f soulspot | grep -i "auto-imp
 ### Viewing Container Logs
 
 ```bash
-# All services
+# All services (only SoulSpot Bridge in Docker)
 docker-compose -f docker/docker-compose.yml logs -f
 
-# Specific service
+# SoulSpot service
 docker-compose -f docker/docker-compose.yml logs -f soulspot
-docker-compose -f docker/docker-compose.yml logs -f slskd
 
 # Last 100 lines
 docker-compose -f docker/docker-compose.yml logs --tail=100 soulspot
 ```
+
+**Note:** slskd logs are not available through docker-compose since it runs on the host. Check slskd's own logs in its installation directory.
 
 ### Restarting Services
 
