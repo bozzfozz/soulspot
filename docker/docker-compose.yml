@@ -27,8 +27,8 @@ services:
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/api/v1/auth/callback}
       
       # slskd Configuration
-      - SLSKD_BASE_URL=${SLSKD_BASE_URL:-http://host.docker.internal:5030}
       - SLSKD_URL=${SLSKD_URL:-http://host.docker.internal:5030}
+      # Authentication: Use API key (recommended) OR username/password (fallback)
       - SLSKD_API_KEY=${SLSKD_API_KEY:-}
       - SLSKD_USERNAME=${SLSKD_USERNAME:-admin}
       # WARNING: You MUST set SLSKD_PASSWORD to a strong value in production!

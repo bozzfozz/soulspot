@@ -101,21 +101,23 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/v1/auth/callback
 
 ```env
 # For Docker on Windows/Mac (use host.docker.internal)
-SLSKD_BASE_URL=http://host.docker.internal:5030
+SLSKD_URL=http://host.docker.internal:5030
+
+# Authentication: Use API key (recommended)
 SLSKD_API_KEY=your_slskd_api_key_here
 ```
 
 For Linux, you may need to use your host IP address instead:
 ```env
 # For Docker on Linux (use host IP, e.g., 192.168.1.100)
-SLSKD_BASE_URL=http://192.168.1.100:5030
+SLSKD_URL=http://192.168.1.100:5030
 SLSKD_API_KEY=your_slskd_api_key_here
 ```
 
-Or if using username/password:
+Alternative authentication using username/password (fallback):
 
 ```env
-SLSKD_BASE_URL=http://host.docker.internal:5030
+SLSKD_URL=http://host.docker.internal:5030
 SLSKD_USERNAME=admin
 SLSKD_PASSWORD=your_password_here
 ```
@@ -159,10 +161,10 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `SPOTIFY_CLIENT_ID` | Yes | - | Spotify OAuth Client ID |
 | `SPOTIFY_CLIENT_SECRET` | Yes | - | Spotify OAuth Client Secret |
 | `SPOTIFY_REDIRECT_URI` | No | `http://127.0.0.1:8765/api/v1/auth/callback` | OAuth redirect URI |
-| `SLSKD_BASE_URL` | Yes | - | slskd base URL |
-| `SLSKD_API_KEY` | Yes* | - | slskd API key |
-| `SLSKD_USERNAME` | Yes* | `admin` | slskd username (if no API key) |
-| `SLSKD_PASSWORD` | Yes* | - | slskd password (if no API key) |
+| `SLSKD_URL` | Yes | - | slskd URL |
+| `SLSKD_API_KEY` | Yes* | - | slskd API key (recommended) |
+| `SLSKD_USERNAME` | Yes* | `admin` | slskd username (fallback auth) |
+| `SLSKD_PASSWORD` | Yes* | - | slskd password (fallback auth) |
 | `SECRET_KEY` | No | (default) | Application secret key |
 | `DEBUG` | No | `false` | Enable debug mode |
 | `LOG_LEVEL` | No | `INFO` | Logging level |

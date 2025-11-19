@@ -270,11 +270,12 @@ python -m pytest tests/unit/infrastructure/integrations/ -k spotify -v
 **Configuration:** `.env.example` lines 40-48:
 ```bash
 # slskd Configuration
-SLSKD_BASE_URL=http://localhost:5030
 SLSKD_URL=http://localhost:5030
+
+# Authentication: Use API key (recommended) OR username/password (fallback)
+SLSKD_API_KEY=
 SLSKD_USERNAME=admin
 SLSKD_PASSWORD=changeme
-SLSKD_API_KEY=
 ```
 
 **Client Implementation:**
