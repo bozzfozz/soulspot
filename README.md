@@ -1,13 +1,12 @@
 # SoulSpot Bridge
 
-> 🎵 Musik von Spotify-Playlists automatisch über Soulseek herunterladen und sauber organisieren.
+> 🎵 Musik von Spotify-Playlists automatisch über Soulseek herunterladen und sauber organisieren - für lokale Nutzung.
 
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot-bridge?include_prereleases)](https://github.com/bozzfozz/soulspot-bridge/releases)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io-blue)](https://github.com/bozzfozz/soulspot-bridge/pkgs/container/soulspot-bridge)
 
 ## Was ist SoulSpot Bridge?
-SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Die Anwendung lädt Titel automatisch herunter, reichert sie mit Metadaten an und legt sie strukturiert in deiner Musikbibliothek ab – komplett über eine moderne Weboberfläche.
+SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Die Anwendung lädt Titel automatisch herunter, reichert sie mit Metadaten an und legt sie strukturiert in deiner Musikbibliothek ab – komplett über eine moderne Weboberfläche für den lokalen Single-User Einsatz.
 
 ## Highlights für Anwender
 - **Playlist-Synchronisation:** Importiere Spotify-Playlists per OAuth und halte sie aktuell.
@@ -15,6 +14,7 @@ SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Di
 - **Bibliotheksverwaltung:** Verschiebt fertige Downloads automatisch in deine Musikbibliothek.
 - **Metadaten & Cover:** Ergänzt Titel mit Informationen aus MusicBrainz und CoverArtArchive.
 - **Moderne Web-App:** Bedienung per Browser mit intuitivem UI, Suchfiltern und Statusmeldungen.
+- **Lokale Nutzung:** Optimiert für Single-User Setup ohne Cloud-Deployment.
 
 ## Systemvoraussetzungen
 - Docker 20.10 oder neuer sowie Docker Compose 2.x.
@@ -92,4 +92,4 @@ Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien
 Die Lizenz ist noch in Arbeit und wird vor dem ersten Stable-Release veröffentlicht.
 
 ---
-**Version:** 1.0 · **Status:** Active Development · **Letzte Aktualisierung:** 2025-11-17
+**Version:** 1.0 · **Status:** Active Development · **Verwendung:** Local Single-User · **Letzte Aktualisierung:** 2025-11-19

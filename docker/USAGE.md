@@ -1,14 +1,11 @@
 # Docker Usage Quick Reference
 
-This directory contains all Docker-related files for SoulSpot Bridge.
+This directory contains all Docker-related files for SoulSpot Bridge (local single-user setup).
 
 ## Files in this Directory
 
 - **Dockerfile** - Multi-stage Docker image definition
-- **docker-compose.yml** - Main compose file for production
-- **docker-compose.dev.yml** - Development environment configuration
-- **docker-compose.prod.yml** - Production deployment configuration
-- **docker-compose.staging.yml** - Staging environment configuration
+- **docker-compose.yml** - Main compose file for local use
 - **docker-entrypoint.sh** - Container startup script
 - **README.md** - Complete Docker setup guide
 
@@ -29,7 +26,7 @@ docker-compose -f docker/docker-compose.yml down
 
 ## Using Make/Just
 
-The Makefile and Justfile in the root directory have been updated:
+The Makefile and Justfile in the root directory provide convenient shortcuts:
 
 ```bash
 # With Make
@@ -48,19 +45,6 @@ just docker-down
 ```bash
 # Build from repository root
 docker build -f docker/Dockerfile -t soulspot-bridge .
-```
-
-## Environment-Specific Deployments
-
-```bash
-# Development
-docker-compose -f docker/docker-compose.dev.yml up -d
-
-# Production
-docker-compose -f docker/docker-compose.prod.yml up -d
-
-# Staging
-docker-compose -f docker/docker-compose.staging.yml up -d
 ```
 
 ## Documentation

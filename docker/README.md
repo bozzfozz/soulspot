@@ -41,9 +41,7 @@ SoulSpot Bridge requires a specific directory structure for bind mounts:
 ```
 your-project/
 ├── docker/
-│   ├── docker-compose.yml      # Main compose file
-│   ├── docker-compose.dev.yml  # Development compose file
-│   ├── docker-compose.prod.yml # Production compose file
+│   ├── docker-compose.yml      # Main compose file for local use
 │   ├── Dockerfile              # Docker image definition
 │   ├── docker-entrypoint.sh    # Container startup script
 │   └── README.md               # This file
@@ -157,7 +155,6 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | `SLSKD_USERNAME` | Yes* | `admin` | slskd username (if no API key) |
 | `SLSKD_PASSWORD` | Yes* | - | slskd password (if no API key) |
 | `SECRET_KEY` | No | (default) | Application secret key |
-| `APP_ENV` | No | `production` | Environment (development/staging/production) |
 | `DEBUG` | No | `false` | Enable debug mode |
 | `LOG_LEVEL` | No | `INFO` | Logging level |
 
@@ -460,19 +457,22 @@ tar -czf full-backup-$(date +%Y%m%d).tar.gz mnt/
 
 ---
 
-## Production Deployment Checklist
+## Deployment Notes
 
-Before deploying to production:
+This application is designed for **local single-user use**:
+
+- No multi-environment setups (development/staging/production)
+- No HTTPS/SSL configuration needed (local-only)
+- No secure cookies configuration (local network only)
+- SQLite database for simplicity
+- All services run on localhost
+
+### Checklist Before Running
 
 - [ ] Set a strong `SECRET_KEY`
 - [ ] Configure proper `PUID`/`PGID` for your system
-- [ ] Set `DEBUG=false`
-- [ ] Set `APP_ENV=production`
-- [ ] Configure `API_SECURE_COOKIES=true` if using HTTPS
+- [ ] Set `DEBUG=false` for less verbose logging
 - [ ] Set up regular backups of `/config` directory
-- [ ] Configure log rotation
-- [ ] Set up monitoring and health checks
-- [ ] Review and update `CORS_ORIGINS` for your domain
 - [ ] Ensure `/downloads` and `/music` exist before starting
 
 ---
