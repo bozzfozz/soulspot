@@ -91,13 +91,55 @@
 </div>
 {% endmacro %}
 
+{# Breadcrumb Navigation #}
+{% macro breadcrumb(items) %}
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="flex items-center space-x-2 text-sm">
+        {% for item in items %}
+        <li class="flex items-center">
+            {% if not loop.first %}
+            <svg class="w-4 h-4 text-gray-400 mx-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+            </svg>
+            {% endif %}
+            {% if item.href and not loop.last %}
+            <a href="{{ item.href }}" class="text-gray-600 hover:text-gray-900 transition-colors focus-ring rounded">
+                {{ item.text }}
+            </a>
+            {% else %}
+            <span class="{% if loop.last %}text-gray-900 font-medium{% else %}text-gray-600{% endif %}" {% if loop.last %}aria-current="page"{% endif %}>
+                {{ item.text }}
+            </span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ol>
+</nav>
+{% endmacro %}
+
+{# Tooltip Component #}
+{% macro tooltip(text, position='top') %}
+<span class="relative group inline-block">
+    <svg class="w-4 h-4 text-gray-400 cursor-help" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+    </svg>
+    <span class="absolute z-10 invisible group-hover:visible bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap
+                 {% if position == 'top' %}bottom-full left-1/2 -translate-x-1/2 mb-2
+                 {% elif position == 'bottom' %}top-full left-1/2 -translate-x-1/2 mt-2
+                 {% elif position == 'left' %}right-full top-1/2 -translate-y-1/2 mr-2
+                 {% elif position == 'right' %}left-full top-1/2 -translate-y-1/2 ml-2{% endif %}">
+        {{ text }}
+    </span>
+</span>
+{% endmacro %}
+
 {# Empty State #}
 {% macro empty_state(icon, title, description, action_text='', action_href='') %}
 <div class="card text-center py-12">
     <div class="card-body">
         {{ icon|safe }}
-        <h3 class="text-lg font-medium text-gray-900 mb-2">{{ title }}</h3>
-        <p class="text-gray-600 mb-6">{{ description }}</p>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{{ title }}</h3>
+        <p class="text-gray-600 dark:text-gray-400 mb-6">{{ description }}</p>
         {% if action_text and action_href %}
         <a href="{{ action_href }}" class="btn btn-primary focus-ring">
             {{ action_text }}

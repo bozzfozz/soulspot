@@ -1,80 +1,122 @@
 {% extends "base.html" %}
 {% from "includes/_skeleton.html" import stats_skeleton, spinner %}
+{% from "includes/_components.html" import breadcrumb %}
 
 {% block title %}Dashboard - SoulSpot Bridge{% endblock %}
 
 {% block content %}
 <div class="dashboard space-y-8">
-    <!-- Page Header -->
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 leading-tight">
+    <!-- Breadcrumb -->
+    {{ breadcrumb([
+        {'text': 'Home', 'href': '/'}
+    ]) }}
+    
+    <!-- Page Header with Enhanced Visual -->
+    <div class="mb-8 p-6 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-xl shadow-lg text-white">
+        <h1 class="text-4xl font-bold mb-2 flex items-center gap-3">
+            <span class="text-5xl">🎵</span>
             Welcome to SoulSpot Bridge
         </h1>
-        <p class="text-base text-gray-600 mt-2">
+        <p class="text-lg text-primary-50 opacity-90">
             Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation
         </p>
     </div>
     
-    <!-- Statistics Cards -->
+    <!-- Statistics Cards with Enhanced Design -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="card hover:shadow-md transition-shadow">
+        <div class="card hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-primary-500">
             <div class="card-header">
-                <h3 class="card-title text-gray-700">Playlists</h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="card-title text-gray-700 dark:text-gray-300">Playlists</h3>
+                    <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                </div>
             </div>
             <div class="card-body">
-                <p class="text-5xl font-bold text-primary-500 mb-4">
+                <p class="text-5xl font-bold text-primary-600 dark:text-primary-400 mb-2">
                     {{ stats.playlists or 0 }}
                 </p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total playlists imported</p>
             </div>
             <div class="card-footer">
-                <a href="/playlists" class="btn btn-primary btn-sm focus-ring">
+                <a href="/playlists" class="btn btn-primary btn-sm focus-ring w-full justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
                     View Playlists
                 </a>
             </div>
         </div>
         
-        <div class="card hover:shadow-md transition-shadow">
+        <div class="card hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-secondary-500">
             <div class="card-header">
-                <h3 class="card-title text-gray-700">Tracks</h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="card-title text-gray-700 dark:text-gray-300">Tracks</h3>
+                    <svg class="w-8 h-8 text-secondary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                </div>
             </div>
             <div class="card-body">
-                <p class="text-5xl font-bold text-primary-500 mb-4">
+                <p class="text-5xl font-bold text-secondary-600 dark:text-secondary-400 mb-2">
                     {{ stats.tracks or 0 }}
                 </p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total tracks in library</p>
             </div>
         </div>
         
-        <div class="card hover:shadow-md transition-shadow">
+        <div class="card hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-success-500">
             <div class="card-header">
-                <h3 class="card-title text-gray-700">Downloads</h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="card-title text-gray-700 dark:text-gray-300">Downloads</h3>
+                    <svg class="w-8 h-8 text-success-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                    </svg>
+                </div>
             </div>
             <div class="card-body">
-                <p class="text-5xl font-bold text-primary-500 mb-4">
+                <p class="text-5xl font-bold text-success-600 dark:text-success-400 mb-2">
                     {{ stats.downloads or 0 }}
                 </p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Completed downloads</p>
             </div>
             <div class="card-footer">
-                <a href="/downloads" class="btn btn-primary btn-sm focus-ring">
+                <a href="/downloads" class="btn btn-primary btn-sm focus-ring w-full justify-center">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
                     View Downloads
                 </a>
             </div>
         </div>
         
-        <div class="card hover:shadow-md transition-shadow">
+        <div class="card hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border-l-4 border-warning-500">
             <div class="card-header">
-                <h3 class="card-title text-gray-700">Queue Size</h3>
+                <div class="flex items-center justify-between">
+                    <h3 class="card-title text-gray-700 dark:text-gray-300">Queue Size</h3>
+                    <svg class="w-8 h-8 text-warning-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
             </div>
             <div class="card-body">
-                <p class="text-5xl font-bold text-primary-500 mb-4">
+                <p class="text-5xl font-bold text-warning-600 dark:text-warning-400 mb-2">
                     {{ stats.queue_size or 0 }}
                 </p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Pending in queue</p>
             </div>
         </div>
     </div>
 
     <!-- Quick Actions Section -->
     <div class="mt-12">
-        <h2 class="text-2xl font-semibold text-gray-800 mb-6">Quick Actions</h2>
+        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6 flex items-center gap-2">
+            <svg class="w-6 h-6 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Quick Actions
+        </h2>
         
         <!-- Session Status Check -->
         <div id="session-status" 
@@ -82,7 +124,7 @@
              hx-trigger="load"
              hx-swap="innerHTML"
              class="mb-6">
-            <div class="card bg-gray-50">
+            <div class="card bg-gray-50 dark:bg-gray-800">
                 <div class="card-body flex items-center gap-3">
                     {{ spinner('sm', 'Checking Spotify connection...') }}
                 </div>
@@ -90,11 +132,23 @@
         </div>
         
         <div class="flex flex-wrap gap-4">
-            <a href="/playlists/import" class="btn btn-primary btn-lg focus-ring">
+            <a href="/playlists/import" class="btn btn-primary btn-lg focus-ring group">
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
                 Import Playlist
             </a>
-            <a href="/playlists" class="btn btn-secondary btn-lg focus-ring">
+            <a href="/playlists" class="btn btn-secondary btn-lg focus-ring group">
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                </svg>
                 View Playlists
+            </a>
+            <a href="/search" class="btn btn-secondary btn-lg focus-ring group">
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                Search Music
             </a>
         </div>
     </div>
@@ -110,16 +164,16 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
             
             if (response.has_access_token && !response.token_expired) {
                 statusDiv.innerHTML = `
-                    <div class="card bg-success-50 border-success-200 hover:shadow-md transition-shadow">
+                    <div class="card bg-success-50 dark:bg-success-900/20 border-success-200 dark:border-success-800 hover:shadow-md transition-shadow">
                         <div class="card-body">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <svg class="w-6 h-6 text-success-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <svg class="w-8 h-8 text-success-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                     </svg>
                                     <div>
-                                        <p class="text-sm font-semibold text-success-900">✅ Spotify Connected</p>
-                                        <p class="text-xs text-success-700">Ready to import playlists and download tracks</p>
+                                        <p class="text-sm font-semibold text-success-900 dark:text-success-100">✅ Spotify Connected</p>
+                                        <p class="text-xs text-success-700 dark:text-success-300">Ready to import playlists and download tracks</p>
                                     </div>
                                 </div>
                                 <a href="/api/auth/logout" class="btn btn-secondary btn-sm focus-ring">
@@ -131,16 +185,16 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                 `;
             } else if (response.token_expired) {
                 statusDiv.innerHTML = `
-                    <div class="card bg-warning-50 border-warning-200 hover:shadow-md transition-shadow">
+                    <div class="card bg-warning-50 dark:bg-warning-900/20 border-warning-200 dark:border-warning-800 hover:shadow-md transition-shadow">
                         <div class="card-body">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <svg class="w-6 h-6 text-warning-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <svg class="w-8 h-8 text-warning-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                                     </svg>
                                     <div>
-                                        <p class="text-sm font-semibold text-warning-900">⚠️ Spotify Token Expired</p>
-                                        <p class="text-xs text-warning-700">Will auto-refresh when needed, or reconnect manually</p>
+                                        <p class="text-sm font-semibold text-warning-900 dark:text-warning-100">⚠️ Spotify Token Expired</p>
+                                        <p class="text-xs text-warning-700 dark:text-warning-300">Will auto-refresh when needed, or reconnect manually</p>
                                     </div>
                                 </div>
                                 <a href="/auth" class="btn btn-warning btn-sm focus-ring">
@@ -152,16 +206,16 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                 `;
             } else {
                 statusDiv.innerHTML = `
-                    <div class="card bg-info-50 border-info-200 hover:shadow-md transition-shadow">
+                    <div class="card bg-info-50 dark:bg-blue-900/20 border-info-200 dark:border-blue-800 hover:shadow-md transition-shadow">
                         <div class="card-body">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <svg class="w-6 h-6 text-info-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <svg class="w-8 h-8 text-info-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                                     </svg>
                                     <div>
-                                        <p class="text-sm font-semibold text-info-900">🎵 Connect Spotify</p>
-                                        <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
+                                        <p class="text-sm font-semibold text-info-900 dark:text-blue-100">🎵 Connect Spotify</p>
+                                        <p class="text-xs text-info-700 dark:text-blue-300">Connect your Spotify account to start importing playlists</p>
                                     </div>
                                 </div>
                                 <a href="/auth" class="btn btn-primary btn-sm focus-ring">
@@ -176,16 +230,16 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
             // If session endpoint returns error (no session), show connect button
             const statusDiv = document.getElementById('session-status');
             statusDiv.innerHTML = `
-                <div class="card bg-info-50 border-info-200 hover:shadow-md transition-shadow">
+                <div class="card bg-info-50 dark:bg-blue-900/20 border-info-200 dark:border-blue-800 hover:shadow-md transition-shadow">
                     <div class="card-body">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-3">
-                                <svg class="w-6 h-6 text-info-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                <svg class="w-8 h-8 text-info-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                                 </svg>
                                 <div>
-                                    <p class="text-sm font-semibold text-info-900">🎵 Connect Spotify</p>
-                                    <p class="text-xs text-info-700">Connect your Spotify account to start importing playlists</p>
+                                    <p class="text-sm font-semibold text-info-900 dark:text-blue-100">🎵 Connect Spotify</p>
+                                    <p class="text-xs text-info-700 dark:text-blue-300">Connect your Spotify account to start importing playlists</p>
                                 </div>
                             </div>
                             <a href="/auth" class="btn btn-primary btn-sm focus-ring">

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,10 +11,46 @@
     <link rel="stylesheet" href="/static/css/ui-layout.css">
     <!-- Existing Tailwind styles -->
     <link rel="stylesheet" href="/static/css/style.css">
+    <!-- UX Enhancements -->
+    <link rel="stylesheet" href="/static/css/enhancements.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     {% block extra_head %}{% endblock %}
+    <style>
+        /* Page transition animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .page-content {
+            animation: fadeIn 0.3s ease-out;
+        }
+        /* Loading bar */
+        .htmx-request .loading-bar {
+            display: block;
+        }
+        .loading-bar {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #0ea5e9, #38bdf8, #0ea5e9);
+            background-size: 200% 100%;
+            animation: loadingBarMove 1.5s ease-in-out infinite;
+            z-index: 9999;
+        }
+        @keyframes loadingBarMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased">
+    <!-- Global Loading Bar -->
+    <div class="loading-bar" role="progressbar" aria-label="Loading"></div>
+    
     <!-- Skip to main content for keyboard navigation -->
     <a href="#main-content" class="skip-to-content focus-ring">
         Skip to main content
@@ -25,22 +61,66 @@
     {{ main_nav(request.path.split('/')[1] or 'dashboard') }}
 
     <!-- Main Content -->
-    <main id="main-content" class="container mx-auto px-4 py-8 min-h-screen" role="main">
+    <main id="main-content" class="container mx-auto px-4 py-8 min-h-screen page-content" role="main">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 border-t border-gray-800 mt-12" role="contentinfo">
-        <div class="container mx-auto px-4 py-6 text-center">
-            <p class="text-gray-400 text-sm">
-                &copy; 2025 SoulSpot Bridge | 
-                <a href="/docs" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring">API Docs</a> | 
-                <a href="/health" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring">Health</a>
-            </p>
+    <footer class="bg-gray-900 dark:bg-gray-950 border-t border-gray-800 dark:border-gray-900 mt-12" role="contentinfo">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-gray-400 text-sm text-center md:text-left">
+                    &copy; 2025 SoulSpot Bridge | Made with ❤️ for music lovers
+                </p>
+                <div class="flex gap-4 text-sm">
+                    <a href="/docs" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">API Docs</a>
+                    <a href="/health" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">Health</a>
+                    <a href="/settings" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">Settings</a>
+                </div>
+            </div>
         </div>
     </footer>
 
+    <!-- HTMX Indicator (Screen Reader Only) -->
+    <div id="htmx-indicator" class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        Loading...
+    </div>
+
     <script src="/static/js/app.js"></script>
     {% block extra_scripts %}{% endblock %}
+    
+    <script>
+        // Enhanced HTMX event handling
+        document.body.addEventListener('htmx:beforeRequest', function(event) {
+            // Announce to screen readers
+            const indicator = document.getElementById('htmx-indicator');
+            if (indicator) indicator.textContent = 'Loading content...';
+        });
+        
+        document.body.addEventListener('htmx:afterRequest', function(event) {
+            // Clear screen reader announcement
+            const indicator = document.getElementById('htmx-indicator');
+            if (indicator) {
+                if (event.detail.successful) {
+                    indicator.textContent = 'Content loaded successfully';
+                } else {
+                    indicator.textContent = 'Error loading content';
+                }
+                setTimeout(() => { indicator.textContent = ''; }, 1000);
+            }
+        });
+        
+        // Smooth scroll behavior for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    target.focus();
+                }
+            });
+        });
+    </script>
 </body>
 </html>
