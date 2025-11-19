@@ -1,6 +1,5 @@
 """Tests for TrackFileCache."""
 
-import asyncio
 import tempfile
 from pathlib import Path
 

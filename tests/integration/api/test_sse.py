@@ -8,6 +8,9 @@ from httpx import AsyncClient
 
 from soulspot.domain.entities import Download, DownloadId, DownloadStatus, TrackId
 
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
+
 
 @pytest.mark.asyncio
 async def test_sse_stream_connection(async_client: AsyncClient):

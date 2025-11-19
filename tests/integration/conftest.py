@@ -19,7 +19,7 @@ def test_db_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("data") / "test.db"
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def test_settings(test_db_path: Path) -> Settings:
     """Create test settings with file-based database."""
     return Settings(
@@ -32,7 +32,7 @@ def test_settings(test_db_path: Path) -> Settings:
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def db(
     test_settings: Settings, test_db_path: Path
 ) -> AsyncGenerator[Database, None]:
@@ -93,7 +93,7 @@ async def db_session(db: Database) -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def app_with_db(test_settings: Settings, db: Database):
     """Create FastAPI app with initialized database (no lifespan)."""
     # Create app without lifespan to avoid automatic initialization

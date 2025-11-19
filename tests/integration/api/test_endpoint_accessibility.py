@@ -5,7 +5,11 @@ to basic requests. It ensures 100% endpoint coverage and validates that all
 pages and features are reachable.
 """
 
+import pytest
 from httpx import AsyncClient
+
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
 
 
 class TestHealthEndpoints:

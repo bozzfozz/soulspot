@@ -9,7 +9,10 @@ help: ## Show this help message
 install: ## Install dependencies with pip
 	pip install -r requirements.txt
 
-test: ## Run all tests
+test: ## Run all tests (excluding slow tests)
+	pytest tests/ -v -m "not slow"
+
+test-all: ## Run all tests including slow ones
 	pytest tests/ -v
 
 test-unit: ## Run unit tests only
@@ -18,11 +21,14 @@ test-unit: ## Run unit tests only
 test-fast: ## Run unit tests only (fastest)
 	pytest tests/unit/ -q
 
-test-integration: ## Run integration tests only
+test-integration: ## Run integration tests only (excluding slow)
 	pytest tests/integration/ -v -m "not slow"
 
-test-cov: ## Run tests with coverage
-	pytest tests/ --cov=src/soulspot --cov-report=html --cov-report=term
+test-slow: ## Run only slow tests
+	pytest tests/ -v -m "slow"
+
+test-cov: ## Run tests with coverage (excluding slow)
+	pytest tests/ -m "not slow" --cov=src/soulspot --cov-report=html --cov-report=term
 
 lint: ## Run linter (ruff check)
 	ruff check src/ tests/

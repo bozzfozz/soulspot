@@ -1,6 +1,5 @@
 """Tests for MusicBrainzCache."""
 
-import asyncio
 
 import pytest
 

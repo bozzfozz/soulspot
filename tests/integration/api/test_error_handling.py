@@ -4,7 +4,11 @@ This module tests error handling, edge cases, and input validation across
 all API endpoints to ensure robust error responses and proper validation.
 """
 
+import pytest
 from httpx import AsyncClient
+
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
 
 
 class TestInputValidation:

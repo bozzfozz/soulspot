@@ -3,6 +3,9 @@
 import pytest
 from httpx import AsyncClient
 
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
+
 
 @pytest.mark.asyncio
 async def test_dashboard_page_loads(async_client: AsyncClient):

@@ -1,6 +1,5 @@
 """Tests for SpotifyCache."""
 
-import asyncio
 
 import pytest
 

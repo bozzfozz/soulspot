@@ -9,6 +9,9 @@ from soulspot.application.workers.job_queue import JobQueue
 from soulspot.config import Settings
 from soulspot.main import create_app
 
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture
 def test_settings():

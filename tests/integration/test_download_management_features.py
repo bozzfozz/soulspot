@@ -17,6 +17,9 @@ from soulspot.application.workers.job_queue import Job, JobQueue, JobStatus, Job
 from soulspot.domain.entities import Download, DownloadStatus
 from soulspot.domain.value_objects import DownloadId, TrackId
 
+# Mark all tests in this module as slow
+pytestmark = pytest.mark.slow
+
 
 class TestPriorityBasedQueue:
     """Test priority-based job queue implementation."""
