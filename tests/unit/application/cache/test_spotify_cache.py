@@ -1,6 +1,5 @@
 """Tests for SpotifyCache."""
 
-
 import pytest
 
 from soulspot.application.cache.spotify_cache import SpotifyCache
