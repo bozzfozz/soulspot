@@ -124,6 +124,8 @@ SLSKD_PASSWORD=your_password_here
 
 ### 3. Optional Configuration
 
+Most configuration has sensible defaults built into the application. The settings below are optional and typically only needed for customization.
+
 #### User and Group IDs (File Permissions)
 
 ```env
@@ -138,38 +140,45 @@ UMASK=002  # File creation mask
 TZ=Europe/Berlin  # Your timezone (e.g., America/New_York, UTC)
 ```
 
-#### Security
-
-```env
-SECRET_KEY=generate-a-random-secret-key-here
-```
-
-Generate a secure secret key:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
 ### Complete Environment Variables Reference
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PUID` | No | `1000` | User ID for file permissions |
-| `PGID` | No | `1000` | Group ID for file permissions |
-| `UMASK` | No | `002` | File creation mask |
-| `TZ` | No | `UTC` | Timezone |
-| `SPOTIFY_CLIENT_ID` | Yes | - | Spotify OAuth Client ID |
-| `SPOTIFY_CLIENT_SECRET` | Yes | - | Spotify OAuth Client Secret |
-| `SPOTIFY_REDIRECT_URI` | No | `http://127.0.0.1:8765/api/v1/auth/callback` | OAuth redirect URI |
-| `SLSKD_URL` | Yes | - | slskd URL |
-| `SLSKD_API_KEY` | Yes* | - | slskd API key (recommended) |
-| `SLSKD_USERNAME` | Yes* | `admin` | slskd username (fallback auth) |
-| `SLSKD_PASSWORD` | Yes* | - | slskd password (fallback auth) |
-| `SECRET_KEY` | No | (default) | Application secret key |
-| `DEBUG` | No | `false` | Enable debug mode |
-| `LOG_LEVEL` | No | `INFO` | Logging level |
+**Required Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SPOTIFY_CLIENT_ID` | - | Spotify OAuth Client ID |
+| `SPOTIFY_CLIENT_SECRET` | - | Spotify OAuth Client Secret |
+| `SLSKD_URL` | - | slskd base URL |
+| `SLSKD_API_KEY`* | - | slskd API key (recommended) |
+| `SLSKD_USERNAME`* | `admin` | slskd username (fallback auth) |
+| `SLSKD_PASSWORD`* | - | slskd password (fallback auth) |
 
 \*Either `SLSKD_API_KEY` or both `SLSKD_USERNAME` and `SLSKD_PASSWORD` are required.
+
+**Optional Variables (have good defaults):**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PUID` | `1000` | User ID for file permissions |
+| `PGID` | `1000` | Group ID for file permissions |
+| `UMASK` | `002` | File creation mask |
+| `TZ` | `UTC` | Timezone |
+| `SPOTIFY_REDIRECT_URI` | `http://127.0.0.1:8765/api/v1/auth/callback` | OAuth redirect URI |
+
+**Variables with Internal Defaults (not needed in .env or docker-compose.yml):**
+
+| Variable | Internal Default | Description |
+|----------|------------------|-------------|
+| `APP_NAME` | `SoulSpot Bridge` | Application name |
+| `DEBUG` | `false` | Enable debug mode (set `true` for development) |
+| `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| `SECRET_KEY` | (auto-generated) | Application secret key for local use |
+| `API_HOST` | `0.0.0.0` | API host (set in Dockerfile for containers) |
+| `API_PORT` | `8765` | API port (set in Dockerfile for containers) |
+| `STORAGE__DOWNLOAD_PATH` | `/downloads` | Container download path (set in docker-entrypoint.sh) |
+| `STORAGE__MUSIC_PATH` | `/music` | Container music path (set in docker-entrypoint.sh) |
+| `STORAGE__ARTWORK_PATH` | `/config/artwork` | Container artwork path (set in docker-entrypoint.sh) |
+| `STORAGE__TEMP_PATH` | `/config/tmp` | Container temp path (set in docker-entrypoint.sh) |
 
 ---
 
@@ -493,14 +502,15 @@ This application is designed for **local single-user use**:
 - No secure cookies configuration (local network only)
 - SQLite database for simplicity
 - All services run on localhost
+- Most settings use sensible defaults - minimal configuration needed
 
 ### Checklist Before Running
 
-- [ ] Set a strong `SECRET_KEY`
-- [ ] Configure proper `PUID`/`PGID` for your system
-- [ ] Set `DEBUG=false` for less verbose logging
+- [ ] Configure Spotify API credentials (`SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`)
+- [ ] Configure slskd connection (`SLSKD_URL`, `SLSKD_API_KEY` or `SLSKD_USERNAME`/`SLSKD_PASSWORD`)
+- [ ] Ensure `/downloads` and `/music` directories exist before starting
+- [ ] Optionally configure `PUID`/`PGID` for your system (default: 1000)
 - [ ] Set up regular backups of `/config` directory
-- [ ] Ensure `/downloads` and `/music` exist before starting
 
 ---
 

@@ -1,5 +1,7 @@
 services:
   # SoulSpot Bridge - Main application (local single-user setup)
+  # Note: Most configuration uses internal defaults from settings.py and Dockerfile
+  # Only external service credentials and container-specific settings are configured here
   soulspot:
     # Use pre-built image from GitHub Container Registry
     # For local development, uncomment the build section below and comment out the image line
@@ -16,17 +18,17 @@ services:
       - ./mnt/soulspot:/config
     environment:
       # User and Permissions
-      - PUID=1000
-      - PGID=1000
-      - UMASK=002
-      - TZ=Europe/Berlin
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - UMASK=${UMASK:-002}
+      - TZ=${TZ:-Europe/Berlin}
       
-      # Spotify Configuration
+      # Spotify Configuration (Required)
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/api/v1/auth/callback}
       
-      # slskd Configuration
+      # slskd Configuration (Required)
       - SLSKD_URL=${SLSKD_URL:-http://host.docker.internal:5030}
       # Authentication: Use API key (recommended) OR username/password (fallback)
       - SLSKD_API_KEY=${SLSKD_API_KEY:-}
@@ -34,26 +36,8 @@ services:
       # WARNING: You MUST set SLSKD_PASSWORD to a strong value in production!
       - SLSKD_PASSWORD=${SLSKD_PASSWORD:-}
       
-      # Application Settings
-      - APP_NAME=SoulSpot Bridge
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      
-      # Database
+      # Database (Container path)
       - DATABASE_URL=sqlite+aiosqlite:///config/soulspot.db
-      
-      # Storage Paths (Container paths - mapped to volumes)
-      - STORAGE__DOWNLOAD_PATH=/downloads
-      - STORAGE__MUSIC_PATH=/music
-      - STORAGE__ARTWORK_PATH=/config/artwork
-      - STORAGE__TEMP_PATH=/config/tmp
-      
-      # Security (local single-user setup)
-      - SECRET_KEY=${SECRET_KEY:-change-me-to-a-random-secret-key}
-      
-      # API Configuration
-      - API_HOST=0.0.0.0
-      - API_PORT=8765
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
