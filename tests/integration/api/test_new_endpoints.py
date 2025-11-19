@@ -44,6 +44,6 @@ def test_playlist_download_missing_endpoint_exists(client: TestClient) -> None:
     # Should return error for invalid playlist or 500 for DB initialization issues
     # The important thing is it's not 404 (endpoint exists)
     assert response.status_code in [400, 404, 500], "Endpoint should exist"
-    assert response.status_code != 404 or "not found" in response.text.lower(), (
-        "If 404, should be about playlist not endpoint"
-    )
+    assert (
+        response.status_code != 404 or "not found" in response.text.lower()
+    ), "If 404, should be about playlist not endpoint"

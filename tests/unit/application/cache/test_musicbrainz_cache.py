@@ -1,6 +1,5 @@
 """Tests for MusicBrainzCache."""
 
-
 import pytest
 
 from soulspot.application.cache.musicbrainz_cache import MusicBrainzCache
