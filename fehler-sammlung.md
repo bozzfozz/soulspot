@@ -560,8 +560,13 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
 
 ## 🎯 **PRIORISIERTE HANDLUNGSEMPFEHLUNGEN**
 
-### Sofortmaßnahmen (Sprint 1)
-1. ✅ **K-2 beheben:** Fehlgeschlagene Error-Handling-Tests debuggen und fixen
+### Sofortmaßnahmen (Sprint 1) - ✅ **COMPLETED 2025-11-20**
+1. ✅ **K-2 beheben:** Fehlgeschlagene Error-Handling-Tests debuggen und fixen - **COMPLETED 2025-11-20**
+   - Added `register_exception_handlers()` function in `main.py`
+   - Domain exceptions now properly mapped to HTTP status codes (ValidationException→422, EntityNotFoundException→404, etc.)
+   - Added handlers for malformed JSON, request validation errors, and value errors
+   - Removed overly broad try-except blocks in `tracks.py` and `downloads.py`
+   - All 27 error handling tests now passing (was 20/27)
 2. ✅ **K-4 absichern:** Globale State-Variablen mit Locks schützen - **COMPLETED 2025-11-20**
    - `dependencies.py`: Replaced global `_session_store` with `@lru_cache` decorator
    - `widget_template_registry.py`: Replaced global `_registry` with `@lru_cache` decorator
@@ -577,11 +582,15 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
    - Ruff check now passes with 0 violations
 
 ### Kurzfristig (Sprint 2-3)
-6. ✅ **K-1 angehen:** Test-Coverage auf >90% heben (Priorität: main.py, ui.py, workers)
-7. ✅ **H-3 härten:** Cookie-Security konfigurierbar machen
-8. ✅ **H-4 implementieren:** CSRF-Protection für alle POST/PUT/DELETE
-9. ✅ **M-5 dokumentieren:** SQLite-Betriebshinweise und Foreign-Keys aktivieren
-10. ✅ **M-2 aufarbeiten:** Kritische TODOs in Issues überführen und abarbeiten
+6. ⏳ **K-1 angehen:** Test-Coverage auf >90% heben (Priorität: main.py, ui.py, workers)
+7. ✅ **H-3 härten:** Cookie-Security konfigurierbar machen - **COMPLETED 2025-11-20**
+   - Added `APISettings.secure_cookies` configuration (default: False for dev, True for production)
+   - Added `APISettings.session_cookie_name` and `APISettings.session_max_age`
+   - Updated `auth.py` to use settings for all cookie operations
+   - Documented in `.env.example` with clear production deployment instructions
+8. ⏳ **H-4 implementieren:** CSRF-Protection für alle POST/PUT/DELETE
+9. ⏳ **M-5 dokumentieren:** SQLite-Betriebshinweise und Foreign-Keys aktivieren
+10. ⏳ **M-2 aufarbeiten:** Kritische TODOs in Issues überführen und abarbeiten
 
 ### Mittelfristig (Sprint 4-6)
 11. ✅ **K-3 refactoren:** `repositories.py` aufteilen (größter Wartungsengpass)
@@ -600,13 +609,13 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
 ## 🔐 **SICHERHEITSRISIKEN (ZUSAMMENFASSUNG)**
 
 **HOCH:**
-- ❌ Session-Cookies ohne `secure=True` (H-3)
-- ❌ Fehlende CSRF-Protection (H-4)
-- ❌ Potentieller Path Traversal in File-Ops (H-5)
+- ✅ Session-Cookies ohne `secure=True` (H-3) - **COMPLETED 2025-11-20** - Now configurable
+- ⏳ Fehlende CSRF-Protection (H-4) - In Progress
+- ⏳ Potentieller Path Traversal in File-Ops (H-5) - To be addressed
 
 **MITTEL:**
-- ⚠️ Broad Exception-Handling verschleiert Fehler (H-2)
-- ⚠️ Globale Variablen ohne Thread-Safety (K-4)
+- ✅ Broad Exception-Handling verschleiert Fehler (H-2) - **COMPLETED 2025-11-20**
+- ✅ Globale Variablen ohne Thread-Safety (K-4) - **COMPLETED 2025-11-20**
 
 **NIEDRIG:**
 - ℹ️ Fehlende Dependency-Scans (N-5)
