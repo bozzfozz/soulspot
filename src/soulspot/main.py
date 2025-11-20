@@ -28,6 +28,34 @@ from soulspot.infrastructure.persistence import Database
 logger = logging.getLogger(__name__)
 
 
+def _validate_sqlite_path(settings: Settings) -> None:
+    """Validate SQLite database path accessibility before engine creation."""
+
+    db_path = settings._get_sqlite_db_path()
+    if db_path is None:
+        return
+
+    try:
+        if db_path.parent and str(db_path.parent) != ".":
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:  # pragma: no cover - safety log
+        raise RuntimeError(
+            "Unable to create SQLite database directory "
+            f"'{db_path.parent}': {exc}. "
+            "Update DATABASE_URL or adjust directory permissions."
+        ) from exc
+
+    try:
+        with db_path.open("a+"):
+            pass
+    except Exception as exc:  # pragma: no cover - safety log
+        raise RuntimeError(
+            "Unable to access SQLite database file "
+            f"'{db_path}': {exc}. "
+            "Update DATABASE_URL or adjust directory permissions."
+        ) from exc
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager.
@@ -57,6 +85,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Ensure storage directories exist
         settings.ensure_directories()
         logger.info("Storage directories initialized")
+
+        # Validate SQLite path before initializing database engine
+        _validate_sqlite_path(settings)
 
         # Initialize database
         db = Database(settings)
