@@ -105,6 +105,49 @@ class TestSettings:
         assert (tmp_path / "artwork").exists()
         assert (tmp_path / "tmp").exists()
 
+    def test_ensure_directories_creates_database_parent(self, tmp_path):
+        """Test that ensure_directories creates database parent directory for SQLite."""
+        db_path = tmp_path / "config" / "soulspot.db"
+        settings = Settings(
+            database={"url": f"sqlite+aiosqlite:///{db_path}"},
+            storage={
+                "download_path": tmp_path / "downloads",
+                "music_path": tmp_path / "music",
+                "artwork_path": tmp_path / "artwork",
+                "temp_path": tmp_path / "tmp",
+            },
+        )
+
+        # Database parent should not exist yet
+        assert not db_path.parent.exists()
+
+        settings.ensure_directories()
+
+        # Database parent should now exist
+        assert db_path.parent.exists()
+        assert db_path.parent.is_dir()
+
+    def test_get_sqlite_db_path_with_absolute_path(self):
+        """Test extracting SQLite database path with absolute path."""
+        settings = Settings(database={"url": "sqlite+aiosqlite:///config/soulspot.db"})
+        db_path = settings._get_sqlite_db_path()
+        assert db_path is not None
+        assert str(db_path) == "/config/soulspot.db"
+
+    def test_get_sqlite_db_path_with_relative_path(self):
+        """Test extracting SQLite database path with relative path."""
+        settings = Settings(database={"url": "sqlite+aiosqlite:///./soulspot.db"})
+        db_path = settings._get_sqlite_db_path()
+        assert db_path is not None
+        # Path() normalizes "./soulspot.db" to "soulspot.db"
+        assert str(db_path) == "soulspot.db"
+
+    def test_get_sqlite_db_path_with_postgresql(self):
+        """Test that PostgreSQL URL returns None for database path."""
+        settings = Settings(database={"url": "postgresql://localhost/test"})
+        db_path = settings._get_sqlite_db_path()
+        assert db_path is None
+
     def test_get_settings_caching(self):
         """Test settings singleton caching."""
         # Clear cache before testing

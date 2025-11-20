@@ -4,6 +4,7 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -429,12 +430,48 @@ class Settings(BaseSettings):
         """Check if using standard profile."""
         return self.profile == Profile.STANDARD
 
+    def _get_sqlite_db_path(self) -> Path | None:
+        """Extract database file path from SQLite URL.
+
+        Returns:
+            Path to the database file if using SQLite, None otherwise.
+        """
+        db_url = self.database.url
+        if "sqlite" not in db_url:
+            return None
+
+        # Parse URL to extract path
+        # Format: sqlite+aiosqlite:///path/to/db.db or sqlite:///path/to/db.db
+        parsed = urlparse(db_url)
+        if not parsed.path:
+            return None
+
+        # Remove leading slash for relative paths, keep for absolute paths
+        path_str = parsed.path
+        if (
+            path_str.startswith("/")
+            and not path_str.startswith("//")
+            and (path_str.startswith("/./") or path_str.startswith("/../"))
+        ):
+            # Relative path with leading slash
+            path_str = path_str[1:]  # Remove first slash
+
+        return Path(path_str)
+
     def ensure_directories(self) -> None:
-        """Ensure all storage directories exist."""
+        """Ensure all storage directories exist, including database parent directory."""
+        # Ensure storage directories exist
         self.storage.download_path.mkdir(parents=True, exist_ok=True)
         self.storage.music_path.mkdir(parents=True, exist_ok=True)
         self.storage.artwork_path.mkdir(parents=True, exist_ok=True)
         self.storage.temp_path.mkdir(parents=True, exist_ok=True)
+
+        # Ensure database parent directory exists for SQLite
+        db_path = self._get_sqlite_db_path()
+        if db_path is not None:
+            db_parent = db_path.parent
+            if db_parent and str(db_parent) != ".":
+                db_parent.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache
