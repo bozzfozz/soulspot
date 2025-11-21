@@ -16,6 +16,11 @@ from soulspot.infrastructure.observability.logging import (
 logger = logging.getLogger(__name__)
 
 
+# Hey future me, this middleware logs EVERY HTTP request/response! It runs BEFORE your route
+# handlers. We extend BaseHTTPMiddleware which handles the FastAPI integration magic. The
+# log_request_body param is OFF by default - turn it on for debugging but NEVER in production
+# (huge log volume, potential secrets in POST bodies!). This middleware is stateless - safe for
+# concurrent requests. Add it early in middleware stack so it catches everything!
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware for logging HTTP requests and responses."""
 
@@ -29,6 +34,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.log_request_body = log_request_body
 
+    # Yo, this dispatch() is THE request/response interceptor! Flow: 1) Extract correlation_id from
+    # header (or generate one), 2) Set it in context so ALL logs for this request inherit it,
+    # 3) Log request details, 4) Call next middleware/route handler, 5) Log response + duration,
+    # 6) Add correlation_id to response header so client can reference it. The time.time() calls
+    # measure TOTAL request duration including middleware overhead - useful for performance tracking!
+    # We catch exceptions to log them with full context before re-raising. The client_ip extraction
+    # handles proxies (request.client might be None if behind load balancer). The response.headers
+    # modification adds correlation_id for client-side debugging (they can include it in support tickets!).
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:

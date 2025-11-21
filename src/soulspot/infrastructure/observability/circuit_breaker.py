@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+# Hey future me, these are the THREE STATES of the circuit breaker state machine: CLOSED means
+# "all good, let traffic through", OPEN means "service is broken, fail fast", and HALF_OPEN
+# means "let's TEST if the service recovered". Think of it like a real circuit breaker in your
+# house - when something trips (OPEN), you have to manually test (HALF_OPEN) before it's
+# back to normal (CLOSED). The transitions: CLOSED → OPEN (too many failures), OPEN → HALF_OPEN
+# (timeout elapsed), HALF_OPEN → CLOSED (success threshold met) or HALF_OPEN → OPEN (any failure).
 class CircuitState(str, Enum):
     """Circuit breaker states."""
 
@@ -22,6 +28,13 @@ class CircuitState(str, Enum):
     HALF_OPEN = "half_open"  # Testing if service recovered
 
 
+# Yo future me, this config controls circuit breaker sensitivity! failure_threshold=5 means
+# "5 failures in a row before opening" - lower = more sensitive but more false positives.
+# success_threshold=2 means "need 2 successful requests in HALF_OPEN to close" - increase if
+# you want more confidence before declaring service healthy. timeout=60s is how long to wait
+# in OPEN before trying HALF_OPEN - increase if service needs recovery time (DB restart, etc).
+# reset_timeout=300s is how long in CLOSED before we forget old failures - prevents "ghost"
+# failures from distant past affecting current health. Tweak these via env vars, not code!
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker behavior."""
@@ -39,6 +52,11 @@ class CircuitBreakerConfig:
     """Seconds to wait before resetting failure counter in CLOSED state"""
 
 
+# Hey, these stats are GOLD for monitoring dashboards! failure_count is current streak
+# (resets when circuit closes), total_failures is ALL TIME. Same for successes. Use this to
+# graph circuit health over time. last_failure_time helps calculate "retry after" times.
+# last_state_change tells you how long the circuit has been in current state - if it's been
+# OPEN for hours, something's seriously broken! Expose this via /metrics or health check.
 @dataclass
 class CircuitBreakerStats:
     """Statistics for circuit breaker monitoring."""
@@ -53,6 +71,12 @@ class CircuitBreakerStats:
     total_successes: int = 0
 
 
+# Listen up, this exception is INTENTIONAL - it's not a bug! When the circuit is OPEN, we
+# raise this to fail fast instead of waiting 30s for a timeout. The retry_after tells clients
+# "come back in X seconds" - use it in HTTP 503 responses with Retry-After header! The service_name
+# helps identify WHICH service is down in logs (you might have 5 different circuit breakers).
+# DON'T catch this and retry immediately - respect the retry_after or you're just hammering a
+# dead service. In HTTP handlers, convert this to 503 Service Unavailable with proper headers.
 class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open and requests are blocked."""
 
@@ -173,6 +197,10 @@ class CircuitBreaker:
             await self._on_failure(e)
             raise
 
+    # Yo, this calculates the "come back later" time for clients. Used in the CircuitBreakerError
+    # message. If last failure was 30s ago and timeout is 60s, returns 30s. If we're past the
+    # timeout, returns 0 (should be in HALF_OPEN already). The max(0.0, ...) prevents negative
+    # values due to clock drift or race conditions. Use this in Retry-After headers!
     def _get_retry_after(self) -> float:
         """Calculate seconds until circuit can be tried again."""
         if self._last_failure_time is None:
@@ -181,6 +209,12 @@ class CircuitBreaker:
         elapsed = (datetime.now() - self._last_failure_time).total_seconds()
         return max(0.0, self.config.timeout - elapsed)
 
+    # Hey future me, this is TIME-BASED state transition logic! Called before EVERY request.
+    # If we're OPEN and timeout has passed, switch to HALF_OPEN automatically (no manual reset
+    # needed). If we're CLOSED but had old failures, and reset_timeout passed, forget those
+    # failures (clean slate). This prevents: 1) circuits stuck OPEN forever, 2) ancient failures
+    # from 5 hours ago counting toward current failure_threshold. The "now = datetime.now()"
+    # at the top is important - use same timestamp for both checks to avoid race conditions!
     async def _check_state_transition(self) -> None:
         """Check if state should transition based on time elapsed."""
         now = datetime.now()
@@ -199,6 +233,13 @@ class CircuitBreaker:
                 self._failure_count = 0
                 self._last_failure_time = None
 
+    # Listen up, success handling is STATE-DEPENDENT! In HALF_OPEN, we count successes toward
+    # success_threshold to close the circuit. If we hit the threshold, circuit closes! In CLOSED,
+    # a success resets the failure counter (back to "no failures"). This is important - prevents
+    # a service that's MOSTLY healthy but had 4 failures in the past from opening on the 5th
+    # failure if there were successes in between. The lock protects _success_count increments.
+    # We log INFO in HALF_OPEN because that's important (service recovering!), but not in CLOSED
+    # (that's normal operation, would flood logs).
     async def _on_success(self) -> None:
         """Handle successful request."""
         async with self._lock:
@@ -227,6 +268,13 @@ class CircuitBreaker:
                     self._failure_count = 0
                     self._last_failure_time = None
 
+    # Yo future me, failure handling is AGGRESSIVE! Every failure increments counters and updates
+    # last_failure_time (used for timeouts). In HALF_OPEN, even ONE failure immediately opens the
+    # circuit again - we're strict because service clearly hasn't recovered! In CLOSED, we wait
+    # until failure_threshold before opening. We log WARNING (not ERROR) because failures might
+    # be temporary network blips - ERROR would be too noisy. The exception type/message are logged
+    # to help debug WHY it's failing (timeout vs connection refused vs 500 error, etc.). The lock
+    # prevents race conditions where two failures happen simultaneously and only one gets counted.
     async def _on_failure(self, exception: Exception) -> None:
         """Handle failed request."""
         async with self._lock:
@@ -260,6 +308,10 @@ class CircuitBreaker:
                 # Check if we've hit the failure threshold
                 await self._transition_to_open()
 
+    # Hey, this transition is BAD NEWS - service is down! We log ERROR (not warning) because
+    # this affects availability. The success_count reset prepares for eventual HALF_OPEN state.
+    # We update last_state_change for metrics tracking. The timeout value in the log message
+    # tells operators "service will be tested again in X seconds". Alert on this in production!
     async def _transition_to_open(self) -> None:
         """Transition to OPEN state."""
         self._state = CircuitState.OPEN
@@ -278,6 +330,11 @@ class CircuitBreaker:
             },
         )
 
+    # Listen up, HALF_OPEN is the TESTING state - we cautiously try the service again. We reset
+    # BOTH failure_count and success_count to zero because we're starting fresh. This state is
+    # fragile - one failure snaps us back to OPEN, but success_threshold successes close the
+    # circuit. We log INFO because this is hopeful (service might be recovering!). Monitor for
+    # circuits that flip between HALF_OPEN and OPEN repeatedly - that means service is flaky!
     async def _transition_to_half_open(self) -> None:
         """Transition to HALF_OPEN state."""
         self._state = CircuitState.HALF_OPEN
@@ -291,6 +348,11 @@ class CircuitBreaker:
             extra={"circuit_breaker": self.name, "state": self._state.value},
         )
 
+    # Yo, we're HEALTHY again! Circuit closed means normal operation restored. Reset ALL counters
+    # and timestamps to clean slate. The None assignment to last_failure_time is important - tells
+    # _check_state_transition "don't apply reset_timeout logic". We log INFO (not ERROR) because
+    # this is GOOD news - celebrate service recovery! If you see frequent CLOSED → OPEN → CLOSED
+    # cycles, your failure_threshold might be too sensitive (increase it).
     async def _transition_to_closed(self) -> None:
         """Transition to CLOSED state."""
         self._state = CircuitState.CLOSED
@@ -305,6 +367,11 @@ class CircuitBreaker:
             extra={"circuit_breaker": self.name, "state": self._state.value},
         )
 
+    # Hey future me, this is a MANUAL override - use with caution! Good for: 1) testing circuit
+    # breaker behavior, 2) forcing recovery after you fix the underlying service, 3) emergency
+    # "just make it work" situations. BAD for: production automation (defeats the purpose!). The
+    # lock prevents race conditions. We log INFO to audit trail - track who/when/why this was
+    # called. Consider adding authentication/authorization before exposing this via admin API!
     async def reset(self) -> None:
         """Manually reset the circuit breaker to CLOSED state."""
         async with self._lock:
@@ -316,6 +383,12 @@ class CircuitBreaker:
             )
 
 
+# Listen up, this decorator is EASIER than using CircuitBreaker directly! Just slap
+# @circuit_breaker("my-service") on any function. BUT there's a caveat: the breaker is created
+# PER DECORATED FUNCTION, not globally! If you have 10 functions calling same service, use 10
+# decorators with SAME name to share one breaker. Or better yet, create ONE breaker instance
+# and pass it as dependency. The decorator supports both sync and async functions but... most
+# services are async nowadays. The wraps() preserves function metadata for introspection/docs.
 def circuit_breaker(
     name: str,
     config: CircuitBreakerConfig | None = None,

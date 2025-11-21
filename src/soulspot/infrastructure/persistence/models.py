@@ -16,11 +16,20 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
+# Hey future me, utc_now() ensures ALL timestamps are UTC! Never use datetime.now() without
+# timezone - that's "naive" datetime and causes bugs when servers are in different timezones.
+# UTC (Universal Time Coordinated) is the standard for backend systems. The datetime.now(UTC)
+# syntax is Python 3.11+ - for older versions, use datetime.utcnow(). UTC is CRITICAL for
+# distributed systems, log aggregation, and avoiding DST (Daylight Saving Time) headaches!
 def utc_now() -> datetime:
     """Get current UTC time."""
     return datetime.now(UTC)
 
 
+# Yo, Base is THE foundation of all ORM models! DeclarativeBase is SQLAlchemy 2.0 style
+# (cleaner than old declarative_base()). ALL models inherit from this - it manages the shared
+# metadata registry (table definitions, relationships, etc.). Don't create multiple Base classes
+# or you'll get weird migration issues! The "pass" is intentional - Base is just a marker class.
 class Base(DeclarativeBase):
     """Base class for all ORM models.
 
@@ -31,6 +40,14 @@ class Base(DeclarativeBase):
     pass
 
 
+# Listen up, ArtistModel is the CORE entity - everything links to artists! The id is String(36)
+# for UUID storage (UUIDs are 36 chars with hyphens). The lambda: str(uuid.uuid4()) generates
+# new UUIDs as default - IMPORTANT: it's a lambda, not uuid.uuid4() directly, so each row gets
+# unique ID! The indexes on spotify_uri and musicbrainz_id are for lookups when syncing data.
+# The func.lower(name) index enables case-insensitive artist search - "Beatles" matches "beatles".
+# The cascade="all, delete-orphan" on relationships means: delete artist → delete all albums/tracks!
+# This is POWERFUL but DANGEROUS - deleting "The Beatles" wipes their entire discography! Alembic
+# migrations must handle this carefully to avoid data loss.
 class ArtistModel(Base):
     """SQLAlchemy model for Artist entity."""
 
@@ -96,6 +113,14 @@ class AlbumModel(Base):
     __table_args__ = (Index("ix_albums_title_artist", "title", "artist_id"),)
 
 
+# Hey future me, TrackModel is the BUSIEST table - queries hit it constantly! The file_*
+# fields (file_size, file_hash, file_hash_algorithm) are for library integrity checks - detecting
+# duplicates, corruption, etc. The is_broken flag marks files that failed validation (corrupt,
+# deleted, permission issues). The audio_* fields store technical metadata (bitrate, format,
+# sample_rate) for quality filtering and upgrade detection. The indexes on title+artist_id and
+# file_hash are CRITICAL for performance - without them, duplicate detection scans the entire
+# table! The download relationship uses uselist=False because it's ONE-TO-ONE (each track has
+# at most one active download). Be careful with migrations - this table can have millions of rows!
 class TrackModel(Base):
     """SQLAlchemy model for Track entity."""
 

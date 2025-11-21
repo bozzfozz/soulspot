@@ -11,6 +11,11 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 
+# Hey future me, HEALTHY means "all good", DEGRADED means "works but something's off" (like
+# a cache miss or slow response), UNHEALTHY means "broken, don't use this". For overall health
+# checks: all HEALTHY = 200 OK, any DEGRADED = 200 OK but warn operators, any UNHEALTHY = 503
+# Service Unavailable. Use DEGRADED wisely - don't mark the whole app unhealthy just because
+# Last.fm is down if that's not critical! Reserve UNHEALTHY for show-stoppers like DB failures.
 class HealthStatus(str, Enum):
     """Health check status."""
 
@@ -19,6 +24,11 @@ class HealthStatus(str, Enum):
     UNHEALTHY = "unhealthy"
 
 
+# Listen up, this is the health check RESULT object! name identifies which check (database,
+# slskd, spotify, etc). status is the verdict. message is human-readable (show in dashboards).
+# details is optional structured data (response times, version info, etc) - useful for debugging
+# but don't put sensitive data here! This gets exposed via /health endpoint. Keep checks FAST
+# (<1s) or health endpoint becomes slow and defeats the purpose!
 @dataclass
 class HealthCheck:
     """Result of a health check."""
@@ -118,6 +128,12 @@ async def check_slskd_health(base_url: str, timeout: float = 5.0) -> HealthCheck
         )
 
 
+# Yo future me, Spotify health check is interesting - we expect 401 Unauthorized! That's because
+# their API requires auth tokens, but a 401 means the API is UP and responding. We'd only get
+# timeouts/connection errors if it's actually down. The 5s timeout is generous for a health check
+# but Spotify can be slow sometimes. We return DEGRADED (not UNHEALTHY) on errors because Spotify
+# being down doesn't break the ENTIRE app - users can still manage their library, downloads, etc.
+# Only new playlist imports are affected. The httpx.RequestError catches network/DNS/timeout issues.
 async def check_spotify_health(timeout: float = 5.0) -> HealthCheck:
     """Check Spotify API health.
 
@@ -163,6 +179,12 @@ async def check_spotify_health(timeout: float = 5.0) -> HealthCheck:
         )
 
 
+# Hey, MusicBrainz is similar to Spotify health check - just hit the base URL and see if it
+# responds. 200 OK means healthy. They have strict rate limiting (1 req/sec) but ONE health check
+# request won't violate that. Unlike Spotify, MusicBrainz doesn't require auth for basic endpoints,
+# so we expect 200, not 401. We return DEGRADED on errors because MB is for metadata enrichment -
+# app still works without it, just less pretty track info. The 5s timeout is fine - MB is usually
+# fast. If this times out frequently, their servers might be overloaded (check status.musicbrainz.org).
 async def check_musicbrainz_health(timeout: float = 5.0) -> HealthCheck:
     """Check MusicBrainz API health.
 
