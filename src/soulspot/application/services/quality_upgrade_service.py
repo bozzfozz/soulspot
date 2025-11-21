@@ -150,6 +150,10 @@ class QualityUpgradeService:
         logger.info(f"Found {len(candidates)} quality upgrade candidates")
         return candidates
 
+    # Hey future me: Quality upgrade candidate creation - stores potential upgrades in DB
+    # WHY store candidates? Don't want to recalculate improvement scores every time
+    # generates new ID for candidate - separate from track ID (one track can have multiple candidates over time)
+    # Creates both domain entity AND persistence model - standard repository pattern
     async def create_upgrade_candidate(
         self,
         track_id: TrackId,
@@ -205,6 +209,10 @@ class QualityUpgradeService:
         logger.info(f"Created quality upgrade candidate for track {track_id}")
         return candidate
 
+    # Listen, unprocessed candidates query - sorted by improvement score DESC
+    # WHY DESC? Show best upgrades first (FLAC > 320kbps > 192kbps)
+    # processed=False means we haven't downloaded the upgrade yet
+    # Returns dict not entity for API responses
     async def get_unprocessed_candidates(
         self, limit: int = 100
     ) -> list[dict[str, Any]]:
@@ -239,6 +247,9 @@ class QualityUpgradeService:
             for model in models
         ]
 
+    # Hey, mark candidate as done - sets processed=True and optionally links download_id
+    # download_id tracks which download job handled this upgrade (audit trail)
+    # No validation that candidate_id exists - will silently do nothing if not found
     async def mark_candidate_processed(
         self, candidate_id: str, download_id: DownloadId | None = None
     ) -> None:

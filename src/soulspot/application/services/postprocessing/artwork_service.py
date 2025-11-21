@@ -103,6 +103,10 @@ class ArtworkService:
         logger.warning("No artwork found for track: %s", track.title)
         return None
 
+    # Hey future me: CoverArtArchive downloader - free high-quality album art source
+    # WHY /front endpoint? Gets front cover specifically (not back, booklet, etc)
+    # follow_redirects=True because CAA returns 307 redirect to actual image URL
+    # 404 is normal (album doesn't have artwork), don't spam error logs
     async def _download_from_coverart(self, release_id: str) -> bytes | None:
         """Download artwork from CoverArtArchive.
 
@@ -129,6 +133,10 @@ class ArtworkService:
             logger.exception("Error downloading artwork from CoverArtArchive: %s", e)
             return None
 
+    # Yo Spotify album artwork stub - NOT IMPLEMENTED yet
+    # WHY stub? Needs access_token which we don't have in this context
+    # TODO: Pass access_token through service constructor or method param
+    # Spotify images array has multiple sizes - we want largest (index 0)
     async def _download_from_spotify(self, album_uri: Any) -> bytes | None:
         """Download artwork from Spotify album.
 
@@ -158,6 +166,8 @@ class ArtworkService:
             logger.exception("Error downloading artwork from Spotify: %s", e)
             return None
 
+    # Listen, Spotify track artwork fallback - another stub
+    # Used when album doesn't have artwork but track does (rare case)
     async def _download_from_spotify_track(self, track_uri: Any) -> bytes | None:
         """Download artwork from Spotify track.
 
@@ -188,6 +198,9 @@ class ArtworkService:
     # WHY JPEG quality=85? Sweet spot between quality and file size (90+ is diminishing returns)
     # WHY Lanczos resampling? Best quality downscaling algorithm (slower but worth it)
     # GOTCHA: We convert all images to RGB - some PNGs with transparency will get black backgrounds
+    # Hey async-to-sync wrapper - delegates to blocking PIL code in thread pool
+    # WHY to_thread? PIL/Pillow is synchronous - would block event loop
+    # Returns processed bytes ready for embedding
     async def _process_image(self, image_data: bytes) -> bytes:
         """Process and optimize image.
 
@@ -200,6 +213,11 @@ class ArtworkService:
         # Run image processing in thread pool to avoid blocking
         return await asyncio.to_thread(self._process_image_sync, image_data)
 
+    # Yo synchronous PIL image processing - the actual resize/optimize logic
+    # WHY convert RGB? Some PNG with alpha channel - ID3 APIC doesn't support transparency
+    # GOTCHA: Transparent backgrounds become BLACK after conversion
+    # thumbnail() is in-place (modifies img) and maintains aspect ratio
+    # optimize=True enables compression optimization (slower but smaller files)
     def _process_image_sync(self, image_data: bytes) -> bytes:
         """Synchronous image processing.
 
@@ -234,6 +252,10 @@ class ArtworkService:
             # Return original if processing fails
             return image_data
 
+    # Listen, artwork persistence - saves to disk with path validation
+    # WHY validate path? SECURITY - prevent path traversal attacks
+    # File named by album.id to avoid special chars in album names
+    # asyncio.to_thread for write_bytes because filesystem I/O is blocking
     async def save_artwork(
         self,
         artwork_data: bytes,

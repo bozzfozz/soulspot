@@ -93,6 +93,12 @@ class LRUCache[K, V]:
     - Batch operations for efficiency
     """
 
+    # Hey future me: LRU cache __init__ with METRICS tracking! max_size=1000 is sane default for dev
+    # but production might need 10k+ depending on data size. OrderedDict maintains insertion order
+    # which is perfect for LRU - oldest items at front, newest at back. When we hit max_size, we
+    # popitem(last=False) which removes the FIRST (oldest/least-recently-used) item. The metrics
+    # object tracks hits/misses/evictions for monitoring cache effectiveness. Lock is critical -
+    # OrderedDict operations aren't atomic, concurrent modifications would corrupt the order!
     def __init__(self, max_size: int = 1000) -> None:
         """Initialize LRU cache.
 
@@ -104,6 +110,12 @@ class LRUCache[K, V]:
         self._lock = asyncio.Lock()
         self._metrics = CacheMetrics()
 
+    # Yo, LRU get() with move_to_end! This is the LRU magic - accessing an entry moves it to END
+    # (most recent). So frequently-accessed items stay at the end, unused items drift to the front
+    # and get evicted. entry.touch() updates access_count and last_accessed for metrics/debugging.
+    # GOTCHA: Every get() modifies the OrderedDict order - this is expensive for hot keys! Trade-off
+    # between cache effectiveness and performance. Metrics increment BEFORE returning - so failed gets
+    # (miss) still count. Returns None for both "not found" and "expired" - caller can't distinguish.
     async def get(self, key: K) -> V | None:
         """Get value from cache with LRU tracking.
 
@@ -130,6 +142,11 @@ class LRUCache[K, V]:
             self._metrics.hits += 1
             return entry.value
 
+    # Listen up future me: LRU eviction happens HERE! When cache is full (len >= max_size), we
+    # popitem(last=False) which removes FIRST (oldest/LRU) entry. Then we add new entry to END.
+    # WHY delete existing key first? To update its position - if key exists, deleting and re-adding
+    # moves it from middle to end. metrics.evictions tracks how often we're hitting size limit -
+    # if this is high, increase max_size! metrics.writes counts ALL sets (updates and new entries).
     async def set(self, key: K, value: V, ttl_seconds: int = 3600) -> None:
         """Set value in cache with LRU eviction if needed.
 
@@ -156,6 +173,12 @@ class LRUCache[K, V]:
             )
             self._metrics.writes += 1
 
+    # Hey future me: Batch set for efficiency! Single lock acquisition for multiple items instead of
+    # locking/unlocking for each set(). Uses current_time once for all entries - consistent timestamps.
+    # Still does eviction per-item though - if batch has 100 items and cache is at 950/1000, you'll see
+    # 50 evictions. GOTCHA: This can evict recently-added items from SAME batch if batch is huge! If you
+    # set_batch 2000 items into 1000-size cache, first 1000 items get evicted to make room for last 1000.
+    # Consider checking batch size vs max_size and warning if batch > max_size/2.
     async def set_batch(self, items: dict[K, V], ttl_seconds: int = 3600) -> None:
         """Set multiple values in cache efficiently.
 
@@ -273,6 +296,10 @@ class CacheWarmer[K, V]:
     accessed data.
     """
 
+    # Hey future me: Cache warmer - the startup performance booster!
+    # WHY pre-warm? Cold cache = every request hits DB/API = slow first page loads
+    # Warm cache at startup = instant responses from first request
+    # Use this for "top 100 tracks", "recent playlists", etc. Don't warm entire DB!
     def __init__(self, cache: LRUCache[K, V]) -> None:
         """Initialize cache warmer.
 
@@ -281,6 +308,12 @@ class CacheWarmer[K, V]:
         """
         self._cache = cache
 
+    # Yo, warm_from_loader is the SMART warmer - calls loader function for each key
+    # WHY loader function? Decouples warming logic from data source (DB, API, file, etc.)
+    # Loader returns None for missing/failed keys - we skip those (warmed_count won't include them)
+    # WHY collect items dict first? To use set_batch for efficiency (single lock vs N locks)
+    # GOTCHA: If loader is slow (DB query, API call), warming could take MINUTES for large key lists!
+    # Consider adding timeout, parallelization (asyncio.gather), or progress logging
     async def warm_from_loader(
         self,
         keys: list[K],
@@ -311,6 +344,10 @@ class CacheWarmer[K, V]:
 
         return warmed_count
 
+    # Listen, warm_from_dict is the FAST warmer - data already loaded, just shove it in cache!
+    # Use this when you've already fetched data (e.g., from startup script, bulk import)
+    # and just need to populate cache. No loader overhead, just batch insert. Returns
+    # len(items) directly because we know all items succeeded (no filtering like warm_from_loader).
     async def warm_from_dict(
         self,
         items: dict[K, V],

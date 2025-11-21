@@ -81,6 +81,11 @@ async def import_playlist(
 # though - so if someone adds/deletes playlists while paginating you might get duplicates or gaps.
 # The len(playlists) for total is wrong if there are more results! Should do separate count query.
 # Also we're calling str() on URIs which assumes they exist - None would crash. type: ignore needed.
+# Yo, classic pagination endpoint here. Default 20 items is reasonable but limit is capped at 100
+# to prevent someone requesting 10000 playlists and killing the DB. No cursor-based pagination
+# though - so if someone adds/deletes playlists while paginating you might get duplicates or gaps.
+# The len(playlists) for total is wrong if there are more results! Should do separate count query.
+# Also we're calling str() on URIs which assumes they exist - None would crash. type: ignore needed.
 @router.get("/")
 async def list_playlists(
     skip: int = Query(0, ge=0, description="Number of playlists to skip"),
@@ -121,6 +126,10 @@ async def list_playlists(
     }
 
 
+# Hey future me, this gets ONE playlist by ID! PlaylistId.from_string() validates the UUID format -
+# it'll throw ValueError if malformed. We return 404 if playlist doesn't exist. The str() calls on
+# spotify_uri and track_ids assume they're not None - could crash! type: ignore to silence mypy.
+# Track IDs are just UUIDs here, not actual track data - frontend needs separate API calls to hydrate.
 @router.get("/{playlist_id}")
 async def get_playlist(
     playlist_id: str,

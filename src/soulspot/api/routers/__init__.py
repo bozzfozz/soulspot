@@ -1,5 +1,13 @@
 """API router initialization."""
 
+# Hey future me, this is the MAIN API router aggregator! It collects all sub-routers (auth, playlists, tracks,
+# etc) and mounts them under /api prefix (check main.py where api_router is mounted). Each include_router()
+# adds a prefix ("/auth", "/playlists", etc) so endpoints become /api/auth/login, /api/playlists/import, etc.
+# The tags parameter groups endpoints in OpenAPI/Swagger docs - super helpful for API exploration! Order matters
+# here - routers are tried in order for route matching (but shouldn't overlap anyway). library/automation/
+# dashboard/widgets/widget_templates/sse have NO prefix because they define prefix in their own router
+# (prefix="/library" in router.py). The __all__ export makes these importable from soulspot.api.routers.
+
 from fastapi import APIRouter
 
 from soulspot.api.routers import (
@@ -17,6 +25,7 @@ from soulspot.api.routers import (
     widgets,
 )
 
+# Yo, this is the main API router that aggregates everything! Gets mounted at /api in main.py.
 api_router = APIRouter()
 
 # Include all routers

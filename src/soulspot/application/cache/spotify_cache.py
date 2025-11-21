@@ -18,6 +18,10 @@ class SpotifyCache:
     """
 
     # Cache TTL values (in seconds)
+    # Hey future me: Spotify cache TTLs reflect how often data changes
+    # Tracks are stable (24h) - once published, metadata rarely changes
+    # Playlists are DYNAMIC (1h) - users add/remove tracks constantly, old cache = missing new songs
+    # Search results shortest (30min) - Spotify catalog updates daily with new releases
     TRACK_TTL = 86400  # 24 hours
     PLAYLIST_TTL = 3600  # 1 hour (playlists change frequently)
     SEARCH_TTL = 1800  # 30 minutes
@@ -26,6 +30,9 @@ class SpotifyCache:
         """Initialize Spotify cache."""
         self._cache: InMemoryCache[str, Any] = InMemoryCache()
 
+    # Yo, these key builders use Spotify IDs which are unique and stable
+    # "track:3n3Ppam7vgaVa1iaRUc9Lp" won't collide with "playlist:37i9dQZF1DXcBWIGoYBM5M"
+    # WHY include limit in search key? search("beatles", 10) ≠ search("beatles", 50) results!
     def _make_track_key(self, track_id: str) -> str:
         """Make cache key for track metadata."""
         return f"track:{track_id}"
@@ -38,6 +45,10 @@ class SpotifyCache:
         """Make cache key for search results."""
         return f"search:{query}:{limit}"
 
+    # Hey future me: Spotify track metadata is RICH - album art, preview URLs, ISRC, etc.
+    # Cache this aggressively (24h) because it saves quota and is rarely stale
+    # GOTCHA: If track gets "pulled" from Spotify (rights issues), cache holds dead data
+    # Consider invalidate_track() if user reports missing/wrong track
     async def get_track(self, track_id: str) -> dict[str, Any] | None:
         """Get cached track metadata.
 
@@ -60,6 +71,10 @@ class SpotifyCache:
         key = self._make_track_key(track_id)
         await self._cache.set(key, track, self.TRACK_TTL)
 
+    # Listen, playlists have SHORT TTL (1h) because they're living documents
+    # User adds 5 tracks → sync immediately → cache still shows old version = confusion
+    # WHY not 5 minutes? Balance responsiveness vs API quota (we have rate limits!)
+    # For "My Discover Weekly", invalidate explicitly on Monday when Spotify refreshes it
     async def get_playlist(self, playlist_id: str) -> dict[str, Any] | None:
         """Get cached playlist metadata.
 
@@ -125,6 +140,9 @@ class SpotifyCache:
         key = self._make_track_key(track_id)
         return await self._cache.delete(key)
 
+    # Yo, invalidate playlist when you KNOW it changed (user just edited it)
+    # Don't spam this - every invalidation = next request hits Spotify API (rate limits!)
+    # Returns True if entry existed, False if wasn't cached anyway
     async def invalidate_playlist(self, playlist_id: str) -> bool:
         """Invalidate cached playlist.
 

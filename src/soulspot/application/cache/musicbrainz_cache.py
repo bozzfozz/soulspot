@@ -19,6 +19,10 @@ class MusicBrainzCache:
     """
 
     # Cache TTL values (in seconds)
+    # Hey future me: TTL choices are intentional!
+    # Recordings (tracks) cache for 24h because metadata rarely changes (title, ISRC, duration are fixed)
+    # Artists cache for 7 days because artist info changes even less (name, bio, etc.)
+    # Search results only 1h because new recordings get added to MB daily - stale search = missing new releases
     RECORDING_TTL = 86400  # 24 hours
     RELEASE_TTL = 86400  # 24 hours
     ARTIST_TTL = 604800  # 7 days
@@ -28,6 +32,9 @@ class MusicBrainzCache:
         """Initialize MusicBrainz cache."""
         self._cache: InMemoryCache[str, Any] = InMemoryCache()
 
+    # Hey future me: These key builders use prefixes to avoid collisions
+    # "recording:isrc:USRC17607839" vs "search:Beatles:Yesterday" can't clash because different prefixes
+    # WHY include artist+title in search key? "Yesterday" by Beatles vs "Yesterday" by Himesh is different!
     def _make_recording_key(self, isrc: str) -> str:
         """Make cache key for recording lookup by ISRC."""
         return f"recording:isrc:{isrc}"
@@ -44,6 +51,10 @@ class MusicBrainzCache:
         """Make cache key for artist lookup."""
         return f"artist:{mbid}"
 
+    # Hey future me: ISRC lookups are the FASTEST way to get MusicBrainz data
+    # ISRC = International Standard Recording Code, globally unique per recording
+    # Like a barcode for music - if track has ISRC, this is your best friend
+    # GOTCHA: Not all tracks have ISRCs (especially old/indie releases pre-2000s)
     async def get_recording_by_isrc(self, isrc: str) -> dict[str, Any] | None:
         """Get cached recording by ISRC.
 
@@ -68,6 +79,10 @@ class MusicBrainzCache:
         key = self._make_recording_key(isrc)
         await self._cache.set(key, recording, self.RECORDING_TTL)
 
+    # Yo, search results are SHORT-lived (1h TTL) because MB database grows constantly
+    # New albums released → new recordings added → yesterday's search is incomplete today
+    # GOTCHA: Artist/title matching is fuzzy - "The Beatles" vs "Beatles" might return different results
+    # We cache the EXACT query string - if you search again with slightly different spelling, cache miss
     async def get_search_results(
         self, artist: str, title: str
     ) -> list[dict[str, Any]] | None:
@@ -143,6 +158,10 @@ class MusicBrainzCache:
         key = self._make_artist_key(mbid)
         await self._cache.set(key, artist, self.ARTIST_TTL)
 
+    # Listen up future me: Manual invalidation is for when you KNOW cached data is wrong
+    # Example: MB editor fixes typo in track title, your cache has old version
+    # Don't invalidate frivolously - every cache miss = 1+ second MusicBrainz API call (rate limited!)
+    # Returns True if entry existed, False if already gone
     async def invalidate_recording(self, isrc: str) -> bool:
         """Invalidate cached recording.
 

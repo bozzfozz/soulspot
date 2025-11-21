@@ -97,6 +97,11 @@ class RenamingService:
 
         return filename
 
+    # Hey name cleaning - replaces problematic chars with safe alternatives
+    # WHY these replacements? Filesystem compatibility across Windows/Mac/Linux
+    # "/" -> "-" because "/" is directory separator on Unix
+    # ":" -> " -" because ":" is reserved on Windows
+    # Multiple spaces collapsed to one for cleaner look
     def _clean_name(self, name: str) -> str:
         """Clean a name for use in filenames.
 
@@ -215,6 +220,10 @@ class RenamingService:
 
         return dest_path
 
+    # Yo unique path generator - adds _1, _2, _3 suffix until path is unique
+    # WHY needed? Race conditions or multiple downloads of same track
+    # Infinite loop protection: unlikely but counter could overflow after 2^31 iterations
+    # stem = filename without extension, suffix = extension with dot
     def _get_unique_path(self, path: Path) -> Path:
         """Get a unique path by adding numeric suffix.
 
@@ -236,6 +245,11 @@ class RenamingService:
 
         return path
 
+    # Listen, template validator - checks if all variables in template are supported
+    # WHY validate? User typos like "{Arist}" instead of "{Artist}" cause crashes at runtime
+    # Formatter.parse() extracts all placeholders from template string
+    # field.split(":")[0] handles format specs like "{track:02d}" - takes only variable name
+    # Returns False on ANY unsupported variable - fail fast and clear
     def validate_template(self, template: str) -> bool:
         """Validate a naming template.
 

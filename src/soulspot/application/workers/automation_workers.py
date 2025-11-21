@@ -170,6 +170,10 @@ class WatchlistWorker:
 class DiscographyWorker:
     """Background worker for checking artist discography completeness."""
 
+    # Hey future me: Discography worker - the "complete your collection" automation
+    # WHY 24h check interval? Artist discographies rarely change (few new albums per year)
+    # This is more intensive than watchlist checking because we fetch ENTIRE discography
+    # WHY Spotify client? MB doesn't have complete discographies for all artists
     def __init__(
         self,
         session: AsyncSession,
@@ -223,6 +227,11 @@ class DiscographyWorker:
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
 
+    # Yo, discography check is STUBBED OUT (implementation needed)
+    # WHY not implemented? This is complex - need to query Spotify for ALL albums, compare with local library,
+    # detect missing albums (not just tracks), and queue downloads. Could hammer Spotify API hard if you
+    # have 100+ artists with 10+ albums each. The TODO comments show the plan but needs careful implementation
+    # with rate limiting, pagination, and error handling. Don't enable this worker until implemented!
     async def _check_discographies(self) -> None:
         """Check discography completeness for all artists.
 
@@ -255,6 +264,10 @@ class DiscographyWorker:
 class QualityUpgradeWorker:
     """Background worker for detecting quality upgrade opportunities."""
 
+    # Listen up future me: Quality upgrade worker - the "replace your 128kbps MP3s with FLAC" automation
+    # WHY 24h check interval? Quality of existing files doesn't change, new sources might appear gradually
+    # This scans LOCAL library (not external APIs) so less rate-limit concerns than other workers
+    # GOTCHA: Comparing quality is subjective - bitrate alone doesn't tell full story (lossy vs lossless)
     def __init__(
         self,
         session: AsyncSession,
@@ -305,6 +318,12 @@ class QualityUpgradeWorker:
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
 
+    # Hey future me: Quality upgrade identification is STUBBED (implementation needed)
+    # WHY not implemented? This is complex - need to scan all files, extract bitrates/formats,
+    # search Soulseek for better versions, calculate "improvement score" (320kbps->FLAC is worth it,
+    # 256kbps->320kbps maybe not), and avoid downloading inferior "upgrades" (downsampled FLACs are a trap!).
+    # Also need to handle edge cases like different masterings (2011 remaster might be louder but not "better").
+    # The TODO shows the plan. Don't enable until implemented with proper quality heuristics!
     async def _identify_upgrades(self) -> None:
         """Identify quality upgrade opportunities.
 
@@ -336,6 +355,10 @@ class QualityUpgradeWorker:
 class AutomationWorkerManager:
     """Manager for all automation background workers."""
 
+    # Yo, the manager class - starts/stops all three workers as a unit
+    # WHY manager? So you can start/stop all automation with one call instead of managing three workers
+    # GOTCHA: All workers share same DB session - concurrent access could cause conflicts if not careful
+    # The interval params let you tune each worker independently (watchlist hourly, others daily)
     def __init__(
         self,
         session: AsyncSession,
@@ -361,6 +384,10 @@ class AutomationWorkerManager:
         )
         self.quality_worker = QualityUpgradeWorker(session, quality_interval)
 
+    # Hey future me: Start all three workers in parallel with asyncio.gather equivalents
+    # Each worker.start() creates an async task that runs forever in background
+    # WHY await each start()? To ensure all workers actually started before returning
+    # GOTCHA: If any start() fails, others might already be running - no rollback!
     async def start_all(self) -> None:
         """Start all automation workers."""
         await self.watchlist_worker.start()
@@ -368,6 +395,9 @@ class AutomationWorkerManager:
         await self.quality_worker.start()
         logger.info("All automation workers started")
 
+    # Listen, graceful shutdown - stop all workers and wait for their loops to exit
+    # WHY await each stop()? To ensure tasks actually cancelled before app shutdown
+    # Order doesn't matter - workers are independent. Stops are idempotent (safe to call twice).
     async def stop_all(self) -> None:
         """Stop all automation workers."""
         await self.watchlist_worker.stop()
@@ -375,6 +405,9 @@ class AutomationWorkerManager:
         await self.quality_worker.stop()
         logger.info("All automation workers stopped")
 
+    # Yo, health check helper - returns dict of running status for monitoring/dashboard
+    # Accesses _running flags directly - not thread-safe but these are bool reads so low risk
+    # Returns snapshot - status might change immediately after this returns!
     def get_status(self) -> dict[str, bool]:
         """Get status of all workers.
 

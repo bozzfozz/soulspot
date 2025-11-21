@@ -215,6 +215,12 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
 
+# Hey future me, this validates SQLite paths BEFORE we try creating DB engine! It ensures parent
+# directories exist and the .db file is writable. Call this during startup, NOT during request
+# handling (too slow). If validation fails, app won't start - better than cryptic SQLAlchemy
+# errors later. Only runs for SQLite URLs (returns early for PostgreSQL). The try/except blocks
+# catch filesystem permission errors and convert them to clear RuntimeError messages instead of
+# letting obscure OSError bubble up to logs!
 def _validate_sqlite_path(settings: Settings) -> None:
     """Validate SQLite database path accessibility before engine creation."""
 
@@ -243,6 +249,12 @@ def _validate_sqlite_path(settings: Settings) -> None:
         ) from exc
 
 
+# Listen future me, @asynccontextmanager makes this a CONTEXT MANAGER for FastAPI lifespan!
+# Everything before `yield` runs at STARTUP, everything after runs at SHUTDOWN. FastAPI calls
+# this ONCE when server starts and cleans up when server stops. The try/finally ensures cleanup
+# ALWAYS runs even if startup fails! If startup crashes, app won't start. Resources like DB
+# connections, job queue workers, and auto-import tasks are stored on app.state so routes can
+# access them. DON'T put long-running code here without timeouts - blocks server startup!
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan manager.
@@ -395,6 +407,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.exception("Error closing database: %s", e)
 
 
+# Yo, this is the APP FACTORY! Creates a new FastAPI instance with all middleware, routes, and
+# exception handlers configured. Called ONCE at module load to create `app` singleton at bottom of
+# file. Takes optional Settings for testing (dependency injection). Middleware order MATTERS:
+# GZip first (outermost), then logging, then CORS. Exception handlers registered BEFORE routes!
+# Static files mounted BEFORE routes to avoid route conflicts. Use this pattern if you ever need
+# multiple app instances (like in tests). DON'T call this multiple times in production!
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create FastAPI application instance."""
     if settings is None:
@@ -473,6 +491,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Include UI router at root
     app.include_router(ui.router, tags=["UI"])
 
+    # Hey, this is the BASIC health check - just returns "alive" without checking dependencies!
+    # Kubernetes uses this for liveness probe (is process running?). FAST because no DB/API calls.
+    # For detailed checks (DB connectivity, external services), use /ready endpoint instead. If this
+    # returns 500, Kubernetes will restart the pod thinking process is hung. Keep it lightweight!
     # Health check endpoint
     @app.get(
         "/health",
@@ -500,6 +522,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "profile": settings.profile.value,
         }
 
+    # Yo future me, this is the DETAILED readiness check - Kubernetes readiness probe! Checks DB
+    # connectivity, external services (slskd, Spotify, MusicBrainz) if enabled. Takes longer than
+    # /health because it makes real network calls. If this fails, Kubernetes STOPS routing traffic
+    # to pod but doesn't restart it (gives time to recover). Can be slow during startup while DB
+    # migrations run. The overall_status logic: UNHEALTHY if any critical service down, DEGRADED
+    # if optional services down but app still works. Don't add checks for non-critical features!
     # Readiness check endpoint with dependency checks
     @app.get(
         "/ready",
@@ -611,6 +639,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "checks": checks,
         }
 
+    # Listen, /live is the SIMPLEST liveness probe - literally just returns JSON if process is alive!
+    # Kubernetes uses this to detect if app is hung/deadlocked. If this 500s or times out, pod gets
+    # killed and restarted. NO database checks, NO external calls - just "can Python respond?". Even
+    # simpler than /health! If this fails, something is REALLY broken (out of memory, deadlock, etc).
     # Liveness probe endpoint
     @app.get("/live", tags=["Health"])
     async def liveness_check() -> dict[str, str]:
@@ -624,6 +656,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 app = create_app()
 
 
+# Hey, this is the CLI entry point! Called when you run `python -m soulspot.main` or `soulspot` CLI
+# command (defined in pyproject.toml). Starts uvicorn development server with hot-reload if debug=True.
+# The string "soulspot.main:app" tells uvicorn to import app from this module (enables hot-reload).
+# For production, use gunicorn/uvicorn workers instead! This is single-process, single-threaded dev mode.
+# If you change settings while running with reload=True, server auto-restarts. DON'T use in production!
 def main() -> None:
     """Run the application with uvicorn."""
     import uvicorn

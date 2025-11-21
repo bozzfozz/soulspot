@@ -10,6 +10,11 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Hey future me, Profile enum controls deployment complexity! SIMPLE = SQLite + in-memory queue
+# (good for local dev, single user). STANDARD = PostgreSQL + Redis/Celery (production). Profile
+# affects which features are available and which defaults are used. Code can check profile with
+# settings.is_simple_profile() or settings.is_standard_profile(). Don't add more profiles without
+# thinking hard - it multiplies testing matrix! Two is already painful enough to maintain.
 class Profile(str, Enum):
     """Deployment profile."""
 
@@ -17,6 +22,12 @@ class Profile(str, Enum):
     STANDARD = "standard"  # PostgreSQL, Redis/Celery, optional S3
 
 
+# Yo, DatabaseSettings is a NESTED Pydantic model! It groups all DB-related config together.
+# Env vars are prefixed with DATABASE_ (e.g., DATABASE_URL, DATABASE_POOL_SIZE). pool_* settings
+# only apply to PostgreSQL - SQLite ignores them! The pool_pre_ping=True is CRITICAL to prevent
+# stale connections (MySQL closes idle conns after 8h, breaks app without pre-ping). pool_recycle
+# refreshes connections every hour to avoid this. Don't lower pool_size below 5 unless you want
+# "connection pool exhausted" errors under load! Each async request needs its own connection.
 class DatabaseSettings(BaseSettings):
     """Database configuration with enhanced connection pool tuning."""
 
@@ -60,6 +71,10 @@ class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DATABASE_")
 
 
+# Listen future me, SlskdSettings configures the slskd (Soulseek daemon) HTTP client! You need EITHER
+# api_key OR username+password for auth. api_key is preferred (more secure, doesn't expire). The URL
+# should point to your slskd instance (usually http://localhost:5030 in dev, could be remote in prod).
+# If slskd is down/unreachable, downloads fail but app stays up. Check slskd health in /ready endpoint.
 class SlskdSettings(BaseSettings):
     """slskd client configuration."""
 
@@ -83,6 +98,11 @@ class SlskdSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SLSKD_")
 
 
+# Hey, SpotifySettings stores OAuth PKCE credentials for Spotify API! You get client_id and
+# client_secret from Spotify Developer Dashboard. redirect_uri MUST match what you registered in
+# Spotify dashboard exactly (including http vs https, trailing slash, port)! OAuth will fail with
+# cryptic "redirect_uri mismatch" if they don't match. Default redirect_uri assumes local dev on
+# port 8000. For production, override with your actual domain. These are NOT the same as user tokens!
 class SpotifySettings(BaseSettings):
     """Spotify API configuration."""
 
@@ -102,6 +122,11 @@ class SpotifySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="SPOTIFY_")
 
 
+# Yo future me, MusicBrainz requires a User-Agent with app_name, app_version, and contact email!
+# They'll ban your IP if you don't set a proper User-Agent (or use a generic Python one). contact
+# should be a real email so they can reach you if your app misbehaves (excessive requests, etc).
+# MusicBrainz has strict rate limits (1 req/sec) enforced by our circuit breaker. DON'T abuse this
+# API or you'll get blocked for the entire community! Be a good citizen and respect rate limits.
 class MusicBrainzSettings(BaseSettings):
     """MusicBrainz API configuration."""
 
@@ -121,6 +146,11 @@ class MusicBrainzSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MUSICBRAINZ_")
 
 
+# Hey, Last.fm is OPTIONAL! The is_configured() method checks if credentials are actually set
+# (not just empty strings). Code should check lastfm.is_configured() before attempting API calls.
+# If not configured, features gracefully degrade (skip Last.fm tags, just use MusicBrainz). Get
+# api_key and api_secret from Last.fm API account (https://www.last.fm/api/account/create). Both
+# are required - missing either means Last.fm is disabled. Empty/whitespace-only values = not configured!
 class LastfmSettings(BaseSettings):
     """Last.fm API configuration."""
 
@@ -154,6 +184,12 @@ class LastfmSettings(BaseSettings):
         )
 
 
+# Listen up future me, StorageSettings has a CRITICAL validator ensure_path_is_absolute! All paths
+# are automatically resolved to absolute paths (./downloads becomes /home/user/app/downloads). This
+# prevents bugs when working directory changes! The validator runs on ALL four path fields. Paths
+# default to current directory subdirectories (./downloads, ./music, etc) but you should override
+# these in production to permanent storage locations. The app auto-creates these dirs at startup
+# via settings.ensure_directories(). DON'T use relative paths anywhere else in the code!
 class StorageSettings(BaseSettings):
     """File storage configuration."""
 
@@ -189,6 +225,11 @@ class StorageSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="STORAGE_")
 
 
+# Hey future me, APISettings configures the FastAPI server! host="0.0.0.0" means bind to ALL network
+# interfaces (needed for Docker containers). For local dev, "127.0.0.1" is safer but won't work in
+# containers. cors_origins can be comma-separated string OR list (validator handles both). The
+# parse_cors_origins validator converts "http://a.com,http://b.com" to ["http://a.com", "http://b.com"].
+# secure_cookies should be True in production (requires HTTPS) but False for local dev (breaks on HTTP)!
 class APISettings(BaseSettings):
     """API server configuration."""
 
@@ -230,6 +271,11 @@ class APISettings(BaseSettings):
         le=86400,
     )
 
+    # Yo, this validator handles CORS origins from ENV vars! Env vars are always strings, so we need
+    # to parse "http://a,http://b" into a list. If it's already a list (programmatic config), pass
+    # through unchanged. The strip() removes accidental whitespace from "http://a.com, http://b.com".
+    # This runs BEFORE Pydantic validates the list type. If someone sets API__CORS_ORIGINS="http://a,b",
+    # this converts it to ["http://a", "b"]. mode="before" means run before Pydantic's own parsing!
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
@@ -241,6 +287,12 @@ class APISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="API_")
 
 
+# Listen future me, CircuitBreakerSettings configures the circuit breaker pattern for external APIs!
+# After failure_threshold consecutive failures, circuit OPENS (stops calling API, fails fast). After
+# timeout seconds in OPEN state, circuit goes HALF_OPEN (tries one request). If success_threshold
+# consecutive successes in HALF_OPEN, circuit CLOSES (back to normal). If any failure in HALF_OPEN,
+# back to OPEN! This prevents cascading failures when external APIs are down. reset_timeout clears
+# failure counter in CLOSED state after 5min of no failures. Tune these based on API reliability!
 class CircuitBreakerSettings(BaseSettings):
     """Circuit breaker configuration for external services."""
 
@@ -268,6 +320,11 @@ class CircuitBreakerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CIRCUIT_BREAKER_")
 
 
+# Hey, ObservabilitySettings groups all monitoring/logging config! log_json_format=True enables
+# structured JSON logging (good for production log aggregators like ELK, Datadog). Set False for
+# human-readable dev logs. enable_dependency_health_checks controls whether /ready endpoint checks
+# external services (DB, slskd, Spotify, MusicBrainz). Disable this if health checks are too slow
+# or you don't care about external service status. circuit_breaker settings are nested here too!
 class ObservabilitySettings(BaseSettings):
     """Observability and monitoring configuration."""
 
@@ -298,6 +355,12 @@ class ObservabilitySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_")
 
 
+# Yo future me, DownloadSettings configures the job queue and download workers! max_concurrent_downloads
+# limits parallel downloads (Soulseek servers often throttle/ban if you download too many at once).
+# 1-3 is recommended range - higher = faster but more likely to get banned. default_max_retries is
+# how many times we retry failed downloads before giving up. enable_priority_queue=True means P0
+# downloads (priority=0) are processed before P1/P2. If False, FIFO order. Don't set max_concurrent
+# too high or you'll saturate network bandwidth and downloads will slow down from congestion!
 class DownloadSettings(BaseSettings):
     """Download queue and worker configuration."""
 
@@ -321,6 +384,12 @@ class DownloadSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOWNLOAD_")
 
 
+# Hey, PostProcessingSettings controls what happens AFTER a file is downloaded! enabled=True means
+# run the full pipeline (fetch artwork, embed lyrics, write ID3 tags, rename files). You can disable
+# individual steps (artwork_enabled, lyrics_enabled, etc) while keeping others. artwork_max_size and
+# artwork_quality control image resizing (big artwork = big file size). file_naming_template uses
+# special placeholders like {Artist CleanName} and {Track CleanTitle} - see docs for full list. If
+# pipeline is disabled, files just sit in downloads/ with original slskd filenames (usually garbage)!
 class PostProcessingSettings(BaseSettings):
     """Post-processing pipeline configuration."""
 
@@ -364,6 +433,12 @@ class PostProcessingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POSTPROCESSING_")
 
 
+# Listen up future me, Settings is the TOP-LEVEL config class! All other *Settings classes are nested
+# inside this one. Pydantic loads config from .env file (env_file=".env") and environment variables.
+# The env_nested_delimiter="__" means DATABASE_URL becomes database.url (double underscore = nesting).
+# case_sensitive=False means database_url, DATABASE_URL, Database_Url all work. extra="ignore" means
+# unknown env vars don't cause errors. This class is a SINGLETON via @lru_cache on get_settings()!
+# DON'T instantiate Settings() directly - always use get_settings() to get the cached singleton.
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -445,14 +520,26 @@ class Settings(BaseSettings):
 
     # Removed production secret key validation - this is for local use only
 
+    # Hey, these profile helper methods are for feature flags! Use `if settings.is_simple_profile():`
+    # instead of `if settings.profile == Profile.SIMPLE` - cleaner and more explicit. Code can check
+    # profile to enable/disable features (e.g., Redis queue only in STANDARD, in-memory in SIMPLE).
     def is_simple_profile(self) -> bool:
         """Check if using simple profile."""
         return self.profile == Profile.SIMPLE
 
+    # Yo, same as is_simple_profile but for STANDARD! These could be properties instead of methods
+    # but methods are more explicit (verb names make intent clearer). Don't add more profiles
+    # without adding corresponding helper methods here!
     def is_standard_profile(self) -> bool:
         """Check if using standard profile."""
         return self.profile == Profile.STANDARD
 
+    # Listen future me, this parses DATABASE_URL to extract the SQLite file path! It's PRIVATE (leading
+    # underscore) because it's internal implementation detail. Returns None for non-SQLite databases
+    # (PostgreSQL, MySQL). The parsing logic handles both sqlite:/// and sqlite+aiosqlite:/// formats.
+    # The path manipulation removes leading slash for relative paths but keeps it for absolute paths.
+    # This is used by ensure_directories() to create parent directories before SQLAlchemy tries to
+    # access the file. DON'T call this repeatedly - it's called once at startup!
     def _get_sqlite_db_path(self) -> Path | None:
         """Extract database file path from SQLite URL.
 
@@ -481,6 +568,11 @@ class Settings(BaseSettings):
 
         return Path(path_str)
 
+    # Hey, this creates ALL storage directories at app startup! Called from lifespan() before any file
+    # operations. Uses mkdir(parents=True, exist_ok=True) so it's idempotent (safe to call multiple
+    # times). Also creates DB parent directory for SQLite (otherwise SQLAlchemy fails with "directory
+    # not found"). If this fails (permission denied, disk full), app won't start - better than failing
+    # later during first download! The exists_ok=True means no error if directories already exist.
     def ensure_directories(self) -> None:
         """Ensure all storage directories exist, including database parent directory."""
         # Ensure storage directories exist
@@ -497,6 +589,12 @@ class Settings(BaseSettings):
                 db_parent.mkdir(parents=True, exist_ok=True)
 
 
+# Listen up future me, @lru_cache makes this a SINGLETON! First call creates Settings by reading .env
+# and environment variables, subsequent calls return THE SAME INSTANCE. This is efficient (only parse
+# .env once) but means settings changes require app restart! Each process/worker gets its own singleton
+# (lru_cache is per-process, not shared across gunicorn workers). For tests, you might need to clear
+# the cache with get_settings.cache_clear() to force re-reading. ALWAYS use get_settings() instead of
+# Settings() directly to get the singleton! The maxsize is unbounded (default) since we only cache one.
 @lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""

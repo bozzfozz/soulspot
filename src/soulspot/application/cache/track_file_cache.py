@@ -21,6 +21,10 @@ class TrackFileCache:
     """
 
     # Cache TTL values (in seconds)
+    # Hey future me: These TTLs are LONG because files don't move often
+    # File paths cached 7 days - files sit in download folder for weeks
+    # Checksums only 24h - WHY shorter? Because files can be replaced/re-downloaded
+    # If checksum is stale, we just recompute (few seconds) - not a big deal
     FILE_PATH_TTL = 604800  # 7 days
     CHECKSUM_TTL = 86400  # 24 hours
 
@@ -28,6 +32,10 @@ class TrackFileCache:
         """Initialize track file cache."""
         self._cache: InMemoryCache[str, Any] = InMemoryCache()
 
+    # Yo, these key builders separate concerns - track location vs file integrity
+    # "file_path:{track_id}" stores WHERE file is
+    # "checksum:{file_path}" stores file integrity hash
+    # "metadata:{track_id}" stores audio properties (bitrate, format, etc.)
     def _make_file_path_key(self, track_id: TrackId) -> str:
         """Make cache key for file path."""
         return f"file_path:{track_id}"
@@ -40,6 +48,10 @@ class TrackFileCache:
         """Make cache key for file metadata."""
         return f"metadata:{track_id}"
 
+    # Hey future me: This prevents redundant downloads!
+    # Before searching Soulseek, check is_file_downloaded() - maybe you already have it
+    # GOTCHA: Cache might say "yes" but file got deleted manually - always verify Path.exists()
+    # That's why is_file_downloaded() does BOTH checks (cache + filesystem)
     async def get_file_path(self, track_id: TrackId) -> FilePath | None:
         """Get cached file path for track.
 
@@ -89,6 +101,10 @@ class TrackFileCache:
         key = self._make_metadata_key(track_id)
         await self._cache.set(key, metadata, self.FILE_PATH_TTL)
 
+    # Listen up future me: MD5 checksums for INTEGRITY not security (that's why usedforsecurity=False)
+    # We detect if download corrupted (network glitch, disk failure) - MD5 is perfect for this
+    # WHY cache checksums? Computing MD5 of 50MB FLAC takes seconds - don't repeat unnecessarily
+    # GOTCHA: If file modified (e.g., re-encoded), checksum changes - cache becomes stale!
     async def get_checksum(self, file_path: str) -> str | None:
         """Get cached file checksum.
 
@@ -111,6 +127,11 @@ class TrackFileCache:
         key = self._make_checksum_key(file_path)
         await self._cache.set(key, checksum, self.CHECKSUM_TTL)
 
+    # Yo, this is the checksum computer - reads file in 4KB chunks to avoid memory explosion
+    # WHY 4KB? Good balance - smaller = more syscalls, larger = memory pressure
+    # The "nosec B324" comment tells bandit security scanner "yes we know MD5 is weak cryptographically,
+    # but we're using it for file integrity not passwords!" Otherwise bandit screams every build
+    # Automatically caches result so next call is instant
     async def compute_and_cache_checksum(self, file_path: str) -> str:
         """Compute and cache file checksum.
 
@@ -139,6 +160,10 @@ class TrackFileCache:
 
         return checksum
 
+    # Hey future me: This is your "do we already have this track?" check
+    # Prevents downloading same song twice! Check this BEFORE queuing download
+    # Does TWO validations: cache says yes AND file actually exists on disk
+    # WHY both? User might delete file manually, cache doesn't know - we'd return True for missing file!
     async def is_file_downloaded(self, track_id: TrackId) -> bool:
         """Check if track file is already downloaded.
 

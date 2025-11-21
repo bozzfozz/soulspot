@@ -13,6 +13,11 @@ from soulspot.domain.value_objects import (
 )
 
 
+# Hey future me, IArtistRepository is a PORT (Hexagonal Architecture)! It's an INTERFACE (ABC) that
+# defines the contract for artist data access. The actual implementation is in infrastructure layer
+# (SQLAlchemy repository). Domain layer depends on this interface, not concrete implementation - this
+# is DEPENDENCY INVERSION! Use this in service classes: `def __init__(self, artist_repo: IArtistRepository)`
+# Tests can mock this easily. If you change this interface, ALL implementations must change too!
 class IArtistRepository(ABC):
     """Repository interface for Artist entities."""
 
@@ -201,6 +206,11 @@ class IDownloadRepository(ABC):
 # External Integration Ports
 
 
+# Yo, ISlskdClient is the PORT for slskd integration! It abstracts HTTP client details away from
+# domain logic. The domain says "I need to search Soulseek and download files" - it doesn't care if
+# it's HTTP, gRPC, or mock client. Implementation is in infrastructure/integrations/slskd_client.py.
+# All methods are async because HTTP calls are async. Return types are dict (JSON responses) - could
+# be more strongly typed with Pydantic models but we keep it simple. Circuit breaker wraps this!
 class ISlskdClient(ABC):
     """Port for slskd HTTP client operations."""
 
@@ -266,6 +276,11 @@ class ISlskdClient(ABC):
         pass
 
 
+# Listen, ISpotifyClient is the PORT for Spotify OAuth + API! It handles OAuth PKCE flow AND API calls.
+# The access_token parameter on most methods is the user's OAuth token (not client credentials). We
+# use PKCE (Proof Key for Code Exchange) for security - code_verifier is generated per auth flow. The
+# exchange_code and refresh_token methods return token dicts with access_token, refresh_token, expires_in.
+# Actual implementation is in infrastructure/integrations/spotify_client.py with circuit breaker!
 class ISpotifyClient(ABC):
     """Port for Spotify API client operations with OAuth PKCE."""
 
@@ -356,6 +371,11 @@ class ISpotifyClient(ABC):
         pass
 
 
+# Hey future me, IMusicBrainzClient is the PORT for MusicBrainz metadata API! MusicBrainz is our
+# primary metadata source (free, open, high quality). ISRC (International Standard Recording Code)
+# is the best way to match tracks - it's globally unique. The lookup methods return None if not found
+# (not exception) - calling code should handle missing data gracefully. MusicBrainz has strict 1 req/sec
+# rate limit enforced by circuit breaker! Actual implementation is in infrastructure/integrations/musicbrainz_client.py.
 class IMusicBrainzClient(ABC):
     """Port for MusicBrainz API client operations."""
 
@@ -416,6 +436,11 @@ class IMusicBrainzClient(ABC):
         pass
 
 
+# Yo, ILastfmClient is the PORT for Last.fm API! Last.fm is OPTIONAL (check lastfm.is_configured()
+# before using). It provides genre tags and popularity data. mbid parameter is MusicBrainz ID for
+# more accurate matching. All methods return None if not found or if Last.fm is not configured. The
+# actual implementation checks is_configured() and returns None early if credentials are missing. Useful
+# for enriching metadata beyond what MusicBrainz provides!
 class ILastfmClient(ABC):
     """Port for Last.fm API client operations."""
 

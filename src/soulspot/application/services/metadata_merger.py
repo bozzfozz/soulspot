@@ -23,11 +23,18 @@ class MetadataMerger:
         MetadataSource.LASTFM: 3,
     }
 
+    # Hey helper method - returns priority number for source (lower = higher authority)
+    # MANUAL has priority 0 (highest), MUSICBRAINZ 1, SPOTIFY 2, LASTFM 3
+    # Unknown sources get 999 (lowest priority) - safe fallback
     @staticmethod
     def _get_source_priority(source: MetadataSource) -> int:
         """Get priority value for a metadata source."""
         return MetadataMerger.AUTHORITY_HIERARCHY.get(source, 999)
 
+    # Yo value selection - picks best value based on source authority
+    # WHY check empty strings? API might return "" instead of None for missing data
+    # WHY prefer new if current is None? Need to populate empty fields
+    # Returns tuple (value, source) so you know WHERE the final value came from
     @staticmethod
     def _select_best_value(
         current_value: Any,
@@ -70,6 +77,10 @@ class MetadataMerger:
 
         return current_value, current_source
 
+    # Listen, list merger - combines two lists while removing duplicates
+    # WHY normalize to lowercase? "Rock" and "rock" are the same genre
+    # WHY preserve original case? Keep first occurrence's case ("Rock" not "rock")
+    # max_items limit prevents tag bloat (imagine merging 50 tags from all sources!)
     @staticmethod
     def _merge_lists(
         current_list: list[str],
@@ -250,6 +261,10 @@ class MetadataMerger:
 
         return track
 
+    # Hey artist metadata merger - updates Artist entity with data from multiple sources
+    # WHY normalize name first? Standardize "ft." format before merging
+    # Tags and genres MERGE from all sources (accumulate), not replace
+    # Returns modified artist entity for fluent API style
     def merge_artist_metadata(
         self,
         artist: Artist,
@@ -323,6 +338,10 @@ class MetadataMerger:
 
         return artist
 
+    # Yo album metadata merger - similar to track/artist but also handles release_year
+    # WHY parse date string? MusicBrainz returns "YYYY-MM-DD", we only want year
+    # WHY [:4] slice? First 4 chars are always the year ("2023-05-15" -> "2023")
+    # isdigit() check prevents crash on malformed dates like "XXXX-01-01"
     def merge_album_metadata(
         self,
         album: Album,

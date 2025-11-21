@@ -67,6 +67,12 @@ def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyCli
     return SpotifyClient(settings.spotify)
 
 
+# Hey future me, this is THE CORE AUTH DEPENDENCY for all Spotify API endpoints! It does THREE things:
+# 1) Checks session cookie exists and is valid, 2) Extracts access token from session, 3) AUTO-REFRESHES
+# expired tokens using the refresh_token. This is super convenient - endpoints just inject this and get
+# a VALID token without thinking about expiration! BUT the auto-refresh can fail if refresh_token is
+# invalid/revoked - then HTTPException 401 forces user to re-auth. The cast() at the end is needed for
+# mypy because we checked token is not None but mypy doesn't track that through the if blocks.
 async def get_spotify_token_from_session(
     session_id: str | None = Cookie(None),
     session_store: SessionStore = Depends(get_session_store),
@@ -143,11 +149,19 @@ async def get_spotify_token_from_session(
     return session.access_token
 
 
+# Yo, creates NEW SlskdClient on every request - not cached! Slskd is your Soulseek downloader, this
+# client talks to its API. Like SpotifyClient, it's stateless so creating new instances is fine (httpx
+# pools connections internally). If slskd server is down, this won't fail until you actually USE the
+# client in an endpoint. Settings include API key, base URL - check config if requests fail!
 def get_slskd_client(settings: Settings = Depends(get_settings)) -> SlskdClient:
     """Get slskd client instance."""
     return SlskdClient(settings.slskd)
 
 
+# Hey, MusicBrainz is the metadata enrichment source - gets artist/album/track info from their public
+# database. Not cached, new client per request. MusicBrainz has RATE LIMITS (1 req/sec for anonymous,
+# higher if you set contact info in settings.musicbrainz.contact). If you hammer it too fast, you'll
+# get 503 errors! The client should handle rate limiting internally but watch out for that.
 def get_musicbrainz_client(
     settings: Settings = Depends(get_settings),
 ) -> MusicBrainzClient:
@@ -155,6 +169,10 @@ def get_musicbrainz_client(
     return MusicBrainzClient(settings.musicbrainz)
 
 
+# Listen up, Last.fm is OPTIONAL! Returns None if API key isn't configured. This is different from other
+# clients - endpoints MUST check for None before using! Last.fm provides scrobble data, play counts, tags
+# etc for metadata enrichment. If you call methods on None you'll get AttributeError. The is_configured()
+# check probably verifies API key exists - check LastfmSettings if you're debugging why this returns None.
 def get_lastfm_client(
     settings: Settings = Depends(get_settings),
 ) -> LastfmClient | None:
@@ -164,6 +182,9 @@ def get_lastfm_client(
     return LastfmClient(settings.lastfm)
 
 
+# Yo, TokenManager handles OAuth token operations - exchange, refresh, validation. It wraps SpotifyClient
+# for token-specific logic. Created new per request. I think this might be redundant with the token
+# management already in get_spotify_token_from_session? Check if this is actually used - might be legacy.
 def get_token_manager(
     spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> TokenManager:
@@ -171,6 +192,10 @@ def get_token_manager(
     return TokenManager(spotify_client)
 
 
+# Hey future me, this is the Repository Pattern in action! ArtistRepository abstracts all artist DB access.
+# Created new per request with the DB session injected. The session is tied to the request lifecycle (auto
+# cleanup/rollback). Use this dependency in endpoints that need to read/write artists. DON'T bypass the
+# repository and query artists directly - that breaks the abstraction and makes code harder to test!
 def get_artist_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> ArtistRepository:
@@ -178,6 +203,9 @@ def get_artist_repository(
     return ArtistRepository(session)
 
 
+# Yo, album data access layer. Same pattern as ArtistRepository - wraps all album DB queries. New instance
+# per request with request-scoped session. Albums have complex relationships (artists, tracks, metadata)
+# so the repository handles all that JOIN complexity. Use this instead of raw SQLAlchemy queries!
 def get_album_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> AlbumRepository:
@@ -185,6 +213,9 @@ def get_album_repository(
     return AlbumRepository(session)
 
 
+# Hey, manages playlist storage and retrieval. Playlists link to tracks through a many-to-many relationship
+# (playlist_tracks join table probably). Repository handles adding/removing tracks from playlists, ordering,
+# etc. Standard repository pattern - use this for all playlist DB operations!
 def get_playlist_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> PlaylistRepository:
@@ -192,6 +223,9 @@ def get_playlist_repository(
     return PlaylistRepository(session)
 
 
+# Listen, THE most important repository - tracks are the core domain entity! Handles track metadata, file
+# paths, download status, relationships to artists/albums. Queries here can be SLOW if you have thousands
+# of tracks - consider adding indexes if track listing endpoints lag. Repository pattern as usual.
 def get_track_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> TrackRepository:
@@ -199,6 +233,9 @@ def get_track_repository(
     return TrackRepository(session)
 
 
+# Yo, tracks download operations and their state (queued, in-progress, completed, failed). This is separate
+# from TrackRepository because downloads are transient operations, not permanent track data. Repository
+# queries are used by download workers to find pending downloads. High-traffic table!
 def get_download_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> DownloadRepository:
@@ -206,6 +243,10 @@ def get_download_repository(
     return DownloadRepository(session)
 
 
+# Hey future me, this is a USE CASE - application layer orchestration! It coordinates SpotifyClient and
+# multiple repositories to import a playlist from Spotify into our DB. Use cases encapsulate business
+# logic that spans multiple repositories/services. Created fresh per request with all dependencies injected.
+# This is Clean Architecture - endpoint just calls use_case.execute(), the use case does the work!
 def get_import_playlist_use_case(
     spotify_client: SpotifyClient = Depends(get_spotify_client),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
@@ -221,6 +262,10 @@ def get_import_playlist_use_case(
     )
 
 
+# Listen, this use case searches Soulseek for a track and initiates download! It's the bridge between
+# "I want this track" and "download is queued in slskd". Coordinates SlskdClient (Soulseek API) with
+# track/download repositories. Complex logic around search result ranking, file quality selection, etc
+# lives in this use case. Standard dependency injection pattern.
 def get_search_and_download_use_case(
     slskd_client: SlskdClient = Depends(get_slskd_client),
     track_repository: TrackRepository = Depends(get_track_repository),
@@ -234,6 +279,10 @@ def get_search_and_download_use_case(
     )
 
 
+# Yo, fetches rich metadata from MusicBrainz and stores it in our DB! Gets album art, genres, release
+# dates, artist bios, etc. This is separate from the multi-source enrichment use case (which merges
+# Spotify/Last.fm/MusicBrainz). Probably legacy - check if this is still used or if multi-source version
+# replaced it. MusicBrainz-only enrichment is simpler but less comprehensive.
 def get_enrich_metadata_use_case(
     musicbrainz_client: MusicBrainzClient = Depends(get_musicbrainz_client),
     track_repository: TrackRepository = Depends(get_track_repository),
@@ -249,6 +298,11 @@ def get_enrich_metadata_use_case(
     )
 
 
+# Hey future me, JobQueue is a SINGLETON stored in app.state! It's created at startup (check main.py or
+# app initialization) and lives for the app lifetime. This is different from repositories which are
+# request-scoped. If job_queue isn't in app.state, app didn't start properly - probably a startup error.
+# 503 Service Unavailable is correct HTTP code for "app not ready yet". The cast() is needed because
+# app.state is untyped (can hold anything). JobQueue manages background work queue for downloads/imports.
 def get_job_queue(request: Request) -> JobQueue:
     """Get job queue instance from app state.
 
@@ -269,6 +323,11 @@ def get_job_queue(request: Request) -> JobQueue:
     return cast(JobQueue, request.app.state.job_queue)
 
 
+# Listen up, DownloadWorker is also a singleton in app.state! It's the background worker that processes
+# download jobs from the queue. Probably runs in a separate asyncio task continuously polling for work.
+# Like JobQueue, this lives for the whole app lifetime and is shared across all requests. If this fails,
+# downloads won't process! 503 is appropriate - app is partially broken. Check startup logs if this error
+# appears. The worker coordinates with slskd to actually download files.
 def get_download_worker(request: Request) -> DownloadWorker:
     """Get download worker instance from app state.
 

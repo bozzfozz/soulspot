@@ -17,9 +17,16 @@ from soulspot.infrastructure.persistence.repositories import AutomationRuleRepos
 logger = logging.getLogger(__name__)
 
 
+# Yo, AutomationWorkflowService orchestrates automated actions! This is the "if this then that" engine for
+# music downloads. Define triggers (new_release, missing_album, quality_upgrade) and actions (download, notify,
+# queue). Each rule has priority (for execution order), quality settings, filters, etc. Uses repository pattern
+# for persistence and notification_service for alerts. Stateless except for DB calls - safe for concurrent use!
 class AutomationWorkflowService:
     """Service for orchestrating automated workflows (Detect→Search→Download→Process)."""
 
+    # Hey future me, constructor needs DB session (for rule persistence) and optional notification service (for
+    # alerts). If no notification service provided, creates default (which just logs). Could make notification
+    # service required to catch config errors earlier - consider that!
     def __init__(
         self,
         session: AsyncSession,
@@ -91,23 +98,36 @@ class AutomationWorkflowService:
         )
         return rule
 
+    # Listen future me, gets a single rule by ID. Simple repository lookup. Returns None if not found (not exception).
+    # The type annotation is explicit - repository might return None. Good for checking if rule exists before update!
     async def get_rule(self, rule_id: AutomationRuleId) -> AutomationRule | None:
         """Get automation rule by ID."""
         result: AutomationRule | None = await self.repository.get_by_id(rule_id)
         return result
 
+    # Yo, list all rules with pagination support. Default limit of 100 prevents memory blow-up if you have thousands
+    # of rules (unlikely but defensive!). Offset is for pagination - offset=100, limit=100 gets rules 100-200.
+    # This returns ALL rules regardless of enabled status - use list_enabled() if you only want active ones!
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[AutomationRule]:
         """List all automation rules."""
         return await self.repository.list_all(limit, offset)
 
+    # Hey, filter rules by trigger type (e.g., only "new_release" rules). Useful for UI - show user all their
+    # new release rules together. Repository does the filtering, not us - keeps service thin and dumb!
     async def list_by_trigger(self, trigger: AutomationTrigger) -> list[AutomationRule]:
         """List automation rules by trigger type."""
         return await self.repository.list_by_trigger(trigger.value)
 
+    # Listen, gets only ENABLED rules - the ones that will actually execute. Disabled rules are ignored by
+    # automation system. This is what background workers call to find rules to run. No pagination here -
+    # assumes you don't have thousands of enabled rules (if you do, you have other problems!)
     async def list_enabled(self) -> list[AutomationRule]:
         """List all enabled automation rules."""
         return await self.repository.list_enabled()
 
+    # Yo, enables a rule - sets enabled=True and persists. Checks rule exists first (returns silently if not -
+    # idempotent design). Logs the action for audit trail. The entity method enable() handles state change,
+    # repository.update() persists it. Clean separation of concerns!
     async def enable_rule(self, rule_id: AutomationRuleId) -> None:
         """Enable an automation rule."""
         rule = await self.repository.get_by_id(rule_id)
@@ -116,6 +136,9 @@ class AutomationWorkflowService:
             await self.repository.update(rule)
             logger.info(f"Enabled automation rule: {rule.name}")
 
+    # Hey, pause a rule - sets enabled=False. Disabled rules won't execute but are preserved in DB for later.
+    # WHY disable instead of delete? User might want to temporarily pause automation without losing config.
+    # Example: going on vacation, don't want downloads piling up, disable all rules then re-enable when back!
     async def disable_rule(self, rule_id: AutomationRuleId) -> None:
         """Disable an automation rule."""
         rule = await self.repository.get_by_id(rule_id)
@@ -124,11 +147,18 @@ class AutomationWorkflowService:
             await self.repository.update(rule)
             logger.info(f"Disabled automation rule: {rule.name}")
 
+    # Yo, permanent deletion - removes rule from DB entirely. No soft delete, it's GONE. Use disable if you want
+    # to keep the rule for later! This is destructive and can't be undone. Consider adding confirmation step in UI!
     async def delete_rule(self, rule_id: AutomationRuleId) -> None:
         """Delete an automation rule."""
         await self.repository.delete(rule_id)
         logger.info(f"Deleted automation rule: {rule_id}")
 
+    # Listen up, this executes a SINGLE rule with given context! Context dict has trigger-specific data (track IDs,
+    # album info, etc). Returns result dict with success flag and details. If rule not found or disabled, returns
+    # error immediately (fail-fast). Wraps _execute_action in try/catch to handle failures gracefully. Records
+    # execution stats (total_executions, successful_executions, failed_executions) for monitoring. Updates
+    # last_triggered_at timestamp. This is called by trigger_workflow for each matching rule!
     async def execute_rule(
         self, rule_id: AutomationRuleId, context: dict[str, Any]
     ) -> dict[str, Any]:
@@ -199,6 +229,11 @@ class AutomationWorkflowService:
         else:
             raise ValueError(f"Unknown action: {rule.action}")
 
+    # Hey future me, the STUB implementation for search-and-download action! This logs what WOULD happen but doesn't
+    # actually trigger downloads yet. In production, this would: 1) Create Track entities for items, 2) Add download
+    # jobs to queue, 3) Download worker picks them up and processes. Right now it just returns success with context
+    # passed through. The quality_profile, apply_filters, auto_process settings are preserved for when you implement
+    # the real download logic. Extract track_ids, album_info, release_info from context - these tell you WHAT to download!
     async def _action_search_and_download(
         self, rule: AutomationRule, context: dict[str, Any]
     ) -> dict[str, Any]:
@@ -250,6 +285,11 @@ class AutomationWorkflowService:
             "message": f"Download triggered for quality profile: {rule.quality_profile}",
         }
 
+    # Yo, notify-only action - sends notification WITHOUT downloading! Use this for "heads up" alerts when you want
+    # manual review before downloading. The trigger type determines notification format (new_release vs missing_album
+    # vs quality_upgrade have different message templates). Each trigger extracts different context fields (artist_name,
+    # album_name, release_date, etc). Falls back to generic notification if trigger doesn't match known types. Wraps
+    # notification_service calls in try/catch - notification failures shouldn't crash the workflow!
     async def _action_notify_only(
         self, rule: AutomationRule, context: dict[str, Any]
     ) -> dict[str, Any]:
@@ -310,6 +350,12 @@ class AutomationWorkflowService:
                 "error": str(e),
             }
 
+    # Listen, add-to-queue action - creates a pending download job for manual approval! This is the middle ground
+    # between auto-download and notify-only. Downloads are queued but need user click to start. Good for when you
+    # want control but don't want to search manually. Extracts item name from context (album OR track title). Logs
+    # what would be queued (STUB - real implementation would create DB job record). Sends notification so user knows
+    # something is waiting for approval. Returns success with context preserved. Quality profile is stored for when
+    # user approves the download!
     async def _action_add_to_queue(
         self, rule: AutomationRule, context: dict[str, Any]
     ) -> dict[str, Any]:
@@ -352,6 +398,12 @@ class AutomationWorkflowService:
             "message": f"Added to download queue for manual approval: {item_name}",
         }
 
+    # Hey future me, trigger ALL enabled rules for a specific trigger type! This is what background workers call
+    # when events occur (new_release detected, missing_album found, etc). Filters to enabled rules only (disabled
+    # rules are skipped). Sorts by priority (higher first) so important rules run before low-priority ones. Executes
+    # each rule with same context. Collects results from all rules - some might succeed, others fail. Returns list
+    # of result dicts with rule ID, rule name, and execution result. Empty list if no enabled rules for that trigger.
+    # This is the "broadcast" pattern - one trigger fires multiple rules!
     async def trigger_workflow(
         self,
         trigger: AutomationTrigger,
@@ -390,6 +442,11 @@ class AutomationWorkflowService:
         logger.info(f"Executed {len(enabled_rules)} rules for trigger: {trigger.value}")
         return results
 
+    # Yo, creates sensible default rules for new users - the "starter pack"! Three pre-configured rules:
+    # 1) Auto-download new releases (priority 100 - highest), 2) Notify on missing albums (priority 50 - medium),
+    # 3) Auto-upgrade quality to lossless (priority 75 - high). Each rule is created separately with error handling -
+    # if one fails, others still get created. Returns list of successfully created rules. Logs count at end for
+    # feedback. Call this during first-time setup or when user clicks "restore defaults" button!
     async def create_default_rules(self) -> list[AutomationRule]:
         """Create default automation rules for common scenarios.
 

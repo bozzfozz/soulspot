@@ -1,5 +1,12 @@
 """Server-Sent Events (SSE) endpoints for real-time widget updates."""
 
+# Hey future me, SSE is how we push real-time updates to the UI without polling! Long-lived HTTP connection
+# that streams events. Used for live download progress, job queue changes, notifications, etc. SSE is simpler
+# than WebSockets (unidirectional, HTTP-based) but less flexible. Browser auto-reconnects if connection drops.
+# Event format is text-based: "event: type\ndata: json\n\n". Keep messages small - large events can cause lag.
+# CORS must allow streaming if frontend is different origin! The Streaming Response is critical - standard
+# Response would buffer everything which defeats the purpose.
+
 import asyncio
 import json
 import logging
@@ -19,6 +26,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ui/sse", tags=["sse"])
 
 
+# Yo future me, this wraps SSE event data! SSE format is quirky text-based protocol with specific syntax.
+# The encode() method serializes to "event: type\ndata: json\n\n" format. Each data line must start with
+# "data: " prefix - that's why we split JSON and re-prefix each line (handles multiline JSON correctly).
+# The double newline at end signals "event complete" to client. id lets client resume from last event
+# after disconnect. retry tells browser how long to wait before reconnect (milliseconds). Most events
+# won't use id/retry, just event type and data.
 class SSEEvent:
     """Server-Sent Event wrapper."""
 
@@ -42,6 +55,13 @@ class SSEEvent:
         self.id = id
         self.retry = retry
 
+    # Hey, this formats the event into SSE protocol spec! The order matters: event, id, retry, then data.
+    # Each field is optional except data. JSON is serialized then split by newlines - necessary because SSE
+    # requires EACH line to start with "data: ". Example output:
+    # event: download_update
+    # data: {"id": "abc", "progress": 50}
+    # <blank line>
+    # The split/rejoin with "data: " prefix handles multiline JSON gracefully. Empty line at end is REQUIRED!
     def encode(self) -> str:
         """Encode event as SSE format.
 
