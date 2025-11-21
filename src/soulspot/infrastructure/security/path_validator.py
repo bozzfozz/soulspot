@@ -1,0 +1,246 @@
+"""Path validation utilities to prevent path traversal attacks.
+
+This module provides utilities to safely validate file paths and prevent
+malicious path traversal attempts (e.g., ../../etc/passwd).
+"""
+
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Allowed file extensions for audio files
+ALLOWED_AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".flac",
+    ".m4a",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".aac",
+    ".wma",
+}
+
+# Allowed file extensions for images
+ALLOWED_IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+}
+
+
+class PathValidator:
+    """Validator for safe file path operations.
+
+    This class provides methods to validate that file paths are safe
+    and within expected directories, preventing path traversal attacks.
+    """
+
+    @staticmethod
+    def validate_path_within_base(
+        path: Path | str, base_dir: Path | str, *, resolve: bool = True
+    ) -> Path:
+        """Validate that a path is within a base directory.
+
+        Args:
+            path: The path to validate
+            base_dir: The base directory that path must be within
+            resolve: Whether to resolve symlinks and relative paths (default: True)
+
+        Returns:
+            The validated path as a Path object
+
+        Raises:
+            ValueError: If the path is outside the base directory or invalid
+        """
+        # Convert to Path objects
+        path_obj = Path(path)
+        base_dir_obj = Path(base_dir)
+
+        # Resolve to absolute paths if requested
+        if resolve:
+            try:
+                path_obj = path_obj.resolve()
+                base_dir_obj = base_dir_obj.resolve()
+            except (OSError, RuntimeError) as e:
+                logger.warning("Failed to resolve path %s: %s", path, e)
+                raise ValueError(f"Invalid path: {path}") from e
+
+        # Check if path is within base directory
+        try:
+            # is_relative_to is available in Python 3.9+
+            if not path_obj.is_relative_to(base_dir_obj):
+                logger.warning(
+                    "Path traversal attempt detected: %s is not within %s",
+                    path_obj,
+                    base_dir_obj,
+                )
+                raise ValueError(
+                    f"Path {path_obj} is outside allowed directory {base_dir_obj}"
+                )
+        except AttributeError:
+            # Fallback for older Python versions
+            try:
+                path_obj.relative_to(base_dir_obj)
+            except ValueError as e:
+                logger.warning(
+                    "Path traversal attempt detected: %s is not within %s",
+                    path_obj,
+                    base_dir_obj,
+                )
+                raise ValueError(
+                    f"Path {path_obj} is outside allowed directory {base_dir_obj}"
+                ) from e
+
+        return path_obj
+
+    @staticmethod
+    def validate_file_extension(
+        path: Path | str,
+        allowed_extensions: set[str] | None = None,
+    ) -> Path:
+        """Validate that a file has an allowed extension.
+
+        Args:
+            path: The file path to validate
+            allowed_extensions: Set of allowed extensions (e.g., {'.mp3', '.flac'})
+                              If None, no extension validation is performed
+
+        Returns:
+            The validated path as a Path object
+
+        Raises:
+            ValueError: If the file extension is not allowed
+        """
+        path_obj = Path(path)
+
+        if allowed_extensions is not None:
+            extension = path_obj.suffix.lower()
+            if extension not in allowed_extensions:
+                logger.warning(
+                    "Invalid file extension %s for path %s. Allowed: %s",
+                    extension,
+                    path_obj,
+                    allowed_extensions,
+                )
+                raise ValueError(
+                    f"File extension {extension} is not allowed. "
+                    f"Allowed extensions: {', '.join(sorted(allowed_extensions))}"
+                )
+
+        return path_obj
+
+    @staticmethod
+    def validate_audio_file_path(
+        path: Path | str,
+        base_dir: Path | str,
+        *,
+        resolve: bool = True,
+    ) -> Path:
+        """Validate an audio file path.
+
+        Combines path validation with audio file extension validation.
+
+        Args:
+            path: The audio file path to validate
+            base_dir: The base directory that path must be within
+            resolve: Whether to resolve symlinks and relative paths (default: True)
+
+        Returns:
+            The validated path as a Path object
+
+        Raises:
+            ValueError: If the path is invalid or extension not allowed
+        """
+        # First validate the path is within base directory
+        validated_path = PathValidator.validate_path_within_base(
+            path, base_dir, resolve=resolve
+        )
+
+        # Then validate it's an audio file
+        PathValidator.validate_file_extension(
+            validated_path, ALLOWED_AUDIO_EXTENSIONS
+        )
+
+        return validated_path
+
+    @staticmethod
+    def validate_image_file_path(
+        path: Path | str,
+        base_dir: Path | str,
+        *,
+        resolve: bool = True,
+    ) -> Path:
+        """Validate an image file path.
+
+        Combines path validation with image file extension validation.
+
+        Args:
+            path: The image file path to validate
+            base_dir: The base directory that path must be within
+            resolve: Whether to resolve symlinks and relative paths (default: True)
+
+        Returns:
+            The validated path as a Path object
+
+        Raises:
+            ValueError: If the path is invalid or extension not allowed
+        """
+        # First validate the path is within base directory
+        validated_path = PathValidator.validate_path_within_base(
+            path, base_dir, resolve=resolve
+        )
+
+        # Then validate it's an image file
+        PathValidator.validate_file_extension(
+            validated_path, ALLOWED_IMAGE_EXTENSIONS
+        )
+
+        return validated_path
+
+
+def validate_safe_path(
+    path: Path | str,
+    base_dir: Path | str,
+    *,
+    allowed_extensions: set[str] | None = None,
+    resolve: bool = True,
+) -> Path:
+    """Convenience function to validate a safe file path.
+
+    Args:
+        path: The path to validate
+        base_dir: The base directory that path must be within
+        allowed_extensions: Optional set of allowed file extensions
+        resolve: Whether to resolve symlinks and relative paths (default: True)
+
+    Returns:
+        The validated path as a Path object
+
+    Raises:
+        ValueError: If the path is invalid
+
+    Example:
+        >>> from pathlib import Path
+        >>> base = Path("/mnt/music")
+        >>> # This is safe
+        >>> validate_safe_path("album/track.mp3", base, allowed_extensions={".mp3"})
+        PosixPath('/mnt/music/album/track.mp3')
+        >>> # This would raise ValueError (path traversal)
+        >>> validate_safe_path("../../etc/passwd", base)
+        Traceback (most recent call last):
+        ...
+        ValueError: Path ... is outside allowed directory ...
+    """
+    # Validate path is within base directory
+    validated_path = PathValidator.validate_path_within_base(
+        path, base_dir, resolve=resolve
+    )
+
+    # Optionally validate file extension
+    if allowed_extensions is not None:
+        PathValidator.validate_file_extension(validated_path, allowed_extensions)
+
+    return validated_path

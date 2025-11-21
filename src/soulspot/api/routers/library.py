@@ -18,6 +18,7 @@ from soulspot.application.use_cases.scan_library import (
     GetDuplicatesUseCase,
     ScanLibraryUseCase,
 )
+from soulspot.config import Settings, get_settings
 
 router = APIRouter(prefix="/library", tags=["library"])
 
@@ -52,18 +53,20 @@ class ReDownloadRequest(BaseModel):
 async def start_library_scan(
     request: ScanRequest,
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Start a library scan.
 
     Args:
         request: Scan request with path
         session: Database session
+        settings: Application settings
 
     Returns:
         Scan information with ID
     """
     try:
-        use_case = ScanLibraryUseCase(session)
+        use_case = ScanLibraryUseCase(session, settings)
         scan = await use_case.execute(request.scan_path)
 
         return {
@@ -73,6 +76,9 @@ async def start_library_scan(
             "total_files": scan.total_files,
             "message": "Library scan started",
         }
+    except ValueError as e:
+        # Path validation errors
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to start library scan: {str(e)}"
@@ -83,17 +89,19 @@ async def start_library_scan(
 async def get_scan_status(
     scan_id: str,
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> ScanResponse:
     """Get library scan status.
 
     Args:
         scan_id: Scan ID
         session: Database session
+        settings: Application settings
 
     Returns:
         Scan status and progress
     """
-    use_case = ScanLibraryUseCase(session)
+    use_case = ScanLibraryUseCase(session, settings)
     scan = await use_case.get_scan_status(scan_id)
 
     if not scan:

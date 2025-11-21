@@ -10,6 +10,7 @@ from mutagen.mp3 import MP3
 
 from soulspot.config import Settings
 from soulspot.domain.entities import Album, Artist, Track
+from soulspot.infrastructure.security import PathValidator
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,40 @@ class ID3TaggingService:
             album: Optional album entity
             artwork_data: Optional artwork image data
             lyrics: Optional lyrics text
+
+        Raises:
+            ValueError: If path is outside allowed directories or invalid
+            FileNotFoundError: If audio file does not exist
         """
+        # Validate file path is within allowed music directories
+        allowed_dirs = [
+            self._settings.storage.download_path,
+            self._settings.storage.music_path,
+        ]
+
+        validated_path: Path | None = None
+        for base_dir in allowed_dirs:
+            try:
+                validated_path = PathValidator.validate_audio_file_path(
+                    file_path, base_dir
+                )
+                break  # Path is valid for this base directory
+            except ValueError:
+                continue  # Try next directory
+
+        if validated_path is None:
+            logger.error(
+                "Path validation failed for %s. Not in allowed directories: %s",
+                file_path,
+                allowed_dirs,
+            )
+            raise ValueError(
+                f"File path {file_path} is not in allowed directories"
+            )
+
+        # Use validated path for all subsequent operations
+        file_path = validated_path
+
         if not file_path.exists():
             raise FileNotFoundError(f"Audio file not found: {file_path}")
 
@@ -210,7 +244,40 @@ class ID3TaggingService:
 
         Returns:
             Dictionary of tag values
+
+        Raises:
+            ValueError: If path is outside allowed directories or invalid
+            FileNotFoundError: If audio file does not exist
         """
+        # Validate file path is within allowed music directories
+        allowed_dirs = [
+            self._settings.storage.download_path,
+            self._settings.storage.music_path,
+        ]
+
+        validated_path: Path | None = None
+        for base_dir in allowed_dirs:
+            try:
+                validated_path = PathValidator.validate_audio_file_path(
+                    file_path, base_dir
+                )
+                break
+            except ValueError:
+                continue
+
+        if validated_path is None:
+            logger.error(
+                "Path validation failed for %s. Not in allowed directories: %s",
+                file_path,
+                allowed_dirs,
+            )
+            raise ValueError(
+                f"File path {file_path} is not in allowed directories"
+            )
+
+        # Use validated path
+        file_path = validated_path
+
         if not file_path.exists():
             raise FileNotFoundError(f"Audio file not found: {file_path}")
 

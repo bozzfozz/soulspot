@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from soulspot.infrastructure.persistence.models import (
     LibraryScanModel,
     TrackModel,
 )
+from soulspot.infrastructure.security import validate_safe_path
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +30,18 @@ class ScanLibraryUseCase:
     def __init__(
         self,
         session: AsyncSession,
+        settings: Any,
         scanner_service: LibraryScannerService | None = None,
     ) -> None:
         """Initialize use case.
 
         Args:
             session: Database session
+            settings: Application settings for allowed directories
             scanner_service: Library scanner service
         """
         self.session = session
+        self.settings = settings
         self.scanner_service = scanner_service or LibraryScannerService()
 
     async def execute(self, scan_path: str) -> LibraryScan:
@@ -47,12 +52,45 @@ class ScanLibraryUseCase:
 
         Returns:
             LibraryScan entity with scan results
+
+        Raises:
+            ValueError: If scan_path is outside allowed directories
         """
+        # Validate scan path is within allowed directories
+        allowed_dirs = [
+            self.settings.storage.download_path,
+            self.settings.storage.music_path,
+        ]
+
+        path = Path(scan_path)
+        validated_path: Path | None = None
+
+        for base_dir in allowed_dirs:
+            try:
+                validated_path = validate_safe_path(path, base_dir, resolve=True)
+                break  # Path is valid for this base directory
+            except ValueError:
+                continue  # Try next directory
+
+        if validated_path is None:
+            logger.error(
+                "Scan path validation failed for %s. Not in allowed directories: %s",
+                scan_path,
+                allowed_dirs,
+            )
+            raise ValueError(
+                f"Scan path {scan_path} is not in allowed directories. "
+                f"Allowed: {', '.join(str(d) for d in allowed_dirs)}"
+            )
+
+        # Use validated path
+        scan_path_validated = str(validated_path)
+
         # Create scan record
         scan = LibraryScan(
             id=str(uuid.uuid4()),
             status=ScanStatus.PENDING,
-            scan_path=scan_path,
+            scan_path=scan_path_validated,
         )
 
         # Save initial scan record
@@ -72,13 +110,13 @@ class ScanLibraryUseCase:
             await self.session.commit()
 
             # Discover files
-            path = Path(scan_path)
+            path = Path(scan_path_validated)
             audio_files = self.scanner_service.discover_audio_files(path)
             scan.total_files = len(audio_files)
             scan_model.total_files = scan.total_files
             await self.session.commit()
 
-            logger.info(f"Found {len(audio_files)} audio files in {scan_path}")
+            logger.info(f"Found {len(audio_files)} audio files in {scan_path_validated}")
 
             # Scan each file
             file_infos: list[FileInfo] = []

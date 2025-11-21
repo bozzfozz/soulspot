@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from soulspot.config import Settings
@@ -35,16 +36,46 @@ class Database:
                     "pool_recycle": settings.database.pool_recycle,
                 }
             )
+        elif "sqlite" in settings.database.url:
+            # SQLite-specific configuration
+            engine_kwargs.update(
+                {
+                    "connect_args": {
+                        "check_same_thread": False,
+                        "timeout": 30,  # Wait up to 30s for lock
+                    }
+                }
+            )
 
         self._engine = create_async_engine(
             settings.database.url,
             **engine_kwargs,
         )
+
+        # Enable foreign keys for SQLite
+        if "sqlite" in settings.database.url:
+            self._enable_sqlite_foreign_keys()
+
         self._session_factory = async_sessionmaker(
             self._engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
+
+    def _enable_sqlite_foreign_keys(self) -> None:
+        """Enable foreign key constraints for SQLite.
+
+        SQLite has foreign keys disabled by default. This method enables them
+        for all connections.
+        """
+
+        @event.listens_for(self._engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_conn: Any, _connection_record: Any) -> None:
+            """Set SQLite pragmas on connection."""
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+            logger.debug("Enabled foreign keys for SQLite connection")
 
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
