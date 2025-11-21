@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 class Database:
     """Database connection and session manager."""
 
+    # Hey future me, this init is WHERE THE MAGIC (and pain) HAPPENS. We support BOTH PostgreSQL
+    # AND SQLite because dev/test uses SQLite, production uses Postgres. The pool settings ONLY
+    # apply to Postgres - SQLite doesn't pool connections! If you try to set pool_size on SQLite,
+    # it'll silently ignore it or blow up depending on the driver version. The "check_same_thread":
+    # False is CRITICAL for SQLite + async - without it, you get cryptic "objects created in a
+    # thread can only be used in that same thread" errors. The 30s timeout helps with "database
+    # is locked" errors when multiple workers hit SQLite simultaneously. Don't reduce it!
     def __init__(self, settings: Settings) -> None:
         """Initialize database with settings."""
         self.settings = settings
@@ -62,6 +69,11 @@ class Database:
             expire_on_commit=False,
         )
 
+    # Yo future me, SQLite is EVIL - it has foreign keys DISABLED BY DEFAULT! This hook turns
+    # them on for EVERY connection. Without this, you can delete a track that still has downloads
+    # pointing to it, and the DB won't complain. Cascades won't work. Relationships break silently.
+    # This was a nasty bug to track down - data inconsistencies everywhere until I added this.
+    # The event listener runs on EVERY new connection from the pool, so don't do heavy work here!
     def _enable_sqlite_foreign_keys(self) -> None:
         """Enable foreign key constraints for SQLite.
 
@@ -77,6 +89,13 @@ class Database:
             cursor.close()
             logger.debug("Enabled foreign keys for SQLite connection")
 
+    # Listen future me, this is a GENERATOR (note the yield!), not a regular async function.
+    # Use it with "async for session in db.get_session():" - NOT "session = await db.get_session()".
+    # I spent 2 hours debugging that once. The auto-commit happens ONLY if no exception occurs.
+    # If anything goes wrong, we rollback and re-raise. The except block catches EVERYTHING
+    # intentionally - we don't want partial transactions committed. The finally ensures session.close()
+    # even if rollback fails (though that's rare). Don't put business logic here - this is just
+    # transaction management!
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
         async with self._session_factory() as session:
@@ -91,6 +110,11 @@ class Database:
             finally:
                 await session.close()
 
+    # Hey, this is basically IDENTICAL to get_session() but it's a context manager instead of
+    # a generator. Use it with "async with db.session_scope() as session:" - this is the PREFERRED
+    # way! It's clearer and harder to mess up than get_session(). I should probably deprecate
+    # get_session() but it's used in some old code. Same transaction semantics: commit on success,
+    # rollback on exception, always close.
     @asynccontextmanager
     async def session_scope(self) -> AsyncGenerator[AsyncSession, None]:
         """Provide a transactional scope for database operations."""
@@ -106,10 +130,21 @@ class Database:
             finally:
                 await session.close()
 
+    # Yo, dispose() closes ALL connections in the pool and shuts down the engine. CRITICAL on
+    # shutdown or you'll leave dangling connections! Postgres might complain about "too many
+    # connections" if you keep creating Database instances without closing them. Always call
+    # this in shutdown hooks or finally blocks. For SQLite it's less critical but still good
+    # practice to release the file lock.
     async def close(self) -> None:
         """Close database connection."""
         await self._engine.dispose()
 
+    # Hey future me, this is ONLY for testing! Don't use in production - use Alembic migrations
+    # instead. This creates tables synchronously using run_sync which blocks the async engine.
+    # It's fine for test setup but defeats the purpose of async in real code. Also, this creates
+    # tables based on current model definitions - if your DB is out of sync with models (e.g.,
+    # you added a migration but didn't run it), this will create the NEW schema, not match
+    # production. Good for pytest fixtures, bad for literally anything else!
     async def create_tables(self) -> None:
         """Create all tables (for testing only)."""
         from soulspot.infrastructure.persistence.models import Base
@@ -117,6 +152,10 @@ class Database:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+    # Listen up, drop_tables is DESTRUCTIVE! Testing only! I once accidentally ran this against
+    # a dev database and lost a week of test data. Now I'm paranoid. This drops ALL tables defined
+    # in Base.metadata - if you have tables created outside SQLAlchemy (manual SQL, legacy, etc.),
+    # this won't touch them. Only use in test teardown!
     async def drop_tables(self) -> None:
         """Drop all tables (for testing only)."""
         from soulspot.infrastructure.persistence.models import Base
@@ -124,6 +163,13 @@ class Database:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
 
+    # Yo future me, pool stats are GOLD for debugging connection leaks and performance issues.
+    # If "checked_out" stays high, you're leaking sessions (forgot to close them). If "overflow"
+    # is high, your pool_size is too small for your workload. SQLite returns a dummy response
+    # because it doesn't pool - every connection is ad-hoc. The getattr() calls with lambda
+    # defaults are defensive coding - different pool types (NullPool, StaticPool, QueuePool)
+    # expose different stats. Without the defaults, this would crash on some pool types. Use
+    # this in health checks or monitoring dashboards!
     def get_pool_stats(self) -> dict[str, Any]:
         """Get connection pool statistics for monitoring.
 

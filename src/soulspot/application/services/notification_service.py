@@ -18,6 +18,12 @@ class NotificationService:
     - In-app notifications
     """
 
+    # Hey future me, this is a STUB implementation! Right now we just log notifications. TODO:
+    # integrate with actual notification backends (email, Slack, Discord, etc.). The "pass"
+    # here looks weird but it's intentional - Python requires SOMETHING in the function body.
+    # When you implement real notifications, replace this whole method with actual init code
+    # (SMTP client, webhook URLs, API keys, etc.). Don't forget error handling - notification
+    # failures shouldn't crash the app!
     def __init__(self) -> None:
         """Initialize notification service.
 
@@ -30,6 +36,11 @@ class NotificationService:
         """
         pass
 
+    # Listen up, this just logs new release notifications for now. In the real world, you'd want
+    # to send emails, push notifications, webhook POSTs to Discord/Slack, etc. Always return True
+    # because logging can't really "fail" (unless disk is full, but then you have bigger problems).
+    # The [NOTIFICATION] prefix makes it easy to grep logs. Format the message nicely - users
+    # will see this! Consider adding album art URLs or Spotify links when you wire up real channels.
     async def send_new_release_notification(
         self, artist_name: str, album_name: str, release_date: str
     ) -> bool:
@@ -50,6 +61,11 @@ class NotificationService:
         logger.info(f"[NOTIFICATION] {message}")
         return True
 
+    # Yo future me, completeness percentage is nice UX touch - easier to understand "75% complete"
+    # than "25 of 100 albums missing". The "if total_count > 0 else 0" prevents division by zero
+    # when an artist somehow has no albums (shouldn't happen, but defensive coding!). Format with
+    # .1f to show one decimal place - looks professional. The f-string is getting long - might
+    # want to break it up for readability if you add more fields.
     async def send_missing_album_notification(
         self, artist_name: str, missing_count: int, total_count: int
     ) -> bool:
