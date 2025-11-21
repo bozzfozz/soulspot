@@ -29,6 +29,11 @@ class HealthCheck:
     details: dict[str, Any] | None = None
 
 
+# Hey future me, this health check does a simple SELECT 1 query to verify DB is alive and responsive.
+# We use text("SELECT 1") which is DB-agnostic (works on Postgres, MySQL, SQLite). The scalar() call
+# actually fetches the result (otherwise query might not execute!). We wrap in session_scope() so
+# session is properly closed even if query fails. This runs on /health endpoint - keep it FAST
+# (no complex queries, no table scans!). If this fails, app is basically dead - DB is critical.
 async def check_database_health(db: Any) -> HealthCheck:
     """Check database connectivity.
 
@@ -58,6 +63,11 @@ async def check_database_health(db: Any) -> HealthCheck:
         )
 
 
+# Yo, this checks if slskd (Soulseek daemon) is reachable by HTTP GET to /health endpoint. The
+# 5s timeout is critical - without it, hung slskd service could block health checks for minutes!
+# If slskd is down, downloads won't work but the rest of the app still functions (degraded mode).
+# We return DEGRADED not UNHEALTHY because it's not a critical dependency - users can still browse
+# their library, edit playlists, etc. The try/except catches network errors, timeouts, DNS failures.
 async def check_slskd_health(base_url: str, timeout: float = 5.0) -> HealthCheck:
     """Check slskd service health.
 

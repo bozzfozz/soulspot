@@ -38,6 +38,12 @@ class PathValidator:
     and within expected directories, preventing path traversal attacks.
     """
 
+    # Hey future me, this is THE SECURITY GATEKEEPER for path traversal attacks! Someone tries
+    # "../../etc/passwd" and this catches it. resolve=True (default) converts symlinks and relative
+    # paths to absolute which is CRITICAL - without it, "../" tricks still work! The is_relative_to
+    # check ensures resolved path is actually INSIDE base_dir. If path is /tmp/evil and base is
+    # /mnt/music, this raises ValueError. The try/except for AttributeError handles Python <3.9
+    # (is_relative_to added in 3.9). We log WARNING on attacks so you can spot malicious users!
     @staticmethod
     def validate_path_within_base(
         path: Path | str, base_dir: Path | str, *, resolve: bool = True
@@ -96,6 +102,12 @@ class PathValidator:
 
         return path_obj
 
+    # Yo, this validates file extension against whitelist - prevents uploading malicious files like
+    # ".exe" or ".php" disguised as music. The .lower() is CRITICAL because Windows/Mac are case-
+    # insensitive (".MP3" == ".mp3") but Python strings aren't! Without lower(), ".MP3" fails even
+    # though it's valid. If allowed_extensions is None, we skip validation (dangerous - only do
+    # this for trusted internal paths!). The sorted() in error message is just cosmetic for nicer
+    # output. We log WARNING on failures to spot potential attacks or user mistakes.
     @staticmethod
     def validate_file_extension(
         path: Path | str,
@@ -132,6 +144,12 @@ class PathValidator:
 
         return path_obj
 
+    # Listen future me, this is a COMBO validator - first checks path is in base_dir (security),
+    # then checks extension is audio (type safety). Two-stage validation means better error messages.
+    # If path is outside base_dir, you get "path traversal" error. If path is valid but wrong type
+    # (like "music/cat.jpg"), you get "extension not allowed" error. The resolve param is passed
+    # through to validate_path_within_base - usually True for security, but False for performance
+    # if you already have absolute paths.
     @staticmethod
     def validate_audio_file_path(
         path: Path | str,
@@ -166,6 +184,10 @@ class PathValidator:
 
         return validated_path
 
+    # Hey, same as validate_audio_file_path but for images (album art, etc). Images are less risky
+    # than audio (smaller, no metadata exploits) but still need validation. If someone uploads a
+    # 10GB "image.png" that's actually a zip bomb, this won't catch it - we only check extension!
+    # Add size limits elsewhere if that's a concern.
     @staticmethod
     def validate_image_file_path(
         path: Path | str,
@@ -201,6 +223,11 @@ class PathValidator:
         return validated_path
 
 
+# Yo future me, this is a CONVENIENCE wrapper around PathValidator class methods! Use this for
+# quick one-off validations. If you're doing repeated validations with same params, instantiate
+# PathValidator once instead (oh wait, it's all static methods, nevermind). The allowed_extensions
+# is optional - if None, we only check path traversal, not file type. Good for directories or when
+# you don't care about extension. This function has a nice docstring example - keep it updated!
 def validate_safe_path(
     path: Path | str,
     base_dir: Path | str,

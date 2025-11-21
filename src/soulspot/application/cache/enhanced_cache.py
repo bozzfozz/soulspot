@@ -26,6 +26,10 @@ class CacheMetrics:
     evictions: int = 0
     writes: int = 0
 
+    # Hey future me, this calculates hit rate as a percentage (0-100). Division by zero guard is
+    # CRITICAL - if cache is brand new (no hits or misses), total is 0 and we return 0.0 instead
+    # of crashing! The formula is simple: hits / (hits + misses) * 100. So 80 hits and 20 misses
+    # gives 80% hit rate. Use this metric to decide if cache size is adequate!
     @property
     def hit_rate(self) -> float:
         """Calculate cache hit rate as percentage."""
@@ -34,6 +38,9 @@ class CacheMetrics:
             return 0.0
         return (self.hits / total) * 100
 
+    # Yo, reset() zeroes out ALL metrics! Use this for testing or when you want fresh stats after
+    # deployment/config change. Be careful - you lose historical data. If you need trends over time,
+    # export metrics before resetting!
     def reset(self) -> None:
         """Reset all metrics to zero."""
         self.hits = 0
@@ -52,10 +59,19 @@ class LRUCacheEntry[V]:
     access_count: int = 0
     last_accessed: float = field(default_factory=time.time)
 
+    # Listen up, is_expired checks if entry passed its TTL. Same logic as base_cache but lives in
+    # LRUCacheEntry because LRU needs metadata (access_count, last_accessed) that basic CacheEntry
+    # doesn't have. Don't confuse with touch() - is_expired is about TIME expiry, touch is about
+    # LRU access tracking!
     def is_expired(self) -> bool:
         """Check if cache entry is expired."""
         return time.time() > (self.created_at + self.ttl_seconds)
 
+    # Hey future me, touch() updates LRU metadata when entry is accessed! Increments access_count
+    # and refreshes last_accessed timestamp. This is how LRU knows which items to evict - entries
+    # with old last_accessed get kicked out first. Call this EVERY time you read a cached value
+    # or LRU won't work correctly (it'll evict frequently-used items!). The access_count is mainly
+    # for debugging/stats - the real LRU decision is based on last_accessed time.
     def touch(self) -> None:
         """Update access metadata."""
         self.access_count += 1
