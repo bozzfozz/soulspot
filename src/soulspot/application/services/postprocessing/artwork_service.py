@@ -11,6 +11,7 @@ from PIL import Image as PILImage
 
 from soulspot.config import Settings
 from soulspot.domain.entities import Album, Track
+from soulspot.infrastructure.security import PathValidator
 
 logger = logging.getLogger(__name__)
 
@@ -237,13 +238,21 @@ class ArtworkService:
 
         Returns:
             Path to saved artwork file
+
+        Raises:
+            ValueError: If path validation fails
         """
         # Generate filename from album ID
         filename = f"{album.id.value}.jpg"
         filepath = self._artwork_path / filename
 
-        # Save to disk
-        await asyncio.to_thread(filepath.write_bytes, artwork_data)
-        logger.info("Saved artwork to: %s", filepath)
+        # Validate path is within artwork directory (path traversal protection)
+        validated_path = PathValidator.validate_image_file_path(
+            filepath, self._artwork_path, resolve=False
+        )
 
-        return filepath
+        # Save to disk
+        await asyncio.to_thread(validated_path.write_bytes, artwork_data)
+        logger.info("Saved artwork to: %s", validated_path)
+
+        return validated_path
