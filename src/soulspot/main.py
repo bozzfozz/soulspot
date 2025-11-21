@@ -38,6 +38,12 @@ from soulspot.infrastructure.persistence import Database
 logger = logging.getLogger(__name__)
 
 
+# Hey future me, this registers GLOBAL exception handlers for the entire app! FastAPI will call
+# these whenever matching exceptions are raised in ANY endpoint. We convert domain exceptions
+# (ValidationException, EntityNotFoundException, etc.) into proper HTTP responses with correct
+# status codes. Without this, domain exceptions would leak as 500 errors with stack traces to
+# clients! The @app.exception_handler decorator MUST be called during app setup BEFORE any
+# requests arrive. Don't try to register handlers after app starts - won't work!
 def register_exception_handlers(app: FastAPI) -> None:
     """Register custom exception handlers for domain and validation exceptions.
 

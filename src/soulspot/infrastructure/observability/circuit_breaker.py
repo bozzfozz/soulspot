@@ -82,6 +82,12 @@ class CircuitBreaker:
         config: Circuit breaker configuration
     """
 
+    # Hey future me, CircuitBreaker is STATEFUL - it tracks failures/successes across ALL calls!
+    # Starts in CLOSED (normal), moves to OPEN (broken) after threshold failures, then HALF_OPEN
+    # (testing recovery). The _lock is CRITICAL - without it, concurrent requests can corrupt state
+    # (imagine two failures incrementing _failure_count at same time, count goes up by 1 not 2!).
+    # Each instance is for ONE service - don't share across different APIs or you'll get weird
+    # behavior (Spotify fails but MusicBrainz gets blocked too!). Use globals/singletons per service.
     def __init__(
         self,
         name: str,

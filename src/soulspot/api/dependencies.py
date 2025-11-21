@@ -33,6 +33,11 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 
+# Listen up future me, @lru_cache makes this a SINGLETON! First call creates SessionStore,
+# subsequent calls return THE SAME INSTANCE. This is thread-safe but NOT multiprocess-safe
+# (each gunicorn worker gets its own singleton). The 3600s timeout means sessions expire after
+# 1 hour - adjust if users complain about getting logged out. If you restart the server, ALL
+# sessions are lost because SessionStore is in-memory. For production, move to Redis!
 @lru_cache
 def get_session_store() -> SessionStore:
     """Get or create session store singleton (thread-safe).
@@ -43,6 +48,10 @@ def get_session_store() -> SessionStore:
     return SessionStore(session_timeout_seconds=3600)  # 1 hour timeout
 
 
+# Hey, this is a FastAPI dependency - extracts DB from app.state and yields a session. The "async
+# for" syntax is weird but REQUIRED because db.get_session() is an async generator. FastAPI handles
+# cleanup automatically (session.close(), rollback on error). Use this in endpoint params like:
+# "session: AsyncSession = Depends(get_db_session)". Don't call this directly outside FastAPI!
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """Get database session from app state."""
     db: Database = request.app.state.db
@@ -50,6 +59,9 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
         yield session
 
 
+# Yo, creates NEW SpotifyClient on EVERY request! Not cached/singleton. This is fine because
+# SpotifyClient is stateless (httpx client inside is pooled). If SpotifyClient becomes expensive
+# to construct, add @lru_cache but watch out - settings changes won't take effect until restart!
 def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyClient:
     """Get Spotify client instance."""
     return SpotifyClient(settings.spotify)
