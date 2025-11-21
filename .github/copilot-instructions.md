@@ -89,13 +89,14 @@ Schreib diesen Kommentar als echte, ehrliche Notiz an dein zukünftiges Selbst �
 - Sag, was du fast vergessen hättest, wo Bugs lauern oder Workarounds stecken.
 
 **Beispiel:**  
-```python
 # Hey future me – diese Funktion holt nur die Bilder aus dem Upload-Ordner,
 # weil du letztes Jahr aus Versehen system files gelöscht hast. Pass auf bei der Dateiendung!
 def get_uploaded_images():
-    ...
 
-- 
+
+
+
+
 ## 2.0 Prozessübersicht
 
 **Gesamter Lebenszyklus:**  
