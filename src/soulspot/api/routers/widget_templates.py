@@ -102,6 +102,10 @@ async def list_widget_templates(
     ]
 
 
+# Hey, this gets ONE widget template by ID! registry.get() returns None if not found, then we 404.
+# The same verbose unpacking as list endpoint - t.config.field for each property. Could refactor to
+# helper function or use Pydantic's from_orm if WidgetTemplate was an ORM model. This is read-only
+# operation - templates can't be modified via API (yet). Templates are defined in code or config files.
 @router.get("/{template_id}", response_model=WidgetTemplateResponse)
 async def get_widget_template(template_id: str) -> WidgetTemplateResponse:
     """Get a specific widget template by ID.
@@ -152,6 +156,10 @@ async def get_widget_template(template_id: str) -> WidgetTemplateResponse:
     )
 
 
+# Yo, filter templates by category (e.g., "stats", "media", "system")! get_by_category does simple
+# list filtering in Python - registry is in-memory dict so this is fast. Same verbose unpacking as
+# other endpoints. Returns empty list if category has no templates (not 404). Category names are
+# case-sensitive! "Stats" != "stats". Should normalize or document valid category values.
 @router.get("/category/{category}", response_model=list[WidgetTemplateResponse])
 async def get_templates_by_category(category: str) -> list[WidgetTemplateResponse]:
     """Get widget templates by category.
@@ -246,6 +254,11 @@ async def search_widget_templates(
     ]
 
 
+# Listen, this scans filesystem for new custom widget templates! discover_templates() looks in
+# configured directories (e.g., "src/soulspot/templates/widgets/custom/") for template files that
+# match naming convention. Parses YAML frontmatter to load widget config. Returns count of NEW
+# templates found (doesn't count already-loaded ones). This is idempotent - safe to call multiple
+# times. Use this after adding new widget template files to hot-reload them without restarting server!
 @router.post("/discover")
 async def discover_widget_templates() -> dict[str, Any]:
     """Discover and load custom widget templates.
@@ -262,6 +275,10 @@ async def discover_widget_templates() -> dict[str, Any]:
     }
 
 
+# Hey, this returns unique list of all categories from enabled templates! Uses set comprehension to
+# dedupe, then sorted() for alphabetical order. enabled_only=True filters out disabled/experimental
+# templates. Returns just strings (category names) not full category objects. Frontend uses this to
+# populate category filter dropdown. Categories are freeform strings - no enum validation.
 @router.get("/categories/list")
 async def list_categories() -> dict[str, list[str]]:
     """List all available widget categories.
@@ -277,6 +294,10 @@ async def list_categories() -> dict[str, list[str]]:
     return {"categories": categories}
 
 
+# Yo, same as categories but for tags! A widget can have multiple tags (list) vs single category.
+# update() merges all tags from all templates into one big set. sorted() for alphabetical order.
+# Tags are used for search/filtering. Common tags: "audio", "realtime", "analytics", "experimental".
+# No validation - tags are freeform strings defined in widget template config. Returns unique sorted list.
 @router.get("/tags/list")
 async def list_tags() -> dict[str, list[str]]:
     """List all available widget tags.

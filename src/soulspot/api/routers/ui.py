@@ -177,6 +177,13 @@ async def playlist_missing_tracks(
         )
 
 
+# Listen, this renders the full playlist detail page with ALL tracks! Does N queries in a loop
+# (one per track_id) which is SLOW for big playlists. Should batch fetch tracks in one query.
+# The type: ignore comments are for accessing Track.artist/album which are relationships not
+# direct attributes. track.is_broken is also a computed property that might not exist on all
+# Track entities. Returns error.html template for 404/400 - nice UX pattern. The isoformat()
+# calls convert datetimes to ISO strings for template rendering. This builds entire playlist
+# data in memory before passing to template - could be huge for 1000+ track playlists!
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
 async def playlist_detail(
     request: Request,
@@ -251,12 +258,19 @@ async def playlist_detail(
         )
 
 
+# Hey this just renders a static template - no DB lookups! The actual import logic happens via
+# API POST to /playlists/import endpoint (different router). This is just the UI form page.
 @router.get("/playlists/import", response_class=HTMLResponse)
 async def import_playlist(request: Request) -> Any:
     """Import playlist page."""
     return templates.TemplateResponse("import_playlist.html", {"request": request})
 
 
+# Yo, downloads page fetches ALL active downloads! list_active() might return thousands of downloads
+# if your download history is long (needs DB index on status + created_at). The isoformat() calls
+# can fail if started_at is None - we handle with ternary. progress_percent and error_message can
+# also be None. This renders ALL downloads at once - no pagination! Could freeze browser with 1000s
+# of rows. Should use virtual scrolling or pagination. Template gets full list in memory.
 @router.get("/downloads", response_class=HTMLResponse)
 async def downloads(
     request: Request,
@@ -287,6 +301,7 @@ async def downloads(
     )
 
 
+# Static template pages - no logic, just render HTML. These are lightweight routes.
 @router.get("/auth", response_class=HTMLResponse)
 async def auth(request: Request) -> Any:
     """Auth page."""
@@ -311,6 +326,10 @@ async def settings(request: Request) -> Any:
     return templates.TemplateResponse("settings.html", {"request": request})
 
 
+# Hey, this is the new customizable dashboard! page=None means content loads via HTMX after initial
+# render. edit_mode controls whether user sees widget drag-drop editor or read-only view. The actual
+# widgets are loaded dynamically via widget template API, not embedded in this response. This keeps
+# the initial page load fast - widgets hydrate themselves via data endpoints or SSE connections.
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request) -> Any:
     """Dynamic dashboard with customizable widgets."""
@@ -324,12 +343,21 @@ async def dashboard(request: Request) -> Any:
     )
 
 
+# This is the first-run wizard for new users! Shows "connect Spotify" flow and basic setup. Should
+# only show once per user but we don't track "has completed onboarding" flag yet. Future: add user
+# preferences table to track onboarding state and skip redirect to this page if already done.
 @router.get("/onboarding", response_class=HTMLResponse)
 async def onboarding(request: Request) -> Any:
     """First-run onboarding page for new users."""
     return templates.TemplateResponse("onboarding.html", {"request": request})
 
 
+# Yo, this is the library overview page with aggregated stats! Loads ALL tracks into memory using
+# list_all() - could be 10000s of tracks! The set() operations to count unique artists/albums work
+# but require loading everything first. Should use DB aggregation queries (COUNT DISTINCT) instead.
+# The track.artist/album type: ignore is for relationship attributes. broken_tracks uses is_broken
+# property that might not exist on all Track entities. Stats are recalculated on every page load - no
+# caching! This gets slow with big libraries. Consider Redis caching or pre-computing stats.
 @router.get("/library", response_class=HTMLResponse)
 async def library(
     request: Request,
@@ -360,6 +388,11 @@ async def library(
     )
 
 
+# Listen up - this groups ALL tracks by artist name in Python! Loads entire track library into memory
+# which is super inefficient. Should be a SQL GROUP BY query with COUNT and DISTINCT. The artists_dict
+# accumulates track counts and unique album names using set(). Converting set to len() for album_count
+# works but we lose the actual album list. Sorting happens in Python after grouping - should be in SQL.
+# No pagination means this returns ALL artists - could be 1000s! Will freeze browser with big library.
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
@@ -402,6 +435,11 @@ async def library_artists(
     )
 
 
+# Yo - same problem as artists! Loads ALL tracks, groups in Python, returns ALL albums unfiltered.
+# The album_key uses "::" delimiter to combine artist+album (ugly but works). "Unknown" fallback for
+# missing artist is good. year field is hardcoded None because Track doesn't have year (should pull
+# from Album relationship). Sorting by artist then album in Python - should be SQL ORDER BY. No
+# pagination! This is doomed with 1000+ albums. Needs DB-level aggregation or pagination badly!
 @router.get("/library/albums", response_class=HTMLResponse)
 async def library_albums(
     request: Request,
@@ -490,6 +528,13 @@ async def library_tracks(
     )
 
 
+# Hey heads up - this shows ONE artist's albums+tracks! unquote() handles URL-encoded artist names (e.g.,
+# "AC%2FDC" becomes "AC/DC"). The SQL query uses join + where to filter by artist.name - efficient!
+# joinedload() prevents N+1 by eagerly loading relationships. unique() prevents duplicate Track objects
+# from joins. has() is SQLAlchemy syntax for filtering on relationship (WHERE EXISTS subquery). The
+# albums_dict groups tracks by album in Python - could be SQL but OK since we already filtered by artist.
+# hasattr checks for year field that might not exist on Album model. Returns 404 if no tracks found for
+# artist. Sort by album then track number (or title if no track_number). Album key uses "::" delimiter.
 @router.get("/library/artists/{artist_name}", response_class=HTMLResponse)
 async def library_artist_detail(
     request: Request,
@@ -576,6 +621,13 @@ async def library_artist_detail(
     )
 
 
+# Listen, this shows ONE album's tracks! album_key format is "artist::album" (e.g., "Pink Floyd::The Wall").
+# We split on "::" to extract both parts - if format is wrong we return 400 error. unquote() handles
+# URL encoding. SQL query joins artist AND album, filters both, uses joinedload for eager loading.
+# unique() prevents duplicates from joins. Returns 404 if no tracks found. Sorts by track_number (or
+# title if missing). Calculates total_duration_ms by summing all track durations (or 0 if None). Gets
+# year from first track's album (assumes all tracks same album) - fragile if Album has no year field!
+# Track number 999 is used as fallback sort value for tracks missing track_number - pushes to end.
 @router.get("/library/albums/{album_key}", response_class=HTMLResponse)
 async def library_album_detail(
     request: Request,
@@ -679,6 +731,12 @@ async def library_album_detail(
     )
 
 
+# Yo, this returns an HTMX partial for the metadata editor modal! Uses anext() to grab DB session
+# (sketchy pattern). Queries one track with joinedload for artist/album. Returns error.html partial
+# for 404/400 instead of raising HTTPException - nice HTMX pattern. album_artist and genre are hardcoded
+# None (TODOs) - should add these fields to Track/Album models. year comes from album relationship if
+# it exists. The track_data dict matches what the metadata_editor.html template expects. This is a
+# modal fragment, not full page. Template should have form fields pre-filled with current values.
 @router.get("/tracks/{track_id}/metadata-editor", response_class=HTMLResponse)
 async def track_metadata_editor(
     request: Request,
