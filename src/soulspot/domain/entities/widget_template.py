@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any
 
 
+# Listen future me, WidgetTemplateConfig is a CONFIGURATION SCHEMA not a domain entity! It defines
+# what a widget TYPE supports (not a specific widget instance). config_schema is JSON Schema for
+# widget configuration (e.g., {"type": "object", "properties": {"refresh_interval": {...}}}). The
+# default_config provides initial values when adding widget to page. supports_sse=True means widget
+# uses Server-Sent Events for live updates. poll_interval is fallback if SSE not available. The
+# validate() method returns error list (empty = valid) - use before saving to DB to catch bad templates!
 @dataclass
 class WidgetTemplateConfig:
     """Configuration schema for widget templates."""
@@ -42,6 +48,11 @@ class WidgetTemplateConfig:
     permissions: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
 
+    # Yo, validate() checks ALL business rules for widget template config! Returns list of error
+    # messages (empty list = valid). We check required fields, valid ranges, logical consistency
+    # (min <= max). Use this BEFORE persisting to DB or registering widget. If you skip validation,
+    # bad configs will cause runtime errors when rendering widgets! The errors list lets you show
+    # ALL problems at once instead of failing on first error. Validation is pure (no side effects).
     def validate(self) -> list[str]:
         """Validate template configuration.
 
@@ -76,6 +87,11 @@ class WidgetTemplateConfig:
 
         return errors
 
+    # Hey, from_dict is a FACTORY METHOD (alternative constructor)! It creates WidgetTemplateConfig
+    # from dictionary (e.g., from JSON file or API response). Uses .get() with defaults so missing
+    # fields don't crash - we fall back to sensible defaults. This is more lenient than __init__
+    # which requires all fields. Use this when loading from external sources (files, network). If
+    # you want strict validation, call .validate() after creating from dict!
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "WidgetTemplateConfig":
         """Create config from dictionary.
@@ -109,6 +125,10 @@ class WidgetTemplateConfig:
             tags=data.get("tags", []),
         )
 
+    # Listen, to_dict is the INVERSE of from_dict! Serializes config to dictionary for JSON storage
+    # or API responses. The dict structure matches what from_dict expects (round-trip compatible).
+    # All values are JSON-serializable (no Path objects, datetime, etc). Use this before json.dumps()
+    # or storing in DB JSON column. If you add new fields to config, add them here too!
     def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary.
 
@@ -139,6 +159,11 @@ class WidgetTemplateConfig:
         }
 
 
+# Yo future me, WidgetTemplate wraps WidgetTemplateConfig with metadata! It's the full template
+# definition including id (unique identifier), type (widget type like "recent_downloads"), config
+# (the WidgetTemplateConfig), is_enabled (can toggle on/off), is_system (can't delete system widgets).
+# __post_init__ validates config on creation - invalid templates can't be created! Use from_file()
+# to load templates from JSON files (typical workflow). The id should be same as type usually.
 @dataclass
 class WidgetTemplate:
     """Widget template with metadata and configuration."""
@@ -149,6 +174,11 @@ class WidgetTemplate:
     is_enabled: bool = True
     is_system: bool = False
 
+    # Hey, __post_init__ validates the nested config! It calls config.validate() and raises ValueError
+    # if any validation errors. This means you CAN'T create invalid WidgetTemplate objects - they fail
+    # at construction time. The error message joins all validation errors into single message. This is
+    # fail-fast design - catch errors early before they propagate! If template loads from file, any
+    # config errors are caught here immediately, not later during rendering.
     def __post_init__(self) -> None:
         """Validate widget template after initialization."""
         errors = self.config.validate()
@@ -157,6 +187,11 @@ class WidgetTemplate:
                 f"Invalid widget template configuration: {', '.join(errors)}"
             )
 
+    # Listen, from_file loads widget template from JSON! It's how you register custom widgets - drop
+    # a JSON file in templates directory, call this to parse it. Raises FileNotFoundError if missing,
+    # ValueError if JSON is malformed or validation fails. The try/except catches json.JSONDecodeError
+    # and re-raises as ValueError with clearer message. If this succeeds, template is valid and ready
+    # to register in widget registry. Use during app startup to load all available widget types!
     @classmethod
     def from_file(cls, template_file: Path) -> "WidgetTemplate":
         """Load widget template from JSON file.
@@ -197,6 +232,10 @@ class WidgetTemplate:
         except Exception as e:
             raise ValueError(f"Error loading template: {e}") from e
 
+    # Yo, to_dict serializes entire template to dictionary! Similar to config.to_dict() but includes
+    # template-level fields (id, type, is_enabled, is_system). Use this for API responses or saving
+    # to DB. The config.to_dict() nests the config object. Round-trip compatible with from_file() -
+    # you can to_dict(), json.dumps(), save to file, then from_file() later and get same template!
     def to_dict(self) -> dict[str, Any]:
         """Convert template to dictionary.
 
@@ -211,6 +250,9 @@ class WidgetTemplate:
             "is_system": self.is_system,
         }
 
+    # Hey, to_json is convenience method that wraps to_dict() + json.dumps()! The indent=2 makes it
+    # human-readable (pretty-printed). Use this to export templates or save to files. Equivalent to
+    # json.dumps(template.to_dict(), indent=2) but more concise. Returns string, not bytes!
     def to_json(self) -> str:
         """Convert template to JSON string.
 
