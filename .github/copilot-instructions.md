@@ -1,4 +1,4 @@
-<!-- Copied/merged for AI coding agents: concise, actionable guidance for contributors and assistants -->
+
 # Copilot / AI Assistant Instructions
 
 This file contains focused, repository-specific guidance to help AI coding agents be productive immediately.
@@ -74,6 +74,26 @@ This file contains focused, repository-specific guidance to help AI coding agent
 If anything in this file is unclear or missing (CI details, secrets handling, or preferred workflow), please flag the area and I will refine the instructions.
 
 - "Bevor du einen PR öffnest oder eine Aufgabe als erledigt markierst, führe lokal: `ruff check . --config pyproject.toml`, `mypy --config-file mypy.ini .`, `bandit -r . -f json -o /tmp/bandit-report.json` aus und vermerke in der PR‑Beschreibung je Check Befehl, Exit‑Code, kurze Zahlen (Violations/Errors/HIGH‑Findings) sowie den CodeQL‑Workflow‑Status (GitHub Actions URL oder local run status). Öffne den PR nur, wenn alle Checks erfolgreich sind oder Ausnahmen dokumentiert und freigegeben wurden."
+
+
+
+## Future-Self Erklärungen als Kommentar für alle Funktionen
+
+**Anweisung für alle Agenten:**  
+Jede neue Funktion (public, private, helper usw.) muss einen erklärenden Kommentar direkt davor bekommen.  
+Schreib diesen Kommentar als echte, ehrliche Notiz an dein zukünftiges Selbst – genauso, wie du dir nach sechs Monaten beim nochmaligen Lesen auf die Sprünge helfen willst.
+
+**Erklärungstiefe:**  
+- Nicht nur erklären, sondern wie ein „drunk note“ an dein forgetful future self: Was war tricky, warum so gebaut, was können Stolperfallen sein?
+- Ehrlich, direkt und ohne Marketing-Sprech.
+- Sag, was du fast vergessen hättest, wo Bugs lauern oder Workarounds stecken.
+
+**Beispiel:**  
+```python
+# Hey future me – diese Funktion holt nur die Bilder aus dem Upload-Ordner,
+# weil du letztes Jahr aus Versehen system files gelöscht hast. Pass auf bei der Dateiendung!
+def get_uploaded_images():
+    ...
 
 - 
 ## 2.0 Prozessübersicht
