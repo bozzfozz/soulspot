@@ -142,6 +142,10 @@ class BatchProcessor[T, R]:
 
         return None
 
+    # Yo check this - adds single item to batch and auto-flushes if batch is full
+    # Returns BatchResult if we auto-flushed, None if just queued the item
+    # Uses async lock to prevent race conditions - thread-safe!
+    # Important: Auto-flush only happens if auto_flush=True in constructor
     async def add_batch(self, items: list[T]) -> list[BatchResult[R]]:
         """Add multiple items at once.
 
@@ -166,6 +170,9 @@ class BatchProcessor[T, R]:
 
         return results
 
+    # Hey, manual flush trigger - processes ALL pending items regardless of batch_size
+    # WHY manual? Sometimes you want to force processing before shutdown or on timer
+    # Lock ensures no other coroutine is modifying _pending during flush
     async def flush(self) -> BatchResult[R]:
         """Manually flush all pending items.
 
@@ -208,6 +215,10 @@ class BatchProcessor[T, R]:
 
         return result
 
+    # Listen, time-based flush - checks if we waited too long and forces flush
+    # WHY max_wait_time? Don't want items stuck in queue forever if batch never fills
+    # Example: You add 10 items but batch_size=50 - without timeout, they sit forever!
+    # Returns None if didn't flush (not enough time passed yet)
     async def flush_if_needed(self) -> BatchResult[R] | None:
         """Flush pending items if max wait time has been exceeded.
 
@@ -223,6 +234,9 @@ class BatchProcessor[T, R]:
                 return await self._flush_internal()
         return None
 
+    # Hey simple getter - returns count without lock (racy but fast)
+    # WHY no lock? Reading int is atomic in Python, and exact count doesn't matter for monitoring
+    # This is for UI display, not critical logic
     def get_pending_count(self) -> int:
         """Get the number of pending items.
 
@@ -231,6 +245,9 @@ class BatchProcessor[T, R]:
         """
         return len(self._pending)
 
+    # Yo cleanup method - flushes remaining items before shutting down
+    # Always call this in finally blocks or shutdown hooks to avoid data loss!
+    # Alias for flush() - could be removed, but explicit names are good UX
     async def close(self) -> BatchResult[R]:
         """Close the batch processor and flush remaining items.
 
@@ -267,6 +284,11 @@ class SpotifyBatchProcessor:
             processor_func=self._fetch_artists_batch,
         )
 
+    # Hey future me: Spotify batch fetcher - PLACEHOLDER implementation!
+    # WHY return empty list? Real implementation would call spotify_client.get_tracks(track_ids)
+    # Spotify API supports up to 50 tracks per request - that's why batch_size=50
+    # TODO: Wire up actual Spotify client when implementing this
+    # The _track_ids param is prefixed with _ because we're not using it yet
     async def _fetch_tracks_batch(self, _track_ids: list[str]) -> list[Any]:
         """Fetch multiple tracks from Spotify API.
 
@@ -281,6 +303,9 @@ class SpotifyBatchProcessor:
         # For now, returning empty list as placeholder
         return []
 
+    # Yo album fetcher stub - Spotify albums endpoint
+    # WHY batch_size=20 not 50? Spotify album API limit is 20 per request (different from tracks!)
+    # Album objects are bigger (contains track list) so Spotify caps lower
     async def _fetch_albums_batch(self, _album_ids: list[str]) -> list[Any]:
         """Fetch multiple albums from Spotify API.
 
@@ -293,6 +318,8 @@ class SpotifyBatchProcessor:
         # Spotify API supports fetching up to 20 albums at once
         return []
 
+    # Listen, artist fetcher stub - back to 50 limit like tracks
+    # Artists are smaller objects (just metadata, no track lists)
     async def _fetch_artists_batch(self, _artist_ids: list[str]) -> list[Any]:
         """Fetch multiple artists from Spotify API.
 
@@ -305,6 +332,8 @@ class SpotifyBatchProcessor:
         # Spotify API supports fetching up to 50 artists at once
         return []
 
+    # Hey simple delegation - wraps underlying BatchProcessor.add()
+    # Returns BatchResult if auto-flushed, otherwise None
     async def add_track(self, track_id: str) -> BatchResult[Any] | None:
         """Add a track to the batch queue.
 
@@ -316,6 +345,7 @@ class SpotifyBatchProcessor:
         """
         return await self._track_processor.add(track_id)
 
+    # Yo album queue delegation
     async def add_album(self, album_id: str) -> BatchResult[Any] | None:
         """Add an album to the batch queue.
 
@@ -327,6 +357,7 @@ class SpotifyBatchProcessor:
         """
         return await self._album_processor.add(album_id)
 
+    # Listen artist queue delegation
     async def add_artist(self, artist_id: str) -> BatchResult[Any] | None:
         """Add an artist to the batch queue.
 
@@ -338,6 +369,9 @@ class SpotifyBatchProcessor:
         """
         return await self._artist_processor.add(artist_id)
 
+    # Hey, flushes ALL three processors (tracks, albums, artists) and returns their results
+    # WHY dict return? Caller can see results per entity type separately
+    # Call this before shutdown or when you want to force-process everything queued
     async def flush_all(self) -> dict[str, BatchResult[Any]]:
         """Flush all pending batches.
 

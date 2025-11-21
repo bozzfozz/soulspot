@@ -248,6 +248,9 @@ class WidgetTemplateRegistry:
 
         logger.info(f"Registered {len(self.templates)} system widgets")
 
+    # Listen, widget registry methods - CRUD for widget templates
+    # WHY log warning on overwrite? Dev probably made mistake, help debug
+    # is_system check prevents deleting built-in widgets (safety)
     def register(self, template: WidgetTemplate) -> None:
         """Register a widget template.
 
@@ -373,6 +376,10 @@ class WidgetTemplateRegistry:
 
         return results
 
+    # Hey, template file discovery - loads custom widgets from JSON files
+    # WHY template_dir? Allows users to add custom widgets without code changes
+    # glob("*.json") finds all JSON files in directory
+    # Per-file exception handling - one bad template doesn't break loading others
     def discover_templates(self) -> int:
         """Discover and load custom templates from template directory.
 
@@ -396,6 +403,10 @@ class WidgetTemplateRegistry:
         return count
 
 
+# Listen, global registry singleton - cached with lru_cache decorator
+# WHY lru_cache? Ensures only ONE registry instance across app (singleton pattern)
+# The decorator makes this thread-safe and prevents re-instantiation
+# Automatically discovers custom templates on first call
 @lru_cache
 def get_widget_template_registry() -> WidgetTemplateRegistry:
     """Get the global widget template registry (thread-safe).

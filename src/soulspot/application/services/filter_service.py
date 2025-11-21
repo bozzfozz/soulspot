@@ -71,22 +71,30 @@ class FilterService:
         logger.info(f"Created filter rule: {name} ({filter_type.value})")
         return filter_rule
 
+    # Hey simple getter - fetches filter by ID from repository
+    # type: ignore comment because repository might return None but type system gets confused
     async def get_filter(self, filter_id: FilterRuleId) -> FilterRule | None:
         """Get filter rule by ID."""
         return await self.repository.get_by_id(filter_id)  # type: ignore[no-any-return]
 
+    # Yo list all filters with pagination - offset/limit for large filter lists
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[FilterRule]:
         """List all filter rules."""
         return await self.repository.list_all(limit, offset)
 
+    # Listen, filters by type - get only whitelist OR only blacklist rules
     async def list_by_type(self, filter_type: FilterType) -> list[FilterRule]:
         """List filter rules by type."""
         return await self.repository.list_by_type(filter_type.value)
 
+    # Hey only enabled filters - disabled ones exist in DB but don't apply to search results
+    # Useful for temporarily disabling a filter without deleting it
     async def list_enabled(self) -> list[FilterRule]:
         """List all enabled filter rules."""
         return await self.repository.list_enabled()
 
+    # Yo enable/disable toggle - calls domain entity method then persists
+    # WHY call entity.enable()? Encapsulates business logic (could add validation, timestamps, etc)
     async def enable_filter(self, filter_id: FilterRuleId) -> None:
         """Enable a filter rule."""
         filter_rule = await self.repository.get_by_id(filter_id)
@@ -95,6 +103,7 @@ class FilterService:
             await self.repository.update(filter_rule)
             logger.info(f"Enabled filter rule: {filter_rule.name}")
 
+    # Listen, disable filter - keeps it in DB but stops applying it
     async def disable_filter(self, filter_id: FilterRuleId) -> None:
         """Disable a filter rule."""
         filter_rule = await self.repository.get_by_id(filter_id)
@@ -103,6 +112,8 @@ class FilterService:
             await self.repository.update(filter_rule)
             logger.info(f"Disabled filter rule: {filter_rule.name}")
 
+    # Hey pattern update - change the match pattern or regex flag
+    # Useful for tweaking filters without deleting and recreating
     async def update_filter_pattern(
         self, filter_id: FilterRuleId, pattern: str, is_regex: bool = False
     ) -> None:
@@ -113,6 +124,7 @@ class FilterService:
             await self.repository.update(filter_rule)
             logger.info(f"Updated pattern for filter rule: {filter_rule.name}")
 
+    # Yo permanent deletion - use with caution!
     async def delete_filter(self, filter_id: FilterRuleId) -> None:
         """Delete a filter rule."""
         await self.repository.delete(filter_id)
@@ -171,6 +183,8 @@ class FilterService:
         )
         return filtered_results
 
+    # Listen, blacklist check - returns True if result matches ANY blacklist filter
+    # WHY any match? One bad keyword is enough to filter out (e.g., "live" excludes all live versions)
     def _is_blacklisted(
         self, result: dict[str, Any], blacklist_filters: list[FilterRule]
     ) -> bool:
@@ -180,6 +194,8 @@ class FilterService:
                 return True
         return False
 
+    # Hey whitelist check - returns True if matches ANY whitelist filter
+    # If you have whitelists, result MUST match at least one to pass
     def _is_whitelisted(
         self, result: dict[str, Any], whitelist_filters: list[FilterRule]
     ) -> bool:
@@ -224,6 +240,9 @@ class FilterService:
 
         return False
 
+    # Yo pattern matching - case-insensitive substring search OR regex
+    # WHY case-insensitive? "FLAC" and "flac" should both match
+    # GOTCHA: Invalid regex patterns are caught and logged, returns False (safe default)
     def _pattern_matches(self, filter_rule: FilterRule, text: str) -> bool:
         """Check if text matches filter pattern."""
         if filter_rule.is_regex:
@@ -236,6 +255,9 @@ class FilterService:
             # Case-insensitive substring match
             return filter_rule.pattern.lower() in text.lower()
 
+    # Listen, default keywords - hard-coded list of common exclusions
+    # WHY these? Live recordings, remixes, karaoke usually lower quality than studio originals
+    # Return list not set so order is preserved (could be used for UI display order)
     async def get_default_exclusion_keywords(self) -> list[str]:
         """Get default exclusion keywords for new installations.
 
@@ -255,6 +277,10 @@ class FilterService:
             "tribute",
         ]
 
+    # Hey, create default filters from keyword list - onboarding helper for new users
+    # WHY priority 100-i? Earlier keywords (like "live") get higher priority than later ones
+    # WHY per-filter try/except? Don't want one bad keyword to stop creating others
+    # Returns created filters so caller knows what was actually created vs failed
     async def create_default_filters(self) -> list[FilterRule]:
         """Create default blacklist filters for common unwanted content.
 

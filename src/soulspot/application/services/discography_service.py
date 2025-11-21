@@ -34,10 +34,14 @@ class DiscographyInfo:
             (owned_albums / total_albums * 100) if total_albums > 0 else 0.0
         )
 
+    # Hey future me, simple dataclass helper - checks if we have ALL albums or missing some
+    # Used for UI indicators (green checkmark vs yellow warning)
     def is_complete(self) -> bool:
         """Check if discography is complete."""
         return self.owned_albums >= self.total_albums
 
+    # Yo serialization helper - converts to JSON-friendly dict for API responses
+    # WHY round completeness? 66.66666667% looks ugly, 66.67% is cleaner
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -177,6 +181,11 @@ class DiscographyService:
                 missing_albums=[],
             )
 
+    # Listen - batch discography check for multiple artists
+    # WHY limit param? Checking 1000 artists = 1000 Spotify API calls = rate limit hell
+    # Default limit=10 is conservative - increase if you have good rate limit headroom
+    # GOTCHA: This is SLOW - each artist requires separate Spotify API call
+    # Consider adding batch parallelization with asyncio.gather() but watch rate limits!
     async def get_missing_albums_for_all_artists(
         self, access_token: str, limit: int = 10
     ) -> list[DiscographyInfo]:

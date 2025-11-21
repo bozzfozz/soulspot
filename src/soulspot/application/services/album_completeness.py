@@ -9,9 +9,17 @@ from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 logger = logging.getLogger(__name__)
 
 
+# Hey future me, AlbumCompletenessInfo is a data holder for album gap analysis! Tells you WHICH tracks are
+# missing and calculates percentage (e.g., "you have 10 of 12 tracks = 83.3% complete"). The missing_track_numbers
+# list is the actual gap - [3, 7] means track 3 and 7 are missing. Source tells you where we got the track count
+# from (spotify vs musicbrainz - useful for debugging mismatches). This is pure data, no business logic!
 class AlbumCompletenessInfo:
     """Information about album completeness."""
 
+    # Yo, constructor stores all the album gap details. expected vs actual is the key comparison. expected comes
+    # from Spotify/MusicBrainz (what SHOULD exist), actual is what you have locally. missing_track_numbers is
+    # computed elsewhere and passed in - this is just storage! The completeness_percent calculation is inline
+    # (not a method) because it's simple math. Division by zero check prevents crash on weird edge cases.
     def __init__(
         self,
         album_id: str,
@@ -36,10 +44,16 @@ class AlbumCompletenessInfo:
             else 0.0
         )
 
+    # Listen, simple boolean check - is album 100% complete? WHY >= not ==? Deluxe editions might have MORE
+    # tracks than expected (bonus tracks). We consider that "complete" because you have everything plus extras!
+    # If you want exact match only, change to == but that's probably too strict.
     def is_complete(self) -> bool:
         """Check if album is complete."""
         return self.actual_track_count >= self.expected_track_count
 
+    # Hey future me, serialization to dict for JSON API responses. Rounds percentage to 2 decimals for readability
+    # (83.33% not 83.33333333%). Includes both missing count (quick overview) and actual missing numbers (details).
+    # The is_complete() call computes the boolean on the fly. Source field lets you know where count came from!
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -56,9 +70,16 @@ class AlbumCompletenessInfo:
         }
 
 
+# Yo, AlbumCompletenessService is the gap finder - compares your collection against official tracklists!
+# Uses TWO metadata sources (Spotify + MusicBrainz) because no single source has everything. Spotify is great
+# for mainstream albums, MusicBrainz has obscure/old stuff. Both clients are optional - service degrades
+# gracefully if one is missing. This is stateless - no caching, fetches fresh data every time!
 class AlbumCompletenessService:
     """Service for checking album completeness."""
 
+    # Hey, constructor takes both metadata clients as optional dependencies. If you only have one, that's okay -
+    # the service will use what's available. Spotify usually needs access token (OAuth), MusicBrainz is
+    # anonymous (no auth). Good separation of concerns - service doesn't know HOW to authenticate!
     def __init__(
         self,
         spotify_client: SpotifyClient | None = None,
@@ -168,6 +189,10 @@ class AlbumCompletenessService:
             )
             return None
 
+    # Listen up, set math to find missing track numbers! Creates a set of expected (1 to N) and a set of what
+    # you have, then subtract to find gaps. WHY sets not lists? Sets have O(1) lookup vs O(n) for lists - much
+    # faster for large albums! The sorted() at the end makes output readable ([1, 3, 7] not [7, 1, 3]). Returns
+    # empty list if expected_track_count is zero or negative (defensive). Simple and efficient algorithm!
     def detect_missing_track_numbers(
         self, local_track_numbers: list[int], expected_track_count: int
     ) -> list[int]:

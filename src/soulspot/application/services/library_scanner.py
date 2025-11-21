@@ -121,6 +121,10 @@ class LibraryScannerService:
 
         return audio_files
 
+    # Listen, hash calculation for duplicate detection - reads file in 8KB chunks
+    # WHY chunks? A 500MB FLAC file won't fit in RAM at once, chunk reading is memory-efficient
+    # WHY 8192 bytes? Common OS page size, good balance between syscalls and memory
+    # hash_algorithm is configurable (md5/sha1/sha256) - sha256 is slower but more collision-resistant
     def calculate_file_hash(self, file_path: Path) -> str:
         """Calculate hash of a file.
 
@@ -250,6 +254,10 @@ class LibraryScannerService:
 
         return metadata
 
+    # Hey future me: All-in-one file scanner - combines hash, validation, and metadata
+    # WHY all at once? Efficient - one file open/read for multiple operations
+    # Returns FileInfo dataclass with everything you need for analysis
+    # Used for library health checks, duplicate detection, metadata extraction
     def scan_file(self, file_path: Path) -> FileInfo:
         """Scan a single audio file.
 
@@ -285,8 +293,12 @@ class LibraryScannerService:
             title=metadata.get("title"),
             artist=metadata.get("artist"),
             album=metadata.get("album"),
-        )
+        }
 
+    # Yo duplicate detection - groups files by hash value
+    # WHY by hash? Two files with same hash = byte-identical = definite duplicate
+    # Returns only actual duplicates (len > 1) - single files ignored
+    # Useful for reclaiming disk space or finding different encodings of same track
     def detect_duplicates(
         self, file_infos: list[FileInfo]
     ) -> dict[str, list[FileInfo]]:
@@ -313,6 +325,9 @@ class LibraryScannerService:
             if len(files) > 1
         }
 
+    # Listen, broken file filter - simple list comprehension
+    # WHY separate method? Could inline but explicit is better for testing
+    # is_valid=False means corrupted, truncated, or unsupported format
     def analyze_broken_files(self, file_infos: list[FileInfo]) -> list[FileInfo]:
         """Analyze and return broken files.
 

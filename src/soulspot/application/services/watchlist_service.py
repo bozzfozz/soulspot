@@ -69,6 +69,8 @@ class WatchlistService:
         logger.info(f"Created watchlist for artist {artist_id}")
         return watchlist
 
+    # Yo simple getters - repository delegation methods
+    # These are thin wrappers around repository - service layer orchestration
     async def get_watchlist(self, watchlist_id: WatchlistId) -> ArtistWatchlist | None:
         """Get watchlist by ID."""
         result: ArtistWatchlist | None = await self.repository.get_by_id(watchlist_id)
@@ -97,6 +99,9 @@ class WatchlistService:
         """List watchlists that need checking."""
         return await self.repository.list_due_for_check(limit)
 
+    # Hey, pause/resume/delete controls - domain entity methods + persist
+    # WHY entity methods? Business logic (state transitions, validations) in entity
+    # Service just orchestrates: fetch, call entity method, save
     async def pause_watchlist(self, watchlist_id: WatchlistId) -> None:
         """Pause a watchlist."""
         watchlist = await self.repository.get_by_id(watchlist_id)

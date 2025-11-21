@@ -172,6 +172,10 @@ class ID3TaggingService:
             logger.exception("Error writing ID3 tags to %s: %s", file_path, e)
             raise
 
+    # Hey, artwork embedding - removes old APIC frames then adds new one
+    # WHY delall first? Prevents duplicate artwork frames (wastes space, confuses players)
+    # encoding=3 means UTF-8, type=3 means "Cover (front)" per ID3v2.4 spec
+    # APIC = Attached Picture frame
     def _embed_artwork(self, audio: MP3, artwork_data: bytes) -> None:
         """Embed artwork into audio file.
 
@@ -198,6 +202,10 @@ class ID3TaggingService:
         except Exception as e:
             logger.exception("Error embedding artwork: %s", e)
 
+    # Yo lyrics embedding - USLT frame (Unsynchronised Lyrics/Text)
+    # WHY lang="eng"? ISO 639-2 language code, required by spec
+    # desc="" means no description (could be "chorus", "verse 1", etc)
+    # delall removes old lyrics first
     def _embed_lyrics(self, audio: MP3, lyrics: str) -> None:
         """Embed lyrics into audio file.
 
@@ -223,6 +231,9 @@ class ID3TaggingService:
         except Exception as e:
             logger.exception("Error embedding lyrics: %s", e)
 
+    # Listen, stub for custom ID3 frames - NOT IMPLEMENTED
+    # WHY stub? UFID (Unique File ID) and TXXX (user text) need special handling
+    # TODO: Implement proper frame creation using Mutagen's frame classes
     def _create_text_frame(self, frame_id: str, data: bytes) -> Any:
         """Create a text frame for ID3 tag.
 
@@ -245,6 +256,10 @@ class ID3TaggingService:
         # Example: TXXX(encoding=3, desc='custom_field', text=['value'])
         pass
 
+    # Hey tag reader - extracts ID3 tags from MP3 file
+    # Returns dict for easy API serialization
+    # Path validation same as write_tags - security critical
+    # EasyID3 returns lists for multi-value tags (artists, genres) - we flatten single values
     async def read_tags(self, file_path: Path) -> dict[str, Any]:
         """Read ID3 tags from an audio file.
 

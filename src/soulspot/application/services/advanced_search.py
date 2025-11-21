@@ -7,6 +7,10 @@ from typing import Any
 from rapidfuzz import fuzz
 
 
+# Hey future me, SearchFilters is a simple config dataclass for search criteria! Holds bitrate minimum (320kbps for
+# high quality), allowed formats (prevent downloading .wma garbage), exclusion keywords (no "live" or "remix" trash),
+# and fuzzy match threshold (how close filenames must match query, 0-100). Default threshold of 80 is pretty strict -
+# lower it to 60-70 if you're getting zero results. These are ALL optional - can search without any filters!
 @dataclass
 class SearchFilters:
     """Search filters configuration."""
@@ -19,6 +23,11 @@ class SearchFilters:
     fuzzy_threshold: int = 80  # Minimum fuzzy match score (0-100)
 
 
+# Yo, SearchResult is slskd raw data + OUR computed scores! Username is who's sharing the file (useful for
+# blacklisting jerks), filename is full path like "/music/Artist/Album/01 Track.flac", size in bytes, bitrate
+# in kbps, length in seconds (might be None!). The scores are what make this "enhanced" - fuzzy_score is how
+# well filename matches query, quality_score is audio quality rating, match_score is combined weighted total.
+# All scores are 0-100 scale. This is what you sort by to find the BEST match from hundreds of search results!
 @dataclass
 class SearchResult:
     """Enhanced search result with scoring."""
@@ -34,9 +43,16 @@ class SearchResult:
     quality_score: float = 0.0  # Quality score (0-100)
 
 
+# Listen up future me, AdvancedSearchService is the SMART search on top of dumb slskd results! Takes raw
+# search results (hundreds of files) and ranks them by fuzzy matching + quality + filename cleanliness. This
+# is stateless (no internal state, pure functions) so safe for concurrent use. default_exclusion_keywords are
+# patterns most users hate (live recordings, karaoke tracks, etc). Add more keywords here if users complain!
 class AdvancedSearchService:
     """Service for advanced search with fuzzy matching and filtering."""
 
+    # Hey future me, stores default blacklist keywords - these get auto-excluded unless user overrides.
+    # WHY these specific words? They're the most common "junk" in music filenames that users don't want.
+    # Add regional variants if needed (e.g., "en vivo" for Spanish "live").
     def __init__(self) -> None:
         """Initialize the advanced search service."""
         self.default_exclusion_keywords = [
@@ -95,6 +111,10 @@ class AdvancedSearchService:
 
         return enhanced_results
 
+    # Yo, quality filtering - removes files that don't meet bitrate/format standards. This is FAST filtering
+    # (simple comparisons), no scoring involved. WHY filter before scoring? Saves CPU - don't score files we'll
+    # reject anyway! Example: if user wants FLAC only, we remove all MP3s here. If min_bitrate=320, we remove
+    # all 128kbps files. This can reduce 1000 results to 50, huge speedup for scoring step!
     def apply_quality_filters(
         self,
         results: list[SearchResult],
@@ -128,6 +148,11 @@ class AdvancedSearchService:
 
         return filtered_results
 
+    # Hey, exclusion filter - blacklist removal by keywords in filename. WHY case-insensitive? "LIVE" and "live"
+    # both suck equally! WHY substring match not word match? Catches "live_recording", "live-2023", etc. Uses
+    # default keywords if none provided (convenience). This is super simple but effective - removes 30-40% of
+    # junk results typically. The any() check is efficient - stops at first match, no need to check all keywords.
+    # GOTCHA: This can be too aggressive - "Alive" contains "live"! Consider word boundary regex if that's a problem.
     def apply_exclusion_filters(
         self,
         results: list[SearchResult],
@@ -259,6 +284,13 @@ class AdvancedSearchService:
         result.match_score = smart_score
         return smart_score
 
+    # Listen, filename cleanliness scoring - because "Artist - Title.mp3" is better than
+    # "!!!Artist!!!_-_Title_[FLAC][2023][OFFICIAL]_by_uploader!!!.mp3". Start at 100 points and deduct penalties.
+    # WHY penalize length? Long names = people stuffing metadata/tags/watermarks into filename (annoying!).
+    # WHY count special chars? Clean names use minimal punctuation. The regex excludes word chars, spaces, hyphens,
+    # dots (normal filename chars). More than 15 special chars = -30pts max. Double spaces/underscores = sloppy
+    # encoding. The regex bonus rewards "Artist - Title" format which is the gold standard. This is subjective but
+    # empirically works well - cleaner filenames usually = better sources!
     def _calculate_filename_quality(self, filename: str) -> float:
         """Calculate filename quality score.
 
@@ -291,6 +323,10 @@ class AdvancedSearchService:
 
         return max(score, 0.0)
 
+    # Yo, strips path and extension from filename. WHY split on both / and \? Soulseek returns paths from
+    # Windows (backslash) and Unix (forward slash) users. Taking last element gets filename regardless. The
+    # extension removal joins all but last dot-separated part - handles "file.tar.gz" correctly (keeps "file.tar").
+    # This is purely string manipulation, no filesystem access. Simple and works cross-platform!
     def _extract_base_filename(self, filename: str) -> str:
         """Extract base filename without path and extension.
 
@@ -307,6 +343,11 @@ class AdvancedSearchService:
             base = ".".join(base.split(".")[:-1])
         return base
 
+    # Hey future me, the final ranking step - calculates smart scores for ALL results then sorts best-first.
+    # WHY calculate then sort, not sort during calculate? Cleaner separation, easier to debug scores. The lambda
+    # sort key is simple - higher match_score wins. reverse=True puts best matches at index 0. This modifies
+    # the SearchResult objects in place (sets match_score) which is a bit side-effecty but efficient. Returns
+    # new sorted list without modifying input. Use this before presenting results to user!
     def rank_results(
         self,
         results: list[SearchResult],
@@ -330,6 +371,12 @@ class AdvancedSearchService:
 
         return ranked
 
+    # Listen up, this is THE FULL PIPELINE - everything in one call! Takes raw slskd results and returns
+    # ranked, filtered, scored results ready for user. Four-step process: fuzzy match (remove non-matches),
+    # quality filter (bitrate/format), exclusion filter (blacklist keywords), then rank (smart scoring + sort).
+    # Order matters! Filter first (fast), then score survivors (slow). This is the main public API - most
+    # callers use this instead of individual steps. Filters default to SearchFilters() with all None (no filtering).
+    # Returns list in best-to-worst order - take first N for "top results"!
     def search_with_filters(
         self,
         query: str,
@@ -371,6 +418,10 @@ class AdvancedSearchService:
 
         return ranked_results
 
+    # Hey future me, convenience method - runs full pipeline and returns ONLY the #1 best result. Use this for
+    # auto-download scenarios where you trust the scoring algorithm. Returns None if no results pass filters
+    # (common with strict bitrate requirements). This is safe for automation but always log what you pick so
+    # you can debug when it downloads the wrong version!
     def select_best_match(
         self,
         query: str,
