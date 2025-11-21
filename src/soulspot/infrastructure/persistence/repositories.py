@@ -49,10 +49,20 @@ T = TypeVar("T")
 class ArtistRepository(IArtistRepository):
     """SQLAlchemy implementation of Artist repository."""
 
+    # Hey future me, this is the Repository pattern! Each repo gets its own AsyncSession injected
+    # from the DB dependency. The session is NOT committed here - that happens in the route/use case!
+    # Repo only stages changes (session.add, model updates). If you call add() then the request
+    # fails before commit, the DB stays unchanged (transaction rollback). Don't create your own
+    # session inside repos - always use the injected one or you'll get isolation/deadlock issues!
     def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with session."""
         self.session = session
 
+    # Yo, add() converts domain entity (Artist) to ORM model (ArtistModel) and stages it. Note we
+    # convert IDs and URIs to strings for DB storage (UUIDs/URIs as varchar). The session.add()
+    # does NOT hit the database yet - it just marks model for INSERT. Actual DB write happens on
+    # session.commit() (handled by dependency). If artist.id already exists in DB, you'll get
+    # IntegrityError on commit - this method doesn't check! Use get_by_id first if you care.
     async def add(self, artist: Artist) -> None:
         """Add a new artist."""
         model = ArtistModel(
@@ -86,6 +96,11 @@ class ArtistRepository(IArtistRepository):
         if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
             raise EntityNotFoundException("Artist", artist_id.value)
 
+    # Listen up, get_by_id fetches from DB and converts ORM model back to domain entity. Returns None
+    # if not found (not an error!). The scalar_one_or_none() is important - it returns ONE row or None,
+    # raising if multiple rows match (shouldn't happen with unique ID but defensive). We reconstruct
+    # the domain Artist object with all its value objects (ArtistId, SpotifyUri). The if/else on
+    # spotify_uri handles nullable field - can't call SpotifyUri.from_string(None)!
     async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
         stmt = select(ArtistModel).where(ArtistModel.id == str(artist_id.value))
