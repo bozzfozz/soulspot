@@ -589,12 +589,21 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
    - Updated `auth.py` to use settings for all cookie operations
    - Documented in `.env.example` with clear production deployment instructions
 8. ⏳ **H-4 implementieren:** CSRF-Protection für alle POST/PUT/DELETE
-9. ⏳ **M-5 dokumentieren:** SQLite-Betriebshinweise und Foreign-Keys aktivieren
+9. ✅ **M-5 dokumentieren:** SQLite-Betriebshinweise und Foreign-Keys aktivieren - **COMPLETED 2025-11-21**
+   - Foreign keys confirmed ENABLED in database.py (lines 55-78)
+   - Created comprehensive docs/sqlite-operations.md documentation
+   - Documented SQLite-specific configurations (timeout: 30s, check_same_thread: False)
+   - Documented limitations (concurrent writes, type affinity, no connection pooling)
+   - Provided troubleshooting guide and migration path to PostgreSQL
 10. ⏳ **M-2 aufarbeiten:** Kritische TODOs in Issues überführen und abarbeiten
 
 ### Mittelfristig (Sprint 4-6)
 11. ✅ **K-3 refactoren:** `repositories.py` aufteilen (größter Wartungsengpass)
-12. ✅ **H-5 validieren:** Path-Traversal-Schutz in allen File-Ops
+12. ✅ **H-5 validieren:** Path-Traversal-Schutz in allen File-Ops - **COMPLETED 2025-11-21**
+   - Added PathValidator to artwork_service.py (save_artwork method)
+   - Added PathValidator to library_scanner.py (discover_audio_files method)
+   - All file paths validated to be within allowed directories
+   - Protection against path traversal attacks (e.g., ../../etc/passwd)
 13. ✅ **M-6 modularisieren:** Große Router-Dateien (ui.py, automation.py) aufteilen
 14. ✅ **M-3 dokumentieren:** Docstring-Coverage auf >80% heben
 15. ✅ **N-3 stabilisieren:** Retry-Mechanismen für externe APIs
@@ -610,8 +619,8 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
 
 **HOCH:**
 - ✅ Session-Cookies ohne `secure=True` (H-3) - **COMPLETED 2025-11-20** - Now configurable
-- ⏳ Fehlende CSRF-Protection (H-4) - In Progress
-- ⏳ Potentieller Path Traversal in File-Ops (H-5) - To be addressed
+- ⏳ Fehlende CSRF-Protection (H-4) - In Progress (52 endpoints to protect)
+- ✅ Potentieller Path Traversal in File-Ops (H-5) - **COMPLETED 2025-11-21** - PathValidator implemented
 
 **MITTEL:**
 - ✅ Broad Exception-Handling verschleiert Fehler (H-2) - **COMPLETED 2025-11-20**
@@ -620,7 +629,7 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
 **NIEDRIG:**
 - ℹ️ Fehlende Dependency-Scans (N-5)
 
-**Bandit-Ergebnis:** ✅ 0 Findings (Gut, aber manuelles Review deckt mehr auf)
+**Bandit-Ergebnis:** ✅ 0 HIGH, 0 MEDIUM, 0 LOW findings (Excellent security posture)
 
 ---
 
