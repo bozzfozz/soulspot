@@ -23,12 +23,25 @@ from soulspot.config import Settings, get_settings
 router = APIRouter(prefix="/library", tags=["library"])
 
 
+# Hey future me, these are DTOs for library scanning! ScanRequest is minimal - just the path to scan.
+# ScanResponse tracks scan progress (scanned_files, broken_files, duplicate_files counts) and provides
+# scan_id for polling status. broken_files = corrupted/unreadable audio files, duplicate_files = same
+# content/fingerprint detected multiple times (helps clean up library). ReDownloadRequest controls bulk
+# re-download of broken files - priority for queue ordering, max_files caps how many to fix at once
+# (prevents queueing 1000 broken files and overwhelming slskd). All counts start at 0 and increment as scan
+# progresses. progress_percent is 0-100 calculated from scanned/total.
+
 class ScanRequest(BaseModel):
     """Request to start a library scan."""
 
     scan_path: str
 
 
+# Yo, scan response format! Shows real-time scan progress. total_files is estimated/discovered count
+# (might grow as scan finds subdirectories). scanned_files increments as we process each file. broken_files
+# and duplicate_files are cumulative counters of issues found. progress_percent helps UI show progress bar.
+# Poll GET /scan/{scan_id} repeatedly to watch this update in real-time (every 1-2 seconds). status enum
+# is "running", "completed", "failed" - check that to know when to stop polling!
 class ScanResponse(BaseModel):
     """Response from library scan."""
 
@@ -42,6 +55,11 @@ class ScanResponse(BaseModel):
     progress_percent: float
 
 
+# Listen up, request to re-download broken files found by scan! priority determines queue order (higher =
+# sooner). max_files limits how many broken files to fix in one batch - if scan found 500 broken files and
+# you set max_files=50, only the 50 worst/first ones get queued. This prevents overwhelming the download
+# system. Setting max_files=None queues ALL broken files (dangerous if you have hundreds!). Use conservative
+# values like 10-20 for first run, then increase if downloads complete quickly.
 class ReDownloadRequest(BaseModel):
     """Request to re-download broken files."""
 

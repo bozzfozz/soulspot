@@ -10,6 +10,12 @@ from soulspot.config import get_settings
 router = APIRouter()
 
 
+# Hey future me, these are Pydantic schemas for settings API! They group related settings (general, integration,
+# download, appearance, advanced) for the UI. IMPORTANT: These are READ-ONLY views! Changing values here doesn't
+# update the actual app config (which comes from env vars at startup). If you want dynamic config, you'd need
+# to implement a config update mechanism with validation and app reload/restart. These schemas are also used
+# for validation if you ever add PUT/PATCH endpoints to update settings at runtime.
+
 class GeneralSettings(BaseModel):
     """General application settings."""
 
@@ -18,6 +24,11 @@ class GeneralSettings(BaseModel):
     debug: bool = Field(description="Debug mode")
 
 
+# Yo, external service credentials! SECURITY CRITICAL: Never log these, never return actual values in API
+# responses! The GET endpoint below masks these with "***". slskd_api_key is optional because you can auth
+# with username/password OR API key. The redirect_uri for Spotify must exactly match what's configured in
+# Spotify Developer Dashboard or OAuth will fail! If these are wrong, integration endpoints will blow up with
+# 401/403 errors. Store these in .env file, NEVER commit to git!
 class IntegrationSettings(BaseModel):
     """Integration settings for external services."""
 
@@ -39,6 +50,11 @@ class IntegrationSettings(BaseModel):
     musicbrainz_contact: str = Field(description="MusicBrainz contact email")
 
 
+# Hey, download worker configuration! max_concurrent_downloads is resource-limited (1-10 range) because
+# running 50 simultaneous downloads would kill network/disk. Default is probably 3-5 (check config). If
+# downloads are slow, increasing this helps IF your bottleneck is parallelism not bandwidth. default_max_retries
+# is how many times we retry failed downloads before giving up. enable_priority_queue toggles whether priority
+# field is used (if false, all downloads are FIFO regardless of priority). These affect runtime behavior!
 class DownloadSettings(BaseModel):
     """Download configuration settings."""
 
@@ -49,12 +65,20 @@ class DownloadSettings(BaseModel):
     enable_priority_queue: bool = Field(description="Enable priority queue")
 
 
+# Yo, just theme settings for now! "light", "dark", or "auto" (follows system preference). This is client-side
+# only - server doesn't care about theme. Future expansion: font size, compact mode, color customization, etc.
+# Could also add dashboard layout preferences here (default widget sizes, grid spacing, etc).
 class AppearanceSettings(BaseModel):
     """Appearance and theme settings."""
 
     theme: str = Field(description="Theme: light, dark, or auto")
 
 
+# Listen, "advanced" means "don't touch unless you know what you're doing"! api_host/port determine where
+# the server listens - changing these requires restart. Circuit breaker settings are for fault tolerance -
+# if external API (Spotify/MusicBrainz/slskd) fails N times (failure_threshold), we stop calling it for X
+# seconds (timeout) to avoid hammering a dead service. Prevents cascading failures. The 1-65535 port range
+# is full TCP port range. Note secure_cookies was removed - see comment, this is local-only app!
 class AdvancedSettings(BaseModel):
     """Advanced configuration settings."""
 
@@ -69,6 +93,10 @@ class AdvancedSettings(BaseModel):
     )
 
 
+# Hey, container for all settings groups! This is what GET /settings returns - one object with nested
+# sections. Makes UI easier - you can render tabs for each category. Pydantic validates the whole tree,
+# so if any setting is invalid/missing, the endpoint will 500. These match the actual Settings dataclass
+# from soulspot.config - keep them in sync or you'll get validation errors!
 class AllSettings(BaseModel):
     """Combined settings model."""
 

@@ -18,6 +18,12 @@ router = APIRouter(prefix="/automation", tags=["automation"])
 
 
 # Pydantic models for API
+# Hey future me, these are REQUEST/RESPONSE schemas - Pydantic validates incoming JSON and serializes
+# outgoing data. They're DTOs (Data Transfer Objects) - different from domain entities! Don't confuse
+# CreateWatchlistRequest with the Watchlist domain entity. Request schemas live here, domain models live
+# in domain/entities. This keeps API concerns separate from business logic. Use Field() for validation
+# and OpenAPI docs - those descriptions show up in Swagger UI!
+
 class CreateWatchlistRequest(BaseModel):
     """Request to create an artist watchlist."""
 
@@ -27,6 +33,10 @@ class CreateWatchlistRequest(BaseModel):
     quality_profile: str = "high"
 
 
+# Yo, this is what GET /watchlist returns for each watchlist! Maps domain entity fields to API response
+# format. last_checked_at is optional (None if never checked). The counts (total_releases_found,
+# total_downloads_triggered) are cumulative stats - they increment but never reset. Useful for tracking
+# automation effectiveness ("this watchlist triggered 50 downloads!"). status is enum converted to string.
 class WatchlistResponse(BaseModel):
     """Response with watchlist information."""
 
@@ -41,12 +51,21 @@ class WatchlistResponse(BaseModel):
     total_downloads_triggered: int
 
 
+# Hey, super simple request - just an artist ID to check their complete discography! This hits Spotify
+# API to get ALL albums/singles/compilations/etc for the artist, then compares against our library to
+# find gaps. No pagination here - if artist has 100 albums, you get all 100. Might be slow for prolific
+# artists (check Classical music artists with hundreds of recordings!).
 class DiscographyCheckRequest(BaseModel):
     """Request to check discography."""
 
     artist_id: str
 
 
+# Listen, this finds tracks that could be upgraded to better quality files! quality_profile is target
+# quality ("high" = FLAC/320kbps, "medium" = 256kbps, etc - check QualityProfile enum for values).
+# min_improvement_score filters results - only show upgrades that are X% better quality. Score is 0.0-1.0
+# where 0.3 means "30% improvement". Lower scores = more aggressive upgrades (might upgrade 320 to FLAC),
+# higher = only major upgrades (128kbps to anything better). limit prevents huge response sets!
 class QualityUpgradeRequest(BaseModel):
     """Request to identify quality upgrade candidates."""
 
@@ -442,6 +461,12 @@ async def get_unprocessed_upgrades(
 
 
 # Filter management endpoints
+# Yo future me, filter schemas for the automation filtering system! Filters control what downloads are
+# allowed (whitelist) or blocked (blacklist). target specifies WHAT to filter (keywords in filename, username,
+# file format, bitrate). pattern is the value to match (could be regex if is_regex=true!). priority determines
+# filter evaluation order - higher priority runs first. This is powerful but complex - wrong filter can block
+# everything or let junk through! Test carefully in dev before deploying filter changes!
+
 class CreateFilterRequest(BaseModel):
     """Request to create a filter rule."""
 
@@ -454,6 +479,11 @@ class CreateFilterRequest(BaseModel):
     description: str | None = None
 
 
+# Hey, PATCH request to update existing filter's pattern! You can't change filter type or target with PATCH
+# (that would be creating a new filter), just tweak the pattern and regex flag. This is useful when your
+# regex was almost right but needs tweaking. Changing is_regex from false to true (or vice versa) completely
+# changes match behavior - "test" as literal only matches "test", but "test" as regex matches "testing",
+# "contest", etc! Be careful with that toggle!
 class UpdateFilterRequest(BaseModel):
     """Request to update a filter rule."""
 
@@ -461,6 +491,12 @@ class UpdateFilterRequest(BaseModel):
     is_regex: bool = False
 
 
+# Hey future me, this creates filter rules via the POST /filters endpoint! The lazy imports inside the
+# endpoint are kind of ugly but avoid circular import issues. FilterType and FilterTarget are enums that
+# validate the strings - will raise ValueError if you send invalid values like filter_type="maybe" (only
+# whitelist/blacklist allowed). The filter is enabled by default (check FilterRule entity) so it takes
+# effect IMMEDIATELY after commit! priority determines evaluation order when multiple filters match. Higher
+# priority = runs first. Returns full filter object with generated ID and timestamps.
 @router.post("/filters")
 async def create_filter(
     request: CreateFilterRequest,
@@ -574,6 +610,10 @@ async def list_filters(
         ) from e
 
 
+# Listen up, this GET fetches individual filter details! Similar to other get-by-id endpoints - standard
+# REST pattern. Returns full filter config including execution stats (if that's tracked - check FilterRule
+# entity for hit_count or similar fields). The lazy import pattern again for FilterService and FilterRuleId.
+# 404 if filter doesn't exist. Good for "edit filter" UI where you pre-populate form with existing values.
 @router.get("/filters/{filter_id}")
 async def get_filter(
     filter_id: str,
@@ -756,6 +796,14 @@ async def delete_filter(
 
 
 # Automation rule management endpoints
+# Hey, automation rules are the WORKFLOW system - "when X happens, do Y"! trigger is the event (new_release,
+# missing_album, quality_upgrade, manual), action is what to do (search_and_download, notify_only, add_to_queue).
+# This is more complex than filters - rules can chain actions, apply filters, run on schedules. priority controls
+# which rule fires when multiple match. apply_filters=true means run filter rules on download candidates before
+# executing. auto_process=true means rule executes automatically without human approval. These defaults (priority=0,
+# quality_profile="high", apply_filters=true, auto_process=true) create fully automated rules - might want
+# manual approval for some use cases!
+
 class CreateAutomationRuleRequest(BaseModel):
     """Request to create an automation rule."""
 
@@ -769,6 +817,12 @@ class CreateAutomationRuleRequest(BaseModel):
     description: str | None = None
 
 
+# Yo future me, creates automation rules via POST /rules! AutomationTrigger and AutomationAction enums
+# validate the string values - ValueError if invalid. The lazy imports avoid circular deps. Rules are
+# enabled by default so they start firing events IMMEDIATELY after commit! This could trigger downloads
+# right away if there are pending events matching the trigger. The response includes execution stats
+# (total/successful/failed counts) which are 0 for new rules. Check AutomationWorkflowService for the
+# actual rule execution logic - this endpoint just stores configuration.
 @router.post("/rules")
 async def create_automation_rule(
     request: CreateAutomationRuleRequest,

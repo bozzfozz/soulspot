@@ -145,6 +145,11 @@ async def toggle_edit_mode(
     )
 
 
+# Yo, this opens the widget catalog modal - shows all available widget types users can add to their dashboard!
+# Gets all widgets from DB (WidgetRepository.get_all()) and renders them in a modal template. page_id defaults
+# to None but gets coerced to 1 in template ({"page_id": page_id or 1}) - that's a weird fallback. Why not
+# require page_id or get it from context? The catalog shows widget name, description, preview, etc. User clicks
+# a widget -> calls add_widget_instance. Template is partials/widget_catalog_modal.html - check that for UI!
 @router.get("/widgets/catalog", response_class=HTMLResponse)
 async def widget_catalog(
     request: Request,
@@ -219,6 +224,11 @@ async def add_widget_instance(
     )
 
 
+# Hey future me, DELETE widget instance! Standard soft-delete pattern - removes widget from page but doesn't
+# cascade delete widget metadata (that's in WidgetRepository, reusable across instances). Returns empty HTML
+# on success - HTMX sees the empty response and removes the widget element from DOM (the hx-target was probably
+# the widget div). 404 returns empty HTML too - UI won't show error, widget just stays. Should probably show
+# toast notification! Commits immediately. No undo - instance config is GONE.
 @router.delete("/widgets/instances/{instance_id}", response_class=HTMLResponse)
 async def delete_widget_instance(
     instance_id: int,
@@ -283,6 +293,11 @@ async def move_widget(
     )
 
 
+# Listen, resizes widget through size cycle! toggle_size() method probably does 4->6->12->4 columns (third-width
+# -> half-width -> full-width -> back to third). It's a toggle not a "set size" endpoint - can't jump directly
+# to specific size, have to cycle through! Returns full canvas reload HTML which is inefficient - the whole grid
+# re-renders just to change one widget's width. Consider returning just the resized widget's updated element
+# instead. Good for mobile responsive layouts where you might want widgets full-width on small screens!
 @router.post("/widgets/instances/{instance_id}/resize", response_class=HTMLResponse)
 async def resize_widget(
     instance_id: int,
@@ -309,6 +324,11 @@ async def resize_widget(
     )
 
 
+# Yo, loads widget config modal! Shows form for editing widget instance settings (refresh rate, data source,
+# display options, etc). Gets both instance (for current config values) and widget metadata (for config schema/
+# validation rules). The template probably renders a dynamic form based on widget.config_schema defining what
+# fields are editable. Returns modal HTML - user edits config -> POST to save_widget_config. Template needs
+# instance AND widget because instance has values, widget has field definitions!
 @router.get("/widgets/instances/{instance_id}/config", response_class=HTMLResponse)
 async def get_widget_config(
     request: Request,
@@ -365,6 +385,11 @@ async def save_widget_config(
     return HTMLResponse('<div class="text-green-600">Configuration saved!</div>')
 
 
+# Hey, this returns page list for sidebar navigation! Simple read-only endpoint - gets all pages from DB
+# and renders them as navigation links. The template (partials/page_list.html) probably generates <a> tags
+# with each page's slug. No pagination - assumes you won't have hundreds of dashboard pages (reasonable!).
+# The is_default flag on pages determines which shows "default" badge in UI. No auth check here - any user
+# sees all pages. Add ACLs if you need per-user dashboards!
 @router.get("/pages/list", response_class=HTMLResponse)
 async def list_pages(
     request: Request,
@@ -383,6 +408,10 @@ async def list_pages(
     )
 
 
+# Yo, shows "create new page" modal! Dead simple - just renders empty form template. No DB access needed
+# since we're not pre-populating anything. User fills name and slug -> POST to create_page. The modal
+# template probably has input validation (slug must be URL-safe, name required, etc). This is a GET for
+# modal HTML, actual creation is the POST endpoint. Standard HTMX modal pattern!
 @router.get("/pages/new", response_class=HTMLResponse)
 async def new_page_modal(request: Request) -> Any:
     """Get new page creation modal."""

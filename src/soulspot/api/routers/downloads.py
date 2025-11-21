@@ -19,6 +19,12 @@ from soulspot.infrastructure.persistence.repositories import DownloadRepository
 router = APIRouter()
 
 
+# Hey future me, these are DTOs for the download API! Simple Pydantic schemas for request/response validation
+# and JSON serialization. PauseResumeResponse is used by both pause and resume endpoints (same shape). Batch
+# operations use BatchDownloadRequest/Response for multi-track downloads. UpdatePriorityRequest for changing
+# queue order. BatchActionRequest is for bulk operations (cancel/pause/resume multiple downloads at once).
+# Keep these simple - complex business logic belongs in domain entities or use cases, not API schemas!
+
 class PauseResumeResponse(BaseModel):
     """Response model for pause/resume operations."""
 
@@ -26,6 +32,10 @@ class PauseResumeResponse(BaseModel):
     status: str
 
 
+# Yo, batch download request schema! track_ids is list of UUID strings - no validation here that they're
+# valid track IDs (that happens in the endpoint). priority applies to ALL tracks in batch - can't set
+# different priorities per track. Default priority 0 is normal queue order. Higher numbers = higher priority
+# (processed first). For huge batches (1000+ tracks), consider chunking or async processing!
 class BatchDownloadRequest(BaseModel):
     """Request model for batch download operations."""
 
@@ -33,6 +43,10 @@ class BatchDownloadRequest(BaseModel):
     priority: int = 0
 
 
+# Hey, batch download response! job_ids lets caller track each individual download (poll /downloads/{job_id}
+# for progress). total_tracks is redundant with len(job_ids) but explicit is better than implicit! If some
+# tracks failed to queue (invalid IDs), this response won't reflect that - endpoint fails all-or-nothing.
+# Consider changing to partial success model where we return both succeeded and failed job_ids.
 class BatchDownloadResponse(BaseModel):
     """Response model for batch download operations."""
 
@@ -41,12 +55,20 @@ class BatchDownloadResponse(BaseModel):
     total_tracks: int
 
 
+# Listen, super simple priority update request! Just one field - the new priority number. No validation
+# constraints here (min/max), that's handled by domain layer. Priority can be negative if you want to deprioritize
+# downloads (process them LAST). Common values: 0 = normal, 10 = high, 100 = urgent, -10 = low priority.
 class UpdatePriorityRequest(BaseModel):
     """Request model for updating download priority."""
 
     priority: int
 
 
+# Yo, batch actions request for bulk operations! download_ids is list of download UUIDs to operate on.
+# action string determines what to do: "cancel", "pause", "resume", "priority". priority field is only used
+# for action="priority", otherwise it's ignored. This is a multi-purpose schema which is flexible but less
+# type-safe than separate schemas per action. Consider splitting into CancelBatchRequest, PauseBatchRequest, etc
+# for better API clarity and validation!
 class BatchActionRequest(BaseModel):
     """Request model for batch operations on downloads."""
 

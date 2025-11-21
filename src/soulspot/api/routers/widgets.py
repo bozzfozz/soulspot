@@ -1,5 +1,12 @@
 """Widget content endpoints for dashboard widgets."""
 
+# Yo future me, these endpoints power the HTMX-driven widget refresh system! Each widget type has a /content
+# endpoint that returns HTML fragment. Widgets auto-poll these endpoints (hx-get + hx-trigger="every 5s") to
+# stay up-to-date. This is a hybrid approach: SSE for instant updates, polling as fallback. The templates
+# in partials/widgets/ define how each widget renders. Keep these endpoints FAST - widgets poll frequently!
+# Use repository pagination and limits to avoid huge queries. The templates variable is Jinja2 template engine
+# configured with src/soulspot/templates directory. All responses are HTMLResponse not JSON!
+
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -60,6 +67,12 @@ async def active_jobs_content(
     )
 
 
+# Hey future me, Spotify search widget endpoint! Gets search results and renders them as HTML using the
+# widget template. Creates SpotifyClient fresh each time which is inefficient - should use dependency injection!
+# More critically, access_token="" with nosec B106 means NO AUTHENTICATION - search will FAIL! The # nosec
+# suppresses security warning but this is a real bug. Should get token from session or skip this widget if
+# no auth. query_string length check (>= 2 chars) prevents single-letter spam searches. Returns empty results
+# array if search fails rather than showing error - UI should indicate failure!
 @router.get("/spotify-search/content", response_class=HTMLResponse)
 async def spotify_search_content(
     request: Request,
