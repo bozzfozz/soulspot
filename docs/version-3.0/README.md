@@ -147,8 +147,19 @@ Focus on:
 
 ```
 modules/{module_name}/
+├── README.md          # ✅ Module overview & getting started
+├── CHANGELOG.md       # ✅ Module version history
+├── docs/              # ✅ Module documentation
+│   ├── architecture.md
+│   ├── api.md
+│   ├── events.md
+│   ├── configuration.md
+│   └── development.md
 ├── submodules/        # Optional: self-contained submodules
 │   └── auth/         # e.g., OAuth authentication
+│       ├── README.md
+│       ├── CHANGELOG.md
+│       ├── docs/
 │       ├── backend/
 │       ├── frontend/
 │       └── tests/
@@ -338,11 +349,23 @@ All modules MUST:
 ### Documentation Requirements
 
 Every module MUST have:
-- README.md (purpose, features, usage)
-- API documentation (OpenAPI/Swagger)
-- Event schemas (YAML)
-- Configuration documentation
-- Migration notes (if applicable)
+- **README.md** - Module overview, purpose, features, quick start guide (in module root)
+- **CHANGELOG.md** - Module version history following Keep a Changelog format (in module root)
+- **docs/** directory containing:
+  - **architecture.md** - Architecture, design decisions, component diagrams
+  - **api.md** - Complete API documentation (endpoints, schemas)
+  - **events.md** - Event schemas, published/subscribed events
+  - **configuration.md** - Configuration options, environment variables
+  - **development.md** - Development, testing, and contribution guide
+
+**Submodules** MUST have the same documentation structure.
+
+**Documentation Location Rules:**
+- Module docs live **in the module directory**, not in global `docs/`
+- Submodule docs live **in the submodule directory**
+- Global `docs/` only for system-level architecture and cross-module concerns
+
+See [MODULE_SPECIFICATION.md](./MODULE_SPECIFICATION.md) Section 3.2.1 for detailed requirements and examples.
 
 ---
 

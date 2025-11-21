@@ -116,8 +116,16 @@ __all__ = ["Module"]
 
 ```
 modules/{module_name}/
-├── README.md                   # ✅ REQUIRED
-├── __init__.py                 # ✅ REQUIRED
+├── README.md                   # ✅ REQUIRED - Module overview & getting started
+├── CHANGELOG.md                # ✅ REQUIRED - Module version history
+├── __init__.py                 # ✅ REQUIRED - Module interface & metadata
+│
+├── docs/                       # ✅ REQUIRED - Module documentation
+│   ├── architecture.md         # Module architecture & design decisions
+│   ├── api.md                  # API documentation
+│   ├── events.md               # Event schemas & contracts
+│   ├── configuration.md        # Configuration guide
+│   └── development.md          # Development & contribution guide
 │
 ├── frontend/                   # ✅ REQUIRED (if provides_ui)
 │   ├── __init__.py
@@ -187,6 +195,177 @@ modules/{module_name}/
 - Prefix with `test_`: `test_download_service.py`
 - Mirror source structure: `services/download_service.py` → `tests/unit/test_download_service.py`
 
+### 3.2.1 Module Documentation Requirements
+
+**CHANGELOG.md (Required):**
+
+Each module and submodule MUST have its own `CHANGELOG.md` in addition to the global changelog at the repository root.
+
+**Purpose:**
+- Track module-specific version history
+- Document breaking changes within the module
+- Provide module-level migration guides
+- Enable independent module versioning
+
+**Format (Keep a Changelog):**
+
+```markdown
+# Changelog - {Module Name}
+
+All notable changes to this module will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this module adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- New feature X
+
+### Changed
+- Updated Y
+
+## [1.2.0] - 2025-11-20
+
+### Added
+- Implemented download queue management
+- Added retry mechanism for failed downloads
+
+### Fixed
+- Fixed race condition in concurrent downloads
+- Corrected metadata encoding issue
+
+### Security
+- Updated slskd client to address CVE-2025-XXXX
+
+## [1.1.0] - 2025-10-15
+
+### Changed
+- Improved search algorithm performance
+- Enhanced error messages
+
+## [1.0.0] - 2025-09-01
+
+### Added
+- Initial release
+- Basic download functionality
+- Search integration
+```
+
+**Submodule Changelog Example:**
+
+```markdown
+# Changelog - Spotify Auth Submodule
+
+## [1.1.0] - 2025-11-15
+
+### Added
+- Token refresh retry logic with exponential backoff
+- Support for PKCE flow
+
+### Changed
+- Token storage now uses encrypted database instead of plaintext
+
+### Deprecated
+- Legacy token storage format (will be removed in 2.0.0)
+```
+
+**docs/ Directory (Required):**
+
+Each module and submodule MUST have a `docs/` directory containing detailed documentation.
+
+**Minimum Required Files:**
+
+1. **architecture.md** - Module architecture, design decisions, patterns used
+2. **api.md** - Complete API documentation (endpoints, parameters, responses)
+3. **events.md** - Event schemas, when they're published, what subscribes to them
+4. **configuration.md** - Configuration options, environment variables, settings
+5. **development.md** - How to develop, test, and contribute to the module
+
+**Example: modules/soulseek/docs/architecture.md**
+
+```markdown
+# Soulseek Module Architecture
+
+## Overview
+This module handles all Soulseek/slskd integration for downloading music files.
+
+## Design Decisions
+
+### Why separate Download entity from SearchResult?
+We initially considered combining these, but separated them because:
+- Search results are ephemeral (cached short-term)
+- Downloads persist long-term and have complex state transitions
+- Different lifecycle and storage needs
+
+### Circuit Breaker Pattern
+We use circuit breaker for slskd API calls because:
+- slskd can become temporarily unresponsive
+- Prevents cascading failures
+- Allows graceful degradation
+
+## Component Diagram
+[Diagram showing Download flow]
+
+## State Transitions
+[State machine diagram for Download entity]
+```
+
+**Example: modules/spotify/submodules/auth/docs/oauth-flow.md**
+
+```markdown
+# Spotify OAuth Flow
+
+## Authorization Code Flow
+
+1. User clicks "Connect Spotify"
+2. Redirect to Spotify authorization URL
+3. User approves
+4. Spotify redirects back with code
+5. Exchange code for tokens
+6. Store encrypted tokens
+7. Set refresh timer
+
+## Token Refresh
+
+Tokens refresh automatically 5 minutes before expiry.
+If refresh fails, user is prompted to re-authenticate.
+
+## Security Considerations
+
+- Tokens stored encrypted in database
+- State parameter prevents CSRF
+- PKCE used for additional security
+```
+
+**Documentation Location Rules:**
+
+```
+✅ Correct:
+modules/soulseek/docs/architecture.md        # Module docs in module
+modules/spotify/docs/api.md                  # Module docs in module
+modules/spotify/submodules/auth/docs/oauth-flow.md  # Submodule docs in submodule
+
+❌ Wrong:
+docs/modules/soulseek/architecture.md        # Don't put in global docs/
+docs/spotify-api.md                          # Don't mix with global docs
+modules/soulseek/architecture.md             # Must be in docs/ subdirectory
+```
+
+**Global vs. Module Documentation:**
+
+- **Global docs/** (repository root): System architecture, cross-module patterns, deployment guides
+- **Module docs/**: Module-specific implementation, APIs, configuration
+- **Submodule docs/**: Submodule-specific details
+
+**Why This Matters:**
+
+1. **Modularity**: Each module is self-documenting and self-contained
+2. **Versioning**: Module docs version with the module code
+3. **Discovery**: Developers find docs next to the code they're reading
+4. **Independence**: Modules can be extracted or reused with docs intact
+5. **Clarity**: Clear separation between system-level and module-level concerns
+
 ### 3.3 Submodules Support
 
 **Overview:**  
@@ -202,13 +381,26 @@ Modules can contain submodules for better organization and separation of concern
 
 ```
 modules/spotify/
-├── README.md
+├── README.md                       # ✅ Parent module overview
+├── CHANGELOG.md                    # ✅ Parent module changelog
 ├── __init__.py                     # Parent module exports
+│
+├── docs/                           # ✅ Parent module documentation
+│   ├── architecture.md
+│   ├── api.md
+│   └── configuration.md
 │
 ├── submodules/                     # ✅ Submodules directory
 │   │
 │   ├── auth/                       # Authentication submodule
+│   │   ├── README.md               # ✅ Submodule overview
+│   │   ├── CHANGELOG.md            # ✅ Submodule changelog
 │   │   ├── __init__.py
+│   │   │
+│   │   ├── docs/                   # ✅ Submodule documentation
+│   │   │   ├── oauth-flow.md
+│   │   │   └── token-management.md
+│   │   │
 │   │   ├── backend/
 │   │   │   ├── api/
 │   │   │   │   ├── routes.py      # /spotify/auth/* routes
@@ -228,7 +420,11 @@ modules/spotify/
 │   │   └── tests/
 │   │
 │   └── webhooks/                   # Webhooks submodule (example)
+│       ├── README.md               # ✅ Submodule overview
+│       ├── CHANGELOG.md            # ✅ Submodule changelog
 │       ├── __init__.py
+│       ├── docs/                   # ✅ Submodule documentation
+│       │   └── webhook-handlers.md
 │       └── backend/
 │           └── api/
 │               └── routes.py       # /spotify/webhooks/* routes

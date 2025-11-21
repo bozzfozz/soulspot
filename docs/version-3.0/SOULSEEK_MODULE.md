@@ -64,8 +64,16 @@ The Soulseek module manages all functionality related to searching, downloading,
 
 ```
 modules/soulseek/
-├── README.md                              # Module documentation
+├── README.md                              # ✅ Module overview & getting started
+├── CHANGELOG.md                           # ✅ Module version history
 ├── __init__.py                            # Module interface
+│
+├── docs/                                  # ✅ Module documentation
+│   ├── architecture.md                    # Architecture & design decisions
+│   ├── api.md                             # API endpoints documentation
+│   ├── events.md                          # Event schemas & contracts
+│   ├── configuration.md                   # Configuration guide
+│   └── development.md                     # Development guide
 │
 ├── frontend/                              # Frontend layer
 │   ├── __init__.py
@@ -1515,7 +1523,566 @@ class TestDownloadFlow:
 
 ---
 
-## 10. Deployment and Migration
+## 10. Module Documentation & Changelog
+
+### 10.1 CHANGELOG.md
+
+**Location:** `modules/soulseek/CHANGELOG.md`
+
+```markdown
+# Changelog - Soulseek Module
+
+All notable changes to the Soulseek module will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this module adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Planned
+- BitRate filtering in search results
+- Download history export
+- Batch download support
+
+## [1.0.0] - 2025-12-01
+
+### Added
+- Initial module implementation
+- Search functionality with quality ranking
+- Download queue management with priority support
+- Real-time progress monitoring via SSE
+- Circuit breaker pattern for slskd API calls
+- Automatic retry mechanism for failed downloads
+- Integration with Module Router for coordinated downloads
+- Event-based notifications (download.started, download.completed, download.failed)
+- Health monitoring for slskd connection
+- Download statistics and reporting
+- HTMX-based frontend (search interface, download queue widget, progress display)
+
+### Architecture
+- Domain-driven design with clean architecture
+- Separation: Domain → Application → Infrastructure → API
+- Repository pattern for data access
+- Event sourcing for download state changes
+- Circuit breaker for external API resilience
+
+### Events Published
+- `soulseek.download.started` - When download begins
+- `soulseek.download.progress` - Progress updates (every 5 seconds)
+- `soulseek.download.completed` - Download successful
+- `soulseek.download.failed` - Download failed
+
+### Events Subscribed
+- None (standalone module)
+
+### Dependencies
+- slskd >= 0.18.0
+- Module Router (for coordinated flows)
+- Core module (shared utilities)
+
+### Breaking Changes
+- N/A (initial release)
+
+### Migration Guide
+- Fresh installation - no migration required
+- Database tables created automatically on first run
+```
+
+### 10.2 Module Documentation (docs/)
+
+#### docs/architecture.md
+
+**Location:** `modules/soulseek/docs/architecture.md`
+
+```markdown
+# Soulseek Module - Architecture Documentation
+
+## Overview
+
+The Soulseek module manages all Soulseek P2P network interactions for music downloads.
+It demonstrates the reference architecture for SoulSpot Bridge Version 3.0 modules.
+
+## Architecture Diagram
+
+```
+┌──────────────────────────────────────────────────┐
+│              Frontend (HTMX)                     │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │  Search  │  │ Download │  │ Progress │      │
+│  │  Page    │  │  Queue   │  │  Widget  │      │
+│  └──────────┘  └──────────┘  └──────────┘      │
+└────────────────────┬─────────────────────────────┘
+                     │ HTTP / SSE
+┌────────────────────┴─────────────────────────────┐
+│              API Layer (FastAPI)                 │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │ Search   │  │ Download │  │  Health  │      │
+│  │ Routes   │  │  Routes  │  │  Routes  │      │
+│  └──────────┘  └──────────┘  └──────────┘      │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────┐
+│         Application Layer (Services)             │
+│  ┌──────────────┐  ┌──────────────┐             │
+│  │ Download     │  │  Search      │             │
+│  │ Service      │  │  Service     │             │
+│  └──────────────┘  └──────────────┘             │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────┐
+│            Domain Layer (Entities)               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
+│  │ Download │  │  Search  │  │  slskd   │      │
+│  │ Entity   │  │  Result  │  │  Client  │      │
+│  └──────────┘  └──────────┘  └──────────┘      │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────┐
+│       Infrastructure (Persistence & APIs)        │
+│  ┌──────────────┐  ┌──────────────┐             │
+│  │ Download     │  │  slskd API   │             │
+│  │ Repository   │  │  Client      │             │
+│  └──────────────┘  └──────────────┘             │
+└──────────────────────────────────────────────────┘
+```
+
+## Design Decisions
+
+### 1. Separation of Download and SearchResult
+
+**Decision:** Keep Download and SearchResult as separate entities.
+
+**Rationale:**
+- SearchResult is ephemeral (cached for minutes)
+- Download is persistent (stored for lifetime)
+- Different state machines and lifecycles
+- SearchResult can have hundreds of results, Download only stores initiated ones
+
+**Alternatives Considered:**
+- Single entity with optional download_id - rejected due to lifecycle mismatch
+- Embedded SearchResult in Download - rejected to avoid data duplication
+
+### 2. Circuit Breaker for slskd API
+
+**Decision:** Wrap all slskd API calls with circuit breaker pattern.
+
+**Rationale:**
+- slskd can become temporarily unresponsive (network issues, overload)
+- Prevents cascading failures in our application
+- Allows graceful degradation (show cached data, queue requests)
+- Improves user experience (fast failures vs. timeouts)
+
+**Implementation:**
+- 5 failures threshold
+- 30-second recovery time
+- Fallback: show last known status, queue actions
+
+### 3. Event-Driven Post-Processing
+
+**Decision:** Publish events on download completion rather than direct calls.
+
+**Rationale:**
+- Loose coupling with metadata/library modules
+- Modules can be added/removed without code changes
+- Retry/recovery easier with event queue
+- Enables future features (webhooks, notifications)
+
+**Events:**
+- `download.completed` → Metadata module enriches file
+- `download.completed` → Library module imports file
+- `download.completed` → Notification module alerts user
+
+### 4. Repository Pattern
+
+**Decision:** Use repository pattern for data access.
+
+**Rationale:**
+- Isolates domain from infrastructure concerns
+- Easy to mock for testing
+- Future-proof (can swap SQLAlchemy for other ORMs)
+- Clean architecture principle
+
+## State Machine
+
+### Download State Transitions
+
+```
+PENDING
+  │
+  ├──> QUEUED ──────> DOWNLOADING ──────> COMPLETED
+  │      │               │                    
+  │      │               │                    
+  │      └──> PAUSED ────┘                    
+  │                                           
+  └──────────────────────────────────────> FAILED
+                                              │
+                                              └──> RETRYING ──> PENDING
+```
+
+**States:**
+- PENDING: Download requested, not yet queued
+- QUEUED: In queue, waiting for slot
+- DOWNLOADING: Actively downloading
+- PAUSED: User paused download
+- COMPLETED: Successfully completed
+- FAILED: Failed (network error, file not found)
+- RETRYING: Automatic retry in progress
+
+## Error Handling Strategy
+
+1. **Network Errors**: Retry with exponential backoff (3 attempts)
+2. **File Not Found**: Mark failed immediately, log event
+3. **slskd Unreachable**: Circuit breaker triggers, queue requests
+4. **Disk Full**: Pause all downloads, alert user
+5. **Validation Failure**: Mark failed, publish event for cleanup
+
+## Performance Considerations
+
+1. **Concurrent Downloads**: Max 5 simultaneous downloads (configurable)
+2. **Search Result Caching**: 5 minutes (memory cache)
+3. **Database Queries**: Indexed on status, created_at, track_id
+4. **SSE Updates**: Throttled to 1 update per 5 seconds per download
+5. **Event Publishing**: Async, non-blocking
+
+## Security Considerations
+
+1. **slskd API Key**: Stored encrypted, never logged
+2. **File Path Validation**: Prevent directory traversal attacks
+3. **Rate Limiting**: Max 100 searches per hour per user
+4. **Download Limits**: Max 1000 pending downloads per user
+
+## Testing Strategy
+
+1. **Unit Tests**: 80%+ coverage requirement
+2. **Integration Tests**: Repository + slskd client mocked
+3. **E2E Tests**: Full flow with test slskd instance
+4. **Performance Tests**: Load testing with 100 concurrent downloads
+```
+
+#### docs/api.md
+
+**Location:** `modules/soulseek/docs/api.md`
+
+```markdown
+# Soulseek Module - API Documentation
+
+## Base URL
+
+`/api/soulseek`
+
+## Authentication
+
+All endpoints require authentication via session cookie or API key.
+
+## Endpoints
+
+### Search Tracks
+
+**POST** `/search`
+
+Search for tracks on the Soulseek network.
+
+**Request Body:**
+```json
+{
+  "query": "The Beatles - Let It Be",
+  "max_results": 50
+}
+```
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "id": "result-123",
+      "username": "musiclover",
+      "filename": "The Beatles - Let It Be.mp3",
+      "size_bytes": 8421376,
+      "bitrate": 320,
+      "sample_rate": 44100,
+      "duration_seconds": 243,
+      "quality_score": 95
+    }
+  ],
+  "total": 142,
+  "cached": false
+}
+```
+
+**Quality Score:**
+- 90-100: Excellent (320kbps+, complete metadata)
+- 70-89: Good (256-320kbps, good metadata)
+- 50-69: Fair (192-255kbps, partial metadata)
+- 0-49: Poor (<192kbps or missing metadata)
+
+### Start Download
+
+**POST** `/downloads`
+
+Start a new download.
+
+**Request Body:**
+```json
+{
+  "result_id": "result-123",
+  "track_id": "spotify:track:abc123",
+  "priority": 5
+}
+```
+
+**Response:**
+```json
+{
+  "download_id": "dl-456",
+  "status": "queued",
+  "position_in_queue": 3
+}
+```
+
+### Get Download Status
+
+**GET** `/downloads/{download_id}`
+
+**Response:**
+```json
+{
+  "download_id": "dl-456",
+  "status": "downloading",
+  "progress_percent": 45,
+  "bytes_downloaded": 3789312,
+  "bytes_total": 8421376,
+  "speed_bytes_per_sec": 524288,
+  "eta_seconds": 8,
+  "file_path": null
+}
+```
+
+### List Downloads
+
+**GET** `/downloads`
+
+**Query Parameters:**
+- `status` (optional): Filter by status (pending, queued, downloading, completed, failed)
+- `limit` (optional): Max results (default 50, max 100)
+- `offset` (optional): Pagination offset
+
+**Response:**
+```json
+{
+  "downloads": [...],
+  "total": 123,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+### Pause Download
+
+**POST** `/downloads/{download_id}/pause`
+
+**Response:**
+```json
+{
+  "download_id": "dl-456",
+  "status": "paused"
+}
+```
+
+### Resume Download
+
+**POST** `/downloads/{download_id}/resume`
+
+**Response:**
+```json
+{
+  "download_id": "dl-456",
+  "status": "downloading"
+}
+```
+
+### Cancel Download
+
+**DELETE** `/downloads/{download_id}`
+
+**Response:**
+```json
+{
+  "download_id": "dl-456",
+  "status": "cancelled"
+}
+```
+
+### Health Check
+
+**GET** `/health`
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "module": "soulseek",
+  "version": "1.0.0",
+  "slskd": {
+    "connected": true,
+    "version": "0.18.0",
+    "uptime_seconds": 86400
+  }
+}
+```
+
+### Progress Stream (SSE)
+
+**GET** `/downloads/{download_id}/stream`
+
+Server-Sent Events stream for real-time progress updates.
+
+**Event Format:**
+```
+event: progress
+data: {"download_id": "dl-456", "progress_percent": 47, "speed_bytes_per_sec": 524288}
+
+event: completed
+data: {"download_id": "dl-456", "file_path": "/music/beatles.mp3"}
+
+event: failed
+data: {"download_id": "dl-456", "error": "File not found"}
+```
+
+## Error Responses
+
+All endpoints return standardized error responses:
+
+```json
+{
+  "error": {
+    "code": "DOWNLOAD_NOT_FOUND",
+    "message": "Download dl-999 not found",
+    "details": {}
+  }
+}
+```
+
+**Error Codes:**
+- `DOWNLOAD_NOT_FOUND`: Download ID doesn't exist
+- `SEARCH_FAILED`: Search request failed
+- `SLSKD_UNREACHABLE`: Cannot connect to slskd
+- `QUEUE_FULL`: Download queue is full
+- `INVALID_REQUEST`: Request validation failed
+```
+
+#### docs/events.md
+
+**Location:** `modules/soulseek/docs/events.md`
+
+```markdown
+# Soulseek Module - Event Schemas
+
+## Published Events
+
+### soulseek.download.started
+
+Published when a download begins.
+
+**Schema:**
+```json
+{
+  "event_type": "soulseek.download.started",
+  "event_version": "1.0",
+  "timestamp": "2025-11-21T10:30:00Z",
+  "data": {
+    "download_id": "dl-456",
+    "track_id": "spotify:track:abc123",
+    "filename": "The Beatles - Let It Be.mp3",
+    "size_bytes": 8421376,
+    "user_id": "user-789"
+  }
+}
+```
+
+### soulseek.download.progress
+
+Published every 5 seconds during download.
+
+**Schema:**
+```json
+{
+  "event_type": "soulseek.download.progress",
+  "event_version": "1.0",
+  "timestamp": "2025-11-21T10:30:15Z",
+  "data": {
+    "download_id": "dl-456",
+    "progress_percent": 45,
+    "bytes_downloaded": 3789312,
+    "speed_bytes_per_sec": 524288,
+    "eta_seconds": 8
+  }
+}
+```
+
+### soulseek.download.completed
+
+Published when download completes successfully.
+
+**Schema:**
+```json
+{
+  "event_type": "soulseek.download.completed",
+  "event_version": "1.0",
+  "timestamp": "2025-11-21T10:35:00Z",
+  "data": {
+    "download_id": "dl-456",
+    "track_id": "spotify:track:abc123",
+    "file_path": "/music/downloads/The Beatles - Let It Be.mp3",
+    "size_bytes": 8421376,
+    "duration_seconds": 243,
+    "user_id": "user-789"
+  }
+}
+```
+
+**Subscribers:**
+- **Metadata Module**: Enriches file with MusicBrainz/CoverArt data
+- **Library Module**: Imports file into user library
+- **Notification Module**: Sends completion notification to user
+- **Router**: Coordinates post-processing pipeline
+
+### soulseek.download.failed
+
+Published when download fails.
+
+**Schema:**
+```json
+{
+  "event_type": "soulseek.download.failed",
+  "event_version": "1.0",
+  "timestamp": "2025-11-21T10:35:00Z",
+  "data": {
+    "download_id": "dl-456",
+    "track_id": "spotify:track:abc123",
+    "error_code": "FILE_NOT_FOUND",
+    "error_message": "File no longer available from user",
+    "retry_count": 2,
+    "user_id": "user-789"
+  }
+}
+```
+
+## Subscribed Events
+
+This module does not currently subscribe to any events. It operates independently.
+
+## Event Versioning
+
+Events follow semantic versioning:
+- **Major version** change: Breaking schema changes (field removals, type changes)
+- **Minor version** change: New optional fields
+- **Patch version** change: Documentation updates only
+
+Current version: `1.0`
+```
+
+## 11. Deployment and Migration
 
 ### 10.1 Database Migration
 

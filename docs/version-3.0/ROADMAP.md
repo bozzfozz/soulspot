@@ -427,8 +427,14 @@ modules/soulseek/tests/integration/test_slskd_integration.py
 
 ```
 modules/spotify/
+├── README.md                       # ✅ Parent module
+├── CHANGELOG.md                    # ✅ Parent changelog
+├── docs/                           # ✅ Parent docs
 ├── submodules/
 │   └── auth/                       # OAuth authentication submodule
+│       ├── README.md               # ✅ Submodule docs
+│       ├── CHANGELOG.md            # ✅ Submodule changelog
+│       ├── docs/                   # ✅ Submodule docs
 │       ├── backend/
 │       │   ├── api/routes.py       # /spotify/auth/* endpoints
 │       │   ├── application/
@@ -447,6 +453,95 @@ modules/spotify/
 - Independent testing and versioning
 - Reusable across modules
 - Optional enablement (disable auth submodule if not needed)
+
+### 6.5 Documentation & Changelog Requirements
+
+**Module Documentation (REQUIRED):**
+
+Each module and submodule MUST have:
+
+1. **CHANGELOG.md** - Module-specific version history
+   - Located in module/submodule root directory
+   - Follows [Keep a Changelog](https://keepachangelog.com/) format
+   - Independent versioning from global changelog
+   - Tracks module-specific breaking changes
+
+2. **docs/** directory - Complete module documentation
+   - **architecture.md**: Design decisions, component diagrams
+   - **api.md**: Complete API documentation
+   - **events.md**: Event schemas and contracts
+   - **configuration.md**: Configuration guide
+   - **development.md**: Development and contribution guide
+
+**Location Rules:**
+
+```
+✅ Correct:
+modules/soulseek/CHANGELOG.md
+modules/soulseek/docs/architecture.md
+modules/spotify/submodules/auth/CHANGELOG.md
+modules/spotify/submodules/auth/docs/oauth-flow.md
+
+❌ Wrong:
+docs/modules/soulseek/CHANGELOG.md        # Don't put in global docs
+CHANGELOG.md (only global)                # Module needs its own
+modules/soulseek/architecture.md          # Must be in docs/ subdirectory
+```
+
+**Global vs. Module Changelog:**
+
+- **Global CHANGELOG.md** (repo root):
+  - System-level changes
+  - Version 3.0 milestone releases
+  - Cross-module breaking changes
+  - Infrastructure updates
+
+- **Module CHANGELOG.md** (modules/{name}/):
+  - Module-specific features/fixes
+  - Module version updates (independent SemVer)
+  - Module API changes
+  - Module event schema changes
+
+**Example: Global Changelog Entry**
+
+```markdown
+# Changelog - SoulSpot Bridge
+
+## [3.0.0] - 2025-12-01
+
+### Added
+- Modular architecture with feature-based modules
+- Module Router for intelligent coordination
+- Event bus for inter-module communication
+
+### Modules Introduced
+- Soulseek v1.0.0 - Download management
+- Spotify v1.0.0 - Playlist sync with auth submodule
+- Library v1.0.0 - Music library management
+```
+
+**Example: Module Changelog Entry**
+
+```markdown
+# Changelog - Soulseek Module
+
+## [1.1.0] - 2025-12-15
+
+### Added
+- Batch download support
+- BitRate filtering in search
+
+### Fixed
+- Race condition in concurrent downloads
+```
+
+**Why Separate Changelogs?**
+
+1. **Module Independence**: Modules version independently
+2. **Clear Ownership**: Each team maintains their module's changelog
+3. **Release Flexibility**: Modules can release without system-wide release
+4. **Migration Tracking**: Module-specific migration guides
+5. **Modularity**: Extracted modules carry their history
 
 ---
 
