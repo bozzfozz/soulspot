@@ -93,7 +93,7 @@ class SearchAndDownloadTrackUseCase(
 
     # Hey future me: The "best file" selection - this is where the magic happens
     # WHY use_advanced_search? Because "best" means different things:
-    # - Fuzzy matching: "Bohemian Rhapsody" vs "Bohemian Rapsody (2011 Remaster).flac"
+    # - Fuzzy matching: "Bohemian Rhapsody" vs "Bohemian Rhapsody (2011 Remaster).flac"
     # - Quality: 320kbps MP3 vs 1411kbps FLAC vs 128kbps MP3
     # - Exclusions: Not live, not remix, not karaoke versions
     # GOTCHA: If advanced search returns nothing, we fall back to legacy logic (simpler but dumber)

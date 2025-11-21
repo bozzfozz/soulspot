@@ -18,8 +18,8 @@ class NotificationService:
     - In-app notifications
     """
 
-# Already has a drunk note - skipping this one to avoid duplication!
-# Hey future me, this is a STUB implementation! Right now we just log notifications. TODO:
+    # Hey future me, this is a STUB implementation! Right now we just log notifications.
+    # TODO: Integrate with real notification provider (email, push, SMS, Slack, etc.)
     def __init__(self) -> None:
         """Initialize notification service.
 
