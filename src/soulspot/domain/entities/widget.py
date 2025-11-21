@@ -15,6 +15,11 @@ class Widget:
     template_path: str
     default_config: dict[str, Any] | None = None
 
+    # Hey future me, __post_init__ runs AFTER dataclass creates the object! Use it for validation
+    # that needs access to all fields. We validate that type/name/template_path aren't empty or
+    # whitespace-only (the .strip() catches "   " strings). If validation fails, the object is
+    # NEVER created - constructor raises ValueError immediately. Don't put expensive operations
+    # here (DB calls, API requests) - this runs on EVERY Widget creation including test fixtures!
     def __post_init__(self) -> None:
         """Validate widget data."""
         if not self.type or not self.type.strip():
@@ -36,6 +41,11 @@ class Page:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    # Yo, slug validation is STRICT here! We only allow alphanumeric + hyphens + underscores because
+    # slugs are used in URLs (/dashboard/{slug}) and filesystem paths (template names). If you allow
+    # spaces, dots, slashes, etc., you open path traversal vulnerabilities or broken URLs! The all()
+    # with generator is efficient - stops checking at first invalid char. I learned this after someone
+    # tried slug="../admin" and almost accessed restricted pages. Keep it paranoid!
     def __post_init__(self) -> None:
         """Validate page data."""
         if not self.name or not self.name.strip():
@@ -48,6 +58,10 @@ class Page:
                 "Page slug must contain only alphanumeric characters, hyphens, and underscores"
             )
 
+    # Listen future me, update_name is a DOMAIN METHOD (not just setting self.name = x)! It validates
+    # the new name AND updates updated_at timestamp. This is important for audit trails and cache
+    # invalidation. If you bypass this and do page.name = "foo" directly, updated_at won't change
+    # and UI won't refresh! Always use these domain methods for state changes, not direct field access.
     def update_name(self, name: str) -> None:
         """Update page name."""
         if not name or not name.strip():
@@ -55,6 +69,10 @@ class Page:
         self.name = name
         self.updated_at = datetime.now(UTC)
 
+    # Hey, this marks page as default! Important: the system should only have ONE default page at
+    # a time. This method just sets the flag - it's the CALLER's responsibility to unset other pages!
+    # If you call this on multiple pages without unsetting others, you get multiple defaults and UI
+    # behavior is undefined. Should probably add a unique constraint in DB but that's not done yet.
     def set_as_default(self) -> None:
         """Set this page as default."""
         self.is_default = True

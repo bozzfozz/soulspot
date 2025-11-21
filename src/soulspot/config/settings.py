@@ -135,6 +135,11 @@ class LastfmSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="LASTFM_")
 
+    # Hey future me, this checks if Last.fm is actually configured or just using placeholder values.
+    # We need BOTH api_key AND api_secret to be non-empty (after stripping whitespace). If either
+    # is missing/empty, Last.fm features should be disabled gracefully. The bool() wrapper isn't
+    # strictly needed (the and chain returns truthy/falsy) but makes intent clearer. Use this in
+    # conditional feature enabling - don't try Last.fm API calls if this returns False!
     def is_configured(self) -> bool:
         """Check if Last.fm credentials are configured.
 
@@ -169,6 +174,12 @@ class StorageSettings(BaseSettings):
         description="Directory for temporary files",
     )
 
+    # Yo, this Pydantic validator runs AUTOMATICALLY on field assignment! @field_validator decorator
+    # marks it as validator for ALL four path fields. The @classmethod is REQUIRED (Pydantic needs
+    # it). v.resolve() converts relative paths to absolute (e.g., "./downloads" becomes
+    # "/home/user/app/downloads"). This prevents bugs where relative paths break when working
+    # directory changes! Without this, Path("./music") might point to /tmp/music when running
+    # tests but /app/music in production. ALWAYS use absolute paths for file operations!
     @field_validator("download_path", "music_path", "artwork_path", "temp_path")
     @classmethod
     def ensure_path_is_absolute(cls, v: Path) -> Path:
