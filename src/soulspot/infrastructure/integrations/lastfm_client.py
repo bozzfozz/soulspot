@@ -14,6 +14,8 @@ class LastfmClient(ILastfmClient):
 
     API_BASE_URL = "https://ws.audioscrobbler.com/2.0/"
 
+    # Hey future me, Last.fm client is simple compared to MusicBrainz - no crazy rate limits!
+    # Just store the settings and lazy-load the HTTP client. Easy peasy.
     def __init__(self, settings: LastfmSettings) -> None:
         """
         Initialize Last.fm client.
@@ -24,6 +26,8 @@ class LastfmClient(ILastfmClient):
         self.settings = settings
         self._client: httpx.AsyncClient | None = None
 
+    # Listen up, Last.fm is chill - no special headers required, 30s timeout is plenty.
+    # Their API is pretty fast and reliable. No drama here!
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
@@ -33,12 +37,20 @@ class LastfmClient(ILastfmClient):
             )
         return self._client
 
+    # Hey, cleanup - you know the drill by now!
     async def close(self) -> None:
         """Close HTTP client."""
         if self._client is not None:
             await self._client.aclose()
             self._client = None
 
+    # Yo future me, Last.fm API signatures are WEIRD. They use MD5 (yeah, in 2024!) but it's
+    # NOT for security - just for verifying request integrity. The # nosec comment tells Bandit
+    # "chill, we know MD5 is broken for crypto, but that's not what this is". The signature
+    # dance: 1) Sort params alphabetically 2) Concatenate key+value pairs 3) Append secret
+    # 4) MD5 hash it. If you mess up the order or forget the secret, auth fails. Don't log
+    # the signature or secret - that would defeat the purpose! Also, usedforsecurity=False
+    # is REQUIRED in Python 3.9+ for FIPS compliance.
     def _sign_request(self, params: dict[str, str]) -> str:
         """
         Create API signature for authenticated requests.
@@ -59,6 +71,12 @@ class LastfmClient(ILastfmClient):
             sig_string.encode("utf-8"), usedforsecurity=False
         ).hexdigest()
 
+    # Hey future me, Last.fm API is quirky. The actual endpoint is empty string ""! All
+    # methods go in the "method" param (like "track.getInfo"). They return JSON but ALSO
+    # include an "error" field in the response if something's wrong - that's different from
+    # HTTP status codes! So you need to check BOTH response.status_code AND data["error"].
+    # Returning None for errors makes consuming code simpler - "not found" is just None,
+    # not an exception. But real HTTP errors (500, timeouts) still raise. Makes sense?
     async def _make_request(
         self, method: str, params: dict[str, Any], auth_required: bool = False
     ) -> dict[str, Any] | None:
@@ -103,6 +121,11 @@ class LastfmClient(ILastfmClient):
                 return None
             raise
 
+    # Listen future me, Last.fm's track data is AMAZING for tags (genres, moods, etc.) and
+    # listener stats. BUT their matching is fuzzy - if artist/track names don't match exactly,
+    # you get None. Using MBID (MusicBrainz ID) is WAY more reliable if you have it! MBID
+    # lookup bypasses the fuzzy name matching. Always prefer MBID when available. The response
+    # has tons of useful data: tags, play counts, similar tracks, even wiki descriptions.
     async def get_track_info(
         self, artist: str, track: str, mbid: str | None = None
     ) -> dict[str, Any] | None:
@@ -128,6 +151,10 @@ class LastfmClient(ILastfmClient):
         response = await self._make_request("track.getInfo", params)
         return response.get("track") if response else None
 
+    # Yo, artist info from Last.fm includes bio, tags, similar artists, and stats. The bio
+    # can be LONG (full Wikipedia-style text). Tags are community-voted like MB but generally
+    # better quality because Last.fm has more active users. Same MBID vs name matching advice
+    # applies - MBID is king if you have it!
     async def get_artist_info(
         self, artist: str, mbid: str | None = None
     ) -> dict[str, Any] | None:
@@ -151,6 +178,9 @@ class LastfmClient(ILastfmClient):
         response = await self._make_request("artist.getInfo", params)
         return response.get("artist") if response else None
 
+    # Hey future me, album info includes tags, track list (sometimes), and wiki. But Last.fm's
+    # album database is... patchy. Major albums are well-covered, but indie/obscure releases
+    # might be missing or have incomplete data. Again, MBID >> name matching for reliability.
     async def get_album_info(
         self, artist: str, album: str, mbid: str | None = None
     ) -> dict[str, Any] | None:
@@ -176,6 +206,7 @@ class LastfmClient(ILastfmClient):
         response = await self._make_request("album.getInfo", params)
         return response.get("album") if response else None
 
+    # Hey, context manager for proper cleanup. Use it!
     async def __aenter__(self) -> "LastfmClient":
         """Async context manager entry."""
         return self

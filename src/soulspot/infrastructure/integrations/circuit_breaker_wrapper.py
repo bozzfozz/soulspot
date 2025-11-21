@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 class CircuitBreakerSlskdClient(ISlskdClient):
     """slskd client with circuit breaker protection."""
 
+    # Hey future me, this is a DECORATOR PATTERN wrapper around the real slskd client. The
+    # circuit breaker protects us from hammering a dead/slow slskd service. If slskd goes down
+    # or starts timing out, the breaker "opens" and fails fast instead of waiting 30s per request.
+    # The config values (failure_threshold, etc.) come from settings - tweak those in .env if
+    # you're getting too many false opens or not opening fast enough when things actually fail.
     def __init__(self, client: ISlskdClient, settings: Settings) -> None:
         """
         Initialize circuit breaker wrapper for slskd client.
@@ -35,6 +40,11 @@ class CircuitBreakerSlskdClient(ISlskdClient):
             ),
         )
 
+    # Listen up, all these wrapper methods follow the same pattern: call the real client
+    # through the circuit breaker. If the breaker is OPEN (too many recent failures), it
+    # raises CircuitBreakerOpenError immediately without even trying the request. This is
+    # GOOD - fail fast, don't waste time! The cast() is for type checking - the breaker
+    # returns Any but we know what type it actually is. This pattern repeats for every method.
     async def search(self, query: str, timeout: int = 30) -> list[dict[str, Any]]:
         """Search for files on the Soulseek network."""
         result = await self._circuit_breaker.call(

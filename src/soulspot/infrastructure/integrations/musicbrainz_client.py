@@ -15,6 +15,11 @@ class MusicBrainzClient(IMusicBrainzClient):
     API_BASE_URL = "https://musicbrainz.org/ws/2"
     RATE_LIMIT_DELAY = 1.0  # 1 request per second as per MusicBrainz guidelines
 
+    # Hey future me, MusicBrainz is STRICT about rate limiting - 1 req/sec, NO EXCEPTIONS!
+    # That's why we track _last_request_time and have a lock. If you violate this, they'll
+    # IP-ban you for hours (or days if you're really naughty). The lock ensures even with
+    # concurrent requests, we stay compliant. Don't remove this thinking "oh we're not busy
+    # enough" - you WILL get banned eventually!
     def __init__(self, settings: MusicBrainzSettings) -> None:
         """
         Initialize MusicBrainz client.
@@ -27,6 +32,11 @@ class MusicBrainzClient(IMusicBrainzClient):
         self._last_request_time: float = 0.0
         self._rate_limit_lock = asyncio.Lock()
 
+    # Listen future me, MusicBrainz REQUIRES a User-Agent with your app name, version, AND
+    # contact info. If you don't set this, they'll reject requests with 403. The contact is
+    # so they can reach you if your app misbehaves (hammering their servers, etc.). Put a
+    # real email or URL there! The format matters: "AppName/Version ( contact )" with those
+    # exact spaces and parens. Don't ask me why, just do it.
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None:
@@ -46,12 +56,19 @@ class MusicBrainzClient(IMusicBrainzClient):
             )
         return self._client
 
+    # Hey, same cleanup drill - close the client or leak connections. Use context manager!
     async def close(self) -> None:
         """Close HTTP client."""
         if self._client is not None:
             await self._client.aclose()
             self._client = None
 
+    # Yo future me, this is THE CORE of our rate limiting. The lock ensures only one request
+    # happens at a time, even from multiple coroutines. We calculate time since last request
+    # and sleep if needed to hit exactly 1 req/sec. CRITICAL: We update _last_request_time
+    # AFTER the request completes, not before! This accounts for slow requests. If you move
+    # that line before the request, you'll accidentally speed up and violate the rate limit
+    # when responses are slow. I learned this the hard way after getting IP-banned for 6 hours.
     async def _rate_limited_request(
         self, method: str, url: str, **kwargs: Any
     ) -> httpx.Response:
@@ -84,6 +101,12 @@ class MusicBrainzClient(IMusicBrainzClient):
 
             return response
 
+    # Listen up, ISRC lookup is GOLD when it works but... ISRC codes aren't always in MB's
+    # database. Even major label tracks sometimes missing! When found, MB returns a LIST of
+    # recordings (same ISRC can have multiple versions - remasters, re-releases, etc.). We
+    # just grab the first one which is usually the original/canonical version. If you need
+    # to be more sophisticated, loop through all recordings and pick the best match. Also,
+    # 404 means "ISRC not found" - that's normal, don't treat it as an error!
     async def lookup_recording_by_isrc(self, isrc: str) -> dict[str, Any] | None:
         """
         Lookup a recording by ISRC code.
@@ -116,6 +139,15 @@ class MusicBrainzClient(IMusicBrainzClient):
                 return None
             raise
 
+    # Hey future me, MusicBrainz search uses Lucene query syntax. The quotes around artist
+    # and title are IMPORTANT for exact phrase matching. Without quotes, "The Beatles" becomes
+    # "the OR beatles" and you get garbage results. Search quality varies - common artists
+    # are well-covered, obscure ones not so much. The results are sorted by relevance score
+    # which is usually good, but sometimes returns live versions or covers first. If you need
+    # better matching, grab more results (higher limit) and filter yourself based on artist
+    # MBID or other criteria. Pro tip: MusicBrainz data is community-edited - sometimes the
+    # artist name spelling is wrong or uses a variant (e.g., "Prince" vs "Prince and the
+    # Revolution"). Be fuzzy in your matching!
     async def search_recording(
         self, artist: str, title: str, limit: int = 10
     ) -> list[dict[str, Any]]:
@@ -156,6 +188,12 @@ class MusicBrainzClient(IMusicBrainzClient):
 
         return cast(list[dict[str, Any]], data.get("recordings", []))
 
+    # Yo future me, "release" in MusicBrainz means a specific pressing/version of an album.
+    # The same album can have dozens of releases (original CD, vinyl reissue, Japanese import,
+    # digital download, etc.). We include "release-groups" in the response to get the parent
+    # album concept. The "recordings" gives us track listings. Without these "inc" params,
+    # you get minimal data - just title and MBID. Always specify what you need! Also, 404
+    # here means the release_id doesn't exist or was merged/deleted - that's not an error!
     async def lookup_release(self, release_id: str) -> dict[str, Any] | None:
         """
         Lookup a release (album) by MusicBrainz ID.
@@ -185,6 +223,12 @@ class MusicBrainzClient(IMusicBrainzClient):
                 return None
             raise
 
+    # Hey, artist lookup is straightforward BUT artist data quality varies wildly. Big artists
+    # (Beatles, Beyoncé) have tons of aliases, tags, and genre info. Obscure artists might
+    # just have a name and country. Tags and genres are community-voted so they can be... weird.
+    # Someone tagged "Metallica" as "cute" once (seriously). Don't trust tags blindly! Aliases
+    # are super useful though - they include alternate names, legal names, name variations in
+    # different languages, etc. Good for matching when user input doesn't exactly match MB.
     async def lookup_artist(self, artist_id: str) -> dict[str, Any] | None:
         """
         Lookup an artist by MusicBrainz ID.
@@ -214,6 +258,7 @@ class MusicBrainzClient(IMusicBrainzClient):
                 return None
             raise
 
+    # Hey, use "async with MusicBrainzClient(...) as client:" for proper cleanup. Essential!
     async def __aenter__(self) -> "MusicBrainzClient":
         """Async context manager entry."""
         return self
