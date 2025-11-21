@@ -293,7 +293,7 @@ class LibraryScannerService:
             title=metadata.get("title"),
             artist=metadata.get("artist"),
             album=metadata.get("album"),
-        }
+        )
 
     # Yo duplicate detection - groups files by hash value
     # WHY by hash? Two files with same hash = byte-identical = definite duplicate

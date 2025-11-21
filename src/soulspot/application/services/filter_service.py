@@ -72,7 +72,7 @@ class FilterService:
         return filter_rule
 
     # Hey simple getter - fetches filter by ID from repository
-    # type: ignore comment because repository might return None but type system gets confused
+    # The type-ignore annotation below is needed because repository might return None but type system gets confused
     async def get_filter(self, filter_id: FilterRuleId) -> FilterRule | None:
         """Get filter rule by ID."""
         return await self.repository.get_by_id(filter_id)  # type: ignore[no-any-return]
