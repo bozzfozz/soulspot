@@ -186,6 +186,17 @@ async def playlist_missing_tracks(
         )
 
 
+# Hey this just renders a static template - no DB lookups! The actual import logic happens via
+# API POST to /playlists/import endpoint (different router). This is just the UI form page.
+# IMPORTANT: This route MUST come before /playlists/{playlist_id} to avoid route conflicts!
+# FastAPI matches routes in order, so specific paths like /import must be defined before
+# parametric paths like /{playlist_id} to prevent "import" being treated as a playlist ID.
+@router.get("/playlists/import", response_class=HTMLResponse)
+async def import_playlist(request: Request) -> Any:
+    """Import playlist page."""
+    return templates.TemplateResponse("import_playlist.html", {"request": request})
+
+
 # Listen, this renders the full playlist detail page with ALL tracks! Does N queries in a loop
 # (one per track_id) which is SLOW for big playlists. Should batch fetch tracks in one query.
 # The type: ignore comments are for accessing Track.artist/album which are relationships not
@@ -265,14 +276,6 @@ async def playlist_detail(
             },
             status_code=400,
         )
-
-
-# Hey this just renders a static template - no DB lookups! The actual import logic happens via
-# API POST to /playlists/import endpoint (different router). This is just the UI form page.
-@router.get("/playlists/import", response_class=HTMLResponse)
-async def import_playlist(request: Request) -> Any:
-    """Import playlist page."""
-    return templates.TemplateResponse("import_playlist.html", {"request": request})
 
 
 # Yo, downloads page fetches ALL active downloads! list_active() might return thousands of downloads
