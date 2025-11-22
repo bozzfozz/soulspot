@@ -216,35 +216,57 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 # Hey future me, this validates SQLite paths BEFORE we try creating DB engine! It ensures parent
-# directories exist and the .db file is writable. Call this during startup, NOT during request
-# handling (too slow). If validation fails, app won't start - better than cryptic SQLAlchemy
-# errors later. Only runs for SQLite URLs (returns early for PostgreSQL). The try/except blocks
-# catch filesystem permission errors and convert them to clear RuntimeError messages instead of
-# letting obscure OSError bubble up to logs!
+# directories exist and are writable for both the database file and temporary files. SQLite needs
+# to create temp files (-journal, -wal, -shm) in the same directory as the .db file, so we validate
+# directory write permissions thoroughly. We DON'T pre-create the .db file here - let SQLite handle
+# that to avoid corrupting an empty file! Call this during startup, NOT during request handling
+# (too slow). If validation fails, app won't start - better than cryptic SQLAlchemy errors later.
+# Only runs for SQLite URLs (returns early for PostgreSQL). The try/except blocks catch filesystem
+# permission errors and convert them to clear RuntimeError messages!
 def _validate_sqlite_path(settings: Settings) -> None:
-    """Validate SQLite database path accessibility before engine creation."""
+    """Validate SQLite database path accessibility before engine creation.
+    
+    This function ensures:
+    1. Parent directory exists and is writable
+    2. Directory allows creating database and temporary files (journal, WAL, etc.)
+    
+    Note: We don't pre-create the database file to avoid initialization issues.
+    SQLite will create and initialize the file properly on first connection.
+    """
 
     db_path = settings._get_sqlite_db_path()
     if db_path is None:
         return
 
+    # Ensure parent directory exists
     try:
         if db_path.parent and str(db_path.parent) != ".":
             db_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.debug(
+                "Ensured SQLite parent directory exists: %s", db_path.parent
+            )
     except Exception as exc:  # pragma: no cover - safety log
         raise RuntimeError(
-            "Unable to create SQLite database directory "
-            f"'{db_path.parent}': {exc}. "
+            f"Unable to create SQLite database directory '{db_path.parent}': {exc}. "
+            "Ensure the directory path is valid and has write permissions. "
             "Update DATABASE_URL or adjust directory permissions."
         ) from exc
 
+    # Verify directory write permissions by creating a test file
+    # This ensures both the database file and temporary files can be created
     try:
-        with db_path.open("a+"):
-            pass
+        test_file = db_path.parent / f".{db_path.stem}_write_test"
+        test_file.write_bytes(b"test")
+        test_file.unlink()
+        logger.debug(
+            "Verified directory write permissions for SQLite files: %s",
+            db_path.parent,
+        )
     except Exception as exc:  # pragma: no cover - safety log
         raise RuntimeError(
-            "Unable to access SQLite database file "
-            f"'{db_path}': {exc}. "
+            f"Unable to write files in database directory '{db_path.parent}': {exc}. "
+            "SQLite requires write permissions to create database and journal files. "
+            "Ensure the directory is fully writable. "
             "Update DATABASE_URL or adjust directory permissions."
         ) from exc
 
@@ -286,7 +308,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Storage directories initialized")
 
         # Validate SQLite path before initializing database engine
-        _validate_sqlite_path(settings)
+        try:
+            _validate_sqlite_path(settings)
+            logger.info("SQLite path validation completed successfully")
+        except RuntimeError as e:
+            logger.error("SQLite path validation failed: %s", e)
+            raise
 
         # Initialize database
         db = Database(settings)
@@ -298,10 +325,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             initialize_widget_registry,
         )
 
-        async for session in db.get_session():
-            await initialize_widget_registry(session)
-            break
-        logger.info("Widget registry initialized")
+        try:
+            async for session in db.get_session():
+                await initialize_widget_registry(session)
+                break
+            logger.info("Widget registry initialized")
+        except Exception as e:
+            logger.error(
+                "Failed to initialize widget registry: %s. "
+                "This may indicate database tables are missing. "
+                "Run 'alembic upgrade head' to create database schema.",
+                e,
+            )
+            raise
 
         # Initialize job queue with configured max concurrent downloads
         from soulspot.application.workers.download_worker import DownloadWorker
