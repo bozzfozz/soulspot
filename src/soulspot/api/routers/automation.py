@@ -1198,8 +1198,6 @@ async def sync_followed_artists(
 
         if is_htmx:
             # Return HTML partial for HTMX
-            from fastapi.responses import HTMLResponse
-
             artists_data = [
                 {
                     "id": str(artist.id.value),
