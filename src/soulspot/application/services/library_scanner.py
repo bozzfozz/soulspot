@@ -110,8 +110,7 @@ class LibraryScannerService:
                         # Log but don't stop scanning if individual file validation fails
                         # Don't include full path in log to avoid information disclosure
                         logger.warning(
-                            "Skipping file due to validation failure in %s. "
-                            "Reason: %s",
+                            "Skipping file due to validation failure in %s. Reason: %s",
                             scan_path_resolved.name,
                             str(e),
                         )

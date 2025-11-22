@@ -92,7 +92,9 @@ class TestWatchlistWorker:
     @pytest.mark.asyncio
     async def test_check_watchlists_no_watchlists(self, worker):
         """Test checking watchlists when none are due."""
-        with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
+        with patch.object(
+            worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
+        ) as mock_list:
             mock_list.return_value = []
 
             await worker._check_watchlists()
@@ -100,7 +102,9 @@ class TestWatchlistWorker:
             mock_list.assert_called_once_with(limit=100)
 
     @pytest.mark.asyncio
-    async def test_check_watchlists_with_watchlists_no_spotify(self, worker, mock_session):
+    async def test_check_watchlists_with_watchlists_no_spotify(
+        self, worker, mock_session
+    ):
         """Test checking watchlists without Spotify client."""
         # Create mock watchlist
         mock_watchlist = MagicMock()
@@ -113,22 +117,27 @@ class TestWatchlistWorker:
         # Set no spotify client
         worker.spotify_client = None
 
-        with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
+        with patch.object(
+            worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
+        ) as mock_list:
             mock_list.return_value = [mock_watchlist]
 
-            with patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock) as mock_update:
+            with patch.object(
+                worker.watchlist_service.repository, "update", new_callable=AsyncMock
+            ) as mock_update:
                 await worker._check_watchlists()
 
                 # Should update watchlist with 0 releases
                 mock_watchlist.update_check.assert_called_once_with(
-                    releases_found=0,
-                    downloads_triggered=0
+                    releases_found=0, downloads_triggered=0
                 )
                 mock_update.assert_called_once_with(mock_watchlist)
                 mock_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_check_watchlists_with_auto_download(self, worker, mock_session, mock_spotify_client):
+    async def test_check_watchlists_with_auto_download(
+        self, worker, mock_session, mock_spotify_client
+    ):
         """Test checking watchlists with auto_download enabled."""
         # Create mock watchlist with auto_download enabled
         mock_watchlist = MagicMock()
@@ -140,23 +149,32 @@ class TestWatchlistWorker:
         mock_watchlist.quality_profile = "high"
         mock_watchlist.update_check = MagicMock()
 
-        with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
+        with (
+            patch.object(
+                worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
+            ) as mock_list,
+            patch.object(
+                worker.workflow_service, "trigger_workflow", new_callable=AsyncMock
+            ) as mock_trigger,
+            patch.object(
+                worker.watchlist_service.repository, "update", new_callable=AsyncMock
+            ),
+        ):
             mock_list.return_value = [mock_watchlist]
+            await worker._check_watchlists()
 
-            with patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger:
-                with patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock):
-                    await worker._check_watchlists()
-
-                    # Should trigger workflow
-                    mock_trigger.assert_called_once()
-                    call_args = mock_trigger.call_args
-                    assert call_args[1]["trigger"] == AutomationTrigger.NEW_RELEASE
-                    assert "artist_id" in call_args[1]["context"]
+            # Should trigger workflow
+            mock_trigger.assert_called_once()
+            call_args = mock_trigger.call_args
+            assert call_args[1]["trigger"] == AutomationTrigger.NEW_RELEASE
+            assert "artist_id" in call_args[1]["context"]
 
     @pytest.mark.asyncio
     async def test_check_watchlists_error_handling(self, worker):
         """Test error handling in watchlist checking."""
-        with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
+        with patch.object(
+            worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
+        ) as mock_list:
             mock_list.side_effect = Exception("Test error")
 
             # Should not raise exception
@@ -177,7 +195,9 @@ class TestWatchlistWorker:
             {"id": "release-2", "name": "Album 2"},
         ]
 
-        with patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger:
+        with patch.object(
+            worker.workflow_service, "trigger_workflow", new_callable=AsyncMock
+        ) as mock_trigger:
             await worker._trigger_automation(mock_watchlist, new_releases)
 
             # Should trigger workflow for each release
@@ -251,7 +271,9 @@ class TestDiscographyWorker:
     @pytest.mark.asyncio
     async def test_check_discographies_error_handling(self, worker):
         """Test error handling in discography checking."""
-        with patch("soulspot.infrastructure.persistence.repositories.ArtistWatchlistRepository") as MockRepo:
+        with patch(
+            "soulspot.infrastructure.persistence.repositories.ArtistWatchlistRepository"
+        ) as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_active = AsyncMock(side_effect=Exception("Test error"))
 
@@ -319,7 +341,9 @@ class TestQualityUpgradeWorker:
     @pytest.mark.asyncio
     async def test_identify_upgrades_no_tracks(self, worker):
         """Test identifying upgrades when no tracks exist."""
-        with patch("soulspot.infrastructure.persistence.repositories.TrackRepository") as MockRepo:
+        with patch(
+            "soulspot.infrastructure.persistence.repositories.TrackRepository"
+        ) as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_all = AsyncMock(return_value=[])
 
@@ -329,7 +353,9 @@ class TestQualityUpgradeWorker:
     @pytest.mark.asyncio
     async def test_identify_upgrades_error_handling(self, worker):
         """Test error handling in upgrade identification."""
-        with patch("soulspot.infrastructure.persistence.repositories.TrackRepository") as MockRepo:
+        with patch(
+            "soulspot.infrastructure.persistence.repositories.TrackRepository"
+        ) as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_all = AsyncMock(side_effect=Exception("Test error"))
 
@@ -344,6 +370,7 @@ class TestQualityUpgradeWorker:
 
         # Mock check method to set _running to False after first call
         call_count = 0
+
         async def mock_check():
             nonlocal call_count
             call_count += 1

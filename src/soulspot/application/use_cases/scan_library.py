@@ -120,7 +120,9 @@ class ScanLibraryUseCase:
             scan_model.total_files = scan.total_files
             await self.session.commit()
 
-            logger.info(f"Found {len(audio_files)} audio files in {scan_path_validated}")
+            logger.info(
+                f"Found {len(audio_files)} audio files in {scan_path_validated}"
+            )
 
             # Scan each file
             file_infos: list[FileInfo] = []

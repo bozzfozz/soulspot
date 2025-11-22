@@ -45,7 +45,9 @@ class EnrichMetadataMultiSourceResponse:
     enriched_fields: list[str]
     sources_used: list[str]
     errors: list[str]
-    conflicts: dict[str, dict[str, Any]] = field(default_factory=dict)  # Hey - field -> {source: value} conflicts!
+    conflicts: dict[str, dict[str, Any]] = field(
+        default_factory=dict
+    )  # Hey - field -> {source: value} conflicts!
 
 
 class EnrichMetadataMultiSourceUseCase(
@@ -240,8 +242,7 @@ class EnrichMetadataMultiSourceUseCase(
             # Hey - convert MetadataSource enum to string for API serialization
             for field_name, conflicts_by_source in detected_conflicts.items():
                 track_conflicts[field_name] = {
-                    source.value: value
-                    for source, value in conflicts_by_source.items()
+                    source.value: value for source, value in conflicts_by_source.items()
                 }
 
             await self._track_repository.update(track)

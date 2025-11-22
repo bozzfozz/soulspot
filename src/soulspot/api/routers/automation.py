@@ -24,6 +24,7 @@ router = APIRouter(prefix="/automation", tags=["automation"])
 # in domain/entities. This keeps API concerns separate from business logic. Use Field() for validation
 # and OpenAPI docs - those descriptions show up in Swagger UI!
 
+
 class CreateWatchlistRequest(BaseModel):
     """Request to create an artist watchlist."""
 
@@ -467,6 +468,7 @@ async def get_unprocessed_upgrades(
 # filter evaluation order - higher priority runs first. This is powerful but complex - wrong filter can block
 # everything or let junk through! Test carefully in dev before deploying filter changes!
 
+
 class CreateFilterRequest(BaseModel):
     """Request to create a filter rule."""
 
@@ -803,6 +805,7 @@ async def delete_filter(
 # executing. auto_process=true means rule executes automatically without human approval. These defaults (priority=0,
 # quality_profile="high", apply_filters=true, auto_process=true) create fully automated rules - might want
 # manual approval for some use cases!
+
 
 class CreateAutomationRuleRequest(BaseModel):
     """Request to create an automation rule."""

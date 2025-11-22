@@ -223,7 +223,9 @@ class TestWidgetRegistry:
 
             # Check that info was logged
             assert mock_logger.info.call_count == 2
-            assert "Initializing widget registry" in str(mock_logger.info.call_args_list)
+            assert "Initializing widget registry" in str(
+                mock_logger.info.call_args_list
+            )
             assert "Widget registry initialized" in str(mock_logger.info.call_args_list)
 
             # Check that debug was logged for each widget

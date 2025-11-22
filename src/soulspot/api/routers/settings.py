@@ -16,6 +16,7 @@ router = APIRouter()
 # to implement a config update mechanism with validation and app reload/restart. These schemas are also used
 # for validation if you ever add PUT/PATCH endpoints to update settings at runtime.
 
+
 class GeneralSettings(BaseModel):
     """General application settings."""
 

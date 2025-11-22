@@ -80,11 +80,14 @@ class TestRequestLoggingMiddleware:
 
     def test_request_with_correlation_id_header(self, client: TestClient):
         """Test request with X-Correlation-ID header."""
-        with patch(
-            "soulspot.infrastructure.observability.middleware.set_correlation_id"
-        ) as mock_set_correlation_id, patch(
-            "soulspot.infrastructure.observability.middleware.get_correlation_id",
-            return_value="test-correlation-id",
+        with (
+            patch(
+                "soulspot.infrastructure.observability.middleware.set_correlation_id"
+            ) as mock_set_correlation_id,
+            patch(
+                "soulspot.infrastructure.observability.middleware.get_correlation_id",
+                return_value="test-correlation-id",
+            ),
         ):
             response = client.get(
                 "/test", headers={"X-Correlation-ID": "custom-correlation-id"}
@@ -101,11 +104,14 @@ class TestRequestLoggingMiddleware:
 
     def test_request_without_correlation_id_header(self, client: TestClient):
         """Test request without X-Correlation-ID header generates one."""
-        with patch(
-            "soulspot.infrastructure.observability.middleware.set_correlation_id"
-        ) as mock_set_correlation_id, patch(
-            "soulspot.infrastructure.observability.middleware.get_correlation_id",
-            return_value="generated-correlation-id",
+        with (
+            patch(
+                "soulspot.infrastructure.observability.middleware.set_correlation_id"
+            ) as mock_set_correlation_id,
+            patch(
+                "soulspot.infrastructure.observability.middleware.get_correlation_id",
+                return_value="generated-correlation-id",
+            ),
         ):
             response = client.get("/test")
 

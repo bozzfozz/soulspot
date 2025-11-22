@@ -322,7 +322,9 @@ class TrackRepository(ITrackRepository):
         # Hey - extract primary genre from genres list for DB storage!
         # Takes first genre if available, else None. DB stores single genre for filtering.
         # Check both that list exists AND is not empty before accessing [0]
-        primary_genre = track.genres[0] if (track.genres and len(track.genres) > 0) else None
+        primary_genre = (
+            track.genres[0] if (track.genres and len(track.genres) > 0) else None
+        )
 
         model = TrackModel(
             id=str(track.id.value),
@@ -353,7 +355,9 @@ class TrackRepository(ITrackRepository):
 
         # Hey - update genre from entity's genres list (primary genre only)
         # Check both that list exists AND is not empty before accessing [0]
-        primary_genre = track.genres[0] if (track.genres and len(track.genres) > 0) else None
+        primary_genre = (
+            track.genres[0] if (track.genres and len(track.genres) > 0) else None
+        )
 
         model.title = track.title
         model.artist_id = str(track.artist_id.value)
@@ -400,7 +404,9 @@ class TrackRepository(ITrackRepository):
             file_path=FilePath.from_string(model.file_path)
             if model.file_path
             else None,
-            genres=[model.genre] if model.genre else [],  # Hey - convert single genre back to list!
+            genres=[model.genre]
+            if model.genre
+            else [],  # Hey - convert single genre back to list!
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

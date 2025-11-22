@@ -25,6 +25,7 @@ router = APIRouter()
 # queue order. BatchActionRequest is for bulk operations (cancel/pause/resume multiple downloads at once).
 # Keep these simple - complex business logic belongs in domain entities or use cases, not API schemas!
 
+
 class PauseResumeResponse(BaseModel):
     """Response model for pause/resume operations."""
 
@@ -311,9 +312,7 @@ async def get_download_status(
         "source_url": download.source_url,
         "target_path": str(download.target_path) if download.target_path else None,
         "error_message": download.error_message,
-        "started_at": download.started_at.isoformat()
-        if download.started_at
-        else None,
+        "started_at": download.started_at.isoformat() if download.started_at else None,
         "completed_at": download.completed_at.isoformat()
         if download.completed_at
         else None,

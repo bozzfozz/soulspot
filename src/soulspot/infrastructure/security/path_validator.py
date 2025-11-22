@@ -178,9 +178,7 @@ class PathValidator:
         )
 
         # Then validate it's an audio file
-        PathValidator.validate_file_extension(
-            validated_path, ALLOWED_AUDIO_EXTENSIONS
-        )
+        PathValidator.validate_file_extension(validated_path, ALLOWED_AUDIO_EXTENSIONS)
 
         return validated_path
 
@@ -216,9 +214,7 @@ class PathValidator:
         )
 
         # Then validate it's an image file
-        PathValidator.validate_file_extension(
-            validated_path, ALLOWED_IMAGE_EXTENSIONS
-        )
+        PathValidator.validate_file_extension(validated_path, ALLOWED_IMAGE_EXTENSIONS)
 
         return validated_path
 

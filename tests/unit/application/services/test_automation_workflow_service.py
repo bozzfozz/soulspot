@@ -194,7 +194,9 @@ class TestAutomationWorkflowService:
         """Test successful rule execution."""
         service.repository.get_by_id = AsyncMock(return_value=sample_rule)
         service.repository.update = AsyncMock()
-        service._execute_action = AsyncMock(return_value={"success": True, "data": "test"})
+        service._execute_action = AsyncMock(
+            return_value={"success": True, "data": "test"}
+        )
 
         context = {"track_id": "123"}
         result = await service.execute_rule(sample_rule.id, context)
@@ -253,7 +255,9 @@ class TestAutomationWorkflowService:
         result = await service._execute_action(sample_rule, context)
 
         assert result["success"] is True
-        service._action_search_and_download.assert_called_once_with(sample_rule, context)
+        service._action_search_and_download.assert_called_once_with(
+            sample_rule, context
+        )
 
     @pytest.mark.asyncio
     async def test_execute_action_notify_only(self, service, sample_rule):
@@ -303,7 +307,9 @@ class TestAutomationWorkflowService:
         assert "context" in result
 
     @pytest.mark.asyncio
-    async def test_action_notify_only(self, service, sample_rule, mock_notification_service):
+    async def test_action_notify_only(
+        self, service, sample_rule, mock_notification_service
+    ):
         """Test notify only action."""
         context = {"message": "Test notification"}
 

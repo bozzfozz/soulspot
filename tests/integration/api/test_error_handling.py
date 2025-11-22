@@ -82,7 +82,12 @@ class TestNotFoundErrors:
         """Verify accessing non-existent playlist returns 404."""
         response = await async_client.get("/api/playlists/nonexistent-id-999")
         # Note: Returns 422 because "nonexistent-id-999" is not a valid PlaylistId format (UUID)
-        assert response.status_code in [404, 401, 403, 422]  # Might require auth or be invalid format
+        assert response.status_code in [
+            404,
+            401,
+            403,
+            422,
+        ]  # Might require auth or be invalid format
 
     async def test_nonexistent_api_route_returns_404(self, async_client: AsyncClient):
         """Verify non-existent API routes return 404."""

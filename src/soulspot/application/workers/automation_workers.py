@@ -265,7 +265,9 @@ class DiscographyWorker:
                 try:
                     # Skip if auto_download is disabled
                     if not watchlist.auto_download:
-                        logger.debug(f"Skipping artist {watchlist.artist_id} - auto_download disabled")
+                        logger.debug(
+                            f"Skipping artist {watchlist.artist_id} - auto_download disabled"
+                        )
                         continue
 
                     # Hey - need Spotify access token! This is the TODO from above
@@ -273,13 +275,14 @@ class DiscographyWorker:
                     # In production, should get from session/config or refresh automatically
                     access_token = None  # TODO: Get from auth context or config
                     if not access_token:
-                        logger.warning("No Spotify access token available - skipping discography checks")
+                        logger.warning(
+                            "No Spotify access token available - skipping discography checks"
+                        )
                         break  # Skip all checks if no token
 
                     # Check discography using service
                     discography_info = await self.discography_service.check_discography(
-                        artist_id=watchlist.artist_id,
-                        access_token=access_token
+                        artist_id=watchlist.artist_id, access_token=access_token
                     )
 
                     # If missing albums found and auto_download enabled, trigger automation
@@ -297,11 +300,13 @@ class DiscographyWorker:
                                 "artist_id": str(watchlist.artist_id.value),
                                 "missing_albums": discography_info.missing_albums,
                                 "quality_profile": watchlist.quality_profile,
-                            }
+                            },
                         )
 
                 except Exception as e:
-                    logger.error(f"Error checking discography for artist {watchlist.artist_id}: {e}")
+                    logger.error(
+                        f"Error checking discography for artist {watchlist.artist_id}: {e}"
+                    )
                     continue  # Continue with next artist on error
 
         except Exception as e:
@@ -395,7 +400,9 @@ class QualityUpgradeWorker:
                 logger.debug("No tracks in library to check for upgrades")
                 return
 
-            logger.info(f"Scanning {len(all_tracks)} tracks for quality upgrade opportunities")
+            logger.info(
+                f"Scanning {len(all_tracks)} tracks for quality upgrade opportunities"
+            )
 
             upgrade_candidates_found = 0
 
@@ -410,12 +417,18 @@ class QualityUpgradeWorker:
                     # This checks bitrate, format, and calculates improvement score
                     # Hey - method will be implemented in QualityUpgradeService later
                     # For now, skip if method doesn't exist yet (graceful degradation)
-                    if not hasattr(self.quality_service, 'identify_upgrade_opportunities'):
-                        logger.debug("Quality upgrade identification not yet implemented - skipping")
+                    if not hasattr(
+                        self.quality_service, "identify_upgrade_opportunities"
+                    ):
+                        logger.debug(
+                            "Quality upgrade identification not yet implemented - skipping"
+                        )
                         continue
 
-                    candidates = await self.quality_service.identify_upgrade_opportunities(
-                        track_id=track.id
+                    candidates = (
+                        await self.quality_service.identify_upgrade_opportunities(
+                            track_id=track.id
+                        )
                     )
 
                     # Process each candidate
@@ -442,7 +455,7 @@ class QualityUpgradeWorker:
                                     "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
                                     "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
                                     "improvement_score": candidate.improvement_score,
-                                }
+                                },
                             )
                             upgrade_candidates_found += 1
 

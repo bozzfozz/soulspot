@@ -335,7 +335,12 @@ async def update_track_metadata(
                 audio.save()
             except Exception as e:
                 # Log error but don't fail the request
-                logger.warning("Failed to update file tags for track %s: %s", track_id, e, exc_info=True)
+                logger.warning(
+                    "Failed to update file tags for track %s: %s",
+                    track_id,
+                    e,
+                    exc_info=True,
+                )
 
         return {
             "message": "Metadata updated successfully",

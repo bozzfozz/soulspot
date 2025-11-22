@@ -32,9 +32,7 @@ class TestPathValidator:
         assert result == base_dir / "track.mp3"
 
         # Test with nested path
-        result = PathValidator.validate_path_within_base(
-            subdir / "track.mp3", base_dir
-        )
+        result = PathValidator.validate_path_within_base(subdir / "track.mp3", base_dir)
         assert result == subdir / "track.mp3"
 
     def test_validate_path_within_base_traversal_attempt(self, tmp_path: Path) -> None:

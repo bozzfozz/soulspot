@@ -31,6 +31,7 @@ router = APIRouter(prefix="/library", tags=["library"])
 # (prevents queueing 1000 broken files and overwhelming slskd). All counts start at 0 and increment as scan
 # progresses. progress_percent is 0-100 calculated from scanned/total.
 
+
 class ScanRequest(BaseModel):
     """Request to start a library scan."""
 

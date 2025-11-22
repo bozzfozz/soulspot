@@ -57,7 +57,9 @@ class MetadataMerger:
 
         # Get winning value
         winning_value = values_by_source.get(winning_source)
-        if winning_value is None or (isinstance(winning_value, str) and not winning_value.strip()):
+        if winning_value is None or (
+            isinstance(winning_value, str) and not winning_value.strip()
+        ):
             return conflicts  # No conflicts if winning value is empty
 
         # Check each source for conflicts
@@ -70,7 +72,9 @@ class MetadataMerger:
                 continue
 
             # Normalize for comparison (case-insensitive for strings)
-            normalized_winning = str(winning_value).strip().lower() if winning_value else ""
+            normalized_winning = (
+                str(winning_value).strip().lower() if winning_value else ""
+            )
             normalized_value = str(value).strip().lower() if value else ""
 
             # If values differ, it's a conflict
@@ -337,7 +341,9 @@ class MetadataMerger:
                 continue  # Skip if no winning source tracked
 
             winning_source = MetadataSource(winning_source_str)
-            conflicts = self._detect_conflicts(field_name, values_by_source, winning_source)
+            conflicts = self._detect_conflicts(
+                field_name, values_by_source, winning_source
+            )
 
             if conflicts:
                 detected_conflicts[field_name] = conflicts

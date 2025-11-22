@@ -90,9 +90,7 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise ValueError(
-                f"File path {file_path} is not in allowed directories"
-            )
+            raise ValueError(f"File path {file_path} is not in allowed directories")
 
         # Use validated path for all subsequent operations
         file_path = validated_path
@@ -293,7 +291,7 @@ class ID3TaggingService:
         """
         return UFID(  # type: ignore[no-untyped-call]
             owner=owner,
-            data=identifier.encode('utf-8'),
+            data=identifier.encode("utf-8"),
         )
 
     # Hey - convenience method to write MusicBrainz IDs to file!
@@ -379,9 +377,7 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise ValueError(
-                f"File path {file_path} is not in allowed directories"
-            )
+            raise ValueError(f"File path {file_path} is not in allowed directories")
 
         # Use validated path
         file_path = validated_path
