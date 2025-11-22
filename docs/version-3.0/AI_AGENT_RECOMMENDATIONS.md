@@ -2,12 +2,15 @@
 
 ## Executive Summary
 
-This document provides research-backed recommendations for AI agents specialized in backend and frontend implementation to ensure 100% complete, error-free code generation for SoulSpot Bridge Version 3.0.
+This document provides research-backed recommendations for AI models and agents specialized in backend and frontend implementation to ensure 100% complete, error-free code generation for SoulSpot Bridge Version 3.0.
+
+> **📝 Note:** This document recommends AI models from [GitHub Copilot's supported models list](https://docs.github.com/en/copilot/reference/ai-models/supported-models) where applicable.
 
 **TL;DR Recommendations:**
-- **Backend**: Cursor IDE (primary) + Aider (code review)
-- **Frontend**: v0.dev by Vercel (UI design) + Claude 3.5 Sonnet (complex logic)
-- **Cost**: ~$50-60/month optimal setup
+- **Backend**: GitHub Copilot with **Claude 3.5 Sonnet** or **GPT-4o** (primary)
+- **Frontend**: GitHub Copilot with **Claude 3.5 Sonnet** (UI/HTMX expertise)
+- **Code Review**: **o1-preview** (architecture validation)
+- **Cost**: GitHub Copilot subscription (~$10-20/month)
 - **ROI**: 1-2 weeks break-even through 50-70% faster development
 
 ---
@@ -52,26 +55,25 @@ When evaluating AI agents for SoulSpot Bridge v3.0, we prioritize:
 
 ## Backend Recommendations
 
-### 🏆 Primary Recommendation: Cursor IDE
+### 🏆 Primary Recommendation: GitHub Copilot with Claude 3.5 Sonnet
 
-**Why Cursor:**
+**Why Claude 3.5 Sonnet:**
 
-Cursor IDE (https://cursor.sh) is specifically designed for AI-assisted development and excels at backend implementation.
+Claude 3.5 Sonnet is one of [GitHub Copilot's supported models](https://docs.github.com/en/copilot/reference/ai-models/supported-models) and excels at Python backend development with strong reasoning capabilities.
 
 **Strengths:**
 - ✅ **100% Completeness**: Generates fully implemented functions, not skeletons
-- ✅ **Multi-file Editing**: Can refactor across entire codebase (critical for Database Module migration)
-- ✅ **Context Awareness**: Understands entire project structure, not just current file
 - ✅ **Python/FastAPI Excellence**: Native support for async patterns, type hints, Pydantic
-- ✅ **Integrated Testing**: Writes pytest tests alongside implementation
+- ✅ **Strong Reasoning**: Excellent at understanding complex architectural patterns
+- ✅ **Context Awareness**: Large context window (200K tokens) understands entire project
 - ✅ **Code Quality**: Generates code that passes ruff, mypy, bandit on first try
-- ✅ **Composer Mode**: Multi-file changes with architectural understanding
-- ✅ **Tab Autocomplete**: Excellent inline suggestions
-- ✅ **Documentation**: Generates comprehensive docstrings with examples
+- ✅ **Testing**: Writes comprehensive pytest tests alongside implementation
+- ✅ **Documentation**: Generates detailed Google-style docstrings with examples
+- ✅ **Integrated**: Works directly in your IDE via GitHub Copilot
 
 **Weaknesses:**
-- ⚠️ **Cost**: $20/month (worth it for quality)
-- ⚠️ **IDE Lock-in**: Must use Cursor IDE (VSCode fork)
+- ⚠️ **Requires GitHub Copilot**: Need GitHub Copilot subscription
+- ⚠️ **Model Selection**: Must explicitly select Claude 3.5 Sonnet in Copilot settings
 
 **Perfect For:**
 - Database Module implementation
@@ -79,6 +81,7 @@ Cursor IDE (https://cursor.sh) is specifically designed for AI-assisted developm
 - OAuth service with complex flow
 - Module refactoring from v2.x
 - API endpoint generation
+- Complex business logic
 
 **Example Prompt:**
 ```
@@ -102,52 +105,68 @@ Implement the DatabaseService class following our architecture:
 - Events published correctly
 - Ready to commit
 
+**How to Use:**
+1. Install GitHub Copilot extension in your IDE (VS Code, JetBrains, etc.)
+2. In Copilot settings, select **Claude 3.5 Sonnet** as your model
+3. Use Copilot Chat for complex implementations
+4. Use inline completions for routine code
+
 ---
 
-### 🥈 Secondary Recommendation: Aider (Code Review & Validation)
+### 🥈 Alternative: GitHub Copilot with GPT-4o
 
-**Why Aider:**
+**Why GPT-4o:**
 
-Aider (https://aider.chat) is a command-line AI coding assistant excellent for architecture validation and refactoring.
+GPT-4o is another excellent [GitHub Copilot supported model](https://docs.github.com/en/copilot/reference/ai-models/supported-models) optimized for speed and efficiency.
+
+**Strengths:**
+- ✅ **Fast**: Faster response times than Claude 3.5 Sonnet
+- ✅ **Good Python Support**: Strong Python and FastAPI knowledge
+- ✅ **Cost-effective**: Often better token efficiency
+- ✅ **Integrated**: Works directly via GitHub Copilot
+- ✅ **Reliable**: Consistent output quality
+
+**Weaknesses:**
+- ⚠️ **Less Context**: Smaller context window than Claude
+- ⚠️ **Reasoning**: Not as strong for complex architectural decisions
+
+**Best For:**
+- Routine endpoint implementations
+- Simple CRUD operations
+- Utility functions
+- Test generation
+- Documentation
+
+---
+
+### 🔬 Advanced: GitHub Copilot with o1-preview
+
+**Why o1-preview:**
+
+The o1-preview model (available in [GitHub Copilot](https://docs.github.com/en/copilot/reference/ai-models/supported-models)) specializes in complex reasoning and architecture validation.
 
 **Strengths:**
 - ✅ **Architecture Expert**: Excellent at identifying pattern violations
-- ✅ **Large-scale Refactoring**: Can refactor entire codebase safely
-- ✅ **Git Integration**: Creates atomic commits with good messages
-- ✅ **Cost-effective**: Uses your own API keys (Claude, GPT-4)
-- ✅ **Multi-file Changes**: Orchestrates complex refactorings
-- ✅ **Code Review**: Finds architectural issues Cursor might miss
+- ✅ **Deep Reasoning**: Can analyze complex architectural decisions
+- ✅ **Code Review**: Superior at finding subtle bugs and issues
+- ✅ **Best Practices**: Strong knowledge of design patterns
 
 **Weaknesses:**
-- ⚠️ **Not IDE**: Command-line only, less convenient for primary development
-- ⚠️ **Slower**: Not as fast as Cursor for rapid iteration
-- ⚠️ **Requires API Key**: Need OpenAI/Anthropic account
+- ⚠️ **Slower**: Takes longer to generate responses (extended thinking time)
+- ⚠️ **Overkill**: Not needed for simple implementations
 
 **Perfect For:**
 - Code review before commits
 - Validating Database Module usage (no direct SQLAlchemy)
 - Ensuring Settings Service patterns
-- Large refactorings (e.g., migrating v2.x code)
 - Architecture compliance checks
-
-**Example Usage:**
-```bash
-# Review Database Module for architecture violations
-aider --architect --model claude-3.5-sonnet database_module.py
-
-# Ask: "Does this code follow our Database Module pattern? Any direct SQLAlchemy?"
-# Aider will identify violations and suggest fixes
-```
+- Complex refactorings
 
 **Recommended Workflow:**
-1. Implement with Cursor (fast, complete)
-2. Review with Aider (validate architecture)
-3. Fix any issues Aider identifies
+1. Implement with Claude 3.5 Sonnet or GPT-4o (fast, complete)
+2. Review with o1-preview (validate architecture)
+3. Fix any issues identified
 4. Commit
-
----
-
-### Alternative: GitHub Copilot
 
 **Why NOT Recommended as Primary:**
 
@@ -166,132 +185,111 @@ GitHub Copilot is widely used but has limitations for our use case.
 - ❌ **Context**: Limited understanding of full project
 
 **Use Case:**
-- Good as supplement to Cursor for quick autocomplete
-- Not recommended as primary backend implementation tool
+- Works with GitHub Copilot for autocomplete
+- Not recommended as primary implementation tool
 
 ---
 
 ## Frontend Recommendations
 
-### 🏆 Primary Recommendation: v0.dev by Vercel
+### 🏆 Primary Recommendation: GitHub Copilot with Claude 3.5 Sonnet
 
-**Why v0.dev:**
+**Why Claude 3.5 Sonnet:**
 
-v0.dev (https://v0.dev) is Vercel's AI-powered UI generation tool, specifically designed for creating beautiful, production-ready interfaces.
+Claude 3.5 Sonnet (available via [GitHub Copilot](https://docs.github.com/en/copilot/reference/ai-models/supported-models)) excels at understanding complex UI interactions, HTMX patterns, and accessible design.
 
 **Strengths:**
-- ✅ **Beautiful UI**: Generates stunning, modern interfaces consistently
-- ✅ **Component-based**: Creates reusable React/Vue components
-- ✅ **Live Preview**: Immediate visual feedback, iterate quickly
-- ✅ **Responsive**: Mobile-first designs by default
-- ✅ **HTMX Support**: Can generate HTMX templates (our tech stack!)
-- ✅ **Design System**: Follows Tailwind, shadcn/ui patterns
-- ✅ **Accessibility**: Generates WCAG-compliant markup
-- ✅ **Export**: Download as HTML/HTMX templates
+- ✅ **HTMX Expertise**: Deep understanding of HTMX patterns and best practices
+- ✅ **Strong Reasoning**: Excellent at complex UI state management and interactions
+- ✅ **Accessibility**: Generates WCAG 2.1 AA compliant code automatically
+- ✅ **Component Design**: Creates reusable, maintainable card components
+- ✅ **Complex Interactions**: Multi-step forms, real-time updates, SSE patterns
+- ✅ **Documentation**: Explains design decisions and provides usage examples
+- ✅ **Integrated**: Works directly in your IDE via GitHub Copilot
 
 **Weaknesses:**
-- ⚠️ **Requires Adaptation**: Generates React/Vue, need to adapt to HTMX
-- ⚠️ **Cost**: Free tier limited, $20/month for pro
+- ⚠️ **Requires GitHub Copilot**: Need GitHub Copilot subscription
+- ⚠️ **Model Selection**: Must select Claude 3.5 Sonnet in Copilot settings
 
 **Perfect For:**
 - Card component generation (our 7 card types)
-- Status card with health indicators
-- Progress card with SSE updates
-- Form card with validation
-- Data card with media sections
-- Alert card with severity levels
-- List card with pagination
-
-**Example Prompt:**
-```
-Create a Status Card component for a module health dashboard:
-- Shows module name and status (Active/Warning/Inactive/Loading)
-- Green/yellow/red/gray color coding
-- Health indicator icon
-- Last checked timestamp
-- "Test Connection" button
-- HTMX-compatible
-- Follows card design with 12px border radius, shadow-md
-- Responsive
-```
-
-**Expected Output:**
-- Beautiful status card with exact specifications
-- HTMX attributes (hx-get, hx-swap, hx-trigger)
-- Accessible markup (ARIA labels, semantic HTML)
-- Responsive CSS (mobile-first)
-- Ready to integrate into our card system
-
----
-
-### 🥈 Secondary Recommendation: Claude 3.5 Sonnet (Complex Logic)
-
-**Why Claude:**
-
-Claude 3.5 Sonnet (https://claude.ai) excels at understanding complex UI interactions and HTMX patterns.
-
-**Strengths:**
-- ✅ **HTMX Expertise**: Deep understanding of HTMX patterns
-- ✅ **Best Reasoning**: Understands complex UI state management
-- ✅ **Accessibility**: Generates WCAG-compliant code automatically
-- ✅ **Artifacts Mode**: Iterative development with live preview
-- ✅ **Complex Interactions**: Multi-step forms, real-time updates, SSE
-- ✅ **Documentation**: Explains every decision
-
-**Weaknesses:**
-- ⚠️ **Not Specialized UI Tool**: Better for logic than pure design
-- ⚠️ **No Live Visual Preview**: Text-based, not visual like v0.dev
-- ⚠️ **Cost**: API usage or $20/month Claude Pro
-
-**Perfect For:**
 - Complex HTMX interactions (search with debounce, SSE updates)
 - Multi-step wizards (onboarding flow)
 - Real-time progress tracking (download queue)
 - Interactive forms with validation
-- State management in HTMX
+- Accessible UI patterns
 
 **Example Prompt:**
 ```
-Create an HTMX-based search widget with:
-- Input field with debounce (500ms)
-- Live search results as user types
-- SSE updates for real-time changes
-- Loading spinner during search
-- Empty state when no results
-- Keyboard navigation (arrow keys, enter)
-- Accessible (ARIA live region)
-- Follows our card-based design system
+Create a Status Card component for module health dashboard using HTMX:
+- Shows module name and status (Active/Warning/Inactive/Loading)
+- Green/yellow/red/gray color coding with badges
+- Health indicator icon and progress bar
+- Last checked timestamp
+- "Test Connection" button with hx-post
+- Auto-refresh every 30s with hx-trigger
+- WCAG 2.1 AA compliant
+- Follows our card design system (12px border radius, shadow-md)
+- Responsive mobile-first design
 ```
 
 **Expected Output:**
-- Complete HTML template with HTMX attributes
-- JavaScript for debounce (if needed)
-- SSE endpoint integration
-- Accessibility features
-- Detailed explanation of each decision
+- Complete HTML with HTMX attributes (hx-get, hx-swap, hx-trigger)
+- Accessible markup (ARIA labels, semantic HTML, proper heading hierarchy)
+- Responsive CSS using our design tokens
+- JavaScript for progressive enhancement
+- Ready to integrate into our card system
+
+**How to Use:**
+1. Install GitHub Copilot in your IDE
+2. Select **Claude 3.5 Sonnet** as your model
+3. Use Copilot Chat for component generation
+4. Request HTMX patterns and accessibility features explicitly
 
 ---
 
-### Alternative: Lovable (formerly GPT Engineer)
+### 🥈 Alternative: GitHub Copilot with GPT-4o
 
-**Why NOT Recommended as Primary:**
+**Why GPT-4o:**
 
-Lovable (https://lovable.dev) is good for full-stack prototypes but less suitable for our specific needs.
+GPT-4o (available via [GitHub Copilot](https://docs.github.com/en/copilot/reference/ai-models/supported-models)) is optimized for speed and can handle frontend development efficiently.
 
 **Strengths:**
-- ✅ **Full-stack**: Generates frontend + backend
-- ✅ **Fast Prototyping**: Entire apps in minutes
-- ✅ **Modern Stack**: React, Next.js, Tailwind
+- ✅ **Fast**: Quicker response times than Claude
+- ✅ **Good HTMX Support**: Understands HTMX patterns
+- ✅ **Cost-effective**: Better token efficiency
+- ✅ **Integrated**: Works via GitHub Copilot
 
 **Weaknesses:**
-- ❌ **Opinionated**: Forces specific tech stack (React)
-- ❌ **Less Control**: Hard to adapt to our HTMX + FastAPI stack
-- ❌ **Higher Cost**: $20-40/month
-- ❌ **Over-engineered**: Too much for our card-based simplicity
+- ⚠️ **Less Complex Reasoning**: Not as strong for intricate UI interactions
+- ⚠️ **Accessibility**: May need explicit prompting for WCAG compliance
 
-**Use Case:**
-- Good for prototyping ideas
-- Not recommended for production implementation
+**Best For:**
+- Simple card components
+- Standard form implementations
+- Basic HTMX patterns
+- CSS styling
+
+---
+
+### 🎨 Visual Design Alternative: Gemini 1.5 Pro
+
+**Why Gemini 1.5 Pro:**
+
+Gemini 1.5 Pro (available via [GitHub Copilot](https://docs.github.com/en/copilot/reference/ai-models/supported-models)) can handle multimodal inputs including images, useful for design-to-code workflows.
+
+**Strengths:**
+- ✅ **Multimodal**: Can analyze design mockups and generate code
+- ✅ **Large Context**: Excellent for understanding full page layouts
+- ✅ **Good HTML/CSS**: Strong frontend generation capabilities
+
+**Weaknesses:**
+- ⚠️ **Less HTMX Specific**: May need more guidance on HTMX patterns
+
+**Best For:**
+- Converting design mockups to HTML/CSS
+- Understanding visual layouts
+- Generating responsive layouts from screenshots
 
 ---
 
@@ -299,22 +297,24 @@ Lovable (https://lovable.dev) is good for full-stack prototypes but less suitabl
 
 ### Phase 1: Core Infrastructure (Backend Heavy)
 
-**Tools**: Cursor (primary), Aider (validation)
+**Tools**: GitHub Copilot with Claude 3.5 Sonnet (primary), o1-preview (validation)
 
-1. **Database Module** (Cursor):
+1. **Database Module** (Claude 3.5 Sonnet via Copilot):
    ```
-   - Open Cursor IDE with project context
-   - Prompt: "Implement Database Module per DATABASE_MODULE.md"
+   - Open your IDE with GitHub Copilot enabled
+   - Select Claude 3.5 Sonnet as model
+   - Use Copilot Chat: "Implement Database Module per DATABASE_MODULE.md"
    - Review generated code
    - Run: pytest tests/test_database_module.py
    - Iterate if needed
    ```
 
-2. **Architecture Validation** (Aider):
-   ```bash
-   aider --architect database_module.py
-   # Ask: "Does this follow our architecture? Any violations?"
-   # Apply suggested fixes
+2. **Architecture Validation** (o1-preview via Copilot):
+   ```
+   - Switch to o1-preview model in Copilot
+   - Ask: "Review database_module.py for architecture violations"
+   - Ask: "Does this follow our patterns? Any direct SQLAlchemy usage?"
+   - Apply suggested fixes
    ```
 
 3. **Quality Gates**:
@@ -327,61 +327,64 @@ Lovable (https://lovable.dev) is good for full-stack prototypes but less suitabl
 
 ### Phase 2: Authentication & Settings (Backend + Frontend)
 
-**Tools**: Cursor (backend), v0.dev (UI), Claude (OAuth flow)
+**Tools**: GitHub Copilot with Claude 3.5 Sonnet (backend), Claude 3.5 Sonnet (OAuth flow)
 
-1. **Settings Service** (Cursor):
+1. **Settings Service** (Claude 3.5 Sonnet via Copilot):
    ```
-   - Implement SettingsService with Pydantic validation
+   - Use Copilot Chat: "Implement SettingsService with Pydantic validation"
    - Generate tests
-   - Validate with Aider
+   - Run pytest with coverage check
    ```
 
-2. **OAuth Flow** (Claude):
+2. **OAuth Flow** (Claude 3.5 Sonnet via Copilot):
    ```
+   - Use Copilot Chat with detailed prompt:
    - Complex multi-step flow with PKCE
    - State management
    - Token refresh background task
    - Error handling for each step
    ```
 
-3. **Settings UI** (v0.dev):
+3. **Settings UI** (Claude 3.5 Sonnet via Copilot):
    ```
-   - Generate Settings Form Card
+   - Use Copilot Chat: "Generate Settings Form Card with HTMX"
    - Module configuration cards
    - Credential input with test connection
-   - Export to HTMX templates
+   - WCAG 2.1 AA compliance
    ```
 
 ### Phase 3: Pilot Modules (Full Stack)
 
-**Tools**: Cursor (backend), v0.dev (cards), Claude (interactions)
+**Tools**: GitHub Copilot with Claude 3.5 Sonnet (backend + frontend)
 
-1. **Soulseek Backend** (Cursor):
+1. **Soulseek Backend** (Claude 3.5 Sonnet via Copilot):
    ```
-   - Search service
-   - Download service
-   - Database integration (via Database Module!)
-   - Event publishing
-   ```
-
-2. **Soulseek Frontend** (v0.dev + Claude):
-   ```
-   - Search card (v0.dev)
-   - Progress card (v0.dev)
-   - Download queue list (v0.dev)
-   - Real-time SSE updates (Claude)
+   - Use Copilot Chat for:
+     - Search service
+     - Download service
+     - Database integration (via Database Module!)
+     - Event publishing
    ```
 
-3. **Integration** (Cursor):
+2. **Soulseek Frontend** (Claude 3.5 Sonnet via Copilot):
+   ```
+   - Use Copilot Chat with HTMX-specific prompts:
+     - Search card with HTMX
+     - Progress card with live updates
+     - Download queue list with hx-trigger
+     - Real-time SSE updates
+   ```
+
+3. **Integration** (Claude 3.5 Sonnet via Copilot):
    ```
    - Connect frontend HTMX to FastAPI routes
    - End-to-end testing
-   - Validation with Aider
+   - Validation with o1-preview
    ```
 
 ### Phase 4: Spotify Module
 
-Similar to Phase 3, with added OAuth complexity (use Claude for OAuth UI flow).
+Similar to Phase 3, with added OAuth complexity (use Claude 3.5 Sonnet for OAuth UI flow).
 
 ---
 
@@ -450,11 +453,12 @@ bandit -r .                     # Security
 ### Validation Workflow
 
 ```bash
-# 1. Generate code (Cursor)
-cursor
+# 1. Generate code with GitHub Copilot
+# Use Claude 3.5 Sonnet for implementation
 
-# 2. Validate architecture (Aider)
-aider --architect --model claude-3.5-sonnet module_name.py
+# 2. Validate architecture with o1-preview
+# Switch to o1-preview model in Copilot Chat
+# Ask for architecture review
 
 # 3. Run quality gates
 make lint      # ruff check
@@ -474,51 +478,61 @@ git commit -m "feat(module): implement feature"
 
 ## Cost Analysis
 
-### Minimal Setup (Backend Only)
+### GitHub Copilot Setup (Recommended)
 
 **Tools:**
-- Cursor IDE: $20/month
-- Claude API (for Aider): ~$10-20/month
+- GitHub Copilot Individual: $10/month
+- OR GitHub Copilot Business: $19/user/month
 
-**Total: $30-40/month**
+**Total: $10-19/month**
+
+**Includes:**
+- Access to Claude 3.5 Sonnet
+- Access to GPT-4o, GPT-4o mini
+- Access to o1-preview, o1-mini
+- Access to Gemini 1.5 Pro
+- Unlimited model switching
+- IDE integration
+- Code completions + Chat
 
 **Use Case:**
-- Backend-heavy development
-- Can handle frontend manually or with basic tools
+- Full-stack development (backend + frontend)
+- All GitHub Copilot supported models
+- Best value for comprehensive AI assistance
 
-### Optimal Setup (Backend + Frontend)
+### Alternative: GitHub Copilot + External Tools
 
 **Tools:**
-- Cursor IDE: $20/month
-- v0.dev Pro: $20/month
-- Claude API/Pro: ~$10-20/month
+- GitHub Copilot: $10-19/month
+- Optional external design tools (free tier)
 
-**Total: $50-60/month**
+**Total: $10-19/month**
 
 **Use Case:**
-- Full-stack development
-- Beautiful UI required
-- Maximum productivity
+- Maximum flexibility
+- Use GitHub Copilot models for code
+- Use free design tools for mockups
 
 ### ROI Analysis
 
 **Time Savings:**
-- Cursor: 50-60% faster backend development
-- v0.dev: 70-80% faster UI development
-- Aider: 30-40% fewer bugs (less debugging time)
+- Claude 3.5 Sonnet: 50-70% faster backend development
+- Claude 3.5 Sonnet: 60-70% faster frontend HTMX development
+- GPT-4o: 30-40% fewer bugs (better error handling)
+- o1-preview: Superior architecture validation
 
 **Quality Improvement:**
-- Fewer bugs (better error handling)
-- Better architecture compliance
+- Fewer bugs (Claude's strong reasoning)
+- Better architecture compliance (o1-preview validation)
 - More consistent code
 - Better documentation
 
 **Break-even Calculation:**
-- Cost: $60/month = $2/day
+- Cost: $10-19/month GitHub Copilot
 - Time savings: 4-6 hours/day at 50% faster
 - Developer hourly rate: $50-100/hour
 - Savings: $200-600/day
-- **Break-even: 1-2 weeks of development**
+- **Break-even: Less than 1 week of development**
 
 ---
 
@@ -527,52 +541,60 @@ git commit -m "feat(module): implement feature"
 ### Development Environment Setup
 
 ```
-Primary IDE: Cursor
-├── Install: https://cursor.sh
-├── Enable: Composer mode
-├── Context: Load entire project
-└── Shortcuts: Cmd+K for inline, Cmd+L for chat
+Primary: GitHub Copilot (IDE Integration)
+├── Install: GitHub Copilot extension in your IDE
+├── IDE Support: VS Code, JetBrains, Vim, Neovim
+├── Models: Claude 3.5 Sonnet, GPT-4o, o1-preview, Gemini 1.5 Pro
+├── Enable: Copilot Chat for complex implementations
+└── Shortcuts: IDE-specific (e.g., Cmd+I in VS Code)
 
-Code Review: Aider (CLI)
-├── Install: pip install aider-chat
-├── API Key: export ANTHROPIC_API_KEY=...
-├── Model: claude-3.5-sonnet (recommended)
-└── Usage: aider --architect --model claude-3.5-sonnet
-
-UI Design: v0.dev (Web)
-├── Access: https://v0.dev
-├── Account: Free tier or $20/month pro
-├── Workflow: Prompt → Preview → Export → Adapt
-└── Output: HTMX templates
-
-Complex UI: Claude (Web/API)
-├── Access: https://claude.ai
-├── Mode: Artifacts for iterative development
-├── Model: Claude 3.5 Sonnet
-└── Use: HTMX logic, SSE, complex interactions
+Model Selection:
+├── Backend Implementation: Claude 3.5 Sonnet
+├── Frontend HTMX: Claude 3.5 Sonnet
+├── Simple Tasks: GPT-4o (faster)
+├── Architecture Review: o1-preview
+└── Design to Code: Gemini 1.5 Pro
 ```
+
+### GitHub Copilot Model Selection
+
+**In VS Code:**
+1. Open Copilot Chat (Cmd/Ctrl + I)
+2. Click model selector (top right)
+3. Choose from available models:
+   - Claude 3.5 Sonnet (recommended for complex work)
+   - GPT-4o (recommended for speed)
+   - o1-preview (recommended for reviews)
+   - GPT-4o mini (fast, simple tasks)
+   - o1-mini (reasoning, budget)
+   - Gemini 1.5 Pro (multimodal)
+
+**Model Switch Strategy:**
+- Use Claude 3.5 Sonnet for implementation (best reasoning)
+- Switch to o1-preview for code review
+- Use GPT-4o for quick iterations
 
 ### Project Structure
 
 ```
 soulspot-bridge/
 ├── modules/
-│   ├── database/        # Cursor
-│   ├── settings/        # Cursor
-│   ├── spotify/         # Cursor (backend) + v0.dev (frontend)
-│   └── soulseek/        # Cursor (backend) + v0.dev (frontend)
-├── tests/              # Cursor (auto-generated)
-├── docs/               # Manual
-└── .cursor/            # Cursor configuration
-    └── rules.md        # Custom rules for Cursor
+│   ├── database/        # Copilot with Claude 3.5 Sonnet
+│   ├── settings/        # Copilot with Claude 3.5 Sonnet
+│   ├── spotify/         # Copilot with Claude 3.5 Sonnet (backend + frontend)
+│   └── soulseek/        # Copilot with Claude 3.5 Sonnet (backend + frontend)
+├── tests/              # Copilot auto-generated
+├── docs/               # Manual or Copilot-assisted
+└── .github/            # GitHub Copilot configuration
+    └── copilot-instructions.md  # Custom instructions
 ```
 
-### Cursor Rules Configuration
+### GitHub Copilot Instructions Configuration
 
-Create `.cursor/rules.md` in project root:
+Create `.github/copilot-instructions.md` in project root:
 
 ```markdown
-# SoulSpot Bridge v3.0 Coding Rules
+# SoulSpot Bridge v3.0 Coding Instructions
 
 ## Architecture
 - ALWAYS use Database Module, NEVER direct SQLAlchemy
@@ -605,32 +627,31 @@ Create `.cursor/rules.md` in project root:
 
 ### Immediate Actions
 
-1. **Subscribe to Cursor IDE** ($20/month)
-   - https://cursor.sh/pricing
-   - Enable Composer mode
-   - Load SoulSpot Bridge v3.0 project
+1. **Subscribe to GitHub Copilot** ($10-19/month)
+   - GitHub Copilot Individual: https://github.com/features/copilot
+   - Install in your preferred IDE (VS Code, JetBrains, etc.)
+   - Enable Copilot Chat
 
-2. **Set up Aider** (free + API costs)
+2. **Configure Model Selection**
+   - Set Claude 3.5 Sonnet as primary model
+   - Familiarize with model switching
+   - Test each model on sample tasks
+
+3. **Set Up Project Instructions**
    ```bash
-   pip install aider-chat
-   export ANTHROPIC_API_KEY=your_key_here
+   # Create GitHub Copilot instructions
+   mkdir -p .github
+   touch .github/copilot-instructions.md
+   # Add SoulSpot Bridge coding standards
    ```
-
-3. **Create v0.dev Account** (free tier to start)
-   - https://v0.dev
-   - Test with first card component
-
-4. **Configure Claude Access**
-   - https://claude.ai (web) or API
-   - Test Artifacts mode
 
 ### Development Process
 
-1. **Backend**: Implement with Cursor, validate with Aider
-2. **Frontend**: Design with v0.dev, logic with Claude
-3. **Integration**: Connect with Cursor
+1. **Backend**: Implement with Claude 3.5 Sonnet, validate with o1-preview
+2. **Frontend**: Design and implement with Claude 3.5 Sonnet (HTMX focus)
+3. **Integration**: Connect with Claude 3.5 Sonnet or GPT-4o
 4. **Quality**: Run all gates (ruff, mypy, pytest, bandit)
-5. **Review**: Manual code review
+5. **Review**: Manual code review + o1-preview validation
 6. **Commit**: Atomic commits with clear messages
 
 ### Success Metrics
@@ -638,7 +659,7 @@ Create `.cursor/rules.md` in project root:
 - [ ] 100% code completeness (no TODOs)
 - [ ] Passes all linters on first try
 - [ ] >80% test coverage
-- [ ] Zero architecture violations
+- [ ] Zero architecture violations (validated with o1-preview)
 - [ ] Beautiful, accessible UI
 - [ ] 50-70% faster development
 
@@ -646,15 +667,26 @@ Create `.cursor/rules.md` in project root:
 
 ## Conclusion
 
-**For Backend**: Cursor IDE is the clear winner for 100% complete, error-free Python/FastAPI implementation. Aider provides essential architecture validation.
+**Best Practice for SoulSpot Bridge v3.0:**
 
-**For Frontend**: v0.dev generates beautiful, accessible UI components. Claude handles complex HTMX interactions and logic.
+Use **GitHub Copilot** with the following model strategy:
+- **Claude 3.5 Sonnet**: Primary model for backend and frontend implementation
+- **o1-preview**: Code review and architecture validation
+- **GPT-4o**: Quick iterations and simple tasks
+- **Gemini 1.5 Pro**: Design-to-code when working from mockups
 
-**Together**: This toolchain provides 50-70% faster development with higher quality and consistency than manual coding or inferior AI tools.
+This approach provides:
+- ✅ **Single subscription** ($10-19/month for everything)
+- ✅ **All models** from GitHub's supported list
+- ✅ **IDE integration** (works in your preferred editor)
+- ✅ **Best quality** (Claude for reasoning, o1 for validation)
+- ✅ **Cost-effective** (breaks even in less than a week)
 
-**Investment**: $50-60/month pays for itself in 1-2 weeks through time savings and quality improvements.
+**Together**: This approach provides 50-70% faster development with higher quality and consistency than manual coding.
 
-**Next Step**: Start with Cursor IDE for Database Module implementation, following the quality assurance process outlined above.
+**Investment**: $10-19/month pays for itself within days through time savings and quality improvements.
+
+**Next Step**: Subscribe to GitHub Copilot, select Claude 3.5 Sonnet as your primary model, and start with Database Module implementation following the quality assurance process outlined above.
 
 ---
 
