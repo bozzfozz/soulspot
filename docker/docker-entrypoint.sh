@@ -136,6 +136,40 @@ mkdir -p /config/artwork /config/tmp
 chown -R $PUID:$PGID /config/artwork /config/tmp
 
 echo ""
+echo "Initializing database..."
+
+# Ensure database directory exists and has correct permissions
+DB_DIR=$(dirname "${DATABASE_URL##*:///}")
+if [ ! -d "$DB_DIR" ]; then
+    echo "Creating database directory: $DB_DIR"
+    mkdir -p "$DB_DIR"
+fi
+
+# Set ownership and permissions for database directory
+chown -R $PUID:$PGID "$DB_DIR"
+chmod -R 775 "$DB_DIR"
+echo -e "${GREEN}✓${NC} Database directory prepared: $DB_DIR"
+
+# Run database migrations as the app user
+# This ensures the database schema is up-to-date before starting the application
+if [ -f "/app/alembic.ini" ]; then
+    echo "Running database migrations..."
+    gosu $PUID:$PGID alembic upgrade head
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓${NC} Database migrations completed"
+    else
+        echo -e "${RED}✗ ERROR: Database migrations failed!${NC}"
+        echo "  Please check the database configuration and try again."
+        echo "  Database URL: $DATABASE_URL"
+        echo "  Database directory: $DB_DIR"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}!${NC} Warning: alembic.ini not found, skipping migrations"
+    echo "  Database tables may not exist. The application may fail to start."
+fi
+
+echo ""
 echo "================================================"
 echo "  Starting SoulSpot Bridge Application"
 echo "================================================"
