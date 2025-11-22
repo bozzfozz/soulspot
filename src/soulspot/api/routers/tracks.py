@@ -221,7 +221,7 @@ async def get_track(
             "album_artist": track_model.album.artist
             if track_model.album and hasattr(track_model.album, "artist")
             else None,
-            "genre": None,  # TODO: Add genre field to track model
+            "genre": track_model.genre,  # Hey - now returns actual genre from DB!
             "year": track_model.album.year
             if track_model.album and hasattr(track_model.album, "year")
             else None,

@@ -149,6 +149,12 @@ class TrackModel(Base):
         String(12), nullable=True, unique=True, index=True
     )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    
+    # Hey future me - genre stores the primary genre for this track! We use JSON to store
+    # list[str] in DB (SQLite doesn't have array type). Multiple genres are comma-separated
+    # in the Track entity's genres list, but we store just the primary one here for filtering.
+    # If you need all genres, use the full metadata from MusicBrainz/Spotify API calls.
+    genre: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # File integrity and library management fields
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
