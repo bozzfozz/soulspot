@@ -183,7 +183,7 @@ class TestSettings:
         assert settings.spotify.client_id == ""
         assert (
             settings.spotify.redirect_uri
-            == "http://localhost:8000/auth/spotify/callback"
+            == "http://localhost:8000/api/auth/callback"
         )
 
     def test_musicbrainz_defaults(self):
