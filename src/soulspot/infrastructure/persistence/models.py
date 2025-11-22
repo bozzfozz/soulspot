@@ -570,3 +570,48 @@ class WidgetInstanceModel(Base):
             "page_id", "position_row", "position_col", name="uq_widget_position"
         ),
     )
+
+
+# Hey future me, SessionModel persists user sessions to survive Docker restarts!
+# The access_token and refresh_token are SENSITIVE - they grant full access to user's Spotify.
+# Consider encrypting these fields at rest for production (use SQLAlchemy TypeDecorator with Fernet).
+# The session_id is the PRIMARY KEY - it's the random urlsafe string stored in user's cookie.
+# Sessions expire based on last_accessed_at + timeout (default 1 hour) - expired ones get cleaned up.
+# oauth_state and code_verifier are TEMPORARY - only needed during OAuth flow, cleared after callback.
+# This model replaces the in-memory dict in SessionStore - now sessions persist across restarts!
+class SessionModel(Base):
+    """User session with OAuth tokens for persistence across restarts.
+
+    Stores Spotify OAuth tokens and session state in database to survive
+    container restarts. Sessions are identified by session_id (cookie value).
+    """
+
+    __tablename__ = "sessions"
+
+    # Primary key: session_id from cookie (urlsafe random string)
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    # OAuth tokens (SENSITIVE - consider encrypting in production)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+
+    # OAuth flow state (temporary, cleared after callback)
+    oauth_state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    code_verifier: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    # Session lifecycle timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_accessed_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Indexes for efficient cleanup queries
+    __table_args__ = (
+        Index("ix_sessions_last_accessed", "last_accessed_at"),
+        Index("ix_sessions_token_expires", "token_expires_at"),
+    )

@@ -339,6 +339,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
             raise
 
+        # Initialize database-backed session store for OAuth persistence
+        from soulspot.application.services.session_store import DatabaseSessionStore
+
+        async def get_db_session_for_store() -> AsyncGenerator[Any, None]:
+            """Get DB session for session store operations."""
+            async for session in db.get_session():
+                yield session
+
+        session_store = DatabaseSessionStore(
+            session_timeout_seconds=3600,  # 1 hour session timeout
+            get_db_session=get_db_session_for_store,
+        )
+        app.state.session_store = session_store
+        logger.info("Session store initialized with database persistence")
+
         # Initialize job queue with configured max concurrent downloads
         from soulspot.application.workers.download_worker import DownloadWorker
         from soulspot.application.workers.job_queue import JobQueue

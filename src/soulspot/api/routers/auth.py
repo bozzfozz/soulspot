@@ -6,7 +6,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 
 from soulspot.api.dependencies import get_session_store
-from soulspot.application.services.session_store import SessionStore
+from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.config import Settings, get_settings
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
@@ -22,7 +22,7 @@ router = APIRouter()
 async def authorize(
     response: Response,
     settings: Settings = Depends(get_settings),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Start OAuth authorization flow with session management.
 
@@ -46,7 +46,7 @@ async def authorize(
     code_verifier = SpotifyClient.generate_code_verifier()
 
     # Create session and store state + verifier
-    session = session_store.create_session(
+    session = await session_store.create_session(
         oauth_state=state, code_verifier=code_verifier
     )
 
@@ -83,7 +83,7 @@ async def callback(
     redirect_to: str = Query("/", description="Redirect URL after success"),
     session_id: str | None = Cookie(None),
     settings: Settings = Depends(get_settings),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> RedirectResponse | dict[str, Any]:
     """Handle OAuth callback from Spotify with session verification.
 
@@ -111,7 +111,7 @@ async def callback(
             detail="No session found. Please start authorization flow again.",
         )
 
-    session = session_store.get_session(session_id)
+    session = await session_store.get_session(session_id)
     if not session:
         raise HTTPException(
             status_code=401,
@@ -147,6 +147,16 @@ async def callback(
         session.oauth_state = None
         session.code_verifier = None
 
+        # Persist session changes to database
+        await session_store.update_session(
+            session.session_id,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+            token_expires_at=session.token_expires_at,
+            oauth_state=None,
+            code_verifier=None,
+        )
+
         # Redirect to specified URL (default: dashboard)
         return RedirectResponse(url=redirect_to, status_code=302)
     except Exception as e:
@@ -164,7 +174,7 @@ async def callback(
 async def refresh_token(
     session_id: str | None = Cookie(None),
     settings: Settings = Depends(get_settings),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Refresh access token using session's refresh token.
 
@@ -185,7 +195,7 @@ async def refresh_token(
     if not session_id:
         raise HTTPException(status_code=401, detail="No session found.")
 
-    session = session_store.get_session(session_id)
+    session = await session_store.get_session(session_id)
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or expired session.")
 
@@ -209,6 +219,14 @@ async def refresh_token(
             expires_in=token_data.get("expires_in", 3600),
         )
 
+        # Persist session changes to database
+        await session_store.update_session(
+            session.session_id,
+            access_token=session.access_token,
+            refresh_token=session.refresh_token,
+            token_expires_at=session.token_expires_at,
+        )
+
         return {
             "message": "Token refreshed successfully",
             "expires_in": token_data.get("expires_in", 3600),
@@ -228,7 +246,7 @@ async def refresh_token(
 @router.get("/session")
 async def get_session_info(
     session_id: str | None = Cookie(None),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Get current session information.
 
@@ -245,7 +263,7 @@ async def get_session_info(
     if not session_id:
         raise HTTPException(status_code=401, detail="No session found.")
 
-    session = session_store.get_session(session_id)
+    session = await session_store.get_session(session_id)
     if not session:
         raise HTTPException(status_code=401, detail="Invalid or expired session.")
 
@@ -269,7 +287,7 @@ async def logout(
     response: Response,
     settings: Settings = Depends(get_settings),
     session_id: str | None = Cookie(None),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Log out and delete session.
 
@@ -283,7 +301,7 @@ async def logout(
         Logout confirmation
     """
     if session_id:
-        session_store.delete_session(session_id)
+        await session_store.delete_session(session_id)
         response.delete_cookie(key=settings.api.session_cookie_name)
         return {"message": "Logged out successfully"}
 
@@ -298,7 +316,7 @@ async def logout(
 @router.get("/spotify/status")
 async def spotify_status(
     session_id: str | None = Cookie(None),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Get Spotify connection status for onboarding flow.
 
@@ -316,7 +334,7 @@ async def spotify_status(
             "message": "No session found",
         }
 
-    session = session_store.get_session(session_id)
+    session = await session_store.get_session(session_id)
     if not session:
         return {
             "connected": False,
@@ -346,7 +364,7 @@ async def spotify_status(
 async def skip_onboarding(
     _response: Response,
     session_id: str | None = Cookie(None),
-    session_store: SessionStore = Depends(get_session_store),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
 ) -> dict[str, Any]:
     """Skip onboarding and proceed to dashboard.
 
@@ -360,7 +378,7 @@ async def skip_onboarding(
     """
     # Mark onboarding as skipped in session if exists
     if session_id:
-        session = session_store.get_session(session_id)
+        session = await session_store.get_session(session_id)
         if session:
             # We could add a flag here if needed in the future
             # For now, just acknowledge the skip
