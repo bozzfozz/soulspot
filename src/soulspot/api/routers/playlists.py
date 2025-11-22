@@ -14,7 +14,7 @@ from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistRequest,
     ImportSpotifyPlaylistUseCase,
 )
-from soulspot.domain.value_objects import PlaylistId
+from soulspot.domain.value_objects import PlaylistId, SpotifyUri
 from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
     TrackRepository,
@@ -23,15 +23,55 @@ from soulspot.infrastructure.persistence.repositories import (
 router = APIRouter()
 
 
+# Hey future me, this helper extracts playlist ID from either a full Spotify URL or a bare ID!
+# Users paste URLs like "https://open.spotify.com/playlist/ABC123" but our API expects just "ABC123".
+# We detect URLs by checking for "spotify.com/" and use SpotifyUri.from_url() to parse them.
+# If it's already a bare ID (no "spotify.com/"), return it as-is. This makes the API user-friendly
+# while keeping backward compatibility. SpotifyUri validates the format so invalid URLs/IDs throw
+# ValidationException which converts to 422 error. DON'T cache results - function is cheap!
+def _extract_playlist_id(playlist_id_or_url: str) -> str:
+    """Extract Spotify playlist ID from either a URL or bare ID.
+
+    This function accepts both:
+    - Full Spotify URLs: https://open.spotify.com/playlist/2ZBCi09CSeWMBOoHZdN6Nl
+    - Bare playlist IDs: 2ZBCi09CSeWMBOoHZdN6Nl
+
+    Args:
+        playlist_id_or_url: Spotify playlist URL or ID
+
+    Returns:
+        Spotify playlist ID (the alphanumeric string)
+
+    Raises:
+        ValidationException: If the URL or ID format is invalid
+    """
+    # If it looks like a URL, parse it
+    if "spotify.com/" in playlist_id_or_url:
+        spotify_uri = SpotifyUri.from_url(playlist_id_or_url)
+        # Validate it's a playlist URI, not track/album/etc
+        if spotify_uri.resource_type != "playlist":
+            from soulspot.domain.exceptions import ValidationException
+
+            raise ValidationException(
+                f"URL must be a playlist, got {spotify_uri.resource_type}"
+            )
+        return spotify_uri.resource_id
+    # Otherwise assume it's already a bare ID
+    return playlist_id_or_url
+
+
 # Hey future me, this is the main playlist import endpoint! Access token comes from SESSION not
 # a header - super important for security. The token dependency will auto-refresh if expired,
 # which is slick but can cause weird timing issues if the refresh fails. fetch_all_tracks=True
 # means we'll fetch EVERY track even if playlist has 1000+ songs - could timeout for huge playlists.
 # Consider adding pagination or background job queueing for massive playlists. Also this returns
-# dict not Pydantic model - less type safety but more flexible for errors array.
+# dict not Pydantic model - less type safety but more flexible for errors array. NOW accepts both
+# bare playlist IDs AND full Spotify URLs - extracts ID automatically via _extract_playlist_id()!
 @router.post("/import")
 async def import_playlist(
-    playlist_id: str = Query(..., description="Spotify playlist ID"),
+    playlist_id: str = Query(
+        ..., description="Spotify playlist ID or URL (e.g., https://open.spotify.com/playlist/ID)"
+    ),
     fetch_all_tracks: bool = Query(True, description="Fetch all tracks in playlist"),
     access_token: str = Depends(get_spotify_token_from_session),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
@@ -43,8 +83,12 @@ async def import_playlist(
     If you don't have a valid session, you'll receive a 401 error
     and need to authenticate at /auth first.
 
+    Accepts both:
+    - Spotify playlist URLs: https://open.spotify.com/playlist/2ZBCi09CSeWMBOoHZdN6Nl
+    - Bare playlist IDs: 2ZBCi09CSeWMBOoHZdN6Nl
+
     Args:
-        playlist_id: Spotify playlist ID
+        playlist_id: Spotify playlist ID or full URL
         fetch_all_tracks: Whether to fetch all tracks
         access_token: Automatically retrieved from session
         use_case: Import playlist use case
@@ -53,8 +97,11 @@ async def import_playlist(
         Import status and statistics
     """
     try:
+        # Extract ID from URL if needed
+        extracted_id = _extract_playlist_id(playlist_id)
+
         request = ImportSpotifyPlaylistRequest(
-            playlist_id=playlist_id,
+            playlist_id=extracted_id,
             access_token=access_token,
             fetch_all_tracks=fetch_all_tracks,
         )
