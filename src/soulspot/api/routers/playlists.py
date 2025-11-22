@@ -17,6 +17,7 @@ from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,
 )
 from soulspot.domain.entities import Playlist, PlaylistSource
+from soulspot.domain.exceptions import ValidationException
 from soulspot.domain.value_objects import PlaylistId, SpotifyUri
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
@@ -29,9 +30,9 @@ router = APIRouter()
 
 # Hey future me, this helper extracts playlist ID from either a full Spotify URL or a bare ID!
 # Users paste URLs like "https://open.spotify.com/playlist/ABC123" but our API expects just "ABC123".
-# We detect URLs by checking for "spotify.com/" and use SpotifyUri.from_url() to parse them.
-# If it's already a bare ID (no "spotify.com/"), return it as-is. This makes the API user-friendly
-# while keeping backward compatibility. SpotifyUri validates the format so invalid URLs/IDs throw
+# We detect URLs by checking for "://" (protocol indicator) and use SpotifyUri.from_url() to parse.
+# If it's already a bare ID (no protocol), return it as-is. This makes the API user-friendly while
+# keeping backward compatibility. SpotifyUri validates the format so invalid URLs/IDs throw
 # ValidationException which converts to 422 error. DON'T cache results - function is cheap!
 def _extract_playlist_id(playlist_id_or_url: str) -> str:
     """Extract Spotify playlist ID from either a URL or bare ID.
@@ -49,13 +50,12 @@ def _extract_playlist_id(playlist_id_or_url: str) -> str:
     Raises:
         ValidationException: If the URL or ID format is invalid
     """
-    # If it looks like a URL, parse it
-    if "spotify.com/" in playlist_id_or_url:
+    # If it looks like a URL (contains protocol), parse it
+    # Using "://" to detect URLs is more robust than checking for domain substring
+    if "://" in playlist_id_or_url:
         spotify_uri = SpotifyUri.from_url(playlist_id_or_url)
         # Validate it's a playlist URI, not track/album/etc
         if spotify_uri.resource_type != "playlist":
-            from soulspot.domain.exceptions import ValidationException
-
             raise ValidationException(
                 f"URL must be a playlist, got {spotify_uri.resource_type}"
             )
@@ -167,12 +167,9 @@ async def sync_playlist_library(
             )
 
             items = response.get("items", [])
-            if not items:
-                break
-
             all_playlists.extend(items)
 
-            # Check if there are more pages
+            # Check if there are more pages - 'next' is authoritative
             if not response.get("next"):
                 break
 
@@ -185,6 +182,9 @@ async def sync_playlist_library(
 
         for playlist_data in all_playlists:
             try:
+                # Use consistent timestamp for this iteration
+                now = datetime.now(UTC)
+
                 # Extract playlist metadata
                 spotify_playlist_id = playlist_data["id"]
                 spotify_uri = SpotifyUri(f"spotify:playlist:{spotify_playlist_id}")
@@ -198,7 +198,7 @@ async def sync_playlist_library(
                     # Update existing playlist metadata
                     existing_playlist.name = playlist_data["name"]
                     existing_playlist.description = playlist_data.get("description")
-                    existing_playlist.updated_at = datetime.now(UTC)
+                    existing_playlist.updated_at = now
                     await playlist_repository.update(existing_playlist)
                     updated_count += 1
                     status = "updated"
@@ -210,8 +210,8 @@ async def sync_playlist_library(
                         description=playlist_data.get("description"),
                         source=PlaylistSource.SPOTIFY,
                         spotify_uri=spotify_uri,
-                        created_at=datetime.now(UTC),
-                        updated_at=datetime.now(UTC),
+                        created_at=now,
+                        updated_at=now,
                     )
                     await playlist_repository.add(playlist)
                     synced_count += 1

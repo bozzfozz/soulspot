@@ -46,13 +46,12 @@ class TestExtractPlaylistId:
         with pytest.raises(ValidationException, match="must be a playlist"):
             _extract_playlist_id(url)
 
-    def test_non_spotify_url_passed_through(self) -> None:
-        """Test that non-Spotify URLs are passed through as-is (will fail later in API call)."""
+    def test_non_spotify_url_rejected(self) -> None:
+        """Test that non-Spotify URLs with protocol are rejected."""
         invalid_url = "https://example.com/not-a-spotify-url"
-        # Non-Spotify URLs are treated as bare IDs and passed through
-        # They will fail when used with the Spotify API, which is acceptable
-        result = _extract_playlist_id(invalid_url)
-        assert result == invalid_url
+        # URLs with protocol ("://") are parsed, and non-Spotify ones are rejected
+        with pytest.raises(ValidationException, match="Invalid Spotify URL"):
+            _extract_playlist_id(invalid_url)
 
     def test_reject_malformed_spotify_url(self) -> None:
         """Test that malformed Spotify URLs are rejected."""
