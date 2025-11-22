@@ -343,7 +343,7 @@ async def test_spotify_connection(
           <strong>Configure Redirect URI</strong>
           <ul>
             <li>Go to app settings</li>
-            <li>Add redirect URI: <code>http://localhost:8000/callback</code></li>
+            <li>Add redirect URI: <code>http://localhost:8765/callback</code></li>
           </ul>
         </li>
         <li>

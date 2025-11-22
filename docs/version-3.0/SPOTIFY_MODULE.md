@@ -1393,7 +1393,7 @@ class SpotifySettings(BaseSettings):
     )
     
     redirect_uri: str = Field(
-        default="http://localhost:8000/spotify/auth/callback",
+        default="http://localhost:8765/spotify/auth/callback",
         description="OAuth redirect URI (must match Spotify app settings)",
     )
     
@@ -1448,7 +1448,7 @@ class SpotifySettings(BaseSettings):
 {
   "client_id": "abc123def456",
   "client_secret": "secret789xyz012",  # Will be encrypted
-  "redirect_uri": "http://localhost:8000/spotify/auth/callback"
+  "redirect_uri": "http://localhost:8765/spotify/auth/callback"
 }
 
 # Step 2: Test connection

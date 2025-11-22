@@ -663,15 +663,15 @@ Review when slskd v0.20.0 releases (expected Q1 2026)
 
 ```bash
 # Configure slskd connection
-curl -X POST http://localhost:8000/settings/soulseek \
+curl -X POST http://localhost:8765/settings/soulseek \
   -H "Content-Type: application/json" \
   -d '{"url": "http://localhost:5030", "api_key": "your_key"}'
 
 # Search for track
-curl http://localhost:8000/soulseek/search?q=Beatles+Let+It+Be
+curl http://localhost:8765/soulseek/search?q=Beatles+Let+It+Be
 
 # Start download
-curl -X POST http://localhost:8000/soulseek/downloads \
+curl -X POST http://localhost:8765/soulseek/downloads \
   -H "Content-Type: application/json" \
   -d '{"artist": "Beatles", "title": "Let It Be"}'
 ```
