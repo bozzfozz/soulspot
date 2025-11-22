@@ -100,7 +100,20 @@ class SpotifyClient(ISpotifyClient):
 
         Returns:
             Authorization URL
+
+        Raises:
+            ValueError: If redirect_uri is not configured
         """
+        # Hey future me, ALWAYS validate redirect_uri is set before building auth URL!
+        # Empty redirect_uri causes cryptic Spotify errors. Better to fail fast here
+        # with a clear message than let user hit Spotify's error page.
+        if not self.settings.redirect_uri or not self.settings.redirect_uri.strip():
+            raise ValueError(
+                "SPOTIFY_REDIRECT_URI is not configured. "
+                "Set it in .env to match your callback URL "
+                "(e.g., http://localhost:8000/api/auth/callback)"
+            )
+
         code_challenge = self.generate_code_challenge(code_verifier)
 
         params = {
