@@ -140,18 +140,19 @@ class TestWatchlistWorker:
         mock_watchlist.quality_profile = "high"
         mock_watchlist.update_check = MagicMock()
 
-        with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
+        with (
+            patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list,
+            patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger,
+            patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock),
+        ):
             mock_list.return_value = [mock_watchlist]
+            await worker._check_watchlists()
 
-            with patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger:
-                with patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock):
-                    await worker._check_watchlists()
-
-                    # Should trigger workflow
-                    mock_trigger.assert_called_once()
-                    call_args = mock_trigger.call_args
-                    assert call_args[1]["trigger"] == AutomationTrigger.NEW_RELEASE
-                    assert "artist_id" in call_args[1]["context"]
+            # Should trigger workflow
+            mock_trigger.assert_called_once()
+            call_args = mock_trigger.call_args
+            assert call_args[1]["trigger"] == AutomationTrigger.NEW_RELEASE
+            assert "artist_id" in call_args[1]["context"]
 
     @pytest.mark.asyncio
     async def test_check_watchlists_error_handling(self, worker):
