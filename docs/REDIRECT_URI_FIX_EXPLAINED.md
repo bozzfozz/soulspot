@@ -57,17 +57,34 @@ Der Default in `settings.py` wird **NUR** verwendet, wenn:
 
 ### Für Docker (Port 8765):
 
-Du musst in deiner `.env` oder `docker-compose.yml` setzen:
+⚠️ **WICHTIG: Spotify erfordert localhost oder HTTPS!**
+
+Du **MUSST** `127.0.0.1` verwenden:
 
 ```env
 SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/auth/callback
 ```
 
-**ODER** wenn du von einem anderen PC im LAN zugreifst:
+**NICHT verwenden:**
 
 ```env
+# ❌ FALSCH - Spotify lehnt LAN-IPs ohne HTTPS ab!
 SPOTIFY_REDIRECT_URI=http://192.168.178.100:8765/api/auth/callback
 ```
+
+**Zugriff von anderen Geräten:**
+
+Wenn du von einem anderen Gerät zugreifen möchtest, nutze einen SSH-Tunnel:
+
+```bash
+# Auf deinem Client-Gerät (Laptop, Tablet, etc.):
+ssh -L 8765:localhost:8765 benutzer@192.168.178.100
+
+# Dann im Browser öffnen:
+# http://127.0.0.1:8765
+```
+
+So erscheint der Zugriff für Spotify als `localhost`, auch wenn du remote bist!
 
 ## Die vollständige Fix-Historie
 
@@ -102,12 +119,14 @@ cat .env | grep SPOTIFY_REDIRECT_URI
 Füge in deiner `.env` Datei hinzu oder aktualisiere:
 
 ```env
-# Wenn du lokal per localhost zugreifst:
-SPOTIFY_REDIRECT_URI=http://localhost:8765/api/auth/callback
+# Für Docker (Port 8765) - IMMER 127.0.0.1 verwenden!
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/auth/callback
 
-# Wenn du per IP zugreifst (z.B. von einem anderen Gerät):
-SPOTIFY_REDIRECT_URI=http://192.168.178.100:8765/api/auth/callback
+# Für lokale Entwicklung (Port 8000):
+SPOTIFY_REDIRECT_URI=http://localhost:8000/api/auth/callback
 ```
+
+⚠️ **WICHTIG:** Verwende NIEMALS LAN-IP-Adressen (wie `192.168.x.x`) ohne HTTPS! Spotify lehnt diese ab.
 
 ### Schritt 3: Registriere in Spotify Developer Dashboard
 
@@ -115,11 +134,12 @@ SPOTIFY_REDIRECT_URI=http://192.168.178.100:8765/api/auth/callback
 2. Wähle deine App aus
 3. Klicke "Edit Settings"
 4. Unter "Redirect URIs", füge hinzu:
-   - `http://localhost:8765/api/auth/callback`
-   - `http://127.0.0.1:8765/api/auth/callback`
-   - `http://192.168.178.100:8765/api/auth/callback`
+   - `http://localhost:8765/api/auth/callback` (für Docker)
+   - `http://127.0.0.1:8765/api/auth/callback` (für Docker)
+   - `http://localhost:8000/api/auth/callback` (für lokale Entwicklung)
    
-   (Du kannst mehrere gleichzeitig registrieren!)
+   **NICHT hinzufügen:**
+   - ❌ `http://192.168.178.100:8765/...` (wird abgelehnt!)
 
 5. Klicke "Add" und dann "Save"
 
@@ -136,10 +156,11 @@ docker-compose up -d
 
 ### Schritt 5: Teste
 
-1. Öffne: `http://192.168.178.100:8765/auth` (oder localhost)
-2. Klicke "Connect Spotify"
-3. Du wirst zu Spotify weitergeleitet
-4. Nach der Autorisierung kommst du zurück zur App
+1. Öffne: `http://127.0.0.1:8765/auth` (wenn direkt auf Docker-Host)
+2. ODER nutze SSH-Tunnel von anderem Gerät (siehe unten)
+3. Klicke "Connect Spotify"
+4. Du wirst zu Spotify weitergeleitet
+5. Nach der Autorisierung kommst du zurück zur App
 
 ## Fehlersuche
 

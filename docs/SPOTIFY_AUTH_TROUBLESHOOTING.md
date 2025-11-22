@@ -2,7 +2,16 @@
 
 ## Common Error: "INVALID_CLIENT: Insecure redirect URI"
 
-This error occurs when the `redirect_uri` in your authorization request doesn't **exactly match** what's configured in your Spotify Developer Dashboard.
+This error occurs when the `redirect_uri` in your authorization request doesn't **exactly match** what's configured in your Spotify Developer Dashboard, OR when you're using a non-localhost HTTP URL.
+
+### ⚠️ IMPORTANT: Spotify's HTTPS Requirement
+
+**Spotify only accepts:**
+- ✅ `http://localhost:...` or `http://127.0.0.1:...` (HTTP without HTTPS)
+- ✅ `https://...` (HTTPS with valid certificate)
+- ❌ `http://192.168.x.x:...` (LAN IPs without HTTPS are REJECTED)
+
+**Solution for Docker:** Use `127.0.0.1` and access via SSH tunnel or directly from Docker host!
 
 ### Quick Fix Checklist
 
@@ -29,35 +38,41 @@ This error occurs when the `redirect_uri` in your authorization request doesn't 
 SPOTIFY_REDIRECT_URI=http://localhost:8000/api/auth/callback
 ```
 
-#### Docker Deployment (with port mapping)
-If your Docker container is exposed on port 8765:
+#### Docker Deployment
+**ALWAYS use 127.0.0.1 for Docker:**
 ```env
-SPOTIFY_REDIRECT_URI=http://localhost:8765/api/auth/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/auth/callback
 ```
 
-#### LAN Access (IP address)
-If accessing from `192.168.178.100` on port 8765:
+#### ❌ DON'T Use LAN IP Addresses
+**This will be REJECTED by Spotify:**
 ```env
 SPOTIFY_REDIRECT_URI=http://192.168.178.100:8765/api/auth/callback
 ```
 
+**Use SSH tunnel instead (see below).**
+
 ### Step-by-Step Fix
 
-#### Step 1: Identify Your Access URL
+#### Step 1: Identify Your Access Method
 How do you access the application?
-- Local only: `http://localhost:8000`
-- Docker with port mapping: `http://localhost:8765`
-- LAN access: `http://192.168.178.100:8765`
-- Custom domain: `https://yourdomain.com`
+- ✅ Local only: `http://localhost:8000` or `http://127.0.0.1:8000`
+- ✅ Docker on same machine: `http://127.0.0.1:8765`
+- ✅ Remote via SSH tunnel: `http://127.0.0.1:8765` (tunneled)
+- ✅ Custom domain with HTTPS: `https://yourdomain.com`
+- ❌ LAN IP without HTTPS: NOT SUPPORTED by Spotify
 
 #### Step 2: Build Your redirect_uri
 Format: `{YOUR_ACCESS_URL}/api/auth/callback`
 
-Examples:
+**Valid Examples:**
 - `http://localhost:8000/api/auth/callback`
-- `http://localhost:8765/api/auth/callback`
-- `http://192.168.178.100:8765/api/auth/callback`
+- `http://127.0.0.1:8765/api/auth/callback`
 - `https://yourdomain.com/api/auth/callback`
+
+**Invalid Examples:**
+- ❌ `http://192.168.178.100:8765/api/auth/callback` (no HTTPS)
+- ❌ `http://localhost:8765/auth/spotify/callback` (wrong path)
 
 #### Step 3: Register in Spotify Dashboard
 1. Visit: https://developer.spotify.com/dashboard
@@ -137,12 +152,41 @@ SPOTIFY_REDIRECT_URI=http://localhost:8000/api/auth/callback
 **HTTP vs HTTPS:**
 - ✅ `http://localhost` is ALLOWED by Spotify for development
 - ✅ `http://127.0.0.1` is ALLOWED by Spotify for development
-- ⚠️ `http://192.168.x.x` may be rejected by Spotify in some cases
+- ❌ `http://192.168.x.x` is REJECTED by Spotify (requires HTTPS)
 - ✅ `https://` is REQUIRED for production domains
 
-If Spotify rejects your HTTP redirect_uri for LAN IPs, you have two options:
-1. Use `http://localhost` with port forwarding
-2. Set up HTTPS with a proper domain and SSL certificate
+### Remote Access via SSH Tunnel
+
+If you need to access from a different device than the Docker host:
+
+**Why SSH Tunnel?**
+
+Spotify only allows HTTP for `localhost`/`127.0.0.1`. For remote access, you need either:
+- ✅ HTTPS with valid certificate, OR
+- ✅ SSH tunnel to make remote access appear as localhost
+
+**Setting up SSH Tunnel:**
+
+On your client device (laptop, tablet, etc.):
+
+```bash
+# Create tunnel to Docker host
+ssh -L 8765:localhost:8765 user@192.168.178.100
+
+# Keep this connection open
+```
+
+**Access via SSH Tunnel:**
+
+1. SSH tunnel is active
+2. Open browser on client device
+3. Go to: `http://127.0.0.1:8765/auth`
+4. Connection tunnels through SSH to Docker host
+5. OAuth works because Spotify sees `127.0.0.1`
+
+**Alternative: Setup HTTPS**
+
+For permanent remote access without SSH tunnel, set up a reverse proxy (nginx/traefik) with Let's Encrypt. Then use `https://yourdomain.com/api/auth/callback`.
 
 ### Debugging Tips
 
