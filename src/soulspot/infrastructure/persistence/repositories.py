@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 if TYPE_CHECKING:
@@ -2300,7 +2301,6 @@ class SessionRepository:
         Returns:
             Session dataclass or None if not found
         """
-        from soulspot.application.services.session_store import Session
 
         # Get the session
         stmt = select(SessionModel).where(SessionModel.session_id == session_id)
@@ -2311,7 +2311,6 @@ class SessionRepository:
             return None
 
         # Update last_accessed_at (sliding expiration)
-        from datetime import UTC, datetime
 
         model.last_accessed_at = datetime.now(UTC)
 
@@ -2341,7 +2340,6 @@ class SessionRepository:
         Returns:
             Updated session or None if not found
         """
-        from soulspot.application.services.session_store import Session
 
         stmt = select(SessionModel).where(SessionModel.session_id == session_id)
         result = await self.session.execute(stmt)
@@ -2356,7 +2354,6 @@ class SessionRepository:
                 setattr(model, key, value)
 
         # Update last_accessed_at
-        from datetime import UTC, datetime
 
         model.last_accessed_at = datetime.now(UTC)
 
@@ -2405,8 +2402,6 @@ class SessionRepository:
         Returns:
             Number of sessions deleted
         """
-        from datetime import UTC, datetime, timedelta
-
         cutoff_time = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
         stmt = delete(SessionModel).where(SessionModel.last_accessed_at < cutoff_time)
         result = await self.session.execute(stmt)
@@ -2427,7 +2422,6 @@ class SessionRepository:
         Returns:
             Session dataclass or None if not found
         """
-        from soulspot.application.services.session_store import Session
 
         stmt = select(SessionModel).where(SessionModel.oauth_state == state)
         result = await self.session.execute(stmt)
@@ -2437,7 +2431,6 @@ class SessionRepository:
             return None
 
         # Update last_accessed_at
-        from datetime import UTC, datetime
 
         model.last_accessed_at = datetime.now(UTC)
 

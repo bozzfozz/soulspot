@@ -1,7 +1,7 @@
 """add_session_persistence
 
 Revision ID: 40cac646364c
-Revises: 0b88b6152c1d
+Revises: 0372f0c937d1
 Create Date: 2025-11-22 20:30:00.000000
 
 """
@@ -17,7 +17,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-# Hey future me, this migration adds database-backed session persistence to fix the 
+# Hey future me, this migration adds database-backed session persistence to fix the
 # "re-authenticate after Docker restart" bug. The sessions table stores OAuth tokens
 # (access_token, refresh_token) and session metadata. When the container restarts,
 # sessions survive because they're in SQLite (mounted on /config volume) instead of
@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column('last_accessed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint('session_id')
     )
-    
+
     # Create indexes for efficient cleanup queries
     op.create_index('ix_sessions_last_accessed', 'sessions', ['last_accessed_at'])
     op.create_index('ix_sessions_token_expires', 'sessions', ['token_expires_at'])

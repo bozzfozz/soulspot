@@ -282,12 +282,19 @@ class DatabaseSessionStore:
     # sessions) but subsequent requests are fast (memory cache). If you have 10k+ sessions, this could
     # be a problem - consider paginated loading or on-demand loading per session_id instead!
     async def _ensure_loaded(self) -> None:
-        """Load sessions from database on first access."""
+        """Mark sessions as ready for on-demand loading.
+
+        Sessions are loaded on-demand when accessed, not all at once.
+        This flag prevents attempting to pre-load all sessions, which
+        could be expensive with many sessions. Each session is fetched
+        from the database individually when requested if not in cache.
+        """
         if self._db_loaded or not self._get_db_session:
             return
 
-        # Note: We'd need to add a get_all() method to SessionRepository
-        # For now, we'll load sessions on-demand
+        # Sessions are loaded on-demand in get_session() and get_session_by_state()
+        # when not found in memory cache. This is more efficient than loading all
+        # sessions upfront, especially after restart with many sessions.
         self._db_loaded = True
 
     # Hey, create() now writes to BOTH memory and DB! The in-memory write is sync (fast), the DB
