@@ -1,6 +1,5 @@
 """Unit tests for automation workers."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -51,10 +50,10 @@ class TestWatchlistWorker:
     async def test_start(self, worker):
         """Test starting the worker."""
         await worker.start()
-        
+
         assert worker._running is True
         assert worker._task is not None
-        
+
         # Stop worker
         await worker.stop()
 
@@ -63,13 +62,13 @@ class TestWatchlistWorker:
         """Test starting worker when already running."""
         await worker.start()
         initial_task = worker._task
-        
+
         # Try to start again
         await worker.start()
-        
+
         # Should keep the same task
         assert worker._task == initial_task
-        
+
         await worker.stop()
 
     @pytest.mark.asyncio
@@ -77,9 +76,9 @@ class TestWatchlistWorker:
         """Test stopping the worker."""
         await worker.start()
         assert worker._running is True
-        
+
         await worker.stop()
-        
+
         assert worker._running is False
         # Task should be cancelled
 
@@ -95,9 +94,9 @@ class TestWatchlistWorker:
         """Test checking watchlists when none are due."""
         with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = []
-            
+
             await worker._check_watchlists()
-            
+
             mock_list.assert_called_once_with(limit=100)
 
     @pytest.mark.asyncio
@@ -110,16 +109,16 @@ class TestWatchlistWorker:
         mock_watchlist.id = MagicMock()
         mock_watchlist.id.value = "watchlist-123"
         mock_watchlist.update_check = MagicMock()
-        
+
         # Set no spotify client
         worker.spotify_client = None
-        
+
         with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = [mock_watchlist]
-            
+
             with patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock) as mock_update:
                 await worker._check_watchlists()
-                
+
                 # Should update watchlist with 0 releases
                 mock_watchlist.update_check.assert_called_once_with(
                     releases_found=0,
@@ -140,14 +139,14 @@ class TestWatchlistWorker:
         mock_watchlist.auto_download = True
         mock_watchlist.quality_profile = "high"
         mock_watchlist.update_check = MagicMock()
-        
+
         with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = [mock_watchlist]
-            
+
             with patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger:
                 with patch.object(worker.watchlist_service.repository, "update", new_callable=AsyncMock):
                     await worker._check_watchlists()
-                    
+
                     # Should trigger workflow
                     mock_trigger.assert_called_once()
                     call_args = mock_trigger.call_args
@@ -159,7 +158,7 @@ class TestWatchlistWorker:
         """Test error handling in watchlist checking."""
         with patch.object(worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock) as mock_list:
             mock_list.side_effect = Exception("Test error")
-            
+
             # Should not raise exception
             await worker._check_watchlists()
 
@@ -172,15 +171,15 @@ class TestWatchlistWorker:
         mock_watchlist.id = MagicMock()
         mock_watchlist.id.value = "watchlist-123"
         mock_watchlist.quality_profile = "high"
-        
+
         new_releases = [
             {"id": "release-1", "name": "Album 1"},
             {"id": "release-2", "name": "Album 2"},
         ]
-        
+
         with patch.object(worker.workflow_service, "trigger_workflow", new_callable=AsyncMock) as mock_trigger:
             await worker._trigger_automation(mock_watchlist, new_releases)
-            
+
             # Should trigger workflow for each release
             assert mock_trigger.call_count == 2
 
@@ -222,10 +221,10 @@ class TestDiscographyWorker:
     async def test_start(self, worker):
         """Test starting the worker."""
         await worker.start()
-        
+
         assert worker._running is True
         assert worker._task is not None
-        
+
         await worker.stop()
 
     @pytest.mark.asyncio
@@ -233,20 +232,20 @@ class TestDiscographyWorker:
         """Test starting when already running."""
         await worker.start()
         initial_task = worker._task
-        
+
         await worker.start()
-        
+
         assert worker._task == initial_task
-        
+
         await worker.stop()
 
     @pytest.mark.asyncio
     async def test_stop(self, worker):
         """Test stopping the worker."""
         await worker.start()
-        
+
         await worker.stop()
-        
+
         assert worker._running is False
 
     @pytest.mark.asyncio
@@ -255,7 +254,7 @@ class TestDiscographyWorker:
         with patch("soulspot.infrastructure.persistence.repositories.ArtistWatchlistRepository") as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_active = AsyncMock(side_effect=Exception("Test error"))
-            
+
             # Should not raise exception
             await worker._check_discographies()
 
@@ -290,10 +289,10 @@ class TestQualityUpgradeWorker:
     async def test_start(self, worker):
         """Test starting the worker."""
         await worker.start()
-        
+
         assert worker._running is True
         assert worker._task is not None
-        
+
         await worker.stop()
 
     @pytest.mark.asyncio
@@ -301,20 +300,20 @@ class TestQualityUpgradeWorker:
         """Test starting when already running."""
         await worker.start()
         initial_task = worker._task
-        
+
         await worker.start()
-        
+
         assert worker._task == initial_task
-        
+
         await worker.stop()
 
     @pytest.mark.asyncio
     async def test_stop(self, worker):
         """Test stopping the worker."""
         await worker.start()
-        
+
         await worker.stop()
-        
+
         assert worker._running is False
 
     @pytest.mark.asyncio
@@ -323,7 +322,7 @@ class TestQualityUpgradeWorker:
         with patch("soulspot.infrastructure.persistence.repositories.TrackRepository") as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_all = AsyncMock(return_value=[])
-            
+
             # Should handle empty list gracefully
             await worker._identify_upgrades()
 
@@ -333,7 +332,7 @@ class TestQualityUpgradeWorker:
         with patch("soulspot.infrastructure.persistence.repositories.TrackRepository") as MockRepo:
             mock_repo = MockRepo.return_value
             mock_repo.list_all = AsyncMock(side_effect=Exception("Test error"))
-            
+
             # Should not raise exception
             await worker._identify_upgrades()
 
@@ -342,7 +341,7 @@ class TestQualityUpgradeWorker:
         """Test that run loop stops when _running is False."""
         # Start the worker
         worker._running = True
-        
+
         # Mock check method to set _running to False after first call
         call_count = 0
         async def mock_check():
@@ -350,9 +349,9 @@ class TestQualityUpgradeWorker:
             call_count += 1
             if call_count >= 1:
                 worker._running = False
-        
+
         with patch.object(worker, "_identify_upgrades", side_effect=mock_check):
             await worker._run_loop()
-        
+
         # Should have called check at least once
         assert call_count >= 1
