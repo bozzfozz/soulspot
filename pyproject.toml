@@ -9,6 +9,15 @@ description = "Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchr
 authors = ["bozzfozz"]
 readme = "README.md"
 packages = [{include = "soulspot", from = "src"}]
+# AI-Model: Copilot
+# Hey future me - explicitly include templates and static files in the package distribution.
+# Poetry includes Python files by default, but we need to ensure HTML templates, CSS, JS,
+# and other static assets are bundled when users install via pip/poetry. Without this,
+# the installed package would have code but no templates = runtime errors!
+include = [
+    "src/soulspot/templates/**/*",
+    "src/soulspot/static/**/*",
+]
 license = "MIT"
 homepage = "https://github.com/bozzfozz/soulspot-bridge"
 repository = "https://github.com/bozzfozz/soulspot-bridge"
