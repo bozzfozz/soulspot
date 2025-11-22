@@ -1,451 +1,160 @@
 # Fehler-Sammlung: SoulSpot Bridge
-## Umfassende Fehlersuche und Problemanalyse
+## Offene Probleme und Verbesserungspotenziale
 
-**Datum:** 2025-11-20  
-**Analysierter Codebase:** soulspot-bridge (90 Python-Dateien, ~24k LOC)  
-**Analysemethoden:** Statische Analyse (ruff, mypy, bandit), Unit-Tests, Coverage-Analyse, Manuelle Code-Inspektion
+**Datum:** 2025-11-22 (Last Updated)  
+**Analysierter Codebase:** soulspot-bridge (92 Python-Dateien, ~24k LOC)  
+**Analysemethoden:** Statische Analyse (ruff, mypy, bandit), Unit-Tests, Coverage-Analyse
 
 ---
 
-## 📊 **STATUS UPDATE - 2025-11-20**
+## 📊 **AKTUELLER STATUS**
 
-### Sofortmaßnahmen (Sprint 1) - ✅ **COMPLETED**
-- ✅ **M-1**: Ruff linter violations (68 auto-fixed) - 0 violations remaining
-- ✅ **H-1**: Print statement replaced with structured logging
-- ✅ **H-2**: Broad exception handling made specific with proper logging
-- ✅ **K-4**: Global state variables now thread-safe with `@lru_cache`
+### ✅ Vollständig Erledigte Aufgaben
+Die folgenden Punkte wurden verifiziert und komplett abgeschlossen (**aus dieser Liste entfernt**):
+- ✅ **M-1**: Ruff linter violations - 0 violations
+- ✅ **H-1**: Print statements replaced with structured logging
+- ✅ **H-2**: Broad exception handling made specific
+- ✅ **K-4**: Global state variables thread-safe with `@lru_cache`
+- ✅ **K-2**: Error handling tests (600 passed, 1 skipped)
+- ✅ **H-3**: Cookie security configurable via `API_SECURE_COOKIES`
+- ✅ **M-5**: SQLite operations documented in `docs/sqlite-operations.md`
+- ✅ **H-5**: Path traversal protection with `PathValidator`
 
-### Current Quality Metrics ✅
-- **Ruff**: ✅ 0 violations (was 68)
-- **MyPy**: ✅ 0 errors (strict mode)
-- **Bandit**: ✅ 0 high-severity findings
-- **Tests**: ✅ 528 passing, 1 skipped
+### Current Quality Metrics
+- **Ruff**: ✅ 0 violations
+- **MyPy**: ✅ 0 errors (strict mode, 92 files)
+- **Bandit**: ✅ 0 HIGH/MEDIUM/LOW findings
+- **Tests**: ✅ 600 passed, 1 skipped
+- **Coverage**: ⚠️ **51.62%** (Target: 90%)
 
 ---
 
 ## 🔴 **KRITISCHE FEHLER (BLOCKER)**
 
-### K-1: Fehlende Test-Abdeckung in kritischen Komponenten
+### K-1: Unzureichende Test-Abdeckung
 **Schweregrad:** KRITISCH  
-**Betroffene Dateien:**
-- `src/soulspot/main.py` - **0.00%** Coverage
-- `src/soulspot/api/routers/ui.py` (725 Zeilen) - **0.00%** Coverage
-- `src/soulspot/application/workers/automation_workers.py` - **0.00%** Coverage
-- `src/soulspot/application/services/automation_workflow_service.py` - **0.00%** Coverage
-- `src/soulspot/application/services/notification_service.py` - **0.00%** Coverage
-- `src/soulspot/infrastructure/observability/middleware.py` - **0.00%** Coverage
-- `src/soulspot/infrastructure/persistence/widget_registry.py` - **0.00%** Coverage
+**Aktuelle Coverage:** 51.62% (Ziel: 90%)
 
-**Problem:**  
-Zentrale Anwendungskomponenten (Haupteinstiegspunkt, UI-Router, Worker, Middleware) haben **KEINE** Tests. Dies verstößt gegen die Projektvorgabe von ≥90% globaler Coverage und 100% Services-Layer Coverage.
-
-**Risiko:**
-- Keine Absicherung gegen Regressionen
-- Produktionsausfälle nicht erkennbar vor Deployment
-- Kritische User-Flows (UI, Automation, Benachrichtigungen) ungetestet
+**Betroffene Dateien mit niedriger Coverage:**
+| Datei | Coverage | Statements |
+|-------|----------|------------|
+| `application/workers/automation_workers.py` | 0.00% | 209/209 ungetestet |
+| `application/services/automation_workflow_service.py` | 0.00% | 129/129 ungetestet |
+| `application/services/postprocessing/id3_tagging_service.py` | 11.63% | 106/126 ungetestet |
+| `application/services/postprocessing/lyrics_service.py` | 13.64% | 84/102 ungetestet |
+| `use_cases/check_album_completeness.py` | 12.04% | 69/82 ungetestet |
+| `use_cases/scan_library.py` | 14.37% | 121/145 ungetestet |
+| `infrastructure/persistence/repositories.py` | 33.65% | 460/731 ungetestet |
+| `main.py` | 30.29% | 130/199 ungetestet |
 
 **Empfehlung:**
-1. Sofortige Erstellung von Integration-Tests für `main.py` (Lifespan-Events, Startup/Shutdown)
-2. E2E-Tests mit Playwright für `ui.py` (HTMX-Interaktionen)
-3. Unit-Tests für Worker und Services (Mock externe Dependencies)
-4. Deployment-Gate einrichten: Coverage < 90% → Build blockieren
+1. **PRIORITÄT 1**: Integration-Tests für `main.py` (Lifespan-Events, Startup/Shutdown)
+2. **PRIORITÄT 2**: Unit-Tests für Worker und Automation-Services (mit Mocks)
+3. **PRIORITÄT 3**: Postprocessing-Services testen (ID3, Lyrics, Artwork)
+4. **PRIORITÄT 4**: Use-Case-Tests für Album-Completeness und Library-Scan
+5. **CI-Gate**: Build blockieren bei Coverage < 80%
 
 ---
 
-### K-2: Fehlende Test-Fälle für Fehlerbehandlung
-**Schweregrad:** KRITISCH  
-**Betroffene Tests:** `tests/integration/api/test_error_handling.py`
-
-**Fehlgeschlagene Tests (7 von 27):**
-```
-FAILED test_invalid_json_body_returns_422
-FAILED test_malformed_json_returns_error
-FAILED test_missing_required_fields_returns_422
-FAILED test_invalid_data_types_returns_422
-FAILED test_post_only_endpoint_rejects_get
-FAILED test_nonexistent_playlist_returns_404
-FAILED test_duplicate_creation_handled_gracefully
-```
-
-**Problem:**  
-API-Fehlerbehandlung ist nicht korrekt implementiert oder Tests sind fehlerhaft. Kritische Validierungspfade (422 Fehler, Methodenvalidierung, 404-Handling, Constraint-Violations) schlagen fehl.
-
-**Risiko:**
-- Ungültige Eingaben könnten zu 500-Fehlern statt 422 führen
-- Fehlende HTTP-Methoden-Validierung (Sicherheitsrisiko)
-- Datenbankconstraint-Verletzungen möglicherweise nicht abgefangen
-
-**Empfehlung:**
-1. Tests debuggen und exakte Fehlerursache identifizieren
-2. Pydantic-Validierung in allen Endpunkten sicherstellen
-3. Custom Exception Handler für 422, 404, 409 implementieren
-4. Constraint-Violation-Handling mit Try-Catch um DB-Operationen
-
----
-
-### K-3: Sehr große Repository-Datei (Wartbarkeitsproblem)
+### K-3: Sehr große Repository-Datei
 **Schweregrad:** HOCH  
-**Betroffene Datei:** `src/soulspot/infrastructure/persistence/repositories.py` (2203 Zeilen)
+**Betroffene Datei:** `src/soulspot/infrastructure/persistence/repositories.py` (2231 Zeilen, 83KB)
 
 **Problem:**  
-Single Responsibility Principle verletzt. Die Datei enthält zu viele Repositories und Logik.
-
-**Coverage:** 31.97% (472 von 728 Statements nicht getestet)
-
-**Risiko:**
-- Schwer zu testen und zu warten
-- Merge-Konflikte bei paralleler Entwicklung
-- Cognitive Overload für neue Entwickler
-- Refactorings sind risikoreich ohne ausreichende Tests
+- Single Responsibility Principle verletzt
+- Schwer zu testen (nur 33.65% Coverage)
+- Schwer zu warten und zu verstehen
+- Hohe Merge-Konflikt-Wahrscheinlichkeit
 
 **Empfehlung:**
-1. Aufteilen in separate Repository-Klassen pro Entität:
-   - `playlist_repository.py`
-   - `track_repository.py`
-   - `download_repository.py`
-   - `user_repository.py`
-   - etc.
-2. Jede Datei < 300 Zeilen halten
+1. Aufteilen in separate Repository-Klassen pro Entität
+2. Jede Datei < 400 Zeilen halten
 3. Tests pro Repository-Datei erstellen
-
----
-
-### K-4: Globale State-Variablen ohne Thread-Safety ✅ **RESOLVED 2025-11-20**
-**Schweregrad:** HOCH  
-**Betroffene Dateien:**
-- `src/soulspot/api/dependencies.py:45` - `global _session_store`
-- `src/soulspot/application/services/widget_template_registry.py:391` - `global _registry`
-
-**Code-Snippets:**
-```python
-# dependencies.py
-global _session_store
-if _session_store is None:
-    _session_store = SessionStore()
-return _session_store
-
-# widget_template_registry.py
-global _registry
-if _registry is None:
-    _registry = WidgetTemplateRegistry()
-```
-
-**Problem:**  
-Globale Variablen in Async-/Multithreaded-Umgebung können Race Conditions verursachen. Keine Locks um Initialisierung.
-
-**Risiko:**
-- Doppelte Initialisierung möglich (bei concurrent requests)
-- Session-Store-Inkonsistenzen
-- Registry-Corruption
-
-**Lösung (Implementiert):**
-Beide Funktionen verwenden nun `@lru_cache` Decorator für thread-sichere Singleton-Initialisierung:
-```python
-@lru_cache
-def get_session_store() -> SessionStore:
-    return SessionStore(session_timeout_seconds=3600)
-
-@lru_cache
-def get_widget_template_registry() -> WidgetTemplateRegistry:
-    registry = WidgetTemplateRegistry()
-    registry.discover_templates()
-    return registry
-```
+4. **HINWEIS:** Dies ist ein größeres Refactoring-Projekt
 
 ---
 
 ## 🟡 **HOHE PRIORITÄT**
 
-### H-1: Print-Statement statt strukturiertem Logging ✅ **RESOLVED 2025-11-20**
+### H-4: Fehlende CSRF-Protection
 **Schweregrad:** HOCH  
-**Betroffene Datei:** `src/soulspot/api/routers/tracks.py:318`
-
-```python
-print(f"Warning: Failed to update file tags: {e}")
-```
 
 **Problem:**  
-In Produktion nicht nachvollziehbar, da `print()` nicht in strukturierte Logs geschrieben wird. Projektvorgabe verlangt `structlog` oder projektspezifisches Logging.
+Nur OAuth-Flow hat CSRF-Protection. Reguläre POST/PUT/DELETE-Endpunkte haben **KEINE** CSRF-Token-Validierung.
 
-**Risiko:**
-- Fehler in Produktion schwer zu diagnostizieren
-- Keine Log-Aggregation möglich
-- Verletzung der Logging-Architektur
-
-**Lösung (Implementiert):**
-```python
-logger.warning("Failed to update file tags for track %s: %s", track_id, e, exc_info=True)
-```
-
----
-
-### H-2: Übermäßig breite Exception-Handling ✅ **RESOLVED 2025-11-20**
-**Schweregrad:** HOCH  
-**Betroffene Dateien:**
-- `src/soulspot/application/services/token_manager.py:152`
-- `src/soulspot/application/use_cases/enrich_metadata.py:133`
-- `src/soulspot/infrastructure/persistence/database.py:52`
-- `src/soulspot/infrastructure/persistence/database.py:65`
-
-**Code-Pattern:**
-```python
-except Exception:
-    # Zu breites Catch-All
-    pass
-```
-
-**Problem:**  
-Fängt SystemExit, KeyboardInterrupt und andere Exceptions ab, die nicht abgefangen werden sollten. Versteckt Bugs.
-
-**Risiko:**
-- Schwer zu debuggende Fehler
-- Programm läuft weiter trotz kritischer Fehler
-- Keine aussagekräftigen Fehlermeldungen
-
-**Lösung (Implementiert):**
-1. **token_manager.py**: Spezifische Exceptions `except (httpx.HTTPError, ValueError)` mit Logging
-2. **enrich_metadata.py**: Spezifische Exception `except httpx.HTTPError` mit Logging
-3. **database.py**: Clarifying comments added - broad exception intentional for transaction rollback integrity
-
----
-
-### H-3: Fehlende Sicherheits-Features in Session-Cookies
-**Schweregrad:** HOCH  
-**Betroffene Datei:** `src/soulspot/api/routers/auth.py:49-56`
-
-```python
-response.set_cookie(
-    key="session_id",
-    value=session.session_id,
-    httponly=True,
-    secure=False,  # ⚠️ KEIN HTTPS-SCHUTZ!
-    samesite="lax",
-    max_age=3600,
-)
-```
-
-**Problem:**  
-`secure=False` bedeutet Cookie wird auch über HTTP übertragen. Kommentar sagt "Local use only", aber Code sollte produktionsbereit sein.
-
-**Risiko:**
-- Session-Hijacking bei Man-in-the-Middle-Attacken
-- Nicht deployment-ready für produktive Umgebungen
-- Verstoß gegen Security Best Practices
-
-**Empfehlung:**
-1. `secure=True` mit Umgebungsvariable steuern:
-   ```python
-   secure=settings.cookie_secure  # True in Production, False in Dev
-   ```
-2. `samesite="strict"` für besseren CSRF-Schutz erwägen
-3. Session-Token mit kürzerer Laufzeit (z.B. 15 Minuten) + Refresh-Token
-
----
-
-### H-4: Fehlende CSRF-Protection für POST-Endpunkte
-**Schweregrad:** HOCH  
-**Bereich:** Gesamte API
-
-**Problem:**  
-Nur OAuth-Flow hat CSRF-Protection via `state`-Parameter. Reguläre POST/PUT/DELETE-Endpunkte haben **KEINE** CSRF-Token-Validierung.
-
-**Betroffene Endpunkte (Beispiele):**
-- `/playlists/import`
-- `/tracks/{track_id}/download`
-- `/settings`
-- `/widgets` (CRUD)
+**Betroffene Endpunkte:**
+- `/api/v1/playlists/import`
+- `/api/v1/tracks/{track_id}/download`
+- `/api/v1/settings`
+- `/api/v1/widgets` (CRUD)
+- Alle anderen POST/PUT/DELETE-Endpunkte
 
 **Risiko:**
 - CSRF-Angriffe möglich
 - Unbefugte Aktionen im Namen authentifizierter Nutzer
-- Compliance-Probleme (OWASP Top 10)
+- OWASP Top 10 Compliance-Problem
 
 **Empfehlung:**
-1. CSRF-Middleware implementieren (z.B. `starlette-csrf`)
-2. CSRF-Token in allen Forms/HTMX-Requests einbetten
-3. Double-Submit Cookie Pattern oder Synchronizer Token Pattern
-4. Tests für CSRF-Schutz schreiben (siehe Agent-Instructions)
-
----
-
-### H-5: Fehlende Input-Validierung bei Datei-Operationen
-**Schweregrad:** HOCH  
-**Betroffene Services:**
-- `postprocessing/artwork_service.py`
-- `postprocessing/id3_tagging_service.py`
-- `library_scanner.py`
-
-**Problem:**  
-Keine explizite Validierung von Dateipfaden gegen Path Traversal. Vertrauen auf User-Input könnte zu Zugriff außerhalb von `mnt/downloads` und `mnt/music` führen.
-
-**Beispiel-Code-Snippet (potentiell anfällig):**
-```python
-# Irgendwo könnte user_input in Pfade einfließen
-file_path = Path(base_dir) / user_provided_filename
-```
-
-**Risiko:**
-- Path Traversal (z.B. `../../etc/passwd`)
-- Zugriff auf unerwünschte Dateien
-- Datenverlust bei Schreiboperationen
-
-**Empfehlung:**
-1. `Path.resolve()` verwenden und gegen `base_dir` prüfen:
-   ```python
-   resolved = (base_dir / user_input).resolve()
-   if not resolved.is_relative_to(base_dir):
-       raise ValueError("Invalid path")
-   ```
-2. Whitelist für erlaubte Dateiendungen (z.B. `.mp3`, `.flac`)
-3. Bandit-Regel B607/B608 beachten
+1. `starlette-csrf` Middleware implementieren
+2. CSRF-Token in alle Forms/HTMX-Requests einbetten
+3. Double-Submit Cookie Pattern verwenden
+4. Tests für CSRF-Schutz schreiben
 
 ---
 
 ## 🟠 **MITTLERE PRIORITÄT**
 
-### M-1: 64 Linter-Violations (Ruff) ✅ **RESOLVED 2025-11-20**
-**Schweregrad:** MITTEL  
-**Quelle:** `/tmp/ruff-report.json`
-
-**Verteilung:**
-- **W293** (Whitespace in Leerzeilen): 39 Vorkommen
-- **UP007** (Use `X | Y` statt `Union[X, Y]`): 12 Vorkommen
-- **I001** (Imports unsortiert): 6 Vorkommen
-- **UP035** (Veraltete Imports): 4 Vorkommen
-- **F541** (F-String ohne Platzhalter): 2 Vorkommen
-- **F401** (Ungenutzter Import): 1 Vorkommen
-
-**Hauptsächlich betroffen:**
-- Alembic-Migration-Dateien (Codegen-Output)
-- `scripts/capture_screenshots.py` (16 Issues)
-
-**Lösung (Implementiert):**
-Alle 68 Violations wurden mit `ruff check --fix .` automatisch behoben:
-- Modern Python 3.10+ type unions (`X | Y` statt `Union[X, Y]`)
-- Imports from `collections.abc` statt `typing`
-- Sorted and formatted imports
-- Removed trailing whitespace
-- All checks now pass with 0 violations
-
----
-
 ### M-2: Unvollständige TODO-Implementierungen
 **Schweregrad:** MITTEL  
-**Anzahl:** 15+ TODOs in produktivem Code
+**Anzahl:** 19 TODOs in produktivem Code
 
 **Kritische TODOs:**
-1. **tracks.py:210** - `"genre": None,  # TODO: Add genre field to track model`
-   - Genre-Support fehlt komplett (DB-Schema + API)
-
-2. **metadata.py:109** - `spotify_access_token=None,  # TODO: Get from auth context`
-   - Spotify-Token nicht aus Session extrahiert
-
-3. **metadata.py:125** - `conflicts=[],  # TODO: Implement conflict detection`
-   - Metadaten-Konflikte nicht erkannt (verschiedene Quellen)
-
-4. **settings.py:145** - `# TODO: Implement actual persistence`
+1. **settings.py:184** - `# TODO: Implement actual persistence`
    - Settings werden nicht gespeichert (nur In-Memory)
 
-5. **id3_tagging_service.py:201** - `# TODO: Implement custom frame creation`
+2. **metadata.py:126** - `# TODO: Get from auth context`
+   - Spotify-Token nicht aus Session extrahiert
+
+3. **ui.py:782** - `# TODO: Add genre field`
+   - Genre-Support fehlt komplett (DB-Schema + API)
+
+4. **postprocessing/id3_tagging_service.py:201** - `# TODO: Implement custom frame creation`
    - Custom ID3-Tags nicht implementiert
 
-6. **automation_workers.py:231, 316** - `# TODO: Get list of artists / Implement upgrade identification`
-   - Automation-Features nur Stubs
+5. **automation_workers.py:82, 274** - `# TODO: Get access token from auth context`
+   - Automation-Features fehlt Token-Handling
 
 **Empfehlung:**
-1. TODOs in Issues überführen (GitHub/Jira)
-2. Priorisieren: Genre-Support + Settings-Persistenz zuerst
-3. Nicht-kritische TODOs in separate Branch auslagern
-4. TODOs im Code mit Issue-Nummer verlinken
+1. TODOs in GitHub Issues überführen
+2. Priorisieren: Settings-Persistenz + Genre-Support zuerst
+3. TODOs im Code mit Issue-Nummer verlinken (`# TODO(#123): ...`)
 
 ---
 
-### M-3: Fehlende Docstrings in vielen Modulen
+### M-3: Fehlende Docstrings
 **Schweregrad:** MITTEL  
-**Analyse:** Viele Dateien ohne Module-Level-Docstrings
 
-**Beispiele ohne `"""`-Docstrings:**
-- Alle API-Router haben Docstrings
-- Aber: Viele Service-Klassen ohne Klassen-Docstring
-- Utility-Funktionen oft ohne Dokumentation
-
-**Gemäß Analyse:**
-- 659 Funktionen **mit** Return-Type-Annotation
-- 342 Funktionen **ohne** Return-Type (aber viele sind Abstrakte/Interfaces)
+**Problem:**  
+Viele Service-Klassen und Funktionen ohne Docstrings.
 
 **Empfehlung:**
 1. Google-Style oder NumPy-Style Docstrings einführen
 2. Öffentliche APIs: **MUSS** dokumentiert sein
-3. Interne Funktionen: **SOLLTE** dokumentiert sein
-4. Tool: `pydocstyle` oder `interrogate` zur Docstring-Coverage-Messung
+3. Tool: `interrogate` zur Docstring-Coverage-Messung
+4. Ziel: >80% Docstring-Coverage
 
 ---
 
-### M-4: Leere `pass`-Statements ohne Kontext
-**Schweregrad:** MITTEL  
-**Anzahl:** 20+ Vorkommen
-
-**Betroffene Bereiche:**
-- `domain/ports/__init__.py` - Abstract Methods (OK)
-- `domain/exceptions/__init__.py` - Exception-Klassen (OK)
-- `application/cache/base_cache.py` - Abstract Cache (OK)
-- **`api/routers/auth.py:329`** - Exception-Handler mit leerem `pass` (⚠️)
-- **`application/workers/download_worker.py:169`** - Error-Handling mit `pass` (⚠️)
-
-**Problem:**  
-Einige `pass`-Statements schlucken Exceptions ohne Logging.
-
-**Empfehlung:**
-1. Abstrakte Methoden: `pass` + `...` für Klarheit
-2. Exception-Handler: Entweder Logging oder `raise` statt `pass`
-3. Leere Implementierungen: Kommentar hinzufügen warum `pass`
-
----
-
-### M-5: SQLite-spezifische Risiken nicht dokumentiert
-**Schweregrad:** MITTEL  
-**Betroffene Komponenten:** Datenbankschicht
-
-**Problem:**  
-Projekt nutzt SQLite als Standard (`sqlite+aiosqlite:///./soulspot.db`), aber spezielle SQLite-Limitierungen nicht adressiert:
-
-1. **Foreign Keys standardmäßig deaktiviert**
-   - Muss via `PRAGMA foreign_keys=ON` aktiviert werden
-   - Nicht sichtbar in Code ob aktiviert
-
-2. **Concurrent Writes limitiert**
-   - SQLite sperrt komplette Datenbank bei Schreibzugriff
-   - Mehrere Worker könnten `database is locked` Fehler bekommen
-
-3. **Type Affinity statt strikter Typen**
-   - SQLite erlaubt z.B. String in INTEGER-Spalte
-   - Constraints müssen explizit sein
-
-**Empfehlung:**
-1. Foreign Keys explizit in Engine-Config aktivieren:
-   ```python
-   event.listen(engine.sync_engine, "connect", lambda c, _: c.execute("PRAGMA foreign_keys=ON"))
-   ```
-2. Dokumentation für SQLite-Betrieb erweitern
-3. Retry-Logik für `OperationalError` (database locked)
-4. Erwägen: Connection Pool mit `max_overflow=0` für SQLite
-5. Tests für Concurrent-Write-Szenarien
-
----
-
-### M-6: Große Dateien erschweren Wartung
+### M-6: Große Router-Dateien
 **Schweregrad:** MITTEL  
 
 **Dateien > 500 Zeilen:**
-- `repositories.py` - 2203 Zeilen (KRITISCH, siehe K-3)
-- `automation.py` (Router) - 978 Zeilen
-- `ui.py` (Router) - 725 Zeilen
-- `playlists.py` (Router) - 621 Zeilen
-- `downloads.py` (Router) - 523 Zeilen
-- `settings.py` (Config) - 480 Zeilen
+- `automation.py` - 1110 Zeilen
+- `ui.py` - 805 Zeilen
+- `playlists.py` - 677 Zeilen
 
 **Empfehlung:**
-1. Router in kleinere Sub-Router aufteilen (z.B. nach Feature-Bereich)
+1. Router in kleinere Sub-Router aufteilen
 2. Shared-Komponenten in separate Utility-Module
 3. Ziel: Keine Datei > 400 Zeilen
 
@@ -453,50 +162,18 @@ Projekt nutzt SQLite als Standard (`sqlite+aiosqlite:///./soulspot.db`), aber sp
 
 ## 🔵 **NIEDRIGE PRIORITÄT / TECH DEBT**
 
-### N-1: Veraltete Dependency-Patterns
+### N-3: Fehlende Retry-Mechanismen
 **Schweregrad:** NIEDRIG  
 
-**Ruff UP007/UP035-Warnings:**
-- Migration-Dateien nutzen noch `Union[X, Y]` statt `X | Y` (Python 3.10+)
-- Alte `typing.Sequence` statt `collections.abc.Sequence`
-
-**Empfehlung:**
-- Auto-Fix via `ruff check --fix --select UP`
-- Migration-Templates modernisieren
-
----
-
-### N-2: Fehlende Type-Hints in Tests
-**Schweregrad:** NIEDRIG  
-
-**Analyse:**
-- Tests haben laut `mypy.ini` Override: `disallow_untyped_defs = false`
-- Bedeutet: Tests können ohne Type-Hints sein
-
-**Empfehlung:**
-- Langfristig auch Tests typisieren (bessere IDE-Unterstützung)
-- Aber: Nicht prioritär, da Tests lokal nicht deployed werden
-
----
-
-### N-3: Fehlende Retry-Mechanismen für externe APIs
-**Schweregrad:** NIEDRIG  
 **Betroffene Clients:**
 - `musicbrainz_client.py`
 - `lastfm_client.py`
 - `spotify_client.py`
 
-**Problem:**  
-Netzwerk-Timeouts oder temporäre API-Ausfälle könnten Features brechen. Nur `musicbrainz_client.py` hat Rate-Limiting.
-
 **Empfehlung:**
-1. `tenacity` Library für Retry-Logik nutzen:
-   ```python
-   @retry(stop=stop_after_attempt(3), wait=wait_exponential())
-   async def fetch_data():
-       ...
-   ```
-2. Circuit-Breaker-Pattern bereits vorhanden (`circuit_breaker.py`) - konsistent nutzen
+1. `tenacity` Library für Retry-Logik nutzen
+2. Circuit-Breaker-Pattern konsistent verwenden
+3. Exponential Backoff bei API-Fehlern
 
 ---
 
@@ -504,20 +181,16 @@ Netzwerk-Timeouts oder temporäre API-Ausfälle könnten Features brechen. Nur `
 **Schweregrad:** NIEDRIG  
 
 **Problem:**  
-API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
+Manche API-Endpunkte ohne `/v1/`-Präfix.
 
 **Empfehlung:**
-- Router mit `/api/v1/` prefixen
+- Router einheitlich mit `/api/v1/` prefixen
 - Bei Breaking Changes `/api/v2/` parallel laufen lassen
 
 ---
 
 ### N-5: Keine Dependency-Vulnerability-Scanning
 **Schweregrad:** NIEDRIG  
-
-**Aktueller Stand:**
-- `safety` ist in `pyproject.toml` aber möglicherweise nicht in CI
-- Keine `dependabot.yml` für automatische Updates
 
 **Empfehlung:**
 1. GitHub Dependabot aktivieren
@@ -526,380 +199,77 @@ API-Endpunkte ohne `/v1/`-Präfix. Bei Breaking Changes schwierig zu migrieren.
 
 ---
 
-## 📊 **METRIKEN & STATISTIKEN**
-
-### Test-Coverage Zusammenfassung
-**Globale Coverage:** 48.24% (❌ UNTER 90%-Ziel)
-
-**Services-Layer Coverage:**
-| Service | Coverage | Status |
-|---------|----------|--------|
-| `session_store.py` | 98.92% | ✅ |
-| `renaming_service.py` | 91.58% | ✅ |
-| `token_manager.py` | 82.80% | ⚠️ |
-| `notification_service.py` | 0.00% | ❌ |
-| `automation_workflow_service.py` | 0.00% | ❌ |
-
-**Durchschnitt Services-Layer:** ~54% (❌ UNTER 100%-Ziel)
-
-### Code-Qualität Metriken
-- **Ruff-Violations:** 64 (👍 relativ niedrig für Codebase-Größe)
-- **Mypy-Errors:** 0 (✅ PERFEKT - Strict Mode erfolgreich)
-- **Bandit Security Issues:** 0 (✅ PERFEKT)
-- **Fehlgeschlagene Tests:** 7 von ~70 Integration-Tests (⚠️)
-
-### Größenkennzahlen
-- **Gesamt Python-Dateien:** 90
-- **Gesamt LOC:** ~24.000
-- **Größte Datei:** 2203 Zeilen (repositories.py)
-- **Durchschnittliche Dateigröße:** 267 Zeilen
-- **HTML-Templates:** 40
-- **HTMX-Interactions:** 89 `hx-*` Attribute
-
----
-
 ## 🎯 **PRIORISIERTE HANDLUNGSEMPFEHLUNGEN**
 
-### Sofortmaßnahmen (Sprint 1) - ✅ **COMPLETED 2025-11-20**
-1. ✅ **K-2 beheben:** Fehlgeschlagene Error-Handling-Tests debuggen und fixen - **COMPLETED 2025-11-20**
-   - Added `register_exception_handlers()` function in `main.py`
-   - Domain exceptions now properly mapped to HTTP status codes (ValidationException→422, EntityNotFoundException→404, etc.)
-   - Added handlers for malformed JSON, request validation errors, and value errors
-   - Removed overly broad try-except blocks in `tracks.py` and `downloads.py`
-   - All 27 error handling tests now passing (was 20/27)
-2. ✅ **K-4 absichern:** Globale State-Variablen mit Locks schützen - **COMPLETED 2025-11-20**
-   - `dependencies.py`: Replaced global `_session_store` with `@lru_cache` decorator
-   - `widget_template_registry.py`: Replaced global `_registry` with `@lru_cache` decorator
-   - Both singletons now thread-safe via FastAPI dependency injection best practices
-3. ✅ **H-1 fixen:** Print-Statement durch Logging ersetzen - **COMPLETED 2025-11-20**
-   - `tracks.py:318`: Replaced `print()` with `logger.warning()` including exc_info
-4. ✅ **H-2 verbessern:** Broad Exception-Handling spezifischer machen - **COMPLETED 2025-11-20**
-   - `token_manager.py:152`: Changed to catch `(httpx.HTTPError, ValueError)` with logging
-   - `enrich_metadata.py:133`: Changed to catch `httpx.HTTPError` with logging
-   - `database.py:52, 65`: Added clarifying comments for intentional broad exception handling
-5. ✅ **M-1 aufräumen:** Ruff-Violations mit Auto-Fix beseitigen - **COMPLETED 2025-11-20**
-   - All 68 violations auto-fixed (W293, UP007, I001, UP035, F541, F401)
-   - Ruff check now passes with 0 violations
+### Sprint 1 (Sofort)
+1. ⏳ **K-1**: Test-Coverage auf >80% heben (Priorität: main.py, workers, services)
+2. ⏳ **H-4**: CSRF-Protection implementieren
+3. ⏳ **M-2**: Kritische TODOs in GitHub Issues überführen
 
-### Kurzfristig (Sprint 2-3)
-6. ⏳ **K-1 angehen:** Test-Coverage auf >90% heben (Priorität: main.py, ui.py, workers)
-7. ✅ **H-3 härten:** Cookie-Security konfigurierbar machen - **COMPLETED 2025-11-20**
-   - Added `APISettings.secure_cookies` configuration (default: False for dev, True for production)
-   - Added `APISettings.session_cookie_name` and `APISettings.session_max_age`
-   - Updated `auth.py` to use settings for all cookie operations
-   - Documented in `.env.example` with clear production deployment instructions
-8. ⏳ **H-4 implementieren:** CSRF-Protection für alle POST/PUT/DELETE
-9. ✅ **M-5 dokumentieren:** SQLite-Betriebshinweise und Foreign-Keys aktivieren - **COMPLETED 2025-11-21**
-   - Foreign keys confirmed ENABLED in database.py (lines 55-78)
-   - Created comprehensive docs/sqlite-operations.md documentation
-   - Documented SQLite-specific configurations (timeout: 30s, check_same_thread: False)
-   - Documented limitations (concurrent writes, type affinity, no connection pooling)
-   - Provided troubleshooting guide and migration path to PostgreSQL
-10. ⏳ **M-2 aufarbeiten:** Kritische TODOs in Issues überführen und abarbeiten
+### Sprint 2-3 (Kurzfristig)
+4. ⏳ **M-6**: Große Router-Dateien aufteilen (automation.py, ui.py)
+5. ⏳ **M-3**: Docstring-Coverage auf >80% heben
+6. ⏳ **N-3**: Retry-Mechanismen für externe APIs
 
-### Mittelfristig (Sprint 4-6)
-11. ✅ **K-3 refactoren:** `repositories.py` aufteilen (größter Wartungsengpass)
-12. ✅ **H-5 validieren:** Path-Traversal-Schutz in allen File-Ops - **COMPLETED 2025-11-21**
-   - Added PathValidator to artwork_service.py (save_artwork method)
-   - Added PathValidator to library_scanner.py (discover_audio_files method)
-   - All file paths validated to be within allowed directories
-   - Protection against path traversal attacks (e.g., ../../etc/passwd)
-13. ✅ **M-6 modularisieren:** Große Router-Dateien (ui.py, automation.py) aufteilen
-14. ✅ **M-3 dokumentieren:** Docstring-Coverage auf >80% heben
-15. ✅ **N-3 stabilisieren:** Retry-Mechanismen für externe APIs
-
-### Langfristig (Backlog)
-16. ⏳ **N-1:** Dependency-Modernisierung (automatisch via Dependabot)
-17. ⏳ **N-4:** API-Versionierung einführen (`/api/v1/`)
-18. ⏳ **N-5:** Security-Scanning in CI integrieren
+### Sprint 4-6 (Mittelfristig)
+7. ⏳ **K-3**: repositories.py refactoren (größter Wartungsengpass)
+8. ⏳ **N-4**: API-Versionierung einheitlich umsetzen
+9. ⏳ **N-5**: Dependency-Scanning in CI integrieren
 
 ---
 
 ## 🔐 **SICHERHEITSRISIKEN (ZUSAMMENFASSUNG)**
 
 **HOCH:**
-- ✅ Session-Cookies ohne `secure=True` (H-3) - **COMPLETED 2025-11-20** - Now configurable
-- ⏳ Fehlende CSRF-Protection (H-4) - In Progress (52 endpoints to protect)
-- ✅ Potentieller Path Traversal in File-Ops (H-5) - **COMPLETED 2025-11-21** - PathValidator implemented
+- ⏳ Fehlende CSRF-Protection (H-4)
 
 **MITTEL:**
-- ✅ Broad Exception-Handling verschleiert Fehler (H-2) - **COMPLETED 2025-11-20**
-- ✅ Globale Variablen ohne Thread-Safety (K-4) - **COMPLETED 2025-11-20**
+- ℹ️ Keine weiteren mittelschweren Sicherheitsrisiken identifiziert
 
 **NIEDRIG:**
 - ℹ️ Fehlende Dependency-Scans (N-5)
 
-**Bandit-Ergebnis:** ✅ 0 HIGH, 0 MEDIUM, 0 LOW findings (Excellent security posture)
+**Bandit-Ergebnis:** ✅ 0 HIGH/MEDIUM/LOW findings
 
 ---
 
-## 📋 **ZUSÄTZLICHE BEOBACHTUNGEN**
+## ✅ **POSITIVE ASPEKTE**
 
-### Positive Aspekte ✅
+### Code-Qualität ✅
 1. **Mypy Strict Mode:** 0 Type-Errors - exzellente Type-Safety
-2. **Bandit Security:** 0 Vulnerabilities - Code ist sicher geschrieben
-3. **Architektur:** Saubere Layered Architecture (Domain, Application, Infrastructure)
-4. **Async-First:** Konsequente Nutzung von async/await
-5. **Dependency Injection:** FastAPI Dependencies gut genutzt
+2. **Bandit Security:** 0 Vulnerabilities - sicherer Code
+3. **Ruff Linting:** 0 Violations - sauberer Code-Stil
+4. **Tests:** 600 passing - gute Test-Basis
 
-### Architektur-Patterns ✅
+### Architektur ✅
+- ✅ Saubere Layered Architecture (Domain, Application, Infrastructure)
 - ✅ Repository-Pattern implementiert
 - ✅ Service-Layer vorhanden
 - ✅ Domain-Exceptions definiert
-- ✅ Circuit-Breaker für Resilience
-- ✅ Structured Logging vorbereitet
-
-### Verbesserungswürdige Patterns ⚠️
-- ⚠️ Fehlende Unit-of-Work Pattern (könnte Transaktionen vereinfachen)
-- ⚠️ Keine explizite Event-Sourcing für Automation-History
-- ⚠️ Command/Query Separation nicht durchgängig (CQRS-Light wäre sinnvoll)
+- ✅ Async-First mit async/await
+- ✅ Dependency Injection via FastAPI
 
 ---
 
-## 🧪 **TEST-STRATEGIE EMPFEHLUNGEN**
+## 📝 **ÄNDERUNGSHISTORIE**
 
-### Unit-Tests
-**Aktuell:** 492 Tests (gut)  
-**Fehlend:**
-- Worker-Tests (Download, Metadata, Playlist-Sync)
-- Notification-Service-Tests
-- Widget-Registry-Tests
+**2025-11-22:**
+- Datei bereinigt: Alle erledigten Items entfernt
+- Coverage aktualisiert: 51.62% (600 Tests passing)
+- Verifiziert: Ruff 0, MyPy 0, Bandit 0 Violations
+- Status aktualisiert: H-3, H-5, M-5, K-2, K-4, H-1, H-2, M-1 als erledigt markiert
 
-### Integration-Tests
-**Aktuell:** API-Endpoint-Tests vorhanden  
-**Fehlend:**
-- Database-Migration-Tests (Alembic up/down)
-- Multi-Source Metadata-Enrichment
-- End-to-End Workflows (Playlist-Import → Download → Library-Scan)
-
-### E2E-Tests
-**Aktuell:** KEINE (❌)  
-**Empfohlen:**
-- Playwright-Tests für HTMX-Flows
-- Login/Logout-Flow
-- Playlist-Import-Wizard
-- Dashboard-Widget-Interaktionen
-
-### Performance-Tests
-**Aktuell:** KEINE (❌)  
-**Empfohlen:**
-- Load-Test für SSE-Streaming (viele gleichzeitige Verbindungen)
-- Concurrent-Download-Stress-Test
-- Database-Query-Performance (N+1 Queries?)
+**2025-11-20:**
+- Initial comprehensive error collection
 
 ---
-
-## 🛠️ **TOOLING-VERBESSERUNGEN**
-
-### Aktuell vorhanden ✅
-- ruff (Linting & Formatting)
-- mypy (Type Checking)
-- bandit (Security)
-- pytest + pytest-cov
-- pre-commit hooks (konfiguriert aber evtl. nicht aktiv)
-
-### Fehlt / Empfohlen ⏳
-- `pydocstyle` oder `interrogate` (Docstring-Coverage)
-- `safety` in CI (Dependency-Vulnerabilities)
-- `vulture` (Dead Code Detection)
-- `radon` (Code Complexity Metrics)
-- `locust` oder `k6` (Performance Testing)
-- `semgrep` (Advanced SAST)
-
----
-
-## 📝 **DOKUMENTATIONS-LÜCKEN**
-
-### Code-Dokumentation
-- ⚠️ Viele Service-Methoden ohne Docstrings
-- ⚠️ Domain-Entities ohne Beispiel-Usage
-- ⚠️ Repository-Interfaces nicht dokumentiert
-
-### Projekt-Dokumentation
-- ✅ README.md vorhanden und gut
-- ✅ TESTING.md vorhanden
-- ❌ ARCHITECTURE.md fehlt (Layer-Diagramme, Dependency-Flow)
-- ❌ API.md fehlt (OpenAPI vorhanden, aber Prose-Doku wäre gut)
-- ❌ DEPLOYMENT.md rudimentär (mehr Details zu Produktion)
-- ❌ TROUBLESHOOTING.md fehlt (Häufige Fehler + Lösungen)
-
-### Inline-Kommentare
-- ⚠️ Zu viele TODOs (sollten Issues sein)
-- ⚠️ Manche komplexe Algorithmen ohne Erklärung
-- ✅ Gute Kommentare in Security-kritischen Bereichen (auth.py)
-
----
-
-## 🚀 **PERFORMANCE-POTENZIALE**
-
-### Datenbank
-- ⏳ **N+1 Queries möglich:** Repositories nutzen oft `selectinload()` nicht
-- ⏳ **Fehlende Indizes:** Nur `cc17880fff37_add_performance_indexes.py`, aber womöglich nicht vollständig
-- ⏳ **SQLite Write-Locks:** Bei hoher Last könnte PostgreSQL nötig sein
-
-### Caching
-- ✅ Cache-Layer vorhanden (`enhanced_cache.py`, `musicbrainz_cache.py`)
-- ⏳ **Redis-Integration fehlt:** Nur In-Memory (verloren bei Restart)
-- ⏳ **Cache-Invalidierung:** Nicht klar implementiert
-
-### Async-Optimierung
-- ✅ Gute async/await-Nutzung
-- ⏳ **Blocking I/O:** Mutagen (ID3-Tags) ist synchron - könnte Worker blockieren
-- ⏳ **Concurrency Limits:** Keine Semaphoren für parallele Downloads sichtbar
-
----
-
-## 📅 **MIGRATIONS-QUALITÄT**
-
-### Alembic-Migrationen
-**Anzahl:** 6 Migrations
-
-**Positiv:**
-- ✅ Klare Benennung (z.B. `add_dashboard_widget_schema`)
-- ✅ Up/Down-Funktionen vorhanden
-
-**Negativ:**
-- ⚠️ Linter-Violations in generierten Migrationen (W293, UP007)
-- ❌ Keine Migration-Tests (DB-Zustand vor/nach)
-- ❌ Keine Daten-Migrationen (nur Schema-Changes)
-
-**Empfehlung:**
-- Template anpassen für ruff-konforme Migrations
-- Tests: `alembic upgrade head` / `alembic downgrade -1` / `alembic upgrade head`
-
----
-
-## 🎨 **FRONTEND-SPEZIFISCHE ISSUES (HTMX)**
-
-### Positive Aspekte
-- ✅ 89 HTMX-Interaktionen - gute Progressive Enhancement
-- ✅ SSE für Real-Time Updates implementiert
-- ✅ Tailwind CSS für Styling
-
-### Potenzielle Probleme
-- ⚠️ **Keine Frontend-Tests:** Browser-Tests mit Playwright fehlen komplett
-- ⚠️ **CSRF bei HTMX:** Müssen CSRF-Token in allen `hx-post`/`hx-put`/`hx-delete` haben
-- ⚠️ **Error-Handling:** Unklar ob HTMX-Fehler (4xx/5xx) gut gehandled werden
-- ⚠️ **Accessibility:** Keine Tests für Screen-Reader / Keyboard-Navigation
-
-### JavaScript
-**Dateien:**
-- `static/js/app.js`
-- `static/js/search.js`
-- `static/js/sse-client.js`
-
-**Analyse:**
-- ⚠️ **Keine JS-Linter:** ESLint/Prettier fehlen
-- ⚠️ **Keine JS-Tests:** Jest/Vitest nicht konfiguriert
-- ⏳ **TypeScript:** Könnte Type-Safety verbessern
-
----
-
-## ✅ **COMPLIANCE & BEST PRACTICES**
-
-### OWASP Top 10 (2021) Check
-1. **A01:2021 – Broken Access Control:** ⚠️ Teilweise (Auth vorhanden, aber CSRF fehlt)
-2. **A02:2021 – Cryptographic Failures:** ✅ Keine Secrets im Code
-3. **A03:2021 – Injection:** ✅ Kein SQL-Injection (ORM), aber Path-Traversal-Risiko
-4. **A04:2021 – Insecure Design:** ⚠️ CSRF + Cookie-Security
-5. **A05:2021 – Security Misconfiguration:** ⚠️ `secure=False` in Cookies
-6. **A06:2021 – Vulnerable Components:** ⏳ Kein automatisches Scanning
-7. **A07:2021 – Auth Failures:** ✅ OAuth2 + PKCE gut implementiert
-8. **A08:2021 – Data Integrity Failures:** ✅ Signing/Verification in JWT
-9. **A09:2021 – Logging Failures:** ⚠️ Print-Statement, aber sonst OK
-10. **A10:2021 – SSRF:** ✅ Keine User-kontrollierten URLs
-
-**Gesamtbewertung:** 6/10 (Verbesserungsbedarf bei A01, A04, A05)
-
----
-
-## 🏁 **FAZIT**
-
-### Gesamtzustand: **GELB** (Funktionsfähig, aber erheblicher Verbesserungsbedarf)
-
-**Stärken:**
-- ✅ Solide Architektur mit klarer Trennung
-- ✅ Exzellente Type-Safety (mypy strict)
-- ✅ Null Security-Vulnerabilities (Bandit)
-- ✅ Moderne Tech-Stack (FastAPI, SQLAlchemy 2.0, async)
-
-**Kritische Schwächen:**
-- ❌ Coverage weit unter Projektziel (48% statt 90%)
-- ❌ Zentrale Komponenten komplett ungetestet (main.py, ui.py, workers)
-- ❌ 7 fehlgeschlagene Error-Handling-Tests
-- ❌ Security-Lücken (CSRF, Cookie-Security)
-
-**Handlungsbedarf:**
-- **BLOCKER für Production-Deployment:**
-  - Test-Coverage auf >90% heben
-  - Fehlerbehandlungs-Tests reparieren
-  - CSRF-Protection implementieren
-  - Cookie-Security härten
-
-- **Vor nächstem Major-Release:**
-  - `repositories.py` refactoren
-  - TODOs abarbeiten
-  - Dokumentation vervollständigen
-
-**Geschätzte Technical Debt:** ~3-4 Wochen Vollzeit-Arbeit für alle HIGH-Prios
-
----
-
-## 📊 **ANHANG: DETAILLIERTE STATISTIKEN**
-
-### Datei-Coverage Top/Bottom 10
-
-**Beste Coverage (100%):**
-```
-✅ api/schemas/metadata.py - 100%
-✅ application/cache/base_cache.py - 100%
-✅ application/cache/musicbrainz_cache.py - 100%
-✅ application/cache/spotify_cache.py - 100%
-✅ application/cache/track_file_cache.py - 100%
-```
-
-**Schlechteste Coverage (0%):**
-```
-❌ main.py - 0%
-❌ api/routers/ui.py - 0%
-❌ application/workers/automation_workers.py - 0%
-❌ application/services/automation_workflow_service.py - 0%
-❌ application/services/notification_service.py - 0%
-❌ infrastructure/observability/middleware.py - 0%
-❌ infrastructure/persistence/widget_registry.py - 0%
-```
-
-### Ruff-Violations nach Datei
-```
-scripts/capture_screenshots.py: 16
-alembic/versions/aa15670cdf15_add_library_management_schema.py: 13
-alembic/versions/cc17880fff37_add_performance_indexes.py: 12
-alembic/versions/0b88b6152c1d_add_dashboard_widget_schema.py: 9
-alembic/versions/46d1c2c2f85b_add_priority_field_to_downloads.py: 7
-alembic/versions/bb16770eeg26_add_automation_and_watchlist_schema.py: 5
-scripts/library_scanner_demo.py: 2
-```
-
-### Komplexitäts-Hotspots (Dateigröße)
-```
-1. repositories.py - 2203 Zeilen ⚠️⚠️⚠️
-2. automation.py (Router) - 978 Zeilen ⚠️⚠️
-3. ui.py (Router) - 725 Zeilen ⚠️⚠️
-4. entities/__init__.py - 654 Zeilen ⚠️
-5. ports/__init__.py - 633 Zeilen ⚠️
-6. playlists.py (Router) - 621 Zeilen ⚠️
-```
-
----
-
-**Ende der Fehlersammlung**
 
 **Nächste Schritte:**
-1. Dieses Dokument mit Team reviewen
-2. Priorisierung bestätigen
-3. Issues in Tracking-System (Jira/GitHub) erstellen
-4. Sprint-Planning basierend auf Handlungsempfehlungen
-5. Nach Fixes: Erneute Code-Review + Metriken
+1. Diese Liste mit Team reviewen
+2. Sprint-Planning für offene Punkte
+3. GitHub Issues erstellen für alle TODO-Items
+4. Nach jedem Fix: Item aus dieser Liste entfernen
+5. Regelmäßige Updates (wöchentlich oder nach jedem Sprint)
 
-**Erstellt von:** QA & Test Automation Specialist Agent  
-**Verantwortlich für Follow-Up:** Development Team Lead
+**Erstellt von:** QA & Test Automation Specialist  
+**Verantwortlich für Updates:** Development Team
