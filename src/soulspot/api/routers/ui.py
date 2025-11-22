@@ -815,3 +815,25 @@ async def track_metadata_editor(
             },
             status_code=400,
         )
+
+
+# Hey future me, this renders the followed artists sync page! It's a simple GET that loads the template
+# with empty state. The actual sync happens client-side via HTMX POST to /api/automation/followed-artists/sync
+# which returns JSON that gets rendered by JavaScript in the template. No DB queries on initial page load -
+# keeps it fast. Users see empty state with "Sync from Spotify" button. After sync, artists list populates
+# and users can select which artists to add to watchlists. The bulk create uses POST to /api/automation/
+# followed-artists/watchlists/bulk. This page requires Spotify OAuth token in session or sync will fail!
+@router.get("/automation/followed-artists", response_class=HTMLResponse)
+async def followed_artists_page(request: Request) -> Any:
+    """Followed artists sync and watchlist creation page.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        HTML page for managing followed artists
+    """
+    return templates.TemplateResponse(
+        "followed_artists.html",
+        {"request": request},
+    )

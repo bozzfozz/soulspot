@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% from "includes/_skeleton.html" import card_skeleton, spinner %}
+{% from "includes/_components.html" import empty_state, badge, breadcrumb %}
+
+{% block title %}Followed Artists - SoulSpot Bridge{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Breadcrumb -->
+    {{ breadcrumb([
+        {'text': 'Home', 'href': '/'},
+        {'text': 'Automation', 'href': '/automation'},
+        {'text': 'Followed Artists'}
+    ]) }}
+    
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
+                <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+                Followed Artists
+            </h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Sync your Spotify followed artists and create watchlists</p>
+        </div>
+        <div class="flex gap-2 w-full sm:w-auto">
+            <button id="sync-btn" 
+                    class="btn btn-primary focus-ring group flex-1 sm:flex-none justify-center"
+                    hx-post="/api/automation/followed-artists/sync"
+                    hx-target="#artists-list"
+                    hx-swap="innerHTML"
+                    hx-indicator="#sync-spinner">
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Sync from Spotify
+            </button>
+            <button id="create-watchlists-btn"
+                    class="btn btn-secondary focus-ring group flex-1 sm:flex-none justify-center"
+                    onclick="createWatchlistsForSelected()"
+                    disabled>
+                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create Watchlists
+            </button>
+        </div>
+    </div>
+
+    <!-- Sync Progress Indicator -->
+    <div id="sync-spinner" class="htmx-indicator flex items-center justify-center p-8 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+        <div class="text-center">
+            {{ spinner() }}
+            <p class="text-primary-600 dark:text-primary-400 mt-4">Syncing followed artists from Spotify...</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This may take a few moments if you follow many artists</p>
+        </div>
+    </div>
+
+    <!-- Stats Banner -->
+    <div id="stats-banner" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div class="text-center">
+            <div class="text-2xl font-bold text-primary-600 dark:text-primary-400" id="stat-total">0</div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">Total Fetched</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400" id="stat-created">0</div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">Created</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="stat-updated">0</div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">Updated</div>
+        </div>
+        <div class="text-center">
+            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400" id="stat-selected">0</div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">Selected</div>
+        </div>
+    </div>
+
+    <!-- Artists List -->
+    <div id="artists-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {# Empty state using component #}
+        <div class="col-span-full">
+            {% set icon %}
+            <svg class="w-20 h-20 mx-auto text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+            {% endset %}
+            {{ empty_state(icon, 'No artists synced yet', 'Click "Sync from Spotify" to fetch all artists you follow on Spotify and create watchlists for automatic downloads.', 'Sync from Spotify', 'javascript:document.getElementById(\'sync-btn\').click()') }}
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for handling artist selection and bulk operations -->
+<script>
+    let selectedArtists = new Set();
+
+    // Handle sync response - called via HTMX
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.detail.target.id === 'artists-list') {
+            // Extract stats from response if available
+            const statsData = event.detail.xhr.response;
+            if (statsData) {
+                try {
+                    const data = JSON.parse(statsData);
+                    updateStats(data);
+                    renderArtists(data.artists || []);
+                } catch (e) {
+                    console.error('Failed to parse sync response:', e);
+                }
+            }
+        }
+    });
+
+    function updateStats(data) {
+        if (data.total_fetched !== undefined) {
+            document.getElementById('stat-total').textContent = data.total_fetched;
+            document.getElementById('stat-created').textContent = data.created;
+            document.getElementById('stat-updated').textContent = data.updated;
+            document.getElementById('stats-banner').classList.remove('hidden');
+        }
+    }
+
+    function renderArtists(artists) {
+        const container = document.getElementById('artists-list');
+        if (!artists || artists.length === 0) {
+            return;
+        }
+
+        container.innerHTML = artists.map(artist => `
+            <div class="card hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+                <label class="cursor-pointer block">
+                    <div class="card-body space-y-3">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" 
+                                   class="artist-checkbox mt-1 w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                   data-artist-id="${artist.id}"
+                                   onchange="toggleArtist('${artist.id}')">
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-semibold text-gray-900 dark:text-white truncate" title="${artist.name}">
+                                    ${artist.name}
+                                </h3>
+                                ${artist.genres && artist.genres.length > 0 ? `
+                                    <div class="flex flex-wrap gap-1 mt-2">
+                                        ${artist.genres.slice(0, 3).map(genre => `
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary-100 text-secondary-800 dark:bg-secondary-900/30 dark:text-secondary-300">
+                                                ${genre}
+                                            </span>
+                                        `).join('')}
+                                        ${artist.genres.length > 3 ? `
+                                            <span class="text-xs text-gray-500 dark:text-gray-400">+${artist.genres.length - 3} more</span>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </label>
+            </div>
+        `).join('');
+
+        // Enable Create Watchlists button if artists were loaded
+        document.getElementById('create-watchlists-btn').disabled = false;
+    }
+
+    function toggleArtist(artistId) {
+        if (selectedArtists.has(artistId)) {
+            selectedArtists.delete(artistId);
+        } else {
+            selectedArtists.add(artistId);
+        }
+        updateSelectedCount();
+        updateCreateButton();
+    }
+
+    function updateSelectedCount() {
+        document.getElementById('stat-selected').textContent = selectedArtists.size;
+    }
+
+    function updateCreateButton() {
+        const btn = document.getElementById('create-watchlists-btn');
+        btn.disabled = selectedArtists.size === 0;
+    }
+
+    async function createWatchlistsForSelected() {
+        if (selectedArtists.size === 0) {
+            alert('Please select at least one artist');
+            return;
+        }
+
+        const btn = document.getElementById('create-watchlists-btn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `
+            <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Creating...
+        `;
+
+        try {
+            const response = await fetch('/api/automation/followed-artists/watchlists/bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    artist_ids: Array.from(selectedArtists),
+                    check_frequency_hours: 24,
+                    auto_download: true,
+                    quality_profile: 'high'
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(`Successfully created ${result.created} watchlists!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+                
+                // Clear selections
+                selectedArtists.clear();
+                document.querySelectorAll('.artist-checkbox').forEach(cb => cb.checked = false);
+                updateSelectedCount();
+                updateCreateButton();
+            } else {
+                throw new Error(result.detail || 'Failed to create watchlists');
+            }
+        } catch (error) {
+            alert('Error creating watchlists: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // Select all / deselect all functionality
+    function selectAll() {
+        document.querySelectorAll('.artist-checkbox').forEach(checkbox => {
+            if (!checkbox.checked) {
+                checkbox.checked = true;
+                selectedArtists.add(checkbox.dataset.artistId);
+            }
+        });
+        updateSelectedCount();
+        updateCreateButton();
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.artist-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        selectedArtists.clear();
+        updateSelectedCount();
+        updateCreateButton();
+    }
+</script>
+{% endblock %}
