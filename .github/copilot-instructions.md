@@ -195,3 +195,27 @@ Plan → Implement (Bulk) → Validate & Fixⁿ → Auto-Code-Review & Auto-Fix�
 - Wenn einer dieser Checks fehlschlägt, ist deine Aufgabe **nicht abgeschlossen**:
   - Fixe den Code, bis alle Checks erfolgreich sind.
   - Dokumentiere bei Bedarf Sonderfälle (z. B. legitime False Positives) in der Pull-Request-Beschreibung.
+
+
+
+
+# AI Attribution Requirement
+# 1) Bei jeder von der KI generierten Datei: Füge ganz oben EINE Zeile mit exakt folgendem Format ein,
+#    wobei du das passende Kommentarzeichen für die Zielsprache benutzt:
+#       AI-Model: <Modell-Name> (Version: <Version>)
+#    Beispiel (Python):
+#       # AI-Model: Claude 3.5 Sonnet (v3.5)
+#    Beispiel (JS/TS):
+#       // AI-Model: GPT-4o (v1)
+#    Wenn Modell/Version nicht automatisch ermittelbar ist, schreibe:
+#       AI-Model: unbekannt
+#
+# 2) Bei jeder von der KI generierten Pull-Request-Beschreibung: Setze ganz oben dieselbe einzeilige Attribution:
+#       AI-Model: <Modell-Name> (Version: <Version>)
+#
+# 3) Bei jeder von der KI vorgeschlagenen Commit-Nachricht: Füge im Body einen Abschnitt "AI-Model: <Modell-Name> (Version: <Version>)"
+#
+# 4) Ausgabeformat: Gib unmittelbar danach NUR den eigentlichen Code/ Text aus (keine zusätzlichen Erklärungen).
+#
+# 5) Hinweis für Reviewer/Action-Bots: Falls möglich, prüft die CI/Action ob die Attribution vorhanden ist und kommentiert fehlende Attributionszeilen.
+
