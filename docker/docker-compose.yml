@@ -26,7 +26,7 @@ services:
       # Spotify Configuration (Required)
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
-      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/api/v1/auth/callback}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8765/api/auth/callback}
       
       # slskd Configuration (Required)
       - SLSKD_URL=${SLSKD_URL:-http://host.docker.internal:5030}

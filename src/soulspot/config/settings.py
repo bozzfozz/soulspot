@@ -115,7 +115,7 @@ class SpotifySettings(BaseSettings):
         description="Spotify OAuth client secret",
     )
     redirect_uri: str = Field(
-        default="http://localhost:8000/auth/spotify/callback",
+        default="http://localhost:8000/api/auth/callback",
         description="OAuth redirect URI",
     )
 

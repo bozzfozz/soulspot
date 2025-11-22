@@ -92,7 +92,7 @@ Edit the `.env` file and set the following **required** variables:
 ```env
 SPOTIFY_CLIENT_ID=your_spotify_client_id_here
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
-SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/v1/auth/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/auth/callback
 ```
 
 #### slskd Configuration
@@ -163,7 +163,7 @@ TZ=Europe/Berlin  # Your timezone (e.g., America/New_York, UTC)
 | `PGID` | `1000` | Group ID for file permissions |
 | `UMASK` | `002` | File creation mask |
 | `TZ` | `UTC` | Timezone |
-| `SPOTIFY_REDIRECT_URI` | `http://127.0.0.1:8765/api/v1/auth/callback` | OAuth redirect URI |
+| `SPOTIFY_REDIRECT_URI` | `http://127.0.0.1:8765/api/auth/callback` | OAuth redirect URI |
 
 **Variables with Internal Defaults (not needed in .env or docker-compose.yml):**
 
