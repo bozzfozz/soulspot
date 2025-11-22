@@ -225,11 +225,11 @@ def register_exception_handlers(app: FastAPI) -> None:
 # permission errors and convert them to clear RuntimeError messages!
 def _validate_sqlite_path(settings: Settings) -> None:
     """Validate SQLite database path accessibility before engine creation.
-    
+
     This function ensures:
     1. Parent directory exists and is writable
     2. Directory allows creating database and temporary files (journal, WAL, etc.)
-    
+
     Note: We don't pre-create the database file to avoid initialization issues.
     SQLite will create and initialize the file properly on first connection.
     """
