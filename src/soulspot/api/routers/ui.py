@@ -1,5 +1,6 @@
 """UI routes for serving HTML templates."""
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -17,7 +18,15 @@ from soulspot.infrastructure.persistence.repositories import (
     TrackRepository,
 )
 
-templates = Jinja2Templates(directory="src/soulspot/templates")
+# AI-Model: Copilot
+# Hey future me - compute templates directory relative to THIS file so it works both in
+# development (source tree) and production (installed package). The old hardcoded
+# "src/soulspot/templates" breaks when package is installed because that path doesn't exist!
+# Path(__file__).parent goes up to api/routers/, then .parent.parent goes to soulspot/,
+# then / "templates" gets us to soulspot/templates/. This works whether code runs from
+# source or site-packages. Don't change back to string literal path or it'll break again!
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 router = APIRouter()
 
