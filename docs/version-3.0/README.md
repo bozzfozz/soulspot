@@ -115,14 +115,11 @@ Essential reading:
 Essential reading:
 1. **[UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md)** - Complete card catalog and design tokens
 2. [MODULE_SPECIFICATION.md](./MODULE_SPECIFICATION.md) - Section 5 (Frontend Structure)
-3. [SOULSEEK_MODULE.md](./SOULSEEK_MODULE.md) - Section 6 (Frontend Components)
+3. [SOULSEEK_MODULE.md](./SOULSEEK_MODULE.md) - Section 8 (Frontend Components)
 4. **[ONBOARDING_FLOW.md](./ONBOARDING_FLOW.md)** - Credential collection UI patterns
+5. [ARCHITECTURE.md](./ARCHITECTURE.md) - Section 7 (Frontend Architecture)
 
 **Goal:** Build consistent, accessible UI using card components
-2. [SOULSEEK_MODULE.md](./SOULSEEK_MODULE.md) - Section 8 (Frontend Components)
-3. [ARCHITECTURE.md](./ARCHITECTURE.md) - Section 7 (Frontend Architecture)
-
-**Goal:** Build consistent, modular frontend components
 
 ### For QA/Testers
 
