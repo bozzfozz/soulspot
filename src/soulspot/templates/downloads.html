@@ -5,41 +5,48 @@
 {% block title %}Downloads - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Breadcrumb -->
-    {{ breadcrumb([
-        {'text': 'Home', 'href': '/'},
-        {'text': 'Downloads'}
-    ]) }}
+<div class="space-y-8 animate-fade-in">
     
-    <!-- Page Header -->
+    <!-- Modern Page Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
-                <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
-                </svg>
-                Download Queue
-            </h1>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage your active and pending downloads</p>
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-12 h-12 bg-gradient-to-br from-success-500 to-success-700 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
+                        Download Queue
+                    </h1>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage your active and pending downloads</p>
+                </div>
+            </div>
         </div>
         
         <!-- Global Queue Controls -->
         <div class="flex flex-wrap gap-2">
-            <button id="pause-all-btn" class="btn btn-secondary btn-sm focus-ring group"
+            <button id="pause-all-btn" 
+                    class="btn btn-secondary btn-modern btn-sm focus-visible-ring hover-lift"
                     hx-post="/api/downloads/pause"
                     hx-swap="none"
+                    data-success-message="All downloads paused"
+                    data-error-message="Failed to pause downloads"
                     aria-label="Pause all downloads">
-                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 Pause All
             </button>
-            <button id="resume-all-btn" class="btn btn-secondary btn-sm focus-ring group"
+            <button id="resume-all-btn" 
+                    class="btn btn-gradient btn-modern btn-sm focus-visible-ring shadow-lg glow-on-hover"
                     hx-post="/api/downloads/resume"
                     hx-swap="none"
+                    data-success-message="All downloads resumed"
+                    data-error-message="Failed to resume downloads"
                     aria-label="Resume all downloads">
-                <svg class="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
@@ -49,27 +56,27 @@
     </div>
 
     <!-- Batch Operations Bar (Hidden by default) -->
-    <div id="batch-operations-bar" class="hidden card bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800">
-        <div class="card-body">
+    <div id="batch-operations-bar" class="hidden card-modern border-2 border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 animate-slide-up">
+        <div class="p-4">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div class="flex items-center gap-3">
-                    <span id="selected-count" class="font-semibold text-gray-900 dark:text-white">0 selected</span>
-                    <button class="btn btn-ghost btn-sm focus-ring" onclick="clearSelection()">Clear Selection</button>
+                    <span id="selected-count" class="font-bold text-lg text-primary-900 dark:text-primary-100">0 selected</span>
+                    <button class="btn btn-ghost btn-sm btn-modern focus-visible-ring" onclick="clearSelection()">Clear Selection</button>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <button class="btn btn-secondary btn-sm focus-ring" onclick="batchAction('pause')">
+                    <button class="btn btn-secondary btn-sm btn-modern focus-visible-ring" onclick="batchAction('pause')">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6"></path>
                         </svg>
                         Pause
                     </button>
-                    <button class="btn btn-secondary btn-sm focus-ring" onclick="batchAction('resume')">
+                    <button class="btn btn-gradient btn-sm btn-modern focus-visible-ring" onclick="batchAction('resume')">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                         </svg>
                         Resume
                     </button>
-                    <button class="btn btn-danger btn-sm focus-ring" onclick="batchAction('cancel')">
+                    <button class="btn btn-danger btn-sm btn-modern focus-visible-ring" onclick="batchAction('cancel')">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
@@ -78,13 +85,13 @@
                     <div class="border-l border-gray-300 dark:border-gray-600 mx-2"></div>
                     <div class="flex items-center gap-2">
                         <label for="batch-priority" class="sr-only">Set priority</label>
-                        <select id="batch-priority" class="form-input py-1 text-sm w-24 focus-ring">
+                        <select id="batch-priority" class="input-modern py-1 text-sm w-24">
                             <option value="">Priority</option>
                             <option value="0">P0 - High</option>
                             <option value="1">P1 - Med</option>
                             <option value="2">P2 - Low</option>
                         </select>
-                        <button class="btn btn-secondary btn-sm focus-ring" onclick="batchSetPriority()">
+                        <button class="btn btn-secondary btn-sm btn-modern focus-visible-ring" onclick="batchSetPriority()">
                             Apply
                         </button>
                     </div>
@@ -94,9 +101,11 @@
     </div>
 
     <!-- Filters and View Options -->
-    <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-        <!-- Status Filters -->
-        <div class="flex flex-wrap gap-2" role="group" aria-label="Filter downloads">
+    <div class="card-modern glass-effect">
+        <div class="p-4">
+            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <!-- Status Filters -->
+                <div class="flex flex-wrap gap-2" role="group" aria-label="Filter downloads">
             <button class="btn btn-secondary btn-sm focus-ring filter-btn active" 
                     data-status="all"
                     onclick="filterDownloads('all')"

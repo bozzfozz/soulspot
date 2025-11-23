@@ -5,41 +5,55 @@
 {% block extra_head %}
 <style>
     .tab-button {
-        @apply px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300 transition-colors;
+        @apply px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-colors;
     }
     .tab-button.active {
-        @apply text-primary-600 border-primary-600;
-    }
-    .input-with-icon {
-        @apply relative;
-    }
-    .input-with-icon input {
-        @apply pr-10;
-    }
-    .input-with-icon button {
-        @apply absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700;
+        @apply text-primary-600 dark:text-primary-400 border-primary-600 dark:border-primary-400;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6">
-    <!-- Page Header -->
-    <div class="flex justify-between items-center">
-        <h1 class="text-3xl font-bold text-gray-900">Settings</h1>
+<div class="max-w-6xl mx-auto space-y-8 animate-fade-in">
+    <!-- Modern Page Header -->
+    <div class="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">
+        <div>
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-12 h-12 bg-gradient-to-br from-secondary-500 to-secondary-700 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Settings</h1>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Configure your SoulSpot Bridge</p>
+                </div>
+            </div>
+        </div>
         <div class="flex gap-2">
-            <button id="reset-btn" class="btn btn-secondary btn-sm focus-ring" onclick="confirmReset()">
-                🔄 Reset to Defaults
+            <button id="reset-btn" 
+                    class="btn btn-secondary btn-modern btn-sm focus-visible-ring hover-lift" 
+                    onclick="confirmReset()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Reset to Defaults
             </button>
-            <button id="save-btn" class="btn btn-primary btn-sm focus-ring" onclick="saveSettings()">
-                💾 Save Changes
+            <button id="save-btn" 
+                    class="btn btn-gradient btn-modern btn-sm focus-visible-ring shadow-lg glow-on-hover" 
+                    onclick="saveSettings()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                </svg>
+                Save Changes
             </button>
         </div>
     </div>
 
     <!-- Tabs Navigation -->
-    <div class="border-b border-gray-200">
-        <nav class="flex space-x-1" aria-label="Settings tabs">
+    <div class="card-modern">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-4">
+            <nav class="flex space-x-1" aria-label="Settings tabs" role="tablist">
             <button class="tab-button active" data-tab="general" onclick="switchTab('general')">
                 General
             </button>
