@@ -5,42 +5,67 @@
 {% block title %}Followed Artists - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Breadcrumb -->
-    {{ breadcrumb([
-        {'text': 'Home', 'href': '/'},
-        {'text': 'Automation', 'href': '/automation'},
-        {'text': 'Followed Artists'}
-    ]) }}
+<div class="space-y-8 animate-fade-in">
     
-    <!-- Page Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
-                <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                </svg>
-                Followed Artists
-            </h1>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Sync your Spotify followed artists and create watchlists</p>
+    <!-- Modern Page Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div class="flex-1">
+            <nav class="flex mb-3" aria-label="Breadcrumb">
+                <ol class="inline-flex items-center space-x-2">
+                    <li class="inline-flex items-center">
+                        <a href="/" class="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium">
+                            Home
+                        </a>
+                    </li>
+                    <li>
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 text-gray-400 mx-1" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">Automation</span>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 text-gray-400 mx-1" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <span class="text-sm text-gray-500 dark:text-gray-400" aria-current="page">Followed Artists</span>
+                        </div>
+                    </li>
+                </ol>
+            </nav>
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-12 h-12 bg-gradient-to-br from-secondary-500 to-secondary-700 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Followed Artists</h1>
+                    <p class="text-gray-600 dark:text-gray-400 mt-1">Sync your Spotify followed artists and create watchlists</p>
+                </div>
+            </div>
         </div>
-        <div class="flex gap-2 w-full sm:w-auto">
+        <div class="flex flex-wrap gap-2 w-full sm:w-auto">
             <button id="sync-btn" 
-                    class="btn btn-primary focus-ring group flex-1 sm:flex-none justify-center"
+                    class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover group flex-1 sm:flex-none justify-center"
                     hx-post="/api/automation/followed-artists/sync"
                     hx-target="#artists-list"
                     hx-swap="innerHTML"
-                    hx-indicator="#sync-spinner">
-                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    hx-indicator="#sync-spinner"
+                    data-success-message="Artists synced successfully!"
+                    data-error-message="Failed to sync artists">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
                 Sync from Spotify
             </button>
             <button id="create-watchlists-btn"
-                    class="btn btn-secondary focus-ring group flex-1 sm:flex-none justify-center"
+                    class="btn btn-secondary btn-modern focus-visible-ring hover-lift group flex-1 sm:flex-none justify-center"
                     onclick="createWatchlistsForSelected()"
                     disabled>
-                <svg class="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                 </svg>
                 Create Watchlists
@@ -49,44 +74,85 @@
     </div>
 
     <!-- Sync Progress Indicator -->
-    <div id="sync-spinner" class="htmx-indicator flex items-center justify-center p-8 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
-        <div class="text-center">
-            {{ spinner() }}
-            <p class="text-primary-600 dark:text-primary-400 mt-4">Syncing followed artists from Spotify...</p>
+    <div id="sync-spinner" class="htmx-indicator card-modern border-2 border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 animate-pulse">
+        <div class="p-8 text-center">
+            <div class="spinner-modern mx-auto mb-4"></div>
+            <p class="text-lg font-medium text-primary-600 dark:text-primary-400">Syncing followed artists from Spotify...</p>
             <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This may take a few moments if you follow many artists</p>
         </div>
     </div>
 
     <!-- Stats Banner -->
-    <div id="stats-banner" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <div class="text-center">
-            <div class="text-2xl font-bold text-primary-600 dark:text-primary-400" id="stat-total">0</div>
-            <div class="text-xs text-gray-600 dark:text-gray-400">Total Fetched</div>
+    <div id="stats-banner" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4" data-stagger>
+        <div class="stat-card card-modern card-hover-lift text-center">
+            <div class="flex items-center justify-center mb-2">
+                <div class="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <p class="stat-value" id="stat-total">0</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">Total Fetched</p>
         </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-green-600 dark:text-green-400" id="stat-created">0</div>
-            <div class="text-xs text-gray-600 dark:text-gray-400">Created</div>
+        <div class="stat-card card-modern card-hover-lift text-center">
+            <div class="flex items-center justify-center mb-2">
+                <div class="w-10 h-10 bg-success-100 dark:bg-success-900/30 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5 text-success-600 dark:text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                </div>
+            </div>
+            <p class="stat-value" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="stat-created">0</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">Created</p>
         </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="stat-updated">0</div>
-            <div class="text-xs text-gray-600 dark:text-gray-400">Updated</div>
+        <div class="stat-card card-modern card-hover-lift text-center">
+            <div class="flex items-center justify-center mb-2">
+                <div class="w-10 h-10 bg-info-100 dark:bg-info-900/30 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5 text-info-600 dark:text-info-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                </div>
+            </div>
+            <p class="stat-value" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="stat-updated">0</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">Updated</p>
         </div>
-        <div class="text-center">
-            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400" id="stat-selected">0</div>
-            <div class="text-xs text-gray-600 dark:text-gray-400">Selected</div>
+        <div class="stat-card card-modern card-hover-lift text-center">
+            <div class="flex items-center justify-center mb-2">
+                <div class="w-10 h-10 bg-secondary-100 dark:bg-secondary-900/30 rounded-xl flex items-center justify-center">
+                    <svg class="w-5 h-5 text-secondary-600 dark:text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+            </div>
+            <p class="stat-value" style="background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;" id="stat-selected">0</p>
+            <p class="text-xs text-gray-600 dark:text-gray-400">Selected</p>
         </div>
     </div>
 
     <!-- Artists List -->
     <div id="artists-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {# Empty state using component #}
+        {# Empty state #}
         <div class="col-span-full">
-            {% set icon %}
-            <svg class="w-20 h-20 mx-auto text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-            </svg>
-            {% endset %}
-            {{ empty_state(icon, 'No artists synced yet', 'Click "Sync from Spotify" to fetch all artists you follow on Spotify and create watchlists for automatic downloads.', 'Sync from Spotify', 'javascript:document.getElementById(\'sync-btn\').click()') }}
+            <div class="card-modern text-center py-16">
+                <div class="max-w-md mx-auto">
+                    <div class="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-secondary-100 to-secondary-200 dark:from-secondary-900/30 dark:to-secondary-900/20 rounded-full flex items-center justify-center">
+                        <svg class="w-12 h-12 text-secondary-500 dark:text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">No artists synced yet</h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-6">
+                        Click "Sync from Spotify" to fetch all artists you follow on Spotify and create watchlists for automatic downloads.
+                    </p>
+                    <button onclick="document.getElementById('sync-btn').click()" class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-lg inline-flex">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Sync from Spotify
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -95,13 +161,18 @@
 <script>
     let selectedArtists = new Set();
 
-    // Function to update stats from partial template
+    // Enhanced function to update stats from partial template
     window.updateStatsFromPartial = function() {
         if (window.syncStats) {
             document.getElementById('stat-total').textContent = window.syncStats.total_fetched;
             document.getElementById('stat-created').textContent = window.syncStats.created;
             document.getElementById('stat-updated').textContent = window.syncStats.updated;
             document.getElementById('stats-banner').classList.remove('hidden');
+            
+            // Show toast notification
+            if (window.toastManager) {
+                window.toastManager.success(`Synced ${window.syncStats.total_fetched} artists successfully!`, 3000);
+            }
         }
     };
 
@@ -126,18 +197,25 @@
 
     async function createWatchlistsForSelected() {
         if (selectedArtists.size === 0) {
-            alert('Please select at least one artist');
+            if (window.toastManager) {
+                window.toastManager.warning('Please select at least one artist', 2000);
+            }
             return;
+        }
+
+        if (window.confirmAction) {
+            const confirmed = await window.confirmAction(
+                `Create watchlists for ${selectedArtists.size} artist${selectedArtists.size > 1 ? 's' : ''}?`,
+                'Create Watchlists'
+            );
+            if (!confirmed) return;
         }
 
         const btn = document.getElementById('create-watchlists-btn');
         const originalText = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = `
-            <svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <div class="spinner-modern mr-2"></div>
             Creating...
         `;
 
@@ -158,7 +236,12 @@
             const result = await response.json();
 
             if (response.ok) {
-                alert(`Successfully created ${result.created} watchlists!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`);
+                if (window.toastManager) {
+                    window.toastManager.success(
+                        `Successfully created ${result.created} watchlist${result.created > 1 ? 's' : ''}!${result.failed > 0 ? ` (${result.failed} failed)` : ''}`,
+                        4000
+                    );
+                }
                 
                 // Clear selections
                 selectedArtists.clear();
@@ -169,7 +252,9 @@
                 throw new Error(result.detail || 'Failed to create watchlists');
             }
         } catch (error) {
-            alert('Error creating watchlists: ' + error.message);
+            if (window.toastManager) {
+                window.toastManager.error('Error creating watchlists: ' + error.message);
+            }
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;

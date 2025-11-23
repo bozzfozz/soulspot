@@ -28,31 +28,32 @@
 {% endblock %}
 
 {% block content %}
-<div class="search-page space-y-6">
-    <!-- Breadcrumb -->
-    {{ breadcrumb([
-        {'text': 'Home', 'href': '/'},
-        {'text': 'Search'}
-    ]) }}
+<div class="search-page space-y-8 animate-fade-in">
     
-    <!-- Page Header -->
-    <div class="mb-6">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight flex items-center gap-2">
-            <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
-            Search Music
-        </h1>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Find and download your favorite tracks from Soulseek</p>
+    <!-- Modern Page Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <div class="w-12 h-12 bg-gradient-to-br from-info-500 to-info-700 rounded-2xl flex items-center justify-center shadow-lg">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
+                    Search Music
+                </h1>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Find and download your favorite tracks from Soulseek</p>
+            </div>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <!-- Left Sidebar - Advanced Filters -->
         <div class="lg:col-span-1">
-            <div class="card sticky top-20">
-                <div class="card-header border-b border-gray-200 dark:border-gray-700 pb-4">
+            <div class="card-modern sticky top-20">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between">
-                        <h3 class="card-title flex items-center gap-2">
+                        <h3 class="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
                             </svg>
@@ -60,14 +61,14 @@
                         </h3>
                         <button 
                             id="clear-filters-btn"
-                            class="btn btn-ghost btn-sm focus-ring text-xs"
+                            class="btn btn-ghost btn-sm btn-modern focus-visible-ring text-xs"
                             onclick="SearchManager.clearFilters()"
                             aria-label="Clear all filters">
                             Clear All
                         </button>
                     </div>
                 </div>
-                <div class="card-body space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto">
+                <div class="p-4 space-y-4 max-h-[calc(100vh-250px)] overflow-y-auto">
                     <!-- Quality Filter -->
                     <div>
                         <button 

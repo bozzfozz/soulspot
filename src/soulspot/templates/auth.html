@@ -3,71 +3,90 @@
 {% block title %}Spotify Auth - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-8">
-    <!-- Page Header -->
-    <div>
-        <h1 class="text-3xl font-bold text-gray-900 leading-tight mb-2">Connect Spotify</h1>
-        <p class="text-base text-gray-600">
+<div class="max-w-3xl mx-auto space-y-8 animate-fade-in">
+    <!-- Modern Page Header -->
+    <div class="text-center">
+        <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-success-500 to-success-700 rounded-full flex items-center justify-center shadow-xl animate-scale-in">
+            <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-3">Connect Spotify</h1>
+        <p class="text-lg text-gray-600 dark:text-gray-400">
             Connect your Spotify account to import playlists and access your music library
         </p>
     </div>
     
     <!-- Authorization Section -->
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Step 1: Authorize Application</h2>
+    <div class="card-modern card-hover-lift">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">Step 1: Authorize Application</h2>
         </div>
-        <div class="card-body">
-            <p class="text-sm text-gray-700 mb-4">
+        <div class="p-6">
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
                 Click the button below to connect your Spotify account. You'll be redirected to Spotify to authorize this application.
             </p>
             
             <button id="auth-btn" 
-                    class="btn btn-primary"
+                    class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-xl glow-on-hover w-full sm:w-auto"
                     onclick="initiateSpotifyAuth()">
-                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                 </svg>
-                Connect Spotify
+                Connect with Spotify
             </button>
             
-            <div id="auth-result" class="mt-4"></div>
+            <div id="auth-result" class="mt-6"></div>
         </div>
     </div>
 
     <!-- OAuth Flow Info -->
-    <div class="card bg-info-50 border-info-200">
-        <div class="card-header">
-            <h3 class="card-title text-info-900">How It Works</h3>
+    <div class="card-modern border-2 border-info-200 dark:border-info-800 bg-gradient-to-br from-info-50 to-info-100 dark:from-info-900/20 dark:to-info-900/10">
+        <div class="p-6 border-b border-info-200 dark:border-info-800">
+            <h3 class="text-lg font-bold text-info-900 dark:text-info-100 flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                </svg>
+                How It Works
+            </h3>
         </div>
-        <div class="card-body">
-            <ol class="list-decimal list-inside space-y-2 text-sm text-info-900">
-                <li>Click "Connect Spotify" to start the authorization flow</li>
-                <li>You'll be redirected to Spotify to grant access to your account</li>
-                <li>After authorization, Spotify will redirect you back to this application</li>
-                <li>Your session will be established and you can start using Spotify features</li>
+        <div class="p-6">
+            <ol class="list-decimal list-inside space-y-3 text-sm text-info-900 dark:text-info-100">
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-info-600 dark:text-info-400">1.</span>
+                    <span>Click "Connect with Spotify" to start the authorization flow</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-info-600 dark:text-info-400">2.</span>
+                    <span>You'll be redirected to Spotify to grant access to your account</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-info-600 dark:text-info-400">3.</span>
+                    <span>After authorization, Spotify will redirect you back to this application</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="font-bold text-info-600 dark:text-info-400">4.</span>
+                    <span>Your session will be established and you can start using Spotify features</span>
+                </li>
             </ol>
         </div>
     </div>
 </div>
 
 <script>
-// Hey future me, this initiates the OAuth flow by fetching the auth URL from backend
-// and immediately redirecting the user to Spotify. No manual copy-paste needed!
-// The backend stores state+verifier in a session cookie, so when Spotify redirects
-// back to /api/auth/callback, we can verify and exchange the code for tokens.
+// Enhanced Spotify auth initiation with modern UI feedback
 async function initiateSpotifyAuth() {
     const btn = document.getElementById('auth-btn');
     const resultDiv = document.getElementById('auth-result');
     
     // Disable button and show loading state
     btn.disabled = true;
-    btn.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Connecting...';
+    btn.innerHTML = '<div class="spinner-modern mr-3"></div> Connecting...';
     
     try {
         const response = await fetch('/api/auth/authorize', {
             method: 'GET',
-            credentials: 'same-origin', // Important: include cookies for session
+            credentials: 'same-origin',
         });
         
         if (!response.ok) {
@@ -77,13 +96,22 @@ async function initiateSpotifyAuth() {
         const data = await response.json();
         
         if (data.authorization_url) {
-            // Show success message briefly
+            // Show success message with modern toast
+            if (window.toastManager) {
+                window.toastManager.info('Redirecting to Spotify...', 2000);
+            }
+            
             resultDiv.innerHTML = `
-                <div class="alert alert-info">
-                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span>Redirecting to Spotify...</span>
+                <div class="card-modern border-2 border-success-200 dark:border-success-800 bg-success-50 dark:bg-success-900/20 animate-slide-up">
+                    <div class="p-4 flex items-center gap-3">
+                        <svg class="w-6 h-6 text-success-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <p class="font-bold text-success-900 dark:text-success-100">Redirecting to Spotify...</p>
+                            <p class="text-sm text-success-700 dark:text-success-300">Please wait while we redirect you</p>
+                        </div>
+                    </div>
                 </div>
             `;
             
@@ -96,22 +124,36 @@ async function initiateSpotifyAuth() {
         }
     } catch (error) {
         console.error('Authorization error:', error);
+        
+        if (window.toastManager) {
+            window.toastManager.error('Failed to connect to Spotify');
+        }
+        
         resultDiv.innerHTML = `
-            <div class="alert alert-error">
-                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                </svg>
-                <div>
-                    <p class="font-semibold">Failed to start authorization</p>
-                    <p class="text-sm">${error.message}</p>
-                    <p class="text-xs mt-1">Make sure SPOTIFY_CLIENT_ID and SPOTIFY_REDIRECT_URI are configured in your .env file</p>
+            <div class="card-modern border-2 border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-900/20 animate-slide-up">
+                <div class="p-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-error-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <p class="font-bold text-error-900 dark:text-error-100 mb-1">Failed to start authorization</p>
+                            <p class="text-sm text-error-700 dark:text-error-300 mb-2">${error.message}</p>
+                            <p class="text-xs text-error-600 dark:text-error-400">Make sure SPOTIFY_CLIENT_ID and SPOTIFY_REDIRECT_URI are configured in your .env file</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
         
         // Re-enable button
         btn.disabled = false;
-        btn.innerHTML = '<svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg> Connect Spotify';
+        btn.innerHTML = `
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Connect with Spotify
+        `;
     }
 }
 </script>
