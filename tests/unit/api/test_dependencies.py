@@ -7,14 +7,17 @@ import pytest
 from fastapi import HTTPException
 
 from soulspot.api.dependencies import get_spotify_token_from_session
-from soulspot.application.services.session_store import SessionStore
+from soulspot.application.services.session_store import DatabaseSessionStore, Session
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
 
 @pytest.fixture
-def session_store() -> SessionStore:
-    """Create a session store for testing."""
-    return SessionStore(session_timeout_seconds=3600)
+def session_store() -> DatabaseSessionStore:
+    """Create an async mock session store for testing."""
+    mock_store = AsyncMock(spec=DatabaseSessionStore)
+    # Store sessions in a dict for test isolation
+    mock_store._sessions = {}
+    return mock_store
 
 
 @pytest.fixture
@@ -34,16 +37,21 @@ def spotify_client_mock() -> SpotifyClient:
 
 @pytest.mark.asyncio
 async def test_get_token_from_valid_session(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test retrieving token from a valid session with non-expired token."""
     # Create a session with valid token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.set_tokens(
         access_token="valid_access_token",
         refresh_token="valid_refresh_token",
         expires_in=3600,
     )
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
+    # Mock update_session to do nothing
+    session_store.update_session = AsyncMock()
 
     # Call dependency
     token = await get_spotify_token_from_session(
@@ -60,14 +68,19 @@ async def test_get_token_from_valid_session(
 
 @pytest.mark.asyncio
 async def test_get_token_refreshes_expired_token(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that expired token is automatically refreshed."""
     # Create a session with expired token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.access_token = "expired_access_token"
     session.refresh_token = "valid_refresh_token"
     session.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # Expired
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
+    # Mock update_session to update the session
+    session_store.update_session = AsyncMock()
 
     # Call dependency
     token = await get_spotify_token_from_session(
@@ -81,15 +94,15 @@ async def test_get_token_refreshes_expired_token(
     # Assert refresh was called
     spotify_client_mock.refresh_token.assert_called_once_with("valid_refresh_token")
     # Assert session was updated
-    updated_session = session_store.get_session(session.session_id)
-    assert updated_session is not None
-    assert updated_session.access_token == "new_access_token"
-    assert updated_session.refresh_token == "new_refresh_token"
+    session_store.update_session.assert_called_once()
+    # Check the updated session object
+    assert session.access_token == "new_access_token"
+    assert session.refresh_token == "new_refresh_token"
 
 
 @pytest.mark.asyncio
 async def test_get_token_raises_on_no_session_id(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that 401 is raised when no session ID is provided."""
     with pytest.raises(HTTPException) as exc_info:
@@ -105,9 +118,12 @@ async def test_get_token_raises_on_no_session_id(
 
 @pytest.mark.asyncio
 async def test_get_token_raises_on_invalid_session_id(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that 401 is raised when session ID is invalid."""
+    # Mock get_session to return None (invalid session)
+    session_store.get_session = AsyncMock(return_value=None)
+
     with pytest.raises(HTTPException) as exc_info:
         await get_spotify_token_from_session(
             session_id="invalid_session_id",
@@ -121,11 +137,14 @@ async def test_get_token_raises_on_invalid_session_id(
 
 @pytest.mark.asyncio
 async def test_get_token_raises_on_no_access_token(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that 401 is raised when session has no access token."""
     # Create session without setting tokens
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
 
     with pytest.raises(HTTPException) as exc_info:
         await get_spotify_token_from_session(
@@ -140,14 +159,17 @@ async def test_get_token_raises_on_no_access_token(
 
 @pytest.mark.asyncio
 async def test_get_token_raises_on_expired_without_refresh(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that 401 is raised when token is expired and no refresh token available."""
     # Create session with expired token but no refresh token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.access_token = "expired_access_token"
     session.refresh_token = None  # No refresh token
     session.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # Expired
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
 
     with pytest.raises(HTTPException) as exc_info:
         await get_spotify_token_from_session(
@@ -162,14 +184,17 @@ async def test_get_token_raises_on_expired_without_refresh(
 
 @pytest.mark.asyncio
 async def test_get_token_raises_on_refresh_failure(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that 401 is raised when token refresh fails."""
     # Create session with expired token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.access_token = "expired_access_token"
     session.refresh_token = "valid_refresh_token"
     session.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # Expired
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
 
     # Mock refresh to fail
     spotify_client_mock.refresh_token.side_effect = Exception("Spotify API error")
@@ -188,14 +213,19 @@ async def test_get_token_raises_on_refresh_failure(
 
 @pytest.mark.asyncio
 async def test_get_token_updates_session_on_successful_refresh(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that session is properly updated after successful token refresh."""
     # Create session with expired token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.access_token = "expired_access_token"
     session.refresh_token = "old_refresh_token"
     session.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # Expired
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
+    # Mock update_session to do nothing
+    session_store.update_session = AsyncMock()
 
     # Call dependency
     token = await get_spotify_token_from_session(
@@ -208,29 +238,35 @@ async def test_get_token_updates_session_on_successful_refresh(
     assert token == "new_access_token"
 
     # Verify session was updated
-    updated_session = session_store.get_session(session.session_id)
-    assert updated_session is not None
-    assert updated_session.access_token == "new_access_token"
-    assert updated_session.refresh_token == "new_refresh_token"
+    session_store.update_session.assert_called_once()
+
+    # Check the updated session object
+    assert session.access_token == "new_access_token"
+    assert session.refresh_token == "new_refresh_token"
 
     # Verify new token is not expired
-    assert not updated_session.is_token_expired()
+    assert not session.is_token_expired()
 
     # Verify expiration time is in the future
-    assert updated_session.token_expires_at is not None
-    assert updated_session.token_expires_at > datetime.now(UTC)
+    assert session.token_expires_at is not None
+    assert session.token_expires_at > datetime.now(UTC)
 
 
 @pytest.mark.asyncio
 async def test_get_token_preserves_old_refresh_token_if_not_provided(
-    session_store: SessionStore, spotify_client_mock: SpotifyClient
+    session_store: DatabaseSessionStore, spotify_client_mock: SpotifyClient
 ) -> None:
     """Test that old refresh token is preserved if new one is not provided."""
     # Create session with expired token
-    session = session_store.create_session()
+    session = Session(session_id="test_session_id")
     session.access_token = "expired_access_token"
     session.refresh_token = "old_refresh_token"
     session.token_expires_at = datetime.now(UTC) - timedelta(seconds=1)  # Expired
+
+    # Mock get_session to return the session
+    session_store.get_session = AsyncMock(return_value=session)
+    # Mock update_session to do nothing
+    session_store.update_session = AsyncMock()
 
     # Mock refresh to not return new refresh token
     spotify_client_mock.refresh_token.return_value = {
@@ -248,6 +284,4 @@ async def test_get_token_preserves_old_refresh_token_if_not_provided(
     )
 
     # Verify old refresh token was preserved
-    updated_session = session_store.get_session(session.session_id)
-    assert updated_session is not None
-    assert updated_session.refresh_token == "old_refresh_token"
+    assert session.refresh_token == "old_refresh_token"
