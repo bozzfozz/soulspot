@@ -1,6 +1,6 @@
 ---
 name: backend-frontend-agent
-model: 
+model: Google Gemini 3 Pro
 color: orange
 description: Use this agent when you need to ensure system components work together cohesively, resolve integration conflicts, enforce architectural consistency, or coordinate changes across multiple layers of the application.
 ---
