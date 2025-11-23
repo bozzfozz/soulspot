@@ -4,11 +4,16 @@
 {% block title %}Import Playlist - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-6">
-    <!-- Page Header -->
-    <div>
-        <h1 class="text-3xl font-bold text-gray-900 leading-tight mb-2">Import Spotify Playlist</h1>
-        <p class="text-base text-gray-600">
+<div class="max-w-2xl mx-auto space-y-8 animate-fade-in">
+    <!-- Modern Page Header -->
+    <div class="text-center">
+        <div class="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-xl animate-scale-in">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-3">Import Spotify Playlist</h1>
+        <p class="text-lg text-gray-600 dark:text-gray-400">
             Import a Spotify playlist to start downloading tracks
         </p>
     </div>
@@ -20,53 +25,60 @@
          hx-swap="innerHTML"
          role="status"
          aria-live="polite">
-        <div class="card bg-gray-50">
-            <div class="card-body flex items-center gap-3">
-                {{ spinner('sm', 'Checking authentication status...') }}
+        <div class="card-modern glass-effect animate-pulse">
+            <div class="p-6 flex items-center gap-4">
+                <div class="spinner-modern"></div>
+                <span class="text-gray-700 dark:text-gray-300">Checking authentication status...</span>
             </div>
         </div>
     </div>
     
     <!-- Import Form -->
-    <div class="card">
+    <div class="card-modern card-hover-lift">
         <form id="import-form" 
               hx-post="/api/playlists/import"
               hx-target="#import-result"
               hx-swap="innerHTML"
-              class="space-y-6">
+              class="p-6 space-y-6">
             
-            <div class="form-group">
-                <label for="playlist_id" class="form-label">
+            <div>
+                <label for="playlist_id" class="block text-sm font-bold text-gray-900 dark:text-white mb-2">
                     Spotify Playlist ID or URL <span class="text-error-500" aria-label="required">*</span>
                 </label>
                 <input type="text" 
                        id="playlist_id" 
                        name="playlist_id" 
-                       class="form-input focus-ring"
+                       class="input-modern focus-visible-ring w-full"
                        placeholder="spotify:playlist:... or https://open.spotify.com/playlist/..."
                        aria-describedby="playlist-helper"
                        required>
-                <p id="playlist-helper" class="form-helper">
+                <p id="playlist-helper" class="mt-2 text-sm text-gray-600 dark:text-gray-400">
                     Enter a Spotify playlist ID or paste the full URL
                 </p>
             </div>
             
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <input type="checkbox" 
                        id="fetch_all_tracks"
                        name="fetch_all_tracks" 
                        checked
-                       class="w-4 h-4 text-primary-500 rounded border-gray-300 focus:ring-primary-500 focus-ring">
-                <label for="fetch_all_tracks" class="text-sm text-gray-700 cursor-pointer">
+                       class="w-5 h-5 text-primary-500 rounded border-gray-300 dark:border-gray-600 focus-visible-ring">
+                <label for="fetch_all_tracks" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-medium">
                     Fetch all tracks in the playlist
                 </label>
             </div>
             
-            <div class="flex justify-end gap-3">
-                <a href="/auth" class="btn btn-secondary focus-ring">
+            <div class="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <a href="/auth" class="btn btn-secondary btn-modern focus-visible-ring hover-lift">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                    </svg>
                     Re-authenticate Spotify
                 </a>
-                <button type="submit" class="btn btn-primary btn-lg focus-ring">
+                <button type="submit" class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-lg glow-on-hover">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
                     Import Playlist
                 </button>
             </div>
@@ -78,58 +90,94 @@
 </div>
 
 <script>
-// Handle authentication status display
+// Enhanced authentication status display with modern UI
 document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'auth-status') {
-        const response = JSON.parse(evt.detail.xhr.response);
-        const statusDiv = document.getElementById('auth-status');
-        
-        if (response.has_access_token && !response.token_expired) {
-            statusDiv.innerHTML = `
-                <div class="card bg-success-50 border-success-200 hover:shadow-md transition-shadow">
-                    <div class="card-body">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-success-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                            </svg>
-                            <span class="text-sm font-medium text-success-900">
-                                ✅ Connected to Spotify - Ready to import playlists
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else if (response.token_expired) {
-            statusDiv.innerHTML = `
-                <div class="card bg-warning-50 border-warning-200 hover:shadow-md transition-shadow">
-                    <div class="card-body">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-5 h-5 text-warning-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span class="text-sm font-medium text-warning-900">
-                                    ⚠️ Token expired - Will auto-refresh on import
-                                </span>
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            const statusDiv = document.getElementById('auth-status');
+            
+            if (response.has_access_token && !response.token_expired) {
+                statusDiv.innerHTML = `
+                    <div class="card-modern border-2 border-success-200 dark:border-success-800 bg-success-50 dark:bg-success-900/20 animate-slide-up">
+                        <div class="p-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-success-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-bold text-lg text-success-900 dark:text-success-100">Spotify Connected</p>
+                                    <p class="text-sm text-success-700 dark:text-success-300">Ready to import playlists and download tracks</p>
+                                </div>
+                                <a href="/api/auth/logout" class="btn btn-secondary btn-modern btn-sm focus-visible-ring">
+                                    Disconnect
+                                </a>
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
-        } else {
-            statusDiv.innerHTML = `
-                <div class="card bg-error-50 border-error-200 hover:shadow-md transition-shadow">
-                    <div class="card-body">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-2">
-                                <svg class="w-5 h-5 text-error-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span class="text-sm font-medium text-error-900">
-                                    ❌ Not connected to Spotify
-                                </span>
+                `;
+            } else if (response.token_expired) {
+                statusDiv.innerHTML = `
+                    <div class="card-modern border-2 border-warning-200 dark:border-warning-800 bg-warning-50 dark:bg-warning-900/20 animate-slide-up">
+                        <div class="p-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-warning-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-bold text-lg text-warning-900 dark:text-warning-100">Spotify Token Expired</p>
+                                    <p class="text-sm text-warning-700 dark:text-warning-300">Will auto-refresh when needed, or reconnect manually</p>
+                                </div>
+                                <a href="/auth" class="btn btn-warning btn-modern btn-sm focus-visible-ring">
+                                    Reconnect
+                                </a>
                             </div>
-                            <a href="/auth" class="btn btn-error btn-sm focus-ring">
+                        </div>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
+                        <div class="p-6">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-bold text-lg text-primary-900 dark:text-primary-100">Connect Spotify</p>
+                                    <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
+                                </div>
+                                <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
+                                    Connect Now
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            // If session endpoint returns error, show connect button
+            const statusDiv = document.getElementById('auth-status');
+            statusDiv.innerHTML = `
+                <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
+                    <div class="p-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <p class="font-bold text-lg text-primary-900 dark:text-primary-100">Connect Spotify</p>
+                                <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
+                            </div>
+                            <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
                                 Connect Now
                             </a>
                         </div>
@@ -143,8 +191,8 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'import-result') {
         try {
             const response = JSON.parse(evt.detail.xhr.response);
-            if (response.playlist_id) {
-                ToastManager.success('Playlist imported successfully!', 'Import Complete');
+            if (response.playlist_id && window.toastManager) {
+                window.toastManager.success('Playlist imported successfully!', 3000);
             }
         } catch (e) {
             // Not JSON or error
@@ -154,24 +202,30 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
 
 // Handle 401 errors by redirecting to auth page
 document.body.addEventListener('htmx:responseError', function(evt) {
-    if (evt.detail.xhr.status === 401) {
+    if (evt.detail.xhr.status === 401 && evt.detail.target.id === 'import-form') {
         const response = JSON.parse(evt.detail.xhr.response);
         const resultDiv = document.getElementById('import-result');
         resultDiv.innerHTML = `
-            <div class="alert alert-error" role="alert">
-                <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                </svg>
-                <div class="alert-content">
-                    <strong>Authentication Required</strong>
-                    <p class="text-xs mt-1">${response.detail}</p>
+            <div class="card-modern border-2 border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-900/20 animate-slide-up" role="alert">
+                <div class="p-6">
+                    <div class="flex items-start gap-4">
+                        <svg class="w-6 h-6 text-error-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <p class="font-bold text-lg text-error-900 dark:text-error-100 mb-2">Authentication Required</p>
+                            <p class="text-sm text-error-700 dark:text-error-300 mb-4">${response.detail}</p>
+                            <a href="/auth" class="btn btn-error btn-modern focus-visible-ring">
+                                Connect Spotify
+                            </a>
+                        </div>
+                    </div>
                 </div>
-                <a href="/auth" class="btn btn-error btn-sm">
-                    Connect Spotify
-                </a>
             </div>
         `;
-        ToastManager.error(response.detail, 'Authentication Required');
+        if (window.toastManager) {
+            window.toastManager.error(response.detail);
+        }
     }
 });
 </script>
