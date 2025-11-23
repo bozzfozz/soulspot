@@ -1,83 +1,166 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Willkommen bei SoulSpot Bridge</title>
-    <meta name="description" content="Erste Schritte mit SoulSpot Bridge - Verbinde Spotify und starte durch">
-    <!-- UI 1.0 Design System -->
-    <link rel="stylesheet" href="/static/css/ui-theme.css">
-    <link rel="stylesheet" href="/static/css/ui-components.css">
-    <link rel="stylesheet" href="/static/css/ui-layout.css">
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-</head>
-<body>
-    <!-- Skip to main content for accessibility -->
-    <a href="#main-content" class="ui-skip-link">Zum Hauptinhalt springen</a>
+{% extends "base.html" %}
 
-    <!-- Main Content -->
-    <div class="ui-page">
-        <main id="main-content" class="ui-page-content" role="main">
-            <div class="ui-container ui-container-md">
-                <!-- Onboarding Card -->
-                <div class="ui-card-static" style="margin-top: 5rem;">
-                    <!-- Logo & Header -->
-                    <div class="ui-card-header" style="text-align: center; padding: 2.5rem 1.5rem 1.5rem;">
-                        <!-- Logo (using emoji as placeholder, can be replaced with actual logo) -->
-                        <div style="font-size: 4rem; margin-bottom: 1rem;" aria-hidden="true">🎵</div>
-                        <h1 class="ui-heading-2" style="margin-bottom: 0.5rem;">Willkommen bei SoulSpot</h1>
-                        <p class="ui-card-subtitle">Verbinde Spotify, um Songs und Playlists zu synchronisieren.</p>
-                    </div>
+{% block title %}Willkommen - SoulSpot Bridge{% endblock %}
 
-                    <!-- Status Area (HTMX Target) -->
-                    <div id="onboarding-status" class="ui-card-body" aria-live="polite" aria-atomic="true">
-                        <!-- Initial loading state -->
-                        <div class="ui-flex ui-flex-col ui-items-center ui-gap-4">
-                            <div class="ui-spinner ui-spinner-lg" role="status">
-                                <span class="ui-sr-only">Status wird geprüft...</span>
-                            </div>
-                            <p class="ui-text-muted" style="text-align: center;">Verbindungsstatus wird geprüft...</p>
-                        </div>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div id="onboarding-actions" class="ui-card-footer" style="justify-content: center; padding: 1.5rem;">
-                        <button 
-                            id="continueBtn"
-                            class="ui-btn ui-btn-primary"
-                            hx-get="/api/spotify/status"
-                            hx-target="#onboarding-status"
-                            hx-swap="innerHTML"
-                            hx-trigger="click"
-                            disabled
-                        >
-                            Weiter
-                        </button>
-                        <button 
-                            id="skipBtn"
-                            class="ui-btn ui-btn-ghost"
-                            hx-post="/api/onboarding/skip"
-                            hx-swap="none"
-                        >
-                            Nicht jetzt
-                        </button>
-                    </div>
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center animate-fade-in">
+    <div class="max-w-2xl mx-auto px-4 w-full">
+        <!-- Onboarding Card -->
+        <div class="card-modern text-center">
+            <!-- Logo & Header -->
+            <div class="p-8 pb-6">
+                <div class="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-2xl animate-scale-in">
+                    <span class="text-5xl" aria-hidden="true">🎵</span>
                 </div>
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-3">
+                    Willkommen bei SoulSpot
+                </h1>
+                <p class="text-lg text-gray-600 dark:text-gray-400">
+                    Verbinde Spotify, um Songs und Playlists zu synchronisieren.
+                </p>
+            </div>
 
-                <!-- Help Text -->
-                <div style="text-align: center; margin-top: 2rem; padding: 0 1rem;">
-                    <p class="ui-text-muted" style="font-size: 0.875rem;">
-                        Die Spotify-Verbindung ist erforderlich, um Playlists zu synchronisieren und Songs herunterzuladen.
-                        Du kannst diesen Schritt auch später in den Einstellungen durchführen.
-                    </p>
+            <!-- Status Area (HTMX Target) -->
+            <div id="onboarding-status" class="p-6 border-t border-b border-gray-200 dark:border-gray-700" aria-live="polite" aria-atomic="true">
+                <!-- Initial loading state -->
+                <div class="flex flex-col items-center gap-4">
+                    <div class="spinner-modern" role="status">
+                        <span class="sr-only">Status wird geprüft...</span>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400">Verbindungsstatus wird geprüft...</p>
                 </div>
             </div>
-        </main>
-    </div>
 
-    <script>
-        // Enable continue button after page load
-        document.addEventListener('DOMContentLoaded', function() {
+            <!-- Action Buttons -->
+            <div id="onboarding-actions" class="p-6 flex flex-col sm:flex-row justify-center gap-3">
+                <button 
+                    id="continueBtn"
+                    class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-xl glow-on-hover"
+                    hx-get="/api/spotify/status"
+                    hx-target="#onboarding-status"
+                    hx-swap="innerHTML"
+                    hx-trigger="click"
+                    disabled
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                    </svg>
+                    Weiter
+                </button>
+                <button 
+                    id="skipBtn"
+                    class="btn btn-secondary btn-modern btn-lg focus-visible-ring hover-lift"
+                    hx-post="/api/onboarding/skip"
+                    hx-swap="none"
+                >
+                    Nicht jetzt
+                </button>
+            </div>
+        </div>
+
+        <!-- Help Text -->
+        <div class="mt-8 text-center">
+            <div class="card-modern border-2 border-info-200 dark:border-info-800 bg-gradient-to-br from-info-50 to-info-100 dark:from-info-900/20 dark:to-info-900/10">
+                <div class="p-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-5 h-5 text-info-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        <p class="text-sm text-info-900 dark:text-info-100 text-left">
+                            Die Spotify-Verbindung ist erforderlich, um Playlists zu synchronisieren und Songs herunterzuladen.
+                            Du kannst diesen Schritt auch später in den Einstellungen durchführen.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enable continue button after page load and check status
+document.addEventListener('DOMContentLoaded', function() {
+    const continueBtn = document.getElementById('continueBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const statusDiv = document.getElementById('onboarding-status');
+
+    // Auto-check Spotify status on load
+    setTimeout(() => {
+        htmx.trigger('#continueBtn', 'click');
+    }, 500);
+
+    // Enable button after short delay
+    setTimeout(() => {
+        if (continueBtn) {
+            continueBtn.disabled = false;
+        }
+    }, 1000);
+
+    // Handle successful status check
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'onboarding-status') {
+            try {
+                const response = JSON.parse(evt.detail.xhr.response);
+                
+                if (response.has_access_token && !response.token_expired) {
+                    // Already connected - show success
+                    statusDiv.innerHTML = `
+                        <div class="card-modern border-2 border-success-200 dark:border-success-800 bg-success-50 dark:bg-success-900/20 animate-slide-up">
+                            <div class="p-6">
+                                <div class="flex items-center justify-center gap-4 mb-4">
+                                    <div class="w-16 h-16 bg-success-500 rounded-full flex items-center justify-center shadow-lg">
+                                        <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <p class="font-bold text-lg text-success-900 dark:text-success-100 mb-2">Spotify ist bereits verbunden!</p>
+                                <p class="text-sm text-success-700 dark:text-success-300">Du kannst direkt loslegen.</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Change continue button to go to dashboard
+                    continueBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg> Zum Dashboard';
+                    continueBtn.onclick = () => window.location.href = '/';
+                    continueBtn.removeAttribute('hx-get');
+                } else {
+                    // Not connected - show connect button
+                    statusDiv.innerHTML = `
+                        <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
+                            <div class="p-6">
+                                <div class="flex items-center justify-center gap-4 mb-4">
+                                    <div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg">
+                                        <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <p class="font-bold text-lg text-primary-900 dark:text-primary-100 mb-2">Verbinde dein Spotify-Konto</p>
+                                <p class="text-sm text-primary-700 dark:text-primary-300 mb-4">Klicke auf "Verbinden", um mit der Einrichtung fortzufahren.</p>
+                                <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover inline-flex">
+                                    Mit Spotify verbinden
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                // Error checking status
+                statusDiv.innerHTML = `
+                    <div class="card-modern border-2 border-warning-200 dark:border-warning-800 bg-warning-50 dark:bg-warning-900/20">
+                        <div class="p-6">
+                            <p class="font-bold text-warning-900 dark:text-warning-100 mb-2">Status konnte nicht überprüft werden</p>
+                            <p class="text-sm text-warning-700 dark:text-warning-300">Bitte versuche es später erneut.</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
             setTimeout(function() {
                 const continueBtn = document.getElementById('continueBtn');
                 if (continueBtn) {

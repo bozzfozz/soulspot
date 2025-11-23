@@ -5,20 +5,20 @@
 {% block title %}{{ playlist.name }} - SoulSpot Bridge{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <!-- Page Header -->
+<div class="space-y-8 animate-fade-in">
+    <!-- Modern Page Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div class="flex-1">
-            <nav class="flex mb-2" aria-label="Breadcrumb">
-                <ol class="inline-flex items-center space-x-1 md:space-x-3">
+            <nav class="flex mb-3" aria-label="Breadcrumb">
+                <ol class="inline-flex items-center space-x-2">
                     <li class="inline-flex items-center">
-                        <a href="/ui/playlists" class="text-sm text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400">
+                        <a href="/ui/playlists" class="text-sm text-primary-600 dark:text-primary-400 hover:underline font-medium">
                             Playlists
                         </a>
                     </li>
                     <li>
                         <div class="flex items-center">
-                            <svg class="w-3 h-3 text-gray-400 mx-1" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 text-gray-400 mx-1" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                             </svg>
                             <span class="text-sm text-gray-500 dark:text-gray-400" aria-current="page">{{ playlist.name }}</span>
@@ -26,28 +26,39 @@
                     </li>
                 </ol>
             </nav>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white leading-tight">{{ playlist.name }}</h1>
-            {% if playlist.description %}
-            <p class="text-gray-600 dark:text-gray-400 mt-2">{{ playlist.description }}</p>
-            {% endif %}
+            <div class="flex items-center gap-3 mb-2">
+                <div class="w-12 h-12 bg-gradient-to-br from-secondary-500 to-secondary-700 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">{{ playlist.name }}</h1>
+                    {% if playlist.description %}
+                    <p class="text-gray-600 dark:text-gray-400 mt-1">{{ playlist.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        <div class="flex gap-2">
-            <button class="btn btn-secondary focus-ring" 
+        <div class="flex flex-wrap gap-2">
+            <button class="btn btn-gradient btn-modern btn-sm focus-visible-ring shadow-lg glow-on-hover" 
                     hx-post="/api/playlists/{{ playlist.id }}/sync"
                     hx-target="#sync-status"
                     hx-swap="innerHTML"
                     hx-indicator="#sync-spinner"
+                    data-success-message="Playlist synced!"
+                    data-error-message="Sync failed"
                     aria-label="Sync playlist">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
                 Sync Now
             </button>
-            <button class="btn btn-outline focus-ring"
+            <button class="btn btn-secondary btn-modern btn-sm focus-visible-ring hover-lift"
                     hx-get="/ui/playlists/{{ playlist.id }}/export-modal"
                     hx-target="#export-modal"
                     aria-label="Export playlist">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                 </svg>
                 Export
@@ -55,29 +66,36 @@
         </div>
     </div>
 
+    <!-- Sync Status -->
+    <div id="sync-status"></div>
+
     <!-- Playlist Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="card">
-            <div class="card-body">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Total Tracks</p>
-                        <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ playlist.track_count }}</p>
-                    </div>
-                    <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" data-stagger>
+        <div class="stat-card card-modern card-hover-lift group">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
                     </svg>
                 </div>
             </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Tracks</p>
+            <p class="stat-value">{{ playlist.track_count }}</p>
         </div>
-        <div class="card">
-            <div class="card-body">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Downloaded</p>
-                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
-                            {{ playlist.tracks | selectattr("file_path") | list | length }}
-                        </p>
+        
+        <div class="stat-card card-modern card-hover-lift group">
+            <div class="flex items-center justify-between mb-2">
+                <div class="w-10 h-10 bg-success-100 dark:bg-success-900/30 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5 text-success-600 dark:text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Downloaded</p>
+            <p class="stat-value" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                {{ playlist.tracks | selectattr("file_path") | list | length }}
+            </p>
+        </div>
                     </div>
                     <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
