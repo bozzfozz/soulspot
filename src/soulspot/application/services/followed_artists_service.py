@@ -134,10 +134,9 @@ class FollowedArtistsService:
 
     # Yo future me, this processes a single artist from Spotify API response and creates/updates
     # the Artist entity in DB! We use spotify_uri as unique identifier (better than name since
-    # artists can share names). If artist exists, we update the name. If new, we create it.
+    # artists can share names). If artist exists, we update the name and genres. If new, we create it.
     # Spotify artist object has: id, name, uri, genres (list), images (list of artwork URLs).
-    # NOTE: genres are stored in the entity but NOT persisted to DB yet - ArtistModel needs
-    # genres field added in a future migration. This is tracked as technical debt.
+    # Genres are now persisted to DB as JSON text (migration dd18990ggh48 adds genres/tags columns).
     # Returns tuple (artist, was_created) so caller can track stats properly.
     async def _process_artist_data(
         self, artist_data: dict[str, Any]
@@ -168,11 +167,19 @@ class FollowedArtistsService:
         existing_artist = await self.artist_repo.get_by_spotify_uri(spotify_uri)
 
         if existing_artist:
-            # Update existing artist (name might have changed on Spotify)
+            # Update existing artist (name or genres might have changed on Spotify)
+            needs_update = False
             if existing_artist.name != name:
                 existing_artist.update_name(name)
+                needs_update = True
+            if existing_artist.genres != genres:
+                existing_artist.genres = genres
+                existing_artist.metadata_sources["genres"] = "spotify"
+                needs_update = True
+
+            if needs_update:
                 await self.artist_repo.update(existing_artist)
-                logger.debug(f"Updated artist name: {name} (id: {spotify_id})")
+                logger.debug(f"Updated artist: {name} (id: {spotify_id})")
             return existing_artist, False  # Not created, was updated
 
         # Create new artist entity
@@ -180,7 +187,7 @@ class FollowedArtistsService:
             id=ArtistId.generate(),
             name=name,
             spotify_uri=spotify_uri,
-            genres=genres,  # NOTE: Stored in entity but not persisted to DB yet
+            genres=genres,  # Persisted to DB as JSON text
             metadata_sources={"name": "spotify", "genres": "spotify"},
         )
 

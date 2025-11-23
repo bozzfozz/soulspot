@@ -63,6 +63,12 @@ class ArtistModel(Base):
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
     )
+    # Hey future me - genres and tags are stored as JSON text (SQLite compatible)!
+    # The app layer serializes/deserializes list[str] to/from JSON string.
+    # Example: '["rock", "alternative", "indie"]'. Nullable because existing artists
+    # won't have this data until next Spotify sync. Migration dd18990ggh48 adds these.
+    genres: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False

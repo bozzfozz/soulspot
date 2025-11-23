@@ -68,9 +68,20 @@ Creates watchlists for multiple artists at once.
 
 Quick preview of followed artists without syncing to database (max 50).
 
-## Known Limitations
+## Database Migration
 
-⚠️ **Genres not persisted**: Artist genres are displayed in UI but not stored in database due to missing columns in `artists` table. This requires a future database migration.
+The feature includes a database migration (`dd18990ggh48_add_genres_and_tags_to_artists.py`) that adds `genres` and `tags` columns to the `artists` table. These fields store JSON-encoded arrays of genre/tag strings fetched from Spotify.
+
+**To apply the migration:**
+```bash
+alembic upgrade head
+```
+
+**Migration details:**
+- Adds `genres` TEXT column (nullable, stores JSON array)
+- Adds `tags` TEXT column (nullable, stores JSON array)
+- SQLite compatible (uses TEXT instead of native JSON type)
+- Handles serialization/deserialization in repository layer
 
 ## Troubleshooting
 
