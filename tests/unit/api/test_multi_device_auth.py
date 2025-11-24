@@ -1,8 +1,6 @@
 """Tests for multi-device authentication (bearer token and session export/import)."""
 
 import pytest
-from fastapi import Header
-from fastapi.testclient import TestClient
 
 from soulspot.api.dependencies import get_session_id
 

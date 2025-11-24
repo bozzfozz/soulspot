@@ -441,7 +441,7 @@ async def export_session(
             session.token_expires_at.isoformat() if session.token_expires_at else None
         ),
         "usage_instructions": {
-            "curl": f"curl -H 'Authorization: Bearer {session.session_id}' http://localhost:8000/api/...",
+            "curl": f"curl -H 'Authorization: Bearer {session.session_id}' <BASE_URL>/api/...",
             "browser": "Open browser DevTools → Application → Cookies → Set session_id cookie with this value",
             "api_clients": "Add header: Authorization: Bearer <session_id>",
         },
@@ -456,6 +456,7 @@ async def export_session(
 # This is intentionally permissive - no validation beyond "does session exist" - we trust users know
 # what they're doing. If they import an invalid session_id, they'll just get 401 on next API call.
 # We use the shared parse_bearer_token() helper for consistent Authorization header parsing!
+# PRIORITY: Authorization header takes precedence over query param for flexibility (documented below).
 @router.post("/session/import")
 async def import_session(
     response: Response,
@@ -471,9 +472,17 @@ async def import_session(
     Validates the session ID and sets it as a cookie for browser usage.
     This allows you to "log in" on a new device using a session from another device.
 
+    **Session ID Sources (in priority order):**
+    1. Authorization header (if provided) - takes precedence
+    2. Query parameter `import_session_id` (if header not provided)
+
+    This allows flexible usage:
+    - Browser: `POST /api/auth/session/import?import_session_id=...`
+    - CLI/API: `POST /api/auth/session/import?import_session_id=... -H "Authorization: Bearer ..."`
+
     Args:
         import_session_id: Session ID to import (from query param)
-        authorization: Alternative session ID via header (optional)
+        authorization: Alternative session ID via header (takes precedence if provided)
         settings: Application settings
         session_store: Session store
         response: FastAPI response for setting cookies
