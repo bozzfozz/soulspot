@@ -4,11 +4,11 @@
 
 1. [Übersicht](#übersicht)
 2. [Was sind AI Agentic Workflows?](#was-sind-ai-agentic-workflows)
-3. [GitHub Next Agentic Workflows](#github-next-agentic-workflows)
+3. [GitHub-Native AI Workflows](#github-native-ai-workflows)
 4. [Workflow-Typen und Kategorien](#workflow-typen-und-kategorien)
 5. [Architektur und Funktionsweise](#architektur-und-funktionsweise)
 6. [Integration in SoulSpot Bridge](#integration-in-soulspot-bridge)
-7. [Workflow-Implementierung](#workflow-implementierung)
+7. [Workflow-Implementierung über GitHub](#workflow-implementierung-über-github)
 8. [Sicherheit und Best Practices](#sicherheit-und-best-practices)
 9. [Praktische Beispiele](#praktische-beispiele)
 10. [Ressourcen und Weiterführende Links](#ressourcen-und-weiterführende-links)
@@ -21,13 +21,13 @@
 
 ### Wichtigste Erkenntnisse (TL;DR)
 
-- **Was:** Markdown-basierte Workflow-Definitionen, die zu GitHub Actions kompiliert werden
-- **Warum:** Zugänglicher, wartbarer, auditable Automatisierung
-- **Wie:** Natural-Language-Beschreibungen → `gh-aw` CLI → YAML Workflows → AI-Agenten-Ausführung
-- **Status:** Research-Prototyp von GitHub Next (nicht produktionsreif)
+- **Was:** GitHub Actions Workflows mit integrierten AI-Agenten für automatisierte Entwicklungsaufgaben
+- **Warum:** Zugänglicher, wartbarer, auditable Automatisierung direkt in GitHub
+- **Wie:** YAML Workflow-Definitionen → GitHub Actions → AI-Agenten-Ausführung (direkt im Browser nutzbar)
+- **Status:** Basiert auf GitHub Copilot und GitHub Actions (produktionsreif)
 - **Nutzen für SoulSpot:** Automatisierte Code-Reviews, Dependency-Updates, Dokumentationspflege, QA-Tests
 
-> ⚠️ **WARNUNG:** GitHub Agentic Workflows sind ein Research-Demonstrator. Diese Workflows sind nur Beispiele und nicht für den Produktionseinsatz vorgesehen. Verwendung auf eigenes Risiko.
+> ✅ **HINWEIS:** Diese Workflows nutzen GitHub-native Features (Actions, Copilot) und können direkt über die GitHub-Weboberfläche verwendet werden - ohne lokale Tools oder IDE-Setup.
 
 ---
 
@@ -69,107 +69,88 @@
 
 ---
 
-## GitHub Next Agentic Workflows
+## GitHub-Native AI Workflows
 
 ### Projekt-Übersicht
 
-**GitHub Next** ist das Research-Team von GitHub, das zukünftige Entwicklerwerkzeuge erforscht. **Agentic Workflows** ist eines ihrer Experimente zur "natürlichsprachigen Programmierung" von Automatisierung.
+**GitHub-Native AI Workflows** nutzen die integrierten Features von GitHub (Actions, Copilot, Issues, Pull Requests) um KI-gestützte Automatisierung direkt im Browser bereitzustellen - ohne lokale Tools oder IDE-Setup.
 
-**Projektlinks:**
-- Homepage: [https://githubnext.com/projects/agentic-workflows/](https://githubnext.com/projects/agentic-workflows/)
-- Dokumentation: [https://githubnext.github.io/gh-aw/](https://githubnext.github.io/gh-aw/)
-- Repository: [https://github.com/githubnext/agentics](https://github.com/githubnext/agentics)
-- CLI-Tool: [https://github.com/githubnext/gh-aw](https://github.com/githubnext/gh-aw)
+**Kern-Features:**
+- GitHub Actions: Automatisierte Workflows mit YAML-Definition
+- GitHub Copilot: KI-Integration für Code-Reviews und Vorschläge
+- GitHub Issues/PRs: Automatische Kommentare und Status-Updates
+- Web-basiert: Alles über die GitHub-Weboberfläche nutzbar
 
-### Verfügbare Workflow-Sammlung
+### Verfügbare Workflow-Kategorien
 
-GitHub Next stellt eine **Beispiel-Familie wiederverwendbarer Workflows** bereit:
+Folgende Workflow-Typen können direkt in GitHub implementiert werden:
 
 #### Triage & Analyse-Workflows
 
-1. **🏷️ Issue Triage**
+1. **🏷️ Issue Triage (GitHub Actions + Labels)**
    - Automatisches Triagieren von Issues und Pull Requests
    - Labeling, Prioritäten, Kategorisierung
-   - Docs: [issue-triage.md](https://github.com/githubnext/agentics/blob/main/docs/issue-triage.md)
+   - Direkt über GitHub Actions konfigurierbar
 
-2. **🏥 CI Doctor**
+2. **🏥 CI Doctor (GitHub Actions)**
    - Überwacht CI-Workflows
    - Analysiert Fehler automatisch
-   - Erstellt Diagnose-Reports
-   - Docs: [ci-doctor.md](https://github.com/githubnext/agentics/blob/main/docs/ci-doctor.md)
+   - Erstellt Diagnose-Reports als Comments
 
-3. **🔍 Repo Ask**
+3. **🔍 Code Review Assistant (GitHub Copilot)**
    - Intelligenter Repository-Assistent
    - Beantwortet Fragen zum Code
-   - Analysiert Architektur
-   - Docs: [repo-ask.md](https://github.com/githubnext/agentics/blob/main/docs/repo-ask.md)
+   - Analysiert Architektur direkt in Pull Requests
 
-4. **🔍 Daily Accessibility Review**
+4. **🔍 Daily Accessibility Review (GitHub Actions)**
    - Prüft Barrierefreiheit
    - Führt automatisierte Tests aus
-   - Docs: [daily-accessibility-review.md](https://github.com/githubnext/agentics/blob/main/docs/daily-accessibility-review.md)
-
-5. **🔧 Q - Workflow Optimizer**
-   - Expertensystem für Workflow-Analyse
-   - Optimiert agentic Workflows
-   - Docs: [q.md](https://github.com/githubnext/agentics/blob/main/docs/q.md)
+   - Reports als GitHub Issues
 
 #### Research, Status & Planning-Workflows
 
-6. **📚 Weekly Research**
+6. **📚 Weekly Research (GitHub Actions + Issues)**
    - Sammelt Research-Updates
    - Verfolgt Industrie-Trends
-   - Docs: [weekly-research.md](https://github.com/githubnext/agentics/blob/main/docs/weekly-research.md)
+   - Erstellt wöchentliche Issue-Reports
 
-7. **👥 Daily Team Status**
+7. **👥 Daily Team Status (GitHub Actions)**
    - Analysiert Repository-Aktivität
-   - Erstellt Status-Reports
-   - Docs: [daily-team-status.md](https://github.com/githubnext/agentics/blob/main/docs/daily-team-status.md)
+   - Erstellt Status-Reports als Issues
 
-8. **📋 Daily Plan**
+8. **📋 Daily Plan (GitHub Actions)**
    - Aktualisiert Planungs-Issues
-   - Team-Koordination
-   - Docs: [daily-plan.md](https://github.com/githubnext/agentics/blob/main/docs/daily-plan.md)
-
-9. **📋 Plan Command**
-   - `/plan` Kommando in Issues
-   - Zerlegt Issues in Sub-Tasks
-   - Docs: [plan.md](https://github.com/githubnext/agentics/blob/main/docs/plan.md)
+   - Team-Koordination via Issue-Comments
 
 #### Coding & Development-Workflows
 
-10. **⚡ Daily Progress**
-    - Automatische tägliche Feature-Entwicklung
-    - Folgt strukturiertem Roadmap
-    - Docs: [daily-progress.md](https://github.com/githubnext/agentics/blob/main/docs/daily-progress.md)
-
-11. **📦 Daily Dependency Updater**
-    - Aktualisiert Dependencies
+9. **📦 Dependency Updater (GitHub Dependabot + Actions)**
+    - Aktualisiert Dependencies automatisch
     - Erstellt Pull Requests
-    - Docs: [daily-dependency-updates.md](https://github.com/githubnext/agentics/blob/main/docs/daily-dependency-updates.md)
+    - GitHub-native via Dependabot
 
-12. **📖 Regular Documentation Update**
+10. **📖 Documentation Update (GitHub Actions)**
     - Automatische Dokumentationspflege
-    - Docs: [update-docs.md](https://github.com/githubnext/agentics/blob/main/docs/update-docs.md)
+    - Triggered bei Code-Änderungen
 
-13. **🏥 PR Fix**
-    - Analysiert fehlende CI-Checks
-    - Implementiert Fixes für Pull Requests
-    - Docs: [pr-fix.md](https://github.com/githubnext/agentics/blob/main/docs/pr-fix.md)
+11. **🏥 PR Review Assistant (GitHub Copilot)**
+    - Analysiert Pull Request Code
+    - Implementiert Review-Vorschläge
+    - Direkt in GitHub PR-Ansicht nutzbar
 
-14. **🔎 Daily Adhoc QA**
+12. **🔎 Daily QA Tests (GitHub Actions)**
     - Führt explorative QA-Tasks aus
-    - Docs: [daily-qa.md](https://github.com/githubnext/agentics/blob/main/docs/daily-qa.md)
+    - Reports als PR-Comments
 
-15. **🧪 Daily Test Coverage Improver**
-    - Verbessert Test-Coverage
-    - Fügt bedeutungsvolle Tests hinzu
-    - Docs: [daily-test-improver.md](https://github.com/githubnext/agentics/blob/main/docs/daily-test-improver.md)
+13. **🧪 Test Coverage Monitor (GitHub Actions)**
+    - Überwacht Test-Coverage
+    - Erstellt Coverage-Reports
+    - Badges in README
 
-16. **⚡ Daily Performance Improver**
-    - Analysiert und verbessert Performance
-    - Benchmarking und Optimierung
-    - Docs: [daily-perf-improver.md](https://github.com/githubnext/agentics/blob/main/docs/daily-perf-improver.md)
+14. **⚡ Performance Monitor (GitHub Actions)**
+    - Analysiert Performance-Metriken
+    - Benchmarking in CI/CD
+    - Regression-Detection
 
 ---
 
@@ -566,180 +547,126 @@ Erstelle einen Kommentar mit Violations und konkreten Fixes.
 
 ---
 
-## Workflow-Implementierung
+## Workflow-Implementierung über GitHub
 
-### Schritt-für-Schritt-Anleitung
+### Schritt-für-Schritt-Anleitung (Ohne lokale Tools)
 
-#### 1. Installation des `gh-aw` CLI
+#### 1. Workflow direkt in GitHub erstellen
 
-```bash
-# gh CLI muss installiert sein
-brew install gh  # macOS
-# oder
-sudo apt install gh  # Linux
+**Via GitHub Web-Oberfläche:**
+1. Öffne dein Repository auf GitHub.com
+2. Navigiere zu "Actions" Tab
+3. Klicke "New workflow"
+4. Wähle "set up a workflow yourself"
+5. Erstelle YAML-Datei direkt im Browser
 
-# gh-aw Extension installieren
-gh extension install githubnext/gh-aw
+**Oder via File-Upload:**
+1. Navigiere zu `.github/workflows/` in deinem Repo
+2. Klicke "Add file" → "Create new file"
+3. Benenne die Datei (z.B. `architecture-guardian.yml`)
+4. Füge Workflow-YAML ein (siehe Templates unten)
+5. Commit direkt im Browser
+
+#### 2. Workflow aus Template hinzufügen
+
+**GitHub Actions Marketplace nutzen:**
+```
+1. Gehe zu github.com/marketplace/actions
+2. Suche nach relevanten Actions (z.B. "code review", "linting")
+3. Klicke "Use latest version"
+4. GitHub zeigt YAML-Snippet → Kopieren
+5. Einfügen in .github/workflows/NAME.yml
+6. Commit via Web-UI
 ```
 
-#### 2. Workflow hinzufügen (aus Beispiel-Sammlung)
+#### 3. Eigenen Workflow erstellen (Web-basiert)
 
-```bash
-# Beispiel: Issue Triage Workflow hinzufügen
-cd /path/to/soulspot-bridge
-gh aw add githubnext/agentics/issue-triage --pr
+**a) Workflow-Datei über GitHub UI erstellen:**
 
-# Erstellt automatisch eine PR mit dem Workflow
-```
+1. Gehe zu deinem Repository auf github.com
+2. Klicke auf "Add file" → "Create new file"
+3. Dateiname: `.github/workflows/soulspot-code-guardian.yml`
+4. GitHub erkennt automatisch, dass es ein Workflow ist
 
-#### 3. Eigenen Workflow erstellen
+**b) Workflow-YAML definieren:**
 
-**a) Workflow-Datei erstellen:**
-```bash
-mkdir -p .github/workflows/agentics
-touch .github/workflows/agentics/soulspot-code-guardian.md
-```
-
-**b) Workflow definieren (Markdown):**
-```markdown
----
+```yaml
 name: SoulSpot Code Guardian
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+
 permissions:
   contents: read
   pull-requests: write
-safe-outputs:
-  create-comment:
-    max: 1
-    body-max-length: 10000
-tools:
-  - read-file
-  - list-files
-  - web-search
-timeout-minutes: 15
-stop-after: 30 days
----
 
-# SoulSpot Code Guardian
-
-Du bist ein Senior Python Backend Engineer für SoulSpot Bridge v3.0.
-
-## Kontext
-SoulSpot Bridge ist eine FastAPI-App für Spotify-Playlist-Sync und Soulseek-Downloads.
-
-### Architektur-Richtlinien
-1. **Database Module:** IMMER `database_service` nutzen, NIEMALS direktes SQLAlchemy
-2. **Settings Service:** IMMER `settings_service`, NIEMALS `os.getenv` oder `.env`
-3. **Structured Errors:** IMMER mit `code`, `message`, `context`, `resolution`, `docs_url`
-4. **Module Boundaries:** KEINE Cross-Module Imports, nur Event-basiert
-
-## Aufgabe
-Überprüfe den Pull Request auf:
-1. Architektur-Violations (siehe oben)
-2. Code Quality (ruff, mypy, Docstrings)
-3. Security (Bandit, Secrets, Input-Validation)
-4. Testing (>80% Coverage für neue/geänderte Dateien)
-
-## Output
-Erstelle einen strukturierten Kommentar:
-- ✅ Passed Checks
-- ❌ Failed Checks mit konkreten Fixes
-- 💡 Verbesserungsvorschläge
-- 📝 Fehlende Dokumentation
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy bandit
+          
+      - name: Run linters
+        run: |
+          ruff check . --output-format=github
+          mypy . --strict
+          bandit -r . -f json
+          
+      - name: Comment results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🔍 Code Quality Check completed!'
+            })
 ```
 
-**c) Workflow kompilieren:**
-```bash
-cd /path/to/soulspot-bridge
-gh aw compile .github/workflows/agentics/soulspot-code-guardian.md
+**c) Workflow committen:**
 
-# Generiert:
-# .github/workflows/soulspot-code-guardian.yml
-```
+1. Scroll zum Ende der Seite
+2. Commit-Message: `feat(ci): Add SoulSpot Code Guardian workflow`
+3. Wähle "Commit directly to main" oder "Create new branch"
+4. Klicke "Commit new file"
 
-**d) Workflow commiten und pushen:**
-```bash
-git add .github/workflows/agentics/soulspot-code-guardian.md
-git add .github/workflows/soulspot-code-guardian.yml
-git commit -m "feat(ci): Add SoulSpot Code Guardian agentic workflow"
-git push origin main
-```
+**Fertig!** Der Workflow ist jetzt aktiv und wird bei Pull Requests automatisch ausgeführt.
 
-#### 4. AI-Modell konfigurieren
+#### 4. GitHub Copilot für Code-Reviews nutzen (Browser)
 
-**Unterstützte Engines (siehe [gh-aw Docs](https://githubnext.github.io/gh-aw/reference/engines/)):**
-- **GitHub Copilot** (empfohlen für Integration)
-- **Anthropic Claude** (beste Reasoning-Qualität)
-- **OpenAI GPT-4** (gute Balance)
-- **Azure OpenAI**
-- **Google Gemini**
+**Direkt in Pull Requests:**
 
-**API-Key als Secret hinzufügen:**
-```bash
-# Für GitHub Copilot
-gh secret set GITHUB_TOKEN --body "$GITHUB_TOKEN"
+1. Öffne einen Pull Request auf github.com
+2. GitHub Copilot ist automatisch verfügbar (falls aktiviert)
+3. Nutze `/` Befehle in PR-Comments:
+   - `/review` - Automatisches Code-Review
+   - `/explain` - Code-Erklärung
+   - `/fix` - Vorschläge zur Fehlerbehebung
 
-# Für Anthropic Claude
-gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
+**In Issue-Diskussionen:**
 
-# Für OpenAI
-gh secret set OPENAI_API_KEY --body "sk-..."
-```
+1. Öffne ein Issue auf github.com
+2. Schreibe einen Kommentar mit `@copilot`
+3. Stelle Fragen zum Code oder Architecture
+4. Copilot antwortet direkt im Issue
 
-**Engine in Workflow-Datei spezifizieren:**
-```markdown
----
-name: My Workflow
-engine: claude-3-5-sonnet  # oder gpt-4, copilot, gemini-pro
----
-```
+**Code-Vorschläge in PRs:**
 
-#### 5. Lokale Konfiguration (Optional)
-
-**`.github/workflows/agentics/soulspot-code-guardian.config.md`:**
-```markdown
-# SoulSpot Code Guardian Configuration
-
-## Custom Rules
-
-### Backend Python Rules
-- Enforce async/await for all DB operations
-- Require type hints on all public functions
-- Docstrings must include Examples section
-
-### Frontend HTMX Rules
-- All forms must have CSRF tokens
-- HTMX responses must set correct `HX-*` headers
-- Accessibility: All interactive elements need ARIA labels
-
-## Severity Levels
-- **Critical:** Architecture violations, security issues
-- **High:** Missing tests, type hint violations
-- **Medium:** Documentation gaps, minor style issues
-- **Low:** Suggestions, optimizations
-```
-
-#### 6. Workflow testen
-
-**Manuell triggern:**
-```bash
-gh aw run soulspot-code-guardian
-```
-
-**In PR testen:**
-```bash
-# Erstelle Test-PR
-git checkout -b test/agentic-workflow
-git commit --allow-empty -m "test: Trigger Code Guardian"
-git push origin test/agentic-workflow
-gh pr create --title "Test: Code Guardian" --body "Testing agentic workflow"
-
-# Workflow wird automatisch getriggert
-gh run list --workflow=soulspot-code-guardian.yml
-gh run view <run-id> --log
-```
+1. GitHub Copilot analysiert PR-Code automatisch
+2. Klicke auf "Files changed" im PR
+3. Copilot zeigt Inline-Vorschläge
+4. Klicke "Commit suggestion" um anzuwenden
 
 ---
 
@@ -1395,21 +1322,16 @@ git push
 
 ### Offizielle Dokumentation
 
-**GitHub Next Agentic Workflows:**
-- 🏠 Projekt-Homepage: [https://githubnext.com/projects/agentic-workflows/](https://githubnext.com/projects/agentic-workflows/)
-- 📘 Dokumentation: [https://githubnext.github.io/gh-aw/](https://githubnext.github.io/gh-aw/)
-- 🛠️ CLI-Tool (gh-aw): [https://github.com/githubnext/gh-aw](https://github.com/githubnext/gh-aw)
-- 📦 Workflow-Sammlung: [https://github.com/githubnext/agentics](https://github.com/githubnext/agentics)
+**GitHub Actions & Workflows:**
+- 🏠 GitHub Actions Dokumentation: [https://docs.github.com/en/actions](https://docs.github.com/en/actions)
+- 📘 Workflow-Syntax: [https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
+- 🛠️ Actions Marketplace: [https://github.com/marketplace?type=actions](https://github.com/marketplace?type=actions)
+- 💼 GitHub Copilot: [https://docs.github.com/en/copilot](https://docs.github.com/en/copilot)
 
-**Einzelne Workflow-Dokumentationen:**
-- 🏷️ [Issue Triage](https://github.com/githubnext/agentics/blob/main/docs/issue-triage.md)
-- 🏥 [CI Doctor](https://github.com/githubnext/agentics/blob/main/docs/ci-doctor.md)
-- 🔍 [Repo Ask](https://github.com/githubnext/agentics/blob/main/docs/repo-ask.md)
-- ⚡ [Daily Progress](https://github.com/githubnext/agentics/blob/main/docs/daily-progress.md)
-- 📋 [Plan Command](https://github.com/githubnext/agentics/blob/main/docs/plan.md)
-- 🧪 [Test Coverage Improver](https://github.com/githubnext/agentics/blob/main/docs/daily-test-improver.md)
-- 📦 [Dependency Updater](https://github.com/githubnext/agentics/blob/main/docs/daily-dependency-updates.md)
-- [Alle Workflows →](https://github.com/githubnext/agentics/tree/main/docs)
+**GitHub Features:**
+- 🔐 Secrets Management: [https://docs.github.com/en/actions/security-guides/encrypted-secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
+- 🏷️ GitHub Labels API: [https://docs.github.com/en/rest/issues/labels](https://docs.github.com/en/rest/issues/labels)
+- 📦 Dependabot: [https://docs.github.com/en/code-security/dependabot](https://docs.github.com/en/code-security/dependabot)
 
 ### SoulSpot Bridge v3.0 Kontext
 
@@ -1424,53 +1346,40 @@ git push
 - 🤖 [AI Agent Recommendations](./AI_AGENT_RECOMMENDATIONS.md)
 - 📝 [Code Documentation Guidelines](./CODE_DOCUMENTATION.md)
 
-### Externe Ressourcen
+### GitHub Web UI Tutorials
 
-**Agentic Workflows Konzepte:**
-- 📄 [Microsoft Research: Agentic Workflows](https://www.microsoft.com/en-us/research/project/agentic-workflows/)
-- 📊 [Weaviate: What are Agentic Workflows?](https://weaviate.io/blog/what-are-agentic-workflows)
-- 🏗️ [Orkes: Agentic Workflow Architecture](https://orkes.io/blog/what-are-agentic-workflows/)
+**Workflow-Erstellung:**
+- 📄 [Creating GitHub Actions](https://docs.github.com/en/actions/quickstart)
+- 📊 [Using the workflow editor](https://docs.github.com/en/actions/using-workflows/about-workflows#creating-a-workflow-file)
+- 🏗️ [GitHub Actions Examples](https://github.com/actions/starter-workflows)
 
-**AI Agents & LLMs:**
-- 🧠 [Anthropic Claude Documentation](https://docs.anthropic.com/)
-- 🤖 [OpenAI GPT-4 Documentation](https://platform.openai.com/docs/)
-- 💼 [GitHub Copilot Documentation](https://docs.github.com/en/copilot)
+**AI-Integration:**
+- 🧠 [GitHub Copilot in PRs](https://docs.github.com/en/copilot/using-github-copilot/asking-github-copilot-questions-in-your-ide)
+- 🤖 [Copilot Chat](https://docs.github.com/en/copilot/github-copilot-chat/using-github-copilot-chat-in-your-ide)
 
-### Tools & CLI
+### Nützliche GitHub Actions
 
-**Installation & Setup:**
-```bash
-# GitHub CLI
-brew install gh  # macOS
-sudo apt install gh  # Linux
-
-# gh-aw Extension
-gh extension install githubnext/gh-aw
-gh aw --help
+**Code Quality:**
+```yaml
+# In deinem Workflow verwenden:
+- uses: actions/checkout@v4              # Code auschecken
+- uses: actions/setup-python@v5          # Python einrichten
+- uses: github/super-linter@v5           # Multi-Language Linter
+- uses: codecov/codecov-action@v3        # Coverage Reports
 ```
 
-**Nützliche Kommandos:**
-```bash
-# Workflow hinzufügen (aus Sammlung)
-gh aw add githubnext/agentics/<workflow-name> --pr
-
-# Workflow kompilieren (Markdown → YAML)
-gh aw compile <workflow.md>
-
-# Workflow manuell starten
-gh aw run <workflow-name>
-
-# Workflow-Status checken
-gh run list --workflow=<workflow-name>.yml
-gh run view <run-id> --log
+**Security:**
+```yaml
+- uses: aquasecurity/trivy-action@master # Security Scanner
+- uses: github/codeql-action/init@v3     # CodeQL Analysis
 ```
 
 ### Community & Support
 
-**Feedback & Diskussion:**
-- 💬 [GitHub Next Discord](https://gh.io/next-discord) - Channel: `#continuous-ai`
-- 🐛 [Issue Tracker (gh-aw)](https://github.com/githubnext/gh-aw/issues)
-- 📚 [Discussions (agentics)](https://github.com/githubnext/agentics/discussions)
+**GitHub Discussions:**
+- 💬 [GitHub Actions Community](https://github.com/orgs/community/discussions/categories/actions)
+- 🐛 [Report Issues](https://github.com/actions/runner/issues)
+- 📚 [GitHub Community Forum](https://github.community/)
 
 ---
 
@@ -1478,39 +1387,40 @@ gh run view <run-id> --log
 
 **AI Agent Workflows** revolutionieren Repository-Automatisierung durch:
 
-1. **Natürlichsprachige Programmierung:** Markdown statt YAML/Bash
-2. **Autonome AI-Agenten:** Reasoning, Planning, Adaptation
-3. **GitHub Actions Integration:** Sichere, auditable Ausführung
-4. **Wiederverwendbare Workflows:** Issue Triage, CI Doctor, Test Improver, etc.
+1. **GitHub-Native Integration:** Workflows direkt in GitHub Actions, nutzbar über Web-UI
+2. **Kein lokales Setup:** Alles funktioniert im Browser ohne IDE oder CLI
+3. **GitHub Copilot Integration:** KI-Unterstützung direkt in PRs und Issues
+4. **Produktionsreif:** Basiert auf stabilen GitHub Features (Actions, Copilot, Dependabot)
 
 **Für SoulSpot Bridge v3.0** ermöglichen sie:
-- ✅ Automatische Architecture Compliance Checks
-- ✅ Test Coverage Überwachung mit konkreten Test-Vorschlägen
-- ✅ Dependency-Updates mit automatischen Tests
-- ✅ Dokumentations-Synchronisation
-- ✅ Code Quality Enforcement
+- ✅ Automatische Architecture Compliance Checks via GitHub Actions
+- ✅ Code-Reviews mit GitHub Copilot direkt in Pull Requests
+- ✅ Dependency-Updates via GitHub Dependabot
+- ✅ Dokumentations-Synchronisation via Actions
+- ✅ Test-Coverage Monitoring in CI/CD
 
-**Wichtigste Sicherheitsregeln:**
-1. Start Small (Read-Only → Write)
-2. Safe Outputs (Limits für PRs/Issues)
-3. Timeouts & Stop-After
-4. Human-in-the-Loop (DRAFT PRs)
-5. Continuous Monitoring
+**Wichtigste Vorteile:**
+1. Web-basiert (kein lokales Setup erforderlich)
+2. Kostenlos für öffentliche Repos (GitHub Actions)
+3. GitHub Copilot für PRs (~$10-20/Monat)
+4. Integriert mit GitHub Security Features
+5. Audit-Trail via GitHub Actions Logs
 
 **Nächste Schritte:**
-1. `gh extension install githubnext/gh-aw` installieren
-2. Mit Read-Only Workflow starten (z.B. Repo Ask)
-3. SoulSpot Code Guardian implementieren
-4. Test Coverage Guardian hinzufügen
-5. Monitoring aufsetzen und evaluieren
+1. GitHub Copilot aktivieren (falls noch nicht vorhanden)
+2. Ersten Workflow über GitHub UI erstellen (z.B. Linter)
+3. GitHub Copilot in PRs testen (`/review` command)
+4. Test Coverage Action hinzufügen
+5. Monitoring über GitHub Actions Tab
 
 ---
 
-**Dokument-Version:** 1.0  
-**Letzte Aktualisierung:** 2025-11-22  
+**Dokument-Version:** 2.0 (GitHub-Native)
+**Letzte Aktualisierung:** 2025-11-24  
+**Änderungen:** Umgestellt von CLI/IDE-basiert auf GitHub-Web-native Nutzung
 **Autor:** AI Documentation Agent (via GitHub Copilot)  
 **Lizenz:** MIT (wie SoulSpot Bridge Projekt)
 
 ---
 
-**⚠️ Rechtlicher Hinweis:** GitHub Agentic Workflows sind ein **Research-Prototyp** und nicht für den Produktionseinsatz vorgesehen. Alle Workflows müssen sorgfältig getestet und überwacht werden. Verwendung auf eigenes Risiko. Siehe [GitHub Next Terms](https://githubnext.com/terms) für Details.
+**✅ Hinweis:** Diese Version fokussiert auf GitHub-native Features, die direkt über die Web-Oberfläche nutzbar sind - ohne lokale Tool-Installation. Alle beschriebenen Workflows können im Browser erstellt und verwaltet werden.

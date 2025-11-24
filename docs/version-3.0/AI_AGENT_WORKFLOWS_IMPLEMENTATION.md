@@ -1,9 +1,9 @@
-# AI Agent Workflows - Praktische Implementierung für SoulSpot Bridge
+# AI Agent Workflows - GitHub-Native Implementierung für SoulSpot Bridge
 
 ## Inhaltsverzeichnis
 
 1. [Quick Start](#quick-start)
-2. [Installation & Setup](#installation--setup)
+2. [Setup über GitHub Web-UI](#setup-über-github-web-ui)
 3. [Empfohlene Workflows für SoulSpot](#empfohlene-workflows-für-soulspot)
 4. [Workflow-Templates](#workflow-templates)
 5. [Konfiguration & Customization](#konfiguration--customization)
@@ -14,438 +14,446 @@
 
 ## Quick Start
 
-### 5-Minuten-Setup für SoulSpot Bridge
+### 5-Minuten-Setup für SoulSpot Bridge (Nur Browser)
 
-**Schritt 1: CLI installieren**
-```bash
-# GitHub CLI installieren (falls noch nicht vorhanden)
-brew install gh  # macOS
-# oder
-sudo apt install gh  # Linux
+**Schritt 1: GitHub Copilot aktivieren**
+1. Gehe zu [github.com/settings/copilot](https://github.com/settings/copilot)
+2. Aktiviere GitHub Copilot (falls noch nicht aktiv)
+3. Wähle Individual ($10/Monat) oder Business Plan
 
-# gh-aw Extension installieren
-gh extension install githubnext/gh-aw
-```
+**Schritt 2: Ersten Workflow erstellen**
+1. Öffne dein SoulSpot Bridge Repository auf github.com
+2. Klicke auf "Actions" Tab
+3. Klicke "New workflow"
+4. Wähle "set up a workflow yourself"
+5. Kopiere Template (siehe unten) in den Editor
+6. Commit im Browser
 
-**Schritt 2: Authentifizierung**
-```bash
-# GitHub authentifizieren
-gh auth login
+**Schritt 3: Workflow testen**
+1. Erstelle einen Test-PR (oder öffne bestehenden PR)
+2. Workflow wird automatisch ausgeführt
+3. Siehe Ergebnisse im "Actions" Tab
+4. GitHub Copilot kommentiert automatisch
 
-# API-Key für AI-Modell konfigurieren (Beispiel: Anthropic Claude)
-gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
-```
-
-**Schritt 3: Ersten Workflow hinzufügen**
-```bash
-cd /path/to/soulspot-bridge
-
-# Beispiel: Issue Triage (Read-Only, sicher zum Testen)
-gh aw add githubnext/agentics/issue-triage --pr
-```
-
-**Schritt 4: PR reviewen und mergen**
-```bash
-# PR wurde automatisch erstellt, reviewen:
-gh pr view
-gh pr merge
-```
-
-**Fertig!** Der Workflow wird bei neuen Issues automatisch getriggert.
+**Fertig!** Keine lokalen Tools oder IDE nötig.
 
 ---
 
-## Installation & Setup
+## Setup über GitHub Web-UI
 
 ### Voraussetzungen
 
-**Systemanforderungen:**
-- Git 2.30+
-- GitHub CLI (gh) 2.40+
-- Repository mit Admin-Rechten
-- GitHub Actions aktiviert
-
 **Account-Anforderungen:**
 - GitHub Account mit Repo-Zugriff
-- API-Key für AI-Modell (siehe [Modell-Auswahl](#modell-auswahl))
+- GitHub Copilot Subscription ($10-20/Monat)
+- Repository mit Actions aktiviert
 
-### Detaillierte Installation
+**GitHub Features aktivieren:**
 
-#### 1. GitHub CLI installieren
+1. **Actions aktivieren:**
+   ```
+   Repository → Settings → Actions → General
+   → ✅ "Allow all actions and reusable workflows"
+   → ✅ "Allow GitHub Actions to create and approve pull requests"
+   ```
 
-**macOS:**
-```bash
-brew install gh
+2. **Dependabot aktivieren (Optional):**
+   ```
+   Repository → Settings → Code security → Dependabot
+   → ✅ "Dependabot alerts"
+   → ✅ "Dependabot security updates"
+   → ✅ "Dependabot version updates"
+   ```
+
+3. **Branch Protection (Empfohlen):**
+   ```
+   Repository → Settings → Branches → Add rule
+   → Branch name pattern: main
+   → ✅ "Require pull request reviews before merging"
+   → ✅ "Require status checks to pass before merging"
+   ```
+
+### GitHub Copilot für Code-Reviews (Browser)
+
+**Option 1: GitHub Copilot in Pull Requests**
+
+**Zugriff:**
+- Öffne einen Pull Request auf github.com
+- GitHub Copilot ist automatisch verfügbar (mit Subscription)
+- Nutze Slash-Commands direkt in PR-Comments
+
+**Verfügbare Commands:**
+```
+/review     - Automatisches Code-Review des gesamten PR
+/explain    - Erklärt spezifische Code-Änderungen
+/fix        - Schlägt Korrekturen für Probleme vor
+/tests      - Schlägt Tests für neuen Code vor
 ```
 
-**Linux (Debian/Ubuntu):**
-```bash
-type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-sudo apt update
-sudo apt install gh -y
+**Verwendung:**
+1. Öffne Pull Request auf github.com
+2. Gehe zu "Files changed" Tab
+3. Klicke auf Zeile, die du reviewen möchtest
+4. Klicke "Add comment"
+5. Schreibe `/review` oder `/explain`
+6. GitHub Copilot antwortet automatisch
+
+**Option 2: GitHub Copilot in Issues**
+
+1. Öffne ein Issue auf github.com
+2. Schreibe einen Kommentar
+3. Erwähne `@copilot` mit deiner Frage
+4. Beispiel: `@copilot Welche Architektur-Patterns sollten wir für das Database Module nutzen?`
+5. Copilot antwortet direkt im Issue
+
+### GitHub Dependabot (Automatische Dependencies)
+
+**Aktivierung über Web-UI:**
+
+1. Gehe zu Repository Settings
+2. Klicke "Code security and analysis"
+3. Aktiviere "Dependabot alerts"
+4. Aktiviere "Dependabot security updates"
+5. Klicke "Enable" für "Dependabot version updates"
+
+**Konfiguration erstellen:**
+
+1. Klicke "Add file" → "Create new file"
+2. Dateiname: `.github/dependabot.yml`
+3. Füge Konfiguration ein:
+
+```yaml
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+      
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
 ```
 
-**Windows:**
-```powershell
-winget install --id GitHub.cli
-```
+4. Commit direkt im Browser
 
-**Verifizierung:**
-```bash
-gh --version
-# Ausgabe: gh version 2.40.1 (oder höher)
-```
-
-#### 2. gh-aw Extension installieren
-
-```bash
-gh extension install githubnext/gh-aw
-
-# Verifizierung
-gh aw --version
-```
-
-#### 3. Repository vorbereiten
-
-**GitHub Actions aktivieren:**
-```bash
-# In Repository-Settings
-Settings → Actions → General
-→ ✅ "Allow all actions and reusable workflows"
-→ ✅ "Allow GitHub Actions to create and approve pull requests"
-```
-
-**Branch Protection (Optional, empfohlen):**
-```bash
-Settings → Branches → Add rule
-→ Branch name pattern: main
-→ ✅ "Require pull request reviews before merging"
-→ ✅ "Require status checks to pass before merging"
-```
-
-### Modell-Auswahl
-
-#### Option 1: GitHub Copilot (Empfohlen für Integration)
-
-**Vorteile:**
-- Nahtlose GitHub-Integration
-- Keine separate API-Key-Verwaltung
-- Zugriff auf mehrere Modelle (Claude, GPT-4, Gemini)
-
-**Setup:**
-```bash
-# GitHub Copilot Subscription erforderlich ($10-19/Monat)
-# Kein separater API-Key nötig, nutzt GitHub Token
-```
-
-**Workflow-Konfiguration:**
-```markdown
----
-engine: copilot  # Oder: claude-3-5-sonnet, gpt-4o, gemini-pro
----
-```
-
-#### Option 2: Anthropic Claude (Empfohlen für Qualität)
-
-**Vorteile:**
-- Beste Reasoning-Qualität
-- Große Context-Window (200K tokens)
-- Exzellent für komplexe Architektur-Checks
-
-**Setup:**
-```bash
-# API-Key von https://console.anthropic.com/
-gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
-```
-
-**Workflow-Konfiguration:**
-```markdown
----
-engine: claude-3-5-sonnet
----
-```
-
-**Kosten:**
-- Input: $3 / 1M tokens
-- Output: $15 / 1M tokens
-- Geschätzt: $5-20/Monat für SoulSpot (abhängig von Nutzung)
-
-#### Option 3: OpenAI GPT-4
-
-**Vorteile:**
-- Schnelle Response-Zeiten
-- Gute Python/FastAPI-Kenntnisse
-- Günstigere Option
-
-**Setup:**
-```bash
-# API-Key von https://platform.openai.com/
-gh secret set OPENAI_API_KEY --body "sk-..."
-```
-
-**Workflow-Konfiguration:**
-```markdown
----
-engine: gpt-4o  # Oder: gpt-4o-mini (günstiger)
----
-```
-
-**Kosten:**
-- GPT-4o: Input $2.50/1M, Output $10/1M
-- GPT-4o mini: Input $0.15/1M, Output $0.60/1M
-
----
-
-## Empfohlene Workflows für SoulSpot
+**Ergebnis:**
+- Dependabot erstellt automatisch PRs für Updates
+- Jede Woche neue PRs für veraltete Dependencies
+- Automatic Security Updates bei Vulnerabilities
 
 ### Prioritäts-Matrix
 
 | Workflow | Priorität | Setup-Zeit | Nutzen | Risiko |
 |----------|-----------|------------|--------|--------|
-| **Architecture Guardian** | 🔴 Hoch | 30 min | Verhindert Architektur-Drift | Niedrig |
-| **Test Coverage Guardian** | 🔴 Hoch | 30 min | Verhindert Coverage-Rückgang | Niedrig |
-| **Code Quality Reviewer** | 🟡 Mittel | 20 min | Automatisches Code-Review | Niedrig |
+| **GitHub Copilot in PRs** | 🔴 Hoch | 5 min | Sofortiges Code-Review | Niedrig |
+| **Dependabot** | 🔴 Hoch | 5 min | Automatische Security-Updates | Niedrig |
+| **CI Linting & Tests** | 🔴 Hoch | 15 min | Verhindert Fehler | Niedrig |
+| **Test Coverage Monitor** | 🟡 Mittel | 20 min | Coverage-Tracking | Niedrig |
 | **Documentation Sync** | 🟡 Mittel | 25 min | Docs aktuell halten | Mittel |
-| **Dependency Updater** | 🟢 Niedrig | 30 min | Security & Freshness | Mittel |
-| **Daily Progress** | 🟢 Niedrig | 45 min | Feature-Entwicklung | Hoch |
+| **Auto-Label Issues** | 🟢 Niedrig | 10 min | Organisation | Niedrig |
 
 ### Empfohlene Reihenfolge
 
-**Phase 1: Safety First (Woche 1)**
-1. ✅ Architecture Guardian (Prevent architectural violations)
-2. ✅ Test Coverage Guardian (Ensure quality)
+**Phase 1: Basics (Tag 1)**
+1. ✅ GitHub Copilot aktivieren (Browser-basiertes Review)
+2. ✅ Dependabot konfigurieren (Automatische Updates)
 
-**Phase 2: Quality Automation (Woche 2-3)**
-3. ✅ Code Quality Reviewer (Automated reviews)
-4. ✅ Documentation Sync (Keep docs fresh)
+**Phase 2: Quality Automation (Woche 1)**
+3. ✅ CI Linting & Tests (GitHub Actions)
+4. ✅ Test Coverage Monitor (Actions + Badge)
 
-**Phase 3: Automation Expansion (Woche 4+)**
-5. ⚠️ Dependency Updater (Mit Vorsicht, Test-Suite muss robust sein)
-6. ⚠️ Daily Progress (Nur experimentell, intensives Monitoring)
+**Phase 3: Erweiterte Automatisierung (Woche 2+)**
+5. ✅ Documentation Sync (Bei Code-Änderungen)
+6. ✅ Issue Auto-Labeling (Triage-Automation)
 
 ---
 
 ## Workflow-Templates
 
-### Template 1: SoulSpot Architecture Guardian
+### Template 1: CI Quality Checks (Linting & Tests)
 
-**Zweck:** Stelle sicher, dass Code SoulSpot v3.0 Architektur-Prinzipien folgt
+**Zweck:** Automatisches Linting und Testing bei jedem Push/PR
 
-**Datei:** `.github/workflows/agentics/soulspot-architecture-guardian.md`
+**Erstellen über GitHub Web-UI:**
+1. Gehe zu deinem Repository auf github.com
+2. Klicke "Add file" → "Create new file"
+3. Dateiname: `.github/workflows/ci-quality.yml`
+4. Füge folgenden Inhalt ein:
 
-```markdown
----
-name: SoulSpot Architecture Guardian
+```yaml
+name: CI Quality Checks
+
 on:
+  push:
+    branches: [ main, develop ]
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [ main, develop ]
+
 permissions:
   contents: read
   pull-requests: write
-safe-outputs:
-  create-comment:
-    max: 1
-    body-max-length: 15000
-tools:
-  - bash
-  - read-file
-  - list-files
-engine: claude-3-5-sonnet
-timeout-minutes: 15
-stop-after: 30 days
----
 
-# SoulSpot Architecture Guardian
-
-Du bist der Architektur-Wächter für SoulSpot Bridge v3.0.
-
-## Architektur-Prinzipien
-
-### 1. Database Module (CRITICAL)
-**Regel:** ALLE DB-Operationen über `DatabaseService`
-
-✅ **Erlaubt:**
-```python
-from soulspot.database import DatabaseService
-db = DatabaseService()
-user = await db.get_entity("User", user_id)
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff mypy bandit
+          
+      - name: Run Ruff Linter
+        run: ruff check . --output-format=github
+        continue-on-error: false
+        
+      - name: Run MyPy Type Checker
+        run: mypy . --config-file=mypy.ini
+        continue-on-error: false
+        
+      - name: Run Bandit Security Scanner
+        run: bandit -r src/ -ll
+        continue-on-error: false
+        
+      - name: Run Tests
+        run: make test
+        
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Quality checks passed!'
+            })
 ```
 
-❌ **Verboten:**
-```python
-from sqlalchemy import create_engine
-session.query(User).first()  # DIREKT SQLAlchemy
-```
-
-### 2. Settings Service (CRITICAL)
-**Regel:** ALLE Config-Zugriffe über `SettingsService`
-
-✅ **Erlaubt:**
-```python
-from soulspot.settings import SettingsService
-settings = SettingsService()
-api_key = await settings.get("spotify.client_id")
-```
-
-❌ **Verboten:**
-```python
-import os
-api_key = os.getenv("SPOTIFY_CLIENT_ID")  # DIREKT ENV
-```
-
-### 3. Structured Errors (CRITICAL)
-**Regel:** Alle Exceptions strukturiert
-
-✅ **Erlaubt:**
-```python
-raise SoulspotError(
-    code="AUTH_FAILED",
-    message="Authentication failed",
-    context={"user_id": user_id},
-    resolution="Re-authenticate",
-    docs_url="https://docs.soulspot.dev/errors/AUTH_FAILED"
-)
-```
-
-❌ **Verboten:**
-```python
-raise Exception("Auth failed")  # GENERISCH
-```
-
-### 4. Module Boundaries (CRITICAL)
-**Regel:** Keine direkten Cross-Module Imports
-
-✅ **Erlaubt:**
-```python
-from soulspot.events import EventBus
-event_bus.publish("spotify.synced", {...})
-```
-
-❌ **Verboten:**
-```python
-from soulspot.spotify import SpotifyService  # In soulseek Module
-```
-
-### 5. Type Hints (HIGH)
-**Regel:** Alle Public Functions mit Type Hints
-
-✅ **Erlaubt:**
-```python
-async def get_playlist(self, id: str) -> Playlist:
-    ...
-```
-
-❌ **Verboten:**
-```python
-async def get_playlist(self, id):  # KEINE HINTS
-    ...
-```
-
-## Aufgabe
-
-1. **Scanne alle geänderten Python-Dateien** auf Violations
-2. **Kategorisiere nach Severity:** CRITICAL, HIGH, MEDIUM, LOW
-3. **Erstelle detaillierten Kommentar:**
-   - Liste aller Violations
-   - Konkrete Code-Snippets
-   - Exakte Fix-Vorschläge
-   - Links zur Dokumentation
-
-## Output Format
-
-```markdown
-## 🏛️ Architecture Compliance Report
-
-**Status:** ❌ FAILED (2 violations)
-
-### ❌ CRITICAL: Direct SQLAlchemy Usage
-**File:** `src/soulspot/services/spotify.py`
-**Line:** 45
-
-**Violation:**
-```python
-45: session.query(User).filter_by(id=user_id).first()
-```
-
-**Fix:**
-```python
-user = await database_service.get_entity("User", {"id": user_id})
-```
-
-**Docs:** [Database Module Guide](link)
+5. Commit: "Add CI quality workflow"
+6. Workflow ist sofort aktiv!
 
 ---
 
-### Summary
-- 2 violations (1 CRITICAL, 1 HIGH)
-- Fix CRITICAL before merge
-```
+### Template 2: Test Coverage Monitor
 
-## Fehlerbehandlung
-- Bei Scan-Fehler: Logge, fahre fort
-- Keine Python-Dateien: "No Python files, skipping ✅"
-```
+**Zweck:** Coverage-Reporting und Badge-Generierung
 
-**Installation:**
-```bash
-cd /path/to/soulspot-bridge
-gh aw compile .github/workflows/agentics/soulspot-architecture-guardian.md
-git add .github/workflows/agentics/soulspot-architecture-guardian.md
-git add .github/workflows/soulspot-architecture-guardian.yml
-git commit -m "feat(ci): Add Architecture Guardian workflow"
-git push
-```
+**Datei:** `.github/workflows/coverage.yml`
 
----
+```yaml
+name: Test Coverage
 
-### Template 2: SoulSpot Test Coverage Guardian
-
-**Zweck:** Verhindere Coverage-Rückgang, schlage konkrete Tests vor
-
-**Datei:** `.github/workflows/agentics/soulspot-test-coverage-guardian.md`
-
-```markdown
----
-name: SoulSpot Test Coverage Guardian
 on:
   pull_request:
-    types: [opened, synchronize]
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
 permissions:
   contents: read
   pull-requests: write
-  statuses: write
-safe-outputs:
-  create-comment:
-    max: 1
-    body-max-length: 10000
-  create-status:
-    max: 1
-tools:
-  - bash
-  - read-file
-  - list-files
-engine: claude-3-5-sonnet
-timeout-minutes: 20
-stop-after: 30 days
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+          
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=src --cov-report=html --cov-report=term --cov-report=json
+          
+      - name: Get coverage percentage
+        id: coverage
+        run: |
+          COVERAGE=$(python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+          echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+          
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const coverage = '${{ steps.coverage.outputs.percentage }}';
+            const emoji = coverage >= 80 ? '✅' : '❌';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} Test Coverage: ${coverage}%\n\nTarget: 80%`
+            })
+            
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+```
+
+**Erstellen:**
+1. "Add file" → "Create new file"
+2. Dateiname: `.github/workflows/coverage.yml`
+3. Code einfügen → Commit
+
 ---
 
-# SoulSpot Test Coverage Guardian
+### Template 3: Documentation Sync
 
-Du bist QA Engineer für SoulSpot Bridge v3.0.
+**Zweck:** Automatische Docs-Updates bei Code-Änderungen
 
-## Kontext
-- **Framework:** FastAPI + SQLAlchemy (async)
-- **Tests:** pytest + pytest-asyncio
-- **Ziel:** >80% Coverage
+**Datei:** `.github/workflows/docs-sync.yml`
 
-## Aufgabe
+```yaml
+name: Documentation Sync
 
-### 1. Coverage messen
-```bash
-poetry install --with dev
-make test-cov
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**/*.py'
+      - 'alembic/versions/*.py'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for doc updates needed
+        id: check
+        run: |
+          # Prüfe ob API docs aktualisiert werden müssen
+          if git diff --name-only HEAD~1 | grep -q "src/soulspot/api"; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Create issue for doc update
+        if: steps.check.outputs.needs_update == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📝 Documentation Update Required',
+              body: 'API code was changed. Please update docs in `docs/api/`',
+              labels: ['documentation', 'automation']
+            })
+```
+
+**Hinweis:** Erstellt automatisch ein Issue wenn API-Code geändert wird.
+
+---
+
+### Template 4: Auto-Label Issues
+
+**Zweck:** Automatisches Labeling von Issues basierend auf Inhalt
+
+**Datei:** `.github/workflows/auto-label.yml`
+
+```yaml
+name: Auto-Label Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = issue.body.toLowerCase();
+            const labels = [];
+            
+            // Bug detection
+            if (title.includes('bug') || title.includes('error') || title.includes('fix')) {
+              labels.push('bug');
+            }
+            
+            // Feature request
+            if (title.includes('feature') || title.includes('enhancement')) {
+              labels.push('enhancement');
+            }
+            
+            // Documentation
+            if (title.includes('doc') || title.includes('documentation')) {
+              labels.push('documentation');
+            }
+            
+            // Module-specific
+            if (body.includes('spotify') || title.includes('spotify')) {
+              labels.push('module:spotify');
+            }
+            if (body.includes('soulseek') || title.includes('soulseek')) {
+              labels.push('module:soulseek');
+            }
+            if (body.includes('database') || title.includes('database')) {
+              labels.push('module:database');
+            }
+            
+            // Apply labels
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labels
+              });
+            }
+```
+
+**Erstellen:**
+1. GitHub UI: "Add file" → `.github/workflows/auto-label.yml`
+2. Code einfügen → Commit
+3. Labels werden automatisch bei neuen Issues vergeben!
 ```
 
 ### 2. Coverage analysieren
