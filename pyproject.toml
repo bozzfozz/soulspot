@@ -3,7 +3,7 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "soulspot-bridge"
+name = "soulspot"
 version = "0.1.0"
 description = "Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation und Soulseek-Integration"
 authors = ["bozzfozz"]
@@ -19,8 +19,8 @@ include = [
     "src/soulspot/static/**/*",
 ]
 license = "MIT"
-homepage = "https://github.com/bozzfozz/soulspot-bridge"
-repository = "https://github.com/bozzfozz/soulspot-bridge"
+homepage = "https://github.com/bozzfozz/soulspot"
+repository = "https://github.com/bozzfozz/soulspot"
 keywords = ["spotify", "soulseek", "music", "download", "slskd"]
 classifiers = [
     "Development Status :: 3 - Alpha",

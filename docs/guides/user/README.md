@@ -5,12 +5,12 @@
 
 ---
 
-This directory contains end-user documentation for SoulSpot Bridge.
+This directory contains end-user documentation for SoulSpot.
 
 ## Available Guides
 
 ### [Setup Guide](setup-guide.md)
-Complete installation and configuration instructions for getting SoulSpot Bridge up and running.
+Complete installation and configuration instructions for getting SoulSpot up and running.
 
 **Topics:**
 - Docker installation and setup
@@ -20,7 +20,7 @@ Complete installation and configuration instructions for getting SoulSpot Bridge
 - Initial configuration
 
 ### [User Guide](user-guide.md)
-Comprehensive guide for using all features of SoulSpot Bridge.
+Comprehensive guide for using all features of SoulSpot.
 
 **Topics:**
 - Dashboard and widget customization

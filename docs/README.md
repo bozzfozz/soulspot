@@ -1,4 +1,4 @@
-# SoulSpot Bridge Documentation
+# SoulSpot Documentation
 
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-17
@@ -27,19 +27,19 @@ docs/
 ## 🚀 Quick Start
 
 ### For Users
-New to SoulSpot Bridge? Start here:
+New to SoulSpot? Start here:
 1. [Setup Guide](guides/user/setup-guide.md) - Installation and configuration
 2. [User Guide](guides/user/user-guide.md) - How to use all features
 3. [Troubleshooting](guides/user/troubleshooting-guide.md) - Common issues and solutions
 
 ### For Developers
-Contributing to SoulSpot Bridge? Start here:
+Contributing to SoulSpot? Start here:
 1. [Architecture](project/architecture.md) - System design and structure
 2. [Contributing Guide](project/contributing.md) - How to contribute
 3. [Testing Guide](guides/developer/testing-guide.md) - Writing and running tests
 
 ### For Operators
-Deploying or maintaining SoulSpot Bridge? Start here:
+Deploying or maintaining SoulSpot? Start here:
 1. [Deployment Guide](guides/developer/deployment-guide.md) - Production deployment
 2. [Operations Runbook](guides/developer/operations-runbook.md) - Day-to-day operations
 3. [Observability Guide](guides/developer/observability-guide.md) - Monitoring and logging
@@ -226,4 +226,4 @@ Can't find what you're looking for?
 
 ---
 
-**SoulSpot Bridge version 1.0** - Complete documentation for a complete music automation platform.
+**SoulSpot version 1.0** - Complete documentation for a complete music automation platform.

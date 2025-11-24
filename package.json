@@ -1,7 +1,7 @@
 {
-  "name": "soulspot-bridge",
+  "name": "soulspot",
   "version": "0.1.0",
-  "description": "SoulSpot Bridge - Web UI assets",
+  "description": "SoulSpot - Web UI assets",
   "scripts": {
     "build:css": "tailwindcss -i ./src/soulspot/static/css/input.css -o ./src/soulspot/static/css/style.css --minify",
     "watch:css": "tailwindcss -i ./src/soulspot/static/css/input.css -o ./src/soulspot/static/css/style.css --watch"

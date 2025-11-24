@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Schlag ein neues Feature für SoulSpot Bridge vor
+about: Schlag ein neues Feature für SoulSpot vor
 title: '[FEATURE] '
 labels: enhancement
 assignees: ''

@@ -1,4 +1,4 @@
-"""Security utilities for SoulSpot Bridge."""
+"""Security utilities for SoulSpot."""
 
 from .path_validator import PathValidator, validate_safe_path
 

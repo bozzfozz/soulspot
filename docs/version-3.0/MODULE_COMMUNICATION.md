@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This document defines the communication patterns and contracts for inter-module communication in SoulSpot Bridge Version 3.0. These patterns ensure **loose coupling** while enabling modules to collaborate effectively.
+This document defines the communication patterns and contracts for inter-module communication in SoulSpot Version 3.0. These patterns ensure **loose coupling** while enabling modules to collaborate effectively.
 
 ### 1.1 Design Principles
 

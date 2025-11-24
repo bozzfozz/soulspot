@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Detaillierte Frontend-Development-Roadmap Version 1.0
+# SoulSpot – Detaillierte Frontend-Development-Roadmap Version 1.0
 
 > **Version:** 1.0.0
 > **Letzte Aktualisierung:** 2025-11-15
@@ -29,7 +29,7 @@
 
 ### Projektziel
 
-Version 1.0 von SoulSpot Bridge stellt eine vollständige, produktionsreife Web-Oberfläche bereit, die es Benutzern ermöglicht, ihre Spotify-Playlists zu synchronisieren, Musik über Soulseek herunterzuladen und ihre Musikbibliothek zu verwalten – alles über eine intuitive, barrierefreie und moderne Weboberfläche.
+Version 1.0 von SoulSpot stellt eine vollständige, produktionsreife Web-Oberfläche bereit, die es Benutzern ermöglicht, ihre Spotify-Playlists zu synchronisieren, Musik über Soulseek herunterzuladen und ihre Musikbibliothek zu verwalten – alles über eine intuitive, barrierefreie und moderne Weboberfläche.
 
 ### Kernziele für Version 1.0
 
@@ -62,7 +62,7 @@ Version 1.0 von SoulSpot Bridge stellt eine vollständige, produktionsreife Web-
 
 ### Vision Statement
 
-*"SoulSpot Bridge bietet eine Web-Oberfläche, die so einfach zu bedienen ist wie Spotify selbst, dabei aber die Kontrolle und Flexibilität einer professionellen Bibliotheksverwaltung bietet."*
+*"SoulSpot bietet eine Web-Oberfläche, die so einfach zu bedienen ist wie Spotify selbst, dabei aber die Kontrolle und Flexibilität einer professionellen Bibliotheksverwaltung bietet."*
 
 ### Designprinzipien
 
@@ -1150,7 +1150,7 @@ bandit -r src/ -ll
 safety check --json
 
 # Docker Image
-trivy image ghcr.io/bozzfozz/soulspot-bridge:latest
+trivy image ghcr.io/bozzfozz/soulspot:latest
 ```
 
 ---

@@ -378,7 +378,7 @@ volumes:
 
 ### .env.example
 ```bash
-# SoulSpot Bridge Environment Configuration
+# SoulSpot Environment Configuration
 # Kopiere diese Datei zu .env und passe die Werte an
 
 # ============================================

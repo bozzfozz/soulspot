@@ -22,7 +22,7 @@
 
 ## Overview
 
-The SoulSpot Bridge widget system allows developers to create custom dashboard widgets using a JSON-based template format. Widgets are automatically discovered at application startup and can be added to any dashboard page.
+The SoulSpot widget system allows developers to create custom dashboard widgets using a JSON-based template format. Widgets are automatically discovered at application startup and can be added to any dashboard page.
 
 ### Key Features
 
@@ -552,4 +552,4 @@ For questions or issues:
 
 **Last Updated:** 2025-11-17  
 **Version:** 1.0  
-**Maintained by:** SoulSpot Bridge Team
+**Maintained by:** SoulSpot Team

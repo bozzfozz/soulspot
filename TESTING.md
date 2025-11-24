@@ -1,4 +1,4 @@
-# Test-Ausführungs-Anleitung für SoulSpot Bridge
+# Test-Ausführungs-Anleitung für SoulSpot
 
 ## Schnellstart
 

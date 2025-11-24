@@ -1,15 +1,15 @@
 services:
-  # SoulSpot Bridge - Main application (local single-user setup)
+  # SoulSpot - Main application (local single-user setup)
   # Note: Most configuration uses internal defaults from settings.py and Dockerfile
   # Only external service credentials and container-specific settings are configured here
   soulspot:
     # Use pre-built image from GitHub Container Registry
     # For local development, uncomment the build section below and comment out the image line
-    image: ghcr.io/bozzfozz/soulspot-bridge:latest
+    image: ghcr.io/bozzfozz/soulspot:latest
     # build:
     #   context: ..
     #   dockerfile: docker/Dockerfile
-    container_name: soulspot-bridge
+    container_name: soulspot
     ports:
       - "8765:8765"      # Web UI and API
     volumes:

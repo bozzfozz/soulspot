@@ -2,7 +2,7 @@
 
 > **Version:** 1.0.0
 > **Status:** Production Ready
-> **Lokation:** `/docs/ui/` (SoulSpot Bridge Repository)
+> **Lokation:** `/docs/ui/` (SoulSpot Repository)
 > **Letzte Aktualisierung:** 2025-11-15
 
 
@@ -10,7 +10,7 @@
 
 This design system provides a complete set of design tokens, component styles, and layout utilities that can be integrated into any web application. All branding elements (logos, product names, marketing content) have been removed to create a clean, generic foundation.
 
-**Integration in SoulSpot Bridge:** Dieses Design System bildet die Grundlage für die Web-Oberfläche von SoulSpot Bridge Version 1.0. Alle UI-Komponenten verwenden diese Styles für eine konsistente und moderne Benutzererfahrung.
+**Integration in SoulSpot:** Dieses Design System bildet die Grundlage für die Web-Oberfläche von SoulSpot Version 1.0. Alle UI-Komponenten verwenden diese Styles für eine konsistente und moderne Benutzererfahrung.
 
 ## 🎯 Purpose
 
@@ -70,8 +70,8 @@ Comprehensive showcase of all components and utilities with live examples.
 
 ### Installation
 
-#### Für SoulSpot Bridge
-Das Design System ist bereits in SoulSpot Bridge integriert. Die CSS-Dateien befinden sich in `/docs/ui/` und werden von den Jinja2-Templates referenziert.
+#### Für SoulSpot
+Das Design System ist bereits in SoulSpot integriert. Die CSS-Dateien befinden sich in `/docs/ui/` und werden von den Jinja2-Templates referenziert.
 
 #### Für externe Projekte
 1. Copy the UI files to your project:
@@ -309,9 +309,9 @@ Built-in accessibility features:
 
 
 
-### Für SoulSpot Bridge Contributors
+### Für SoulSpot Contributors
 
-Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
+Wenn Sie UI-Komponenten für SoulSpot entwickeln:
 
 1. Verwenden Sie die vorhandenen Design-Token aus `theme.css`
 2. Erweitern Sie `components.css` nur, wenn neue generische Komponenten benötigt werden
@@ -325,10 +325,10 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 - [WCAG Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 - [CSS Custom Properties](https://developer.mozilla.org/en-US/docs/Web/CSS/--*)
 
-### SoulSpot Bridge Dokumentation
+### SoulSpot Dokumentation
 - [Frontend Development Roadmap v1.0](../frontend-development-roadmap-v1.0.md) – Detaillierte Planung für Version 1.0
 - [Architecture Documentation](../architecture.md) – System-Architektur
-- [Design Guidelines](../design-guidelines.md) – Design-Prinzipien für SoulSpot Bridge
+- [Design Guidelines](../design-guidelines.md) – Design-Prinzipien für SoulSpot
 - [Keyboard Navigation Guide](../keyboard-navigation.md) – Tastaturnavigation
 - [UI/UX Testing Report](../ui-ux-testing-report.md) – Test-Ergebnisse
 
@@ -338,8 +338,8 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 
 ### Version 1.0.0 (2025-11-15)
 - ✅ Initial Release – Complete Design System
-- ✅ Moved to `/docs/ui/` in SoulSpot Bridge Repository
-- ✅ Integration mit SoulSpot Bridge Frontend
+- ✅ Moved to `/docs/ui/` in SoulSpot Repository
+- ✅ Integration mit SoulSpot Frontend
 - ✅ Vollständige Dokumentation mit Beispielen
 - ✅ WCAG 2.1 AA konform
 - ✅ Dark Mode Support
@@ -371,4 +371,4 @@ Wenn Sie UI-Komponenten für SoulSpot Bridge entwickeln:
 **Version**: 1.0.0
 **Last Updated**: 2025-11-15
 **Status**: Production Ready
-**Lokation**: `/docs/ui/` (SoulSpot Bridge)
+**Lokation**: `/docs/ui/` (SoulSpot)

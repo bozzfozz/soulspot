@@ -1,6 +1,6 @@
 # Observability Guide
 
-This guide explains how to use the observability features in SoulSpot Bridge.
+This guide explains how to use the observability features in SoulSpot.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ This guide explains how to use the observability features in SoulSpot Bridge.
 
 ## Overview
 
-SoulSpot Bridge includes observability features to help you monitor and debug your application:
+SoulSpot includes observability features to help you monitor and debug your application:
 
 - **Structured Logging**: JSON-formatted logs with correlation IDs for request tracking
 - **Circuit Breaker**: Resilience pattern to protect external service integrations
@@ -160,7 +160,7 @@ Response:
 ```json
 {
   "status": "healthy",
-  "app_name": "SoulSpot Bridge",
+  "app_name": "SoulSpot",
   "environment": "development",
   "profile": "simple"
 }
@@ -219,11 +219,11 @@ OBSERVABILITY__HEALTH_CHECK_TIMEOUT=5.0
 apiVersion: v1
 kind: Pod
 metadata:
-  name: soulspot-bridge
+  name: soulspot
 spec:
   containers:
   - name: app
-    image: soulspot-bridge:latest
+    image: soulspot:latest
     livenessProbe:
       httpGet:
         path: /live

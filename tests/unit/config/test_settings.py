@@ -12,7 +12,7 @@ class TestSettings:
     def test_default_settings(self):
         """Test default settings values."""
         settings = Settings()
-        assert settings.app_name == "SoulSpot Bridge"
+        assert settings.app_name == "SoulSpot"
         # Removed app_env - project is for local use only
         assert settings.profile == Profile.SIMPLE
         assert settings.debug is True
@@ -189,6 +189,6 @@ class TestSettings:
     def test_musicbrainz_defaults(self):
         """Test MusicBrainz default settings."""
         settings = Settings()
-        assert settings.musicbrainz.app_name == "SoulSpot-Bridge"
+        assert settings.musicbrainz.app_name == "SoulSpot"
         assert settings.musicbrainz.app_version == "0.1.0"
         assert settings.musicbrainz.contact == ""

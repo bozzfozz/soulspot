@@ -1,8 +1,8 @@
-# AI Agent Recommendations for SoulSpot Bridge v3.0
+# AI Agent Recommendations for SoulSpot v3.0
 
 ## Executive Summary
 
-This document provides research-backed recommendations for AI models and agents specialized in backend and frontend implementation to ensure 100% complete, error-free code generation for SoulSpot Bridge Version 3.0.
+This document provides research-backed recommendations for AI models and agents specialized in backend and frontend implementation to ensure 100% complete, error-free code generation for SoulSpot Version 3.0.
 
 > **📝 Note:** This document recommends AI models from [GitHub Copilot's supported models list](https://docs.github.com/en/copilot/reference/ai-models/supported-models) where applicable.
 
@@ -29,7 +29,7 @@ This document provides research-backed recommendations for AI models and agents 
 
 ## Evaluation Criteria
 
-When evaluating AI agents for SoulSpot Bridge v3.0, we prioritize:
+When evaluating AI agents for SoulSpot v3.0, we prioritize:
 
 ### Backend (Python, FastAPI, SQLAlchemy)
 
@@ -446,7 +446,7 @@ bandit -r .                     # Security
 ```markdown
 - [ ] Code makes logical sense
 - [ ] No obvious bugs or race conditions
-- [ ] Follows SoulSpot Bridge v3.0 coding standards
+- [ ] Follows SoulSpot v3.0 coding standards
 - [ ] Would pass human code review
 ```
 
@@ -577,7 +577,7 @@ Model Selection:
 ### Project Structure
 
 ```
-soulspot-bridge/
+soulspot/
 ├── modules/
 │   ├── database/        # Copilot with Claude 3.5 Sonnet
 │   ├── settings/        # Copilot with Claude 3.5 Sonnet
@@ -594,7 +594,7 @@ soulspot-bridge/
 Create `.github/copilot-instructions.md` in project root:
 
 ```markdown
-# SoulSpot Bridge v3.0 Coding Instructions
+# SoulSpot v3.0 Coding Instructions
 
 ## Architecture
 - ALWAYS use Database Module, NEVER direct SQLAlchemy
@@ -642,7 +642,7 @@ Create `.github/copilot-instructions.md` in project root:
    # Create GitHub Copilot instructions
    mkdir -p .github
    touch .github/copilot-instructions.md
-   # Add SoulSpot Bridge coding standards
+   # Add SoulSpot coding standards
    ```
 
 ### Development Process
@@ -667,7 +667,7 @@ Create `.github/copilot-instructions.md` in project root:
 
 ## Conclusion
 
-**Best Practice for SoulSpot Bridge v3.0:**
+**Best Practice for SoulSpot v3.0:**
 
 Use **GitHub Copilot** with the following model strategy:
 - **Claude 3.5 Sonnet**: Primary model for backend and frontend implementation

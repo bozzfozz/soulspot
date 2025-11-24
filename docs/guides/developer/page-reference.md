@@ -1,4 +1,4 @@
-# Page Reference - SoulSpot Bridge
+# Page Reference - SoulSpot
 
 > **Version:** 2.0  
 > **Last Updated:** 2025-11-17  
@@ -8,7 +8,7 @@
 
 ## 📖 Overview
 
-This document provides a comprehensive reference for every page in SoulSpot Bridge, including URLs, features, components used, and HTMX interactions.
+This document provides a comprehensive reference for every page in SoulSpot, including URLs, features, components used, and HTMX interactions.
 
 ---
 
@@ -219,7 +219,7 @@ Browse and manage imported Spotify playlists.
 ## ➕ Import Playlist (`/playlists/import`)
 
 ### Purpose
-Import Spotify playlists into SoulSpot Bridge.
+Import Spotify playlists into SoulSpot.
 
 ### Key Features
 - **URL Input**: Accept Spotify playlist URLs or URIs

@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Module Specification Template (Version 3.0)
+# SoulSpot - Module Specification Template (Version 3.0)
 
 **Version:** 3.0.0  
 **Status:** Planning Phase  
@@ -8,7 +8,7 @@
 
 ## 1. Introduction
 
-This document defines the **standard structure and requirements** for all feature modules in SoulSpot Bridge Version 3.0. Every new module MUST follow this specification to ensure consistency, maintainability, and interoperability.
+This document defines the **standard structure and requirements** for all feature modules in SoulSpot Version 3.0. Every new module MUST follow this specification to ensure consistency, maintainability, and interoperability.
 
 ### 1.1 Purpose
 

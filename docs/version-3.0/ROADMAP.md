@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Modular Architecture Roadmap (Version 3.0)
+# SoulSpot - Modular Architecture Roadmap (Version 3.0)
 
 **Version:** 3.0.0  
 **Status:** Planning Phase  
@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-This roadmap outlines the transition from the current layered/onion architecture to a **fully modular, feature-based architecture** for SoulSpot Bridge. Each feature module (e.g., Soulseek, Spotify, Library Management) will become a self-contained component with its own frontend, backend, and tests, enabling:
+This roadmap outlines the transition from the current layered/onion architecture to a **fully modular, feature-based architecture** for SoulSpot. Each feature module (e.g., Soulseek, Spotify, Library Management) will become a self-contained component with its own frontend, backend, and tests, enabling:
 
 - **Independent Development**: Modules can be developed, tested, and deployed independently
 - **Clear Boundaries**: Well-defined interfaces between modules prevent coupling
@@ -505,7 +505,7 @@ modules/soulseek/architecture.md          # Must be in docs/ subdirectory
 **Example: Global Changelog Entry**
 
 ```markdown
-# Changelog - SoulSpot Bridge
+# Changelog - SoulSpot
 
 ## [3.0.0] - 2025-12-01
 
@@ -1055,7 +1055,7 @@ How this module relates to previous code (if migrated).
 
 ## 14. Conclusion
 
-This modular architecture represents a significant evolution of SoulSpot Bridge, enabling:
+This modular architecture represents a significant evolution of SoulSpot, enabling:
 
 1. **Better Organization**: Clear feature boundaries and responsibilities
 2. **Easier Maintenance**: Isolated modules are easier to understand and modify

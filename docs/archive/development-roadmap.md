@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Development Roadmap (Index)
+# SoulSpot – Development Roadmap (Index)
 
 > **Last Updated:** 2025-11-12  
 > **Version:** 0.1.0 (Alpha)  
@@ -8,7 +8,7 @@
 
 ## 📋 Overview
 
-The SoulSpot Bridge development roadmap has been restructured for better clarity and maintainability. Instead of a single monolithic roadmap, we now maintain separate, focused roadmaps for each major concern area.
+The SoulSpot development roadmap has been restructured for better clarity and maintainability. Instead of a single monolithic roadmap, we now maintain separate, focused roadmaps for each major concern area.
 
 ### Why Split the Roadmap?
 
@@ -115,7 +115,7 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 **Timeline:** Q3-Q4 2025  
 **Priority:** 🔵 STRATEGIC
 
-**Vision:** Transform SoulSpot Bridge into a flexible, customizable workspace where users can create personalized dashboards with drag-and-drop widgets.
+**Vision:** Transform SoulSpot into a flexible, customizable workspace where users can create personalized dashboards with drag-and-drop widgets.
 
 **Key Features:**
 - Grid-based page builder (GridStack.js)
@@ -135,7 +135,7 @@ The SoulSpot Bridge development roadmap has been restructured for better clarity
 **Timeline:** 2026+  
 **Priority:** 🔴 CRITICAL
 
-**Vision:** Transform SoulSpot Bridge into a reliable, feature-rich system with comprehensive security and operational excellence for local deployment.
+**Vision:** Transform SoulSpot into a reliable, feature-rich system with comprehensive security and operational excellence for local deployment.
 
 **Key Features:**
 - Local SQLite infrastructure
@@ -245,7 +245,7 @@ The original monolithic roadmap has been archived for reference:
 
 ## 🎯 Vision & Long-Term Goals
 
-SoulSpot Bridge aims to be:
+SoulSpot aims to be:
 
 - 🎵 **Fully Automated** – Minimal manual intervention for music management
 - 🤖 **Self-Healing** – Automatically detects and fixes issues
@@ -258,8 +258,8 @@ SoulSpot Bridge aims to be:
 
 ## 📞 Questions & Feedback
 
-- **GitHub Issues:** [Create an issue](https://github.com/bozzfozz/soulspot-bridge/issues/new)
-- **Discussions:** [GitHub Discussions](https://github.com/bozzfozz/soulspot-bridge/discussions)
+- **GitHub Issues:** [Create an issue](https://github.com/bozzfozz/soulspot/issues/new)
+- **Discussions:** [GitHub Discussions](https://github.com/bozzfozz/soulspot/discussions)
 - **Documentation:** Check the relevant roadmap or [contributing guide](contributing.md)
 
 ---

@@ -1,6 +1,6 @@
 # Testing Guide
 
-Comprehensive guide for testing SoulSpot Bridge, including unit tests, integration tests, and test-driven development practices.
+Comprehensive guide for testing SoulSpot, including unit tests, integration tests, and test-driven development practices.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ Comprehensive guide for testing SoulSpot Bridge, including unit tests, integrati
 
 ## Testing Overview
 
-SoulSpot Bridge uses a comprehensive testing strategy to ensure code quality and reliability.
+SoulSpot uses a comprehensive testing strategy to ensure code quality and reliability.
 
 ### Testing Framework
 

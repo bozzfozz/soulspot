@@ -1181,7 +1181,7 @@ settings = SoulseekSettings()
 <!-- modules/soulseek/frontend/pages/downloads.html -->
 {% extends "layouts/base.html" %}
 
-{% block title %}Downloads - SoulSpot Bridge{% endblock %}
+{% block title %}Downloads - SoulSpot{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="/soulseek/static/styles/soulseek.css">
@@ -1600,7 +1600,7 @@ and this module adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ## Overview
 
 The Soulseek module manages all Soulseek P2P network interactions for music downloads.
-It demonstrates the reference architecture for SoulSpot Bridge Version 3.0 modules.
+It demonstrates the reference architecture for SoulSpot Version 3.0 modules.
 
 ## Architecture Diagram
 
@@ -2151,7 +2151,7 @@ def downgrade():
 from fastapi import FastAPI
 from modules.soulseek import Module as SoulseekModule
 
-app = FastAPI(title="SoulSpot Bridge")
+app = FastAPI(title="SoulSpot")
 
 # Register Soulseek module
 app.include_router(

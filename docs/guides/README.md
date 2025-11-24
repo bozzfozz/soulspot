@@ -5,12 +5,12 @@
 
 ---
 
-This directory contains all user and developer guides for SoulSpot Bridge.
+This directory contains all user and developer guides for SoulSpot.
 
 ## Guide Categories
 
 ### [User Guides](user/)
-Documentation for end users of SoulSpot Bridge:
+Documentation for end users of SoulSpot:
 - **[Setup Guide](user/setup-guide.md)** - Installation and configuration
 - **[User Guide](user/user-guide.md)** - Feature walkthrough
 - **[Advanced Search Guide](user/advanced-search-guide.md)** - Search tips

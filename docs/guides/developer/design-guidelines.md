@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design system is based on the harmony-v1 backup project, which uses a Wizarr-inspired theme. The design tokens have been extracted and adapted for use in SoulSpot Bridge, providing a cohesive and modern user interface.
+This design system is based on the harmony-v1 backup project, which uses a Wizarr-inspired theme. The design tokens have been extracted and adapted for use in SoulSpot, providing a cohesive and modern user interface.
 
 ## Source
 

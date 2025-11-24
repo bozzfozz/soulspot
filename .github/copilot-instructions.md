@@ -4,7 +4,7 @@
 This file contains focused, repository-specific guidance to help AI coding agents be productive immediately.
 
 1. Purpose & Big Picture
-- **What:** SoulSpot Bridge syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
+- **What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
 - **Architecture:** Python FastAPI app (async SQLAlchemy) in `src/soulspot`, background workers coordinating with `slskd`, and a web UI. DB migrations in `alembic/`.
 
 2. Recommended dev environment

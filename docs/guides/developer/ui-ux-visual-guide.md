@@ -1,7 +1,7 @@
 # UI/UX Improvements - Visual Guide
 
 ## Overview
-This document provides a visual guide to the UI/UX improvements implemented in the SoulSpot Bridge application.
+This document provides a visual guide to the UI/UX improvements implemented in the SoulSpot application.
 
 ## 🎨 Component Showcase
 

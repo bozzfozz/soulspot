@@ -2,7 +2,7 @@
 
 ## Overview
 
-The SoulSpot Bridge download management system provides a robust, priority-based queue for managing music downloads from Soulseek. It includes features for retry logic, concurrent download limits, pause/resume functionality, and batch operations.
+The SoulSpot download management system provides a robust, priority-based queue for managing music downloads from Soulseek. It includes features for retry logic, concurrent download limits, pause/resume functionality, and batch operations.
 
 ## Features
 

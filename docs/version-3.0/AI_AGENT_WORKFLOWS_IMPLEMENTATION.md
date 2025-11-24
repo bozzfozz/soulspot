@@ -1,4 +1,4 @@
-# AI Agent Workflows - Praktische Implementierung für SoulSpot Bridge
+# AI Agent Workflows - Praktische Implementierung für SoulSpot
 
 ## Inhaltsverzeichnis
 
@@ -14,7 +14,7 @@
 
 ## Quick Start
 
-### 5-Minuten-Setup für SoulSpot Bridge
+### 5-Minuten-Setup für SoulSpot
 
 **Schritt 1: CLI installieren**
 ```bash
@@ -38,7 +38,7 @@ gh secret set ANTHROPIC_API_KEY --body "sk-ant-..."
 
 **Schritt 3: Ersten Workflow hinzufügen**
 ```bash
-cd /path/to/soulspot-bridge
+cd /path/to/soulspot
 
 # Beispiel: Issue Triage (Read-Only, sicher zum Testen)
 gh aw add githubnext/agentics/issue-triage --pr
@@ -259,7 +259,7 @@ stop-after: 30 days
 
 # SoulSpot Architecture Guardian
 
-Du bist der Architektur-Wächter für SoulSpot Bridge v3.0.
+Du bist der Architektur-Wächter für SoulSpot v3.0.
 
 ## Architektur-Prinzipien
 
@@ -390,7 +390,7 @@ user = await database_service.get_entity("User", {"id": user_id})
 
 **Installation:**
 ```bash
-cd /path/to/soulspot-bridge
+cd /path/to/soulspot
 gh aw compile .github/workflows/agentics/soulspot-architecture-guardian.md
 git add .github/workflows/agentics/soulspot-architecture-guardian.md
 git add .github/workflows/soulspot-architecture-guardian.yml
@@ -433,7 +433,7 @@ stop-after: 30 days
 
 # SoulSpot Test Coverage Guardian
 
-Du bist QA Engineer für SoulSpot Bridge v3.0.
+Du bist QA Engineer für SoulSpot v3.0.
 
 ## Kontext
 - **Framework:** FastAPI + SQLAlchemy (async)
@@ -655,7 +655,7 @@ stop-after: 60 days
 
 # SoulSpot Documentation Sync
 
-Du bist Technical Writer für SoulSpot Bridge.
+Du bist Technical Writer für SoulSpot.
 
 ## Aufgabe
 Wenn Code in `src/` oder `alembic/versions/` geändert wird:

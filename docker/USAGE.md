@@ -1,6 +1,6 @@
 # Docker Usage Quick Reference
 
-This directory contains all Docker-related files for SoulSpot Bridge (local single-user setup).
+This directory contains all Docker-related files for SoulSpot (local single-user setup).
 
 ## Files in this Directory
 
@@ -44,7 +44,7 @@ just docker-down
 
 ```bash
 # Build from repository root
-docker build -f docker/Dockerfile -t soulspot-bridge .
+docker build -f docker/Dockerfile -t soulspot .
 ```
 
 ## Documentation

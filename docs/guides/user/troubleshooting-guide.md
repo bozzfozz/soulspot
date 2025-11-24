@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Troubleshooting Guide
+# SoulSpot - Troubleshooting Guide
 
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-11  
@@ -6,7 +6,7 @@
 
 ## 📋 Overview
 
-This guide helps diagnose and resolve common issues with SoulSpot Bridge. Issues are organized by category with symptoms, causes, and solutions.
+This guide helps diagnose and resolve common issues with SoulSpot. Issues are organized by category with symptoms, causes, and solutions.
 
 ---
 
@@ -620,7 +620,7 @@ curl http://localhost:8765/api/v1/downloads | jq 'length'
    ls -la src/soulspot/static/
    
    # Rebuild CSS if using Tailwind
-   cd /path/to/soulspot-bridge
+   cd /path/to/soulspot
    npm run build:css
    ```
 
@@ -774,8 +774,8 @@ Collect the following information:
 
 ### Where to Get Help
 
-- **GitHub Issues:** https://github.com/bozzfozz/soulspot-bridge/issues
-- **Documentation:** https://github.com/bozzfozz/soulspot-bridge/tree/main/docs
+- **GitHub Issues:** https://github.com/bozzfozz/soulspot/issues
+- **Documentation:** https://github.com/bozzfozz/soulspot/tree/main/docs
 - **Health Checks:** http://localhost:8765/health
 
 ---

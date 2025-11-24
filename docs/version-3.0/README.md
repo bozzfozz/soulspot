@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Version 3.0 Architecture Documentation
+# SoulSpot - Version 3.0 Architecture Documentation
 
 **Version:** 3.0.0  
 **Status:** Planning Phase  
@@ -13,7 +13,7 @@
 
 ## Overview
 
-This directory contains the complete architectural design for SoulSpot Bridge Version 3.0, which transitions from a layered monolith to a **fully modular, feature-based architecture**.
+This directory contains the complete architectural design for SoulSpot Version 3.0, which transitions from a layered monolith to a **fully modular, feature-based architecture**.
 
 ---
 
@@ -89,7 +89,7 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
    - What are AI Agentic Workflows and core concepts
    - Complete catalog of available workflows (Issue Triage, CI Doctor, etc.)
    - Architecture and how workflows function
-   - Integration patterns for SoulSpot Bridge v3.0
+   - Integration patterns for SoulSpot v3.0
    - Custom workflow templates (Architecture Guardian, Test Coverage Guardian)
    - Security best practices and implementation guides
    - **Essential for automating code review, testing, and quality assurance**
@@ -98,7 +98,7 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
    - Quick start (5-minute setup)
    - Step-by-step installation and configuration
    - Recommended workflows for SoulSpot (prioritized)
-   - Ready-to-use workflow templates for SoulSpot Bridge
+   - Ready-to-use workflow templates for SoulSpot
    - Troubleshooting common issues
    - Monitoring and maintenance guidelines
    - **Hands-on guide for implementing AI automation**

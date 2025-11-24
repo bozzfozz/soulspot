@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the performance optimizations implemented in SoulSpot Bridge as part of the Performance & Scalability epic. These optimizations focus on query performance, database indexing, connection pooling, batch operations, and caching strategies.
+This document describes the performance optimizations implemented in SoulSpot as part of the Performance & Scalability epic. These optimizations focus on query performance, database indexing, connection pooling, batch operations, and caching strategies.
 
 ## Table of Contents
 

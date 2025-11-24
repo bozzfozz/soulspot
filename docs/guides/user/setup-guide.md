@@ -1,6 +1,6 @@
 # Setup Guide
 
-This guide provides comprehensive instructions for setting up SoulSpot Bridge in different environments.
+This guide provides comprehensive instructions for setting up SoulSpot in different environments.
 
 ## Table of Contents
 
@@ -44,8 +44,8 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 **Step 2: Clone the Repository**
 ```bash
-git clone https://github.com/bozzfozz/soulspot-bridge.git
-cd soulspot-bridge
+git clone https://github.com/bozzfozz/soulspot.git
+cd soulspot
 ```
 
 **Step 3: Install Dependencies**
@@ -70,8 +70,8 @@ poetry run pytest --version
 
 **Step 1: Clone the Repository**
 ```bash
-git clone https://github.com/bozzfozz/soulspot-bridge.git
-cd soulspot-bridge
+git clone https://github.com/bozzfozz/soulspot.git
+cd soulspot
 ```
 
 **Step 2: Create Virtual Environment**
@@ -111,7 +111,7 @@ pip install -r requirements.txt
 
 #### Application Settings
 ```env
-APP_NAME=SoulSpot Bridge
+APP_NAME=SoulSpot
 APP_ENV=development  # or production
 DEBUG=true           # Set to false in production
 LOG_LEVEL=INFO       # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -213,7 +213,7 @@ MusicBrainz is used for metadata enrichment. No API key required, but you should
 
 **Configure in `.env`:**
 ```env
-MUSICBRAINZ_APP_NAME=SoulSpot-Bridge
+MUSICBRAINZ_APP_NAME=SoulSpot
 MUSICBRAINZ_APP_VERSION=0.1.0
 MUSICBRAINZ_CONTACT=your-email@example.com
 ```
@@ -341,7 +341,7 @@ poetry run uvicorn soulspot.main:app --host 0.0.0.0 --port 8000 --workers 4
 **Solution:**
 ```bash
 # Ensure you're in the project directory
-cd /path/to/soulspot-bridge
+cd /path/to/soulspot
 
 # Reinstall dependencies
 poetry install
@@ -423,7 +423,7 @@ poetry run uvicorn soulspot.main:app --reload --port 8001
 
 If you encounter issues not covered here:
 
-1. **Check existing issues:** [GitHub Issues](https://github.com/bozzfozz/soulspot-bridge/issues)
+1. **Check existing issues:** [GitHub Issues](https://github.com/bozzfozz/soulspot/issues)
 2. **Review logs:** Check application logs for error messages
 3. **Enable debug mode:** Set `DEBUG=true` in `.env` for verbose logging
 4. **Create an issue:** Use our [Bug Report template](../.github/ISSUE_TEMPLATE/bug_report.md)
@@ -441,4 +441,4 @@ After successful setup:
 
 ---
 
-**Setup complete! 🎉 Enjoy using SoulSpot Bridge!**
+**Setup complete! 🎉 Enjoy using SoulSpot!**

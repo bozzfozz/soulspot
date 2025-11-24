@@ -432,7 +432,7 @@ This document lists **optional** features identified from the Version 2.x codeba
 
 ### 17. Collaborative Playlists
 
-**What it does**: Share playlists with other SoulSpot Bridge users on local network.
+**What it does**: Share playlists with other SoulSpot users on local network.
 
 **Value**:
 - Family/household playlist sharing

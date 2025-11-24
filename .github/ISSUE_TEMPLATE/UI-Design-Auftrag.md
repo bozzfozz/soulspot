@@ -1,4 +1,4 @@
-# UI-Design-Auftrag für Frontend-KI (SoulSpot Bridge)
+# UI-Design-Auftrag für Frontend-KI (SoulSpot)
 
 > Diesen Block 1:1 als Auftrag/Prompt an die KI geben und nur die Platzhalter ausfüllen.
 
@@ -13,7 +13,7 @@
 
 ## Verbindlicher Auftrag an die KI
 
-Du sollst ein **modernes, klar strukturiertes und visuell ansprechendes UI** für SoulSpot Bridge entwerfen, das auf dem **UI 1.0 Design System** basiert und ohne zusätzliche Fantasie-Styles auskommt.
+Du sollst ein **modernes, klar strukturiertes und visuell ansprechendes UI** für SoulSpot entwerfen, das auf dem **UI 1.0 Design System** basiert und ohne zusätzliche Fantasie-Styles auskommt.
 
 ---
 

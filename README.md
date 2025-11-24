@@ -1,12 +1,12 @@
-# SoulSpot Bridge
+# SoulSpot
 
 > 🎵 Musik von Spotify-Playlists automatisch über Soulseek herunterladen und sauber organisieren - für lokale Nutzung.
 
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot-bridge?include_prereleases)](https://github.com/bozzfozz/soulspot-bridge/releases)
+[![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot?include_prereleases)](https://github.com/bozzfozz/soulspot/releases)
 
-## Was ist SoulSpot Bridge?
-SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Die Anwendung lädt Titel automatisch herunter, reichert sie mit Metadaten an und legt sie strukturiert in deiner Musikbibliothek ab – komplett über eine moderne Weboberfläche für den lokalen Single-User Einsatz.
+## Was ist SoulSpot?
+SoulSpot verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Die Anwendung lädt Titel automatisch herunter, reichert sie mit Metadaten an und legt sie strukturiert in deiner Musikbibliothek ab – komplett über eine moderne Weboberfläche für den lokalen Single-User Einsatz.
 
 ## Highlights für Anwender
 - **Playlist-Synchronisation:** Importiere Spotify-Playlists per OAuth und halte sie aktuell.
@@ -25,8 +25,8 @@ SoulSpot Bridge verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Di
 ## Schnellstart mit Docker
 1. Repository klonen und wechseln:
    ```bash
-   git clone https://github.com/bozzfozz/soulspot-bridge.git
-   cd soulspot-bridge
+   git clone https://github.com/bozzfozz/soulspot.git
+   cd soulspot
    ```
 2. Ordner für Downloads und Bibliothek anlegen:
    ```bash

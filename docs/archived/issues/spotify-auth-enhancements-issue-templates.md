@@ -427,7 +427,7 @@ Implement advanced session monitoring with activity-based timeout and session an
 ## How to Use These Templates
 
 ### Manual Creation (GitHub Web UI)
-1. Go to: https://github.com/bozzfozz/soulspot-bridge/issues/new
+1. Go to: https://github.com/bozzfozz/soulspot/issues/new
 2. Copy the title and body from each issue above
 3. Add the labels specified for each issue
 4. Submit the issue

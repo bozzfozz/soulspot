@@ -5,7 +5,7 @@
 
 ---
 
-This directory contains technical documentation for developers contributing to or extending SoulSpot Bridge.
+This directory contains technical documentation for developers contributing to or extending SoulSpot.
 
 ## Development Guides
 

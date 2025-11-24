@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Melde einen Fehler in SoulSpot Bridge
+about: Melde einen Fehler in SoulSpot
 title: '[BUG] '
 labels: bug
 assignees: ''

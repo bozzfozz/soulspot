@@ -6,7 +6,7 @@
 
 ## Overview
 
-Implemented a comprehensive automated CI/CD and release pipeline for SoulSpot Bridge, meeting all requirements from the problem statement with industry best practices.
+Implemented a comprehensive automated CI/CD and release pipeline for SoulSpot, meeting all requirements from the problem statement with industry best practices.
 
 ## Requirements Met (100%)
 
@@ -44,7 +44,7 @@ Implemented a comprehensive automated CI/CD and release pipeline for SoulSpot Br
 - **Features:**
   - Semantic version detection from git tags
   - Changelog extraction from CHANGELOG.md
-  - Docker images pushed to ghcr.io/bozzfozz/soulspot-bridge
+  - Docker images pushed to ghcr.io/bozzfozz/soulspot
   - Smart tagging: latest, major, minor, patch versions
   - Python package building (wheel, sdist)
   - Comprehensive release notes with Docker instructions
@@ -170,10 +170,10 @@ Implemented a comprehensive automated CI/CD and release pipeline for SoulSpot Br
 ### Docker Image Tagging Strategy
 
 For version `v1.2.3`, the following tags are created:
-- `ghcr.io/bozzfozz/soulspot-bridge:1.2.3` (exact version)
-- `ghcr.io/bozzfozz/soulspot-bridge:1.2` (minor version line)
-- `ghcr.io/bozzfozz/soulspot-bridge:1` (major version line)
-- `ghcr.io/bozzfozz/soulspot-bridge:latest` (latest stable)
+- `ghcr.io/bozzfozz/soulspot:1.2.3` (exact version)
+- `ghcr.io/bozzfozz/soulspot:1.2` (minor version line)
+- `ghcr.io/bozzfozz/soulspot:1` (major version line)
+- `ghcr.io/bozzfozz/soulspot:latest` (latest stable)
 
 ### Version Management
 
@@ -232,13 +232,13 @@ All workflow files validated:
 
 ```bash
 # Latest version
-docker pull ghcr.io/bozzfozz/soulspot-bridge:latest
+docker pull ghcr.io/bozzfozz/soulspot:latest
 
 # Specific version
-docker pull ghcr.io/bozzfozz/soulspot-bridge:0.1.0
+docker pull ghcr.io/bozzfozz/soulspot:0.1.0
 
 # ARM architecture (Raspberry Pi, Apple Silicon)
-docker pull --platform linux/arm64 ghcr.io/bozzfozz/soulspot-bridge:latest
+docker pull --platform linux/arm64 ghcr.io/bozzfozz/soulspot:latest
 ```
 
 ### For Contributors: CI Checks

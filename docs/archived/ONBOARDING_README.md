@@ -1,6 +1,6 @@
 # Onboarding UI - Quick Start Guide
 
-> **First-Run Experience for SoulSpot Bridge**
+> **First-Run Experience for SoulSpot**
 
 ## 🎯 What is this?
 
@@ -209,7 +209,7 @@ Full documentation available in `/docs`:
 
 ## 📝 License
 
-Same as SoulSpot Bridge project.
+Same as SoulSpot project.
 
 ## 🙏 Credits
 

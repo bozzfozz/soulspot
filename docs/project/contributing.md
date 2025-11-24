@@ -1,6 +1,6 @@
-# Contributing to SoulSpot Bridge
+# Contributing to SoulSpot
 
-First off, thank you for considering contributing to SoulSpot Bridge! It's people like you that make this project great.
+First off, thank you for considering contributing to SoulSpot! It's people like you that make this project great.
 
 ## 📋 Table of Contents
 
@@ -44,13 +44,13 @@ Before you begin, ensure you have the following installed:
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/YOUR-USERNAME/soulspot-bridge.git
-   cd soulspot-bridge
+   git clone https://github.com/YOUR-USERNAME/soulspot.git
+   cd soulspot
    ```
 
 3. **Add the upstream repository**:
    ```bash
-   git remote add upstream https://github.com/bozzfozz/soulspot-bridge.git
+   git remote add upstream https://github.com/bozzfozz/soulspot.git
    ```
 
 4. **Install dependencies**:
@@ -163,7 +163,7 @@ Fixes #456
 ### Reporting Bugs
 
 Before creating a bug report:
-1. **Check the [issue tracker](https://github.com/bozzfozz/soulspot-bridge/issues)** to avoid duplicates
+1. **Check the [issue tracker](https://github.com/bozzfozz/soulspot/issues)** to avoid duplicates
 2. **Update to the latest version** to see if the issue persists
 3. **Gather information** about your environment and how to reproduce the bug
 
@@ -282,7 +282,7 @@ Follow our [Style Guide](docs/soulspot-style-guide.md) for UI work:
 Understanding the project structure is crucial for contributions:
 
 ```
-soulspot-bridge/
+soulspot/
 ├── src/soulspot/           # Application source code
 │   ├── domain/             # Domain layer (entities, value objects)
 │   ├── application/        # Application layer (use cases, services)
@@ -432,7 +432,7 @@ class TestFeatureName:
 
 ### Release Process
 
-SoulSpot Bridge uses automated CI/CD for releases. See the [CI/CD Guide](ci-cd.md) and [Release Quick Reference](release-quick-reference.md) for complete documentation.
+SoulSpot uses automated CI/CD for releases. See the [CI/CD Guide](ci-cd.md) and [Release Quick Reference](release-quick-reference.md) for complete documentation.
 
 **Quick overview:**
 
@@ -489,7 +489,7 @@ Use the [Release Checklist](../.github/ISSUE_TEMPLATE/release_checklist.md) issu
 
 ### Getting Help
 
-- **Issues:** [GitHub Issues](https://github.com/bozzfozz/soulspot-bridge/issues)
+- **Issues:** [GitHub Issues](https://github.com/bozzfozz/soulspot/issues)
 - **Discussions:** Use GitHub Discussions for questions
 - **Documentation:** Check existing docs first
 - **Code Examples:** Look at existing implementations
@@ -503,4 +503,4 @@ Contributors are recognized in:
 - Release notes
 - docs/project/CHANGELOG.md (for significant contributions)
 
-Thank you for contributing to SoulSpot Bridge! 🎵🙏
+Thank you for contributing to SoulSpot! 🎵🙏

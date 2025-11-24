@@ -1,4 +1,4 @@
-# Initial Assessment – SoulSpot Bridge Repository
+# Initial Assessment – SoulSpot Repository
 
 **Datum:** 2025-11-08  
 **Version:** 1.0.0  
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der Entwicklung. Es existiert ausschließlich eine umfangreiche und qualitativ hochwertige Dokumentation der Ziel-Architektur, jedoch keine Implementierung. Dies ist eine hervorragende Ausgangslage für eine greenfield-Entwicklung nach klaren Architekturprinzipien.
+Das soulspot Repository befindet sich in einem sehr frühen Stadium der Entwicklung. Es existiert ausschließlich eine umfangreiche und qualitativ hochwertige Dokumentation der Ziel-Architektur, jedoch keine Implementierung. Dies ist eine hervorragende Ausgangslage für eine greenfield-Entwicklung nach klaren Architekturprinzipien.
 
 **Kernpunkte:**
 - ✅ **Stärken:** Sehr gut durchdachte Architektur-Dokumentation mit klaren Prinzipien
@@ -22,7 +22,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 ### 1.1 Vorhandene Dokumentation
 
 #### README.md
-**Inhalt:** Minimalistisch - enthält nur den Projektnamen "soulspot-bridge"
+**Inhalt:** Minimalistisch - enthält nur den Projektnamen "soulspot"
 
 **Status:** ⚠️ **Unvollständig**
 
@@ -199,7 +199,7 @@ Das soulspot-bridge Repository befindet sich in einem sehr frühen Stadium der E
 
 **Repository-Struktur:**
 ```
-soulspot-bridge/
+soulspot/
 ├── README.md              (minimal)
 ├── docs/
 │   ├── .github/
@@ -489,7 +489,7 @@ Initiales Python-Projekt aufsetzen mit allen notwendigen Dependency- und Tool-Ko
 #### Technische Details
 ```toml
 [tool.poetry]
-name = "soulspot-bridge"
+name = "soulspot"
 version = "0.1.0"
 description = "Music download application with Spotify and Soulseek integration"
 authors = ["Your Name <you@example.com>"]
@@ -893,7 +893,7 @@ README.md erweitern mit vollständiger Projekt-Beschreibung, Setup-Anleitung, un
 
 #### Technische Details
 ```markdown
-# SoulSpot Bridge
+# SoulSpot
 
 Music download application with Spotify playlist sync and Soulseek integration.
 
@@ -1188,8 +1188,8 @@ Da noch keine Code-Implementierung vorhanden ist, beschreibt dieser Abschnitt da
 
 #### Schritt 1: Repository klonen
 ```bash
-git clone https://github.com/bozzfozz/soulspot-bridge.git
-cd soulspot-bridge
+git clone https://github.com/bozzfozz/soulspot.git
+cd soulspot
 ```
 
 #### Schritt 2: Dependencies installieren

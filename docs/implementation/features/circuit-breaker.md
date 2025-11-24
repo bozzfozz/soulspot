@@ -2,7 +2,7 @@
 
 ## Overview
 
-SoulSpot Bridge implements the Circuit Breaker pattern to protect external service integrations from cascading failures and improve system resilience. The circuit breaker monitors failures in real-time and temporarily blocks requests to failing services, allowing them time to recover.
+SoulSpot implements the Circuit Breaker pattern to protect external service integrations from cascading failures and improve system resilience. The circuit breaker monitors failures in real-time and temporarily blocks requests to failing services, allowing them time to recover.
 
 ## Architecture
 

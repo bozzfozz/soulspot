@@ -2,7 +2,7 @@
 
 ## Overview
 
-SoulSpot Bridge supports accessing your authenticated session from multiple devices or browsers. This guide explains how authentication works and how to use your account across different devices.
+SoulSpot supports accessing your authenticated session from multiple devices or browsers. This guide explains how authentication works and how to use your account across different devices.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ SoulSpot Bridge supports accessing your authenticated session from multiple devi
 
 ### Authentication Methods
 
-SoulSpot Bridge supports **two authentication methods**:
+SoulSpot supports **two authentication methods**:
 
 1. **Cookie-based (Default)** - Most secure, automatically managed by browser
 2. **Bearer Token** - For API clients, curl, or cross-device access
@@ -46,7 +46,7 @@ SoulSpot Bridge supports **two authentication methods**:
 
 2. **Authorize with Spotify**
    - You'll be redirected to Spotify's authorization page
-   - Grant permissions to SoulSpot Bridge
+   - Grant permissions to SoulSpot
    - Automatically redirected back with tokens stored
 
 3. **Session Cookie Set**
@@ -280,7 +280,7 @@ curl -X POST \
 
 **Solutions:**
 1. Check Spotify app permissions: https://www.spotify.com/account/apps/
-2. Revoke and re-grant access to SoulSpot Bridge
+2. Revoke and re-grant access to SoulSpot
 3. Full re-authentication required (cannot recover from invalid refresh token)
 
 ### Session Doesn't Work on Device B
@@ -356,7 +356,7 @@ A: Sessions are active as long as you use them. Default timeout is 1 hour of **i
 A: **Technically yes**, but **not recommended**. Each person should authenticate separately for security and audit trails.
 
 **Q: What happens if someone steals my session ID?**  
-A: They can access your Spotify account via SoulSpot Bridge. **Immediately logout** to revoke the session:
+A: They can access your Spotify account via SoulSpot. **Immediately logout** to revoke the session:
 ```bash
 curl -X POST -H "Authorization: Bearer STOLEN_SESSION_ID" \
      http://localhost:8000/api/auth/logout

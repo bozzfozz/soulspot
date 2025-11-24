@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The Test Coverage Guardian has completed a comprehensive analysis of the SoulSpot Bridge codebase. The current test coverage of **52.57%** is **significantly below** the required 80% minimum threshold.
+The Test Coverage Guardian has completed a comprehensive analysis of the SoulSpot codebase. The current test coverage of **52.57%** is **significantly below** the required 80% minimum threshold.
 
 ### Quality Check Results
 

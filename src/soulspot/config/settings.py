@@ -131,7 +131,7 @@ class MusicBrainzSettings(BaseSettings):
     """MusicBrainz API configuration."""
 
     app_name: str = Field(
-        default="SoulSpot-Bridge",
+        default="SoulSpot",
         description="Application name for MusicBrainz API",
     )
     app_version: str = Field(
@@ -444,7 +444,7 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = Field(
-        default="SoulSpot Bridge",
+        default="SoulSpot",
         description="Application name",
     )
     # Removed app_env - project is for local use only

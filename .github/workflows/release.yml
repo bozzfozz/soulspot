@@ -153,7 +153,7 @@ jobs:
             #### Using Docker (Recommended)
             ```bash
             docker run -d \
-              --name soulspot-bridge \
+              --name soulspot \
               -p 8765:8765 \
               -v $(pwd)/downloads:/downloads \
               -v $(pwd)/music:/music \
@@ -164,7 +164,7 @@ jobs:
             #### Using pip
             Download the wheel file from the assets below and install:
             ```bash
-            pip install soulspot_bridge-${{ needs.prepare.outputs.version }}-py3-none-any.whl
+            pip install soulspot-${{ needs.prepare.outputs.version }}-py3-none-any.whl
             ```
             
             ### Documentation

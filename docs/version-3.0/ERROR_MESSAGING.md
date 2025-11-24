@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This document defines **comprehensive error messaging standards** for SoulSpot Bridge Version 3.0. All errors MUST provide actionable, user-friendly messages with clear resolution steps.
+This document defines **comprehensive error messaging standards** for SoulSpot Version 3.0. All errors MUST provide actionable, user-friendly messages with clear resolution steps.
 
 ### 1.1 Core Principles
 
@@ -67,7 +67,7 @@ class ErrorLevel(Enum):
 @dataclass
 class SoulSpotError(Exception):
     """
-    Base error class for SoulSpot Bridge.
+    Base error class for SoulSpot.
     
     All custom errors MUST inherit from this class.
     """
@@ -443,7 +443,7 @@ raise InternalError(
     resolution=(
         "This is a bug. Please report:\n"
         "1. Copy this error message\n"
-        "2. Go to https://github.com/bozzfozz/soulspot-bridge/issues\n"
+        "2. Go to https://github.com/bozzfozz/soulspot/issues\n"
         "3. Create new issue with error details"
     ),
     context={

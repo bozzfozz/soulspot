@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the v2.0 frontend features implemented for SoulSpot Bridge, completing the Playlist Management UI (Epic 6) and Library Browser (Epic 7) from the frontend development roadmap.
+This document summarizes the v2.0 frontend features implemented for SoulSpot, completing the Playlist Management UI (Epic 6) and Library Browser (Epic 7) from the frontend development roadmap.
 
 ## 🎯 Completed Features
 

@@ -52,7 +52,7 @@ See [docs/ci-cd.md](../docs/ci-cd.md#option-3-manual-process) for manual steps.
 When you push a tag like `v1.2.3`, the release workflow automatically:
 
 1. ✅ Builds Docker images for amd64 and arm64
-2. ✅ Pushes images to `ghcr.io/bozzfozz/soulspot-bridge`
+2. ✅ Pushes images to `ghcr.io/bozzfozz/soulspot`
 3. ✅ Tags images with: `1.2.3`, `1.2`, `1`, and `latest`
 4. ✅ Builds Python packages (wheel and sdist)
 5. ✅ Creates GitHub Release with:

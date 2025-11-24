@@ -37,7 +37,7 @@ This PR has successfully integrated the Spotify Auth future enhancements from `d
 You need to create 5 GitHub issues using the templates provided. Choose one of these methods:
 
 #### Option A: Manual Creation (Recommended for First Time)
-1. Open https://github.com/bozzfozz/soulspot-bridge/issues/new
+1. Open https://github.com/bozzfozz/soulspot/issues/new
 2. For each issue in `docs/issues/spotify-auth-enhancements-issue-templates.md`:
    - Copy the **Title**
    - Copy the **Body** content
@@ -49,7 +49,7 @@ You need to create 5 GitHub issues using the templates provided. Choose one of t
 If you're authenticated with `gh`, run these commands:
 
 ```bash
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 
 # Issue 1: Persistent Session Storage
 gh issue create \
@@ -110,7 +110,7 @@ For better tracking, create a meta-issue/epic:
 ```markdown
 ## Overview
 
-This epic tracks the implementation of 5 future enhancements for Spotify authentication, as documented in [docs/spotify-auth-improvement.md](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/spotify-auth-improvement.md) and [docs/development-roadmap.md - Section 7.9](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/development-roadmap.md#79-spotify-auth--future-enhancements-).
+This epic tracks the implementation of 5 future enhancements for Spotify authentication, as documented in [docs/spotify-auth-improvement.md](https://github.com/bozzfozz/soulspot/blob/main/docs/spotify-auth-improvement.md) and [docs/development-roadmap.md - Section 7.9](https://github.com/bozzfozz/soulspot/blob/main/docs/development-roadmap.md#79-spotify-auth--future-enhancements-).
 
 ## Target Releases
 

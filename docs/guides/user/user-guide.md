@@ -1,4 +1,4 @@
-# SoulSpot Bridge - User Guide
+# SoulSpot - User Guide
 
 > **Version:** 2.0  
 > **Last Updated:** 2025-11-17  
@@ -20,7 +20,7 @@
 
 ## 🎯 Introduction
 
-SoulSpot Bridge is a web-based music management application that syncs Spotify playlists and downloads tracks via the Soulseek network. This guide will help you navigate the interface and make the most of its features.
+SoulSpot is a web-based music management application that syncs Spotify playlists and downloads tracks via the Soulseek network. This guide will help you navigate the interface and make the most of its features.
 
 ### Key Features
 
@@ -165,7 +165,7 @@ Browse and manage your Spotify playlists.
 
 **URL:** `/playlists/import`
 
-Import Spotify playlists into SoulSpot Bridge.
+Import Spotify playlists into SoulSpot.
 
 **How to Use:**
 
@@ -591,7 +591,7 @@ First-run setup wizard for new users.
 **Steps:**
 
 1. **Welcome**
-   - Introduction to SoulSpot Bridge
+   - Introduction to SoulSpot
    - Overview of features
 
 2. **Connect Spotify**

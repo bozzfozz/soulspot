@@ -1,14 +1,14 @@
-# SoulSpot Bridge Design Guidelines
+# SoulSpot Design Guidelines
 
 > **Version:** 1.0.0  
 > **Status:** Production Ready  
 > **Last Updated:** 2025-11-16
 
-This document outlines the design principles, patterns, and guidelines for developing the SoulSpot Bridge user interface.
+This document outlines the design principles, patterns, and guidelines for developing the SoulSpot user interface.
 
 ## 📋 Overview
 
-SoulSpot Bridge uses a modern, accessible, and responsive design system based on neutral UI patterns. The design emphasizes usability, consistency, and aesthetic harmony.
+SoulSpot uses a modern, accessible, and responsive design system based on neutral UI patterns. The design emphasizes usability, consistency, and aesthetic harmony.
 
 ## 🎨 Design System Foundation
 

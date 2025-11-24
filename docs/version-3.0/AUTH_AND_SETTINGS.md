@@ -36,7 +36,7 @@ This document specifies the authentication architecture and settings persistence
 │  └───────────────────────────────────────┘ │
 │              ↓ (no auth required)           │
 │  ┌───────────────────────────────────────┐ │
-│  │   SoulSpot Bridge FastAPI             │ │
+│  │   SoulSpot FastAPI             │ │
 │  │   ❌ No authentication middleware    │ │
 │  │   ❌ No session management           │ │
 │  │   ❌ No login/logout endpoints       │ │

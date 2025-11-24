@@ -63,8 +63,8 @@ git push origin v[VERSION]
 ### Step 4: Verify Release
 - [ ] GitHub Release created automatically
 - [ ] Docker images published to GHCR:
-  - [ ] `ghcr.io/bozzfozz/soulspot-bridge:[VERSION]`
-  - [ ] `ghcr.io/bozzfozz/soulspot-bridge:latest`
+  - [ ] `ghcr.io/bozzfozz/soulspot:[VERSION]`
+  - [ ] `ghcr.io/bozzfozz/soulspot:latest`
   - [ ] Multi-platform images available (amd64, arm64)
 - [ ] Python packages built and attached as artifacts
 - [ ] Release notes look correct
@@ -72,12 +72,12 @@ git push origin v[VERSION]
 ### Step 5: Testing
 - [ ] Pull and test Docker image:
   ```bash
-  docker pull ghcr.io/bozzfozz/soulspot-bridge:[VERSION]
-  docker run --rm ghcr.io/bozzfozz/soulspot-bridge:[VERSION] --version
+  docker pull ghcr.io/bozzfozz/soulspot:[VERSION]
+  docker run --rm ghcr.io/bozzfozz/soulspot:[VERSION] --version
   ```
 - [ ] Test Python package (optional):
   ```bash
-  pip install soulspot_bridge-[VERSION]-py3-none-any.whl
+  pip install soulspot-[VERSION]-py3-none-any.whl
   ```
 - [ ] Smoke test in staging environment
 - [ ] Verify health checks working

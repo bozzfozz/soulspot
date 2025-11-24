@@ -8,7 +8,7 @@
 
 ## 📊 Overview
 
-Phase 6 - Production Readiness has been successfully completed with all planned tasks implemented. This phase transforms SoulSpot Bridge into a production-ready system with proper performance optimizations, comprehensive operational documentation, and enhanced monitoring capabilities.
+Phase 6 - Production Readiness has been successfully completed with all planned tasks implemented. This phase transforms SoulSpot into a production-ready system with proper performance optimizations, comprehensive operational documentation, and enhanced monitoring capabilities.
 
 ---
 
@@ -221,7 +221,7 @@ See [Development Roadmap](development-roadmap.md) for details.
 - **Health Checks:** 
   - Basic: http://localhost:8765/health
   - Detailed: http://localhost:8765/ready
-- **GitHub Issues:** https://github.com/bozzfozz/soulspot-bridge/issues
+- **GitHub Issues:** https://github.com/bozzfozz/soulspot/issues
 
 ---
 

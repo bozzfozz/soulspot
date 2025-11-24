@@ -1,8 +1,8 @@
 # UI Screenshots & Visual Review
 
-> 📸 Comprehensive visual documentation of SoulSpot Bridge UI
+> 📸 Comprehensive visual documentation of SoulSpot UI
 
-This document provides screenshots and feature assessments for all main views of the SoulSpot Bridge web interface.
+This document provides screenshots and feature assessments for all main views of the SoulSpot web interface.
 
 ## 📋 Overview
 
@@ -367,7 +367,7 @@ All screenshots show the application in its current development state with empty
 
 ## ✅ Conclusion
 
-The SoulSpot Bridge UI is **well-designed and functional** for its current development stage. The core workflows (auth, import, downloads) are clearly implemented with good UX. The application is **nearing release-ready state** but would benefit from:
+The SoulSpot UI is **well-designed and functional** for its current development stage. The core workflows (auth, import, downloads) are clearly implemented with good UX. The application is **nearing release-ready state** but would benefit from:
 
 1. Settings page implementation
 2. Session management UI

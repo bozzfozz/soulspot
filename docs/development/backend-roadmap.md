@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Backend Development Roadmap
+# SoulSpot – Backend Development Roadmap
 
 > **Last Updated:** 2025-11-16  
 > **Version:** 0.1.0 (Alpha)  
@@ -23,7 +23,7 @@
 
 ## 🎯 Vision & Goals
 
-The backend of SoulSpot Bridge is responsible for:
+The backend of SoulSpot is responsible for:
 
 - 🗄️ **Data Management** – SQLite database layer, Alembic migrations, robust data persistence
 - 🔌 **External Integrations** – Spotify API, slskd client, MusicBrainz, metadata providers

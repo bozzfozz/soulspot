@@ -1,4 +1,4 @@
-# HTMX Patterns in SoulSpot Bridge
+# HTMX Patterns in SoulSpot
 
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-16  
@@ -8,7 +8,7 @@
 
 ## 📖 Overview
 
-This document catalogs all HTMX patterns and interactions used throughout SoulSpot Bridge's frontend. It serves as a reference for understanding how dynamic content updates, form submissions, and real-time features are implemented.
+This document catalogs all HTMX patterns and interactions used throughout SoulSpot's frontend. It serves as a reference for understanding how dynamic content updates, form submissions, and real-time features are implemented.
 
 ---
 
@@ -444,7 +444,7 @@ function showModal() {
 
 ## 🔧 HTMX Event Handlers
 
-SoulSpot Bridge uses HTMX events for custom behavior:
+SoulSpot uses HTMX events for custom behavior:
 
 ### Common Events
 

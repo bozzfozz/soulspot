@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Operations Runbook
+# SoulSpot - Operations Runbook
 
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-11  
@@ -6,7 +6,7 @@
 
 ## 📋 Overview
 
-This operations runbook provides step-by-step procedures for common operational tasks, incident response, and system maintenance for SoulSpot Bridge.
+This operations runbook provides step-by-step procedures for common operational tasks, incident response, and system maintenance for SoulSpot.
 
 ---
 
@@ -512,7 +512,7 @@ docker-compose logs soulspot | grep -i worker
 #!/bin/bash
 # monitor.sh - Basic health monitoring
 
-echo "=== SoulSpot Bridge Health Check ==="
+echo "=== SoulSpot Health Check ==="
 echo "Timestamp: $(date)"
 
 # Container status
@@ -628,8 +628,8 @@ Before escalating, collect:
 
 ### Contact Information
 
-- **GitHub Issues:** https://github.com/bozzfozz/soulspot-bridge/issues
-- **Documentation:** https://github.com/bozzfozz/soulspot-bridge/docs
+- **GitHub Issues:** https://github.com/bozzfozz/soulspot/issues
+- **Documentation:** https://github.com/bozzfozz/soulspot/docs
 
 ---
 

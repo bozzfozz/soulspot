@@ -1,4 +1,4 @@
-# SoulSpot Bridge - Modular Architecture Specification (Version 3.0)
+# SoulSpot - Modular Architecture Specification (Version 3.0)
 
 **Version:** 3.0.0  
 **Status:** Planning Phase  
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This document defines the **modular architecture** for SoulSpot Bridge Version 3.0. The architecture transforms the current layered monolith into a collection of **self-contained feature modules** while maintaining the proven principles of clean architecture, dependency inversion, and SOLID design.
+This document defines the **modular architecture** for SoulSpot Version 3.0. The architecture transforms the current layered monolith into a collection of **self-contained feature modules** while maintaining the proven principles of clean architecture, dependency inversion, and SOLID design.
 
 ### 1.1 Architecture Goals
 
@@ -152,7 +152,7 @@ Each module follows the **Layered Architecture** pattern internally:
 ### 3.1 Root Structure
 
 ```
-soulspot-bridge/
+soulspot/
 ├── docs/                           # Documentation
 │   ├── version-3.0/                # V3 architecture docs
 │   └── ...
@@ -671,7 +671,7 @@ async def create_download_and_track(track_data, download_data):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{% block title %}SoulSpot Bridge{% endblock %}</title>
+    <title>{% block title %}SoulSpot{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/base.css">
     {% block extra_css %}{% endblock %}
 </head>
@@ -693,7 +693,7 @@ async def create_download_and_track(track_data, download_data):
 <!-- modules/soulseek/frontend/pages/downloads.html -->
 {% extends "layouts/base.html" %}
 
-{% block title %}Downloads - SoulSpot Bridge{% endblock %}
+{% block title %}Downloads - SoulSpot{% endblock %}
 
 {% block extra_css %}
     <link rel="stylesheet" href="/soulseek/static/styles/soulseek.css">
@@ -1149,7 +1149,7 @@ async def health_check(service: DownloadService = Depends()):
 
 ## 15. Conclusion
 
-This modular architecture provides a solid foundation for SoulSpot Bridge's growth while maintaining code quality, testability, and developer experience. Each module is:
+This modular architecture provides a solid foundation for SoulSpot's growth while maintaining code quality, testability, and developer experience. Each module is:
 
 - **Self-contained**: All related code in one place
 - **Testable**: Clear boundaries enable isolation

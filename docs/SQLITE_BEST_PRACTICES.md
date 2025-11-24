@@ -1,7 +1,7 @@
 # SQLite Usage and Best Practices
 
 ## Overview
-SoulSpot Bridge uses SQLite as its default database. This document outlines SQLite-specific considerations, limitations, and best practices for development and production deployment.
+SoulSpot uses SQLite as its default database. This document outlines SQLite-specific considerations, limitations, and best practices for development and production deployment.
 
 ## Current Configuration
 

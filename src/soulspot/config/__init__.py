@@ -1,4 +1,4 @@
-"""Configuration module for SoulSpot Bridge."""
+"""Configuration module for SoulSpot."""
 
 from .settings import Settings, get_settings
 

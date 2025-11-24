@@ -2,7 +2,7 @@
 
 ## Overview
 
-SoulSpot Bridge uses SQLite as its default database for local deployments. This document describes SQLite-specific considerations, configurations, and best practices implemented in the application.
+SoulSpot uses SQLite as its default database for local deployments. This document describes SQLite-specific considerations, configurations, and best practices implemented in the application.
 
 ## SQLite Configuration
 
@@ -311,4 +311,4 @@ chmod 700 soulspot.db-wal soulspot.db-shm  # WAL mode files
 ---
 
 **Last Updated:** 2025-11-21  
-**Maintained By:** SoulSpot Bridge Development Team
+**Maintained By:** SoulSpot Development Team

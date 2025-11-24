@@ -1,8 +1,8 @@
-# SoulSpot Bridge - Onboarding UI Complete Implementation
+# SoulSpot - Onboarding UI Complete Implementation
 
 ## Executive Summary
 
-This document provides a complete overview of the onboarding UI implementation for SoulSpot Bridge, designed according to the problem statement requirements and built with the UI 1.0 Design System.
+This document provides a complete overview of the onboarding UI implementation for SoulSpot, designed according to the problem statement requirements and built with the UI 1.0 Design System.
 
 **Status:** ✅ **Complete and Production-Ready**
 
@@ -22,7 +22,7 @@ This document provides a complete overview of the onboarding UI implementation f
 ### 1. Onboarding Page (`/onboarding`)
 
 A modern, accessible first-run experience that:
-- Welcomes users to SoulSpot Bridge
+- Welcomes users to SoulSpot
 - Checks Spotify connection status
 - Guides users through OAuth authentication
 - Allows skipping for later
@@ -59,7 +59,7 @@ Complete integration of the UI 1.0 Design System:
 2. **Connect Spotify:**
    - Click "Weiter" to check connection status
    - If not connected, click "Spotify verbinden"
-   - Authorize SoulSpot Bridge in Spotify
+   - Authorize SoulSpot in Spotify
    - Automatically redirected to dashboard
 
 3. **Skip Onboarding:**
@@ -195,7 +195,7 @@ curl http://localhost:8000/api/auth/authorize
 ## File Structure
 
 ```
-soulspot-bridge/
+soulspot/
 ├── docs/
 │   ├── onboarding-ui-implementation.md    ← Technical docs
 │   ├── onboarding-ui-visual-guide.md      ← Visual mockups
@@ -612,8 +612,8 @@ Check logs for:
 ## Contact & Support
 
 For questions or issues:
-- **GitHub Issues:** https://github.com/bozzfozz/soulspot-bridge/issues
-- **Discussions:** https://github.com/bozzfozz/soulspot-bridge/discussions
+- **GitHub Issues:** https://github.com/bozzfozz/soulspot/issues
+- **Discussions:** https://github.com/bozzfozz/soulspot/discussions
 - **Documentation:** `/docs` directory in repository
 
 ---
@@ -622,4 +622,4 @@ For questions or issues:
 **Version:** 1.0  
 **Last Updated:** 2025-11-16  
 **Author:** Copilot AI Agent (Frontend Specialist)  
-**License:** Same as SoulSpot Bridge project
+**License:** Same as SoulSpot project

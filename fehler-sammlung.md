@@ -1,8 +1,8 @@
-# Fehler-Sammlung: SoulSpot Bridge
+# Fehler-Sammlung: SoulSpot
 ## Offene Probleme und Verbesserungspotenziale
 
 **Datum:** 2025-11-22 (Last Updated)  
-**Analysierter Codebase:** soulspot-bridge (92 Python-Dateien, ~24k LOC)  
+**Analysierter Codebase:** soulspot (92 Python-Dateien, ~24k LOC)  
 **Analysemethoden:** Statische Analyse (ruff, mypy, bandit), Unit-Tests, Coverage-Analyse
 
 ---

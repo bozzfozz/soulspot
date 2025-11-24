@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Database Module** is a core infrastructure module that manages all database read/write operations for the entire SoulSpot Bridge system. All other modules access the database exclusively through the Database Module, which provides caching, transaction management, and query optimization.
+The **Database Module** is a core infrastructure module that manages all database read/write operations for the entire SoulSpot system. All other modules access the database exclusively through the Database Module, which provides caching, transaction management, and query optimization.
 
 ## Why a Dedicated Database Module?
 

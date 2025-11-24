@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Frontend Development Roadmap
+# SoulSpot – Frontend Development Roadmap
 
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-17  
@@ -352,7 +352,7 @@ See `src/soulspot/templates/widget_templates/system_stats.json` for a complete e
 ## 🎯 Vision & Principles
 
 ### Vision
-Provide a clean, modern, accessible web UI for SoulSpot Bridge that works beautifully on all devices without requiring a heavy JavaScript framework.
+Provide a clean, modern, accessible web UI for SoulSpot that works beautifully on all devices without requiring a heavy JavaScript framework.
 
 ### Core Principles
 

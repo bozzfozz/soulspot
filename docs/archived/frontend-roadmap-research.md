@@ -22,7 +22,7 @@
 ## 🎯 Executive Summary
 
 ### Current State
-SoulSpot Bridge is a server-driven web application built with:
+SoulSpot is a server-driven web application built with:
 - **Backend:** FastAPI (Python 3.12+) with SQLAlchemy
 - **Frontend:** Jinja2 templates + HTMX + Tailwind CSS
 - **Architecture:** Layered architecture with DDD principles

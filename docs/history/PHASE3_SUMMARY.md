@@ -1,7 +1,7 @@
 # Phase 3 Implementation Summary
 
 ## Overview
-Successfully implemented Phase 3 of the SoulSpot Bridge project: External integration clients for slskd, Spotify, and MusicBrainz with full OAuth PKCE support, rate limiting, and comprehensive test coverage.
+Successfully implemented Phase 3 of the SoulSpot project: External integration clients for slskd, Spotify, and MusicBrainz with full OAuth PKCE support, rate limiting, and comprehensive test coverage.
 
 **Implementation Date:** 2025-11-08
 **Branch:** copilot/implement-phase-3-features
@@ -363,7 +363,7 @@ SPOTIFY_REDIRECT_URI=http://localhost:8000/auth/spotify/callback
 
 ### MusicBrainz Settings
 ```python
-MUSICBRAINZ_APP_NAME=SoulSpot-Bridge
+MUSICBRAINZ_APP_NAME=SoulSpot
 MUSICBRAINZ_APP_VERSION=0.1.0
 MUSICBRAINZ_CONTACT=your-email@example.com
 ```

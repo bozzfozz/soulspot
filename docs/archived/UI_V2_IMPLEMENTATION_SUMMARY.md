@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented the UI Version 2.0 dashboard builder with dynamic widget system for SoulSpot Bridge.
+Successfully implemented the UI Version 2.0 dashboard builder with dynamic widget system for SoulSpot.
 
 ## What Was Implemented
 

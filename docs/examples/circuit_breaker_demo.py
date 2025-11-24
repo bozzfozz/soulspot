@@ -2,7 +2,7 @@
 Example: Circuit Breaker Usage
 
 This example demonstrates how the Circuit Breaker pattern protects external
-service calls in SoulSpot Bridge.
+service calls in SoulSpot.
 """
 
 # mypy: ignore-errors

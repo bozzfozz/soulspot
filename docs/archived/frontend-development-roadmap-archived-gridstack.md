@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Frontend Development Roadmap
+# SoulSpot – Frontend Development Roadmap
 
 > **Last Updated:** 2025-11-13  
 > **Version:** 0.1.0 (Alpha)  
@@ -22,7 +22,7 @@
 
 ## 🎯 Vision & Goals
 
-The frontend of SoulSpot Bridge provides:
+The frontend of SoulSpot provides:
 
 - 🎨 **User Interface** – Clean, modern, responsive web UI using Jinja2 templates
 - ⚡ **Interactivity** – Dynamic interactions powered by HTMX with minimal JavaScript

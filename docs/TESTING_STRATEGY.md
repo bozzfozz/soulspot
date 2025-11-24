@@ -1,4 +1,4 @@
-# Testing Strategy for SoulSpot Bridge
+# Testing Strategy for SoulSpot
 
 ## Overview
 

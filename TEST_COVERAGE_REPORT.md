@@ -1,4 +1,4 @@
-# 🧪 Test Coverage Report - SoulSpot Bridge
+# 🧪 Test Coverage Report - SoulSpot
 
 **Generated:** 2025-11-24  
 **Overall Coverage:** 52.57% ❌ (Target: 80%, Critical Minimum: 80%)

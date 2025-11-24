@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Cross-Cutting Concerns Roadmap
+# SoulSpot – Cross-Cutting Concerns Roadmap
 
 > **Last Updated:** 2025-11-13  
 > **Version:** 0.1.0 (Alpha)  

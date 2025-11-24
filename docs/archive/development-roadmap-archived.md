@@ -1,4 +1,4 @@
-# SoulSpot Bridge – Development Roadmap
+# SoulSpot – Development Roadmap
 
 > **Letzte Aktualisierung:** 2025-11-11  
 > **Version:** 0.1.0 (Alpha)  
@@ -27,7 +27,7 @@
 
 ## 🎯 Vision & Gesamtziel
 
-**SoulSpot Bridge** ist ein **vollständig automatisiertes, selbstheilendes Musikverwaltungssystem**, das:
+**SoulSpot** ist ein **vollständig automatisiertes, selbstheilendes Musikverwaltungssystem**, das:
 
 - 🎵 **Spotify & Soulseek intelligent verbindet** – automatische Synchronisation zwischen Streaming und lokalem Download
 - ⬇️ **Musik automatisch findet, herunterlädt und sauber taggt** – keine manuelle Arbeit mehr
@@ -87,7 +87,7 @@
 
 ### 1. Quellen & Integrationen
 
-SoulSpot Bridge verbindet mehrere Datenquellen zu einem einheitlichen System:
+SoulSpot verbindet mehrere Datenquellen zu einem einheitlichen System:
 
 #### 🎵 Musik-Quellen
 
@@ -2458,7 +2458,7 @@ Implementiere optionale View-Sharing-Features.
 
 ---
 
-**🎉 v2.0 Dynamic Views & Widget-Palette ist eine strategische Feature-Erweiterung, die SoulSpot Bridge zu einer hochgradig personalisierbaren Plattform macht. Mit klarer Planung, Phasen-Aufteilung und Security-First-Approach ist das Feature in 4-5 Sprints umsetzbar.**
+**🎉 v2.0 Dynamic Views & Widget-Palette ist eine strategische Feature-Erweiterung, die SoulSpot zu einer hochgradig personalisierbaren Plattform macht. Mit klarer Planung, Phasen-Aufteilung und Security-First-Approach ist das Feature in 4-5 Sprints umsetzbar.**
 
 ---
 
@@ -2691,7 +2691,7 @@ Vor jedem Release:
 ### Wie man beiträgt
 
 1. **Lies den [Contributing Guide](contributing.md)**
-2. **Check [GitHub Issues](https://github.com/bozzfozz/soulspot-bridge/issues)**
+2. **Check [GitHub Issues](https://github.com/bozzfozz/soulspot/issues)**
 3. **Erstelle ein neues Issue** mit [Feature Request Template](../.github/ISSUE_TEMPLATE/feature_request.md)
 4. **Diskutiere in Roadmap-Diskussionen**
 5. **Submit Pull Requests** für Features die du implementieren möchtest

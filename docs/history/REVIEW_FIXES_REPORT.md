@@ -1,7 +1,7 @@
 # Abschlussbericht: Behebung von Fehlern aus geschlossenen Pull Requests
 
 **Datum:** 2025-11-10  
-**Repository:** bozzfozz/soulspot-bridge  
+**Repository:** bozzfozz/soulspot  
 **Bearbeiter:** Copilot Coding Agent
 
 ## Zusammenfassung

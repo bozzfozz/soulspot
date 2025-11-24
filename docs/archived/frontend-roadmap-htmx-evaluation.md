@@ -987,7 +987,7 @@ else:
 - Button-based movement requires more clicks
 
 **Verdict:**
-The benefits far outweigh the trade-off. Button-based layout is actually superior for accessibility and mobile, making it the right choice for SoulSpot Bridge.
+The benefits far outweigh the trade-off. Button-based layout is actually superior for accessibility and mobile, making it the right choice for SoulSpot.
 
 ---
 

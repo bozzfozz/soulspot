@@ -1,6 +1,6 @@
 # Keyboard Navigation Guide
 
-SoulSpot Bridge supports comprehensive keyboard navigation for improved accessibility and power user workflows.
+SoulSpot supports comprehensive keyboard navigation for improved accessibility and power user workflows.
 
 ## Global Keyboard Shortcuts
 

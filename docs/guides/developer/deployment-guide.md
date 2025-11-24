@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide explains how to deploy SoulSpot Bridge to different environments using the automated deployment workflows.
+This guide explains how to deploy SoulSpot to different environments using the automated deployment workflows.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This guide explains how to deploy SoulSpot Bridge to different environments usin
 
 ## Overview
 
-SoulSpot Bridge uses GitHub Actions for automated deployment to three environments:
+SoulSpot uses GitHub Actions for automated deployment to three environments:
 
 - **Development**: Automatic deployment on push to `develop` branch
 - **Staging**: Automatic deployment on push to `main` branch
@@ -61,7 +61,7 @@ Each environment has its own Docker Compose configuration and environment variab
    - Docker and Docker Compose installed
    - SSH access configured (if using automated deployment)
    - Sufficient storage for music library and downloads
-   - Open ports: 8765 (SoulSpot Bridge), 5030 (slskd)
+   - Open ports: 8765 (SoulSpot), 5030 (slskd)
 
 3. **Environment Configuration**:
    - Create `.env` files for each environment
@@ -107,7 +107,7 @@ Test the development configuration locally:
 
 ```bash
 # Pull the latest development image
-docker pull ghcr.io/bozzfozz/soulspot-bridge:dev-latest
+docker pull ghcr.io/bozzfozz/soulspot:dev-latest
 
 # Start services
 docker-compose -f docker/docker-compose.dev.yml up -d
@@ -178,8 +178,8 @@ Deploy to staging server:
 
 ```bash
 # On staging server
-cd /opt/soulspot-bridge
-docker pull ghcr.io/bozzfozz/soulspot-bridge:staging-latest
+cd /opt/soulspot
+docker pull ghcr.io/bozzfozz/soulspot:staging-latest
 docker-compose -f docker/docker-compose.staging.yml --env-file .env.staging up -d
 ```
 
@@ -254,13 +254,13 @@ Deploy to production using blue-green strategy for zero downtime:
 
 ```bash
 # On production server
-cd /opt/soulspot-bridge
+cd /opt/soulspot
 
 # Pull new version
-docker pull ghcr.io/bozzfozz/soulspot-bridge:1.0.0
+docker pull ghcr.io/bozzfozz/soulspot:1.0.0
 
 # Tag as production
-docker tag ghcr.io/bozzfozz/soulspot-bridge:1.0.0 ghcr.io/bozzfozz/soulspot-bridge:production
+docker tag ghcr.io/bozzfozz/soulspot:1.0.0 ghcr.io/bozzfozz/soulspot:production
 
 # Update docker/docker-compose.yml to use the production tag
 export VERSION=1.0.0
@@ -270,7 +270,7 @@ docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d --no
 
 # Wait for health check
 sleep 10
-docker exec soulspot-bridge-prod curl -f http://localhost:8765/health
+docker exec soulspot-prod curl -f http://localhost:8765/health
 
 # Cleanup old images
 docker image prune -f
@@ -288,7 +288,7 @@ curl -f https://soulspot.example.com/health
 curl -f https://soulspot.example.com/api/v1/health
 
 # View logs
-docker logs -f soulspot-bridge-prod
+docker logs -f soulspot-prod
 
 # Check container status
 docker ps | grep soulspot
@@ -319,21 +319,21 @@ To rollback to a previous version:
 3. **Manual rollback on server**:
    ```bash
    # On production server
-   cd /opt/soulspot-bridge
+   cd /opt/soulspot
    
    # Stop current version
    docker-compose -f docker/docker-compose.prod.yml down
    
    # Pull and tag previous version
-   docker pull ghcr.io/bozzfozz/soulspot-bridge:0.9.0
-   docker tag ghcr.io/bozzfozz/soulspot-bridge:0.9.0 ghcr.io/bozzfozz/soulspot-bridge:production
+   docker pull ghcr.io/bozzfozz/soulspot:0.9.0
+   docker tag ghcr.io/bozzfozz/soulspot:0.9.0 ghcr.io/bozzfozz/soulspot:production
    
    # Start previous version
    export VERSION=0.9.0
    docker-compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
    
    # Verify health
-   docker logs -f soulspot-bridge-prod
+   docker logs -f soulspot-prod
    curl -f https://soulspot.example.com/health
    ```
 
@@ -343,7 +343,7 @@ If database migrations are involved:
 
 ```bash
 # On production server
-docker exec -it soulspot-bridge-prod alembic downgrade -1
+docker exec -it soulspot-prod alembic downgrade -1
 ```
 
 ---
@@ -372,13 +372,13 @@ gh auth token | docker login ghcr.io -u USERNAME --password-stdin
 **Solution**:
 ```bash
 # Check container logs
-docker logs soulspot-bridge-prod
+docker logs soulspot-prod
 
 # Check if ports are accessible
 curl -v http://localhost:8765/health
 
 # Verify environment variables
-docker exec soulspot-bridge-prod env | grep APP_ENV
+docker exec soulspot-prod env | grep APP_ENV
 ```
 
 #### 3. Database Migration Fails
@@ -388,13 +388,13 @@ docker exec soulspot-bridge-prod env | grep APP_ENV
 **Solution**:
 ```bash
 # Check migration status
-docker exec -it soulspot-bridge-prod alembic current
+docker exec -it soulspot-prod alembic current
 
 # View migration history
-docker exec -it soulspot-bridge-prod alembic history
+docker exec -it soulspot-prod alembic history
 
 # Rollback last migration
-docker exec -it soulspot-bridge-prod alembic downgrade -1
+docker exec -it soulspot-prod alembic downgrade -1
 ```
 
 #### 4. Permission Issues
@@ -426,14 +426,14 @@ Enable debug mode temporarily:
 docker-compose -f docker/docker-compose.prod.yml restart soulspot
 
 # View detailed logs
-docker logs -f soulspot-bridge-prod
+docker logs -f soulspot-prod
 ```
 
 ### Support
 
 For additional help:
-- Check [GitHub Issues](https://github.com/bozzfozz/soulspot-bridge/issues)
-- Review [Documentation](https://github.com/bozzfozz/soulspot-bridge/tree/main/docs)
+- Check [GitHub Issues](https://github.com/bozzfozz/soulspot/issues)
+- Review [Documentation](https://github.com/bozzfozz/soulspot/tree/main/docs)
 - Join community discussions
 
 ---

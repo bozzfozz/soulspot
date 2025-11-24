@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This document defines **code documentation standards** for SoulSpot Bridge Version 3.0. The core principle: **No complex algorithms or non-trivial code without clear explanation.**
+This document defines **code documentation standards** for SoulSpot Version 3.0. The core principle: **No complex algorithms or non-trivial code without clear explanation.**
 
 ### 1.1 Core Principle
 
@@ -745,7 +745,7 @@ mypy modules/soulseek/
 
 ## Support
 
-- GitHub Issues: https://github.com/bozzfozz/soulspot-bridge/issues
+- GitHub Issues: https://github.com/bozzfozz/soulspot/issues
 - Docs: https://docs.soulspot.app/modules/soulseek
 - Troubleshooting: https://docs.soulspot.app/troubleshooting/soulseek
 ```

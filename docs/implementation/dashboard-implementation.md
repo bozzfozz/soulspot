@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document describes the complete dashboard implementation for SoulSpot Bridge version 1.0, including the dynamic widget system, HTMX integration, and customizable page builder functionality.
+This document describes the complete dashboard implementation for SoulSpot version 1.0, including the dynamic widget system, HTMX integration, and customizable page builder functionality.
 
 ---
 

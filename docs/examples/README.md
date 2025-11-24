@@ -1,6 +1,6 @@
 # Examples
 
-This directory contains example scripts and validation tools for SoulSpot Bridge.
+This directory contains example scripts and validation tools for SoulSpot.
 
 ## Available Examples
 

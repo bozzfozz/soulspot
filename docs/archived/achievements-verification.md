@@ -1,7 +1,7 @@
-# SoulSpot Bridge – Achievements Verification Report
+# SoulSpot – Achievements Verification Report
 
 > **Report Date:** 2025-11-11  
-> **Repository:** https://github.com/bozzfozz/soulspot-bridge  
+> **Repository:** https://github.com/bozzfozz/soulspot  
 > **Reference:** docs/development-roadmap.md  
 > **Test Suite Status:** ✅ 257 tests passing
 
@@ -68,7 +68,7 @@ src/soulspot/domain/
 **Reproduce:**
 ```bash
 # Verify clean architecture
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 grep -r "from sqlalchemy" src/soulspot/domain/  # Should return nothing
 grep -r "from fastapi" src/soulspot/domain/     # Should return nothing
 grep -r "import httpx" src/soulspot/domain/     # Should return nothing
@@ -111,7 +111,7 @@ alembic/
 **Alembic Smoke Test:**
 ```bash
 # Clean test
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 rm -f test_alembic.db
 export DATABASE_URL="sqlite:///./test_alembic.db"
 python -m alembic upgrade head
@@ -164,7 +164,7 @@ src/soulspot/
 
 **Smoke Test:**
 ```bash
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 
 # Run tests that verify endpoints
 python -m pytest tests/integration/api/test_main.py -v
@@ -366,7 +366,7 @@ class MusicBrainzClient(IMusicBrainzClient):
 **Configuration:** `.env.example` lines 61-65:
 ```bash
 # MusicBrainz Configuration
-MUSICBRAINZ_APP_NAME=SoulSpot-Bridge
+MUSICBRAINZ_APP_NAME=SoulSpot
 MUSICBRAINZ_APP_VERSION=0.1.0
 MUSICBRAINZ_CONTACT=
 ```
@@ -640,7 +640,7 @@ src/soulspot/static/
     <div class="container mx-auto px-4">
         <div class="flex justify-between items-center py-4">
             <a href="/ui/" class="text-2xl font-bold text-primary-500 hover:text-primary-400 transition-colors">
-                🎵 SoulSpot Bridge
+                🎵 SoulSpot
             </a>
             <ul class="flex gap-6 list-none">
                 <li>
@@ -716,7 +716,7 @@ npm run build:css
 
 **Search Performed:**
 ```bash
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 
 # Search for common placeholders
 grep -r -i -n -E "(TODO|FIXME|XXX|REPLACE_ME|CHANGE_ME|YOUR_SPOTIFY_CLIENT_ID|NotImplementedError)" \
@@ -747,7 +747,7 @@ tests/unit/infrastructure/           [various] ✅
 
 **Test Command:**
 ```bash
-cd /home/runner/work/soulspot-bridge/soulspot-bridge
+cd /home/runner/work/soulspot/soulspot
 python -m pytest tests/ -v --tb=short
 
 # With coverage
@@ -840,8 +840,8 @@ All Achievements from Phases 1-5 are **complete and functioning**. No separate f
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/bozzfozz/soulspot-bridge.git
-cd soulspot-bridge
+git clone https://github.com/bozzfozz/soulspot.git
+cd soulspot
 
 # 2. Install dependencies
 pip install -e .

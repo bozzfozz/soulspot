@@ -7,7 +7,7 @@
 
 ## Overview
 
-This directory contains API documentation for SoulSpot Bridge version 1.0.
+This directory contains API documentation for SoulSpot version 1.0.
 
 ---
 
@@ -79,7 +79,7 @@ All API endpoints return JSON responses with the following structure:
 
 ## Interactive API Documentation
 
-SoulSpot Bridge includes interactive API documentation powered by FastAPI:
+SoulSpot includes interactive API documentation powered by FastAPI:
 
 **Swagger UI:** http://localhost:8765/docs  
 **ReDoc:** http://localhost:8765/redoc

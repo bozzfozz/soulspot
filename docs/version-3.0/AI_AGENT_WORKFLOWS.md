@@ -1,4 +1,4 @@
-# AI Agent Workflows für SoulSpot Bridge v3.0
+# AI Agent Workflows für SoulSpot v3.0
 
 ## Inhaltsverzeichnis
 
@@ -7,7 +7,7 @@
 3. [GitHub Next Agentic Workflows](#github-next-agentic-workflows)
 4. [Workflow-Typen und Kategorien](#workflow-typen-und-kategorien)
 5. [Architektur und Funktionsweise](#architektur-und-funktionsweise)
-6. [Integration in SoulSpot Bridge](#integration-in-soulspot-bridge)
+6. [Integration in SoulSpot](#integration-in-soulspot)
 7. [Workflow-Implementierung](#workflow-implementierung)
 8. [Sicherheit und Best Practices](#sicherheit-und-best-practices)
 9. [Praktische Beispiele](#praktische-beispiele)
@@ -327,9 +327,9 @@ while not goal_achieved():
 
 ---
 
-## Integration in SoulSpot Bridge
+## Integration in SoulSpot
 
-### Anwendungsfälle für SoulSpot Bridge v3.0
+### Anwendungsfälle für SoulSpot v3.0
 
 #### 1. **Code Quality & Review Automation**
 
@@ -586,7 +586,7 @@ gh extension install githubnext/gh-aw
 
 ```bash
 # Beispiel: Issue Triage Workflow hinzufügen
-cd /path/to/soulspot-bridge
+cd /path/to/soulspot
 gh aw add githubnext/agentics/issue-triage --pr
 
 # Erstellt automatisch eine PR mit dem Workflow
@@ -624,10 +624,10 @@ stop-after: 30 days
 
 # SoulSpot Code Guardian
 
-Du bist ein Senior Python Backend Engineer für SoulSpot Bridge v3.0.
+Du bist ein Senior Python Backend Engineer für SoulSpot v3.0.
 
 ## Kontext
-SoulSpot Bridge ist eine FastAPI-App für Spotify-Playlist-Sync und Soulseek-Downloads.
+SoulSpot ist eine FastAPI-App für Spotify-Playlist-Sync und Soulseek-Downloads.
 
 ### Architektur-Richtlinien
 1. **Database Module:** IMMER `database_service` nutzen, NIEMALS direktes SQLAlchemy
@@ -652,7 +652,7 @@ Erstelle einen strukturierten Kommentar:
 
 **c) Workflow kompilieren:**
 ```bash
-cd /path/to/soulspot-bridge
+cd /path/to/soulspot
 gh aw compile .github/workflows/agentics/soulspot-code-guardian.md
 
 # Generiert:
@@ -929,7 +929,7 @@ Wenn ein neues Release veröffentlicht wird:
 1. Lese `README.md`
 2. Aktualisiere den "Latest Release" Badge:
    ```markdown
-   ![Latest Release](https://img.shields.io/github/v/release/bozzfozz/soulspot-bridge)
+   ![Latest Release](https://img.shields.io/github/v/release/bozzfozz/soulspot)
    ```
 3. Füge Changelog-Eintrag im README hinzu unter "## Recent Changes"
 4. Erstelle PR mit Titel: `[docs] Update README for release vX.Y.Z`
@@ -996,7 +996,7 @@ stop-after: 30 days
 Du bist ein Senior QA Engineer für Python/FastAPI-Projekte.
 
 ## Kontext
-- **Projekt:** SoulSpot Bridge v3.0
+- **Projekt:** SoulSpot v3.0
 - **Framework:** FastAPI + SQLAlchemy (async)
 - **Test-Framework:** pytest + pytest-asyncio
 - **Coverage-Ziel:** >80%
@@ -1139,7 +1139,7 @@ stop-after: 30 days
 
 # SoulSpot Architecture Guardian
 
-Du bist der Architektur-Wächter für SoulSpot Bridge v3.0.
+Du bist der Architektur-Wächter für SoulSpot v3.0.
 
 ## SoulSpot v3.0 Architektur-Prinzipien
 
@@ -1311,7 +1311,7 @@ user = await database_service.get_entity(
 )
 ```
 
-**Documentation:** [Database Module Guide](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/version-3.0/DATABASE_MODULE.md)
+**Documentation:** [Database Module Guide](https://github.com/bozzfozz/soulspot/blob/main/docs/version-3.0/DATABASE_MODULE.md)
 
 ---
 
@@ -1366,7 +1366,7 @@ raise SoulspotError(
 ## Summary
 - ❌ 3 violations found (2 CRITICAL, 1 HIGH)
 - 🔧 All violations have concrete fixes provided
-- 📚 See [Architecture Guide](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/version-3.0/ARCHITECTURE.md)
+- 📚 See [Architecture Guide](https://github.com/bozzfozz/soulspot/blob/main/docs/version-3.0/ARCHITECTURE.md)
 
 **Action Required:** Fix all CRITICAL violations before merge.
 ```
@@ -1411,7 +1411,7 @@ git push
 - 📦 [Dependency Updater](https://github.com/githubnext/agentics/blob/main/docs/daily-dependency-updates.md)
 - [Alle Workflows →](https://github.com/githubnext/agentics/tree/main/docs)
 
-### SoulSpot Bridge v3.0 Kontext
+### SoulSpot v3.0 Kontext
 
 **Architektur-Dokumentation:**
 - 📐 [Architecture Overview](./ARCHITECTURE.md)
@@ -1483,7 +1483,7 @@ gh run view <run-id> --log
 3. **GitHub Actions Integration:** Sichere, auditable Ausführung
 4. **Wiederverwendbare Workflows:** Issue Triage, CI Doctor, Test Improver, etc.
 
-**Für SoulSpot Bridge v3.0** ermöglichen sie:
+**Für SoulSpot v3.0** ermöglichen sie:
 - ✅ Automatische Architecture Compliance Checks
 - ✅ Test Coverage Überwachung mit konkreten Test-Vorschlägen
 - ✅ Dependency-Updates mit automatischen Tests
@@ -1509,7 +1509,7 @@ gh run view <run-id> --log
 **Dokument-Version:** 1.0  
 **Letzte Aktualisierung:** 2025-11-22  
 **Autor:** AI Documentation Agent (via GitHub Copilot)  
-**Lizenz:** MIT (wie SoulSpot Bridge Projekt)
+**Lizenz:** MIT (wie SoulSpot Projekt)
 
 ---
 

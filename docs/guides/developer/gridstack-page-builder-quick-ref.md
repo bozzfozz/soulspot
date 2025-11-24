@@ -8,7 +8,7 @@
 
 ## 📋 Overview
 
-This quick reference guide provides a concise overview of all phases for implementing the GridStack-based page builder in SoulSpot Bridge v2.0.
+This quick reference guide provides a concise overview of all phases for implementing the GridStack-based page builder in SoulSpot v2.0.
 
 **Full Documentation:** See [development-roadmap.md](development-roadmap.md) for complete specifications.
 

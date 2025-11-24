@@ -7,7 +7,7 @@
 
 ## Übersicht
 
-Dieses Dokument archiviert alle entfernten Abschnitte und Erwähnungen zur Discogs-Integration aus der SoulSpot Bridge Dokumentation. Die Discogs-Integration ist derzeit nicht Teil des Produkts und wurde aus den Planungsdokumenten entfernt, da SoulSpot als lokaler Dienst betrieben wird.
+Dieses Dokument archiviert alle entfernten Abschnitte und Erwähnungen zur Discogs-Integration aus der SoulSpot Dokumentation. Die Discogs-Integration ist derzeit nicht Teil des Produkts und wurde aus den Planungsdokumenten entfernt, da SoulSpot als lokaler Dienst betrieben wird.
 
 Falls die Integration später wieder erwünscht ist, kann sie als neues Roadmap-Item oder in einem separaten Dokument wieder aufgenommen werden.
 

@@ -1,6 +1,6 @@
 # Docker Setup Guide
 
-> 🐳 Complete guide for running SoulSpot Bridge with Docker Compose
+> 🐳 Complete guide for running SoulSpot with Docker Compose
 
 ## 📋 Table of Contents
 
@@ -40,7 +40,7 @@ docker-compose -f docker/docker-compose.yml --version
 
 ## Directory Structure
 
-SoulSpot Bridge requires a specific directory structure for bind mounts:
+SoulSpot requires a specific directory structure for bind mounts:
 
 ```
 your-project/
@@ -97,7 +97,7 @@ SPOTIFY_REDIRECT_URI=http://127.0.0.1:8765/api/auth/callback
 
 #### slskd Configuration
 
-**Important:** slskd must be running on your host machine before starting SoulSpot Bridge.
+**Important:** slskd must be running on your host machine before starting SoulSpot.
 
 ```env
 # For Docker on Windows/Mac (use host.docker.internal)
@@ -169,7 +169,7 @@ TZ=Europe/Berlin  # Your timezone (e.g., America/New_York, UTC)
 
 | Variable | Internal Default | Description |
 |----------|------------------|-------------|
-| `APP_NAME` | `SoulSpot Bridge` | Application name |
+| `APP_NAME` | `SoulSpot` | Application name |
 | `DEBUG` | `false` | Enable debug mode (set `true` for development) |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `SECRET_KEY` | (auto-generated) | Application secret key for local use |
@@ -209,13 +209,13 @@ docker-compose -f docker/docker-compose.yml ps
 
 # Expected output:
 # NAME                  STATUS              PORTS
-# soulspot-bridge       Up (healthy)        0.0.0.0:8765->8765/tcp
+# soulspot       Up (healthy)        0.0.0.0:8765->8765/tcp
 ```
 
 ### 3. Check Health Status
 
 ```bash
-# SoulSpot Bridge health
+# SoulSpot health
 curl http://localhost:8765/health
 
 # slskd health (running on host)
@@ -230,7 +230,7 @@ Once the services are running:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| **SoulSpot Bridge** | http://localhost:8765 | Main application |
+| **SoulSpot** | http://localhost:8765 | Main application |
 | **SoulSpot API Docs** | http://localhost:8765/docs | Interactive API documentation |
 | **SoulSpot UI** | http://localhost:8765/ui | Web interface |
 | **slskd Web UI** | http://localhost:5030 | Soulseek daemon interface (running on host) |
@@ -239,7 +239,7 @@ Once the services are running:
 
 ## Auto Music Import
 
-SoulSpot Bridge includes an **automatic music import feature** that moves completed downloads from the `/downloads` directory to the `/music` library.
+SoulSpot includes an **automatic music import feature** that moves completed downloads from the `/downloads` directory to the `/music` library.
 
 ### How It Works
 
@@ -295,7 +295,7 @@ docker-compose -f docker/docker-compose.yml logs -f soulspot | grep -i "auto-imp
 
 ### Understanding PUID and PGID
 
-SoulSpot Bridge runs with the user and group IDs specified by `PUID` and `PGID`. This ensures that files created by the container have the correct ownership on the host system.
+SoulSpot runs with the user and group IDs specified by `PUID` and `PGID`. This ensures that files created by the container have the correct ownership on the host system.
 
 ### Finding Your IDs
 
@@ -411,7 +411,7 @@ docker-compose -f docker/docker-compose.yml logs -f soulspot | grep -i "auto-imp
 ### Viewing Container Logs
 
 ```bash
-# All services (only SoulSpot Bridge in Docker)
+# All services (only SoulSpot in Docker)
 docker-compose -f docker/docker-compose.yml logs -f
 
 # SoulSpot service
@@ -524,6 +524,6 @@ This application is designed for **local single-user use**:
 
 **Need Help?**
 
-- Check the [GitHub Issues](https://github.com/bozzfozz/soulspot-bridge/issues)
+- Check the [GitHub Issues](https://github.com/bozzfozz/soulspot/issues)
 - Read the [FAQ](setup-guide.md#faq)
 - Join our community discussions

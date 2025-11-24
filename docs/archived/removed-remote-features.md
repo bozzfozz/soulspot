@@ -412,11 +412,11 @@ And add a PostgreSQL service to your `docker-compose.yml`.
 ### Zeile 4: PostgreSQL/Redis Deferral
 **Entfernt:**
 ```
-Successfully implemented Phase 1 of the SoulSpot Bridge project, focusing on foundation setup with SQLite database (PostgreSQL and Redis deferred to later phases per requirements).
+Successfully implemented Phase 1 of the SoulSpot project, focusing on foundation setup with SQLite database (PostgreSQL and Redis deferred to later phases per requirements).
 ```
 **Ersetzt durch:**
 ```
-Successfully implemented Phase 1 of the SoulSpot Bridge project, focusing on foundation setup with SQLite database (local-only architecture).
+Successfully implemented Phase 1 of the SoulSpot project, focusing on foundation setup with SQLite database (local-only architecture).
 ```
 **Grund:** Keine zukünftigen PostgreSQL/Redis-Pläne mehr.
 

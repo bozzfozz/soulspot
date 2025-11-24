@@ -17,7 +17,7 @@ All actual bugs and errors listed in `fehler-sammlung.md` have been resolved. Th
 
 ## What Was Requested
 
-> "Liste abarbeiten und fehler korrigieren https://github.com/bozzfozz/soulspot-bridge/blob/main/fehler-sammlung.md"
+> "Liste abarbeiten und fehler korrigieren https://github.com/bozzfozz/soulspot/blob/main/fehler-sammlung.md"
 > 
 > "In der Quellcode nach fehler suchen und beheben und nicht nur test schreiben, tests können auch fehlerhaft sein, wir wollen 100% fehlerfrei sein und 100% Funktion haben"
 

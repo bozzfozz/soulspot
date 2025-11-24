@@ -1,6 +1,6 @@
 # Download Queue Enhancements
 
-This document describes the enhanced download queue system implemented in SoulSpot Bridge, providing priority-based job scheduling, retry logic, and queue management features.
+This document describes the enhanced download queue system implemented in SoulSpot, providing priority-based job scheduling, retry logic, and queue management features.
 
 ## Overview
 

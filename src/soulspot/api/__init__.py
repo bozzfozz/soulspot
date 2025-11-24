@@ -1,4 +1,4 @@
-"""API module for SoulSpot Bridge."""
+"""API module for SoulSpot."""
 
 from soulspot.api.routers import auth, downloads, playlists, tracks
 

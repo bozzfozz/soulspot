@@ -1,6 +1,6 @@
 # CI/CD and Release Process
 
-This document describes the automated CI/CD pipeline and release process for SoulSpot Bridge.
+This document describes the automated CI/CD pipeline and release process for SoulSpot.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ This document describes the automated CI/CD pipeline and release process for Sou
 
 ## Overview
 
-SoulSpot Bridge uses GitHub Actions for continuous integration and automated releases. The pipeline includes:
+SoulSpot uses GitHub Actions for continuous integration and automated releases. The pipeline includes:
 
 - **CI Pipeline**: Automated testing, linting, and Docker builds on every PR
 - **Release Pipeline**: Automated releases with semantic versioning, Docker image publishing, and GitHub releases
@@ -32,7 +32,7 @@ The CI pipeline runs on:
 In addition to the CI pipeline, a separate workflow builds and publishes Docker images daily:
 - **Schedule**: Runs daily at 02:00 UTC
 - **Trigger**: Can also be triggered manually via GitHub Actions UI
-- **Output**: Publishes to `ghcr.io/bozzfozz/soulspot-bridge:latest`
+- **Output**: Publishes to `ghcr.io/bozzfozz/soulspot:latest`
 - **Platforms**: Builds for `linux/amd64` and `linux/arm64`
 - **Tags**: Creates both `latest` and date-stamped tags (e.g., `20250120-abc123`)
 
@@ -78,7 +78,7 @@ All CI jobs must pass before a PR can be merged. Configure branch protection rul
 
 ## Release Process
 
-SoulSpot Bridge follows [Semantic Versioning 2.0.0](https://semver.org/).
+SoulSpot follows [Semantic Versioning 2.0.0](https://semver.org/).
 
 ### Version Format
 
@@ -195,18 +195,18 @@ When you push a tag matching `v*.*.*`, the release workflow automatically:
 Docker images are published to GitHub Container Registry:
 
 ```
-ghcr.io/bozzfozz/soulspot-bridge
+ghcr.io/bozzfozz/soulspot
 ```
 
 ### Image Tags
 
 | Tag | Description | Updated | Example |
 |-----|-------------|---------|---------|
-| `latest` | Latest build (daily or release) | Daily at 02:00 UTC | `ghcr.io/bozzfozz/soulspot-bridge:latest` |
-| `X.Y.Z` | Exact version | On release | `ghcr.io/bozzfozz/soulspot-bridge:0.1.0` |
-| `X.Y` | Minor version line | On release | `ghcr.io/bozzfozz/soulspot-bridge:0.1` |
-| `X` | Major version line | On release | `ghcr.io/bozzfozz/soulspot-bridge:0` |
-| `YYYYMMDD-<sha>` | Daily build with date | Daily at 02:00 UTC | `ghcr.io/bozzfozz/soulspot-bridge:20250120-abc123` |
+| `latest` | Latest build (daily or release) | Daily at 02:00 UTC | `ghcr.io/bozzfozz/soulspot:latest` |
+| `X.Y.Z` | Exact version | On release | `ghcr.io/bozzfozz/soulspot:0.1.0` |
+| `X.Y` | Minor version line | On release | `ghcr.io/bozzfozz/soulspot:0.1` |
+| `X` | Major version line | On release | `ghcr.io/bozzfozz/soulspot:0` |
+| `YYYYMMDD-<sha>` | Daily build with date | Daily at 02:00 UTC | `ghcr.io/bozzfozz/soulspot:20250120-abc123` |
 
 **Note**: The `latest` tag is updated daily via automated builds and also updated when a new release is published.
 
@@ -222,13 +222,13 @@ Docker automatically pulls the correct image for your platform.
 
 ```bash
 # Latest version
-docker pull ghcr.io/bozzfozz/soulspot-bridge:latest
+docker pull ghcr.io/bozzfozz/soulspot:latest
 
 # Specific version
-docker pull ghcr.io/bozzfozz/soulspot-bridge:0.1.0
+docker pull ghcr.io/bozzfozz/soulspot:0.1.0
 
 # Specific platform
-docker pull --platform linux/arm64 ghcr.io/bozzfozz/soulspot-bridge:latest
+docker pull --platform linux/arm64 ghcr.io/bozzfozz/soulspot:latest
 ```
 
 ## Version Management

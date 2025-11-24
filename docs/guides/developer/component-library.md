@@ -8,7 +8,7 @@
 
 ## 📖 Overview
 
-This document provides a comprehensive reference for all reusable UI components available in SoulSpot Bridge. Components are built using the UI 1.0 Design System and can be used across all pages.
+This document provides a comprehensive reference for all reusable UI components available in SoulSpot. Components are built using the UI 1.0 Design System and can be used across all pages.
 
 **Component Locations:**
 - **Jinja Macros:** `/src/soulspot/templates/includes/_components.html`

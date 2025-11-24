@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for SoulSpot Bridge."""
+"""SQLAlchemy ORM models for SoulSpot."""
 
 import uuid
 from datetime import UTC, datetime

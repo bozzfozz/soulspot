@@ -472,7 +472,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description="""
-        ## SoulSpot Bridge API
+        ## SoulSpot API
 
         Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation und Soulseek-Integration.
 
@@ -494,16 +494,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         All errors include a `correlation_id` for debugging. Check logs with this ID for detailed information.
 
         ### Documentation
-        - [GitHub Repository](https://github.com/bozzfozz/soulspot-bridge)
-        - [Setup Guide](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/setup-guide.md)
-        - [Troubleshooting](https://github.com/bozzfozz/soulspot-bridge/blob/main/docs/troubleshooting-guide.md)
+        - [GitHub Repository](https://github.com/bozzfozz/soulspot)
+        - [Setup Guide](https://github.com/bozzfozz/soulspot/blob/main/docs/setup-guide.md)
+        - [Troubleshooting](https://github.com/bozzfozz/soulspot/blob/main/docs/troubleshooting-guide.md)
         """,
         version="0.1.0",
         debug=settings.debug,
         lifespan=lifespan,
         contact={
-            "name": "SoulSpot Bridge",
-            "url": "https://github.com/bozzfozz/soulspot-bridge",
+            "name": "SoulSpot",
+            "url": "https://github.com/bozzfozz/soulspot",
         },
         license_info={
             "name": "TBD",
@@ -563,7 +563,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         Example response:
             {
                 "status": "healthy",
-                "app_name": "SoulSpot Bridge",
+                "app_name": "SoulSpot",
                 "profile": "simple"
             }
         """

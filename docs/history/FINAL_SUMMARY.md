@@ -1,6 +1,6 @@
 # Abschlussbericht: Review und Behebung von Fehlern aus geschlossenen PRs
 
-**Repository:** bozzfozz/soulspot-bridge  
+**Repository:** bozzfozz/soulspot  
 **Datum:** 2025-11-10  
 **Status:** ✅ Erfolgreich abgeschlossen
 

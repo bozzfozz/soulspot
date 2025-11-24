@@ -8,7 +8,7 @@
 
 ## 🎯 Mission Accomplished
 
-Implemented a complete frontend version 1.0 for SoulSpot Bridge with all pages functional, documented, and production-ready.
+Implemented a complete frontend version 1.0 for SoulSpot with all pages functional, documented, and production-ready.
 
 ---
 

@@ -264,7 +264,7 @@ async def get_default_settings() -> AllSettings:
 
     return AllSettings(
         general=GeneralSettings(
-            app_name="SoulSpot Bridge",
+            app_name="SoulSpot",
             log_level="INFO",
             debug=False,
         ),

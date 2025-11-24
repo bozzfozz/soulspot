@@ -389,6 +389,6 @@ POST /api/automation/quality-upgrades/identify
 
 ## Conclusion
 
-This implementation provides a solid foundation for arr-style automation in SoulSpot Bridge. The core functionality (watchlists, discography checking, quality upgrades) is fully operational with clean architecture, type safety, and comprehensive documentation. The remaining 40% focuses on filters, workflow orchestration, background workers, and testing - all buildable on this foundation.
+This implementation provides a solid foundation for arr-style automation in SoulSpot. The core functionality (watchlists, discography checking, quality upgrades) is fully operational with clean architecture, type safety, and comprehensive documentation. The remaining 40% focuses on filters, workflow orchestration, background workers, and testing - all buildable on this foundation.
 
 The delivered features are production-ready for testing and can be deployed incrementally as background workers and filters are completed.

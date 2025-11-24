@@ -202,7 +202,7 @@ curl http://localhost:8000/api/auth/session
 
 **Lösung:**
 1. Spotify-App-Berechtigungen prüfen: https://www.spotify.com/account/apps/
-2. SoulSpot Bridge neu autorisieren
+2. SoulSpot neu autorisieren
 3. Komplette Neu-Authentifizierung durchführen
 
 ---

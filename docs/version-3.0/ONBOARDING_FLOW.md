@@ -32,7 +32,7 @@ Version 3.0 **completely removes .env configuration** and replaces it with a **g
 **UI:**
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                  Welcome to SoulSpot Bridge             │
+│                  Welcome to SoulSpot             │
 │                                                         │
 │  🎵 A modular music bridge connecting Spotify,         │
 │      Soulseek, and your local library.                  │
@@ -54,7 +54,7 @@ Version 3.0 **completely removes .env configuration** and replaces it with a **g
   <div class="onboarding__container">
     <div class="card card--onboarding">
       <div class="card__body text-center">
-        <h1>Welcome to SoulSpot Bridge</h1>
+        <h1>Welcome to SoulSpot</h1>
         
         <div class="onboarding__hero">
           <svg class="onboarding__icon"><!-- music icon --></svg>
@@ -335,7 +335,7 @@ async def test_spotify_connection(
           <strong>Create a new app</strong>
           <ul>
             <li>Click "Create app"</li>
-            <li>Name: "SoulSpot Bridge"</li>
+            <li>Name: "SoulSpot"</li>
             <li>Description: "Personal music bridge"</li>
           </ul>
         </li>
@@ -753,7 +753,7 @@ async def test_soulseek_connection(
 ┌─────────────────────────────────────────────────────────┐
 │  🎉 Setup Complete!                                     │
 │                                                         │
-│  Your SoulSpot Bridge is ready to use.                 │
+│  Your SoulSpot is ready to use.                 │
 │                                                         │
 │  ─────────────────────────────────────────────────     │
 │                                                         │
@@ -778,7 +778,7 @@ async def test_soulseek_connection(
     <div class="onboarding__celebration">
       <svg class="celebration__icon">🎉</svg>
       <h1>Setup Complete!</h1>
-      <p class="text-lg">Your SoulSpot Bridge is ready to use.</p>
+      <p class="text-lg">Your SoulSpot is ready to use.</p>
     </div>
     
     <div class="onboarding__summary">
@@ -1028,7 +1028,7 @@ async def test_onboarding_flow_complete(async_client, mock_spotify, mock_slskd):
     # Step 0: Welcome
     response = await async_client.get("/onboarding")
     assert response.status_code == 200
-    assert "Welcome to SoulSpot Bridge" in response.text
+    assert "Welcome to SoulSpot" in response.text
     
     # Step 1: Spotify configuration
     response = await async_client.post(

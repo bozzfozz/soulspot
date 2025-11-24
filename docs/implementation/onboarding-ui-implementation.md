@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the implementation of the onboarding UI for SoulSpot Bridge, following the problem statement requirements and using the UI 1.0 Design System.
+This document describes the implementation of the onboarding UI for SoulSpot, following the problem statement requirements and using the UI 1.0 Design System.
 
 ## Implementation Summary
 
