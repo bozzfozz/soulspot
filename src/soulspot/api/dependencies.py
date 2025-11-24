@@ -104,8 +104,9 @@ def parse_bearer_token(authorization: str) -> str:
 # users can either use the default session cookie (browser) OR pass session_id via Authorization header
 # (API clients, curl, another browser). We check Authorization first (explicit > implicit), then fall
 # back to cookie. The parse_bearer_token() helper handles the "Bearer " prefix extraction consistently.
+# IMPORTANT: We check for empty/whitespace-only headers to avoid processing blank Authorization headers
+# as valid - if someone sends "Authorization: " with no value, we should fall back to cookie!
 # This makes session IDs PORTABLE across devices but also more vulnerable to theft - MUST use HTTPS!
-# The rest is unchanged - auto-refresh logic works the same regardless of how we got the session_id.
 async def get_session_id(
     authorization: str | None = Header(None),
     session_id_cookie: str | None = Cookie(None, alias="session_id"),
@@ -123,7 +124,8 @@ async def get_session_id(
         Session ID or None if not found in either source
     """
     # Check Authorization header first (explicit auth)
-    if authorization:
+    # Empty/whitespace-only headers should fall back to cookie
+    if authorization and authorization.strip():
         return parse_bearer_token(authorization)
 
     # Fall back to cookie (default browser auth)

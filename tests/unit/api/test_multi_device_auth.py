@@ -89,10 +89,18 @@ class TestGetSessionId:
             authorization="",
             session_id_cookie="cookie-session-id",
         )
-        # Empty string is falsy in Python, so should fall back to cookie
-        # But our implementation treats empty string as truthy, so it returns ""
-        # Let's verify actual behavior:
-        assert session_id == "" or session_id == "cookie-session-id"
+        # Empty string should fall back to cookie (not process as valid header)
+        assert session_id == "cookie-session-id"
+
+    @pytest.mark.asyncio
+    async def test_get_session_id_whitespace_only_authorization(self) -> None:
+        """Test whitespace-only authorization header falls back to cookie."""
+        session_id = await get_session_id(
+            authorization="   ",
+            session_id_cookie="cookie-session-id",
+        )
+        # Whitespace-only should fall back to cookie
+        assert session_id == "cookie-session-id"
 
 
 # Integration tests will be in separate file that requires TestClient setup

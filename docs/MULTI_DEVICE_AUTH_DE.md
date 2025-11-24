@@ -9,7 +9,7 @@ Alle Ihre Fragen sind jetzt **JA** ✅
    - Überleben Server-Neustarts (Docker-Restarts, Updates etc.)
    - Keine erneute Authentifizierung nach Neustart nötig
 
-2. **Kann ich mich von einem anderen PC aufrufen ohne Authentifizierung zu wiederholen?**
+2. **Kann ich mich von einem anderen PC zugreifen ohne Authentifizierung zu wiederholen?**
    - ✅ **JA** - Multi-Device-Zugriff jetzt möglich!
    - Session-ID exportieren und auf anderem Gerät importieren
    - ODER Session-ID als Bearer-Token verwenden
