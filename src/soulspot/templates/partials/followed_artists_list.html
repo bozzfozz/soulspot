@@ -13,20 +13,23 @@
                     {# Hey future me - Artist image display with fallback! If artist has image_url from Spotify,
                        show it as rounded profile picture. If no image (indie artists), show nice gradient placeholder
                        with music note icon. The aspect-square and object-cover ensure consistent sizing regardless
-                       of source image dimensions. Loading="lazy" defers offscreen images for performance. #}
-                    {% if artist.image_url %}
-                        <img src="{{ artist.image_url }}" 
-                             alt="{{ artist.name }}" 
-                             class="w-16 h-16 rounded-xl object-cover flex-shrink-0 shadow-md"
-                             loading="lazy"
-                             onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-16 h-16 rounded-xl bg-gradient-to-br from-secondary-400 to-secondary-600 flex items-center justify-center shadow-md\'><svg class=\'w-8 h-8 text-white\' fill=\'none\' stroke=\'currentColor\' viewBox=\'0 0 24 24\'><path stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3\'></path></svg></div>';">
-                    {% else %}
-                        <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-secondary-400 to-secondary-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                            </svg>
-                        </div>
-                    {% endif %}
+                       of source image dimensions. Loading="lazy" defers offscreen images for performance.
+                       SECURITY: Using classList and data attributes instead of innerHTML to prevent XSS. #}
+                    <div class="artist-image-wrapper">
+                        {% if artist.image_url %}
+                            <img src="{{ artist.image_url }}" 
+                                 alt="{{ artist.name }}" 
+                                 class="w-16 h-16 rounded-xl object-cover flex-shrink-0 shadow-md artist-image"
+                                 loading="lazy"
+                                 onerror="handleImageError(this)">
+                        {% else %}
+                            <div class="w-16 h-16 rounded-xl bg-gradient-to-br from-secondary-400 to-secondary-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
+                                </svg>
+                            </div>
+                        {% endif %}
+                    </div>
                     
                     <div class="flex-1 min-w-0">
                         <h3 class="font-semibold text-gray-900 dark:text-white truncate" title="{{ artist.name }}">
@@ -53,6 +56,37 @@
 
     <!-- Hidden div to pass stats data to JavaScript -->
     <script>
+        // Hey future me - handleImageError safely replaces broken images with fallback placeholder!
+        // Uses DOM methods instead of innerHTML to prevent XSS vulnerabilities. The onerror
+        // is nulled to prevent infinite loops if the fallback also fails (shouldn't happen with SVG).
+        function handleImageError(img) {
+            // Prevent infinite loop
+            img.onerror = null;
+            
+            // Create fallback placeholder using DOM methods (safer than innerHTML)
+            const placeholder = document.createElement('div');
+            placeholder.className = 'w-16 h-16 rounded-xl bg-gradient-to-br from-secondary-400 to-secondary-600 flex items-center justify-center flex-shrink-0 shadow-md';
+            
+            // Create SVG icon
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'w-8 h-8 text-white');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('d', 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3');
+            
+            svg.appendChild(path);
+            placeholder.appendChild(svg);
+            
+            // Replace image with placeholder
+            img.parentNode.replaceChild(placeholder, img);
+        }
+        
         // Update stats after artists are rendered
         window.syncStats = {
             total_fetched: {{ total_fetched }},
