@@ -1,5 +1,6 @@
 """UI routes for dashboard widget system."""
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -15,7 +16,13 @@ from soulspot.infrastructure.persistence.repositories import (
     WidgetRepository,
 )
 
-templates = Jinja2Templates(directory="src/soulspot/templates")
+# Hey future me - compute templates directory relative to THIS file so it works both in
+# development (source tree) and production (installed package / Docker container). The old hardcoded
+# "src/soulspot/templates" breaks when working directory changes or in containers!
+# Path(__file__).parent goes up to api/routers/, then .parent.parent goes to soulspot/,
+# then / "templates" gets us to soulspot/templates/. This works anywhere the code runs!
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 router = APIRouter(prefix="/ui", tags=["dashboard-ui"])
 

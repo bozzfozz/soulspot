@@ -129,6 +129,12 @@ async def app_with_db(test_settings: Settings, db: Database):
     # Manually set db in app state for tests
     app.state.db = db
 
+    # Initialize session store for auth endpoints
+    from soulspot.application.services.session_store import DatabaseSessionStore
+
+    session_store = DatabaseSessionStore(db)
+    app.state.session_store = session_store
+
     # Add mock job queue to avoid 503 errors in download endpoint tests
     mock_job_queue = AsyncMock(spec=JobQueue)
     mock_job_queue.enqueue = AsyncMock(return_value=None)

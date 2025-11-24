@@ -5,8 +5,9 @@
 # stay up-to-date. This is a hybrid approach: SSE for instant updates, polling as fallback. The templates
 # in partials/widgets/ define how each widget renders. Keep these endpoints FAST - widgets poll frequently!
 # Use repository pagination and limits to avoid huge queries. The templates variable is Jinja2 template engine
-# configured with src/soulspot/templates directory. All responses are HTMLResponse not JSON!
+# configured with the templates directory computed relative to this file!
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -24,7 +25,11 @@ from soulspot.infrastructure.persistence.repositories import (
     TrackRepository,
 )
 
-templates = Jinja2Templates(directory="src/soulspot/templates")
+# Hey future me - compute templates directory relative to THIS file so it works in Docker containers
+# and anywhere else the code runs. The old hardcoded "src/soulspot/templates" breaks when working
+# directory is different (like in containers where CWD might be /app or /usr/local/lib/python...)!
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 router = APIRouter(prefix="/ui/widgets", tags=["widget-content"])
 

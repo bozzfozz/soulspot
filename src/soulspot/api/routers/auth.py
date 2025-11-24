@@ -81,9 +81,9 @@ async def callback(
     code: str = Query(..., description="Authorization code from Spotify"),
     state: str = Query(..., description="State parameter for CSRF protection"),
     redirect_to: str = Query("/", description="Redirect URL after success"),
-    session_id: str | None = Cookie(None),
     settings: Settings = Depends(get_settings),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> RedirectResponse | dict[str, Any]:
     """Handle OAuth callback from Spotify with session verification.
 
@@ -172,9 +172,9 @@ async def callback(
 # idempotent - safe to call multiple times, unlike the auth flow which is one-shot.
 @router.post("/refresh")
 async def refresh_token(
-    session_id: str | None = Cookie(None),
     settings: Settings = Depends(get_settings),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> dict[str, Any]:
     """Refresh access token using session's refresh token.
 
@@ -245,8 +245,8 @@ async def refresh_token(
 # just checking token existence!
 @router.get("/session")
 async def get_session_info(
-    session_id: str | None = Cookie(None),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> dict[str, Any]:
     """Get current session information.
 
@@ -286,8 +286,8 @@ async def get_session_info(
 async def logout(
     response: Response,
     settings: Settings = Depends(get_settings),
-    session_id: str | None = Cookie(None),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> dict[str, Any]:
     """Log out and delete session.
 
@@ -315,8 +315,8 @@ async def logout(
 # If true, proceed with API calls. Don't cache this response - token state can change!
 @router.get("/spotify/status")
 async def spotify_status(
-    session_id: str | None = Cookie(None),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> dict[str, Any]:
     """Get Spotify connection status for onboarding flow.
 
@@ -363,8 +363,8 @@ async def spotify_status(
 @router.post("/onboarding/skip")
 async def skip_onboarding(
     _response: Response,
-    session_id: str | None = Cookie(None),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> dict[str, Any]:
     """Skip onboarding and proceed to dashboard.
 

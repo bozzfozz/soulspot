@@ -82,9 +82,9 @@ def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyCli
 # invalid/revoked - then HTTPException 401 forces user to re-auth. The cast() at the end is needed for
 # mypy because we checked token is not None but mypy doesn't track that through the if blocks.
 async def get_spotify_token_from_session(
-    session_id: str | None = Cookie(None),
     session_store: DatabaseSessionStore = Depends(get_session_store),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
+    session_id: str | None = Cookie(None, alias="session_id"),
 ) -> str:
     """Get valid Spotify access token from session with automatic refresh.
 
