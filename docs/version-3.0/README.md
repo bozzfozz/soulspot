@@ -75,8 +75,17 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
    - Migration guide from HTMX to React
    - Performance optimization and accessibility
    - **Production-ready specification for GitHub Spark implementation**
+   - 👉 **[Quick Start Guide](./GITHUB_SPARK_QUICK_START.md)** for rapid implementation
 
-7. **[ONBOARDING_FLOW.md](./ONBOARDING_FLOW.md)** - Onboarding & Configuration
+7. **[GITHUB_SPARK_QUICK_START.md](./GITHUB_SPARK_QUICK_START.md)** - Quick Start Guide **NEW ✨**
+   - **5-minute setup** for GitHub Spark project
+   - Component reference with quick links
+   - Common tasks and examples
+   - Testing snippets
+   - Deployment instructions
+   - **Perfect for developers who want to start immediately**
+
+8. **[ONBOARDING_FLOW.md](./ONBOARDING_FLOW.md)** - Onboarding & Configuration
    - **No .env configuration** - guided UI-based setup
    - Step-by-step credential collection with real-time testing
    - Spotify, Soulseek, and optional module configuration
@@ -86,7 +95,7 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
 
 ### Example Implementation
 
-8. **[SOULSEEK_MODULE.md](./SOULSEEK_MODULE.md)** - Reference Implementation
+9. **[SOULSEEK_MODULE.md](./SOULSEEK_MODULE.md)** - Reference Implementation
    - Complete Soulseek module design
    - Domain model (entities, value objects, services)
    - Application layer (services, use cases, DTOs)
@@ -98,7 +107,7 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
 
 ### AI Integration & Automation
 
-9. **[AI_AGENT_WORKFLOWS.md](./AI_AGENT_WORKFLOWS.md)** - AI Agent Workflows Documentation
+10. **[AI_AGENT_WORKFLOWS.md](./AI_AGENT_WORKFLOWS.md)** - AI Agent Workflows Documentation
    - Comprehensive overview of GitHub Next Agentic Workflows
    - What are AI Agentic Workflows and core concepts
    - Complete catalog of available workflows (Issue Triage, CI Doctor, etc.)
@@ -108,7 +117,7 @@ This directory contains the complete architectural design for SoulSpot Bridge Ve
    - Security best practices and implementation guides
    - **Essential for automating code review, testing, and quality assurance**
 
-10. **[AI_AGENT_WORKFLOWS_IMPLEMENTATION.md](./AI_AGENT_WORKFLOWS_IMPLEMENTATION.md)** - Practical Implementation Guide
+11. **[AI_AGENT_WORKFLOWS_IMPLEMENTATION.md](./AI_AGENT_WORKFLOWS_IMPLEMENTATION.md)** - Practical Implementation Guide
    - Quick start (5-minute setup)
    - Step-by-step installation and configuration
    - Recommended workflows for SoulSpot (prioritized)
@@ -161,10 +170,11 @@ Essential reading:
 5. [ARCHITECTURE.md](./ARCHITECTURE.md) - Section 7 (Frontend Architecture)
 
 **For GitHub Spark (React + TypeScript) implementation:**
-1. **[GITHUB_SPARK_WEB_UI.md](./GITHUB_SPARK_WEB_UI.md)** - Complete React/TypeScript specification ⭐
-2. [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) - Reference for design tokens and card concepts
-3. [MODULE_SPECIFICATION.md](./MODULE_SPECIFICATION.md) - Section 5 (Frontend Structure)
-4. [ARCHITECTURE.md](./ARCHITECTURE.md) - Section 7 (Frontend Architecture)
+1. **[GITHUB_SPARK_QUICK_START.md](./GITHUB_SPARK_QUICK_START.md)** - 5-minute setup guide ⚡
+2. **[GITHUB_SPARK_WEB_UI.md](./GITHUB_SPARK_WEB_UI.md)** - Complete React/TypeScript specification ⭐
+3. [UI_DESIGN_SYSTEM.md](./UI_DESIGN_SYSTEM.md) - Reference for design tokens and card concepts
+4. [MODULE_SPECIFICATION.md](./MODULE_SPECIFICATION.md) - Section 5 (Frontend Structure)
+5. [ARCHITECTURE.md](./ARCHITECTURE.md) - Section 7 (Frontend Architecture)
 
 **Goal:** Build consistent, accessible UI using card components (either HTMX or React)
 
@@ -384,6 +394,7 @@ See [ROADMAP.md](./ROADMAP.md) Section 4 for detailed migration strategy.
 - [x] Create AI_AGENT_WORKFLOWS.md
 - [x] Create AI_AGENT_WORKFLOWS_IMPLEMENTATION.md
 - [x] Create GITHUB_SPARK_WEB_UI.md (React + TypeScript specification)
+- [x] Create GITHUB_SPARK_QUICK_START.md (Quick start guide)
 - [x] Create README.md (this file)
 
 ### Implementation Phase 🔜 PLANNED
