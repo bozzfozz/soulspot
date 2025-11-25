@@ -100,13 +100,13 @@ CREATE INDEX ix_artists_name_lower ON artists(LOWER(name));
 CREATE INDEX ix_artists_genres ON artists USING GIN(genres);  -- Optional: for genre-based queries
 ```
 
-### SQLite Schema (SoulSpot Implementation)
+### SQLite Schema (Current SoulSpot Implementation)
 
-Since SoulSpot uses SQLite for portability, the schema adapts:
+SoulSpot uses SQLite for portability. The current implementation stores a subset of fields, with additional fields planned for future versions:
 
 ```sql
 CREATE TABLE artists (
-    id TEXT PRIMARY KEY,  -- UUID
+    id TEXT PRIMARY KEY,  -- UUID (internal)
     name TEXT NOT NULL,
     spotify_uri TEXT UNIQUE,  -- spotify:artist:{spotify_id}
     musicbrainz_id TEXT UNIQUE,
@@ -121,7 +121,11 @@ CREATE INDEX ix_artists_spotify_uri ON artists(spotify_uri);
 CREATE INDEX ix_artists_name_lower ON artists(name);
 ```
 
-> **Implementation Note:** SQLite stores JSON arrays as TEXT. The application layer handles JSON serialization/deserialization.
+> **Implementation Notes:**
+> - SQLite stores JSON arrays as TEXT. The application layer handles JSON serialization/deserialization.
+> - The `spotify_uri` field contains the full URI (e.g., `spotify:artist:1Xyo4u8uXC1ZmMpatF05PJ`), from which the Spotify ID can be extracted.
+> - Fields like `popularity`, `followers_total`, `external_url`, and `last_synced_at` from the reference schema are planned for future implementation and can be stored in a `raw` JSONB/TEXT field until then.
+> - For a full-featured implementation, extend the schema with the additional fields from the PostgreSQL reference above.
 
 ---
 
@@ -164,16 +168,18 @@ CREATE INDEX ix_artists_name_lower ON artists(name);
 
 ### Field Mapping
 
-| Spotify Field | SoulSpot Field | Transformation |
-|---------------|----------------|----------------|
-| `id` | `spotify_id` / `spotify_uri` | Convert to `spotify:artist:{id}` |
-| `name` | `name` | Direct mapping |
-| `genres` | `genres` | JSON array |
-| `popularity` | `popularity` | Direct mapping |
-| `followers.total` | `followers_total` | Nested field extraction |
-| `images` | `images` / `image_url` | Full array or single 320px URL |
-| `external_urls.spotify` | `external_url` | Nested field extraction |
-| `href` | `href` | Direct mapping |
+| Spotify Field | SoulSpot Field | Status | Transformation |
+|---------------|----------------|--------|----------------|
+| `id` | `spotify_uri` | ✅ Implemented | Convert to `spotify:artist:{id}` |
+| `name` | `name` | ✅ Implemented | Direct mapping |
+| `genres` | `genres` | ✅ Implemented | JSON array (stored as TEXT in SQLite) |
+| `images[1].url` | `image_url` | ✅ Implemented | Extract 320px image URL |
+| `popularity` | `popularity` | 📋 Planned | Direct mapping (requires schema extension) |
+| `followers.total` | `followers_total` | 📋 Planned | Nested field extraction (requires schema extension) |
+| `external_urls.spotify` | `external_url` | 📋 Planned | Nested field extraction (requires schema extension) |
+| `href` | `href` | 📋 Planned | Direct mapping (requires schema extension) |
+
+> **Note:** Fields marked as "Planned" can be stored in a `raw` JSON field for immediate access while schema extensions are developed.
 
 ---
 
