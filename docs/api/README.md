@@ -52,6 +52,16 @@ Integration with Spotify Web API for track/song data management.
 - ISRC-based deduplication
 - Batch sync strategies
 - Field mappings and schema recommendations
+### [Spotify Artist API](spotify-artist-api.md)
+Integration with Spotify Web API for artist metadata synchronization.
+
+**Key Features:**
+- Artist metadata sync from Spotify
+- Field mapping and data model documentation
+- Authentication flows (Client Credentials, PKCE)
+- Rate limiting and exponential backoff
+- On-demand and periodic sync strategies
+- Database schema reference
 
 ---
 
