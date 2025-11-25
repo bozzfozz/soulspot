@@ -27,9 +27,9 @@ Das Authentication-System verwaltet die Spotify OAuth-Verbindung und Session-Man
 
 ### Multi-Device Support
 
-- **Session-Export**: Teile deine Session mit anderen Geräten
-- **Session-Import**: Importiere eine Session von einem anderen Gerät
-- **Keine erneute Authentifizierung**: Einmal verbinden, überall nutzen
+- **Server-seitige Token-Speicherung**: Alle Spotify-Tokens werden zentral gespeichert
+- **Jedes Gerät authentifiziert sich**: Einfach im Browser einloggen
+- **Keine erneute Spotify-Autorisierung**: Einmal verbinden, überall nutzen
 
 ---
 
@@ -69,19 +69,6 @@ SoulSpot fordert folgende Spotify-Berechtigungen an:
 1. Klicke auf dein Profil/Avatar
 2. Klicke auf **Logout**
 3. Deine Session wird gelöscht
-
-### Multi-Device: Session exportieren
-
-1. Navigiere zu **Settings** → **Session**
-2. Klicke auf **Export Session**
-3. Kopiere die Session-ID (sicher aufbewahren!)
-
-### Multi-Device: Session importieren
-
-1. Auf dem neuen Gerät: **Settings** → **Session**
-2. Klicke auf **Import Session**
-3. Füge die Session-ID ein
-4. Klicke auf **Import**
 
 ---
 
@@ -167,47 +154,6 @@ Prüft den Spotify-Verbindungsstatus.
   "provider": "spotify",
   "expires_at": "2025-01-15T13:00:00Z",
   "token_expired": false
-}
-```
-
-### GET `/api/auth/session/export`
-
-Exportiert die Session-ID für Multi-Device-Nutzung.
-
-**Response:**
-```json
-{
-  "session_id": "session-uuid",
-  "created_at": "2025-01-15T10:00:00Z",
-  "expires_at": "2025-01-15T13:00:00Z",
-  "usage_instructions": {
-    "curl": "curl -H 'Authorization: Bearer <session_id>' <BASE_URL>/api/...",
-    "browser": "Open browser DevTools → Application → Cookies → Set session_id cookie",
-    "api_clients": "Add header: Authorization: Bearer <session_id>"
-  },
-  "warning": "⚠️ Keep this session ID secret! It's equivalent to your password for this app."
-}
-```
-
-### POST `/api/auth/session/import`
-
-Importiert eine Session von einem anderen Gerät.
-
-**Query-Parameter:**
-| Parameter | Typ | Beschreibung |
-|-----------|-----|--------------|
-| `import_session_id` | string | Session-ID zum Importieren |
-
-**Alternative:** Session-ID im `Authorization: Bearer <session_id>` Header
-
-**Response:**
-```json
-{
-  "message": "Session imported successfully. You are now authenticated on this device.",
-  "session_id": "session-uuid",
-  "has_spotify_token": true,
-  "token_expired": false,
-  "created_at": "2025-01-15T10:00:00Z"
 }
 ```
 
@@ -297,21 +243,29 @@ sequenceDiagram
 
 ## Multi-Device Workflow
 
+### So funktioniert Multi-Device-Zugriff
+
+SoulSpot speichert alle Spotify-Tokens **serverseitig**. Das bedeutet:
+
+1. **Einmalige Autorisierung**: Sie autorisieren SoulSpot einmal bei Spotify
+2. **Zentrale Token-Speicherung**: Die Tokens werden in der Datenbank gespeichert
+3. **Zugriff von jedem Gerät**: Jedes Gerät im Netzwerk kann sich einloggen
+
 ### Szenario: Desktop → Mobile
 
-1. **Desktop**: Verbinde dich mit Spotify
-2. **Desktop**: Exportiere die Session (`GET /auth/session/export`)
-3. **Desktop**: Kopiere die Session-ID sicher (z.B. via Signal, verschlüsselter Email)
-4. **Mobile**: Öffne SoulSpot
-5. **Mobile**: Importiere die Session (`POST /auth/session/import`)
-6. **Mobile**: Du bist jetzt verbunden!
+1. **Desktop**: Verbinde dich mit Spotify über `/auth/authorize`
+2. **Mobile**: Öffne SoulSpot im Browser
+3. **Mobile**: Authentifiziere dich - der Server hat bereits deine Spotify-Tokens!
 
-### Sicherheitshinweise
+### Bearer Token für API-Clients
 
-⚠️ **Wichtig:**
-- Die Session-ID ist wie ein Passwort – teile sie nur über sichere Kanäle
-- Bei Kompromittierung: Logout auf allen Geräten (`POST /auth/logout`)
-- Session-IDs sind zeitlich begrenzt gültig
+Für Skripte und Automatisierung kann die Session-ID als Bearer Token verwendet werden:
+
+```bash
+# Session-ID aus dem Browser holen (DevTools → Cookies)
+curl -H "Authorization: Bearer YOUR_SESSION_ID" \
+     http://localhost:8000/api/playlists
+```
 
 ---
 
@@ -347,11 +301,10 @@ sequenceDiagram
 ### Problem: Multi-Device funktioniert nicht
 
 **Ursachen:**
-1. Session-ID falsch kopiert
-2. Original-Session abgelaufen
-3. Logout auf Original-Gerät
+1. Gerät kann Server nicht erreichen (Firewall)
+2. Session abgelaufen
 
-**Lösung:** Exportiere eine neue Session vom verbundenen Gerät
+**Lösung:** Prüfe Netzwerkverbindung und authentifiziere dich erneut
 
 ---
 

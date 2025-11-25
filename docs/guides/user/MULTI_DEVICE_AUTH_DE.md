@@ -10,9 +10,8 @@ Alle Ihre Fragen sind jetzt **JA** ✅
    - Keine erneute Authentifizierung nach Neustart nötig
 
 2. **Kann ich mich von einem anderen PC zugreifen ohne Authentifizierung zu wiederholen?**
-   - ✅ **JA** - Multi-Device-Zugriff jetzt möglich!
-   - Session-ID exportieren und auf anderem Gerät importieren
-   - ODER Session-ID als Bearer-Token verwenden
+   - ✅ **JA** - Multi-Device-Zugriff möglich!
+   - Einfach im Browser einloggen - der Server verwaltet Ihre Spotify-Verbindung
 
 3. **Können nachfolgende Authentifizierungen automatisch durchgeführt werden?**
    - ✅ **JA** - Token-Refresh ist vollautomatisch
@@ -23,52 +22,36 @@ Alle Ihre Fragen sind jetzt **JA** ✅
 
 ## Schnellstart: Multi-Device Zugriff
 
-### Schritt 1: Session-ID exportieren (Gerät A)
+### So funktioniert Multi-Device
 
-```bash
-curl http://localhost:8000/api/auth/session/export
-```
+SoulSpot speichert alle Authentifizierungs-Tokens **serverseitig**. Sobald Sie sich auf einem Gerät authentifiziert haben:
 
-Ergebnis:
-```json
-{
-  "session_id": "ihre-lange-session-id-hier",
-  "warning": "⚠️ Session-ID geheim halten!"
-}
-```
+1. Ihre Spotify-Tokens werden in der Datenbank gespeichert
+2. Der gleiche Account kann von jedem Gerät im lokalen Netzwerk genutzt werden
+3. Loggen Sie sich einfach erneut auf dem neuen Gerät ein - der Server verwaltet Ihre Spotify-Verbindung
 
-**Wichtig:** Session-ID kopieren (lange zufällige Zeichenkette)
+### Zugriff von einem anderen Gerät
 
-### Schritt 2: Session auf anderem Gerät nutzen
+**Auf einem beliebigen Gerät in Ihrem lokalen Netzwerk:**
 
-#### Option A: Cookie importieren (Browser auf Gerät B)
+1. Öffnen Sie Ihren Browser und navigieren Sie zu SoulSpot (z.B. `http://192.168.1.100:8000`)
+2. Starten Sie den OAuth-Flow über `/api/auth/authorize`
+3. Melden Sie sich mit Ihren Spotify-Anmeldedaten an
+4. Sie sind jetzt auf diesem Gerät authentifiziert!
 
-```bash
-curl -X POST "http://localhost:8000/api/auth/session/import?import_session_id=IHRE_SESSION_ID"
-```
-
-Oder im Browser:
-1. DevTools öffnen (F12)
-2. Application → Cookies
-3. Cookie hinzufügen: `session_id` = `<ihre-session-id>`
-4. Seite neu laden - Sie sind eingeloggt!
-
-#### Option B: Bearer-Token verwenden (API/CLI)
-
-```bash
-curl -H "Authorization: Bearer IHRE_SESSION_ID" \
-     http://localhost:8000/api/playlists
-```
+> **Hinweis:** Jedes Gerät erhält seine eigene Session, aber alle Sessions teilen die gleichen serverseitigen Spotify-Tokens. Das bedeutet, Sie müssen sich nicht erneut bei Spotify autorisieren - loggen Sie sich einfach ein.
 
 ---
 
 ## Praktische Beispiele
 
-### Spotify-Playlists von anderem PC abrufen
+### Bearer-Token für API-Zugriff
+
+Für API-Clients, Skripte oder Automatisierung können Sie Ihre Session-ID als Bearer-Token verwenden:
 
 ```bash
-# Session-ID als Bearer-Token
-SESSION_ID="ihre-session-id"
+# Holen Sie sich Ihre Session-ID aus dem Browser (DevTools → Application → Cookies → session_id)
+SESSION_ID="ihre-session-id-aus-dem-browser"
 
 # Playlists abrufen
 curl -H "Authorization: Bearer $SESSION_ID" \
@@ -89,7 +72,7 @@ import os
 import requests
 
 # Session-ID aus Umgebungsvariable (sicher!)
-session_id = os.environ["SOULSPOT_SESSION_ID"]
+session_id = os.environ.get("SOULSPOT_SESSION_ID")
 headers = {"Authorization": f"Bearer {session_id}"}
 
 # Playlists abrufen
@@ -123,22 +106,20 @@ Antwort:
 
 ## Sicherheit: Wichtige Hinweise ⚠️
 
-### Session-ID = Passwort!
+### Session-ID = Sensible Daten!
 
-Die Session-ID ist **genauso sensibel wie ein Passwort**. Jeder mit Ihrer Session-ID kann auf Ihren Spotify-Account via SoulSpot zugreifen!
+Die Session-ID gewährt Zugriff auf Ihre SoulSpot-Session. Behandeln Sie sie entsprechend!
 
 ### Sicher ✅
 
 - HTTPS in Produktion verwenden
 - Session-ID geheim halten
-- Nur über verschlüsselte Kanäle teilen (Signal, WhatsApp, verschlüsselte Email)
 - Session widerrufen bei Kompromittierung: `curl -X POST ... /api/auth/logout`
 
 ### Unsicher ❌
 
 - Session-ID in Git committen
 - In öffentlichen Channels teilen (Discord, Slack, GitHub)
-- Per unverschlüsselter Email senden
 - Im Code hardcoden (stattdessen Umgebungsvariablen)
 
 ---
@@ -283,7 +264,7 @@ server {
 |---------|------------|--------------|
 | Sicherheit | ✅ Hoch | ⚠️ Mittel |
 | Benutzerfreundlichkeit | ✅ Automatisch | ⚠️ Manuell |
-| Multi-Device | ⚠️ Import nötig | ✅ Sofort nutzbar |
+| Multi-Device | ✅ Jedes Gerät authentifiziert sich | ✅ Sofort nutzbar |
 | API/CLI | ❌ Unpraktisch | ✅ Perfekt |
 | Empfohlen für | Browser/Web-UI | Skripte/Automatisierung |
 
@@ -295,6 +276,6 @@ server {
 
 ## Weitere Dokumentation
 
-- Ausführliche englische Anleitung: `docs/MULTI_DEVICE_AUTH.md`
+- Ausführliche englische Anleitung: `docs/guides/user/MULTI_DEVICE_AUTH.md`
 - API-Dokumentation: http://localhost:8000/docs
 - Haupt-README: `README.md`

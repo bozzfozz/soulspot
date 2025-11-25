@@ -2,13 +2,12 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
 from fastapi.responses import RedirectResponse
 
 from soulspot.api.dependencies import (
     get_session_id,
     get_session_store,
-    parse_bearer_token,
 )
 from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.config import Settings, get_settings
@@ -391,135 +390,4 @@ async def skip_onboarding(
     return {
         "ok": True,
         "message": "Onboarding skipped. You can connect Spotify later in settings.",
-    }
-
-
-# Hey future me, this is THE MULTI-DEVICE SOLUTION! Export endpoint returns the session_id for users
-# to copy and use on another device/browser. This makes sessions PORTABLE but also MORE DANGEROUS -
-# session_id is equivalent to a password! MUST warn users to keep it secret and only share over
-# secure channels. The response includes usage instructions for different tools (curl, browser, etc).
-# This is a GET not POST because it's read-only (doesn't change state), but requires auth!
-@router.get("/session/export")
-async def export_session(
-    session_store: DatabaseSessionStore = Depends(get_session_store),
-    session_id: str | None = Depends(get_session_id),
-) -> dict[str, Any]:
-    """Export session ID for use on another device.
-
-    ⚠️ SECURITY WARNING: The session ID is a sensitive credential equivalent to a password!
-    - Only share over secure channels (HTTPS, encrypted messaging)
-    - Anyone with your session ID can access your Spotify account via this app
-    - Revoke session if compromised using /api/auth/logout
-
-    Args:
-        session_id: Session ID from cookie or Authorization header
-        session_store: Session store
-
-    Returns:
-        Session ID and usage instructions
-
-    Raises:
-        HTTPException: If no session found
-    """
-    if not session_id:
-        raise HTTPException(
-            status_code=401,
-            detail="No session found. Please authenticate first.",
-        )
-
-    session = await session_store.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired session.",
-        )
-
-    return {
-        "session_id": session.session_id,
-        "created_at": session.created_at.isoformat(),
-        "expires_at": (
-            session.token_expires_at.isoformat() if session.token_expires_at else None
-        ),
-        "usage_instructions": {
-            "curl": f"curl -H 'Authorization: Bearer {session.session_id}' <BASE_URL>/api/...",
-            "browser": "Open browser DevTools → Application → Cookies → Set session_id cookie with this value",
-            "api_clients": "Add header: Authorization: Bearer <session_id>",
-        },
-        "warning": "⚠️ Keep this session ID secret! It's equivalent to your password for this app.",
-    }
-
-
-# Yo future me, this is session IMPORT for multi-device access! It accepts a session_id via header
-# or query param and sets it as a cookie in the response. This allows users to "log in" on a new
-# device/browser by pasting their session_id (exported from original device). The cookie is set with
-# the SAME security settings as the original /authorize endpoint - HttpOnly, Secure (if HTTPS), etc.
-# This is intentionally permissive - no validation beyond "does session exist" - we trust users know
-# what they're doing. If they import an invalid session_id, they'll just get 401 on next API call.
-# We use the shared parse_bearer_token() helper for consistent Authorization header parsing!
-# PRIORITY: Authorization header takes precedence over query param for flexibility (documented below).
-@router.post("/session/import")
-async def import_session(
-    response: Response,
-    settings: Settings = Depends(get_settings),
-    session_store: DatabaseSessionStore = Depends(get_session_store),
-    import_session_id: str = Query(
-        ..., description="Session ID to import from another device"
-    ),
-    authorization: str | None = Header(None),
-) -> dict[str, Any]:
-    """Import session ID from another device.
-
-    Validates the session ID and sets it as a cookie for browser usage.
-    This allows you to "log in" on a new device using a session from another device.
-
-    **Session ID Sources (in priority order):**
-    1. Authorization header (if provided) - takes precedence
-    2. Query parameter `import_session_id` (if header not provided)
-
-    This allows flexible usage:
-    - Browser: `POST /api/auth/session/import?import_session_id=...`
-    - CLI/API: `POST /api/auth/session/import?import_session_id=... -H "Authorization: Bearer ..."`
-
-    Args:
-        import_session_id: Session ID to import (from query param)
-        authorization: Alternative session ID via header (takes precedence if provided)
-        settings: Application settings
-        session_store: Session store
-        response: FastAPI response for setting cookies
-
-    Returns:
-        Import confirmation with session info
-
-    Raises:
-        HTTPException: If session ID is invalid or expired
-    """
-    # Allow session_id from either query param or header (header takes precedence)
-    session_id = import_session_id
-    if authorization:
-        session_id = parse_bearer_token(authorization)
-
-    # Validate session exists
-    session = await session_store.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=404,
-            detail="Session not found or expired. Please check the session ID and try again.",
-        )
-
-    # Set session cookie (same security settings as /authorize endpoint)
-    response.set_cookie(
-        key=settings.api.session_cookie_name,
-        value=session.session_id,
-        httponly=True,
-        secure=settings.api.secure_cookies,
-        samesite="lax",
-        max_age=settings.api.session_max_age,
-    )
-
-    return {
-        "message": "Session imported successfully. You are now authenticated on this device.",
-        "session_id": session.session_id,
-        "has_spotify_token": session.access_token is not None,
-        "token_expired": session.is_token_expired(),
-        "created_at": session.created_at.isoformat(),
     }

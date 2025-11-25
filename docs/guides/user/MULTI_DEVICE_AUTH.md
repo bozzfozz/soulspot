@@ -71,61 +71,45 @@ SoulSpot supports **two authentication methods**:
 - Use API clients (curl, Postman, custom scripts) alongside web UI
 - Share access with trusted household members (same Spotify account)
 
-### Method 1: Export/Import Session (Browser)
+### How Multi-Device Works
 
-**On Device A (where you're already authenticated):**
+SoulSpot stores all authentication tokens **server-side**. Once you authenticate on one device:
 
-1. **Export your session ID**
-   ```bash
-   curl http://localhost:8000/api/auth/session/export
-   ```
+1. Your Spotify tokens are stored in the database
+2. The same account can be accessed from any device on the local network
+3. Simply log in again on the new device - the server maintains your Spotify connection
 
-   Response:
-   ```json
-   {
-     "session_id": "your-session-id-here...",
-     "created_at": "2025-11-24T12:00:00Z",
-     "usage_instructions": {
-       "curl": "curl -H 'Authorization: Bearer ...' ...",
-       "browser": "Open DevTools → Application → Cookies → Set session_id",
-       "api_clients": "Add header: Authorization: Bearer <session_id>"
-     },
-     "warning": "⚠️ Keep this session ID secret! It's equivalent to your password."
-   }
-   ```
+### Accessing from Another Device
 
-2. **Copy the `session_id` value** (long random string)
+**On any device in your local network:**
 
-**On Device B (new device):**
+1. Open your browser and navigate to SoulSpot (e.g., `http://192.168.1.100:8000`)
+2. Start the OAuth flow via `/api/auth/authorize`
+3. Log in with your Spotify credentials
+4. You're now authenticated on this device!
 
-3. **Import the session**
-   ```bash
-   curl -X POST "http://localhost:8000/api/auth/session/import?import_session_id=YOUR_SESSION_ID_HERE"
-   ```
+> **Note:** Each device gets its own session, but all sessions share the same server-side Spotify tokens. This means you don't need to re-authorize with Spotify - just log in.
 
-   Or via browser:
-   - Open browser DevTools (F12)
-   - Go to Application → Cookies
-   - Add cookie: `session_id` = `<your-session-id>`
-   - Set Domain: `localhost`, Path: `/`
-   - Check HttpOnly ✓
-   - Reload page - you're authenticated!
+### Using Bearer Tokens for API Access
 
-### Method 2: Bearer Token (API Clients)
-
-Instead of importing the session as a cookie, you can use it directly via the `Authorization` header:
+For API clients, scripts, or automation, you can use your session ID as a Bearer token:
 
 **Example: List playlists with curl**
 ```bash
-curl -H "Authorization: Bearer YOUR_SESSION_ID_HERE" \
+# First, get your session ID from your browser (DevTools → Application → Cookies → session_id)
+SESSION_ID="your-session-id-from-browser"
+
+curl -H "Authorization: Bearer $SESSION_ID" \
      http://localhost:8000/api/playlists
 ```
 
 **Example: Python script**
 ```python
+import os
 import requests
 
-session_id = "your-session-id-here"
+# Get session ID from environment variable
+session_id = os.environ.get("SOULSPOT_SESSION_ID")
 headers = {"Authorization": f"Bearer {session_id}"}
 
 # Get playlists
@@ -145,7 +129,7 @@ response = requests.post(
 
 **Example: JavaScript fetch**
 ```javascript
-const sessionId = "your-session-id-here";
+const sessionId = "your-session-id-from-browser";
 
 fetch("http://localhost:8000/api/playlists", {
   headers: {
@@ -162,13 +146,12 @@ fetch("http://localhost:8000/api/playlists", {
 
 ### ⚠️ Session ID is a Sensitive Credential
 
-**The session ID is equivalent to your Spotify password for this application!**
+**The session ID grants access to your SoulSpot session!**
 
 ### DO ✅
 
 - **Use HTTPS in production** - Never send session IDs over unencrypted connections
 - **Keep session IDs secret** - Treat them like passwords
-- **Share only over secure channels** - Encrypted messaging, secure file sharing
 - **Revoke compromised sessions** - Use `/api/auth/logout` if session ID is leaked
 - **Use cookie-based auth when possible** - More secure than bearer tokens (HttpOnly protection)
 
@@ -176,20 +159,19 @@ fetch("http://localhost:8000/api/playlists", {
 
 - **Don't commit session IDs to git** - Add `.env` to `.gitignore`
 - **Don't share in public channels** - Slack, Discord, GitHub issues, etc.
-- **Don't send via email/SMS** - Unencrypted and logged
 - **Don't hardcode in scripts** - Use environment variables instead
 
 ### Recommended Practices
 
-1. **Use environment variables**
+1. **Use environment variables for scripts**
    ```bash
    # .env file (never commit this!)
-   SESSION_ID=your-session-id-here
+   SOULSPOT_SESSION_ID=your-session-id-here
    ```
 
    ```python
    import os
-   session_id = os.environ["SESSION_ID"]
+   session_id = os.environ["SOULSPOT_SESSION_ID"]
    ```
 
 2. **Rotate sessions periodically**
@@ -271,8 +253,7 @@ curl -X POST \
 
 **Solutions:**
 1. Check session expiry: `curl http://localhost:8000/api/auth/session`
-2. Re-import session if still valid on another device
-3. Re-authenticate if session truly expired
+2. Re-authenticate via `/api/auth/authorize`
 
 ### Token Refresh Fails
 
@@ -286,11 +267,10 @@ curl -X POST \
 ### Session Doesn't Work on Device B
 
 **Checklist:**
-- ✅ Session ID copied correctly (no extra spaces/characters)
-- ✅ Cookie domain matches (`localhost` or your domain)
+- ✅ Both devices can reach SoulSpot server (check network/firewall)
+- ✅ Cookie domain matches (use IP address or hostname consistently)
 - ✅ Cookie path is `/`
-- ✅ HttpOnly flag set (for cookie-based)
-- ✅ Network can reach server (check firewall, Docker port mapping)
+- ✅ For API clients: Authorization header format is correct
 
 ### Bearer Token Works but Cookie Doesn't
 
@@ -346,13 +326,13 @@ server {
 **Q: Do I need to re-authenticate after server restarts?**  
 A: **No!** Sessions are persisted in SQLite database and survive restarts.
 
-**Q: Can I access from my phone using the same session?**  
-A: **Yes!** Export session from desktop, import on mobile browser or use bearer token in mobile app.
+**Q: Can I access from my phone using the same account?**  
+A: **Yes!** Open SoulSpot in your mobile browser and authenticate. The server maintains your Spotify connection.
 
 **Q: How long do sessions last?**  
 A: Sessions are active as long as you use them. Default timeout is 1 hour of **inactivity**. Each request refreshes the timeout.
 
-**Q: Can multiple people use the same session?**  
+**Q: Can multiple people use the same account?**  
 A: **Technically yes**, but **not recommended**. Each person should authenticate separately for security and audit trails.
 
 **Q: What happens if someone steals my session ID?**  
@@ -363,7 +343,7 @@ curl -X POST -H "Authorization: Bearer STOLEN_SESSION_ID" \
 ```
 
 **Q: Can I have multiple active sessions?**  
-A: **Yes!** Each device/browser can have its own session. Or use the same session ID across all devices (less secure but more convenient).
+A: **Yes!** Each device/browser can have its own session.
 
 ---
 
@@ -373,7 +353,7 @@ A: **Yes!** Each device/browser can have its own session. Or use the same sessio
 |---------|------------------|-------------------|
 | Security | ✅ High (HttpOnly, Secure) | ⚠️ Medium (must handle securely) |
 | Ease of Use | ✅ Automatic (browser) | ⚠️ Manual header management |
-| Multi-device | ⚠️ Requires import | ✅ Native support |
+| Multi-device | ✅ Each device authenticates | ✅ Native support |
 | API Clients | ❌ Not ideal | ✅ Perfect fit |
 | Recommended For | Web UI, browsers | CLI, scripts, automation |
 

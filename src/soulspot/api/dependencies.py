@@ -76,11 +76,9 @@ def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyCli
 
 
 # Hey future me, this is a helper to parse Bearer tokens consistently! We extract this logic
-# because it's used in TWO places: 1) get_session_id dependency (for every auth'd request),
-# 2) import_session endpoint (alternative to query param). The logic is: if string starts with
-# "bearer " (case-insensitive), strip it and return the rest. Otherwise return the whole string.
-# This avoids duplicating the case-insensitive prefix logic and ensures both code paths behave
-# identically. If you change how Bearer tokens are parsed, change it HERE!
+# because it's used by get_session_id dependency (for every auth'd request). The logic is: if string
+# starts with "bearer " (case-insensitive), strip it and return the rest. Otherwise return the whole
+# string. If you change how Bearer tokens are parsed, change it HERE!
 def parse_bearer_token(authorization: str) -> str:
     """Parse Authorization header to extract session ID.
 
