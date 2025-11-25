@@ -264,15 +264,22 @@ async def fetch_with_retry(
 
 Triggered via UI button "Sync Artist":
 
-1. Fetch `/v1/artists/{id}` from Spotify
+1. Fetch `/v1/artists/{spotify_artist_id}` from Spotify (where `spotify_artist_id` is the Spotify artist ID, e.g., `1Xyo4u8uXC1ZmMpatF05PJ`)
 2. Parse response and map fields
 3. Upsert into database (update if exists, insert if new)
 4. Update `last_synced_at` timestamp
 
 ```python
-async def sync_artist(spotify_client: SpotifyClient, artist_id: str) -> Artist:
-    """Sync a single artist from Spotify."""
-    data = await spotify_client.get_artist(artist_id)
+from datetime import datetime, UTC
+
+async def sync_artist(spotify_client: SpotifyClient, spotify_artist_id: str) -> Artist:
+    """Sync a single artist from Spotify.
+    
+    Args:
+        spotify_client: Spotify API client instance
+        spotify_artist_id: Spotify artist ID (e.g., '1Xyo4u8uXC1ZmMpatF05PJ')
+    """
+    data = await spotify_client.get_artist(spotify_artist_id)
     
     artist = Artist(
         spotify_id=data["id"],
@@ -319,6 +326,9 @@ Separate job to maintain artist relations:
 ### Domain Entity
 
 ```python
+from dataclasses import dataclass, field
+from datetime import datetime, UTC
+
 @dataclass
 class Artist:
     """Artist entity representing a music artist."""
