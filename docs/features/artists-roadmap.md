@@ -210,24 +210,77 @@ Diese Dokumentation beschreibt, welche **Spotify Web API Artist-Endpunkte** wir 
 ## Implementierungs-Priorität
 
 ### Prio 1: Artist Details (`GET /artists/{id}`)
+
+**Vorgeschlagene Methoden-Signatur:**
 ```python
-# SpotifyClient - Neu hinzufügen
+# Hinzufügen in SpotifyClient (spotify_client.py)
 async def get_artist(self, artist_id: str, access_token: str) -> dict[str, Any]:
-    """Get detailed artist information including popularity and followers."""
+    """Get detailed artist information including popularity and followers.
+    
+    Returns:
+        dict with keys: id, name, genres, popularity, followers, images, external_urls
+    """
+    client = await self._get_client()
+    response = await client.get(
+        f"{self.API_BASE_URL}/artists/{artist_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+    return cast(dict[str, Any], response.json())
 ```
 **Begründung:** Gibt uns Popularity-Score und Follower-Count für bessere UI.
 
 ### Prio 2: Top Tracks (`GET /artists/{id}/top-tracks`)
+
+**Vorgeschlagene Methoden-Signatur:**
 ```python
-async def get_artist_top_tracks(self, artist_id: str, access_token: str, market: str = "DE") -> list[dict[str, Any]]:
-    """Get artist's top 10 tracks by popularity."""
+# Hinzufügen in SpotifyClient (spotify_client.py)
+async def get_artist_top_tracks(
+    self, artist_id: str, access_token: str, market: str = "DE"
+) -> list[dict[str, Any]]:
+    """Get artist's top 10 tracks by popularity.
+    
+    Args:
+        artist_id: Spotify artist ID
+        access_token: OAuth access token
+        market: ISO 3166-1 alpha-2 country code (default: DE)
+    
+    Returns:
+        List of track objects with keys: id, name, popularity, preview_url, album
+    """
+    client = await self._get_client()
+    response = await client.get(
+        f"{self.API_BASE_URL}/artists/{artist_id}/top-tracks",
+        params={"market": market},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+    return cast(list[dict[str, Any]], response.json().get("tracks", []))
 ```
 **Begründung:** Sehr nützlich für "Smart Downloads" und Track-Vorschau.
 
 ### Prio 3: Related Artists (`GET /artists/{id}/related-artists`)
+
+**Vorgeschlagene Methoden-Signatur:**
 ```python
+# Hinzufügen in SpotifyClient (spotify_client.py)
 async def get_related_artists(self, artist_id: str, access_token: str) -> list[dict[str, Any]]:
-    """Get artists similar to the given artist."""
+    """Get up to 20 artists similar to the given artist.
+    
+    Args:
+        artist_id: Spotify artist ID
+        access_token: OAuth access token
+    
+    Returns:
+        List of artist objects with keys: id, name, genres, popularity, images
+    """
+    client = await self._get_client()
+    response = await client.get(
+        f"{self.API_BASE_URL}/artists/{artist_id}/related-artists",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    response.raise_for_status()
+    return cast(list[dict[str, Any]], response.json().get("artists", []))
 ```
 **Begründung:** Ermöglicht Artist Discovery und Empfehlungen.
 
