@@ -14,34 +14,24 @@ Diese Roadmap dokumentiert den aktuellen Stand der Spotify Playlist API-Integrat
 
 ## ✅ Was wurde schon implementiert?
 
-### 1. OAuth-Authentifizierung (Vollständig)
+### 1. OAuth-Authentifizierung für Playlists (Vollständig)
 
 | Feature | Status | Beschreibung |
 |---------|--------|--------------|
-| **OAuth 2.0 PKCE Flow** | ✅ Fertig | Sichere Authentifizierung ohne Client Secret im Frontend |
+| **OAuth 2.0 PKCE Flow** | ✅ Fertig | Sichere Authentifizierung für Playlist-Zugriff |
 | **Token-Verwaltung** | ✅ Fertig | Automatisches Refresh von Access Tokens |
-| **Session-Management** | ✅ Fertig | Persistente Sessions in der Datenbank |
-| **CSRF-Schutz** | ✅ Fertig | State-Parameter-Validierung bei OAuth Callback |
-| **Scope-Management** | ✅ Fertig | Unterstützt: `playlist-read-private`, `playlist-read-collaborative`, `user-library-read`, `user-read-private`, `user-follow-read` |
+| **Playlist-Scopes** | ✅ Fertig | `playlist-read-private`, `playlist-read-collaborative` |
 
 **Implementierung:**
 - `src/soulspot/infrastructure/integrations/spotify_client.py` - Spotify API Client
 - `src/soulspot/api/routers/auth.py` - OAuth Endpunkte
-- `src/soulspot/application/services/session_store.py` - Session-Verwaltung
 
-### 2. Spotify Client (Vollständig)
+### 2. Spotify Client - Playlist-Methoden (Vollständig)
 
 | Methode | Status | Beschreibung |
 |---------|--------|--------------|
-| `get_authorization_url()` | ✅ Fertig | OAuth-URL generieren |
-| `exchange_code()` | ✅ Fertig | Auth-Code gegen Tokens tauschen |
-| `refresh_token()` | ✅ Fertig | Access Token erneuern |
-| `get_playlist()` | ✅ Fertig | Einzelne Playlist abrufen |
+| `get_playlist()` | ✅ Fertig | Einzelne Playlist mit Tracks abrufen |
 | `get_user_playlists()` | ✅ Fertig | Alle User-Playlists mit Pagination |
-| `get_track()` | ✅ Fertig | Track-Details abrufen |
-| `search_track()` | ✅ Fertig | Track-Suche |
-| `get_artist_albums()` | ✅ Fertig | Alben eines Künstlers |
-| `get_followed_artists()` | ✅ Fertig | Gefolgte Künstler mit Cursor-Pagination |
 
 **Implementierung:**
 - `src/soulspot/infrastructure/integrations/spotify_client.py`
@@ -101,15 +91,15 @@ GET /api/playlists/{id}/export/csv   # CSV-Export
 GET /api/playlists/{id}/export/json  # JSON-Export
 ```
 
-### 6. Domain-Entitäten (Vollständig)
+### 6. Domain-Entität Playlist (Vollständig)
 
-| Entity | Status | Beschreibung |
-|--------|--------|--------------|
-| `Playlist` | ✅ Fertig | Playlist-Entität mit Tracks |
-| `Track` | ✅ Fertig | Track-Entität mit Metadaten |
-| `Artist` | ✅ Fertig | Künstler-Entität |
-| `Album` | ✅ Fertig | Album-Entität |
-| `Download` | ✅ Fertig | Download-Tracking |
+| Feature | Status | Beschreibung |
+|---------|--------|--------------|
+| `Playlist` Entity | ✅ Fertig | Playlist-Entität mit Name, Description, Source |
+| `PlaylistSource` Enum | ✅ Fertig | SPOTIFY oder MANUAL |
+| `SpotifyUri` Value Object | ✅ Fertig | Validierung von Spotify URIs |
+| `PlaylistId` Value Object | ✅ Fertig | UUID-basierte IDs |
+| `add_track()` / `remove_track()` | ✅ Fertig | Track-Management Methoden |
 
 **Implementierung:**
 - `src/soulspot/domain/entities/__init__.py`
@@ -120,10 +110,10 @@ GET /api/playlists/{id}/export/json  # JSON-Export
 | Feature | Status | Beschreibung |
 |---------|--------|--------------|
 | **PlaylistModel** | ✅ Fertig | SQLAlchemy Model mit Spotify URI |
-| **TrackModel** | ✅ Fertig | Track-Persistenz mit ISRC |
-| **ArtistModel** | ✅ Fertig | Künstler-Persistenz |
-| **AlbumModel** | ✅ Fertig | Album-Persistenz |
+| **PlaylistTrackModel** | ✅ Fertig | Association Table für Playlist-Tracks |
 | **PlaylistRepository** | ✅ Fertig | CRUD + Spotify URI Lookup |
+| `get_by_spotify_uri()` | ✅ Fertig | Playlist per Spotify URI finden |
+| `add_track()` | ✅ Fertig | Track zu Playlist hinzufügen |
 
 ---
 
@@ -297,19 +287,20 @@ async def should_sync_playlist(playlist_id: str) -> bool:
 
 | Kategorie | Implementiert | Geplant | Gesamt |
 |-----------|---------------|---------|--------|
-| OAuth & Auth | 6 | 0 | 6 |
-| Spotify Client | 9 | 0 | 9 |
-| Playlist Import | 4 | 0 | 4 |
-| Playlist Management | 4 | 0 | 4 |
+| OAuth für Playlists | 3 | 0 | 3 |
+| Spotify Client (Playlists) | 2 | 0 | 2 |
+| Playlist Import/Sync | 6 | 0 | 6 |
+| Playlist Verwaltung | 4 | 0 | 4 |
 | Playlist Export | 3 | 0 | 3 |
+| Playlist Entity & Persistenz | 8 | 0 | 8 |
 | Erweiterte Metadaten | 0 | 5 | 5 |
 | Playlist Items | 0 | 5 | 5 |
 | Incremental Sync | 0 | 1 | 1 |
-| Lokale/Unavailable Tracks | 0 | 3 | 3 |
+| Lokale/Unavailable Tracks | 0 | 6 | 6 |
 | Modifikations-API | 0 | 4 | 4 |
-| **Gesamt** | **26** | **18** | **44** |
+| **Gesamt** | **26** | **21** | **47** |
 
-**Implementierungsgrad:** ~59%
+**Implementierungsgrad:** ~55%
 
 ---
 
