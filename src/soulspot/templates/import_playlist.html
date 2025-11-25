@@ -140,50 +140,12 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                     </div>
                 `;
             } else {
-                statusDiv.innerHTML = `
-                    <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
-                        <div class="p-6">
-                            <div class="flex items-center gap-4">
-                                <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                    </svg>
-                                </div>
-                                <div class="flex-1">
-                                    <p class="font-bold text-lg text-primary-900 dark:text-primary-100">Connect Spotify</p>
-                                    <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
-                                </div>
-                                <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
-                                    Connect Now
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                statusDiv.innerHTML = getConnectSpotifyHTML();
             }
         } catch (e) {
-            // If session endpoint returns error, show connect button
+            // If session endpoint returns error or malformed JSON, show connect button
             const statusDiv = document.getElementById('auth-status');
-            statusDiv.innerHTML = `
-                <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
-                    <div class="p-6">
-                        <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
-                                <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                </svg>
-                            </div>
-                            <div class="flex-1">
-                                <p class="font-bold text-lg text-primary-900 dark:text-primary-100">Connect Spotify</p>
-                                <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
-                            </div>
-                            <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
-                                Connect Now
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            `;
+            statusDiv.innerHTML = getConnectSpotifyHTML();
         }
     }
     
@@ -200,31 +162,75 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
     }
 });
 
-// Handle 401 errors by redirecting to auth page
-document.body.addEventListener('htmx:responseError', function(evt) {
-    if (evt.detail.xhr.status === 401 && evt.detail.target.id === 'import-form') {
-        const response = JSON.parse(evt.detail.xhr.response);
-        const resultDiv = document.getElementById('import-result');
-        resultDiv.innerHTML = `
-            <div class="card-modern border-2 border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-900/20 animate-slide-up" role="alert">
-                <div class="p-6">
-                    <div class="flex items-start gap-4">
-                        <svg class="w-6 h-6 text-error-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+// Hey future me, this helper generates the "Connect Spotify" UI consistently across all handlers.
+// We show this when: no session, 401 error, or parsing errors. The gradient + glow-on-hover
+// makes it visually prominent so users know they need to authenticate. Keep this in sync with
+// the templates for dashboard and onboarding!
+function getConnectSpotifyHTML() {
+    return `
+        <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
+            <div class="p-6">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                         </svg>
-                        <div class="flex-1">
-                            <p class="font-bold text-lg text-error-900 dark:text-error-100 mb-2">Authentication Required</p>
-                            <p class="text-sm text-error-700 dark:text-error-300 mb-4">${response.detail}</p>
-                            <a href="/auth" class="btn btn-error btn-modern focus-visible-ring">
-                                Connect Spotify
-                            </a>
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-bold text-lg text-primary-900 dark:text-primary-100">Connect Spotify</p>
+                        <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
+                    </div>
+                    <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
+                        Connect Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Handle 401 errors for auth-status check (multi-device access scenario!)
+// Hey future me, THIS IS THE FIX for the "Checking authentication status..." bug! When a user
+// accesses from a different device without the session cookie, /api/auth/session returns 401.
+// HTMX's afterSwap doesn't fire for error responses, so we need htmx:responseError to update
+// the UI. Without this, the spinner just spins forever - users think the app is broken!
+document.body.addEventListener('htmx:responseError', function(evt) {
+    // Handle auth-status 401 errors (no session on this device)
+    if (evt.detail.target.id === 'auth-status') {
+        const statusDiv = document.getElementById('auth-status');
+        statusDiv.innerHTML = getConnectSpotifyHTML();
+    }
+    
+    // Handle import-form 401 errors (session expired during import)
+    if (evt.detail.xhr.status === 401 && evt.detail.target.id === 'import-form') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            const resultDiv = document.getElementById('import-result');
+            resultDiv.innerHTML = `
+                <div class="card-modern border-2 border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-900/20 animate-slide-up" role="alert">
+                    <div class="p-6">
+                        <div class="flex items-start gap-4">
+                            <svg class="w-6 h-6 text-error-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div class="flex-1">
+                                <p class="font-bold text-lg text-error-900 dark:text-error-100 mb-2">Authentication Required</p>
+                                <p class="text-sm text-error-700 dark:text-error-300 mb-4">${response.detail}</p>
+                                <a href="/auth" class="btn btn-error btn-modern focus-visible-ring">
+                                    Connect Spotify
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `;
-        if (window.toastManager) {
-            window.toastManager.error(response.detail);
+            `;
+            if (window.toastManager) {
+                window.toastManager.error(response.detail);
+            }
+        } catch (e) {
+            // If we can't parse the response, still show connect button
+            const resultDiv = document.getElementById('import-result');
+            resultDiv.innerHTML = getConnectSpotifyHTML();
         }
     }
 });

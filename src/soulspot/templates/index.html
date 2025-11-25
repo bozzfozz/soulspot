@@ -273,6 +273,46 @@
 </div>
 
 <script>
+// Hey future me, this helper generates the "Connect Spotify" UI consistently across all handlers.
+// We show this when: no session, 401 error, or parsing errors. The gradient + glow-on-hover
+// makes it visually prominent so users know they need to authenticate.
+function getConnectSpotifyHTML() {
+    return `
+        <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
+            <div class="p-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg">
+                            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-bold text-primary-900 dark:text-primary-100 text-lg">Connect Spotify</p>
+                            <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
+                        </div>
+                    </div>
+                    <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
+                        Connect Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Handle 401 errors for session-status check (multi-device access scenario!)
+// Hey future me, THIS IS THE FIX for the "Checking Spotify connection..." bug! When a user
+// accesses from a different device without the session cookie, /api/auth/session returns 401.
+// HTMX's afterSwap doesn't fire for error responses, so we need htmx:responseError to update
+// the UI. Without this, the spinner just spins forever - users think the app is broken!
+document.body.addEventListener('htmx:responseError', function(evt) {
+    if (evt.detail.target.id === 'session-status') {
+        const statusDiv = document.getElementById('session-status');
+        statusDiv.innerHTML = getConnectSpotifyHTML();
+    }
+});
+
 // Enhanced session status display with modern UI
 document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'session-status') {
@@ -327,28 +367,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                     </div>
                 `;
             } else {
-                statusDiv.innerHTML = `
-                    <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
-                        <div class="p-6">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg">
-                                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <p class="font-bold text-primary-900 dark:text-primary-100 text-lg">Connect Spotify</p>
-                                        <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
-                                    </div>
-                                </div>
-                                <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
-                                    Connect Now
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                statusDiv.innerHTML = getConnectSpotifyHTML();
             }
             
             // Show success toast
@@ -356,30 +375,9 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                 window.toastManager.success('Spotify connection verified!', 2000);
             }
         } catch (e) {
-            // If session endpoint returns error (no session), show connect button
+            // If session endpoint returns error (no session) or malformed JSON, show connect button
             const statusDiv = document.getElementById('session-status');
-            statusDiv.innerHTML = `
-                <div class="card-modern border-2 border-primary-200 dark:border-primary-800 bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 animate-slide-up">
-                    <div class="p-6">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-4">
-                                <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center shadow-lg">
-                                    <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-bold text-primary-900 dark:text-primary-100 text-lg">Connect Spotify</p>
-                                    <p class="text-sm text-primary-700 dark:text-primary-300">Connect your Spotify account to start importing playlists</p>
-                                </div>
-                            </div>
-                            <a href="/auth" class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover">
-                                Connect Now
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            `;
+            statusDiv.innerHTML = getConnectSpotifyHTML();
         }
     }
 });
