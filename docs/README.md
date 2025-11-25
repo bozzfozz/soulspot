@@ -1,7 +1,7 @@
 # SoulSpot Documentation
 
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-17
+> **Last Updated:** 2025-11-25
 
 ---
 
@@ -53,6 +53,8 @@ Core project information and guidelines:
 - **[CHANGELOG](project/CHANGELOG.md)** - Version history and release notes
 - **[Architecture](project/architecture.md)** - System architecture and design
 - **[Contributing](project/contributing.md)** - Contribution guidelines
+- **[Documentation Structure](project/DOCUMENTATION_STRUCTURE.md)** - Documentation organization guide
+- **[Issue Tracker](project/fehler-sammlung.md)** - Current issues and improvements
 
 ### User Guides (`guides/user/`)
 End-user documentation:
@@ -60,6 +62,8 @@ End-user documentation:
 - **[User Guide](guides/user/user-guide.md)** - Complete feature walkthrough
 - **[Advanced Search Guide](guides/user/advanced-search-guide.md)** - Search tips and tricks
 - **[Troubleshooting Guide](guides/user/troubleshooting-guide.md)** - Problem resolution
+- **[Multi-Device Auth](guides/user/MULTI_DEVICE_AUTH.md)** - Multi-device authentication guide
+- **[Spotify Auth Troubleshooting](guides/user/SPOTIFY_AUTH_TROUBLESHOOTING.md)** - Spotify OAuth issues
 
 ### Developer Guides (`guides/developer/`)
 Technical documentation for developers:
@@ -105,6 +109,10 @@ Development planning and guidelines:
 - **[CI/CD](development/ci-cd.md)** - Continuous integration and deployment
 - **[Design Guidelines](development/design-guidelines.md)** - Design principles
 - **[Performance Optimization](development/performance-optimization.md)** - Performance best practices
+- **[SQLite Operations](development/sqlite-operations.md)** - SQLite configuration and usage
+- **[SQLite Best Practices](development/SQLITE_BEST_PRACTICES.md)** - SQLite development guidelines
+- **[CSRF Implementation](development/CSRF_IMPLEMENTATION_PLAN.md)** - CSRF protection plan
+- **[Testing Documentation](development/testing/)** - Test guides and reports
 
 ### Implementation Documentation (`implementation/`)
 Detailed implementation guides:

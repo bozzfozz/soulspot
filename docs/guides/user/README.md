@@ -1,7 +1,7 @@
 # User Guides
 
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-17
+> **Last Updated:** 2025-11-25
 
 ---
 
@@ -50,6 +50,20 @@ Solutions for common issues and problems.
 - Performance issues
 - Common error messages
 
+### Authentication & OAuth
+
+#### [Multi-Device Authentication](MULTI_DEVICE_AUTH.md)
+Guide for accessing SoulSpot from multiple devices.
+
+#### [Multi-Device Authentication (DE)](MULTI_DEVICE_AUTH_DE.md)
+German version of the multi-device authentication guide.
+
+#### [Spotify Auth Troubleshooting](SPOTIFY_AUTH_TROUBLESHOOTING.md)
+Solutions for Spotify OAuth issues including "INVALID_CLIENT" errors.
+
+#### [Redirect URI Fix Explained](REDIRECT_URI_FIX_EXPLAINED.md)
+Technical explanation of the redirect URI configuration.
+
 ---
 
 ## Quick Links
@@ -57,6 +71,8 @@ Solutions for common issues and problems.
 **New users?** Start with the [Setup Guide](setup-guide.md)
 
 **Need help?** Check the [Troubleshooting Guide](troubleshooting-guide.md)
+
+**Spotify issues?** See [Spotify Auth Troubleshooting](SPOTIFY_AUTH_TROUBLESHOOTING.md)
 
 **Want to learn more?** Read the [User Guide](user-guide.md)
 
