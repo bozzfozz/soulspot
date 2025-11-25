@@ -3,7 +3,8 @@
 **Version:** 3.0.0  
 **Status:** Lessons Learned  
 **Erstellt:** 2025-11-24  
-**Autor:** Integration Orchestrator Agent
+**Autor:** Integration Orchestrator Agent  
+**Sprache:** Deutsch (mit englischen Fachbegriffen und Code-Kommentaren)
 
 ---
 
@@ -13,6 +14,8 @@
 > Nach der Analyse aller 19 Dokumente in `docs/version-3.0/` und dem bestehenden Code in `src/soulspot/`
 > fallen mir einige Dinge auf, die ich beim nächsten Mal anders machen würde.
 > Das ist kein "Blame Game", sondern ein konstruktiver Blick nach vorn.
+>
+> **Hinweis:** Code-Kommentare folgen dem Projektstil mit "Hey future me"-Notizen, die bewusst zweisprachig sind.
 
 ---
 
