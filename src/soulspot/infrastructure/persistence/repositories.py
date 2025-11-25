@@ -247,6 +247,18 @@ class ArtistRepository(IArtistRepository):
             for model in models
         ]
 
+    # Hey future me - this counts ALL artists in the DB using SQL COUNT (efficient!).
+    # Used for pagination total_count and stats. Returns 0 if no artists exist (not None).
+    async def count_all(self) -> int:
+        """Count total number of artists in the database.
+
+        Returns:
+            Total count of artists
+        """
+        stmt = select(func.count(ArtistModel.id))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
 
 class AlbumRepository(IAlbumRepository):
     """SQLAlchemy implementation of Album repository."""
