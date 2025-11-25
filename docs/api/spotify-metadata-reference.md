@@ -645,7 +645,9 @@ The following fields represent the **minimum viable data** for each entity type 
 
 ### Current Soulspot Models
 
-The current Soulspot database models (see `src/soulspot/infrastructure/persistence/models.py`) store:
+The current Soulspot database models store:
+
+> **Note:** Model definitions can be found in `src/soulspot/infrastructure/persistence/models.py`
 
 - **Artists**: `spotify_uri`, `musicbrainz_id`, `name`, `image_url`, `genres`, `tags`
 - **Albums**: `spotify_uri`, `musicbrainz_id`, `title`, `artist_id`, `release_year`, `artwork_path`
