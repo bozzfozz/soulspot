@@ -1,7 +1,7 @@
 # API Documentation
 
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-17
+> **Last Updated:** 2025-11-25
 
 ---
 
@@ -42,6 +42,17 @@ Control and monitor download operations from the Soulseek network.
 - Progress tracking
 - Retry logic
 - Bandwidth controls
+
+### [Spotify Metadata Reference](spotify-metadata-reference.md)
+Comprehensive reference for Spotify API metadata fields used in Soulspot.
+
+**Key Features:**
+- Field reference by entity type (Artist, Album, Track, Playlist)
+- Priority levels (Minimal vs. Optional)
+- Index recommendations
+- Storage type guidance
+- Cross-source matching strategies (ISRC, UPC, MusicBrainz)
+- Rate limits and authentication practicalities
 
 ---
 
