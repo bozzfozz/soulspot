@@ -47,7 +47,7 @@ httpx = "^0.28.0"
 # Template Engine & Frontend
 jinja2 = "^3.1.0"
 # Security
-python-multipart = "^0.0.9"
+python-multipart = "^0.0.18"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 # Utilities
