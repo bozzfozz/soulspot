@@ -1,1 +1,0 @@
-development/design-guidelines.md
