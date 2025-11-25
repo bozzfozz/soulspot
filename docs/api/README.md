@@ -93,6 +93,18 @@ Integration with Spotify Web API for artist metadata synchronization.
 - On-demand and periodic sync strategies
 - Database schema reference
 
+### [Spotify Playlist API](spotify-playlist-api.md)
+Integration with Spotify Web API for playlist metadata and track synchronization.
+
+**Key Features:**
+- Playlist metadata fetching and storage
+- Playlist items/tracks with position and added_by info
+- snapshot_id-based change detection for incremental sync
+- Local track and unavailable track handling
+- Collaborative playlist support
+- DB schema design for playlists and playlist_items tables
+- Sync strategies (initial, incremental, on-demand)
+
 ---
 
 ## API Access
