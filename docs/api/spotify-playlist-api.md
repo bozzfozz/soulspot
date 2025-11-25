@@ -188,11 +188,13 @@ CREATE INDEX ix_playlist_items_playlist_id ON playlist_items(playlist_id);
 CREATE INDEX ix_playlist_items_track_spotify_id ON playlist_items(track_spotify_id);
 CREATE INDEX ix_playlist_items_position ON playlist_items(playlist_id, position);
 
--- Unique constraint: Ein Track kann nur einmal pro Position in einer Playlist sein
+-- Unique constraint: Position muss eindeutig pro Playlist sein
+-- HINWEIS: Spotify erlaubt duplicate tracks in einer Playlist (gleicher Track an verschiedenen Positionen),
+-- aber jede Position ist eindeutig. Diese Constraint verhindert versehentliche Position-Duplikate.
 CREATE UNIQUE INDEX ix_playlist_items_unique_position ON playlist_items(playlist_id, position);
 
--- Alternativ: Wenn duplicate tracks in einer Playlist erlaubt sind
--- CREATE INDEX ix_playlist_items_added_at ON playlist_items(playlist_id, track_spotify_id, added_at);
+-- Optionaler Index für Queries nach "wann wurde Track hinzugefügt"
+CREATE INDEX ix_playlist_items_added_at ON playlist_items(added_at);
 ```
 
 ---
@@ -424,10 +426,22 @@ async def sync_playlist(playlist_id: str, access_token: str) -> SyncResult:
     # Option A: Einfach - alle Items löschen und neu einfügen
     await playlist_item_repo.delete_by_playlist(stored.id)
     for position, item in enumerate(new_tracks):
-        await playlist_item_repo.create(...)
+        track = item.get("track")
+        await playlist_item_repo.create({
+            "playlist_id": stored.id,
+            "position": position,
+            "added_at": item.get("added_at"),
+            "added_by": {
+                "id": item.get("added_by", {}).get("id"),
+                "display_name": item.get("added_by", {}).get("display_name"),
+            },
+            "is_local": item.get("is_local", False),
+            "track_spotify_id": track["id"] if track else None,
+            "track_raw": track,
+        })
     
     # Option B: Diff berechnen für granularere Updates
-    # (komplexer, aber effizienter bei großen Playlists)
+    # (komplexer, aber effizienter bei großen Playlists - nicht hier implementiert)
     
     return SyncResult(status="updated", tracks_added=len(new_tracks))
 ```
@@ -437,7 +451,10 @@ async def sync_playlist(playlist_id: str, access_token: str) -> SyncResult:
 ```python
 # UI Button "Sync Playlist" → API Endpoint
 @router.post("/playlists/{playlist_id}/sync")
-async def sync_playlist_endpoint(playlist_id: str):
+async def sync_playlist_endpoint(
+    playlist_id: str,
+    access_token: str = Depends(get_current_user_token)  # Dependency Injection
+):
     """Sofortige Synchronisation einer Playlist."""
     result = await sync_playlist(playlist_id, access_token)
     return {"status": result.status, "details": result}
