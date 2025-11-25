@@ -52,6 +52,17 @@ Documentation for Spotify Album API integration including endpoints, data models
 - UPC-based deduplication strategy
 - Release date precision handling
 - Rate limiting and error handling
+
+### [Spotify Songs Roadmap](spotify-songs-roadmap.md)
+Comprehensive roadmap for Spotify API Songs/Tracks integration status.
+
+**Key Features:**
+- Implementation status matrix
+- Currently available capabilities
+- Missing features with priorities
+- Phased implementation roadmap
+- Technical implementation details
+
 ### [Spotify Metadata Reference](spotify-metadata-reference.md)
 Comprehensive reference for Spotify API metadata fields used in Soulspot.
 
