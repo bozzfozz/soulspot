@@ -385,6 +385,90 @@ class AlbumRepository(IAlbumRepository):
             updated_at=model.updated_at,
         )
 
+    # Hey future me - this gets album by Spotify URI (spotify:album:xxxxx). Used when syncing
+    # albums from Spotify - we check if album already exists before creating. The URI is stored
+    # as string in DB but we convert to/from SpotifyUri value object. Returns None if not found.
+    async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Album | None:
+        """Get an album by Spotify URI.
+
+        Args:
+            spotify_uri: Spotify URI (e.g., spotify:album:4RbUYWWjEBb4umwqakOEd3)
+
+        Returns:
+            Album entity if found, None otherwise
+        """
+        stmt = select(AlbumModel).where(AlbumModel.spotify_uri == str(spotify_uri))
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            release_year=model.release_year,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    # Hey future me - list_all returns ALL albums with pagination. Used for album listings and
+    # stats endpoints. Returns albums ordered by title. Works similarly to ArtistRepository.list_all.
+    async def list_all(self, limit: int = 100, offset: int = 0) -> list[Album]:
+        """List all albums with pagination.
+
+        Args:
+            limit: Maximum number of albums to return
+            offset: Number of albums to skip
+
+        Returns:
+            List of Album entities
+        """
+        stmt = (
+            select(AlbumModel).order_by(AlbumModel.title).limit(limit).offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Album(
+                id=AlbumId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                release_year=model.release_year,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                artwork_path=FilePath.from_string(model.artwork_path)
+                if model.artwork_path
+                else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    # Hey future me - count_all counts ALL albums in DB using SQL COUNT (efficient!).
+    # Used for pagination total_count and stats. Returns 0 if no albums exist.
+    async def count_all(self) -> int:
+        """Count total number of albums in the database.
+
+        Returns:
+            Total count of albums
+        """
+        stmt = select(func.count(AlbumModel.id))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
 
 class TrackRepository(ITrackRepository):
     """SQLAlchemy implementation of Track repository."""
