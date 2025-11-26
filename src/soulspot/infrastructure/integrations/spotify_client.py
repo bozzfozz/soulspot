@@ -648,6 +648,72 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
+    # Hey future me, this fetches artists that are SIMILAR to a given artist! Spotify's recommendation
+    # engine figures this out based on listener overlap, genre tags, and probably magic. Returns up to
+    # 20 related artists - great for "fans also like" sections or discovery features. The returned artists
+    # have full details (images, genres, popularity). GOTCHA: This endpoint has no pagination - you get
+    # exactly what Spotify decides to return, usually 20 but sometimes fewer for niche artists. Also,
+    # related artists can change over time as listening patterns evolve. Don't cache this forever!
+    async def get_related_artists(
+        self, artist_id: str, access_token: str
+    ) -> list[dict[str, Any]]:
+        """Get up to 20 artists similar to the given artist.
+
+        Args:
+            artist_id: Spotify artist ID
+            access_token: OAuth access token
+
+        Returns:
+            List of artist objects with keys: id, name, genres, popularity, images
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+        response = await client.get(
+            f"{self.API_BASE_URL}/artists/{artist_id}/related-artists",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        result = cast(dict[str, Any], response.json())
+        return cast(list[dict[str, Any]], result.get("artists", []))
+
+    # Hey future me, this is artist search - like search_track but for artists! Use this when you need
+    # to find artists by name, or let users browse/discover artists. The query supports Spotify's search
+    # syntax so "genre:metal" works too. Default limit is 20 which is usually enough for autocomplete.
+    # Returns paginated response with 'artists.items' containing artist objects. For exact name matches,
+    # first result is usually the right one, but watch out for tribute bands and cover artists with
+    # similar names! Pro tip: combine with get_artist for full details after user selects one.
+    async def search_artist(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
+        """Search for artists on Spotify.
+
+        Args:
+            query: Search query
+            access_token: OAuth access token
+            limit: Maximum number of results
+
+        Returns:
+            Search results with 'artists' key containing items
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+        params: dict[str, str | int] = {
+            "q": query,
+            "type": "artist",
+            "limit": limit,
+        }
+        response = await client.get(
+            f"{self.API_BASE_URL}/search",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
     # Hey future me, these context manager methods let you use this client with
     # "async with SpotifyClient(...) as client:" syntax. This is THE preferred way
     # to use this client - it guarantees cleanup even if exceptions happen. Use it!

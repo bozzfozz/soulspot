@@ -457,6 +457,46 @@ class ISpotifyClient(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_artist(self, artist_id: str, access_token: str) -> dict[str, Any]:
+        """Get detailed artist information including popularity and followers."""
+        pass
+
+    @abstractmethod
+    async def get_several_artists(
+        self, artist_ids: list[str], access_token: str
+    ) -> list[dict[str, Any]]:
+        """Get details for multiple artists in a single request (up to 50)."""
+        pass
+
+    @abstractmethod
+    async def get_artist_albums(
+        self, artist_id: str, access_token: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Get albums for an artist."""
+        pass
+
+    @abstractmethod
+    async def get_artist_top_tracks(
+        self, artist_id: str, access_token: str, market: str = "US"
+    ) -> list[dict[str, Any]]:
+        """Get artist's top 10 tracks by popularity."""
+        pass
+
+    @abstractmethod
+    async def get_related_artists(
+        self, artist_id: str, access_token: str
+    ) -> list[dict[str, Any]]:
+        """Get up to 20 artists similar to the given artist."""
+        pass
+
+    @abstractmethod
+    async def search_artist(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
+        """Search for artists on Spotify."""
+        pass
+
 
 # Hey future me, IMusicBrainzClient is the PORT for MusicBrainz metadata API! MusicBrainz is our
 # primary metadata source (free, open, high quality). ISRC (International Standard Recording Code)
