@@ -536,6 +536,118 @@ class SpotifyClient(ISpotifyClient):
         result = cast(dict[str, Any], response.json())
         return cast(list[dict[str, Any]], result.get("tracks", []))
 
+    # Hey future me, this fetches a SINGLE album with ALL details! The response includes tracks
+    # (up to 50), images (3 sizes), artists, release date, UPC, label, etc. For albums with >50
+    # tracks (rare, but happens for compilations), you'll need to use get_album_tracks() to fetch
+    # the rest. The 'tracks' object in response has 'total' field - check it against 'items'
+    # length. If they differ, there are more tracks to fetch. Use this when you need complete
+    # album metadata for display or import. Tip: store the raw response in DB for debugging!
+    async def get_album(self, album_id: str, access_token: str) -> dict[str, Any]:
+        """
+        Get single album by ID.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+
+        Returns:
+            Album information including tracks, images, etc.
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/albums/{album_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
+    # Hey future me, this is the BATCH version for albums - same performance trick as get_several_artists!
+    # Instead of 20 individual requests for 20 albums, we make ONE request. Spotify's /albums endpoint
+    # accepts comma-separated IDs with max 20 per request. CRITICAL: If an album ID is invalid or was
+    # removed (licensing, etc.), Spotify returns null in that array position - we filter those out!
+    # Use this for "sync album library" or when processing playlist tracks to fetch all unique albums
+    # efficiently. If you need >20 albums, call this multiple times in batches.
+    async def get_albums(
+        self, album_ids: list[str], access_token: str
+    ) -> list[dict[str, Any]]:
+        """
+        Get details for multiple albums in a single request (up to 20).
+
+        Args:
+            album_ids: List of Spotify album IDs (max 20)
+            access_token: OAuth access token
+
+        Returns:
+            List of album objects (nulls filtered out)
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        # Return empty list early if no IDs provided - avoids API error with empty ids param
+        if not album_ids:
+            return []
+
+        # Spotify API accepts comma-separated IDs, max 20 for albums
+        if len(album_ids) > 20:
+            album_ids = album_ids[:20]
+
+        ids_param = ",".join(album_ids)
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/albums",
+            params={"ids": ids_param},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        result = cast(dict[str, Any], response.json())
+
+        # Filter out null entries (deleted/invalid albums)
+        albums = result.get("albums", [])
+        return [album for album in albums if album is not None]
+
+    # Hey future me, this fetches album tracks with PAGINATION! Use this when an album has more than
+    # 50 tracks (compilations, box sets, etc.) or when you only need tracks without full album metadata.
+    # The response is paginated: 'items' has track objects, 'total' tells you total count, 'next' is URL
+    # for next page. Limit max is 50, offset starts at 0. Tracks here are SIMPLIFIED - they don't have
+    # full artist objects, just name/id. If you need full track details, use get_track() separately.
+    # Pro tip: check 'total' vs returned 'items' length to know if you need more pages!
+    async def get_album_tracks(
+        self, album_id: str, access_token: str, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        """
+        Get album tracks with pagination.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+            limit: Maximum number of tracks to return (max 50)
+            offset: The index of the first track to return
+
+        Returns:
+            Paginated response with 'items' (tracks), 'total', 'next', 'limit', 'offset'
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        # Clamp limit to Spotify's max of 50
+        limit = min(limit, 50)
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/albums/{album_id}/tracks",
+            params={"limit": limit, "offset": offset},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
     # Hey future me, these context manager methods let you use this client with
     # "async with SpotifyClient(...) as client:" syntax. This is THE preferred way
     # to use this client - it guarantees cleanup even if exceptions happen. Use it!

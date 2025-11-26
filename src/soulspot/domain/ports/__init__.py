@@ -409,6 +409,54 @@ class ISpotifyClient(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_album(self, album_id: str, access_token: str) -> dict[str, Any]:
+        """
+        Get single album by ID.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+
+        Returns:
+            Album information including tracks, images, etc.
+        """
+        pass
+
+    @abstractmethod
+    async def get_albums(
+        self, album_ids: list[str], access_token: str
+    ) -> list[dict[str, Any]]:
+        """
+        Batch fetch up to 20 albums by IDs.
+
+        Args:
+            album_ids: List of Spotify album IDs (max 20)
+            access_token: OAuth access token
+
+        Returns:
+            List of album objects (nulls filtered out)
+        """
+        pass
+
+    @abstractmethod
+    async def get_album_tracks(
+        self, album_id: str, access_token: str, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        """
+        Get album tracks with pagination.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+            limit: Maximum number of tracks to return (max 50)
+            offset: The index of the first track to return
+
+        Returns:
+            Paginated response with tracks
+        """
+        pass
+
 
 # Hey future me, IMusicBrainzClient is the PORT for MusicBrainz metadata API! MusicBrainz is our
 # primary metadata source (free, open, high quality). ISRC (International Standard Recording Code)

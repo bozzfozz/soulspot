@@ -1,8 +1,8 @@
 # Spotify Albums API Roadmap
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-11-25  
-> **Status:** In Entwicklung
+> **Version:** 1.1  
+> **Last Updated:** 2025-11-26  
+> **Status:** Phase 1 abgeschlossen (Core Album API implementiert)
 
 ---
 
@@ -110,9 +110,9 @@ Diese Roadmap dokumentiert den aktuellen Stand der Spotify Album API Integration
 
 | Feature | Spotify Endpoint | Status | Aufwand |
 |---------|------------------|--------|---------|
-| **`get_album(id)`** | `GET /v1/albums/{id}` | ❌ Fehlt | Klein |
-| **`get_albums(ids)`** | `GET /v1/albums?ids=` | ❌ Fehlt | Klein |
-| **`get_album_tracks(id)`** | `GET /v1/albums/{id}/tracks` | ❌ Fehlt | Klein |
+| **`get_album(id)`** | `GET /v1/albums/{id}` | ✅ Implementiert | Klein |
+| **`get_albums(ids)`** | `GET /v1/albums?ids=` | ✅ Implementiert | Klein |
+| **`get_album_tracks(id)`** | `GET /v1/albums/{id}/tracks` | ✅ Implementiert | Klein |
 
 ### 🟡 Wichtige Features (P1)
 
@@ -266,11 +266,11 @@ last_synced_at = Column(DateTime)
 ## 6. Akzeptanzkriterien
 
 ### Phase 1: Core Album API
-- [ ] `get_album()` gibt vollständiges Album-Objekt zurück
-- [ ] `get_albums()` unterstützt Batch-Fetch bis 20 IDs
-- [ ] `get_album_tracks()` paginiert korrekt für große Alben
-- [ ] Unit Tests mit >80% Coverage
-- [ ] Integration Tests mit Mock-Spotify-Responses
+- [x] `get_album()` gibt vollständiges Album-Objekt zurück
+- [x] `get_albums()` unterstützt Batch-Fetch bis 20 IDs
+- [x] `get_album_tracks()` paginiert korrekt für große Alben
+- [x] Unit Tests mit >80% Coverage
+- [x] Integration Tests mit Mock-Spotify-Responses
 
 ### Phase 2: Album-Suche
 - [ ] Suche findet Alben nach Titel und Künstler
@@ -306,14 +306,14 @@ last_synced_at = Column(DateTime)
 |-----------|--------|
 | **Domain Layer** | ✅ Basis vorhanden |
 | **Artist Albums** | ✅ Implementiert |
-| **Single Album Fetch** | ❌ Fehlt |
-| **Batch Album Fetch** | ❌ Fehlt |
-| **Album Tracks** | ❌ Fehlt |
+| **Single Album Fetch** | ✅ Implementiert |
+| **Batch Album Fetch** | ✅ Implementiert |
+| **Album Tracks** | ✅ Implementiert |
 | **Album Search** | ❌ Fehlt |
 | **Saved Albums** | ❌ Fehlt |
 | **Album Sync** | ❌ Fehlt |
 
-**Nächster Schritt:** Phase 1 - Core Album API implementieren
+**Nächster Schritt:** Phase 2 - Album-Suche implementieren
 
 ---
 

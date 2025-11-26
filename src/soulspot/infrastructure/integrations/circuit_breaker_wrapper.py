@@ -219,6 +219,73 @@ class CircuitBreakerSpotifyClient(ISpotifyClient):
         )
         return cast(dict[str, Any], result)
 
+    # Hey future me, these album methods were added for Phase 1 of the Spotify Album Roadmap.
+    # They follow the same circuit breaker pattern as all other methods - wrap the call,
+    # let the breaker handle failures, and cast the result. If you need to debug album
+    # fetching issues, check the circuit breaker state first - it might be open!
+
+    async def get_album(self, album_id: str, access_token: str) -> dict[str, Any]:
+        """
+        Get single album by ID.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+
+        Returns:
+            Album object with tracks, images, etc.
+        """
+        result = await self._circuit_breaker.call(
+            self._client.get_album,
+            album_id=album_id,
+            access_token=access_token,
+        )
+        return cast(dict[str, Any], result)
+
+    async def get_albums(
+        self, album_ids: list[str], access_token: str
+    ) -> list[dict[str, Any]]:
+        """
+        Batch fetch up to 20 albums by IDs.
+
+        Args:
+            album_ids: List of Spotify album IDs (max 20)
+            access_token: OAuth access token
+
+        Returns:
+            List of album objects (nulls filtered out)
+        """
+        result = await self._circuit_breaker.call(
+            self._client.get_albums,
+            album_ids=album_ids,
+            access_token=access_token,
+        )
+        return cast(list[dict[str, Any]], result)
+
+    async def get_album_tracks(
+        self, album_id: str, access_token: str, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        """
+        Get album tracks with pagination.
+
+        Args:
+            album_id: Spotify album ID
+            access_token: OAuth access token
+            limit: Maximum number of tracks (max 50)
+            offset: The index of the first track
+
+        Returns:
+            Paginated list of tracks with 'items', 'next', 'total' fields
+        """
+        result = await self._circuit_breaker.call(
+            self._client.get_album_tracks,
+            album_id=album_id,
+            access_token=access_token,
+            limit=limit,
+            offset=offset,
+        )
+        return cast(dict[str, Any], result)
+
     async def close(self) -> None:
         """Close the underlying client."""
         if hasattr(self._client, "close"):

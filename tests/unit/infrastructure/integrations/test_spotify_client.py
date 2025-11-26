@@ -260,3 +260,157 @@ class TestSpotifyClientContext:
 
         mock_http_client.aclose.assert_called_once()
         assert spotify_client._client is None
+
+
+class TestSpotifyClientAlbumAPI:
+    """Test Spotify Album API operations."""
+
+    async def test_get_album_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test getting single album details."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "id": "album-123",
+            "name": "Test Album",
+            "artists": [{"id": "artist-1", "name": "Test Artist"}],
+            "images": [{"url": "https://example.com/image.jpg", "height": 640, "width": 640}],
+            "release_date": "2023-01-15",
+            "total_tracks": 12,
+            "tracks": {
+                "items": [{"id": "track-1", "name": "Song 1"}],
+                "total": 12,
+            },
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.get_album("album-123", "test-token")
+
+        assert result["id"] == "album-123"
+        assert result["name"] == "Test Album"
+        assert result["total_tracks"] == 12
+        assert len(result["artists"]) == 1
+
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert "albums/album-123" in call_args[0][0]
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_get_albums_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test batch fetching multiple albums."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "albums": [
+                {"id": "album-1", "name": "Album One"},
+                {"id": "album-2", "name": "Album Two"},
+                None,  # Deleted/invalid album returns null
+                {"id": "album-3", "name": "Album Three"},
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.get_albums(
+            ["album-1", "album-2", "album-invalid", "album-3"], "test-token"
+        )
+
+        # Should filter out null entries
+        assert len(result) == 3
+        assert result[0]["id"] == "album-1"
+        assert result[1]["id"] == "album-2"
+        assert result[2]["id"] == "album-3"
+
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert "albums" in call_args[0][0]
+        assert call_args[1]["params"]["ids"] == "album-1,album-2,album-invalid,album-3"
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_get_albums_clamps_to_20(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that get_albums clamps to max 20 IDs."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "albums": [{"id": f"album-{i}", "name": f"Album {i}"} for i in range(20)],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        # Pass 25 IDs, should be clamped to 20
+        album_ids = [f"album-{i}" for i in range(25)]
+        await spotify_client.get_albums(album_ids, "test-token")
+
+        call_args = mock_client.get.call_args
+        ids_sent = call_args[1]["params"]["ids"].split(",")
+        assert len(ids_sent) == 20  # Should be clamped to 20
+
+    async def test_get_album_tracks_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test getting album tracks with pagination."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "items": [
+                {"id": "track-1", "name": "Song 1", "track_number": 1},
+                {"id": "track-2", "name": "Song 2", "track_number": 2},
+            ],
+            "total": 12,
+            "limit": 50,
+            "offset": 0,
+            "next": None,
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.get_album_tracks(
+            "album-123", "test-token", limit=50, offset=0
+        )
+
+        assert len(result["items"]) == 2
+        assert result["total"] == 12
+        assert result["limit"] == 50
+        assert result["offset"] == 0
+
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert "albums/album-123/tracks" in call_args[0][0]
+        assert call_args[1]["params"]["limit"] == 50
+        assert call_args[1]["params"]["offset"] == 0
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_get_albums_empty_list(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that get_albums returns empty list for empty input."""
+        mock_client = AsyncMock()
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.get_albums([], "test-token")
+
+        assert result == []
+        # Should not make any API call
+        mock_client.get.assert_not_called()
