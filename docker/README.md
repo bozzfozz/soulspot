@@ -462,6 +462,61 @@ docker-compose -f docker/docker-compose.yml pull
 docker-compose -f docker/docker-compose.yml up -d
 ```
 
+### Building from a Specific Git Branch
+
+The Docker build supports building from any Git branch using the `GIT_BRANCH` and `GIT_REPO` build arguments. This is useful for testing features from development branches or forks.
+
+#### Option 1: Using docker build directly
+
+```bash
+# Build from the 'develop' branch
+docker build \
+  --build-arg GIT_BRANCH=develop \
+  -t soulspot:develop \
+  -f docker/Dockerfile .
+
+# Build from a specific branch of a fork
+docker build \
+  --build-arg GIT_BRANCH=feature/my-feature \
+  --build-arg GIT_REPO=https://github.com/youruser/soulspot.git \
+  -t soulspot:my-feature \
+  -f docker/Dockerfile .
+```
+
+#### Option 2: Using docker-compose
+
+Modify `docker/docker-compose.yml` to uncomment and configure the build section:
+
+```yaml
+services:
+  soulspot:
+    # Comment out the image line:
+    # image: ghcr.io/bozzfozz/soulspot:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        GIT_BRANCH: develop  # Your desired branch
+        # GIT_REPO: https://github.com/youruser/soulspot.git  # Optional: different repo
+```
+
+Then build and start:
+
+```bash
+docker-compose -f docker/docker-compose.yml up -d --build
+```
+
+#### Option 3: Using GitHub Actions (Manual Trigger)
+
+You can trigger a Docker build for any branch directly from GitHub:
+
+1. Go to Actions → "Daily Docker Build" workflow
+2. Click "Run workflow"
+3. Enter the branch name you want to build
+4. The image will be tagged with the branch name (e.g., `ghcr.io/bozzfozz/soulspot:develop`)
+
+**Note:** When `GIT_BRANCH` is not set (default), the build uses local files. When set, it clones the specified branch from the repository.
+
 ---
 
 ## Advanced Configuration
