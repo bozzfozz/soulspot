@@ -5,8 +5,14 @@ on:
   schedule:
     - cron: '0 2 * * *'
   
-  # Allow manual trigger
+  # Allow manual trigger with branch selection
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Git branch to build from (leave empty to use current/default branch)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +26,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
       
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -34,16 +42,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Determine branch name for tagging
+        id: branch
+        run: |
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            BRANCH="${{ github.event.inputs.branch }}"
+          else
+            BRANCH="${GITHUB_REF#refs/heads/}"
+          fi
+          # Sanitize branch name for Docker tag (replace / with -)
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9._-]/-/g')
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "safe_name=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Building from branch: $BRANCH (tag: $SAFE_BRANCH)"
+      
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest
-            type=sha,prefix={{date 'YYYYMMDD'}}-
+            type=raw,value=latest,enable=${{ steps.branch.outputs.name == 'main' }}
+            type=raw,value=${{ steps.branch.outputs.safe_name }}
+            type=sha,prefix=${{ steps.branch.outputs.safe_name }}-{{date 'YYYYMMDD'}}-
       
       - name: Build and push Docker image
+        # Note: We don't pass GIT_BRANCH build-arg because the checkout step above
+        # already checks out the specified branch, so local files are from that branch.
+        # The GIT_BRANCH arg is for users building locally without checkout.
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -58,6 +84,7 @@ jobs:
       - name: Image build summary
         run: |
           echo "✅ Docker image built and pushed successfully!"
-          echo "📦 Image: ghcr.io/${{ github.repository }}:latest"
+          echo "📦 Image: ghcr.io/${{ github.repository }}"
+          echo "🌿 Branch: ${{ steps.branch.outputs.name }}"
           echo "🏷️ Tags: ${{ steps.meta.outputs.tags }}"
           echo "📅 Build date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"

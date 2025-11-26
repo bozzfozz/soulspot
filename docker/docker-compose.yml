@@ -9,6 +9,10 @@ services:
     # build:
     #   context: ..
     #   dockerfile: docker/Dockerfile
+    #   args:
+    #     # Optional: Build from a specific Git branch instead of local files
+    #     # GIT_BRANCH: main
+    #     # GIT_REPO: https://github.com/bozzfozz/soulspot.git
     container_name: soulspot
     ports:
       - "8765:8765"      # Web UI and API
