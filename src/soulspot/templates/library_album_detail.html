@@ -145,7 +145,7 @@
                                     </button>
                                     {% endif %}
                                     <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 focus-ring"
-                                            hx-get="/ui/tracks/{{ track.id }}/metadata-editor"
+                                            hx-get="/tracks/{{ track.id }}/metadata-editor"
                                             hx-target="#metadata-modal"
                                             hx-swap="innerHTML"
                                             aria-label="Edit metadata for {{ track.title }}">

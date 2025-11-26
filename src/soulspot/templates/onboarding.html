@@ -36,7 +36,7 @@
                 <button 
                     id="continueBtn"
                     class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-xl glow-on-hover"
-                    hx-get="/api/spotify/status"
+                    hx-get="/api/auth/spotify/status"
                     hx-target="#onboarding-status"
                     hx-swap="innerHTML"
                     hx-trigger="click"
@@ -50,7 +50,7 @@
                 <button 
                     id="skipBtn"
                     class="btn btn-secondary btn-modern btn-lg focus-visible-ring hover-lift"
-                    hx-post="/api/onboarding/skip"
+                    hx-post="/api/auth/onboarding/skip"
                     hx-swap="none"
                 >
                     Nicht jetzt

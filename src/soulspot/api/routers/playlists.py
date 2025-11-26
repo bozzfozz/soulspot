@@ -11,10 +11,16 @@ from soulspot.api.dependencies import (
     get_spotify_client,
     get_spotify_token_from_session,
     get_track_repository,
+    get_queue_playlist_downloads_use_case,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistRequest,
     ImportSpotifyPlaylistUseCase,
+)
+from soulspot.application.use_cases.queue_playlist_downloads import (
+    QueuePlaylistDownloadsRequest,
+    QueuePlaylistDownloadsResponse,
+    QueuePlaylistDownloadsUseCase,
 )
 from soulspot.domain.entities import Playlist, PlaylistSource
 from soulspot.domain.exceptions import ValidationException
@@ -77,8 +83,17 @@ async def import_playlist(
         ..., description="Spotify playlist ID or URL (e.g., https://open.spotify.com/playlist/ID)"
     ),
     fetch_all_tracks: bool = Query(True, description="Fetch all tracks in playlist"),
+    auto_queue_downloads: bool = Query(
+        False, description="Automatically queue missing tracks for download"
+    ),
+    quality_filter: str | None = Query(
+        None, description="Quality filter for downloads (flac, 320, any)"
+    ),
     access_token: str = Depends(get_spotify_token_from_session),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
+    queue_downloads_use_case: QueuePlaylistDownloadsUseCase = Depends(
+        get_queue_playlist_downloads_use_case
+    ),
 ) -> dict[str, Any]:
     """Import a Spotify playlist using session-based authentication.
 
@@ -94,8 +109,11 @@ async def import_playlist(
     Args:
         playlist_id: Spotify playlist ID or full URL
         fetch_all_tracks: Whether to fetch all tracks
+        auto_queue_downloads: Automatically queue missing tracks for download
+        quality_filter: Quality filter for downloads (flac, 320, any)
         access_token: Automatically retrieved from session
         use_case: Import playlist use case
+        queue_downloads_use_case: Queue downloads use case
 
     Returns:
         Import status and statistics
@@ -111,7 +129,7 @@ async def import_playlist(
         )
         response = await use_case.execute(request)
 
-        return {
+        result = {
             "message": "Playlist imported successfully",
             "playlist_id": str(response.playlist.id.value),
             "playlist_name": response.playlist.name,
@@ -119,6 +137,71 @@ async def import_playlist(
             "tracks_failed": response.tracks_failed,
             "errors": response.errors,
         }
+
+        # Auto-queue downloads if requested
+        if auto_queue_downloads:
+            queue_request = QueuePlaylistDownloadsRequest(
+                playlist_id=str(response.playlist.id.value),
+                quality_filter=quality_filter,
+            )
+            queue_response = await queue_downloads_use_case.execute(queue_request)
+            result["download_queue"] = {
+                "queued_count": queue_response.queued_count,
+                "already_downloaded": queue_response.already_downloaded,
+                "skipped_count": queue_response.skipped_count,
+                "failed_count": queue_response.failed_count,
+            }
+            if queue_response.errors:
+                result["errors"].extend(queue_response.errors)
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# Hey future me, this is the manual trigger for the Smart Download Queue!
+# Useful if you imported a playlist earlier without auto-download, or if you added new tracks
+# and want to sync them up. It's idempotent (skips already downloaded tracks) so safe to call
+# multiple times. The quality_filter is passed to the Soulseek searcher.
+@router.post("/{playlist_id}/queue-downloads")
+async def queue_downloads(
+    playlist_id: str,
+    quality_filter: str | None = Query(
+        None, description="Quality filter for downloads (flac, 320, any)"
+    ),
+    use_case: QueuePlaylistDownloadsUseCase = Depends(
+        get_queue_playlist_downloads_use_case
+    ),
+) -> dict[str, Any]:
+    """Queue missing tracks from a playlist for download.
+
+    Args:
+        playlist_id: Playlist ID
+        quality_filter: Quality filter (flac, 320, any)
+        use_case: Queue downloads use case
+
+    Returns:
+        Queue statistics
+    """
+    try:
+        request = QueuePlaylistDownloadsRequest(
+            playlist_id=playlist_id,
+            quality_filter=quality_filter,
+        )
+        response = await use_case.execute(request)
+
+        return {
+            "message": "Downloads queued successfully",
+            "queued_count": response.queued_count,
+            "already_downloaded": response.already_downloaded,
+            "skipped_count": response.skipped_count,
+            "failed_count": response.failed_count,
+            "errors": response.errors,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
@@ -335,190 +418,6 @@ async def get_playlist(
             "track_count": len(playlist.track_ids),
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
-        ) from e
-
-
-# Listen up! M3U export iterates through EVERY track and does a DB lookup - super slow for big
-# playlists. Should batch fetch all tracks at once. Also #EXTM3U format is fragile - players expect
-# specific formatting. Duration of -1 means "unknown" which some players handle poorly. File paths
-# are absolute which won't work if you move the library. Consider relative paths or making it
-# configurable. The Response import is INSIDE the function (lazy import) - kind of weird but avoids
-# top-level import. artist/title fallback to Unknown prevents crashes but creates ugly M3U entries.
-@router.get("/{playlist_id}/export/m3u")
-async def export_playlist_m3u(
-    playlist_id: str,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
-) -> Any:
-    """Export playlist as M3U file.
-
-    Args:
-        playlist_id: Playlist ID
-        playlist_repository: Playlist repository
-        track_repository: Track repository
-
-    Returns:
-        M3U file as plain text
-    """
-    from fastapi.responses import Response
-
-    try:
-        playlist_id_obj = PlaylistId.from_string(playlist_id)
-        playlist = await playlist_repository.get_by_id(playlist_id_obj)
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Build M3U content
-        m3u_lines = ["#EXTM3U"]
-        m3u_lines.append(f"#PLAYLIST:{playlist.name}")
-
-        for track_id in playlist.track_ids:
-            track = await track_repository.get_by_id(track_id)
-            if track and track.file_path:
-                duration = int(track.duration_ms / 1000) if track.duration_ms else -1
-                artist = track.artist or "Unknown Artist"  # type: ignore[attr-defined]
-                title = track.title or "Unknown Title"
-                m3u_lines.append(f"#EXTINF:{duration},{artist} - {title}")
-                m3u_lines.append(str(track.file_path))
-
-        m3u_content = "\n".join(m3u_lines)
-
-        return Response(
-            content=m3u_content,
-            media_type="audio/x-mpegurl",
-            headers={
-                "Content-Disposition": f'attachment; filename="{playlist.name}.m3u"'
-            },
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
-        ) from e
-
-
-# Hey heads up - CSV export uses io.StringIO which builds ENTIRE CSV in memory before streaming.
-# For 10k track playlists this could eat a lot of RAM. StreamingResponse is used but we're not
-# actually streaming - we build the whole thing then iter it once. Should yield rows instead.
-# CSV writer escapes special chars automatically which is nice. Same N+1 query problem as M3U.
-# The artist/album type: ignore is because Track entity uses relationships, not direct attributes.
-@router.get("/{playlist_id}/export/csv")
-async def export_playlist_csv(
-    playlist_id: str,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
-) -> Any:
-    """Export playlist as CSV file.
-
-    Args:
-        playlist_id: Playlist ID
-        playlist_repository: Playlist repository
-        track_repository: Track repository
-
-    Returns:
-        CSV file
-    """
-    import csv
-    import io
-
-    from fastapi.responses import StreamingResponse
-
-    try:
-        playlist_id_obj = PlaylistId.from_string(playlist_id)
-        playlist = await playlist_repository.get_by_id(playlist_id_obj)
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Build CSV content
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["Title", "Artist", "Album", "Duration (ms)", "File Path"])
-
-        for track_id in playlist.track_ids:
-            track = await track_repository.get_by_id(track_id)
-            if track:
-                writer.writerow(
-                    [
-                        track.title or "Unknown",
-                        track.artist or "Unknown",  # type: ignore[attr-defined]
-                        track.album or "Unknown",  # type: ignore[attr-defined]
-                        track.duration_ms or "",
-                        track.file_path or "",
-                    ]
-                )
-
-        output.seek(0)
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f'attachment; filename="{playlist.name}.csv"'
-            },
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
-        ) from e
-
-
-@router.get("/{playlist_id}/export/json")
-async def export_playlist_json(
-    playlist_id: str,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
-) -> dict[str, Any]:
-    """Export playlist as JSON.
-
-    Args:
-        playlist_id: Playlist ID
-        playlist_repository: Playlist repository
-        track_repository: Track repository
-
-    Returns:
-        JSON with playlist and track details
-    """
-    try:
-        playlist_id_obj = PlaylistId.from_string(playlist_id)
-        playlist = await playlist_repository.get_by_id(playlist_id_obj)
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Build track list
-        tracks = []
-        for track_id in playlist.track_ids:
-            track = await track_repository.get_by_id(track_id)
-            if track:
-                tracks.append(
-                    {
-                        "id": str(track.id.value),
-                        "title": track.title,
-                        "artist": track.artist,  # type: ignore[attr-defined]
-                        "album": track.album,  # type: ignore[attr-defined]
-                        "duration_ms": track.duration_ms,
-                        "file_path": track.file_path,
-                        "spotify_uri": str(track.spotify_uri)
-                        if track.spotify_uri
-                        else None,
-                    }
-                )
-
-        return {
-            "playlist": {
-                "id": str(playlist.id.value),
-                "name": playlist.name,
-                "description": playlist.description,
-                "source": playlist.source.value,
-                "created_at": playlist.created_at.isoformat(),
-                "updated_at": playlist.updated_at.isoformat(),
-            },
-            "tracks": tracks,
-            "track_count": len(tracks),
         }
     except ValueError as e:
         raise HTTPException(

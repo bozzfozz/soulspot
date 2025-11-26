@@ -340,6 +340,79 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
+    # Hey future me, this fetches FULL artist details including images, genres, and popularity!
+    # Unlike track data which only has artist name/ID, this gives you the complete artist object.
+    # The images array typically has 3 sizes: 640x640, 320x320, 160x160. Pick medium (index 1)
+    # for UI display. Genres come from Spotify's classification - useful for filtering/recommendations.
+    # Popularity is 0-100 score based on recent streams - changes frequently. Use this when you need
+    # artist metadata beyond just the name, like for the followed artists feature or artist pages!
+    async def get_artist(self, artist_id: str, access_token: str) -> dict[str, Any]:
+        """
+        Get full artist details.
+
+        Args:
+            artist_id: Spotify artist ID
+            access_token: OAuth access token
+
+        Returns:
+            Artist object with name, genres, images, popularity, etc.
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/artists/{artist_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
+    # Yo future me, this is THE PERFORMANCE BOOSTER for playlist imports! Instead of fetching
+    # artists one-by-one (100 artists = 100 API calls), we batch them up to 50 per request.
+    # Spotify's /artists endpoint (plural!) accepts comma-separated IDs. This is CRITICAL for
+    # large playlists - reduces import time from 30 seconds to 3 seconds! The response is an
+    # object with "artists" array containing full artist objects (same as get_artist). IMPORTANT:
+    # If an artist ID is invalid/deleted, Spotify returns null in that position - filter those out!
+    # Max 50 IDs per request - if you need more, call this multiple times. Use this in playlist
+    # import to fetch all unique artists in 1-2 calls instead of hundreds!
+    async def get_several_artists(
+        self, artist_ids: list[str], access_token: str
+    ) -> list[dict[str, Any]]:
+        """
+        Get details for multiple artists in a single request (up to 50).
+
+        Args:
+            artist_ids: List of Spotify artist IDs (max 50)
+            access_token: OAuth access token
+
+        Returns:
+            List of artist objects (nulls filtered out)
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        # Spotify API accepts comma-separated IDs, max 50
+        if len(artist_ids) > 50:
+            artist_ids = artist_ids[:50]
+
+        ids_param = ",".join(artist_ids)
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/artists",
+            params={"ids": ids_param},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        result = cast(dict[str, Any], response.json())
+        
+        # Filter out null entries (deleted/invalid artists)
+        artists = result.get("artists", [])
+        return [artist for artist in artists if artist is not None]
+
     # Listen future me, this gets an artist's albums AND singles (hence include_groups).
     # Default limit is 50 but artists like Bob Dylan have 500+ releases (compilations, live,
     # etc.). You'll need pagination for prolific artists. Also, Spotify groups "appears_on"

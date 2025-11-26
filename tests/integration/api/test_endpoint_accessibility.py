@@ -87,16 +87,6 @@ class TestPlaylistEndpoints:
         response = await async_client.post(f"/api/playlists/{playlist_id}/sync")
         assert response.status_code != 404
 
-    async def test_export_endpoints_exist(self, async_client: AsyncClient):
-        """Verify export endpoints exist."""
-        playlist_id = "550e8400-e29b-41d4-a716-446655440000"
-        for format in ["m3u", "csv", "json"]:
-            response = await async_client.get(
-                f"/api/playlists/{playlist_id}/export/{format}"
-            )
-            # Should return 404 for non-existent playlist, not route not found
-            assert response.status_code in [200, 404]
-
 
 class TestTracksEndpoints:
     """Test track management endpoints."""
@@ -236,47 +226,27 @@ class TestSettingsEndpoints:
 
 
 class TestDashboardEndpoints:
-    """Test dashboard endpoints."""
+    """Test dashboard endpoints - DEPRECATED widget system tests removed."""
 
-    async def test_get_dashboard_endpoint_accessible(self, async_client: AsyncClient):
-        """Verify get dashboard endpoint is accessible."""
-        response = await async_client.get("/api/ui/dashboard")
-        assert response.status_code == 200
-
-    async def test_toggle_edit_mode_endpoint_exists(self, async_client: AsyncClient):
-        """Verify toggle edit mode endpoint exists."""
-        response = await async_client.post("/api/ui/dashboard/toggle-edit-mode")
-        assert response.status_code != 404
-
-    async def test_widgets_catalog_endpoint_accessible(self, async_client: AsyncClient):
-        """Verify widgets catalog endpoint is accessible."""
-        response = await async_client.get("/api/ui/widgets/catalog")
-        assert response.status_code == 200
+    # Note: The following endpoints were part of an old widget system and have been removed:
+    # - /api/ui/dashboard
+    # - /api/ui/dashboard/toggle-edit-mode
+    # - /api/ui/widgets/catalog
+    # - /api/ui/widgets/active-jobs/content
+    # - /api/ui/widgets/spotify-search/content
+    # 
+    # The current dashboard is served via the UI router at "/" 
+    pass
 
 
 class TestWidgetEndpoints:
-    """Test widget endpoints."""
+    """Test widget endpoints - DEPRECATED."""
 
-    async def test_active_jobs_widget_content_accessible(
-        self, async_client: AsyncClient
-    ):
-        """Verify active jobs widget content is accessible."""
-        response = await async_client.get("/api/ui/widgets/active-jobs/content")
-        assert response.status_code == 200
-
-    async def test_spotify_search_widget_content_accessible(
-        self, async_client: AsyncClient
-    ):
-        """Verify Spotify search widget content is accessible."""
-        response = await async_client.get("/api/ui/widgets/spotify-search/content")
-        assert response.status_code == 200
-
-    async def test_missing_tracks_widget_content_accessible(
-        self, async_client: AsyncClient
-    ):
-        """Verify missing tracks widget content is accessible."""
-        response = await async_client.get("/api/ui/widgets/missing-tracks/content")
-        assert response.status_code == 200
+    # Note: Widget system has been removed. These endpoints no longer exist:
+    # - /api/ui/widgets/active-jobs/content
+    # - /api/ui/widgets/spotify-search/content
+    # - /api/ui/widgets/missing-tracks/content
+    pass
 
 
 class TestWidgetTemplateEndpoints:

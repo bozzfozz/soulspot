@@ -17,6 +17,9 @@ from soulspot.application.use_cases.import_spotify_playlist import (
 from soulspot.application.use_cases.search_and_download import (
     SearchAndDownloadTrackUseCase,
 )
+from soulspot.application.use_cases.queue_playlist_downloads import (
+    QueuePlaylistDownloadsUseCase,
+)
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.config import Settings, get_settings
@@ -420,3 +423,25 @@ def get_download_worker(request: Request) -> DownloadWorker:
             detail="Download worker not initialized",
         )
     return cast(DownloadWorker, request.app.state.download_worker)
+
+
+def get_queue_playlist_downloads_use_case(
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> QueuePlaylistDownloadsUseCase:
+    """Get queue playlist downloads use case.
+
+    Args:
+        playlist_repository: Playlist repository
+        track_repository: Track repository
+        job_queue: Job queue
+
+    Returns:
+        QueuePlaylistDownloadsUseCase instance
+    """
+    return QueuePlaylistDownloadsUseCase(
+        playlist_repository=playlist_repository,
+        track_repository=track_repository,
+        job_queue=job_queue,
+    )

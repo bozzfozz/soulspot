@@ -1,129 +1,118 @@
 <!DOCTYPE html>
-<html lang="de" class="scroll-smooth">
+<html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SoulSpot{% endblock %}</title>
-    <meta name="description" content="Intelligente Musik-Download-Anwendung mit Spotify-Playlist-Synchronisation und Soulseek-Integration">
-    <!-- UI 1.0 Design System -->
-    <link rel="stylesheet" href="/static/css/ui-theme.css">
-    <link rel="stylesheet" href="/static/css/ui-components.css">
-    <link rel="stylesheet" href="/static/css/ui-layout.css">
-    <!-- Existing Tailwind styles -->
-    <link rel="stylesheet" href="/static/css/style.css">
-    <!-- UX Enhancements -->
-    <link rel="stylesheet" href="/static/css/enhancements.css">
-    <!-- Modern UI Layer -->
-    <link rel="stylesheet" href="/static/css/modern-ui.css">
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    {% block extra_head %}{% endblock %}
-    <style>
-        /* Page transition animation */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .page-content {
-            animation: fadeIn 0.3s ease-out;
-        }
-        /* Loading bar */
-        .htmx-request .loading-bar {
-            display: block;
-        }
-        .loading-bar {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #0ea5e9, #38bdf8, #0ea5e9);
-            background-size: 200% 100%;
-            animation: loadingBarMove 1.5s ease-in-out infinite;
-            z-index: 9999;
-        }
-        @keyframes loadingBarMove {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-    </style>
-</head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased">
-    <!-- Global Loading Bar -->
-    <div class="loading-bar" role="progressbar" aria-label="Loading"></div>
-    
-    <!-- Skip to main content for keyboard navigation -->
-    <a href="#main-content" class="skip-to-content focus-ring">
-        Skip to main content
-    </a>
+    <meta name="description" content="Intelligente Musik-Download-Anwendung">
 
-    <!-- Navigation -->
-    {% from "includes/_navigation.html" import main_nav %}
-    {{ main_nav(request.path.split('/')[1] or 'dashboard') }}
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Design System -->
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="app-sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="fa-solid fa-bolt"></i>
+            <span>SoulSpot</span>
+        </div>
+
+        <ul class="sidebar-nav">
+            <li>
+                <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="/playlists" class="nav-item {% if 'playlists' in request.path %}active{% endif %}">
+                    <i class="fa-solid fa-music"></i>
+                    <span>Playlists</span>
+                </a>
+            </li>
+            <li>
+                <a href="/library" class="nav-item {% if 'library' in request.path %}active{% endif %}">
+                    <i class="fa-solid fa-compact-disc"></i>
+                    <span>Library</span>
+                </a>
+            </li>
+            <li>
+                <a href="/downloads" class="nav-item {% if 'downloads' in request.path %}active{% endif %}">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Downloads</span>
+                </a>
+            </li>
+            <li>
+                <a href="/settings" class="nav-item {% if 'settings' in request.path %}active{% endif %}">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <!-- Optional: User profile or status -->
+        </div>
+    </nav>
 
     <!-- Main Content -->
-    <main id="main-content" class="container mx-auto px-4 py-8 min-h-screen page-content" role="main">
-        {% block content %}{% endblock %}
+    <main class="app-main">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-search">
+                <i class="fa-solid fa-search"></i>
+                <input type="text" placeholder="Search tracks, artists..." 
+                       name="q"
+                       hx-get="/search/quick"
+                       hx-trigger="keyup changed delay:500ms"
+                       hx-target="#search-results"
+                       autocomplete="off">
+                <!-- Quick search results dropdown -->
+                <div id="search-results" class="header-search-results"></div>
+            </div>
+
+            <div class="header-actions">
+                <a href="/settings" class="btn btn-icon btn-secondary">
+                    <i class="fa-regular fa-bell"></i>
+                </a>
+                <a href="/auth/logout" class="btn btn-icon btn-secondary" title="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </a>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <div id="main-content" class="page-content">
+            {% block content %}{% endblock %}
+        </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-gray-900 dark:bg-gray-950 border-t border-gray-800 dark:border-gray-900 mt-12" role="contentinfo">
-        <div class="container mx-auto px-4 py-6">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                <p class="text-gray-400 text-sm text-center md:text-left">
-                    &copy; 2025 SoulSpot | Made with ❤️ for music lovers
-                </p>
-                <div class="flex gap-4 text-sm">
-                    <a href="/docs" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">API Docs</a>
-                    <a href="/health" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">Health</a>
-                    <a href="/settings" class="text-primary-500 hover:text-primary-400 transition-colors focus-ring rounded">Settings</a>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    <!-- HTMX Indicator (Screen Reader Only) -->
-    <div id="htmx-indicator" class="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        Loading...
-    </div>
-
-    <script src="/static/js/app.js"></script>
-    <script src="/static/js/modern-ui.js"></script>
-    {% block extra_scripts %}{% endblock %}
-    
+    <!-- Scripts -->
     <script>
-        // Enhanced HTMX event handling
-        document.body.addEventListener('htmx:beforeRequest', function(event) {
-            // Announce to screen readers
-            const indicator = document.getElementById('htmx-indicator');
-            if (indicator) indicator.textContent = 'Loading content...';
-        });
-        
-        document.body.addEventListener('htmx:afterRequest', function(event) {
-            // Clear screen reader announcement
-            const indicator = document.getElementById('htmx-indicator');
-            if (indicator) {
-                if (event.detail.successful) {
-                    indicator.textContent = 'Content loaded successfully';
-                } else {
-                    indicator.textContent = 'Error loading content';
-                }
-                setTimeout(() => { indicator.textContent = ''; }, 1000);
-            }
-        });
-        
-        // Smooth scroll behavior for anchor links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    e.preventDefault();
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    target.focus();
-                }
-            });
+        // Simple sidebar toggle for mobile (can be moved to external JS)
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add any global JS initialization here
         });
     </script>
+    {% block extra_scripts %}{% endblock %}
 </body>
+
 </html>
