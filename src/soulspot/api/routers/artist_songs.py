@@ -1,8 +1,8 @@
 # AI-Model: Copilot
 """Artist songs (singles) management API endpoints.
 
-Hey future me - this router handles syncing and managing individual songs from followed
-artists. Unlike the album sync feature, this focuses on "top tracks" / singles that
+This router handles syncing and managing individual songs from followed artists.
+Unlike the album sync feature, this focuses on "top tracks" / singles that
 aren't necessarily part of a full album. Users can:
 1. Sync songs for a single artist (fetch top tracks from Spotify)
 2. Sync songs for ALL followed artists (bulk operation)
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/artists", tags=["Artist Songs"])
 
 
-# Hey future me - response DTOs for the songs API. TrackResponse maps domain Track
+# Response DTOs for the songs API. TrackResponse maps domain Track
 # to API-friendly format. Keep it flat for easy JSON serialization.
 class TrackResponse(BaseModel):
     """Response model for a track/song."""
@@ -74,7 +74,6 @@ class DeleteResponse(BaseModel):
     deleted_count: int = Field(0, description="Number of items deleted")
 
 
-# Hey future me - converts domain Track to API response DTO.
 def _track_to_response(track: Any) -> TrackResponse:
     """Convert domain Track to TrackResponse DTO.
 
@@ -97,9 +96,9 @@ def _track_to_response(track: Any) -> TrackResponse:
     )
 
 
-# Hey future me - MAIN endpoint for syncing songs from a single artist! It fetches
-# top tracks from Spotify and stores them as singles in our DB. The market param
-# is important - Spotify track availability varies by region. Default is "US".
+# Main endpoint for syncing songs from a single artist. Fetches top tracks
+# from Spotify and stores them as singles in our DB. The market param
+# affects regional track availability.
 @router.post("/{artist_id}/songs/sync", response_model=SyncSongsResponse)
 async def sync_artist_songs(
     artist_id: str,
@@ -174,7 +173,7 @@ async def sync_artist_songs(
         ) from e
 
 
-# Hey future me - BULK sync endpoint! Syncs songs for ALL followed artists in DB.
+# Bulk sync endpoint. Syncs songs for ALL followed artists in DB.
 # This can take a while for users following many artists. Consider adding progress
 # reporting via SSE for large syncs. The limit param prevents runaway operations.
 @router.post("/songs/sync-all", response_model=SyncSongsResponse)
@@ -238,7 +237,7 @@ async def sync_all_artists_songs(
         ) from e
 
 
-# Hey future me - READ endpoint! Lists songs (singles) for an artist from our DB.
+# READ endpoint. Lists songs (singles) for an artist from our DB.
 # No Spotify API calls here - just returns what we've already synced.
 @router.get("/{artist_id}/songs", response_model=SongListResponse)
 async def list_artist_songs(
@@ -264,10 +263,8 @@ async def list_artist_songs(
             status_code=400, detail=f"Invalid artist ID format: {e}"
         ) from e
 
-    service = ArtistSongsService(
-        session=session,
-        spotify_client=SpotifyClient.__new__(SpotifyClient),  # Dummy, not used for read
-    )
+    # spotify_client is optional for read operations
+    service = ArtistSongsService(session=session)
 
     tracks = await service.get_artist_singles(artist_id_obj)
 
@@ -278,8 +275,8 @@ async def list_artist_songs(
     )
 
 
-# Hey future me - DELETE a specific song! Requires both artist_id and track_id
-# for validation - we don't want to accidentally delete tracks from wrong artist.
+# DELETE a specific song. Requires both artist_id and track_id
+# for validation to ensure track belongs to the specified artist.
 @router.delete("/{artist_id}/songs/{track_id}", response_model=DeleteResponse)
 async def delete_artist_song(
     artist_id: str,
@@ -308,10 +305,8 @@ async def delete_artist_song(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid ID format: {e}") from e
 
-    service = ArtistSongsService(
-        session=session,
-        spotify_client=SpotifyClient.__new__(SpotifyClient),  # Dummy, not used for delete
-    )
+    # spotify_client is optional for delete operations
+    service = ArtistSongsService(session=session)
 
     try:
         await service.remove_song(track_id_obj, artist_id_obj)
@@ -335,7 +330,7 @@ async def delete_artist_song(
         ) from e
 
 
-# Hey future me - BULK DELETE! Removes ALL songs (singles) for an artist.
+# Bulk DELETE. Removes ALL songs (singles) for an artist.
 # Use with caution - this clears synced songs but keeps the artist itself.
 @router.delete("/{artist_id}/songs", response_model=DeleteResponse)
 async def delete_all_artist_songs(
@@ -364,10 +359,8 @@ async def delete_all_artist_songs(
             status_code=400, detail=f"Invalid artist ID format: {e}"
         ) from e
 
-    service = ArtistSongsService(
-        session=session,
-        spotify_client=SpotifyClient.__new__(SpotifyClient),  # Dummy, not used for delete
-    )
+    # spotify_client is optional for delete operations
+    service = ArtistSongsService(session=session)
 
     try:
         count = await service.remove_all_artist_songs(artist_id_obj)

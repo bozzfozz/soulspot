@@ -37,32 +37,51 @@ logger = logging.getLogger(__name__)
 class ArtistSongsService:
     """Service for syncing individual songs from followed artists.
 
-    Hey future me - this syncs popular songs/singles from artists in our DB.
+    This service syncs popular songs/singles from artists in the database.
     Unlike FollowedArtistsService which syncs artist metadata, this syncs
-    the actual TRACKS (songs). We focus on singles and popular tracks that
+    the actual TRACKS (songs). Focuses on singles and popular tracks that
     aren't part of full albums, giving users quick access to hit songs.
+
+    The spotify_client is optional - only required for sync operations.
+    Read and delete operations work without it.
     """
 
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient,
+        spotify_client: SpotifyClient | None = None,
     ) -> None:
         """Initialize artist songs service.
 
         Args:
             session: Database session for repositories
-            spotify_client: Spotify client for API calls
+            spotify_client: Spotify client for API calls (optional, only needed for sync)
         """
         self.session = session
         self.artist_repo = ArtistRepository(session)
         self.track_repo = TrackRepository(session)
-        self.spotify_client = spotify_client
+        self._spotify_client = spotify_client
 
-    # Hey future me, this is the MAIN method! It syncs songs for a SINGLE artist.
-    # We fetch top tracks from Spotify, filter for singles (non-album tracks),
-    # and create/update them in DB. Returns the tracks plus stats. The market
-    # param affects which tracks are available - use user's locale if possible.
+    @property
+    def spotify_client(self) -> SpotifyClient:
+        """Get Spotify client, raising error if not configured.
+
+        Returns:
+            SpotifyClient instance
+
+        Raises:
+            ValueError: If spotify_client was not provided during initialization
+        """
+        if self._spotify_client is None:
+            raise ValueError(
+                "SpotifyClient is required for this operation. "
+                "Initialize ArtistSongsService with spotify_client parameter."
+            )
+        return self._spotify_client
+
+    # Main sync method for syncing songs from a single artist.
+    # Fetches top tracks from Spotify, filters for singles (non-album tracks),
+    # and creates/updates them in DB. Returns the tracks plus stats.
     async def sync_artist_songs(
         self, artist_id: ArtistId, access_token: str, market: str = "US"
     ) -> tuple[list[Track], dict[str, Any]]:
@@ -149,10 +168,9 @@ class ArtistSongsService:
 
         return synced_tracks, stats
 
-    # Hey future me - this syncs songs for ALL followed artists in our DB!
-    # It's a batch operation that iterates through artists and syncs their songs.
-    # Use this for the "sync all songs" button in the UI. Can take a while for
-    # users following many artists! Consider adding progress callbacks for UI.
+    # Bulk sync operation for all followed artists in DB.
+    # Iterates through artists and syncs their songs. Can take a while for
+    # users following many artists. Consider adding progress callbacks for UI.
     async def sync_all_artists_songs(
         self, access_token: str, market: str = "US", limit: int = 100
     ) -> tuple[list[Track], dict[str, Any]]:
@@ -213,10 +231,9 @@ class ArtistSongsService:
 
         return all_tracks, aggregate_stats
 
-    # Hey future me - this processes a single track from Spotify API response.
-    # We check if it already exists (by spotify_uri), then create or update.
+    # Process a single track from Spotify API response.
+    # Checks if it already exists (by spotify_uri), then creates or updates.
     # Returns (track, was_created, is_single) - is_single helps with stats.
-    # The album_type check determines if this is a standalone single or album track.
     async def _process_track(
         self, track_data: dict[str, Any], artist_id: ArtistId
     ) -> tuple[Track | None, bool, bool]:
@@ -296,9 +313,8 @@ class ArtistSongsService:
 
         return new_track, True, is_single
 
-    # Hey future me - get all singles (non-album tracks) for an artist from DB.
-    # This is a READ operation that doesn't touch Spotify API. Use after sync
-    # to display the artist's singles in the UI.
+    # Get all singles (non-album tracks) for an artist from DB.
+    # This is a READ operation that doesn't touch Spotify API.
     async def get_artist_singles(self, artist_id: ArtistId) -> list[Track]:
         """Get all singles (non-album tracks) for an artist from the database.
 
@@ -310,9 +326,8 @@ class ArtistSongsService:
         """
         return await self.track_repo.get_singles_by_artist(artist_id)
 
-    # Hey future me - remove a single track from DB. This is the DELETE operation.
+    # Remove a single track from DB.
     # Checks that the track exists and belongs to the given artist before deleting.
-    # Returns True if deleted, raises ValueError if track not found.
     async def remove_song(self, track_id: TrackId, artist_id: ArtistId) -> bool:
         """Remove a song from the database.
 
@@ -341,9 +356,8 @@ class ArtistSongsService:
 
         return True
 
-    # Hey future me - bulk remove all singles for an artist. Use when user wants
-    # to "clear" an artist's synced songs without deleting the artist itself.
-    # Returns count of deleted tracks for confirmation message.
+    # Bulk remove all singles for an artist. Use when user wants to
+    # "clear" an artist's synced songs without deleting the artist itself.
     async def remove_all_artist_songs(self, artist_id: ArtistId) -> int:
         """Remove all singles (non-album tracks) for an artist.
 
