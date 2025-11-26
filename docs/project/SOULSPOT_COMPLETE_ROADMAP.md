@@ -1178,7 +1178,7 @@ class TestDownloadEntity:
 
 #### 7.2.1 Pydantic Settings Klasse
 
-\`\`\`python
+```python
 # src/soulspot/config/settings.py
 
 """
@@ -1274,13 +1274,13 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
-\`\`\`
+```
 
 ### 7.3 Database Layer
 
 #### 7.3.1 SQLAlchemy Models
 
-\`\`\`python
+```python
 # src/soulspot/infrastructure/persistence/models.py
 
 """
@@ -1416,11 +1416,11 @@ class DownloadModel(Base):
     
     # Relationships
     track: Mapped["TrackModel"] = relationship()
-\`\`\`
+```
 
 #### 7.3.2 Database Connection
 
-\`\`\`python
+```python
 # src/soulspot/infrastructure/persistence/database.py
 
 """
@@ -1483,11 +1483,11 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
-\`\`\`
+```
 
 ### 7.4 Repository Implementierungen
 
-\`\`\`python
+```python
 # src/soulspot/infrastructure/persistence/repositories.py
 
 """
@@ -1597,11 +1597,11 @@ class TrackRepository(ITrackRepository):
         model.file_path = entity.file_path
         model.is_broken = entity.is_broken
         # ... weitere Felder
-\`\`\`
+```
 
 ### 7.5 FastAPI Application
 
-\`\`\`python
+```python
 # src/soulspot/main.py
 
 """
@@ -1692,11 +1692,11 @@ def main():
         port=settings.api.port,
         reload=settings.environment == "development"
     )
-\`\`\`
+```
 
 ### 7.6 Alembic Migrations
 
-\`\`\`python
+```python
 # alembic/versions/001_initial_schema.py
 
 """
@@ -1804,7 +1804,7 @@ def downgrade() -> None:
     op.drop_table('tracks')
     op.drop_table('albums')
     op.drop_table('artists')
-\`\`\`
+```
 
 ### 7.7 Akzeptanzkriterien Phase 2
 
