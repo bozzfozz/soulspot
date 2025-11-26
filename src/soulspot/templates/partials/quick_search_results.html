@@ -1,0 +1,55 @@
+{#
+Hey future me - this is the header quick-search dropdown partial! It's loaded via HTMX from
+/search/quick and renders into #search-results in base.html. It searches local library first
+(not Spotify!) because that's instant and doesn't need auth. Shows up to 5 results max to keep
+dropdown compact. Each result links to the full detail page. If query is empty, we show nothing.
+The "View all results" link goes to /search with the query pre-filled for full Spotify search.
+#}
+{% if query and query|length >= 2 %}
+<div class="quick-search-dropdown" role="listbox" aria-label="Search results">
+    {% if results and results|length > 0 %}
+    <div class="quick-search-results">
+        {% for item in results[:5] %}
+        <a href="{{ item.url }}" 
+           class="quick-search-item"
+           role="option">
+            <div class="quick-search-item-icon">
+                {% if item.type == 'track' %}
+                <i class="fa-solid fa-music"></i>
+                {% elif item.type == 'artist' %}
+                <i class="fa-solid fa-user"></i>
+                {% elif item.type == 'album' %}
+                <i class="fa-solid fa-compact-disc"></i>
+                {% elif item.type == 'playlist' %}
+                <i class="fa-solid fa-list"></i>
+                {% endif %}
+            </div>
+            <div class="quick-search-item-content">
+                <span class="quick-search-item-title">{{ item.name }}</span>
+                {% if item.subtitle %}
+                <span class="quick-search-item-subtitle">{{ item.subtitle }}</span>
+                {% endif %}
+            </div>
+            <span class="quick-search-item-type">{{ item.type }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% if results|length > 5 %}
+    <div class="quick-search-footer">
+        <a href="/search?q={{ query | urlencode }}" class="quick-search-more">
+            <i class="fa-solid fa-arrow-right"></i>
+            View all {{ results|length }} results
+        </a>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="quick-search-empty">
+        <i class="fa-solid fa-search"></i>
+        <span>No results for "{{ query }}"</span>
+        <a href="/search?q={{ query | urlencode }}" class="quick-search-link">
+            Search on Spotify →
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endif %}

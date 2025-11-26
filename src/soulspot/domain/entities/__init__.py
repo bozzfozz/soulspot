@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Optional
 
-from soulspot.domain.entities.widget import Page, Widget, WidgetInstance
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
@@ -94,6 +93,7 @@ class Album:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     artwork_path: FilePath | None = None
+    artwork_url: str | None = None  # Spotify CDN URL for album cover
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata_sources: dict[str, str] = field(default_factory=dict)
@@ -208,6 +208,7 @@ class Playlist:
     description: str | None = None
     source: PlaylistSource = PlaylistSource.MANUAL
     spotify_uri: SpotifyUri | None = None
+    cover_url: str | None = None
     track_ids: list[TrackId] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -719,8 +720,4 @@ __all__ = [
     "FilterTarget",
     "AutomationTrigger",
     "AutomationAction",
-    # Widget entities (new)
-    "Widget",
-    "Page",
-    "WidgetInstance",
 ]

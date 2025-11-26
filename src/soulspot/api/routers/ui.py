@@ -90,18 +90,6 @@ async def playlists(
     )
 
 
-@router.get("/playlists/{playlist_id}/export-modal", response_class=HTMLResponse)
-async def playlist_export_modal(
-    request: Request,
-    playlist_id: str,
-) -> Any:
-    """Return export modal partial."""
-    return templates.TemplateResponse(
-        "partials/export_modal.html",
-        {"request": request, "playlist_id": playlist_id},
-    )
-
-
 # Yo this is HTMX partial for missing tracks in a playlist! Uses anext() to get session from generator
 # which is sketchy (same pattern as before). Does N queries in loop for each track - bad performance.
 # joinedload helps but still not great. Returns error.html template for 404/400 errors which is clean
@@ -324,6 +312,83 @@ async def auth(request: Request) -> Any:
 async def search(request: Request) -> Any:
     """Advanced search page."""
     return templates.TemplateResponse("search.html", {"request": request})
+
+
+# Hey future me - this is the HTMX quick-search endpoint for the header search bar! It returns a
+# dropdown partial with local library results (tracks, artists, playlists). NOT Spotify search -
+# that would be slow and require auth. The q param comes from input field via hx-get. We search
+# library only if query is at least 2 chars to avoid noise. Results limited to 5 per type for
+# quick display. The partial renders into #search-results dropdown in base.html header.
+@router.get("/search/quick", response_class=HTMLResponse)
+async def quick_search(
+    request: Request,
+    q: str = "",
+    track_repository: TrackRepository = Depends(get_track_repository),
+    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+) -> Any:
+    """Quick search partial for header search bar.
+
+    Searches local library (tracks, artists, playlists) and returns
+    HTML partial for HTMX dropdown. Minimum query length is 2 characters.
+
+    Args:
+        request: FastAPI request
+        q: Search query string
+        track_repository: Track repository
+        playlist_repository: Playlist repository
+
+    Returns:
+        HTML partial with search results dropdown
+    """
+    results: list[dict[str, Any]] = []
+    query = q.strip()
+
+    if len(query) >= 2:
+        # Search tracks by name or artist
+        # Note: track.artist is ORM relationship attribute not on domain entity
+        all_tracks = await track_repository.list_all()
+        query_lower = query.lower()
+
+        for track in all_tracks:
+            track_artist = track.artist  # type: ignore[attr-defined]
+            if query_lower in track.title.lower() or (
+                track_artist and query_lower in track_artist.lower()
+            ):
+                results.append(
+                    {
+                        "type": "track",
+                        "name": track.title,
+                        "subtitle": track_artist or "Unknown Artist",
+                        "url": f"/library/tracks/{track.id.value}",
+                    }
+                )
+
+        # Search playlists by name
+        all_playlists = await playlist_repository.list_all()
+        for playlist in all_playlists:
+            if query_lower in playlist.name.lower():
+                results.append(
+                    {
+                        "type": "playlist",
+                        "name": playlist.name,
+                        "subtitle": f"{len(playlist.track_ids)} tracks",
+                        "url": f"/playlists/{playlist.id.value}",
+                    }
+                )
+
+        # Sort: exact matches first, then by type (playlist > track)
+        type_order = {"playlist": 0, "artist": 1, "album": 2, "track": 3}
+        results.sort(
+            key=lambda x: (
+                0 if x["name"].lower() == query_lower else 1,
+                type_order.get(x["type"], 99),
+            )
+        )
+
+    return templates.TemplateResponse(
+        "partials/quick_search_results.html",
+        {"request": request, "query": query, "results": results},
+    )
 
 
 @router.get("/theme-sample", response_class=HTMLResponse)

@@ -109,6 +109,13 @@ class AlbumModel(Base):
         String(36), nullable=True, unique=True, index=True
     )
     artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Hey future me - artwork_url stores album cover from Spotify CDN! Similar to artist
+    # image_url, this is the HTTP URL to the album artwork (typically 300x300 or 640x640).
+    # We store BOTH artwork_path (local file) AND artwork_url (Spotify CDN) because:
+    # 1) artwork_path is for downloaded/local album art, 2) artwork_url is for streaming
+    # from Spotify. UI can show artwork_url immediately while downloading, then switch to
+    # artwork_path once local file exists. Nullable because not all albums have covers!
+    artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -210,6 +217,7 @@ class PlaylistModel(Base):
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
+    cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -501,85 +509,6 @@ class QualityUpgradeCandidateModel(Base):
         Index("ix_quality_upgrade_candidates_improvement_score", "improvement_score"),
     )
 
-
-class WidgetModel(Base):
-    """SQLAlchemy model for Widget entity (widget registry)."""
-
-    __tablename__ = "widgets"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    type: Mapped[str] = mapped_column(
-        String(50), nullable=False, unique=True, index=True
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    template_path: Mapped[str] = mapped_column(String(200), nullable=False)
-    default_config: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
-
-    # Relationships
-    instances: Mapped[list["WidgetInstanceModel"]] = relationship(
-        "WidgetInstanceModel", back_populates="widget", cascade="all, delete-orphan"
-    )
-
-
-class PageModel(Base):
-    """SQLAlchemy model for Page entity (dashboard pages)."""
-
-    __tablename__ = "pages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    slug: Mapped[str] = mapped_column(
-        String(100), nullable=False, unique=True, index=True
-    )
-    is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        default=utc_now, onupdate=utc_now, nullable=False
-    )
-
-    # Relationships
-    widget_instances: Mapped[list["WidgetInstanceModel"]] = relationship(
-        "WidgetInstanceModel", back_populates="page", cascade="all, delete-orphan"
-    )
-
-
-class WidgetInstanceModel(Base):
-    """SQLAlchemy model for WidgetInstance entity (placed widgets on pages)."""
-
-    __tablename__ = "widget_instances"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    page_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("pages.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    widget_type: Mapped[str] = mapped_column(
-        String(50),
-        ForeignKey("widgets.type", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    position_row: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    position_col: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    span_cols: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
-    config: Mapped[dict | None] = mapped_column(sa.JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        default=utc_now, onupdate=utc_now, nullable=False
-    )
-
-    # Relationships
-    page: Mapped["PageModel"] = relationship(
-        "PageModel", back_populates="widget_instances"
-    )
-    widget: Mapped["WidgetModel"] = relationship(
-        "WidgetModel", back_populates="instances"
-    )
-
-    __table_args__ = (
-        sa.UniqueConstraint(
-            "page_id", "position_row", "position_col", name="uq_widget_position"
-        ),
-    )
 
 
 # Hey future me, SessionModel persists user sessions to survive Docker restarts!

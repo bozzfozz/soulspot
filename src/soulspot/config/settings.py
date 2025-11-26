@@ -270,6 +270,12 @@ class APISettings(BaseSettings):
         ge=60,
         le=86400,
     )
+    gzip_minimum_size: int = Field(
+        default=1000,
+        description="Minimum response size in bytes for GZip compression",
+        ge=100,
+        le=10000,
+    )
 
     # Yo, this validator handles CORS origins from ENV vars! Env vars are always strings, so we need
     # to parse "http://a,http://b" into a list. If it's already a list (programmatic config), pass
@@ -345,6 +351,12 @@ class ObservabilitySettings(BaseSettings):
         ge=1.0,
         le=30.0,
     )
+    shutdown_timeout: float = Field(
+        default=5.0,
+        description="Timeout for graceful shutdown of background tasks in seconds",
+        ge=1.0,
+        le=30.0,
+    )
 
     # Circuit breaker
     circuit_breaker: CircuitBreakerSettings = Field(
@@ -379,6 +391,12 @@ class DownloadSettings(BaseSettings):
     enable_priority_queue: bool = Field(
         default=True,
         description="Enable priority-based download queue",
+    )
+    num_workers: int = Field(
+        default=3,
+        description="Number of job queue worker threads",
+        ge=1,
+        le=10,
     )
 
     model_config = SettingsConfigDict(env_prefix="DOWNLOAD_")
@@ -428,6 +446,12 @@ class PostProcessingSettings(BaseSettings):
     file_naming_template: str = Field(
         default="{Artist CleanName} - {Album Type} - {Release Year} - {Album CleanTitle}/{medium:02d}{track:02d} - {Track CleanTitle}",
         description="File naming template",
+    )
+    auto_import_poll_interval: int = Field(
+        default=60,
+        description="Auto-import service polling interval in seconds",
+        ge=10,
+        le=600,
     )
 
     model_config = SettingsConfigDict(env_prefix="POSTPROCESSING_")
@@ -516,6 +540,8 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         case_sensitive=False,
         extra="ignore",
+        # .env file is optional - all settings have sensible defaults
+        env_ignore_empty=True,
     )
 
     # Removed production secret key validation - this is for local use only

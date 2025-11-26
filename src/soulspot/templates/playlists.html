@@ -1,135 +1,84 @@
 {% extends "base.html" %}
-{% from "includes/_skeleton.html" import card_skeleton, spinner %}
-{% from "includes/_components.html" import empty_state, badge, breadcrumb %}
 
 {% block title %}Playlists - SoulSpot{% endblock %}
 
 {% block content %}
-<div class="space-y-8 animate-fade-in">
-    
-    <!-- Modern Page Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+<div class="space-y-8">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
         <div>
-            <div class="flex items-center gap-3 mb-2">
-                <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-secondary-500 rounded-2xl flex items-center justify-center shadow-lg">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">
-                        Playlists
-                    </h1>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage and sync your Spotify playlists</p>
-                </div>
-            </div>
+            <h1 class="text-4xl font-bold mb-2 text-gradient">Your Playlists</h1>
+            <p class="text-muted">Manage and sync your music collection</p>
         </div>
-        <a href="/playlists/import" 
-           class="btn btn-gradient btn-modern focus-visible-ring shadow-lg glow-on-hover w-full sm:w-auto justify-center group">
-            <svg class="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-            Import Playlist
+        <a href="/playlists/import" class="btn btn-primary shadow-lg glow-on-hover">
+            <i class="fa-solid fa-plus"></i>
+            <span>Import Playlist</span>
         </a>
     </div>
 
     <!-- Playlists Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="playlists-list" data-stagger>
+    <div class="grid-cols-3" id="playlists-grid">
         {% if playlists %}
-            {% for playlist in playlists %}
-            <div class="card-modern card-hover-lift group">
-                <div class="p-6">
-                    <!-- Playlist Header -->
-                    <div class="flex items-start justify-between mb-4">
-                        <a href="/ui/playlists/{{ playlist.id }}" class="flex-1 min-w-0">
-                            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors truncate">
-                                {{ playlist.name }}
-                            </h3>
-                        </a>
-                        <div class="ml-2 flex-shrink-0">
-                            {{ badge(playlist.source, 'neutral') }}
-                        </div>
-                    </div>
-                    
-                    <!-- Description -->
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 line-clamp-2 min-h-[2.5rem]" title="{{ playlist.description or 'No description' }}">
-                        {{ playlist.description or "No description available" }}
-                    </p>
-                    
-                    <!-- Stats -->
-                    <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        <span class="flex items-center gap-2">
-                            <svg class="w-4 h-4 flex-shrink-0 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                            </svg>
-                            <strong class="text-gray-700 dark:text-gray-300">{{ playlist.track_count or 0 }}</strong> tracks
-                        </span>
-                    </div>
-                    
-                    <!-- Action Buttons -->
-                    <div class="flex gap-2">
-                        <a href="/ui/playlists/{{ playlist.id }}" 
-                           class="btn btn-primary btn-sm btn-modern focus-visible-ring flex-1 justify-center hover-lift">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                            </svg>
-                            View
-                        </a>
-                        <button class="btn btn-secondary btn-sm btn-modern focus-visible-ring flex-1 justify-center hover-lift" 
-                                hx-post="/api/playlists/{{ playlist.id }}/sync"
-                                hx-swap="none"
-                                data-success-message="Playlist synced successfully!"
-                                data-error-message="Failed to sync playlist"
-                                aria-label="Sync playlist {{ playlist.name }}">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                            </svg>
-                            Sync
-                        </button>
-                    </div>
+        {% for playlist in playlists %}
+        <div class="card group hover:scale-[1.02] transition-all duration-300">
+            <!-- Cover Art / Placeholder -->
+            <div
+                class="aspect-square rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 mb-4 relative overflow-hidden shadow-inner">
+                {% if playlist.cover_url %}
+                <img src="{{ playlist.cover_url }}" alt="{{ playlist.name }}"
+                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
+                {% else %}
+                <div
+                    class="absolute inset-0 flex items-center justify-center text-gray-700 group-hover:text-primary transition-colors">
+                    <i class="fa-solid fa-music text-4xl"></i>
+                </div>
+                {% endif %}
+
+                <!-- Hover Overlay -->
+                <div
+                    class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                    <a href="/ui/playlists/{{ playlist.id }}"
+                        class="btn-icon bg-white text-black hover:scale-110 transition-transform" title="View">
+                        <i class="fa-solid fa-play"></i>
+                    </a>
+                    <button class="btn-icon bg-white/20 text-white hover:bg-white hover:text-black transition-colors"
+                        hx-post="/api/playlists/{{ playlist.id }}/sync" hx-swap="none" title="Sync">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
                 </div>
             </div>
-            {% endfor %}
-        {% elif playlists is none %}
-            {# Loading state - show skeletons #}
-            <div class="card-modern skeleton-modern h-64"></div>
-            <div class="card-modern skeleton-modern h-64"></div>
-            <div class="card-modern skeleton-modern h-64"></div>
+
+            <!-- Info -->
+            <div>
+                <h3 class="font-bold text-lg mb-1 truncate group-hover:text-primary transition-colors">
+                    {{ playlist.name }}
+                </h3>
+                <div class="flex items-center justify-between text-sm text-muted">
+                    <span>{{ playlist.track_count or 0 }} tracks</span>
+                    <span class="px-2 py-0.5 rounded-full bg-white/5 text-xs border border-white/10">
+                        {{ playlist.source|upper }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
         {% else %}
-            {# Empty state #}
-            <div class="col-span-full">
-                <div class="card-modern text-center py-16">
-                    <div class="max-w-md mx-auto">
-                        <div class="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-primary-100 to-secondary-100 dark:from-primary-900/30 dark:to-secondary-900/30 rounded-full flex items-center justify-center">
-                            <svg class="w-12 h-12 text-primary-500 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-                            </svg>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">No playlists yet</h3>
-                        <p class="text-gray-600 dark:text-gray-400 mb-6">
-                            Import a Spotify playlist to get started and begin downloading your favorite music!
-                        </p>
-                        <a href="/playlists/import" class="btn btn-gradient btn-modern btn-lg focus-visible-ring shadow-lg inline-flex">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                            </svg>
-                            Import Your First Playlist
-                        </a>
-                    </div>
+        <!-- Empty State -->
+        <div class="col-span-3">
+            <div class="glass-panel p-12 text-center">
+                <div class="w-20 h-20 bg-card rounded-full flex items-center justify-center mx-auto mb-6 text-muted">
+                    <i class="fa-solid fa-music text-3xl"></i>
                 </div>
+                <h2 class="text-2xl font-bold mb-2">No playlists yet</h2>
+                <p class="text-muted mb-8 max-w-md mx-auto">Import your first playlist from Spotify to start building
+                    your offline library.</p>
+                <a href="/playlists/import" class="btn btn-primary btn-lg">
+                    Import Playlist
+                </a>
             </div>
+        </div>
         {% endif %}
     </div>
 </div>
-
-<style>
-    /* Line clamp utility for description truncation */
-    .line-clamp-2 {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-</style>
 {% endblock %}
