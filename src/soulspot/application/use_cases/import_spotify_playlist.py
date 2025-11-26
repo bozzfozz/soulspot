@@ -4,15 +4,21 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from soulspot.application.use_cases import UseCase
-from soulspot.domain.entities import Artist, Playlist, PlaylistSource, Track, Album
+from soulspot.domain.entities import Album, Artist, Playlist, PlaylistSource, Track
 from soulspot.domain.ports import (
+    IAlbumRepository,
     IArtistRepository,
     IPlaylistRepository,
     ISpotifyClient,
     ITrackRepository,
-    IAlbumRepository,
 )
-from soulspot.domain.value_objects import ArtistId, PlaylistId, SpotifyUri, TrackId, AlbumId
+from soulspot.domain.value_objects import (
+    AlbumId,
+    ArtistId,
+    PlaylistId,
+    SpotifyUri,
+    TrackId,
+)
 
 
 @dataclass
@@ -161,17 +167,17 @@ class ImportSpotifyPlaylistUseCase(
         artist_id = artist_data["id"]
         artist_name = artist_data["name"]
         artist_spotify_uri = SpotifyUri(f"spotify:artist:{artist_id}")
-        
+
         # Extract image URL (prefer medium size ~320x320)
         images = artist_data.get("images", [])
         image_url = None
         if images:
             preferred_image = images[1] if len(images) > 1 else images[0]
             image_url = preferred_image.get("url")
-        
+
         # Extract genres
         genres = artist_data.get("genres", [])
-        
+
         return Artist(
             id=ArtistId.generate(),
             name=artist_name,
@@ -208,20 +214,20 @@ class ImportSpotifyPlaylistUseCase(
             Dict mapping artist_id to Artist entity
         """
         artists_map: dict[str, Artist] = {}
-        
+
         # Step 1: Check which artists already exist in DB (by Spotify URI)
         for artist_id in artist_ids:
             spotify_uri = SpotifyUri(f"spotify:artist:{artist_id}")
             existing = await self._artist_repository.get_by_spotify_uri(spotify_uri)
             if existing:
                 artists_map[artist_id] = existing
-        
+
         # Step 2: Get IDs of artists we need to fetch from Spotify
         missing_ids = [aid for aid in artist_ids if aid not in artists_map]
-        
+
         if not missing_ids:
             return artists_map  # All artists already in DB!
-        
+
         # Step 3: Fetch missing artists in batches of 50
         for i in range(0, len(missing_ids), 50):
             batch = missing_ids[i : i + 50]
@@ -229,17 +235,17 @@ class ImportSpotifyPlaylistUseCase(
                 artists_data = await self._spotify_client.get_several_artists(
                     batch, access_token
                 )
-                
+
                 # Create and save artist entities
                 for artist_data in artists_data:
                     artist = self._create_artist_from_data(artist_data)
                     await self._artist_repository.add(artist)
                     artists_map[artist_data["id"]] = artist
-                    
+
             except Exception as e:
                 # Log error but continue with other batches
                 errors.append(f"Failed to fetch artist batch: {e}")
-        
+
         return artists_map
 
     # 3. Process tracks if requested
@@ -293,12 +299,12 @@ class ImportSpotifyPlaylistUseCase(
                     if track_data.get("album"):
                         album_data = track_data["album"]
                         album_spotify_uri = SpotifyUri(album_data["uri"])
-                        
+
                         # Check if album exists
                         album = await self._album_repository.get_by_spotify_uri(
                             album_spotify_uri
                         )
-                        
+
                         if not album:
                             # Extract album cover (prefer medium size ~300x300)
                             images = album_data.get("images", [])
@@ -306,10 +312,10 @@ class ImportSpotifyPlaylistUseCase(
                             if images:
                                 preferred_image = images[1] if len(images) > 1 else images[0]
                                 artwork_url = preferred_image.get("url")
-                            
+
                             # Extract release year
                             release_year = self._extract_year(album_data.get("release_date"))
-                            
+
                             album = Album(
                                 id=AlbumId.generate(),
                                 title=album_data["name"],
@@ -321,7 +327,7 @@ class ImportSpotifyPlaylistUseCase(
                                 updated_at=datetime.now(UTC),
                             )
                             await self._album_repository.add(album)
-                        
+
                         album_id = album.id
 
                     # Create track entity

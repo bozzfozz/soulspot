@@ -14,11 +14,11 @@ from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,
 )
-from soulspot.application.use_cases.search_and_download import (
-    SearchAndDownloadTrackUseCase,
-)
 from soulspot.application.use_cases.queue_playlist_downloads import (
     QueuePlaylistDownloadsUseCase,
+)
+from soulspot.application.use_cases.search_and_download import (
+    SearchAndDownloadTrackUseCase,
 )
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue

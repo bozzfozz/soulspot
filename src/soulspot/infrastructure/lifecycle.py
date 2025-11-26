@@ -8,7 +8,6 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI

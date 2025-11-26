@@ -391,10 +391,10 @@ class AlbumRepository(IAlbumRepository):
     # get_by_spotify_uri - deduplicate by URI, not by name (multiple albums can share names!).
     async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Album | None:
         """Get an album by Spotify URI.
-        
+
         Args:
             spotify_uri: Spotify URI (e.g., spotify:album:4aawyAB9vmqN3uQ7FjRGTy)
-            
+
         Returns:
             Album entity if found, None otherwise
         """
@@ -623,6 +623,71 @@ class TrackRepository(ITrackRepository):
             )
             for model in models
         ]
+
+    # Hey future me - this gets tracks that have NO album association (singles)!
+    # Used for displaying "loose" tracks from an artist that aren't part of any album.
+    # Perfect for the "artist songs" feature where we sync top tracks/singles from Spotify.
+    # The WHERE clause filters for album_id IS NULL to exclude album tracks.
+    async def get_singles_by_artist(self, artist_id: ArtistId) -> list[Track]:
+        """Get tracks by an artist that are NOT associated with any album (singles).
+
+        Args:
+            artist_id: Artist ID to get singles for
+
+        Returns:
+            List of Track entities without album association
+        """
+        stmt = (
+            select(TrackModel)
+            .where(
+                TrackModel.artist_id == str(artist_id.value),
+                TrackModel.album_id.is_(None),
+            )
+            .order_by(TrackModel.title)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Track(
+                id=TrackId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                album_id=None,  # Guaranteed to be None from query
+                duration_ms=model.duration_ms,
+                track_number=model.track_number,
+                disc_number=model.disc_number,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                isrc=model.isrc,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
+                genres=[model.genre] if model.genre else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    # Hey future me - count singles for an artist for pagination/stats.
+    async def count_singles_by_artist(self, artist_id: ArtistId) -> int:
+        """Count tracks by an artist that are NOT associated with any album.
+
+        Args:
+            artist_id: Artist ID to count singles for
+
+        Returns:
+            Number of singles (tracks without album)
+        """
+        stmt = select(func.count(TrackModel.id)).where(
+            TrackModel.artist_id == str(artist_id.value),
+            TrackModel.album_id.is_(None),
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Track]:
         """List all tracks with pagination and eager loading of relationships."""

@@ -408,7 +408,7 @@ class SpotifyClient(ISpotifyClient):
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
-        
+
         # Filter out null entries (deleted/invalid artists)
         artists = result.get("artists", [])
         return [artist for artist in artists if artist is not None]
@@ -501,6 +501,40 @@ class SpotifyClient(ISpotifyClient):
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
+
+    # Hey future me, this fetches an artist's TOP TRACKS (most popular songs)! The market param is
+    # required because Spotify tracks availability varies by country. Use ISO 3166-1 alpha-2 code
+    # (e.g., "US", "DE", "GB"). Returns up to 10 tracks ranked by popularity. These are typically the
+    # artist's most streamed songs - great for "best of" playlists or discovering singles. The tracks
+    # returned include full details (album, duration, ISRC, etc.). GOTCHA: some of these tracks ARE
+    # on albums - you'll need to filter by album_type="single" in the album object if you only want
+    # standalone singles! Use this for the "sync artist songs" feature to get popular non-album tracks.
+    async def get_artist_top_tracks(
+        self, artist_id: str, access_token: str, market: str = "US"
+    ) -> list[dict[str, Any]]:
+        """Get an artist's top tracks (most popular songs).
+
+        Args:
+            artist_id: Spotify artist ID
+            access_token: OAuth access token
+            market: ISO 3166-1 alpha-2 country code (e.g., "US", "DE")
+
+        Returns:
+            List of track objects (up to 10 tracks, ranked by popularity)
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/artists/{artist_id}/top-tracks",
+            params={"market": market},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        result = cast(dict[str, Any], response.json())
+        return cast(list[dict[str, Any]], result.get("tracks", []))
 
     # Hey future me, these context manager methods let you use this client with
     # "async with SpotifyClient(...) as client:" syntax. This is THE preferred way

@@ -3,12 +3,12 @@
 from dataclasses import dataclass
 
 from soulspot.application.use_cases import UseCase
+from soulspot.application.workers.job_queue import JobQueue, JobType
 from soulspot.domain.value_objects import PlaylistId
 from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
     TrackRepository,
 )
-from soulspot.application.workers.job_queue import JobQueue, JobType
 
 
 @dataclass
@@ -101,7 +101,7 @@ class QueuePlaylistDownloadsUseCase(UseCase):
         try:
             playlist_id = PlaylistId.from_string(request.playlist_id)
             playlist = await self._playlist_repository.get_by_id(playlist_id)
-            
+
             if not playlist:
                 errors.append(f"Playlist not found: {request.playlist_id}")
                 return QueuePlaylistDownloadsResponse(
@@ -138,7 +138,7 @@ class QueuePlaylistDownloadsUseCase(UseCase):
         for track_id in playlist.track_ids:
             try:
                 track = await self._track_repository.get_by_id(track_id)
-                
+
                 if not track:
                     skipped_count += 1
                     errors.append(f"Track not found: {track_id}")
@@ -163,7 +163,7 @@ class QueuePlaylistDownloadsUseCase(UseCase):
                     },
                     priority=10,  # Higher priority for user-initiated downloads
                 )
-                
+
                 job_ids.append(job_id)
                 queued_count += 1
 

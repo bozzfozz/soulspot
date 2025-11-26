@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from soulspot.api.dependencies import (
     get_import_playlist_use_case,
     get_playlist_repository,
+    get_queue_playlist_downloads_use_case,
     get_spotify_client,
     get_spotify_token_from_session,
     get_track_repository,
-    get_queue_playlist_downloads_use_case,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistRequest,
@@ -19,7 +19,6 @@ from soulspot.application.use_cases.import_spotify_playlist import (
 )
 from soulspot.application.use_cases.queue_playlist_downloads import (
     QueuePlaylistDownloadsRequest,
-    QueuePlaylistDownloadsResponse,
     QueuePlaylistDownloadsUseCase,
 )
 from soulspot.domain.entities import Playlist, PlaylistSource
