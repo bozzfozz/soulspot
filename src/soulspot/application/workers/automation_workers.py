@@ -51,13 +51,13 @@ class WatchlistWorker:
         self._task: asyncio.Task | None = None
         # Hey - token_manager is set via set_token_manager() after construction
         # This avoids circular dependencies and allows workers to be created before app.state is ready
-        self._token_manager: "DatabaseTokenManager | None" = None
+        self._token_manager: DatabaseTokenManager | None = None
 
     def set_token_manager(self, token_manager: "DatabaseTokenManager") -> None:
         """Set the token manager for getting Spotify access tokens.
-        
+
         Called during app startup after DatabaseTokenManager is initialized.
-        
+
         Args:
             token_manager: Database-backed token manager
         """
@@ -98,7 +98,7 @@ class WatchlistWorker:
     # Hey future me: Watchlist worker - background daemon that polls Spotify for new releases
     # WHY check every hour? Balance between finding new releases quickly vs API rate limits
     # WHY separate worker? Long-running process, can't block main application
-    # 
+    #
     # TOKEN HANDLING (2025 update):
     # Uses DatabaseTokenManager.get_token_for_background() to get valid access token.
     # If token invalid (user revoked, refresh failed), skips work and logs warning.
@@ -112,7 +112,7 @@ class WatchlistWorker:
             access_token = None
             if self._token_manager:
                 access_token = await self._token_manager.get_token_for_background()
-            
+
             if not access_token:
                 # Token invalid or missing - skip this cycle gracefully
                 # UI warning banner shows "Spotify-Verbindung unterbrochen"
@@ -154,7 +154,7 @@ class WatchlistWorker:
                         f"Checking Spotify for new releases from artist {watchlist.artist_id} "
                         f"(token available: yes)"
                     )
-                    
+
                     # TODO: Actually call Spotify API here once SpotifyClient methods are ready
                     # new_releases = await self.spotify_client.get_artist_albums(
                     #     artist_id=watchlist.artist_id.value,
@@ -245,13 +245,13 @@ class DiscographyWorker:
         self._running = False
         self._task: asyncio.Task | None = None
         # Hey - token_manager is set via set_token_manager() after construction
-        self._token_manager: "DatabaseTokenManager | None" = None
+        self._token_manager: DatabaseTokenManager | None = None
 
     def set_token_manager(self, token_manager: "DatabaseTokenManager") -> None:
         """Set the token manager for getting Spotify access tokens.
-        
+
         Called during app startup after DatabaseTokenManager is initialized.
-        
+
         Args:
             token_manager: Database-backed token manager
         """
@@ -314,7 +314,7 @@ class DiscographyWorker:
             access_token = None
             if self._token_manager:
                 access_token = await self._token_manager.get_token_for_background()
-            
+
             if not access_token:
                 # Token invalid or missing - skip this cycle gracefully
                 # UI warning banner shows "Spotify-Verbindung unterbrochen"
@@ -583,7 +583,7 @@ class AutomationWorkerManager:
             session, spotify_client, discography_interval
         )
         self.quality_worker = QualityUpgradeWorker(session, quality_interval)
-        
+
         # Hey - inject token_manager into workers that need Spotify access!
         # This is the critical connection between token storage and background work.
         if token_manager:
@@ -592,9 +592,9 @@ class AutomationWorkerManager:
 
     def set_token_manager(self, token_manager: "DatabaseTokenManager") -> None:
         """Set token manager for all workers that need Spotify access.
-        
+
         Call this if token_manager wasn't available at construction time.
-        
+
         Args:
             token_manager: Database-backed token manager
         """

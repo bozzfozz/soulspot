@@ -97,7 +97,9 @@ class FollowedArtistsService:
                 # Process each artist from Spotify response
                 for artist_data in items:
                     try:
-                        artist, was_created = await self._process_artist_data(artist_data)
+                        artist, was_created = await self._process_artist_data(
+                            artist_data
+                        )
                         all_artists.append(artist)
                         stats["total_fetched"] += 1
                         if was_created:
@@ -160,9 +162,7 @@ class FollowedArtistsService:
         images = artist_data.get("images", [])
 
         if not spotify_id or not name:
-            raise ValueError(
-                f"Invalid artist data: missing id or name - {artist_data}"
-            )
+            raise ValueError(f"Invalid artist data: missing id or name - {artist_data}")
 
         spotify_uri = SpotifyUri.from_string(f"spotify:artist:{spotify_id}")
 

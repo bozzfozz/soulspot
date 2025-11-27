@@ -276,7 +276,9 @@ class TestSpotifyClientAlbumAPI:
             "id": "album-123",
             "name": "Test Album",
             "artists": [{"id": "artist-1", "name": "Test Artist"}],
-            "images": [{"url": "https://example.com/image.jpg", "height": 640, "width": 640}],
+            "images": [
+                {"url": "https://example.com/image.jpg", "height": 640, "width": 640}
+            ],
             "release_date": "2023-01-15",
             "total_tracks": 12,
             "tracks": {
@@ -489,8 +491,7 @@ class TestSpotifyClientArtistAPI:
         call_args = mock_client.get.call_args
         assert "artists" in call_args[0][0]
         assert (
-            call_args[1]["params"]["ids"]
-            == "artist-1,artist-2,artist-invalid,artist-3"
+            call_args[1]["params"]["ids"] == "artist-1,artist-2,artist-invalid,artist-3"
         )
         assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
 
@@ -502,7 +503,9 @@ class TestSpotifyClientArtistAPI:
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "artists": [{"id": f"artist-{i}", "name": f"Artist {i}"} for i in range(50)],
+            "artists": [
+                {"id": f"artist-{i}", "name": f"Artist {i}"} for i in range(50)
+            ],
         }
         mock_response.raise_for_status = MagicMock()
 

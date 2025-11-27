@@ -234,8 +234,8 @@ class TestDashboardEndpoints:
     # - /api/ui/widgets/catalog
     # - /api/ui/widgets/active-jobs/content
     # - /api/ui/widgets/spotify-search/content
-    # 
-    # The current dashboard is served via the UI router at "/" 
+    #
+    # The current dashboard is served via the UI router at "/"
     pass
 
 

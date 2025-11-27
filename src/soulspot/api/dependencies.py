@@ -329,6 +329,7 @@ def get_import_playlist_use_case(
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     track_repository: TrackRepository = Depends(get_track_repository),
     artist_repository: ArtistRepository = Depends(get_artist_repository),
+    album_repository: AlbumRepository = Depends(get_album_repository),
 ) -> ImportSpotifyPlaylistUseCase:
     """Get import playlist use case instance."""
     return ImportSpotifyPlaylistUseCase(
@@ -336,6 +337,7 @@ def get_import_playlist_use_case(
         playlist_repository=playlist_repository,
         track_repository=track_repository,
         artist_repository=artist_repository,
+        album_repository=album_repository,
     )
 
 
@@ -472,7 +474,7 @@ async def get_spotify_sync_service(
 # Used by /api/library/scan endpoints to start/check scans.
 # The service itself handles file discovery, metadata extraction, fuzzy matching.
 async def get_library_scanner_service(
-    request: Request,
+    _request: Request,  # noqa: ARG001
     session: AsyncSession = Depends(get_db_session),
 ) -> AsyncGenerator:
     """Get library scanner service for local file imports.
@@ -484,7 +486,9 @@ async def get_library_scanner_service(
     Yields:
         LibraryScannerService instance
     """
-    from soulspot.application.services.library_scanner_service import LibraryScannerService
+    from soulspot.application.services.library_scanner_service import (
+        LibraryScannerService,
+    )
 
     settings = get_settings()
     yield LibraryScannerService(session=session, settings=settings)

@@ -82,7 +82,7 @@ async def authorize(
 # If ANY check fails, REJECT immediately. Attackers WILL try to bypass these. The redirect_to
 # parameter lets us send users back to where they came from, but we default to "/" for safety.
 # After token exchange succeeds, we CLEAR the state+verifier from session - they're one-time use only!
-# 
+#
 # NEW: We also store tokens in DatabaseTokenManager for background workers (WatchlistWorker, etc.)
 # This is SEPARATE from session storage - workers need tokens even when no user session is active!
 @router.get("/callback", response_model=None)
@@ -173,7 +173,7 @@ async def callback(
         # NEW: Also store tokens in DatabaseTokenManager for background workers!
         # This is CRITICAL for WatchlistWorker, DiscographyWorker, etc.
         if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: "DatabaseTokenManager" = request.app.state.db_token_manager
+            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
             await db_token_manager.store_from_oauth(
                 access_token=token_data["access_token"],
                 refresh_token=token_data.get("refresh_token", ""),
@@ -440,14 +440,14 @@ async def get_token_status(
     request: Request,
 ) -> Any:
     """Get background token status for UI warning banner.
-    
+
     This endpoint checks if background workers have a valid Spotify token.
     The UI uses this to show a warning banner when re-authentication is needed.
-    
+
     Content negotiation:
     - Accept: text/html (default for HTMX) → Returns HTML partial
     - Accept: application/json → Returns JSON response
-    
+
     Returns:
         Token status including:
         - exists: Whether any token is stored
@@ -457,10 +457,10 @@ async def get_token_status(
         - last_error: Error message if refresh failed
     """
     from fastapi.responses import HTMLResponse
-    
+
     # Check if DatabaseTokenManager is initialized
     if not hasattr(request.app.state, "db_token_manager"):
-        status_data = {
+        status_data: dict[str, Any] = {
             "exists": False,
             "is_valid": False,
             "needs_reauth": True,
@@ -469,26 +469,28 @@ async def get_token_status(
             "last_error_at": None,
         }
     else:
-        db_token_manager: "DatabaseTokenManager" = request.app.state.db_token_manager
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
         status = await db_token_manager.get_status()
-        
+
         status_data = {
             "exists": status.exists,
             "is_valid": status.is_valid,
             "needs_reauth": status.needs_reauth,
             "expires_in_minutes": status.expires_in_minutes,
             "last_error": status.last_error,
-            "last_error_at": status.last_error_at.isoformat() if status.last_error_at else None,
+            "last_error_at": status.last_error_at.isoformat()
+            if status.last_error_at
+            else None,
         }
-    
+
     # Check Accept header for content negotiation
     # HTMX sends "text/html" by default, API clients send "application/json"
     accept_header = request.headers.get("accept", "text/html")
-    
+
     if "application/json" in accept_header:
         # Return JSON for API clients
         return status_data
-    
+
     # Return HTML partial for HTMX polling
     # Hey future me - this HTML is directly swapped into #token-status-banner via HTMX.
     # Only show the banner when needs_reauth is true! When token is valid, return empty div
@@ -499,7 +501,7 @@ async def get_token_status(
         error_detail = ""
         if status_data.get("last_error"):
             error_detail = f" ({status_data['last_error']})"
-        
+
         html = f"""
         <div class="token-warning-banner" style="
             background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
@@ -523,7 +525,7 @@ async def get_token_status(
                     Spotify-Verbindung unterbrochen{error_detail}. Hintergrund-Sync ist pausiert.
                 </span>
             </div>
-            <a href="/api/auth/authorize" 
+            <a href="/api/auth/authorize"
                style="
                    background: white;
                    color: #dc2626;
@@ -552,20 +554,23 @@ async def invalidate_token(
     request: Request,
 ) -> dict[str, Any]:
     """Manually invalidate the background token.
-    
+
     Use this when user wants to disconnect Spotify integration.
     Background workers will stop until user re-authenticates.
-    
+
     Returns:
         Confirmation message
     """
     if not hasattr(request.app.state, "db_token_manager"):
         return {"ok": False, "message": "Token manager not initialized"}
-    
-    db_token_manager: "DatabaseTokenManager" = request.app.state.db_token_manager
+
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
     result = await db_token_manager.invalidate()
-    
+
     if result:
-        return {"ok": True, "message": "Token invalidated. Please re-authenticate to enable background sync."}
+        return {
+            "ok": True,
+            "message": "Token invalidated. Please re-authenticate to enable background sync.",
+        }
     else:
         return {"ok": False, "message": "No token to invalidate"}
