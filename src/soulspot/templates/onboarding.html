@@ -7,14 +7,9 @@
 
 {% block title %}Willkommen - SoulSpot{% endblock %}
 
-{# Hey future me - Token status banner only on dashboard/onboarding pages!
-   This polls /api/auth/token-status every 30s to show re-auth warning when needed. #}
+{# Token status banner only on dashboard/onboarding pages - include shared partial #}
 {% block token_status_banner %}
-<div id="token-status-banner" 
-     hx-get="/api/auth/token-status" 
-     hx-trigger="load, every 30s"
-     hx-swap="innerHTML">
-</div>
+{% include "includes/token_status_banner.html" %}
 {% endblock %}
 
 {% block content %}

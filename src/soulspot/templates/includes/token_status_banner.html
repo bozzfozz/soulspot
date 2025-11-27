@@ -1,0 +1,10 @@
+{# Hey future me - Token status banner partial!
+   This polls /api/auth/token-status every 30s to show re-auth warning when needed.
+   Only include this in pages where token status warning should appear (dashboard/onboarding).
+   When needs_reauth=true, the backend returns HTML with a red warning banner and "Erneut anmelden" button.
+   When token is valid, it returns empty div (banner disappears). #}
+<div id="token-status-banner" 
+     hx-get="/api/auth/token-status" 
+     hx-trigger="load, every 30s"
+     hx-swap="innerHTML">
+</div>
