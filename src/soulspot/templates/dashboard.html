@@ -8,6 +8,16 @@
 
 {% block title %}Dashboard - SoulSpot{% endblock %}
 
+{# Hey future me - Token status banner only on dashboard/onboarding pages!
+   This polls /api/auth/token-status every 30s to show re-auth warning when needed. #}
+{% block token_status_banner %}
+<div id="token-status-banner" 
+     hx-get="/api/auth/token-status" 
+     hx-trigger="load, every 30s"
+     hx-swap="innerHTML">
+</div>
+{% endblock %}
+
 {% import "includes/macros.html" as macros %}
 
 {% block content %}

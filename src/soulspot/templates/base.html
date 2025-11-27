@@ -44,15 +44,16 @@
                It polls /api/auth/token-status every 30 seconds via HTMX. When needs_reauth=true,
                the banner becomes visible with a red warning. The user clicks "Erneut anmelden"
                to re-authenticate. Once token is valid again, banner disappears automatically.
-               This is CRITICAL for user experience - without it, background sync silently fails! #}
+               This is CRITICAL for user experience - without it, background sync silently fails!
+               
+               NOTE (Nov 2025): Token status banner is now ONLY shown on dashboard (index.html) and 
+               onboarding pages. Other pages don't need it. Child templates can override the 
+               token_status_banner block to show the polling banner. By default, it's empty. #}
             
-            <!-- Token Status Warning Banner (polls every 30s) -->
-            <div id="token-status-banner" 
-                 hx-get="/api/auth/token-status" 
-                 hx-trigger="load, every 30s"
-                 hx-swap="innerHTML">
-                {# Content will be loaded via HTMX from the partial #}
-            </div>
+            <!-- Token Status Warning Banner (only shown on dashboard/onboarding pages) -->
+            {% block token_status_banner %}
+            {# Default: empty - no polling. Override in dashboard/onboarding templates to enable. #}
+            {% endblock %}
 
             <!-- Mobile Header (Visible only on mobile) -->
             <div class="mobile-header" style="display: none;">
