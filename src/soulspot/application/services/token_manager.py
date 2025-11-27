@@ -587,9 +587,13 @@ class DatabaseTokenManager:
                     )
 
                 # Calculate expires_in_minutes
+                # Use ensure_utc_aware() to handle naive datetimes from SQLite
+                from soulspot.infrastructure.persistence.models import ensure_utc_aware
+
                 now = datetime.now(UTC)
-                if token_model.token_expires_at > now:
-                    delta = token_model.token_expires_at - now
+                expires_at = ensure_utc_aware(token_model.token_expires_at)
+                if expires_at > now:
+                    delta = expires_at - now
                     expires_in_minutes = int(delta.total_seconds() / 60)
                 else:
                     expires_in_minutes = 0

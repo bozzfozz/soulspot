@@ -26,6 +26,17 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+# Hey future me - SQLite doesn't preserve timezone info! When we store UTC datetimes, they come
+# back as "naive" (no tzinfo). This helper ensures we can safely compare with timezone-aware
+# datetimes by attaching UTC if missing. ALWAYS use this when comparing datetimes from DB
+# with datetime.now(UTC) to avoid "can't compare offset-naive and offset-aware" TypeError!
+def ensure_utc_aware(dt: datetime) -> datetime:
+    """Ensure datetime is UTC-aware, assuming naive datetimes are UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
 # Yo, Base is THE foundation of all ORM models! DeclarativeBase is SQLAlchemy 2.0 style
 # (cleaner than old declarative_base()). ALL models inherit from this - it manages the shared
 # metadata registry (table definitions, relationships, etc.). Don't create multiple Base classes
@@ -821,15 +832,14 @@ class SpotifyTokenModel(Base):
     )
 
     # Hey future me - helper methods for cleaner code in services!
+    # Use ensure_utc_aware() to handle naive datetimes from SQLite.
     def is_expired(self) -> bool:
         """Check if token is expired (past expiration time)."""
-        from datetime import UTC
-
-        return datetime.now(UTC) >= self.token_expires_at
+        return utc_now() >= ensure_utc_aware(self.token_expires_at)
 
     def expires_soon(self, minutes: int = 10) -> bool:
         """Check if token expires within given minutes (for proactive refresh)."""
-        from datetime import UTC, timedelta
+        from datetime import timedelta
 
-        threshold = datetime.now(UTC) + timedelta(minutes=minutes)
-        return self.token_expires_at <= threshold
+        threshold = utc_now() + timedelta(minutes=minutes)
+        return ensure_utc_aware(self.token_expires_at) <= threshold
