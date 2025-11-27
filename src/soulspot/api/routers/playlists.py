@@ -10,7 +10,7 @@ from soulspot.api.dependencies import (
     get_playlist_repository,
     get_queue_playlist_downloads_use_case,
     get_spotify_client,
-    get_spotify_token_from_session,
+    get_spotify_token_shared,
     get_track_repository,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
@@ -89,18 +89,16 @@ async def import_playlist(
     quality_filter: str | None = Query(
         None, description="Quality filter for downloads (flac, 320, any)"
     ),
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
     queue_downloads_use_case: QueuePlaylistDownloadsUseCase = Depends(
         get_queue_playlist_downloads_use_case
     ),
 ) -> dict[str, Any]:
-    """Import a Spotify playlist using session-based authentication.
+    """Import a Spotify playlist using shared server-side authentication.
 
-    The access token is automatically retrieved from your session.
-    If your token is expired, it will be automatically refreshed.
-    If you don't have a valid session, you'll receive a 401 error
-    and need to authenticate at /auth first.
+    Uses the shared Spotify token stored on the server, so any device on the
+    network can import playlists without per-browser session cookies.
 
     Accepts both:
     - Spotify playlist URLs: https://open.spotify.com/playlist/2ZBCi09CSeWMBOoHZdN6Nl
@@ -111,7 +109,7 @@ async def import_playlist(
         fetch_all_tracks: Whether to fetch all tracks
         auto_queue_downloads: Automatically queue missing tracks for download
         quality_filter: Quality filter for downloads (flac, 320, any)
-        access_token: Automatically retrieved from session
+        access_token: Automatically retrieved from shared server-side token
         use_case: Import playlist use case
         queue_downloads_use_case: Queue downloads use case
 
@@ -218,11 +216,13 @@ async def queue_downloads(
 # image URLs, and track counts. Perfect for the "browse my playlists" UI!
 @router.post("/sync-library")
 async def sync_playlist_library(
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
 ) -> dict[str, Any]:
     """Sync user's playlist library from Spotify (metadata only, no tracks).
+
+    Uses shared server-side token, so any device can trigger library sync.
 
     Fetches all playlists from the authenticated user's Spotify account and
     stores their metadata in the local database. This creates a "library" of
@@ -230,7 +230,7 @@ async def sync_playlist_library(
     browse their playlists and choose which ones to fully import later.
 
     Args:
-        access_token: Automatically retrieved from session
+        access_token: Automatically retrieved from shared server-side token
         spotify_client: Spotify API client
         playlist_repository: Playlist repository
 
@@ -513,17 +513,18 @@ async def get_missing_tracks(
 @router.post("/{playlist_id}/sync")
 async def sync_playlist(
     playlist_id: str,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
 ) -> dict[str, Any]:
     """Sync a single playlist with Spotify.
 
+    Uses shared server-side token for authentication.
     Re-imports the playlist from Spotify to update track list and metadata.
 
     Args:
         playlist_id: Internal playlist ID
-        access_token: Automatically retrieved from session
+        access_token: Automatically retrieved from shared server-side token
         use_case: Import playlist use case
         playlist_repository: Playlist repository
 
@@ -584,16 +585,17 @@ async def sync_playlist(
 # results assume values exist - could fail. skipped_count tracks playlists with no Spotify URI.
 @router.post("/sync-all")
 async def sync_all_playlists(
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     use_case: ImportSpotifyPlaylistUseCase = Depends(get_import_playlist_use_case),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
 ) -> dict[str, Any]:
     """Sync all playlists with Spotify.
 
+    Uses shared server-side token for authentication.
     Re-imports all playlists from Spotify to update track lists and metadata.
 
     Args:
-        access_token: Automatically retrieved from session
+        access_token: Automatically retrieved from shared server-side token
         use_case: Import playlist use case
         playlist_repository: Playlist repository
 

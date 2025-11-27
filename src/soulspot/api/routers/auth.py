@@ -333,50 +333,46 @@ async def logout(
 
 
 # Yo, this status check is for the onboarding UI flow. Unlike /session, this returns friendly
-# messages for when things are missing. We check BOTH token existence AND expiration - a common
-# bug is having an expired token and thinking you're still connected! The "connected" bool is the
-# single source of truth the frontend should trust. If false, show the "connect Spotify" button.
-# If true, proceed with API calls. Don't cache this response - token state can change!
+# messages for when things are missing. We check the SHARED DatabaseTokenManager token now -
+# this way ANY device can check if Spotify is connected, not just the browser that did OAuth!
+# The "connected" bool is the single source of truth the frontend should trust. If false, show
+# the "connect Spotify" button. If true, proceed with API calls. Don't cache this response -
+# token state can change!
 @router.get("/spotify/status")
 async def spotify_status(
-    session_store: DatabaseSessionStore = Depends(get_session_store),
-    session_id: str | None = Depends(get_session_id),
+    request: Request,
 ) -> dict[str, Any]:
     """Get Spotify connection status for onboarding flow.
 
+    Checks the SHARED server-side token (DatabaseTokenManager), so ANY device
+    on the network can see if Spotify is connected - not just the browser that
+    did the OAuth flow.
+
     Args:
-        session_id: Session ID from cookie or Authorization header
-        session_store: Session store
+        request: FastAPI request (for app.state access)
 
     Returns:
         Connection status information
     """
-    if not session_id:
+    # Hey future me - we check DatabaseTokenManager, not per-session token!
+    # This is the key change for multi-device support.
+    if not hasattr(request.app.state, "db_token_manager"):
         return {
             "connected": False,
             "provider": "spotify",
-            "message": "No session found",
+            "message": "Token manager not initialized",
         }
 
-    session = await session_store.get_session(session_id)
-    if not session:
-        return {
-            "connected": False,
-            "provider": "spotify",
-            "message": "Invalid or expired session",
-        }
-
-    # Check if we have a valid, non-expired access token
-    has_token = session.access_token is not None
-    is_expired = session.is_token_expired()
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+    status = await db_token_manager.get_status()
 
     return {
-        "connected": has_token and not is_expired,
+        "connected": status.is_valid and not status.needs_reauth,
         "provider": "spotify",
-        "expires_at": session.token_expires_at.isoformat()
-        if session.token_expires_at
-        else None,
-        "token_expired": is_expired,
+        "expires_at": None,  # Could add this if needed from status
+        "token_expired": status.needs_reauth,
+        "needs_reauth": status.needs_reauth,
+        "last_error": status.last_error,
     }
 
 

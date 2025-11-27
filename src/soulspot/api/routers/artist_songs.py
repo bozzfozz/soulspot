@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_client,
-    get_spotify_token_from_session,
+    get_spotify_token_shared,
 )
 from soulspot.application.services.artist_songs_service import ArtistSongsService
 from soulspot.domain.value_objects import ArtistId, TrackId
@@ -105,10 +105,11 @@ async def sync_artist_songs(
     market: str = Query("US", description="ISO 3166-1 alpha-2 country code"),
     session: AsyncSession = Depends(get_db_session),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
 ) -> SyncSongsResponse:
     """Sync songs (top tracks/singles) for a specific artist.
 
+    Uses shared server-side token for authentication.
     Fetches the artist's top tracks from Spotify and stores them in the database.
     Tracks are stored without album association (as singles).
 
@@ -117,7 +118,7 @@ async def sync_artist_songs(
         market: Country code for track availability (default: US)
         session: Database session
         spotify_client: Spotify client
-        access_token: Valid Spotify access token
+        access_token: Valid Spotify access token from shared server-side storage
 
     Returns:
         List of synced tracks and sync statistics
@@ -182,10 +183,11 @@ async def sync_all_artists_songs(
     limit: int = Query(100, ge=1, le=500, description="Max artists to process"),
     session: AsyncSession = Depends(get_db_session),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
 ) -> SyncSongsResponse:
     """Sync songs for ALL followed artists in the database.
 
+    Uses shared server-side token for authentication.
     Iterates through all artists in DB and syncs their top tracks.
     This is a bulk operation that may take significant time.
 
@@ -194,7 +196,7 @@ async def sync_all_artists_songs(
         limit: Maximum number of artists to process
         session: Database session
         spotify_client: Spotify client
-        access_token: Valid Spotify access token
+        access_token: Valid Spotify access token from shared server-side storage
 
     Returns:
         List of all synced tracks and aggregate statistics

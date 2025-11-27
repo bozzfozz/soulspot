@@ -1,7 +1,7 @@
 """Dependency injection for API endpoints."""
 
 from collections.abc import AsyncGenerator
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,9 @@ from soulspot.application.services.session_store import (
     DatabaseSessionStore,
 )
 from soulspot.application.services.token_manager import TokenManager
+
+if TYPE_CHECKING:
+    from soulspot.application.services.token_manager import DatabaseTokenManager
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,
@@ -224,6 +227,55 @@ async def get_spotify_token_from_session(
     # At this point we know session.access_token is not None (checked above)
     assert session.access_token is not None  # nosec B101
     return session.access_token
+
+
+# Hey future me - this is THE NEW SHARED TOKEN dependency for all Spotify API endpoints!
+# Instead of per-browser session tokens, this uses the SINGLE SHARED token from DatabaseTokenManager.
+# This solves the "can't use SoulSpot from other PCs on the network" issue because:
+# 1) User authenticates ONCE on any device
+# 2) Token is stored server-side in the database (spotify_tokens table)
+# 3) ALL devices/browsers share the same token - no session cookie needed!
+# 4) Background workers (WatchlistWorker, etc.) also use this same token
+#
+# The tradeoff: This is SINGLE-USER architecture. Only one person can be logged into Spotify.
+# If someone else authenticates, they'll overwrite the previous token. For home server use, this is
+# usually what you want! For multi-user scenarios, stick with get_spotify_token_from_session.
+async def get_spotify_token_shared(request: Request) -> str:
+    """Get valid Spotify access token from shared DatabaseTokenManager.
+
+    This dependency retrieves the Spotify access token from the server-side
+    database, making it accessible from ANY device on the network without
+    requiring per-browser sessions.
+
+    Single-user architecture: One token shared by all devices and background workers.
+
+    Args:
+        request: FastAPI request (for app.state access)
+
+    Returns:
+        Valid Spotify access token
+
+    Raises:
+        HTTPException: 401 if no token found or token is invalid
+    """
+    # Check if DatabaseTokenManager is available
+    if not hasattr(request.app.state, "db_token_manager"):
+        raise HTTPException(
+            status_code=503,
+            detail="Token manager not initialized. Server may still be starting.",
+        )
+
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+    access_token = await db_token_manager.get_token_for_background()
+
+    if not access_token:
+        # Token doesn't exist or is invalid - user needs to authenticate
+        raise HTTPException(
+            status_code=401,
+            detail="Keine Spotify-Verbindung. Bitte zuerst bei Spotify anmelden.",
+        )
+
+    return access_token
 
 
 # Yo, creates NEW SlskdClient on every request - not cached! Slskd is your Soulseek downloader, this
