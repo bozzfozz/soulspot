@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_job_queue, get_library_scanner_service
+from soulspot.api.dependencies import (
+    get_db_session,
+    get_job_queue,
+    get_library_scanner_service,
+)
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.use_cases.check_album_completeness import (
     CheckAlbumCompletenessUseCase,
@@ -519,15 +523,10 @@ async def get_import_scan_status(
         response["error"] = job.error
 
     # Include progress from result if available
-    if job.result:
-        if isinstance(job.result, dict):
-            if "progress" in job.result:
-                response["progress"] = job.result["progress"]
-            if "stats" in job.result:
-                response["stats"] = job.result["stats"]
-            else:
-                # Final result (stats dict directly)
-                response["stats"] = job.result
+    if job.result and isinstance(job.result, dict):
+        if "progress" in job.result:
+            response["progress"] = job.result["progress"]
+        response["stats"] = job.result.get("stats", job.result)
 
     return response
 
@@ -586,7 +585,9 @@ async def list_import_jobs(
                 "status": job.status.value,
                 "created_at": job.created_at.isoformat(),
                 "started_at": job.started_at.isoformat() if job.started_at else None,
-                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "completed_at": job.completed_at.isoformat()
+                if job.completed_at
+                else None,
                 "error": job.error,
             }
             for job in jobs

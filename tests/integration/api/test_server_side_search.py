@@ -35,8 +35,7 @@ class TestTrackSearchEndpoint:
     async def test_search_requires_query(self, async_client: AsyncClient):
         """Test that search endpoint requires query parameter."""
         response = await async_client.get(
-            "/api/tracks/search",
-            params={"access_token": "dummy_token"}
+            "/api/tracks/search", params={"access_token": "dummy_token"}
         )
 
         # Should fail without query
@@ -45,8 +44,7 @@ class TestTrackSearchEndpoint:
     async def test_search_requires_access_token(self, async_client: AsyncClient):
         """Test that search endpoint requires access_token parameter."""
         response = await async_client.get(
-            "/api/tracks/search",
-            params={"query": "test"}
+            "/api/tracks/search", params={"query": "test"}
         )
 
         # Should fail without access_token
@@ -61,17 +59,17 @@ class TestTrackSearchEndpoint:
         with patch("soulspot.api.routers.tracks.SpotifyClient") as mock_spotify_class:
             mock_client = AsyncMock()
             mock_client.search_track.return_value = {
-                "tracks": {"items": [{"id": f"track_{i}", "name": f"Track {i}"} for i in range(limit)]}
+                "tracks": {
+                    "items": [
+                        {"id": f"track_{i}", "name": f"Track {i}"} for i in range(limit)
+                    ]
+                }
             }
             mock_spotify_class.return_value = mock_client
 
             response = await async_client.get(
                 "/api/tracks/search",
-                params={
-                    "query": "test",
-                    "access_token": "dummy_token",
-                    "limit": limit
-                }
+                params={"query": "test", "access_token": "dummy_token", "limit": limit},
             )
 
             # If mocked properly, should succeed
@@ -87,11 +85,7 @@ class TestTrackSearchEndpoint:
 
             response = await async_client.get(
                 "/api/tracks/search",
-                params={
-                    "query": "",
-                    "access_token": "dummy_token",
-                    "limit": 10
-                }
+                params={"query": "", "access_token": "dummy_token", "limit": 10},
             )
 
             # Empty query might be rejected by validation or accepted
@@ -108,18 +102,16 @@ class TestTrackSearchEndpoint:
         ]
 
         for query in special_queries:
-            with patch("soulspot.api.routers.tracks.SpotifyClient") as mock_spotify_class:
+            with patch(
+                "soulspot.api.routers.tracks.SpotifyClient"
+            ) as mock_spotify_class:
                 mock_client = AsyncMock()
                 mock_client.search_track.return_value = {"tracks": {"items": []}}
                 mock_spotify_class.return_value = mock_client
 
                 response = await async_client.get(
                     "/api/tracks/search",
-                    params={
-                        "query": query,
-                        "access_token": "dummy_token",
-                        "limit": 10
-                    }
+                    params={"query": query, "access_token": "dummy_token", "limit": 10},
                 )
 
                 # Should handle special characters gracefully
@@ -138,7 +130,7 @@ class TestTrackSearchEndpoint:
                             "artists": [{"name": "Test Artist"}],
                             "album": {"name": "Test Album"},
                             "duration_ms": 180000,
-                            "uri": "spotify:track:track1"
+                            "uri": "spotify:track:track1",
                         }
                     ]
                 }
@@ -147,11 +139,7 @@ class TestTrackSearchEndpoint:
 
             response = await async_client.get(
                 "/api/tracks/search",
-                params={
-                    "query": "test",
-                    "access_token": "dummy_token",
-                    "limit": 10
-                }
+                params={"query": "test", "access_token": "dummy_token", "limit": 10},
             )
 
             if response.status_code == 200:
@@ -169,7 +157,7 @@ class TestWidgetSearchEndpoints:
         """Test Spotify search results widget endpoint."""
         response = await async_client.get(
             "/api/ui/widgets/spotify-search/results",
-            params={"query": "test", "limit": 5}
+            params={"query": "test", "limit": 5},
         )
 
         assert response.status_code == 200
@@ -178,8 +166,7 @@ class TestWidgetSearchEndpoints:
     async def test_spotify_search_results_empty_query(self, async_client: AsyncClient):
         """Test widget search with empty query."""
         response = await async_client.get(
-            "/api/ui/widgets/spotify-search/results",
-            params={"query": "", "limit": 5}
+            "/api/ui/widgets/spotify-search/results", params={"query": "", "limit": 5}
         )
 
         # Should return HTML with empty results
@@ -189,20 +176,21 @@ class TestWidgetSearchEndpoints:
     async def test_spotify_search_results_short_query(self, async_client: AsyncClient):
         """Test widget search with query < 2 characters."""
         response = await async_client.get(
-            "/api/ui/widgets/spotify-search/results",
-            params={"query": "a", "limit": 5}
+            "/api/ui/widgets/spotify-search/results", params={"query": "a", "limit": 5}
         )
 
         # Query too short, should return empty results or handle gracefully
         assert response.status_code == 200
         assert "text/html" in response.headers.get("content-type", "")
 
-    async def test_spotify_search_results_limit_parameter(self, async_client: AsyncClient):
+    async def test_spotify_search_results_limit_parameter(
+        self, async_client: AsyncClient
+    ):
         """Test widget search respects limit parameter."""
         for limit in [5, 10, 20]:
             response = await async_client.get(
                 "/api/ui/widgets/spotify-search/results",
-                params={"query": "test", "limit": limit}
+                params={"query": "test", "limit": limit},
             )
 
             assert response.status_code == 200
@@ -215,11 +203,7 @@ class TestWidgetSearchEndpoints:
         for search_type in search_types:
             response = await async_client.get(
                 "/api/ui/widgets/spotify-search/results",
-                params={
-                    "query": "test",
-                    "search_type": search_type,
-                    "limit": 10
-                }
+                params={"query": "test", "search_type": search_type, "limit": 10},
             )
 
             assert response.status_code == 200
@@ -243,8 +227,8 @@ class TestSearchEdgeCases:
                 params={
                     "query": long_query,
                     "access_token": "dummy_token",
-                    "limit": 10
-                }
+                    "limit": 10,
+                },
             )
 
             # Should handle long queries (may truncate or reject)
@@ -257,11 +241,7 @@ class TestSearchEdgeCases:
         for limit in invalid_limits:
             response = await async_client.get(
                 "/api/tracks/search",
-                params={
-                    "query": "test",
-                    "access_token": "dummy_token",
-                    "limit": limit
-                }
+                params={"query": "test", "access_token": "dummy_token", "limit": limit},
             )
 
             # Should reject invalid limits with validation error
@@ -279,18 +259,16 @@ class TestSearchEdgeCases:
         ]
 
         for query in unicode_queries:
-            with patch("soulspot.api.routers.tracks.SpotifyClient") as mock_spotify_class:
+            with patch(
+                "soulspot.api.routers.tracks.SpotifyClient"
+            ) as mock_spotify_class:
                 mock_client = AsyncMock()
                 mock_client.search_track.return_value = {"tracks": {"items": []}}
                 mock_spotify_class.return_value = mock_client
 
                 response = await async_client.get(
                     "/api/tracks/search",
-                    params={
-                        "query": query,
-                        "access_token": "dummy_token",
-                        "limit": 10
-                    }
+                    params={"query": query, "access_token": "dummy_token", "limit": 10},
                 )
 
                 # Should handle Unicode gracefully
@@ -302,7 +280,7 @@ class TestSearchEdgeCases:
         # Just verify that errors don't crash the endpoint - it should return HTML
         response = await async_client.get(
             "/api/ui/widgets/spotify-search/results",
-            params={"query": "test query that will fail auth", "limit": 10}
+            params={"query": "test query that will fail auth", "limit": 10},
         )
 
         # Should handle error and return HTML (possibly with error message)
@@ -331,8 +309,8 @@ class TestSearchPerformance:
                     params={
                         "query": f"test{i}",
                         "access_token": "dummy_token",
-                        "limit": 10
-                    }
+                        "limit": 10,
+                    },
                 )
                 for i in range(5)
             ]

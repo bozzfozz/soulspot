@@ -47,6 +47,7 @@ from .models import (
     PlaylistModel,
     PlaylistTrackModel,
     SessionModel,
+    SpotifyTokenModel,
     TrackModel,
 )
 
@@ -294,7 +295,9 @@ class AlbumRepository(IAlbumRepository):
         model.release_year = album.release_year
         model.spotify_uri = str(album.spotify_uri.value) if album.spotify_uri else None
         model.musicbrainz_id = album.musicbrainz_id
-        model.artwork_path = str(album.artwork_path.value) if album.artwork_path else None
+        model.artwork_path = (
+            str(album.artwork_path.value) if album.artwork_path else None
+        )
         model.artwork_url = album.artwork_url  # NEW: Include artwork URL!
         model.updated_at = album.updated_at
 
@@ -379,8 +382,10 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
-            artwork_url=model.artwork_url if hasattr(model, 'artwork_url') else None,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -416,8 +421,10 @@ class AlbumRepository(IAlbumRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath(model.artwork_path) if model.artwork_path else None,
-            artwork_url=model.artwork_url if hasattr(model, 'artwork_url') else None,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -2095,7 +2102,6 @@ class QualityUpgradeCandidateRepository:
         return result.rowcount  # type: ignore[attr-defined, no-any-return]
 
 
-
 # Hey future me, SessionRepository is THE fix for the Docker restart auth bug! It persists
 # sessions to SQLite instead of keeping them in-memory. Each method maps Session dataclass
 # (application layer) to SessionModel (ORM). The get() method refreshes last_accessed_at on
@@ -2311,7 +2317,7 @@ class SessionRepository:
 
 class SpotifyBrowseRepository:
     """Repository for Spotify browse data (followed artists, albums, tracks).
-    
+
     This is SEPARATE from the local library repositories! These tables store
     synced Spotify data for browsing, not local files.
     """
@@ -2326,7 +2332,7 @@ class SpotifyBrowseRepository:
 
     async def get_all_artist_ids(self) -> set[str]:
         """Get all Spotify artist IDs in the database.
-        
+
         Used for diff-sync: compare with Spotify API result to find
         new follows and unfollows.
         """
@@ -2346,9 +2352,7 @@ class SpotifyBrowseRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_all_artists(
-        self, limit: int = 100, offset: int = 0
-    ) -> list[Any]:
+    async def get_all_artists(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """Get all followed artists with pagination."""
         from .models import SpotifyArtistModel
 
@@ -2424,7 +2428,8 @@ class SpotifyBrowseRepository:
             SpotifyArtistModel.spotify_id.in_(spotify_ids)
         )
         result = await self.session.execute(stmt)
-        return result.rowcount or 0  # type: ignore[return-value]
+        # result.rowcount returns the number of rows affected (type stubs incomplete)
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
     # =========================================================================
     # ALBUMS
@@ -2611,9 +2616,7 @@ class SpotifyBrowseRepository:
         """Mark tracks as synced for an album."""
         from .models import SpotifyAlbumModel
 
-        stmt = select(SpotifyAlbumModel).where(
-            SpotifyAlbumModel.spotify_id == album_id
-        )
+        stmt = select(SpotifyAlbumModel).where(SpotifyAlbumModel.spotify_id == album_id)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         if model:
@@ -2704,7 +2707,7 @@ class SpotifyBrowseRepository:
             return False  # Already running
         if not status.next_sync_at:
             return True
-        return datetime.now(UTC) >= status.next_sync_at
+        return bool(datetime.now(UTC) >= status.next_sync_at)
 
 
 # =============================================================================
@@ -2725,10 +2728,10 @@ class SpotifyBrowseRepository:
 
 class SpotifyTokenRepository:
     """Repository for background worker Spotify OAuth tokens.
-    
+
     Single-user: manages exactly one token row (id='default'). Background workers
     call get_active_token() for API access. Separate from user sessions.
-    
+
     Key methods:
     - get_active_token(): Get valid token for background work (None if invalid/missing)
     - upsert_token(): Store new token after OAuth callback
@@ -2737,7 +2740,8 @@ class SpotifyTokenRepository:
     """
 
     # Single-user token ID (could be spotify_user_id for multi-user later)
-    DEFAULT_TOKEN_ID = "default"
+    # This is a database identifier, not a password - B105 is a false positive
+    DEFAULT_TOKEN_ID = "default"  # nosec B105
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize repository with database session."""
@@ -2746,15 +2750,15 @@ class SpotifyTokenRepository:
     # Hey future me - this is THE method background workers call! Returns the token
     # if it exists AND is valid. Returns None if: no token, or is_valid=False.
     # Workers should check for None and gracefully skip work (no crash!).
-    async def get_active_token(self) -> "SpotifyTokenModel | None":
+    async def get_active_token(self) -> SpotifyTokenModel | None:
         """Get the active valid token for background workers.
-        
+
         Returns None if:
         - No token exists (user never authenticated)
         - Token is marked invalid (refresh failed, user revoked)
-        
+
         Background workers should check for None and skip work gracefully.
-        
+
         Returns:
             SpotifyTokenModel if valid token exists, None otherwise
         """
@@ -2768,12 +2772,12 @@ class SpotifyTokenRepository:
         return result.scalar_one_or_none()
 
     # Yo - use this to get token status for UI display (even if invalid)
-    async def get_token_status(self) -> "SpotifyTokenModel | None":
+    async def get_token_status(self) -> SpotifyTokenModel | None:
         """Get token regardless of validity (for status display).
-        
+
         Unlike get_active_token(), this returns the token even if is_valid=False.
         Used for UI status display and the /api/auth/token-status endpoint.
-        
+
         Returns:
             SpotifyTokenModel if exists, None if never authenticated
         """
@@ -2793,18 +2797,18 @@ class SpotifyTokenRepository:
         refresh_token: str,
         token_expires_at: datetime,
         scopes: str | None = None,
-    ) -> "SpotifyTokenModel":
+    ) -> SpotifyTokenModel:
         """Store or update the OAuth token after successful authentication.
-        
+
         Uses UPSERT pattern: creates new row if none exists, updates if exists.
         Sets is_valid=True and clears any previous errors.
-        
+
         Args:
             access_token: New access token from Spotify
             refresh_token: New refresh token from Spotify
             token_expires_at: When the access token expires
             scopes: Space-separated scopes granted (optional)
-            
+
         Returns:
             The created or updated SpotifyTokenModel
         """
@@ -2855,15 +2859,15 @@ class SpotifyTokenRepository:
         refresh_token: str | None = None,
     ) -> bool:
         """Update token after successful refresh.
-        
+
         Called by TokenRefreshWorker after Spotify returns new tokens.
         Optionally updates refresh_token if Spotify returned a new one.
-        
+
         Args:
             access_token: New access token
             token_expires_at: New expiration time
             refresh_token: New refresh token (optional, Spotify sometimes rotates)
-            
+
         Returns:
             True if token was updated, False if no token exists
         """
@@ -2897,14 +2901,14 @@ class SpotifyTokenRepository:
     # Sets is_valid=False which triggers UI warning and pauses workers.
     async def mark_invalid(self, error_message: str) -> bool:
         """Mark token as invalid after refresh failure.
-        
+
         This triggers:
         1. UI warning banner telling user to re-authenticate
         2. Background workers skip their work (no crash loop)
-        
+
         Args:
             error_message: Description of what went wrong (for debugging)
-            
+
         Returns:
             True if token was marked invalid, False if no token exists
         """
@@ -2929,15 +2933,15 @@ class SpotifyTokenRepository:
 
     # Listen - TokenRefreshWorker calls this to find tokens needing refresh!
     # Default: refresh tokens expiring within 10 minutes (proactive refresh).
-    async def get_expiring_soon(self, minutes: int = 10) -> "SpotifyTokenModel | None":
+    async def get_expiring_soon(self, minutes: int = 10) -> SpotifyTokenModel | None:
         """Get token if it expires within given minutes.
-        
+
         Used by TokenRefreshWorker for proactive refresh before expiration.
         Only returns valid tokens (is_valid=True).
-        
+
         Args:
             minutes: Threshold in minutes (default 10)
-            
+
         Returns:
             SpotifyTokenModel if expiring soon and valid, None otherwise
         """
@@ -2956,7 +2960,7 @@ class SpotifyTokenRepository:
     # Hey - cleanup method, probably not needed for single-user but good to have
     async def delete_token(self) -> bool:
         """Delete the token (logout/revoke).
-        
+
         Returns:
             True if token was deleted, False if none existed
         """

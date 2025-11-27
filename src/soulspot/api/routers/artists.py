@@ -39,7 +39,9 @@ class ArtistResponse(BaseModel):
 
     id: str = Field(..., description="Artist UUID")
     name: str = Field(..., description="Artist name")
-    spotify_uri: str | None = Field(None, description="Spotify URI (e.g., spotify:artist:xxxx)")
+    spotify_uri: str | None = Field(
+        None, description="Spotify URI (e.g., spotify:artist:xxxx)"
+    )
     musicbrainz_id: str | None = Field(None, description="MusicBrainz ID")
     image_url: str | None = Field(None, description="Artist profile image URL")
     genres: list[str] = Field(default_factory=list, description="Artist genres")
@@ -154,7 +156,9 @@ async def sync_followed_artists(
 # count for UI pagination controls. Sorted alphabetically by name in repository.
 @router.get("", response_model=ArtistListResponse)
 async def list_artists(
-    limit: int = Query(100, ge=1, le=500, description="Maximum number of artists to return"),
+    limit: int = Query(
+        100, ge=1, le=500, description="Maximum number of artists to return"
+    ),
     offset: int = Query(0, ge=0, description="Number of artists to skip"),
     session: AsyncSession = Depends(get_db_session),
 ) -> ArtistListResponse:
@@ -224,7 +228,9 @@ async def get_artist(
     try:
         artist_id_obj = ArtistId.from_string(artist_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid artist ID format: {e}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid artist ID format: {e}"
+        ) from e
 
     artist = await repo.get_by_id(artist_id_obj)
 
@@ -256,7 +262,9 @@ async def delete_artist(
     try:
         artist_id_obj = ArtistId.from_string(artist_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid artist ID format: {e}") from e
+        raise HTTPException(
+            status_code=400, detail=f"Invalid artist ID format: {e}"
+        ) from e
 
     # Check if artist exists first (repository.delete raises exception if not found)
     artist = await repo.get_by_id(artist_id_obj)

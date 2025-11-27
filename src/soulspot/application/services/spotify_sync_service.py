@@ -5,7 +5,6 @@
 # Auto-sync triggers on page load with cooldown (no button needed).
 """Service for automatic Spotify data synchronization with diff logic."""
 
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -20,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 class SpotifySyncService:
     """Service for auto-syncing Spotify data with diff logic.
-    
+
     This service handles:
     1. Auto-sync followed artists on page load (with cooldown)
     2. Diff-sync: add new follows, remove unfollows from DB
     3. Lazy-load artist albums when user navigates to artist page
     4. Lazy-load album tracks when user navigates to album page
-    
+
     All data goes to spotify_* tables, NOT local library tables!
     """
 
@@ -58,21 +57,21 @@ class SpotifySyncService:
         self, access_token: str, force: bool = False
     ) -> dict[str, Any]:
         """Sync followed artists from Spotify with diff logic.
-        
+
         This is the MAIN auto-sync method! Called on page load.
         - Checks cooldown first (skip if recently synced)
         - Fetches all followed artists from Spotify (paginated)
         - Compares with DB: adds new, removes unfollowed
         - Returns stats for UI display
-        
+
         Args:
             access_token: Spotify OAuth access token
             force: Skip cooldown check
-            
+
         Returns:
             Dict with sync stats (added, removed, total, etc.)
         """
-        stats = {
+        stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
             "added": 0,
@@ -164,7 +163,7 @@ class SpotifySyncService:
         self, access_token: str
     ) -> list[dict[str, Any]]:
         """Fetch all followed artists from Spotify (handles pagination).
-        
+
         Spotify uses cursor-based pagination. We loop until no more pages.
         """
         all_artists: list[dict[str, Any]] = []
@@ -226,19 +225,19 @@ class SpotifySyncService:
         self, access_token: str, artist_id: str, force: bool = False
     ) -> dict[str, Any]:
         """Sync albums for a specific artist from Spotify.
-        
+
         Called when user navigates to artist detail page.
         Lazy-loads albums only when needed.
-        
+
         Args:
             access_token: Spotify OAuth access token
             artist_id: Spotify artist ID
             force: Skip cooldown check
-            
+
         Returns:
             Dict with sync stats
         """
-        stats = {
+        stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
             "added": 0,
@@ -256,6 +255,7 @@ class SpotifySyncService:
             # Check cooldown based on albums_synced_at
             if not force and artist.albums_synced_at:
                 from datetime import timedelta
+
                 cooldown = timedelta(minutes=self.ALBUMS_SYNC_COOLDOWN)
                 if datetime.now(UTC) < artist.albums_synced_at + cooldown:
                     stats["skipped_cooldown"] = True
@@ -287,36 +287,20 @@ class SpotifySyncService:
     async def _fetch_artist_albums(
         self, access_token: str, artist_id: str
     ) -> list[dict[str, Any]]:
-        """Fetch all albums for an artist from Spotify."""
-        all_albums: list[dict[str, Any]] = []
-        offset = 0
-        limit = 50
+        """Fetch all albums for an artist from Spotify.
 
-        while True:
-            response = await self.spotify_client.get_artist_albums(
-                access_token=access_token,
-                artist_id=artist_id,
-                include_groups="album,single,compilation",
-                limit=limit,
-                offset=offset,
-            )
+        Note: The spotify_client.get_artist_albums method returns a list directly
+        with a default limit of 50 albums.
+        """
+        # The client method already handles include_groups and returns a list
+        albums = await self.spotify_client.get_artist_albums(
+            artist_id=artist_id,
+            access_token=access_token,
+            limit=50,
+        )
+        return albums
 
-            items = response.get("items", [])
-            if not items:
-                break
-
-            all_albums.extend(items)
-
-            if len(items) < limit:
-                break
-
-            offset += limit
-
-        return all_albums
-
-    async def _upsert_album(
-        self, album_data: dict[str, Any], artist_id: str
-    ) -> None:
+    async def _upsert_album(self, album_data: dict[str, Any], artist_id: str) -> None:
         """Insert or update a Spotify album in DB."""
         spotify_id = album_data["id"]
         name = album_data.get("name", "Unknown")
@@ -350,18 +334,18 @@ class SpotifySyncService:
         self, access_token: str, album_id: str, force: bool = False
     ) -> dict[str, Any]:
         """Sync tracks for a specific album from Spotify.
-        
+
         Called when user navigates to album detail page.
-        
+
         Args:
             access_token: Spotify OAuth access token
             album_id: Spotify album ID
             force: Skip cooldown check
-            
+
         Returns:
             Dict with sync stats
         """
-        stats = {
+        stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
             "added": 0,
@@ -379,6 +363,7 @@ class SpotifySyncService:
             # Check cooldown
             if not force and album.tracks_synced_at:
                 from datetime import timedelta
+
                 cooldown = timedelta(minutes=self.TRACKS_SYNC_COOLDOWN)
                 if datetime.now(UTC) < album.tracks_synced_at + cooldown:
                     stats["skipped_cooldown"] = True
@@ -412,9 +397,7 @@ class SpotifySyncService:
 
         return stats
 
-    async def _upsert_track(
-        self, track_data: dict[str, Any], album_id: str
-    ) -> None:
+    async def _upsert_track(self, track_data: dict[str, Any], album_id: str) -> None:
         """Insert or update a Spotify track in DB."""
         spotify_id = track_data["id"]
         name = track_data.get("name", "Unknown")
@@ -423,7 +406,7 @@ class SpotifySyncService:
         duration_ms = track_data.get("duration_ms", 0)
         explicit = track_data.get("explicit", False)
         preview_url = track_data.get("preview_url")
-        
+
         # ISRC from external_ids
         external_ids = track_data.get("external_ids", {})
         isrc = external_ids.get("isrc")
@@ -444,9 +427,7 @@ class SpotifySyncService:
     # UTILITY METHODS
     # =========================================================================
 
-    async def get_artists(
-        self, limit: int = 100, offset: int = 0
-    ) -> list[Any]:
+    async def get_artists(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """Get followed artists from DB."""
         return await self.repo.get_all_artists(limit=limit, offset=offset)
 

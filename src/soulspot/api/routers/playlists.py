@@ -79,7 +79,8 @@ def _extract_playlist_id(playlist_id_or_url: str) -> str:
 @router.post("/import")
 async def import_playlist(
     playlist_id: str = Query(
-        ..., description="Spotify playlist ID or URL (e.g., https://open.spotify.com/playlist/ID)"
+        ...,
+        description="Spotify playlist ID or URL (e.g., https://open.spotify.com/playlist/ID)",
     ),
     fetch_all_tracks: bool = Query(True, description="Fetch all tracks in playlist"),
     auto_queue_downloads: bool = Query(
@@ -128,7 +129,7 @@ async def import_playlist(
         )
         response = await use_case.execute(request)
 
-        result = {
+        result: dict[str, Any] = {
             "message": "Playlist imported successfully",
             "playlist_id": str(response.playlist.id.value),
             "playlist_name": response.playlist.name,
@@ -151,7 +152,8 @@ async def import_playlist(
                 "failed_count": queue_response.failed_count,
             }
             if queue_response.errors:
-                result["errors"].extend(queue_response.errors)
+                errors_list: list[str] = result["errors"]
+                errors_list.extend(queue_response.errors)
 
         return result
     except ValueError as e:
@@ -199,8 +201,6 @@ async def queue_downloads(
             "failed_count": response.failed_count,
             "errors": response.errors,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

@@ -133,7 +133,9 @@ class ArtistSongsService:
             )
 
             stats["total_fetched"] = len(top_tracks)
-            logger.info(f"Fetched {len(top_tracks)} top tracks for artist {artist.name}")
+            logger.info(
+                f"Fetched {len(top_tracks)} top tracks for artist {artist.name}"
+            )
 
             for track_data in top_tracks:
                 try:

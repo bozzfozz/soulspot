@@ -86,6 +86,11 @@ class IAlbumRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_spotify_uri(self, spotify_uri: Any) -> Album | None:
+        """Get an album by Spotify URI."""
+        pass
+
+    @abstractmethod
     async def update(self, album: Album) -> None:
         """Update an existing album."""
         pass

@@ -34,7 +34,7 @@ class QueuePlaylistDownloadsResponse:
 
 class QueuePlaylistDownloadsUseCase(UseCase):
     """Queue all missing tracks from a playlist for download.
-    
+
     Hey future me - this is the SMART DOWNLOAD QUEUE feature! When user imports a playlist,
     they can auto-queue all missing tracks (tracks without file_path) for download. The
     quality_filter lets them choose: "flac" (lossless only), "320" (320kbps MP3+), or "any"
@@ -66,12 +66,12 @@ class QueuePlaylistDownloadsUseCase(UseCase):
     # For now, we accept all tracks (quality checking happens in Soulseek search), but
     # this is where you'd add logic to skip tracks based on existing metadata if needed.
     @staticmethod
-    def _meets_quality_filter(quality_filter: str | None) -> bool:
+    def _meets_quality_filter(_quality_filter: str | None) -> bool:  # noqa: ARG004
         """Check if track meets quality filter requirements.
-        
+
         Args:
-            quality_filter: Quality filter ("flac", "320", "any", or None)
-            
+            _quality_filter: Quality filter ("flac", "320", "any", or None)
+
         Returns:
             True if track should be queued, False otherwise
         """

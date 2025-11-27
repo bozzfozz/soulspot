@@ -46,9 +46,7 @@ def _validate_sqlite_path(settings: Settings) -> None:
     try:
         if db_path.parent and str(db_path.parent) != ".":
             db_path.parent.mkdir(parents=True, exist_ok=True)
-            logger.debug(
-                "Ensured SQLite parent directory exists: %s", db_path.parent
-            )
+            logger.debug("Ensured SQLite parent directory exists: %s", db_path.parent)
     except Exception as exc:  # pragma: no cover - safety log
         raise RuntimeError(
             f"Unable to create SQLite database directory '{db_path.parent}': {exc}. "
@@ -152,7 +150,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
         spotify_client = SpotifyClient(settings.spotify)
-        
+
         db_token_manager = DatabaseTokenManager(
             spotify_client=spotify_client,
             get_db_session=get_db_session_for_store,
@@ -277,7 +275,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     # Wait for task to complete gracefully with timeout
                     try:
                         await asyncio.wait_for(
-                            auto_import_task, timeout=settings.observability.shutdown_timeout
+                            auto_import_task,
+                            timeout=settings.observability.shutdown_timeout,
                         )
                     except TimeoutError:
                         # If timeout, cancel forcefully

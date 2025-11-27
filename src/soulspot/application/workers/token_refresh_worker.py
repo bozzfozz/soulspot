@@ -15,24 +15,23 @@
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
-    from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
 logger = logging.getLogger(__name__)
 
 
 class TokenRefreshWorker:
     """Background worker that proactively refreshes Spotify OAuth tokens.
-    
+
     Runs every `check_interval_seconds` (default 5 min) and refreshes tokens
     that expire within `refresh_threshold_minutes` (default 10 min).
-    
+
     This ensures background workers (WatchlistWorker, DiscographyWorker, etc.)
     always have valid tokens available without needing to handle refresh logic.
-    
+
     On refresh failure:
     - HTTP 401/403: Token marked invalid → UI shows warning banner
     - Network error: Logged, retry on next cycle (might be temporary)
@@ -60,7 +59,7 @@ class TokenRefreshWorker:
 
     async def start(self) -> None:
         """Start the token refresh worker.
-        
+
         Creates a background task that runs the refresh loop.
         Safe to call multiple times (idempotent).
         """
@@ -77,7 +76,7 @@ class TokenRefreshWorker:
 
     async def stop(self) -> None:
         """Stop the token refresh worker.
-        
+
         Cancels the background task and waits for cleanup.
         Safe to call multiple times (idempotent).
         """
@@ -91,31 +90,31 @@ class TokenRefreshWorker:
 
     async def _run_loop(self) -> None:
         """Main worker loop - checks and refreshes tokens periodically.
-        
+
         Hey future me - this loop runs FOREVER until stop() is called!
         On each iteration:
         1. Call token_manager.refresh_expiring_tokens()
         2. Sleep for check_interval_seconds
         3. Repeat
-        
+
         Errors in refresh don't crash the loop - just log and continue.
         The loop only exits when self._running becomes False.
         """
         # Yo - wait a bit on startup to let other services initialize
         await asyncio.sleep(10)
-        
+
         while self._running:
             try:
                 # Check and refresh expiring tokens
                 refreshed = await self.token_manager.refresh_expiring_tokens(
                     threshold_minutes=self.refresh_threshold_minutes
                 )
-                
+
                 if refreshed:
                     logger.info("Token refreshed successfully by background worker")
                 else:
                     logger.debug("No tokens needed refresh")
-                    
+
             except Exception as e:
                 # Don't crash the loop on errors - log and continue
                 logger.error(f"Error in token refresh worker: {e}", exc_info=True)
@@ -134,9 +133,9 @@ class TokenRefreshWorker:
 
     async def force_refresh(self) -> bool:
         """Force an immediate token refresh (bypass threshold check).
-        
+
         Useful for testing or when user explicitly requests refresh.
-        
+
         Returns:
             True if refresh was performed, False otherwise
         """
