@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_spotify_token_from_session
+from soulspot.api.dependencies import get_db_session, get_spotify_token_shared
 from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
@@ -238,7 +238,7 @@ async def get_watchlist(
 @router.post("/watchlist/{watchlist_id}/check")
 async def check_watchlist_releases(
     watchlist_id: str,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -324,7 +324,7 @@ async def delete_watchlist(
 @router.post("/discography/check")
 async def check_discography(
     request: DiscographyCheckRequest,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -362,7 +362,7 @@ async def check_discography(
 @router.get("/discography/missing")
 async def get_missing_albums(
     limit: int = 10,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -1153,7 +1153,7 @@ class BulkCreateWatchlistsRequest(BaseModel):
 @router.post("/followed-artists/sync")
 async def sync_followed_artists(
     request: Request,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> Any:
@@ -1329,7 +1329,7 @@ async def bulk_create_watchlists(
 @router.get("/followed-artists/preview")
 async def preview_followed_artists(
     limit: int = 50,
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Preview followed artists from Spotify without syncing to database.

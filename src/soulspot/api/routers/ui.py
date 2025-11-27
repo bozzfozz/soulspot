@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -13,13 +13,10 @@ from soulspot.api.dependencies import (
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
-    get_session_id,
-    get_session_store,
     get_spotify_sync_service,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
-from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.infrastructure.persistence.repositories import (
@@ -27,6 +24,9 @@ from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
     TrackRepository,
 )
+
+if TYPE_CHECKING:
+    from soulspot.application.services.token_manager import DatabaseTokenManager
 
 # AI-Model: Copilot
 # Hey future me - compute templates directory relative to THIS file so it works both in
@@ -999,26 +999,27 @@ async def track_metadata_editor(
 @router.get("/spotify/artists", response_class=HTMLResponse)
 async def spotify_artists_page(
     request: Request,
-    session_id: str | None = Depends(get_session_id),
-    session_store: DatabaseSessionStore = Depends(get_session_store),
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify followed artists page with auto-sync.
 
     Auto-syncs followed artists from Spotify on page load (with cooldown).
     Shows all followed artists from DB after sync.
+
+    Uses SHARED server-side token from DatabaseTokenManager, so any device
+    on the network can access this page without per-browser session cookies.
     """
     artists = []
     sync_stats = None
     error = None
 
     try:
-        # Get access token from session
+        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
+        # This is the key fix: any device can access Spotify data without its own OAuth session.
         access_token = None
-        if session_id:
-            session = await session_store.get_session(session_id)
-            if session and session.access_token:
-                access_token = session.access_token
+        if hasattr(request.app.state, "db_token_manager"):
+            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+            access_token = await db_token_manager.get_token_for_background()
 
         if access_token:
             # Auto-sync (respects cooldown)
@@ -1073,14 +1074,14 @@ async def spotify_artists_page(
 async def spotify_artist_detail_page(
     request: Request,
     artist_id: str,
-    session_id: str | None = Depends(get_session_id),
-    session_store: DatabaseSessionStore = Depends(get_session_store),
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify artist detail page with albums.
 
     Auto-syncs artist's albums from Spotify on page load (with cooldown).
     Shows artist info and album grid.
+
+    Uses SHARED server-side token from DatabaseTokenManager.
     """
     artist = None
     albums = []
@@ -1088,12 +1089,11 @@ async def spotify_artist_detail_page(
     error = None
 
     try:
-        # Get access token
+        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
         access_token = None
-        if session_id:
-            session = await session_store.get_session(session_id)
-            if session and session.access_token:
-                access_token = session.access_token
+        if hasattr(request.app.state, "db_token_manager"):
+            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+            access_token = await db_token_manager.get_token_for_background()
 
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
@@ -1182,14 +1182,14 @@ async def spotify_album_detail_page(
     request: Request,
     artist_id: str,
     album_id: str,
-    session_id: str | None = Depends(get_session_id),
-    session_store: DatabaseSessionStore = Depends(get_session_store),
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify album detail page with tracks.
 
     Auto-syncs album's tracks from Spotify on page load (with cooldown).
     Shows album info and track list with download buttons.
+
+    Uses SHARED server-side token from DatabaseTokenManager.
     """
     artist = None
     album = None
@@ -1198,12 +1198,11 @@ async def spotify_album_detail_page(
     error = None
 
     try:
-        # Get access token
+        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
         access_token = None
-        if session_id:
-            session = await session_store.get_session(session_id)
-            if session and session.access_token:
-                access_token = session.access_token
+        if hasattr(request.app.state, "db_token_manager"):
+            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+            access_token = await db_token_manager.get_token_for_background()
 
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)

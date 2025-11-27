@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_client,
-    get_spotify_token_from_session,
+    get_spotify_token_shared,
 )
 from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
@@ -91,25 +91,26 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
 
 
 # Yo, this is the MAIN sync endpoint! It fetches ALL followed artists from Spotify (paginated
-# internally) and creates/updates them in our DB. The access_token comes from the session
-# (auto-refreshed by get_spotify_token_from_session dependency). Returns the full list of
-# synced artists plus stats (created/updated counts). This is idempotent - safe to call
-# multiple times. Duplicate prevention is by spotify_uri. POST because it modifies DB state.
+# internally) and creates/updates them in our DB. Uses shared server-side token so any device
+# can trigger sync. Returns the full list of synced artists plus stats (created/updated counts).
+# This is idempotent - safe to call multiple times. Duplicate prevention is by spotify_uri.
+# POST because it modifies DB state.
 @router.post("/sync", response_model=SyncArtistsResponse)
 async def sync_followed_artists(
     session: AsyncSession = Depends(get_db_session),
     spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_from_session),
+    access_token: str = Depends(get_spotify_token_shared),
 ) -> SyncArtistsResponse:
     """Sync followed artists from Spotify to the database.
 
+    Uses shared server-side token so any device on the network can trigger sync.
     Fetches all artists the user follows on Spotify and creates/updates them
     in the local database. Uses spotify_uri as unique key to prevent duplicates.
 
     Args:
         session: Database session
         spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        access_token: Valid Spotify access token from shared server-side storage
 
     Returns:
         List of synced artists and sync statistics
