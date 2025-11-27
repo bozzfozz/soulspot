@@ -27,6 +27,10 @@ docs/
 
 ## 🚀 Quick Start
 
+### Understanding SoulSpot
+New to SoulSpot? Understand the core concept:
+- **[SoulSpot Architecture Concept](project/SOULSPOT_ARCHITECTURE_CONCEPT.md)** - SoulSpot as a standalone application
+
 ### For Users
 New to SoulSpot? Start here:
 1. [Setup Guide](guides/user/setup-guide.md) - Installation and configuration
@@ -64,6 +68,7 @@ Complete documentation for all implemented features:
 
 ### Project Documentation (`project/`)
 Core project information and guidelines:
+- **[SoulSpot Architecture Concept](project/SOULSPOT_ARCHITECTURE_CONCEPT.md)** - Core concept: SoulSpot as standalone application
 - **[CHANGELOG](project/CHANGELOG.md)** - Version history and release notes
 - **[Architecture](project/architecture.md)** - System architecture and design
 - **[Contributing](project/contributing.md)** - Contribution guidelines

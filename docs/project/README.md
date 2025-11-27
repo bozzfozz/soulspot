@@ -13,6 +13,7 @@ This directory contains core project-level documentation including architecture,
 
 | File | Description |
 |------|-------------|
+| [SOULSPOT_ARCHITECTURE_CONCEPT.md](SOULSPOT_ARCHITECTURE_CONCEPT.md) | **Core Concept: SoulSpot as standalone application** |
 | [architecture.md](architecture.md) | System architecture and design patterns |
 | [contributing.md](contributing.md) | Guidelines for contributing to SoulSpot |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
@@ -22,6 +23,7 @@ This directory contains core project-level documentation including architecture,
 
 ## Quick Links
 
+- **Understanding SoulSpot:** Start with [SOULSPOT_ARCHITECTURE_CONCEPT.md](SOULSPOT_ARCHITECTURE_CONCEPT.md)
 - **For Contributors:** Start with [contributing.md](contributing.md)
 - **For Developers:** Read [architecture.md](architecture.md) first
 - **For Release Notes:** See [CHANGELOG.md](CHANGELOG.md)
