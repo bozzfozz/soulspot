@@ -14,13 +14,14 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-# Hey future me - this is a merge migration that resolves the branching issue where two
-# independent branches diverged from dd18990ggh48:
-# - Branch 1: dd18990ggh48 -> a0fbb3aff2a8 (merge) -> c7da905f261a (add_image_url_to_artists)
+# Hey future me - this is a merge migration that resolves multiple heads from two branches:
+# - Branch 1: a0fbb3aff2a8 (earlier merge) -> c7da905f261a (add_image_url_to_artists)
+#   Note: a0fbb3aff2a8 already merged session_persistence (40cac646364c) and genres_tags (dd18990ggh48)
 # - Branch 2: dd18990ggh48 -> ee19001hhj49 -> ff20002ii50 -> gg20003jj51 -> hh21004kkl52 -> ii22005llm53
-# This created multiple heads in the migration history, causing "alembic upgrade head" to fail.
-# This merge brings them back into a single linear chain. No schema changes here - just
-# dependency resolution. Both parent migrations must be applied before this one can run.
+# Both branches ultimately trace back to dd18990ggh48, but one went through the earlier merge point.
+# This created multiple heads, causing "alembic upgrade head" to fail. This merge brings them
+# back into a single linear chain. No schema changes here - just dependency resolution.
+# Both parent migrations must be applied before this one can run.
 def upgrade() -> None:
     """Merge two migration branches - no schema changes needed."""
     pass
