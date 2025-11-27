@@ -1,6 +1,6 @@
 {# Hey future me - Import Playlist page!
    Shows auth status via HTMX, then a form for Spotify playlist URL/ID.
-   getConnectSpotifyHTML() helper handles unauthenticated state.
+   getNotConnectedHTML() helper handles unauthenticated state - redirects to dashboard.
    htmx:responseError catches 401s from cross-device access (no session cookie). #}
 
 {% extends "base.html" %}
@@ -128,17 +128,19 @@
     }
 </style>
 <script>
-function getConnectSpotifyHTML() {
+{# Hey future me - No "Connect Spotify" button here! User requested that connect buttons
+   should only appear on dashboard/onboarding. Instead, redirect to dashboard. #}
+function getNotConnectedHTML() {
     return `
         <div class="status-card" style="background: rgba(var(--accent-primary-rgb), 0.1); border: 1px solid rgba(var(--accent-primary-rgb), 0.2);">
             <div class="status-icon" style="background: var(--accent-primary);">
                 <i class="fa-solid fa-circle-info" style="color: white;"></i>
             </div>
             <div style="flex: 1;">
-                <p style="font-weight: var(--font-weight-bold); margin-bottom: var(--space-1);">Connect Spotify</p>
-                <p style="font-size: var(--font-size-sm); color: var(--text-muted);">Connect your Spotify account to start importing playlists</p>
+                <p style="font-weight: var(--font-weight-bold); margin-bottom: var(--space-1);">Spotify nicht verbunden</p>
+                <p style="font-size: var(--font-size-sm); color: var(--text-muted);">Verbinde Spotify zuerst über das Dashboard</p>
             </div>
-            <a href="/auth" class="btn btn-primary">Connect Now</a>
+            <a href="/" class="btn btn-primary">Zum Dashboard</a>
         </div>
     `;
 }
@@ -176,10 +178,10 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                     </div>
                 `;
             } else {
-                statusDiv.innerHTML = getConnectSpotifyHTML();
+                statusDiv.innerHTML = getNotConnectedHTML();
             }
         } catch (e) {
-            document.getElementById('auth-status').innerHTML = getConnectSpotifyHTML();
+            document.getElementById('auth-status').innerHTML = getNotConnectedHTML();
         }
     }
     
@@ -195,7 +197,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
 
 document.body.addEventListener('htmx:responseError', function(evt) {
     if (evt.detail.target.id === 'auth-status') {
-        document.getElementById('auth-status').innerHTML = getConnectSpotifyHTML();
+        document.getElementById('auth-status').innerHTML = getNotConnectedHTML();
     }
     
     if (evt.detail.xhr.status === 401 && evt.detail.target.id === 'import-form') {
@@ -207,15 +209,15 @@ document.body.addEventListener('htmx:responseError', function(evt) {
                         <i class="fa-solid fa-circle-xmark" style="color: white;"></i>
                     </div>
                     <div style="flex: 1;">
-                        <p style="font-weight: var(--font-weight-bold); margin-bottom: var(--space-1);">Authentication Required</p>
+                        <p style="font-weight: var(--font-weight-bold); margin-bottom: var(--space-1);">Authentifizierung erforderlich</p>
                         <p style="font-size: var(--font-size-sm); color: var(--text-muted);">${response.detail}</p>
                     </div>
-                    <a href="/auth" class="btn btn-error">Connect Spotify</a>
+                    <a href="/" class="btn btn-error">Zum Dashboard</a>
                 </div>
             `;
             SoulSpot.showNotification(response.detail, 'error');
         } catch (e) {
-            document.getElementById('import-result').innerHTML = getConnectSpotifyHTML();
+            document.getElementById('import-result').innerHTML = getNotConnectedHTML();
         }
     }
 });

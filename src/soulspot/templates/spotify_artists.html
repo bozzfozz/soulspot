@@ -92,15 +92,16 @@
         {% endfor %}
     </div>
     {% else %}
+    {# Hey future me - No "Connect Spotify" button here! User requested connect buttons only on dashboard/onboarding #}
     <div class="empty-state">
         <div class="empty-icon" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
             <i class="fa-brands fa-spotify" style="color: white;"></i>
         </div>
-        <h3>No followed artists</h3>
-        <p>You don't follow any artists on Spotify, or you need to connect your Spotify account first.</p>
-        <a href="/auth" class="btn btn-primary" style="background: #1DB954;">
-            <i class="fa-brands fa-spotify"></i>
-            Connect Spotify
+        <h3>Keine gefolgten Künstler</h3>
+        <p>Du folgst noch keinen Künstlern auf Spotify, oder Spotify ist noch nicht verbunden.</p>
+        <a href="/" class="btn btn-primary" style="background: #1DB954;">
+            <i class="fa-solid fa-home"></i>
+            Zum Dashboard
         </a>
     </div>
     {% endif %}

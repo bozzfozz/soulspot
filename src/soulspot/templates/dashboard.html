@@ -5,14 +5,10 @@
    The HTMX auto-refresh is for stats every 30s - might cause issues if API endpoint changes. #}
 
 {% extends "base.html" %}
-{% import "includes/macros.html" as macros %}
 
 {% block title %}Dashboard - SoulSpot{% endblock %}
 
-{# Token status banner only on dashboard/onboarding pages - include shared partial #}
-{% block token_status_banner %}
-{% include "includes/token_status_banner.html" %}
-{% endblock %}
+{% import "includes/macros.html" as macros %}
 
 {% block content %}
 <!-- Page Header -->
