@@ -140,7 +140,9 @@ class TestSSEDownloadEvents:
                 ),
             ]
 
-            with patch("soulspot.api.routers.sse.get_download_repository") as mock_get_repo:
+            with patch(
+                "soulspot.api.routers.sse.get_download_repository"
+            ) as mock_get_repo:
                 mock_repo = AsyncMock()
                 mock_repo.list_active = AsyncMock(return_value=mock_downloads)
                 mock_get_repo.return_value = mock_repo
@@ -247,6 +249,7 @@ class TestSSEEventTiming:
                 async for line in response.aiter_lines():
                     if "event: downloads_update" in line:
                         import time
+
                         event_times.append(time.time())
                         event_count += 1
 
@@ -262,9 +265,9 @@ class TestSSEEventTiming:
                     ]
                     # Allow some variance (1-3 seconds)
                     for interval in intervals:
-                        assert 1.0 <= interval <= 4.0, (
-                            f"Event interval {interval}s outside expected range (1-4s)"
-                        )
+                        assert (
+                            1.0 <= interval <= 4.0
+                        ), f"Event interval {interval}s outside expected range (1-4s)"
 
 
 class TestSSEConnectionManagement:
@@ -382,7 +385,9 @@ class TestSSEPerformance:
 
         with patch("soulspot.api.routers.sse.get_download_repository") as mock_get_repo:
             mock_repo = AsyncMock()
-            mock_repo.list_active = AsyncMock(side_effect=lambda: get_changing_downloads())
+            mock_repo.list_active = AsyncMock(
+                side_effect=lambda: get_changing_downloads()
+            )
             mock_get_repo.return_value = mock_repo
 
             async with async_client.stream("GET", "/api/ui/sse/stream") as response:

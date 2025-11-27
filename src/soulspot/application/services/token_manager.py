@@ -11,8 +11,7 @@ import httpx
 from soulspot.domain.ports import ISpotifyClient
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ class TokenInfo:
 @dataclass
 class TokenStatus:
     """Token status for UI display and API responses."""
-    
+
     exists: bool
     is_valid: bool
     needs_reauth: bool
@@ -345,13 +344,13 @@ class TokenManager:
 
 class DatabaseTokenManager:
     """Database-backed token manager for background workers.
-    
+
     Single-user architecture: manages exactly one token for all background work.
     Background workers call get_token_for_background() to get a valid access token.
-    
+
     The is_valid flag triggers UI warning when False (user must re-authenticate).
     Workers gracefully skip work when token is invalid (no crash loop).
-    
+
     Key methods:
     - get_token_for_background(): Get valid token for workers (None if invalid)
     - store_from_oauth(): Save token after OAuth callback
@@ -378,40 +377,44 @@ class DatabaseTokenManager:
     # Does NOT auto-refresh - that's TokenRefreshWorker's job (runs every 5 min).
     async def get_token_for_background(self) -> str | None:
         """Get valid access token for background workers.
-        
+
         Returns the access_token string if a valid token exists.
         Returns None if:
         - No token exists (user never authenticated)
         - Token is invalid (refresh failed, user revoked access)
         - Token is expired (shouldn't happen if TokenRefreshWorker is running)
-        
+
         Background workers should check for None and skip work gracefully.
-        
+
         Returns:
             Access token string or None
         """
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
                 token_model = await repo.get_active_token()
-                
+
                 if not token_model:
                     logger.debug("No active token available for background work")
                     return None
-                
+
                 # Check if expired (shouldn't happen with TokenRefreshWorker)
                 if token_model.is_expired():
-                    logger.warning("Token is expired - TokenRefreshWorker may not be running")
+                    logger.warning(
+                        "Token is expired - TokenRefreshWorker may not be running"
+                    )
                     return None
-                
+
                 return token_model.access_token
-                
+
             finally:
                 await db_session.close()
             break
-        
+
         return None
 
     # Yo - OAuth callback calls this! Stores new token after successful authentication.
@@ -424,17 +427,19 @@ class DatabaseTokenManager:
         scope: str | None = None,
     ) -> None:
         """Store token after successful OAuth authentication.
-        
+
         Called by auth callback after user completes Spotify OAuth flow.
         Creates or updates the single token row. Sets is_valid=True.
-        
+
         Args:
             access_token: Access token from Spotify
             refresh_token: Refresh token from Spotify
             expires_in: Token lifetime in seconds (usually 3600)
             scope: Space-separated scopes granted (optional)
         """
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
@@ -461,56 +466,62 @@ class DatabaseTokenManager:
     # and proactively refreshes it. If refresh fails, marks token invalid (triggers UI warning).
     async def refresh_expiring_tokens(self, threshold_minutes: int = 10) -> bool:
         """Proactively refresh tokens expiring soon.
-        
+
         Called by TokenRefreshWorker every 5 minutes. Checks if token expires
         within threshold_minutes and refreshes if needed.
-        
+
         If refresh fails (401, 403, network error), marks token as invalid
         which triggers the UI warning banner.
-        
+
         Args:
             threshold_minutes: Refresh tokens expiring within this many minutes
-            
+
         Returns:
             True if refresh was performed, False if no refresh needed/possible
         """
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
                 token_model = await repo.get_expiring_soon(minutes=threshold_minutes)
-                
+
                 if not token_model:
                     # No token expiring soon, nothing to do
                     return False
-                
+
                 logger.info(
                     "Token expires at %s, refreshing proactively",
-                    token_model.token_expires_at.isoformat()
+                    token_model.token_expires_at.isoformat(),
                 )
-                
+
                 try:
                     # Call Spotify to refresh
                     token_response = await self._spotify_client.refresh_token(
                         token_model.refresh_token
                     )
-                    
+
                     # Calculate new expiration
                     expires_in = token_response.get("expires_in", 3600)
                     new_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-                    
+
                     # Update in DB
                     await repo.update_after_refresh(
                         access_token=token_response["access_token"],
                         token_expires_at=new_expires_at,
-                        refresh_token=token_response.get("refresh_token"),  # Spotify may rotate
+                        refresh_token=token_response.get(
+                            "refresh_token"
+                        ),  # Spotify may rotate
                     )
                     await db_session.commit()
-                    
-                    logger.info("Token refreshed successfully (expires in %ds)", expires_in)
+
+                    logger.info(
+                        "Token refreshed successfully (expires in %ds)", expires_in
+                    )
                     return True
-                    
+
                 except httpx.HTTPStatusError as e:
                     # HTTP error from Spotify (401, 403 = user revoked access)
                     error_msg = f"Spotify refresh failed: HTTP {e.response.status_code}"
@@ -518,7 +529,7 @@ class DatabaseTokenManager:
                     await repo.mark_invalid(error_msg)
                     await db_session.commit()
                     return False
-                    
+
                 except httpx.HTTPError as e:
                     # Network error (timeout, connection refused, etc.)
                     error_msg = f"Network error during refresh: {str(e)}"
@@ -526,7 +537,7 @@ class DatabaseTokenManager:
                     # Don't mark invalid for network errors - might be temporary
                     # Let next refresh cycle retry
                     return False
-                    
+
                 except Exception as e:
                     # Unexpected error
                     error_msg = f"Unexpected refresh error: {str(e)}"
@@ -534,35 +545,37 @@ class DatabaseTokenManager:
                     await repo.mark_invalid(error_msg)
                     await db_session.commit()
                     return False
-                    
+
             finally:
                 await db_session.close()
             break
-        
+
         return False
 
     # Hey - UI calls this for the token status endpoint and warning banner!
     # Returns structured status info regardless of token validity.
     async def get_status(self) -> TokenStatus:
         """Get token status for UI display and /api/auth/token-status.
-        
+
         Returns comprehensive status including:
         - Whether token exists
         - Whether token is valid
         - Whether re-authentication is needed
         - Time until expiration
         - Last error (if any)
-        
+
         Returns:
             TokenStatus dataclass with all status info
         """
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
                 token_model = await repo.get_token_status()
-                
+
                 if not token_model:
                     return TokenStatus(
                         exists=False,
@@ -572,7 +585,7 @@ class DatabaseTokenManager:
                         last_error=None,
                         last_error_at=None,
                     )
-                
+
                 # Calculate expires_in_minutes
                 now = datetime.now(UTC)
                 if token_model.token_expires_at > now:
@@ -580,7 +593,7 @@ class DatabaseTokenManager:
                     expires_in_minutes = int(delta.total_seconds() / 60)
                 else:
                     expires_in_minutes = 0
-                
+
                 return TokenStatus(
                     exists=True,
                     is_valid=token_model.is_valid,
@@ -589,11 +602,11 @@ class DatabaseTokenManager:
                     last_error=token_model.last_error,
                     last_error_at=token_model.last_error_at,
                 )
-                
+
             finally:
                 await db_session.close()
             break
-        
+
         # Fallback (shouldn't reach here)
         return TokenStatus(
             exists=False,
@@ -607,14 +620,16 @@ class DatabaseTokenManager:
     # Yo - manually mark token as invalid (e.g., user clicked "disconnect Spotify")
     async def invalidate(self) -> bool:
         """Manually invalidate the token.
-        
+
         Use this when user wants to disconnect Spotify or on explicit logout.
         Sets is_valid=False which triggers UI warning.
-        
+
         Returns:
             True if token was invalidated, False if no token exists
         """
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         async for db_session in self._get_db_session():
             try:
@@ -625,6 +640,5 @@ class DatabaseTokenManager:
             finally:
                 await db_session.close()
             break
-        
-        return False
 
+        return False

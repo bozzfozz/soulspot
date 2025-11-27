@@ -1299,7 +1299,9 @@ async def bulk_create_watchlists(
                 )
                 created_count += 1
             except Exception as e:
-                logger.error(f"Failed to create watchlist for artist {artist_id_str}: {e}")
+                logger.error(
+                    f"Failed to create watchlist for artist {artist_id_str}: {e}"
+                )
                 failed_count += 1
                 failed_artists.append(artist_id_str)
 

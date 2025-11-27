@@ -49,7 +49,7 @@ class TestWidgetContentEndpoints:
         # Test with query (will fail without Spotify auth but should return HTML)
         response = await async_client.get(
             "/api/ui/widgets/spotify-search/results",
-            params={"query": "test", "limit": 5}
+            params={"query": "test", "limit": 5},
         )
         assert response.status_code == 200
         assert "text/html" in response.headers.get("content-type", "")
@@ -82,7 +82,7 @@ class TestWidgetContentEndpoints:
         for filter_type in filters:
             response = await async_client.get(
                 "/api/ui/widgets/metadata-manager/content",
-                params={"filter": filter_type}
+                params={"filter": filter_type},
             )
             assert response.status_code == 200
             assert "text/html" in response.headers.get("content-type", "")
@@ -97,9 +97,7 @@ class TestUIPartialEndpoints:
         """Test playlist export modal endpoint exists."""
         # Use a valid UUID format
         playlist_id = "550e8400-e29b-41d4-a716-446655440000"
-        response = await async_client.get(
-            f"/playlists/{playlist_id}/export-modal"
-        )
+        response = await async_client.get(f"/playlists/{playlist_id}/export-modal")
 
         # Endpoint may not be in API prefix, check if it's accessible
         # If 404, it might not be registered in test fixture
@@ -110,9 +108,7 @@ class TestUIPartialEndpoints:
     ):
         """Test missing tracks partial endpoint exists."""
         playlist_id = "550e8400-e29b-41d4-a716-446655440000"
-        response = await async_client.get(
-            f"/playlists/{playlist_id}/missing-tracks"
-        )
+        response = await async_client.get(f"/playlists/{playlist_id}/missing-tracks")
 
         # Endpoint might not be registered or requires different route
         # Check that it's at least attempting to process, not completely missing
@@ -146,9 +142,9 @@ class TestHTMXContentTypes:
             response = await async_client.get(endpoint)
             assert response.status_code == 200
             content_type = response.headers.get("content-type", "")
-            assert "text/html" in content_type, (
-                f"Endpoint {endpoint} should return HTML, got {content_type}"
-            )
+            assert (
+                "text/html" in content_type
+            ), f"Endpoint {endpoint} should return HTML, got {content_type}"
 
     async def test_html_structure_validity(self, async_client: AsyncClient):
         """Test that returned HTML has basic structure (not malformed)."""
@@ -162,9 +158,9 @@ class TestHTMXContentTypes:
         opening_tags = content.count("<div")
         closing_tags = content.count("</div>")
         # Not necessarily equal (some tags might be self-closing), but should be close
-        assert abs(opening_tags - closing_tags) <= 5, (
-            "HTML structure appears malformed - tag mismatch"
-        )
+        assert (
+            abs(opening_tags - closing_tags) <= 5
+        ), "HTML structure appears malformed - tag mismatch"
 
 
 class TestHTMXErrorHandling:
@@ -175,7 +171,7 @@ class TestHTMXErrorHandling:
         # Metadata manager with invalid filter
         response = await async_client.get(
             "/api/ui/widgets/metadata-manager/content",
-            params={"filter": "invalid_filter_type"}
+            params={"filter": "invalid_filter_type"},
         )
 
         # Should still return 200 (graceful handling) or 400
@@ -191,7 +187,7 @@ class TestHTMXErrorHandling:
         # Test metadata manager with various edge cases
         response = await async_client.get(
             "/api/ui/widgets/metadata-manager/content",
-            params={"filter": "nonexistent_filter"}
+            params={"filter": "nonexistent_filter"},
         )
 
         # Should return successfully (graceful handling) or reject with 400

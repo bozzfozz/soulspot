@@ -18,13 +18,17 @@ class TestTemplatePathResolution:
         """Verify templates directory path exists."""
         from soulspot.api.routers.ui import _TEMPLATES_DIR
 
-        assert _TEMPLATES_DIR.exists(), f"Templates directory not found: {_TEMPLATES_DIR}"
+        assert (
+            _TEMPLATES_DIR.exists()
+        ), f"Templates directory not found: {_TEMPLATES_DIR}"
 
     def test_templates_directory_is_absolute(self):
         """Verify templates directory path is absolute."""
         from soulspot.api.routers.ui import _TEMPLATES_DIR
 
-        assert _TEMPLATES_DIR.is_absolute(), "Templates directory path should be absolute"
+        assert (
+            _TEMPLATES_DIR.is_absolute()
+        ), "Templates directory path should be absolute"
 
     def test_templates_directory_contains_index_html(self):
         """Verify templates directory contains index.html."""
@@ -56,9 +60,9 @@ class TestTemplatePathResolution:
 
         search_paths = templates.env.loader.searchpath
         assert len(search_paths) > 0, "No search paths configured"
-        assert str(_TEMPLATES_DIR) in search_paths, (
-            f"Template directory {_TEMPLATES_DIR} not in search paths: {search_paths}"
-        )
+        assert (
+            str(_TEMPLATES_DIR) in search_paths
+        ), f"Template directory {_TEMPLATES_DIR} not in search paths: {search_paths}"
 
     def test_templates_directory_relative_to_module(self):
         """Verify templates directory is correctly computed relative to ui.py."""
@@ -72,9 +76,9 @@ class TestTemplatePathResolution:
 
         from soulspot.api.routers.ui import _TEMPLATES_DIR
 
-        assert expected_templates_dir == _TEMPLATES_DIR, (
-            f"Template directory mismatch: {_TEMPLATES_DIR} != {expected_templates_dir}"
-        )
+        assert (
+            expected_templates_dir == _TEMPLATES_DIR
+        ), f"Template directory mismatch: {_TEMPLATES_DIR} != {expected_templates_dir}"
 
     def test_multiple_templates_accessible(self):
         """Verify multiple common templates can be loaded."""

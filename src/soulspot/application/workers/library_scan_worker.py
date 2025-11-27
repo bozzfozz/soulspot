@@ -71,8 +71,7 @@ class LibraryScanWorker:
         incremental = payload.get("incremental", True)
 
         logger.info(
-            f"Starting library scan job {job.id} "
-            f"(incremental={incremental})"
+            f"Starting library scan job {job.id} " f"(incremental={incremental})"
         )
 
         # Create fresh session for this job
@@ -108,3 +107,6 @@ class LibraryScanWorker:
             except Exception as e:
                 logger.error(f"Library scan job {job.id} failed: {e}")
                 raise
+
+        # This shouldn't happen but satisfies type checker
+        raise RuntimeError("Database session generator yielded nothing")

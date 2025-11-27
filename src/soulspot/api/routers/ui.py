@@ -1,5 +1,6 @@
 """UI routes for serving HTML templates."""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,14 @@ from soulspot.api.dependencies import (
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
+    get_session_id,
+    get_session_store,
+    get_spotify_sync_service,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
+from soulspot.application.services.session_store import DatabaseSessionStore
+from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
@@ -511,19 +517,23 @@ async def library_import_page(
 
 @router.get("/library/import/jobs-list", response_class=HTMLResponse)
 async def library_import_jobs_list(
-    request: Request,
+    _request: Request,  # noqa: ARG001
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> Any:
     """HTMX partial: Recent import jobs list."""
     jobs = await job_queue.list_jobs(job_type=JobType.LIBRARY_SCAN, limit=10)
 
-    jobs_data = [
+    jobs_data: list[dict[str, Any]] = [
         {
             "job_id": job.id,
             "status": job.status.value,
             "created_at": job.created_at.strftime("%Y-%m-%d %H:%M"),
-            "completed_at": job.completed_at.strftime("%Y-%m-%d %H:%M") if job.completed_at else None,
-            "stats": job.result if isinstance(job.result, dict) and "progress" not in job.result else None,
+            "completed_at": job.completed_at.strftime("%Y-%m-%d %H:%M")
+            if job.completed_at
+            else None,
+            "stats": job.result
+            if isinstance(job.result, dict) and "progress" not in job.result
+            else None,
         }
         for job in jobs
     ]
@@ -547,12 +557,12 @@ async def library_import_jobs_list(
         imported = job["stats"].get("imported", "-") if job["stats"] else "-"
         errors = job["stats"].get("errors", "-") if job["stats"] else "-"
 
-        html += f"<tr>"
+        html += "<tr>"
         html += f"<td>{job['created_at']}</td>"
         html += f"<td class='{status_class}'>{job['status']}</td>"
         html += f"<td>{imported}</td>"
         html += f"<td>{errors}</td>"
-        html += f"</tr>"
+        html += "</tr>"
 
     html += "</tbody></table>"
     return HTMLResponse(html)
@@ -985,15 +995,6 @@ async def track_metadata_editor(
 # → auto-sync albums → show albums → click album → /spotify/artists/{a}/albums/{b} → show tracks
 # =============================================================================
 
-from soulspot.api.dependencies import (
-    get_session_id,
-    get_session_store,
-    get_spotify_sync_service,
-)
-from soulspot.application.services.session_store import DatabaseSessionStore
-from soulspot.application.services.spotify_sync_service import SpotifySyncService
-import json
-
 
 @router.get("/spotify/artists", response_class=HTMLResponse)
 async def spotify_artists_page(
@@ -1003,7 +1004,7 @@ async def spotify_artists_page(
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify followed artists page with auto-sync.
-    
+
     Auto-syncs followed artists from Spotify on page load (with cooldown).
     Shows all followed artists from DB after sync.
     """
@@ -1022,28 +1023,34 @@ async def spotify_artists_page(
         if access_token:
             # Auto-sync (respects cooldown)
             sync_stats = await sync_service.sync_followed_artists(access_token)
-            
+
             # Get artists from DB
             artist_models = await sync_service.get_artists(limit=500)
-            
+
             # Convert to template-friendly format
             for artist in artist_models:
                 genres = []
                 if artist.genres:
                     try:
-                        genres = json.loads(artist.genres) if isinstance(artist.genres, str) else artist.genres
+                        genres = (
+                            json.loads(artist.genres)
+                            if isinstance(artist.genres, str)
+                            else artist.genres
+                        )
                     except (json.JSONDecodeError, TypeError):
                         genres = []
-                
-                artists.append({
-                    "spotify_id": artist.spotify_id,
-                    "name": artist.name,
-                    "image_url": artist.image_url,
-                    "genres": genres[:3],  # Max 3 genres for display
-                    "genres_count": len(genres),
-                    "popularity": artist.popularity,
-                    "follower_count": artist.follower_count,
-                })
+
+                artists.append(
+                    {
+                        "spotify_id": artist.spotify_id,
+                        "name": artist.name,
+                        "image_url": artist.image_url,
+                        "genres": genres[:3],  # Max 3 genres for display
+                        "genres_count": len(genres),
+                        "popularity": artist.popularity,
+                        "follower_count": artist.follower_count,
+                    }
+                )
         else:
             error = "Nicht mit Spotify verbunden. Bitte zuerst einloggen."
 
@@ -1071,7 +1078,7 @@ async def spotify_artist_detail_page(
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify artist detail page with albums.
-    
+
     Auto-syncs artist's albums from Spotify on page load (with cooldown).
     Shows artist info and album grid.
     """
@@ -1090,7 +1097,7 @@ async def spotify_artist_detail_page(
 
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
-        
+
         if not artist_model:
             return templates.TemplateResponse(
                 "error.html",
@@ -1106,7 +1113,11 @@ async def spotify_artist_detail_page(
         genres = []
         if artist_model.genres:
             try:
-                genres = json.loads(artist_model.genres) if isinstance(artist_model.genres, str) else artist_model.genres
+                genres = (
+                    json.loads(artist_model.genres)
+                    if isinstance(artist_model.genres, str)
+                    else artist_model.genres
+                )
             except (json.JSONDecodeError, TypeError):
                 genres = []
 
@@ -1125,21 +1136,26 @@ async def spotify_artist_detail_page(
 
         # Get albums from DB
         album_models = await sync_service.get_artist_albums(artist_id, limit=200)
-        
+
         for album in album_models:
-            albums.append({
-                "spotify_id": album.spotify_id,
-                "name": album.name,
-                "image_url": album.image_url,
-                "release_date": album.release_date,
-                "album_type": album.album_type,
-                "total_tracks": album.total_tracks,
-            })
+            albums.append(
+                {
+                    "spotify_id": album.spotify_id,
+                    "name": album.name,
+                    "image_url": album.image_url,
+                    "release_date": album.release_date,
+                    "album_type": album.album_type,
+                    "total_tracks": album.total_tracks,
+                }
+            )
 
         # Sort: albums first, then singles, by release date desc
         type_order = {"album": 0, "single": 1, "compilation": 2}
         albums.sort(
-            key=lambda a: (type_order.get(a["album_type"], 99), a["release_date"] or ""),
+            key=lambda a: (
+                type_order.get(a["album_type"], 99),
+                a["release_date"] or "",
+            ),
             reverse=True,
         )
 
@@ -1159,7 +1175,9 @@ async def spotify_artist_detail_page(
     )
 
 
-@router.get("/spotify/artists/{artist_id}/albums/{album_id}", response_class=HTMLResponse)
+@router.get(
+    "/spotify/artists/{artist_id}/albums/{album_id}", response_class=HTMLResponse
+)
 async def spotify_album_detail_page(
     request: Request,
     artist_id: str,
@@ -1169,7 +1187,7 @@ async def spotify_album_detail_page(
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
 ) -> Any:
     """Spotify album detail page with tracks.
-    
+
     Auto-syncs album's tracks from Spotify on page load (with cooldown).
     Shows album info and track list with download buttons.
     """
@@ -1197,7 +1215,7 @@ async def spotify_album_detail_page(
 
         # Get album from DB
         album_model = await sync_service.get_album(album_id)
-        
+
         if not album_model:
             return templates.TemplateResponse(
                 "error.html",
@@ -1224,27 +1242,29 @@ async def spotify_album_detail_page(
 
         # Get tracks from DB
         track_models = await sync_service.get_album_tracks(album_id, limit=100)
-        
+
         for track in track_models:
             # Format duration
             duration_sec = track.duration_ms // 1000
             duration_min = duration_sec // 60
             duration_sec_rem = duration_sec % 60
             duration_str = f"{duration_min}:{duration_sec_rem:02d}"
-            
-            tracks.append({
-                "spotify_id": track.spotify_id,
-                "name": track.name,
-                "track_number": track.track_number,
-                "disc_number": track.disc_number,
-                "duration_ms": track.duration_ms,
-                "duration_str": duration_str,
-                "explicit": track.explicit,
-                "preview_url": track.preview_url,
-                "isrc": track.isrc,
-                "local_track_id": track.local_track_id,
-                "is_downloaded": track.local_track_id is not None,
-            })
+
+            tracks.append(
+                {
+                    "spotify_id": track.spotify_id,
+                    "name": track.name,
+                    "track_number": track.track_number,
+                    "disc_number": track.disc_number,
+                    "duration_ms": track.duration_ms,
+                    "duration_str": duration_str,
+                    "explicit": track.explicit,
+                    "preview_url": track.preview_url,
+                    "isrc": track.isrc,
+                    "local_track_id": track.local_track_id,
+                    "is_downloaded": track.local_track_id is not None,
+                }
+            )
 
         # Sort by disc number, then track number
         tracks.sort(key=lambda t: (t["disc_number"], t["track_number"]))
@@ -1284,7 +1304,7 @@ async def spotify_album_detail_page(
 @router.get("/automation/followed-artists", response_class=HTMLResponse)
 async def followed_artists_page(request: Request) -> Any:
     """Followed artists sync and watchlist creation page.
-    
+
     DEPRECATED: Use /spotify/artists for auto-sync experience.
 
     Args:

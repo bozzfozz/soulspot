@@ -19,7 +19,7 @@ class TestSQLitePathValidation:
         db_path = tmp_path / "data" / "test.db"
 
         # Mock settings
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=db_path):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=db_path):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = db_path
 
@@ -39,7 +39,7 @@ class TestSQLitePathValidation:
         db_path.parent.mkdir(parents=True)
 
         # Mock settings
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=db_path):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=db_path):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = db_path
 
@@ -54,7 +54,7 @@ class TestSQLitePathValidation:
         db_path = Path("test.db")
 
         # Mock settings
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=db_path):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=db_path):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = db_path
 
@@ -67,7 +67,7 @@ class TestSQLitePathValidation:
         from soulspot.main import _validate_sqlite_path
 
         # Mock settings with PostgreSQL URL
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=None):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=None):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = None
 
@@ -87,7 +87,7 @@ class TestSQLitePathValidation:
         db_path = readonly_dir / "test.db"
 
         # Mock settings
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=db_path):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=db_path):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = db_path
 
@@ -107,7 +107,7 @@ class TestSQLitePathValidation:
         db_path = tmp_path / "a" / "b" / "c" / "d" / "test.db"
 
         # Mock settings
-        with patch.object(Settings, '_get_sqlite_db_path', return_value=db_path):
+        with patch.object(Settings, "_get_sqlite_db_path", return_value=db_path):
             settings = MagicMock(spec=Settings)
             settings._get_sqlite_db_path.return_value = db_path
 

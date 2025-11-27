@@ -6,6 +6,7 @@ from typing import Any
 from soulspot.application.use_cases import ImportSpotifyPlaylistUseCase
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import (
+    IAlbumRepository,
     IArtistRepository,
     IPlaylistRepository,
     ISpotifyClient,
@@ -27,8 +28,8 @@ class PlaylistSyncWorker:
     """
 
     # Hey future me, same pattern as DownloadWorker - inject dependencies and create the use case here.
-    # We need MORE repos than DownloadWorker (playlist, track, artist) because playlist import touches
-    # all three entities! Don't register in __init__, let caller control when worker starts consuming jobs.
+    # We need MORE repos than DownloadWorker (playlist, track, artist, album) because playlist import touches
+    # all four entities! Don't register in __init__, let caller control when worker starts consuming jobs.
     def __init__(
         self,
         job_queue: JobQueue,
@@ -36,6 +37,7 @@ class PlaylistSyncWorker:
         playlist_repository: IPlaylistRepository,
         track_repository: ITrackRepository,
         artist_repository: IArtistRepository,
+        album_repository: IAlbumRepository,
     ) -> None:
         """Initialize playlist sync worker.
 
@@ -45,6 +47,7 @@ class PlaylistSyncWorker:
             playlist_repository: Repository for playlist persistence
             track_repository: Repository for track persistence
             artist_repository: Repository for artist persistence
+            album_repository: Repository for album persistence
         """
         self._job_queue = job_queue
         self._use_case = ImportSpotifyPlaylistUseCase(
@@ -52,6 +55,7 @@ class PlaylistSyncWorker:
             playlist_repository=playlist_repository,
             track_repository=track_repository,
             artist_repository=artist_repository,
+            album_repository=album_repository,
         )
 
     # Yo, register this worker to handle PLAYLIST_SYNC jobs. Call after app startup when everything is ready.

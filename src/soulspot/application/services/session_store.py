@@ -450,9 +450,8 @@ class DatabaseSessionStore:
                     db_session_result = await repo.get_by_oauth_state(state)
                     await db_session.commit()
 
-                    if (
-                        db_session_result
-                        and not db_session_result.is_expired(self.session_timeout_seconds)
+                    if db_session_result and not db_session_result.is_expired(
+                        self.session_timeout_seconds
                     ):
                         # Load into memory cache
                         self._sessions[db_session_result.session_id] = db_session_result

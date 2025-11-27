@@ -39,11 +39,18 @@ def artist_repository_mock() -> AsyncMock:
 
 
 @pytest.fixture
+def album_repository_mock() -> AsyncMock:
+    """Create mock album repository."""
+    return AsyncMock()
+
+
+@pytest.fixture
 def use_case(
     spotify_client_mock: AsyncMock,
     playlist_repository_mock: AsyncMock,
     track_repository_mock: AsyncMock,
     artist_repository_mock: AsyncMock,
+    album_repository_mock: AsyncMock,
 ) -> ImportSpotifyPlaylistUseCase:
     """Create use case with mocked dependencies."""
     return ImportSpotifyPlaylistUseCase(
@@ -51,6 +58,7 @@ def use_case(
         playlist_repository=playlist_repository_mock,
         track_repository=track_repository_mock,
         artist_repository=artist_repository_mock,
+        album_repository=album_repository_mock,
     )
 
 
@@ -64,6 +72,7 @@ class TestImportSpotifyPlaylistUseCase:
         playlist_repository_mock: AsyncMock,
         track_repository_mock: AsyncMock,
         artist_repository_mock: AsyncMock,
+        album_repository_mock: AsyncMock,
     ) -> None:
         """Test successful playlist import with new playlist."""
         # Arrange
@@ -115,10 +124,28 @@ class TestImportSpotifyPlaylistUseCase:
             },
         }
 
-        # Mock repository responses - no existing playlist or tracks
+        # Mock get_several_artists for batch artist fetching
+        spotify_client_mock.get_several_artists.return_value = [
+            {
+                "id": "artist-1",
+                "name": "Test Artist 1",
+                "images": [],
+                "genres": [],
+            },
+            {
+                "id": "artist-2",
+                "name": "Test Artist 2",
+                "images": [],
+                "genres": [],
+            },
+        ]
+
+        # Mock repository responses - no existing playlist, tracks, or artists
         playlist_repository_mock.get_by_spotify_uri.return_value = None
         track_repository_mock.get_by_spotify_uri.return_value = None
+        artist_repository_mock.get_by_spotify_uri.return_value = None
         artist_repository_mock.get_by_name.return_value = None
+        album_repository_mock.get_by_spotify_uri.return_value = None
         artist_repository_mock.add.side_effect = lambda x: x
         track_repository_mock.add.side_effect = lambda x: x
         playlist_repository_mock.add.side_effect = lambda x: x
@@ -140,6 +167,8 @@ class TestImportSpotifyPlaylistUseCase:
         spotify_client_mock.get_playlist.assert_called_once_with(
             "test-playlist-id", "test-token"
         )
+        # Artists are fetched via get_several_artists batch call
+        spotify_client_mock.get_several_artists.assert_called_once()
         assert playlist_repository_mock.add.call_count == 1
         assert track_repository_mock.add.call_count == 2
         assert artist_repository_mock.add.call_count == 2

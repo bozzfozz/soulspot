@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from mutagen import File as MutagenFile
+from mutagen import File as MutagenFile  # type: ignore[attr-defined]
 from rapidfuzz import fuzz
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,18 @@ from soulspot.infrastructure.persistence.repositories import (
 logger = logging.getLogger(__name__)
 
 # Supported audio file extensions
-AUDIO_EXTENSIONS = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aac", ".wma", ".ape", ".alac"}
+AUDIO_EXTENSIONS = {
+    ".mp3",
+    ".flac",
+    ".m4a",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".aac",
+    ".wma",
+    ".ape",
+    ".alac",
+}
 
 
 class LibraryScannerService:
@@ -97,7 +108,7 @@ class LibraryScannerService:
         Returns:
             Dict with scan statistics
         """
-        stats = {
+        stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
             "completed_at": None,
             "total_files": 0,
@@ -164,7 +175,9 @@ class LibraryScannerService:
 
                 except Exception as e:
                     stats["errors"] += 1
-                    stats["error_files"].append({"path": str(file_path), "error": str(e)})
+                    stats["error_files"].append(
+                        {"path": str(file_path), "error": str(e)}
+                    )
                     logger.warning(f"Error importing {file_path}: {e}")
 
             await self.session.commit()
@@ -275,7 +288,9 @@ class LibraryScannerService:
         track_title = metadata.get("title") or file_path.stem
 
         # Find or create artist (fuzzy matching)
-        artist_id, is_new_artist, is_matched = await self._find_or_create_artist(artist_name)
+        artist_id, is_new_artist, is_matched = await self._find_or_create_artist(
+            artist_name
+        )
         result["new_artist"] = is_new_artist
         result["matched_artist"] = is_matched
 
@@ -439,7 +454,9 @@ class LibraryScannerService:
                 if isinstance(value, list) and value:
                     value = value[0]
                 if hasattr(value, "text"):
-                    value = value.text[0] if isinstance(value.text, list) else value.text
+                    value = (
+                        value.text[0] if isinstance(value.text, list) else value.text
+                    )
 
                 # Parse track/disc numbers (might be "1/12" format)
                 if field_name in ("track_number", "disc_number"):
@@ -479,15 +496,15 @@ class LibraryScannerService:
     async def _load_caches(self) -> None:
         """Pre-load artist and album names for fuzzy matching."""
         # Load all artists
-        stmt = select(ArtistModel.id, ArtistModel.name)
-        result = await self.session.execute(stmt)
+        artist_stmt = select(ArtistModel.id, ArtistModel.name)
+        result = await self.session.execute(artist_stmt)
         for row in result.all():
             artist_id = ArtistId.from_string(row[0])
             self._artist_cache[row[1].lower()] = artist_id
 
         # Load all albums
-        stmt = select(AlbumModel.id, AlbumModel.title, AlbumModel.artist_id)
-        result = await self.session.execute(stmt)
+        album_stmt = select(AlbumModel.id, AlbumModel.title, AlbumModel.artist_id)
+        result = await self.session.execute(album_stmt)
         for row in result.all():
             album_id = AlbumId.from_string(row[0])
             # Key: "album_title|artist_id" for uniqueness
@@ -499,9 +516,7 @@ class LibraryScannerService:
             f"{len(self._album_cache)} albums"
         )
 
-    async def _find_or_create_artist(
-        self, name: str
-    ) -> tuple[ArtistId, bool, bool]:
+    async def _find_or_create_artist(self, name: str) -> tuple[ArtistId, bool, bool]:
         """Find existing artist by fuzzy matching or create new.
 
         Args:
@@ -518,9 +533,9 @@ class LibraryScannerService:
 
         # Fuzzy match
         best_match: str | None = None
-        best_score = 0
+        best_score: float = 0.0
 
-        for cached_name in self._artist_cache.keys():
+        for cached_name in self._artist_cache:
             score = fuzz.ratio(name_lower, cached_name)
             if score > best_score:
                 best_score = score
@@ -574,9 +589,9 @@ class LibraryScannerService:
 
         # Fuzzy match (only for same artist)
         best_match_key: str | None = None
-        best_score = 0
+        best_score: float = 0.0
 
-        for cached_key, cached_album_id in self._album_cache.items():
+        for cached_key, _cached_album_id in self._album_cache.items():
             cached_title, cached_artist = cached_key.rsplit("|", 1)
             if cached_artist != artist_id_str:
                 continue
@@ -588,9 +603,7 @@ class LibraryScannerService:
 
         # Use fuzzy match if above threshold
         if best_match_key and best_score >= self.FUZZY_THRESHOLD:
-            logger.debug(
-                f"Fuzzy matched album '{title}' (score: {best_score})"
-            )
+            logger.debug(f"Fuzzy matched album '{title}' (score: {best_score})")
             return self._album_cache[best_match_key], False, True
 
         # Create new album
