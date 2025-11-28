@@ -137,6 +137,36 @@ echo "   Styleguide: /styleguide"
 
 ---
 
+## 🗑️ Leere API Router (können entfernt werden)
+
+Die folgenden Router-Dateien sind leer und enthalten keine Endpoints:
+
+```bash
+# Leere Router entfernen
+rm src/soulspot/api/routers/albums.py
+rm src/soulspot/api/routers/dashboard.py
+rm src/soulspot/api/routers/widget_templates.py
+rm src/soulspot/api/routers/widgets.py
+```
+
+**Hinweis:** Nach dem Löschen müssen ggf. Imports in `routers/__init__.py` angepasst werden.
+
+---
+
+## 📋 TODO: Große Router aufteilen
+
+Die folgenden Router sind sehr groß und sollten bei Gelegenheit aufgeteilt werden:
+
+| Router | Endpoints | Vorschlag |
+|--------|-----------|-----------|
+| `automation.py` | 25 | Aufteilen in: `watchlists.py`, `rules.py`, `filters.py`, `discography.py` |
+| `ui.py` | 26 | Aufteilen in: `ui_pages.py`, `ui_library.py`, `ui_spotify.py` |
+| `library.py` | 15 | Aufteilen in: `library_scan.py`, `library_duplicates.py`, `library_import.py` |
+
+**Priorität:** Niedrig (funktioniert, aber schwerer wartbar)
+
+---
+
 ## 📝 Bereits erledigte Änderungen
 
 - [x] `/theme-sample` Route aus `ui.py` entfernt
