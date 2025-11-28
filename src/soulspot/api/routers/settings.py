@@ -622,7 +622,7 @@ async def trigger_manual_sync(
     from soulspot.application.services.spotify_image_service import SpotifyImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
-    from soulspot.infrastructure.token_management import DatabaseTokenManager
+    from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
 
     valid_types = {"artists", "playlists", "liked", "albums", "all"}
     if sync_type not in valid_types:
@@ -633,9 +633,9 @@ async def trigger_manual_sync(
 
     app_settings = get_settings()
 
-    # Initialize services
-    token_manager = DatabaseTokenManager(db)
-    token = await token_manager.get_token()
+    # Get token from database using repository
+    token_repo = SpotifyTokenRepository(db)
+    token = await token_repo.get_active_token()
 
     if not token:
         raise HTTPException(
@@ -655,7 +655,6 @@ async def trigger_manual_sync(
     )
 
     # Hey future me – das access_token holen wir aus dem gespeicherten Token.
-    # Der token_manager hat das Token schon, wir müssen es nur extrahieren.
     access_token = token.access_token
 
     try:

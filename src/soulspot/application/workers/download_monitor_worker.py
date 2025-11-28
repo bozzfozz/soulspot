@@ -75,8 +75,8 @@ class DownloadMonitorWorker:
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
-        # Stats for monitoring
-        self._stats = {
+        # Stats for monitoring - values can be int, str, or None
+        self._stats: dict[str, int | str | None] = {
             "polls_completed": 0,
             "downloads_completed": 0,
             "downloads_failed": 0,
@@ -146,9 +146,8 @@ class DownloadMonitorWorker:
         while self._running:
             try:
                 await self._poll_downloads()
-                self._stats["polls_completed"] = (
-                    (self._stats["polls_completed"] or 0) + 1
-                )
+                polls = self._stats.get("polls_completed")
+                self._stats["polls_completed"] = (int(polls) if polls else 0) + 1
                 self._stats["last_poll_at"] = datetime.now(UTC).isoformat()
                 self._stats["last_error"] = None
             except Exception as e:
@@ -270,9 +269,8 @@ class DownloadMonitorWorker:
         """
         job.status = JobStatus.COMPLETED
         job.result["completed_at"] = datetime.now(UTC).isoformat()
-        self._stats["downloads_completed"] = (
-            (self._stats["downloads_completed"] or 0) + 1
-        )
+        completed = self._stats.get("downloads_completed")
+        self._stats["downloads_completed"] = (int(completed) if completed else 0) + 1
         logger.info(f"Download job {job.id} completed successfully")
 
         # Note: AutoImportService will pick up the file from downloads folder
@@ -288,5 +286,6 @@ class DownloadMonitorWorker:
         job.status = JobStatus.FAILED
         job.result["error"] = error_message
         job.result["failed_at"] = datetime.now(UTC).isoformat()
-        self._stats["downloads_failed"] = (self._stats["downloads_failed"] or 0) + 1
+        failed = self._stats.get("downloads_failed")
+        self._stats["downloads_failed"] = (int(failed) if failed else 0) + 1
         logger.warning(f"Download job {job.id} failed: {error_message}")

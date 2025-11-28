@@ -131,7 +131,7 @@ class AppSettingsService:
         # Check cache first
         cached_value, cache_hit = self._get_from_cache(key)
         if cache_hit:
-            return cached_value
+            return str(cached_value) if cached_value is not None else None
 
         setting = await self.get_raw(key)
         value = setting.value if setting else default
@@ -155,7 +155,7 @@ class AppSettingsService:
         # Check cache first
         cached_value, cache_hit = self._get_from_cache(key)
         if cache_hit:
-            return cached_value
+            return bool(cached_value)
 
         setting = await self.get_raw(key)
         if setting is None or setting.value is None:
@@ -179,7 +179,7 @@ class AppSettingsService:
         # Check cache first
         cached_value, cache_hit = self._get_from_cache(key)
         if cache_hit:
-            return cached_value
+            return int(cached_value) if cached_value is not None else default
 
         setting = await self.get_raw(key)
         if setting is None or setting.value is None:
@@ -246,6 +246,7 @@ class AppSettingsService:
             Updated or created AppSettingsModel.
         """
         # Convert value to string for storage
+        str_value: str | None
         if value_type == "json" and not isinstance(value, str):
             str_value = json.dumps(value)
         elif value_type == "boolean":
@@ -587,7 +588,7 @@ class AppSettingsService:
     # =========================================================================
 
     # Supported template variables for validation
-    NAMING_VARIABLES: set[str] = {
+    NAMING_VARIABLES: frozenset[str] = frozenset({
         # Artist variables
         "Artist Name",
         "Artist CleanName",
@@ -612,7 +613,7 @@ class AppSettingsService:
         "track:02d",
         "year",
         "disc",
-    }
+    })
 
     def validate_naming_template(self, template: str) -> tuple[bool, list[str]]:
         """Validate a naming template for invalid variables.

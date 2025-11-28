@@ -2862,11 +2862,12 @@ class SpotifyBrowseRepository:
             return 0
 
         # Count tracks
-        stmt = select(func.count(PlaylistTrackModel.track_id)).where(
+        count_stmt = select(func.count(PlaylistTrackModel.track_id)).where(
             PlaylistTrackModel.playlist_id == playlist_id
         )
-        result = await self.session.execute(stmt)
-        return result.scalar() or 0
+        count_result = await self.session.execute(count_stmt)
+        count = count_result.scalar()
+        return count if count is not None else 0
 
     async def sync_liked_songs_tracks(
         self,

@@ -957,14 +957,17 @@ async def preview_batch_rename(
             continue
 
         # Get artist
-        artist = await artist_repo.get_by_id(track_model.artist_id)
+        from soulspot.domain.value_objects import AlbumId as DomainAlbumId
+        from soulspot.domain.value_objects import ArtistId as DomainArtistId
+
+        artist = await artist_repo.get_by_id(DomainArtistId.from_string(track_model.artist_id))
         if not artist:
             continue
 
         # Get album (optional)
         album = None
         if track_model.album_id:
-            album = await album_repo.get_by_id(track_model.album_id)
+            album = await album_repo.get_by_id(DomainAlbumId.from_string(track_model.album_id))
 
         # Get current path
         current_path = str(track_model.file_path)
@@ -973,13 +976,13 @@ async def preview_batch_rename(
         # Generate new filename using async method (uses DB templates)
         # Create a minimal track-like object for the renaming service
         from soulspot.domain.entities import Track
-        from soulspot.domain.value_objects import ArtistId, TrackId
+        from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
 
         track = Track(
-            id=TrackId(track_model.id),
+            id=TrackId.from_string(track_model.id),
             title=track_model.title,
-            artist_id=ArtistId(track_model.artist_id),
-            album_id=track_model.album_id,
+            artist_id=ArtistId.from_string(track_model.artist_id),
+            album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
             track_number=track_model.track_number,
             disc_number=track_model.disc_number,
         )
@@ -1107,7 +1110,10 @@ async def execute_batch_rename(
             continue
 
         # Get artist
-        artist = await artist_repo.get_by_id(track_model.artist_id)
+        from soulspot.domain.value_objects import AlbumId as DomainAlbumId
+        from soulspot.domain.value_objects import ArtistId as DomainArtistId
+
+        artist = await artist_repo.get_by_id(DomainArtistId.from_string(track_model.artist_id))
         if not artist:
             results.append(
                 BatchRenameResult(
@@ -1124,17 +1130,17 @@ async def execute_batch_rename(
         # Get album (optional)
         album = None
         if track_model.album_id:
-            album = await album_repo.get_by_id(track_model.album_id)
+            album = await album_repo.get_by_id(DomainAlbumId.from_string(track_model.album_id))
 
         # Create track entity for renaming service
         from soulspot.domain.entities import Track
-        from soulspot.domain.value_objects import ArtistId, TrackId
+        from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
 
         track = Track(
-            id=TrackId(track_model.id),
+            id=TrackId.from_string(track_model.id),
             title=track_model.title,
-            artist_id=ArtistId(track_model.artist_id),
-            album_id=track_model.album_id,
+            artist_id=ArtistId.from_string(track_model.artist_id),
+            album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
             track_number=track_model.track_number,
             disc_number=track_model.disc_number,
         )

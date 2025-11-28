@@ -271,6 +271,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             AutomationWorkerManager,
         )
 
+        # Ensure session was acquired from the loop
+        if session is None:
+            raise RuntimeError("Failed to acquire database session for workers")
+
         automation_manager = AutomationWorkerManager(
             session=session,
             spotify_client=spotify_client,

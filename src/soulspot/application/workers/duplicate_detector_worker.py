@@ -92,8 +92,8 @@ class DuplicateDetectorWorker:
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
-        # Stats
-        self._stats = {
+        # Stats - values can be int, str, or None
+        self._stats: dict[str, int | str | None] = {
             "scans_completed": 0,
             "duplicates_found": 0,
             "tracks_scanned": 0,
@@ -147,9 +147,8 @@ class DuplicateDetectorWorker:
             try:
                 if await self._settings.is_duplicate_detection_enabled():
                     await self._run_scan()
-                    self._stats["scans_completed"] = (
-                        (self._stats["scans_completed"] or 0) + 1
-                    )
+                    scans = self._stats.get("scans_completed")
+                    self._stats["scans_completed"] = (int(scans) if scans else 0) + 1
                     self._stats["last_scan_at"] = datetime.now(UTC).isoformat()
                 else:
                     logger.debug("Duplicate detection is disabled, skipping scan")
@@ -231,9 +230,8 @@ class DuplicateDetectorWorker:
                         candidates_added += 1
 
             await session.commit()
-            self._stats["duplicates_found"] = (
-                (self._stats["duplicates_found"] or 0) + candidates_added
-            )
+            dups = self._stats.get("duplicates_found")
+            self._stats["duplicates_found"] = (int(dups) if dups else 0) + candidates_added
 
             logger.info(f"Stored {candidates_added} duplicate candidates")
 

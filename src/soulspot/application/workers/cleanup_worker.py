@@ -86,8 +86,8 @@ class CleanupWorker:
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
-        # Stats
-        self._stats = {
+        # Stats - values can be int, str, or None
+        self._stats: dict[str, int | str | None] = {
             "runs_completed": 0,
             "files_deleted": 0,
             "bytes_freed": 0,
@@ -147,9 +147,8 @@ class CleanupWorker:
                 # Check if cleanup is enabled
                 if await self._settings.is_cleanup_automation_enabled():
                     await self._run_cleanup()
-                    self._stats["runs_completed"] = (
-                        (self._stats["runs_completed"] or 0) + 1
-                    )
+                    runs = self._stats.get("runs_completed")
+                    self._stats["runs_completed"] = (int(runs) if runs else 0) + 1
                     self._stats["last_run_at"] = datetime.now(UTC).isoformat()
                 else:
                     logger.debug("Cleanup is disabled, skipping run")
@@ -230,8 +229,10 @@ class CleanupWorker:
         await self._clean_empty_directories()
 
         # Update stats (handle None case for type safety)
-        self._stats["files_deleted"] = (self._stats["files_deleted"] or 0) + deleted_count
-        self._stats["bytes_freed"] = (self._stats["bytes_freed"] or 0) + freed_bytes
+        files_del = self._stats.get("files_deleted")
+        bytes_fr = self._stats.get("bytes_freed")
+        self._stats["files_deleted"] = (int(files_del) if files_del else 0) + deleted_count
+        self._stats["bytes_freed"] = (int(bytes_fr) if bytes_fr else 0) + freed_bytes
 
         logger.info(
             f"Cleanup run complete: deleted {deleted_count} files, "
