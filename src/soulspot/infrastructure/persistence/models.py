@@ -60,9 +60,9 @@ class Base(DeclarativeBase):
 # This is POWERFUL but DANGEROUS - deleting "The Beatles" wipes their entire discography! Alembic
 # migrations must handle this carefully to avoid data loss.
 class ArtistModel(Base):
-    """SQLAlchemy model for Artist entity."""
+    """SQLAlchemy model for Artist entity (Local Library)."""
 
-    __tablename__ = "artists"
+    __tablename__ = "soulspot_artists"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -101,16 +101,16 @@ class ArtistModel(Base):
 
 
 class AlbumModel(Base):
-    """SQLAlchemy model for Album entity."""
+    """SQLAlchemy model for Album entity (Local Library)."""
 
-    __tablename__ = "albums"
+    __tablename__ = "soulspot_albums"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     artist_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
+        String(36), ForeignKey("soulspot_artists.id", ondelete="CASCADE"), nullable=False
     )
     release_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     spotify_uri: Mapped[str | None] = mapped_column(
@@ -150,19 +150,19 @@ class AlbumModel(Base):
 # table! The download relationship uses uselist=False because it's ONE-TO-ONE (each track has
 # at most one active download). Be careful with migrations - this table can have millions of rows!
 class TrackModel(Base):
-    """SQLAlchemy model for Track entity."""
+    """SQLAlchemy model for Track entity (Local Library)."""
 
-    __tablename__ = "tracks"
+    __tablename__ = "soulspot_tracks"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     artist_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("artists.id", ondelete="CASCADE"), nullable=False
+        String(36), ForeignKey("soulspot_artists.id", ondelete="CASCADE"), nullable=False
     )
     album_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("soulspot_albums.id", ondelete="SET NULL"), nullable=True
     )
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -267,7 +267,7 @@ class PlaylistTrackModel(Base):
         String(36), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True
     )
     track_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), primary_key=True
+        String(36), ForeignKey("soulspot_tracks.id", ondelete="CASCADE"), primary_key=True
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
@@ -291,7 +291,7 @@ class DownloadModel(Base):
     )
     track_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="CASCADE"),
+        ForeignKey("soulspot_tracks.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
         index=True,
@@ -363,7 +363,7 @@ class FileDuplicateModel(Base):
     file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_hash_algorithm: Mapped[str] = mapped_column(String(20), nullable=False)
     primary_track_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=True
+        String(36), ForeignKey("soulspot_tracks.id", ondelete="CASCADE"), nullable=True
     )
     duplicate_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     total_size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -392,7 +392,7 @@ class ArtistWatchlistModel(Base):
     )
     artist_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("artists.id", ondelete="CASCADE"),
+        ForeignKey("soulspot_artists.id", ondelete="CASCADE"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
@@ -507,7 +507,7 @@ class QualityUpgradeCandidateModel(Base):
     )
     track_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="CASCADE"),
+        ForeignKey("soulspot_tracks.id", ondelete="CASCADE"),
         nullable=False,
     )
     current_bitrate: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -740,7 +740,7 @@ class SpotifyTrackModel(Base):
     # Link to local library after download
     local_track_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="SET NULL"),
+        ForeignKey("soulspot_tracks.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -971,13 +971,13 @@ class DuplicateCandidateModel(Base):
     # Constraint ensures track_id_1 < track_id_2 to avoid (A,B) and (B,A) rows
     track_id_1: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="CASCADE"),
+        ForeignKey("soulspot_tracks.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     track_id_2: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="CASCADE"),
+        ForeignKey("soulspot_tracks.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -1051,7 +1051,7 @@ class OrphanedFileModel(Base):
     # Related track if this is a db_no_file orphan
     related_track_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("tracks.id", ondelete="SET NULL"),
+        ForeignKey("soulspot_tracks.id", ondelete="SET NULL"),
         nullable=True,
     )
     # Status: pending, resolved, ignored
