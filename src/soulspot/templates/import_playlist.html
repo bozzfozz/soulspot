@@ -1,7 +1,7 @@
 {# Hey future me - Import Playlist page!
    Shows auth status via HTMX, then a form for Spotify playlist URL/ID.
-   getNotConnectedHTML() helper handles unauthenticated state - redirects to dashboard.
-   htmx:responseError catches 401s from cross-device access (no session cookie). #}
+   Uses /api/auth/spotify/status which checks the SHARED token (multi-device support!).
+   getNotConnectedHTML() helper handles unauthenticated state - redirects to dashboard. #}
 
 {% extends "base.html" %}
 
@@ -20,7 +20,7 @@
 
     <!-- Authentication Status -->
     <div id="auth-status" 
-         hx-get="/api/auth/session" 
+         hx-get="/api/auth/spotify/status" 
          hx-trigger="load"
          hx-swap="innerHTML"
          style="margin-bottom: var(--space-6);">
@@ -151,7 +151,9 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
             const response = JSON.parse(evt.detail.xhr.response);
             const statusDiv = document.getElementById('auth-status');
             
-            if (response.has_access_token && !response.token_expired) {
+            // Hey future me - we use /api/auth/spotify/status now which returns
+            // "connected" (bool) and "needs_reauth" - not session fields!
+            if (response.connected && !response.needs_reauth) {
                 statusDiv.innerHTML = `
                     <div class="status-card" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2);">
                         <div class="status-icon" style="background: #22c55e;">
@@ -164,7 +166,7 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
                         <a href="/api/auth/logout" class="btn btn-outline btn-sm">Disconnect</a>
                     </div>
                 `;
-            } else if (response.token_expired) {
+            } else if (response.needs_reauth) {
                 statusDiv.innerHTML = `
                     <div class="status-card" style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.2);">
                         <div class="status-icon" style="background: #eab308;">

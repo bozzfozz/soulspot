@@ -771,3 +771,45 @@ class AppSettingsService:
             "colon_replacement": await self.get_colon_replacement(),
             "slash_replacement": await self.get_slash_replacement(),
         }
+
+    # =========================================================================
+    # DOWNLOAD QUEUE SETTINGS
+    # =========================================================================
+    # Hey future me - these settings control the download queue behavior!
+    # They were previously env-only, now also stored in DB for runtime changes.
+    # The env vars still serve as defaults, but DB values take precedence.
+    # =========================================================================
+
+    async def get_max_concurrent_downloads(self) -> int:
+        """Get maximum number of concurrent downloads.
+
+        Default: 3 (from env or hardcoded). Range 1-10.
+        DB value overrides env if set.
+        """
+        return await self.get_int("download.max_concurrent_downloads", default=3)
+
+    async def get_default_max_retries(self) -> int:
+        """Get default max retry attempts for failed downloads.
+
+        Default: 3. Range 1-10.
+        """
+        return await self.get_int("download.default_max_retries", default=3)
+
+    async def is_priority_queue_enabled(self) -> bool:
+        """Check if priority queue is enabled.
+
+        Default: True - downloads can be prioritized (P0/P1/P2).
+        If False, all downloads are FIFO regardless of priority field.
+        """
+        return await self.get_bool("download.enable_priority_queue", default=True)
+
+    async def get_download_settings_summary(self) -> dict[str, Any]:
+        """Get summary of all download settings for UI display.
+
+        Returns a dict with all download queue settings for the Settings page.
+        """
+        return {
+            "max_concurrent_downloads": await self.get_max_concurrent_downloads(),
+            "default_max_retries": await self.get_default_max_retries(),
+            "enable_priority_queue": await self.is_priority_queue_enabled(),
+        }

@@ -802,6 +802,112 @@ class TrackRepository(ITrackRepository):
                 model.file_path = str(track.file_path) if track.file_path else None
                 model.updated_at = track.updated_at
 
+    # Hey future me - ISRC lookup for auto-import track matching!
+    # ISRC (International Standard Recording Code) is a globally unique identifier
+    # for recordings. If we have ISRC in ID3 tags, this is the BEST way to match
+    # a downloaded file to a track in our DB. Much more reliable than title/artist matching!
+    async def get_by_isrc(self, isrc: str) -> Track | None:
+        """Get a track by ISRC (International Standard Recording Code).
+
+        ISRC is a globally unique identifier for recordings, making this
+        the most reliable way to match downloaded files to tracks.
+
+        Args:
+            isrc: ISRC code (e.g., 'USRC11900012')
+
+        Returns:
+            Track entity or None if not found
+        """
+        stmt = select(TrackModel).where(TrackModel.isrc == isrc)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    # Hey future me - fuzzy title/artist search for fallback matching!
+    # When ISRC is not available, we try to match by title and artist name.
+    # Uses LIKE queries with case-insensitive matching. Not perfect but better than nothing!
+    # Returns list because multiple tracks might match (same song from different albums).
+    async def search_by_title_artist(
+        self, title: str, artist_name: str | None = None, limit: int = 5
+    ) -> list[Track]:
+        """Search for tracks by title and optionally artist name.
+
+        Used as fallback when ISRC is not available. Uses case-insensitive
+        LIKE matching for fuzzy search.
+
+        Args:
+            title: Track title to search for
+            artist_name: Optional artist name to filter by
+            limit: Maximum results to return
+
+        Returns:
+            List of matching Track entities, sorted by relevance
+        """
+        # Base query with title filter (case-insensitive)
+        stmt = select(TrackModel).where(
+            func.lower(TrackModel.title) == func.lower(title)
+        )
+
+        # If artist name provided, join with artist table and filter
+        if artist_name:
+            stmt = (
+                stmt.join(ArtistModel, TrackModel.artist_id == ArtistModel.id)
+                .where(func.lower(ArtistModel.name) == func.lower(artist_name))
+            )
+
+        stmt = stmt.limit(limit)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Track(
+                id=TrackId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                album_id=AlbumId.from_string(model.album_id)
+                if model.album_id
+                else None,
+                duration_ms=model.duration_ms,
+                track_number=model.track_number,
+                disc_number=model.disc_number,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                isrc=model.isrc,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
+                genres=[model.genre] if model.genre else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
 
 class PlaylistRepository(IPlaylistRepository):
     """SQLAlchemy implementation of Playlist repository."""

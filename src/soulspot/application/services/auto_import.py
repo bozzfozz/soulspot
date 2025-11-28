@@ -322,33 +322,94 @@ class AutoImportService:
             logger.exception("Error importing file %s: %s", file_path, e)
             raise
 
-    # Hey future me: Track matching is NOT IMPLEMENTED - this is a STUB!
-    # WHY return None? We don't have a way to map file -> track_id yet
-    # TODO: Options to implement this:
-    #   1. slskd could write .nfo file with track_id alongside download
-    #   2. Parse filename and fuzzy-match against DB tracks
-    #   3. Use acoustic fingerprinting (AcoustID/Chromaprint)
-    # GOTCHA: Without this, post-processing pipeline won't know track metadata
-    # The import will still work (file gets moved) but tagging won't happen
+    # Hey future me: Track matching using ID3 tags -> ISRC -> title/artist!
+    # This is the key to connecting downloaded files to our database tracks.
+    # Priority order:
+    #   1. ISRC (globally unique, best match) - read from TSRC frame in ID3
+    #   2. Title + Artist (fuzzy match) - read from TIT2/TPE1 frames
+    # GOTCHA: mutagen import inside method to avoid startup delay (lazy load)
+    # GOTCHA: Some MP3s have weird encodings - use .text[0] not .text to get string
     async def _find_track_for_file(self, file_path: Path) -> Track | None:
         """Find the track entity associated with a downloaded file.
 
-        This is a simplified implementation. In production, you might:
-        1. Store the track_id in the download metadata
-        2. Use file naming patterns to match tracks
-        3. Use audio fingerprinting
+        Attempts to match using:
+        1. ISRC code from ID3 tags (most reliable)
+        2. Title + Artist name from ID3 tags (fallback)
 
         Args:
             file_path: Path to the downloaded file
 
         Returns:
-            Track entity or None
+            Track entity or None if no match found
         """
-        # For now, return None - in a real implementation,
-        # we would need to track which download corresponds to which track
-        # This could be done by adding metadata files or database lookups
-        logger.debug("Track lookup not implemented for: %s", file_path)
-        return None
+        try:
+            # Lazy import mutagen to avoid startup delay
+            from mutagen import File as MutagenFile
+            from mutagen.easyid3 import EasyID3
+            from mutagen.id3 import ID3
+
+            audio = MutagenFile(file_path, easy=True)
+            if audio is None:
+                logger.debug("Could not read audio metadata: %s", file_path)
+                return None
+
+            # Try to get ISRC from ID3 tags (most reliable match)
+            isrc = None
+            title = None
+            artist = None
+
+            # For MP3 files, try to read ISRC from TSRC frame (not in EasyID3)
+            if file_path.suffix.lower() == ".mp3":
+                try:
+                    id3 = ID3(file_path)
+                    if "TSRC" in id3:
+                        isrc = str(id3["TSRC"].text[0])
+                        logger.debug("Found ISRC in ID3: %s", isrc)
+                except Exception as e:
+                    logger.debug("Could not read TSRC frame: %s", e)
+
+            # Get title and artist from easy tags
+            if isinstance(audio, EasyID3) or hasattr(audio, "get"):
+                title_tag = audio.get("title")
+                artist_tag = audio.get("artist")
+                title = title_tag[0] if title_tag else None
+                artist = artist_tag[0] if artist_tag else None
+
+            # Strategy 1: ISRC lookup (best match)
+            if isrc:
+                track = await self._track_repository.get_by_isrc(isrc)
+                if track:
+                    logger.info("Matched track by ISRC %s: %s", isrc, track.title)
+                    return track
+                logger.debug("No track found for ISRC: %s", isrc)
+
+            # Strategy 2: Title + Artist lookup (fallback)
+            if title:
+                matches = await self._track_repository.search_by_title_artist(
+                    title=title,
+                    artist_name=artist,
+                    limit=1
+                )
+                if matches:
+                    track = matches[0]
+                    logger.info(
+                        "Matched track by title/artist: '%s' by '%s'",
+                        track.title,
+                        artist or "unknown"
+                    )
+                    return track
+                logger.debug(
+                    "No track found for title='%s', artist='%s'",
+                    title,
+                    artist
+                )
+
+            logger.debug("Could not match track for: %s", file_path)
+            return None
+
+        except Exception as e:
+            logger.warning("Error matching track for %s: %s", file_path, e)
+            return None
 
     # Listen future me: Recursive empty directory cleanup - keeps downloads dir tidy
     # WHY recursive? After moving "Artist/Album/track.mp3", both "Album" and "Artist" might be empty

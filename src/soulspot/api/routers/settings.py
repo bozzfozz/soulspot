@@ -116,17 +116,25 @@ class AllSettings(BaseModel):
 
 # Hey future me, this endpoint exposes ALL settings to the UI - but we MASK secrets! Notice the "***"
 # for passwords and API keys - NEVER return actual secrets in API responses or they'll leak in browser
-# devtools, logs, error tracking, etc. The settings come from get_settings() which loads from env vars
-# at startup. These are READ-ONLY in runtime - changing them here won't affect running app! For that,
-# you'd need hot-reload or restart. The appearance.theme default is "auto" - actual theme is client-side.
+# devtools, logs, error tracking, etc. General/Integration/Advanced come from env vars (get_settings()).
+# Download settings are NOW read from DB if set, with env as fallback - this allows runtime changes!
 @router.get("/")
-async def get_all_settings() -> AllSettings:
+async def get_all_settings(
+    db: AsyncSession = Depends(get_db_session),
+) -> AllSettings:
     """Get all current settings.
+
+    Download settings are read from database (if set) with env as fallback.
+    Other settings are read directly from environment variables.
 
     Returns:
         All application settings grouped by category
     """
     settings = get_settings()
+    settings_service = AppSettingsService(db)
+
+    # Download settings from DB (with env fallback)
+    download_summary = await settings_service.get_download_settings_summary()
 
     return AllSettings(
         general=GeneralSettings(
@@ -146,9 +154,9 @@ async def get_all_settings() -> AllSettings:
             musicbrainz_contact=settings.musicbrainz.contact,
         ),
         download=DownloadSettings(
-            max_concurrent_downloads=settings.download.max_concurrent_downloads,
-            default_max_retries=settings.download.default_max_retries,
-            enable_priority_queue=settings.download.enable_priority_queue,
+            max_concurrent_downloads=download_summary["max_concurrent_downloads"],
+            default_max_retries=download_summary["default_max_retries"],
+            enable_priority_queue=download_summary["enable_priority_queue"],
         ),
         appearance=AppearanceSettings(
             theme="auto",  # Default to auto, will be overridden by client preference
@@ -162,43 +170,61 @@ async def get_all_settings() -> AllSettings:
     )
 
 
-# Yo future me, this endpoint is a TODO stub! It ACCEPTS settings but DOESN'T SAVE THEM. If you actually
-# implement this, you have three options: 1) Write to .env file (fragile, needs file permissions), 2) Save
-# to DB config table (persistent, multi-instance safe), 3) External config service (enterprise!). IMPORTANT:
-# Some settings require restart (port changes, DB URL), others can hot-reload (log level, timeouts). Don't
-# let users think settings apply immediately when they don't - the "restart" note is critical! Also validate
-# carefully - bad settings (port 0, invalid URLs) can brick the app!
+# Hey future me - POST /settings/ now actually persists SOME settings to DB!
+# Download settings are saved to DB (can be changed at runtime).
+# Other settings (General, Integration, Advanced) are env-based and require restart.
+# We still return a message explaining what's persisted vs what needs restart.
 @router.post("/")
-async def update_settings(settings_update: AllSettings) -> dict[str, Any]:
+async def update_settings(
+    settings_update: AllSettings,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
     """Update application settings.
 
-    Note: This endpoint currently returns the settings but doesn't persist them.
-    In a full implementation, this would:
-    - Write to .env file (requires dotenv manipulation library)
-    - Store in database (config table)
-    - Apply hot-reload for non-critical settings
-    - Require restart for critical settings (ports, auth keys)
+    Download settings are persisted to database and take effect immediately.
+    Other settings (General, Integration, Advanced) are environment-based
+    and require application restart to take effect.
 
     Args:
         settings_update: New settings values
 
     Returns:
-        Success message
+        Success message with details about which settings are persisted
 
     Raises:
         HTTPException: If settings validation fails
     """
-    # TODO: Implement actual persistence
-    # Options:
-    # 1. Write to .env file using python-dotenv set_key()
-    # 2. Store in database config table with key-value pairs
-    # 3. Use external config service (Consul, etcd)
-    # For now, just validate and return success
-    # Settings validation is done by Pydantic automatically
-    _ = settings_update  # Mark as used for linting
+    settings_service = AppSettingsService(db)
+
+    # Persist Download settings to DB (these take effect immediately)
+    await settings_service.set(
+        "download.max_concurrent_downloads",
+        settings_update.download.max_concurrent_downloads,
+        value_type="integer",
+        category="download",
+    )
+    await settings_service.set(
+        "download.default_max_retries",
+        settings_update.download.default_max_retries,
+        value_type="integer",
+        category="download",
+    )
+    await settings_service.set(
+        "download.enable_priority_queue",
+        settings_update.download.enable_priority_queue,
+        value_type="boolean",
+        category="download",
+    )
+
+    await db.commit()
+
+    # Note: General, Integration, and Advanced settings are env-based
+    # They're validated by Pydantic but not persisted to DB
     return {
-        "message": "Settings updated successfully",
-        "note": "Settings will be applied on next application restart",
+        "message": "Settings saved",
+        "persisted": ["download"],
+        "requires_restart": ["general", "integration", "advanced"],
+        "note": "Download settings take effect immediately. Other settings require restart.",
     }
 
 

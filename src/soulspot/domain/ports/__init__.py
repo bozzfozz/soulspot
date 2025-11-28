@@ -139,6 +139,39 @@ class ITrackRepository(ABC):
         """Delete a track."""
         pass
 
+    @abstractmethod
+    async def get_by_isrc(self, isrc: str) -> Track | None:
+        """Get a track by ISRC (International Standard Recording Code).
+
+        ISRC is a globally unique identifier for recordings, making this
+        the most reliable way to match downloaded files to tracks.
+
+        Args:
+            isrc: ISRC code (e.g., 'USRC11900012')
+
+        Returns:
+            Track entity or None if not found
+        """
+        pass
+
+    @abstractmethod
+    async def search_by_title_artist(
+        self, title: str, artist_name: str | None = None, limit: int = 5
+    ) -> list[Track]:
+        """Search for tracks by title and optionally artist name.
+
+        Used as fallback when ISRC is not available.
+
+        Args:
+            title: Track title to search for
+            artist_name: Optional artist name to filter by
+            limit: Maximum results to return
+
+        Returns:
+            List of matching Track entities
+        """
+        pass
+
 
 class IPlaylistRepository(ABC):
     """Repository interface for Playlist entities."""
