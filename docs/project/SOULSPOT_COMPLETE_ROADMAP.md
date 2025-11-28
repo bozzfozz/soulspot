@@ -1,34 +1,150 @@
 # 🎵 SoulSpot – Vollständige Entwicklungs-Roadmap
 
-> **Version:** 1.0  
+> **Version:** 1.1  
 > **Erstellt:** 2025-11-26  
 > **Autor:** SoulSpot Development Team  
-> **Letzte Aktualisierung:** 2025-11-26  
+> **Letzte Aktualisierung:** 2025-11-28  
 > **Dokumenttyp:** Master-Roadmap (Von Null bis Produktion)
 
 ---
 
 ## 📋 Inhaltsverzeichnis
 
-1. [Executive Summary](#1-executive-summary)
-2. [Projektübersicht](#2-projektübersicht)
-3. [Architektur-Vision](#3-architektur-vision)
-4. [Technologie-Stack](#4-technologie-stack)
-5. [Phase 0: Projektinitialisierung](#5-phase-0-projektinitialisierung-woche-1)
-6. [Phase 1: Foundation](#6-phase-1-foundation-woche-2-3)
-7. [Phase 2: Core Infrastructure](#7-phase-2-core-infrastructure-woche-4-6)
-8. [Phase 3: External Integrations](#8-phase-3-external-integrations-woche-7-9)
-9. [Phase 4: Application Layer](#9-phase-4-application-layer-woche-10-12)
-10. [Phase 5: Web UI & API Integration](#10-phase-5-web-ui--api-integration-woche-13-16)
-11. [Phase 6: Automation & Watchlists](#11-phase-6-automation--watchlists-woche-17-20)
-12. [Phase 7: Performance & Scalability](#12-phase-7-performance--scalability-woche-21-23)
-13. [Phase 8: Security Hardening](#13-phase-8-security-hardening-woche-24-26)
-14. [Phase 9: Advanced Features](#14-phase-9-advanced-features-woche-27-32)
-15. [Phase 10: Production Readiness](#15-phase-10-production-readiness-woche-33-36)
-16. [Langfristige Vision (v2.0/v3.0)](#16-langfristige-vision-v20v30)
-17. [Risiken und Mitigationsstrategien](#17-risiken-und-mitigationsstrategien)
-18. [Erfolgskriterien und KPIs](#18-erfolgskriterien-und-kpis)
-19. [Anhang](#19-anhang)
+1. [Aktueller Stand (November 2025)](#aktueller-stand-november-2025) ⭐ NEU
+2. [Executive Summary](#1-executive-summary)
+3. [Projektübersicht](#2-projektübersicht)
+4. [Architektur-Vision](#3-architektur-vision)
+5. [Technologie-Stack](#4-technologie-stack)
+6. [Phase 0: Projektinitialisierung](#5-phase-0-projektinitialisierung-woche-1)
+7. [Phase 1: Foundation](#6-phase-1-foundation-woche-2-3)
+8. [Phase 2: Core Infrastructure](#7-phase-2-core-infrastructure-woche-4-6)
+9. [Phase 3: External Integrations](#8-phase-3-external-integrations-woche-7-9)
+10. [Phase 4: Application Layer](#9-phase-4-application-layer-woche-10-12)
+11. [Phase 5: Web UI & API Integration](#10-phase-5-web-ui--api-integration-woche-13-16)
+12. [Phase 6: Automation & Watchlists](#11-phase-6-automation--watchlists-woche-17-20)
+13. [Phase 7: Performance & Scalability](#12-phase-7-performance--scalability-woche-21-23)
+14. [Phase 8: Security Hardening](#13-phase-8-security-hardening-woche-24-26)
+15. [Phase 9: Advanced Features](#14-phase-9-advanced-features-woche-27-32)
+16. [Phase 10: Production Readiness](#15-phase-10-production-readiness-woche-33-36)
+17. [Langfristige Vision (v2.0/v3.0)](#16-langfristige-vision-v20v30)
+18. [Risiken und Mitigationsstrategien](#17-risiken-und-mitigationsstrategien)
+19. [Erfolgskriterien und KPIs](#18-erfolgskriterien-und-kpis)
+20. [Anhang](#19-anhang)
+
+---
+
+## Aktueller Stand (November 2025)
+
+> **⚠️ WICHTIG: Dieser Abschnitt zeigt den AKTUELLEN Implementierungsstand des Projekts!**
+
+### 🎯 Aktuelle Version: v0.1.0 Alpha (Production Ready)
+
+Das Projekt hat die Phasen 1-6 weitgehend abgeschlossen und befindet sich in aktiver Entwicklung.
+
+### ✅ Bereits implementierte Features
+
+#### API-Router (17 Router implementiert)
+
+| Router | Datei | Beschreibung |
+|--------|-------|--------------|
+| **auth** | `auth.py` | OAuth 2.0 PKCE Flow mit Spotify |
+| **playlists** | `playlists.py` | Playlist Import, Sync, Track-Management |
+| **downloads** | `downloads.py` | Download Queue mit Priorität, Pause/Resume |
+| **tracks** | `tracks.py` | Track-Verwaltung, Metadaten |
+| **library** | `library.py` | Library Scanner, Duplikate, Broken Files |
+| **metadata** | `metadata.py` | Multi-Source Metadata Enrichment |
+| **automation** | `automation.py` | Watchlists, Filter, Automation Rules |
+| **settings** | `settings.py` | App-Konfiguration |
+| **artists** | `artists.py` | ⭐ Gefolgte Künstler synchronisieren |
+| **albums** | `albums.py` | ⭐ Album-Synchronisierung |
+| **artist_songs** | `artist_songs.py` | ⭐ Singles/Top-Tracks von Künstlern |
+| **dashboard** | `dashboard.py` | Dashboard-Widgets |
+| **widgets** | `widgets.py` | Widget-Management |
+| **widget_templates** | `widget_templates.py` | Widget-Template System |
+| **sse** | `sse.py` | Server-Sent Events für Echtzeit-Updates |
+| **ui** | `ui.py` | Web UI Routes |
+
+#### Application Services (19 Services implementiert)
+
+| Service | Beschreibung | Status |
+|---------|--------------|--------|
+| **FollowedArtistsService** | Spotify gefolgte Künstler synchronisieren | ✅ NEU |
+| **ArtistSongsService** | Singles/Top-Tracks von Künstlern | ✅ NEU |
+| **AlbumSyncService** | Album-Synchronisierung mit Spotify | ✅ NEU |
+| **WatchlistService** | Artist Watchlists für neue Releases | ✅ |
+| **DiscographyService** | Discography Completion Check | ✅ |
+| **QualityUpgradeService** | Quality Upgrade Detection | ✅ |
+| **FilterService** | Whitelist/Blacklist Filter | ✅ |
+| **AutomationWorkflowService** | Automation Rules Engine | ✅ |
+| **NotificationService** | Benachrichtigungen | ✅ |
+| **LibraryScanner** | Bibliothek scannen | ✅ |
+| **MetadataMerger** | Multi-Source Metadata Merge | ✅ |
+| **AdvancedSearch** | Fuzzy Search, Quality Filter | ✅ |
+| **BatchProcessor** | Bulk Operations | ✅ |
+| **TokenManager** | OAuth Token Management | ✅ |
+| **SessionStore** | Session Persistence | ✅ |
+| **AlbumCompleteness** | Album Vollständigkeits-Check | ✅ |
+| **WidgetTemplateRegistry** | Widget Template System | ✅ |
+| **AutoImport** | Automatischer Import | ✅ |
+| **Postprocessing Pipeline** | Artwork, Lyrics, Tagging, Renaming | ✅ |
+
+#### External Integrations (5 Clients implementiert)
+
+| Client | Beschreibung | Features |
+|--------|--------------|----------|
+| **SpotifyClient** | Spotify Web API | OAuth PKCE, Playlists, Tracks, Artists, Albums, Search, Followed Artists |
+| **SlskdClient** | Soulseek Downloads | Search, Download, Status Monitoring |
+| **MusicBrainzClient** | Metadaten | ISRC Lookup, Recording Search, Rate Limiting |
+| **LastfmClient** | Genres/Tags | Track Tags, Artist Tags, Similar Artists |
+| **CircuitBreakerWrapper** | Resilienz | Circuit Breaker Pattern für alle Clients |
+
+#### Web UI Features (Phase 1-2 Complete)
+
+| Feature | Beschreibung |
+|---------|--------------|
+| **PWA Support** | Installierbare App, Offline-Support, Service Worker |
+| **Glassmorphism Design** | Moderne UI mit Blur, Transparenz, Tiefe |
+| **Mobile Gestures** | Swipe Navigation, Pull-to-Refresh, Long-Press |
+| **Fuzzy Search** | Typo-tolerante Suche mit Scoring |
+| **Native Notifications** | Browser Notifications für Download-Events |
+| **SSE Real-time** | Server-Sent Events für Live-Updates |
+| **WCAG 2.1 AA** | Vollständige Accessibility |
+| **60fps Animations** | Master-Class UI Transitions |
+
+#### Database Schema (14 Migrationen)
+
+| Migration | Beschreibung |
+|-----------|--------------|
+| `259d78cbdfef` | Initial Schema (Artists, Albums, Tracks, Playlists, Downloads) |
+| `0372f0c937d1` | Genre Field für Tracks |
+| `0b88b6152c1d` | Dashboard Widget Schema |
+| `40cac646364c` | Session Persistence |
+| `46d1c2c2f85b` | Priority Field für Downloads |
+| `aa15670cdf15` | Library Management Schema |
+| `bb16770eeg26` | Automation & Watchlist Schema |
+| `c7da905f261a` | Image URL für Artists |
+| `cc17880fff37` | Performance Indexes (11 neue Indexes) |
+| `dd18990ggh48` | Genres und Tags für Artists |
+| `ee19001hhj49` | Widget System entfernt |
+| `ff20002ii50` | Album Artwork URL |
+| `gg20003jj51` | Playlist Cover URL |
+
+### 🚧 Aktuell in Entwicklung
+
+- [ ] E2E Tests mit Playwright
+- [ ] CSRF Protection
+- [ ] Rate Limiting
+- [ ] Security Headers
+
+### 📊 Code-Metriken (Aktuell)
+
+| Metrik | Wert |
+|--------|------|
+| **Python Dateien** | ~150+ |
+| **Lines of Code** | ~30.000+ |
+| **API Endpoints** | 70+ |
+| **Unit Tests** | 400+ |
+| **Test Coverage** | >80% |
 
 ---
 
@@ -3635,6 +3751,53 @@ class TokenManager:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### 10.2.1 Neue API Endpoints (Aktualisierung November 2025)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   NEUE API ENDPOINTS (seit v0.1.0)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  /api/artists ⭐ NEU                                                       │
+│  ├── POST /sync           → Gefolgte Künstler von Spotify synchronisieren │
+│  ├── GET  /               → Liste aller synchronisierten Künstler         │
+│  ├── GET  /{id}           → Künstler Details                              │
+│  └── DELETE /{id}         → Künstler entfernen                            │
+│                                                                             │
+│  /api/artists/{id}/songs ⭐ NEU                                            │
+│  ├── POST /sync           → Singles/Top-Tracks synchronisieren            │
+│  ├── GET  /               → Liste der Songs eines Künstlers               │
+│  └── DELETE /{song_id}    → Song entfernen                                │
+│                                                                             │
+│  /api/albums ⭐ NEU                                                        │
+│  ├── POST /sync           → Alben von Spotify synchronisieren             │
+│  ├── GET  /               → Liste aller Alben                             │
+│  ├── GET  /{id}           → Album Details                                 │
+│  ├── GET  /{id}/tracks    → Album Tracks                                  │
+│  └── DELETE /{id}         → Album entfernen                               │
+│                                                                             │
+│  /api/automation                                                           │
+│  ├── POST /watchlist      → Artist Watchlist erstellen                    │
+│  ├── GET  /watchlist      → Alle Watchlists                               │
+│  ├── POST /watchlist/{id}/check → Auf neue Releases prüfen               │
+│  ├── POST /filters        → Filter Rule erstellen                         │
+│  ├── GET  /filters        → Alle Filter                                   │
+│  ├── POST /rules          → Automation Rule erstellen                     │
+│  ├── GET  /rules          → Alle Automation Rules                         │
+│  └── POST /quality-upgrades/identify → Quality Upgrades finden           │
+│                                                                             │
+│  /api/widgets/templates                                                    │
+│  ├── GET  /               → Liste aller Widget-Templates                  │
+│  ├── GET  /{id}           → Template Details                              │
+│  ├── POST /search         → Templates suchen                              │
+│  └── POST /discover       → Custom Templates entdecken                    │
+│                                                                             │
+│  /api/ui/sse                                                               │
+│  └── GET  /stream         → Server-Sent Events für Echtzeit-Updates       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ### 10.3 Web UI Pages
 
 ```
@@ -4432,5 +4595,6 @@ headers = {
 **Dokument Ende**
 
 *Erstellt: 2025-11-26*  
-*Version: 1.0*  
-*Status: Vollständig*
+*Letzte Aktualisierung: 2025-11-28*  
+*Version: 1.1*  
+*Status: Aktualisiert mit neuestem Quellcode-Stand*
