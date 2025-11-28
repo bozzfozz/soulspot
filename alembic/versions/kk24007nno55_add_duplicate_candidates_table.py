@@ -1,7 +1,7 @@
 """Add duplicate_candidates table for duplicate track detection.
 
 Revision ID: kk24007nno55
-Revises: jj23006mmn54
+Revises: mm24007nnp55
 Create Date: 2025-11-28 10:00:00.000000
 
 Hey future me - this migration adds the DUPLICATE DETECTION infrastructure!
@@ -32,7 +32,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "kk24007nno55"
-down_revision = "jj23006mmn54"
+down_revision = "mm24007nnp55"
 branch_labels = None
 depends_on = None
 

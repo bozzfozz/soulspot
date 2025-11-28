@@ -1,7 +1,7 @@
 """Add Spotify sync features: image paths, liked songs, saved albums.
 
-Revision ID: jj23006mmn54
-Revises: ii22005llm53
+Revision ID: mm24007nnp55
+Revises: jj23006mmn54
 Create Date: 2025-11-27 16:00:00.000000
 
 Hey future me - this migration adds LOCAL IMAGE STORAGE for Spotify data!
@@ -27,8 +27,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "jj23006mmn54"
-down_revision = "ii22005llm53"
+revision = "mm24007nnp55"
+down_revision = "jj23006mmn54"
 branch_labels = None
 depends_on = None
 
