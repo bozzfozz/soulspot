@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,6 +85,20 @@ class WatchlistWorker:
                 await self._task
         logger.info("Watchlist worker stopped")
 
+    def get_status(self) -> dict[str, Any]:
+        """Get worker status for monitoring/UI.
+
+        Returns:
+            Dict with running state, config, and check statistics
+        """
+        return {
+            "name": "Watchlist Worker",
+            "running": self._running,
+            "status": "active" if self._running else "stopped",
+            "check_interval_seconds": self.check_interval_seconds,
+            "has_token_manager": self._token_manager is not None,
+        }
+
     async def _run_loop(self) -> None:
         """Main worker loop."""
         while self._running:
@@ -147,36 +162,81 @@ class WatchlistWorker:
                         await self.session.commit()
                         continue
 
-                    # Hey - we have the access_token from token_manager above!
-                    # Use it for Spotify API calls. The token is refreshed automatically
-                    # by TokenRefreshWorker, so we can trust it's valid here.
+                    # Hey future me - jetzt holen wir ECHTE Releases von Spotify!
+                    # get_artist_albums() gibt albums+singles zurück (include_groups in client).
+                    # Wir filtern nach release_date > last_checked_at für "neue" Releases.
                     logger.info(
-                        f"Checking Spotify for new releases from artist {watchlist.artist_id} "
-                        f"(token available: yes)"
+                        f"Fetching albums from Spotify for artist {watchlist.artist_id}"
                     )
 
-                    # TODO: Actually call Spotify API here once SpotifyClient methods are ready
-                    # new_releases = await self.spotify_client.get_artist_albums(
-                    #     artist_id=watchlist.artist_id.value,
-                    #     access_token=access_token,
-                    #     limit=10
-                    # )
+                    # Fetch artist albums from Spotify API
+                    all_albums = await self.spotify_client.get_artist_albums(
+                        artist_id=str(watchlist.artist_id.value),
+                        access_token=access_token,
+                        limit=50,  # Get more to catch all recent releases
+                    )
+
+                    # Filter for NEW releases (released after last check)
+                    new_releases: list[dict[str, Any]] = []
+                    for album in all_albums:
+                        release_date_str = album.get("release_date", "")
+                        if not release_date_str:
+                            continue
+
+                        # Parse release date (can be YYYY, YYYY-MM, or YYYY-MM-DD)
+                        try:
+                            if len(release_date_str) == 4:  # YYYY
+                                release_date = datetime(int(release_date_str), 1, 1, tzinfo=UTC)
+                            elif len(release_date_str) == 7:  # YYYY-MM
+                                parts = release_date_str.split("-")
+                                release_date = datetime(int(parts[0]), int(parts[1]), 1, tzinfo=UTC)
+                            else:  # YYYY-MM-DD
+                                parts = release_date_str.split("-")
+                                release_date = datetime(
+                                    int(parts[0]), int(parts[1]), int(parts[2]), tzinfo=UTC
+                                )
+                        except (ValueError, IndexError):
+                            logger.warning(f"Could not parse release date: {release_date_str}")
+                            continue
+
+                        # Check if this is a NEW release (after last check)
+                        if watchlist.last_checked_at is None or release_date > watchlist.last_checked_at:
+                            new_releases.append({
+                                "album_id": album.get("id"),
+                                "album_name": album.get("name"),
+                                "album_type": album.get("album_type"),
+                                "release_date": release_date_str,
+                                "total_tracks": album.get("total_tracks", 0),
+                                "images": album.get("images", []),
+                            })
+
+                    logger.info(
+                        f"Found {len(new_releases)} new releases for artist {watchlist.artist_id} "
+                        f"(total albums checked: {len(all_albums)})"
+                    )
 
                     # Trigger automation workflows for new releases if auto_download is enabled
-                    if watchlist.auto_download:
-                        context = {
-                            "artist_id": str(watchlist.artist_id.value),
-                            "watchlist_id": str(watchlist.id.value),
-                            "quality_profile": watchlist.quality_profile,
-                        }
-                        # Trigger the automation workflow
-                        await self.workflow_service.trigger_workflow(
-                            trigger=AutomationTrigger.NEW_RELEASE,
-                            context=context,
-                        )
+                    downloads_triggered = 0
+                    if new_releases and watchlist.auto_download:
+                        for release in new_releases:
+                            context = {
+                                "artist_id": str(watchlist.artist_id.value),
+                                "watchlist_id": str(watchlist.id.value),
+                                "release_info": release,
+                                "quality_profile": watchlist.quality_profile,
+                            }
+                            # Trigger the automation workflow
+                            await self.workflow_service.trigger_workflow(
+                                trigger=AutomationTrigger.NEW_RELEASE,
+                                context=context,
+                            )
+                            downloads_triggered += 1
 
-                    # Update check time
-                    watchlist.update_check(releases_found=0, downloads_triggered=0)
+                    # Update check time and stats
+                    watchlist.update_check(
+                        releases_found=len(new_releases),
+                        downloads_triggered=downloads_triggered,
+                    )
                     await self.watchlist_service.repository.update(watchlist)
                     await self.session.commit()
 
@@ -277,6 +337,20 @@ class DiscographyWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
         logger.info("Discography worker stopped")
+
+    def get_status(self) -> dict[str, Any]:
+        """Get worker status for monitoring/UI.
+
+        Returns:
+            Dict with running state, config, and check statistics
+        """
+        return {
+            "name": "Discography Worker",
+            "running": self._running,
+            "status": "active" if self._running else "stopped",
+            "check_interval_seconds": self.check_interval_seconds,
+            "has_token_manager": self._token_manager is not None,
+        }
 
     async def _run_loop(self) -> None:
         """Main worker loop."""
@@ -432,6 +506,19 @@ class QualityUpgradeWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
         logger.info("Quality upgrade worker stopped")
+
+    def get_status(self) -> dict[str, Any]:
+        """Get worker status for monitoring/UI.
+
+        Returns:
+            Dict with running state, config, and check statistics
+        """
+        return {
+            "name": "Quality Upgrade Worker",
+            "running": self._running,
+            "status": "active" if self._running else "stopped",
+            "check_interval_seconds": self.check_interval_seconds,
+        }
 
     async def _run_loop(self) -> None:
         """Main worker loop."""
@@ -626,7 +713,7 @@ class AutomationWorkerManager:
     # Accesses _running flags directly - not thread-safe but these are bool reads so low risk
     # Returns snapshot - status might change immediately after this returns!
     def get_status(self) -> dict[str, bool]:
-        """Get status of all workers.
+        """Get simple running status of all workers.
 
         Returns:
             Dictionary mapping worker name to running status
@@ -635,4 +722,19 @@ class AutomationWorkerManager:
             "watchlist": self.watchlist_worker._running,
             "discography": self.discography_worker._running,
             "quality_upgrade": self.quality_worker._running,
+        }
+
+    def get_detailed_status(self) -> dict[str, dict[str, Any]]:
+        """Get detailed status of all workers including config and stats.
+
+        Hey future me - diese Methode gibt MEHR Details als get_status().
+        Nützlich für die Worker-Status API und Debugging.
+
+        Returns:
+            Dictionary with detailed status for each worker
+        """
+        return {
+            "watchlist": self.watchlist_worker.get_status(),
+            "discography": self.discography_worker.get_status(),
+            "quality_upgrade": self.quality_worker.get_status(),
         }

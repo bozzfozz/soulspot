@@ -986,6 +986,42 @@ async def track_metadata_editor(
 
 
 # =============================================================================
+# DUPLICATE REVIEW ROUTES
+# =============================================================================
+# Hey future me - these routes are for the duplicate detection feature!
+# The DuplicateDetectorWorker runs periodically and populates duplicate_candidates table.
+# This page shows those candidates and lets users resolve them (keep one, keep both, dismiss).
+# API endpoints in library.py do the actual work, this just renders the UI.
+# =============================================================================
+
+
+@router.get("/library/duplicates", response_class=HTMLResponse)
+async def library_duplicates_page(request: Request) -> Any:
+    """Duplicate review page for resolving duplicate tracks.
+
+    Shows all detected duplicate candidates from the duplicate_candidates table.
+    Users can review side-by-side comparisons and choose which to keep.
+
+    The actual duplicate detection runs via DuplicateDetectorWorker (background).
+    Users can also trigger manual scans from this page.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        HTML page with duplicate review UI
+    """
+    # Initial stats will be loaded via HTMX from /api/library/duplicates
+    return templates.TemplateResponse(
+        "duplicates.html",
+        {
+            "request": request,
+            "stats": None,  # Loaded via HTMX
+        },
+    )
+
+
+# =============================================================================
 # SPOTIFY BROWSE ROUTES
 # =============================================================================
 # Hey future me - these routes are for browsing SPOTIFY data (followed artists, their albums,

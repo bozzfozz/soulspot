@@ -746,3 +746,228 @@ async def get_spotify_sync_worker_status(
         last_sync=status["last_sync"],
         stats=status["stats"],
     )
+
+
+# =====================================================
+# Automation Settings Endpoints
+# =====================================================
+
+
+class AutomationSettings(BaseModel):
+    """Automation settings for background workers.
+
+    Hey future me – diese Settings kontrollieren die Automation-Worker!
+    Alle Worker sind per Default DISABLED (opt-in) weil sie potenziell
+    invasiv sind (löschen Dateien, starten Downloads automatisch).
+    """
+
+    # Watchlist Worker
+    watchlist_enabled: bool = Field(
+        default=False, description="Enable watchlist monitoring for new releases"
+    )
+    watchlist_interval_minutes: int = Field(
+        default=60, ge=15, le=1440, description="Watchlist check interval in minutes"
+    )
+
+    # Discography Worker
+    discography_enabled: bool = Field(
+        default=False, description="Enable discography completion scanning"
+    )
+    discography_interval_hours: int = Field(
+        default=24, ge=1, le=168, description="Discography scan interval in hours"
+    )
+
+    # Quality Upgrade Worker
+    quality_upgrade_enabled: bool = Field(
+        default=False, description="Enable quality upgrade detection"
+    )
+    quality_profile: str = Field(
+        default="high", description="Target quality profile (medium, high, lossless)"
+    )
+
+    # Cleanup Worker
+    cleanup_enabled: bool = Field(
+        default=False, description="Enable auto-cleanup of temp files"
+    )
+    cleanup_retention_days: int = Field(
+        default=7, ge=1, le=90, description="File retention period in days"
+    )
+
+    # Duplicate Detection Worker
+    duplicate_detection_enabled: bool = Field(
+        default=False, description="Enable duplicate track detection"
+    )
+    duplicate_scan_interval_hours: int = Field(
+        default=168, ge=24, le=720, description="Duplicate scan interval in hours"
+    )
+
+
+class AutomationSettingsResponse(BaseModel):
+    """Response wrapper for automation settings."""
+
+    settings: AutomationSettings
+    worker_status: dict[str, bool] | None = Field(
+        default=None, description="Current worker running status"
+    )
+
+
+# Hey future me – dieser Endpoint gibt alle Automation Settings zurück.
+# Die Settings kommen aus der DB via AppSettingsService.
+@router.get("/automation")
+async def get_automation_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> AutomationSettingsResponse:
+    """Get automation settings.
+
+    Returns current automation configuration from database.
+    These are runtime-editable settings for background workers.
+
+    Returns:
+        Current automation settings and worker status
+    """
+    settings_service = AppSettingsService(db)
+    summary = await settings_service.get_automation_settings_summary()
+
+    # Get worker status if available
+    worker_status = None
+    if hasattr(request.app.state, "automation_manager"):
+        worker_status = request.app.state.automation_manager.get_status()
+
+    return AutomationSettingsResponse(
+        settings=AutomationSettings(**summary),
+        worker_status=worker_status,
+    )
+
+
+# Hey future me – dieser Endpoint updated alle Automation Settings auf einmal.
+# Die Changes werden sofort in der DB gespeichert und wirken sich auf die Worker aus.
+@router.put("/automation")
+async def update_automation_settings(
+    settings_update: AutomationSettings,
+    db: AsyncSession = Depends(get_db),
+) -> AutomationSettings:
+    """Update automation settings.
+
+    These changes take effect immediately - no restart required!
+
+    Args:
+        settings_update: New settings values
+
+    Returns:
+        Updated settings
+    """
+    settings_service = AppSettingsService(db)
+
+    # Update each setting
+    await settings_service.set(
+        "automation.watchlist_enabled",
+        settings_update.watchlist_enabled,
+        value_type="boolean",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.watchlist_interval_minutes",
+        settings_update.watchlist_interval_minutes,
+        value_type="integer",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.discography_enabled",
+        settings_update.discography_enabled,
+        value_type="boolean",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.discography_interval_hours",
+        settings_update.discography_interval_hours,
+        value_type="integer",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.quality_upgrade_enabled",
+        settings_update.quality_upgrade_enabled,
+        value_type="boolean",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.quality_profile",
+        settings_update.quality_profile,
+        value_type="string",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.cleanup_enabled",
+        settings_update.cleanup_enabled,
+        value_type="boolean",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.cleanup_retention_days",
+        settings_update.cleanup_retention_days,
+        value_type="integer",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.duplicate_detection_enabled",
+        settings_update.duplicate_detection_enabled,
+        value_type="boolean",
+        category="automation",
+    )
+    await settings_service.set(
+        "automation.duplicate_scan_interval_hours",
+        settings_update.duplicate_scan_interval_hours,
+        value_type="integer",
+        category="automation",
+    )
+
+    await db.commit()
+
+    return settings_update
+
+
+# Hey future me – dieser Endpoint updated einzelne Automation Settings.
+# Nützlich für Toggle-Buttons die nur einen Wert ändern.
+@router.patch("/automation")
+async def patch_automation_setting(
+    setting_update: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Update a single automation setting.
+
+    Args:
+        setting_update: Dict with setting name and new value
+
+    Returns:
+        Success message with updated value
+    """
+    settings_service = AppSettingsService(db)
+
+    # Map setting names to their types
+    setting_types = {
+        "watchlist_enabled": "boolean",
+        "watchlist_interval_minutes": "integer",
+        "discography_enabled": "boolean",
+        "discography_interval_hours": "integer",
+        "quality_upgrade_enabled": "boolean",
+        "quality_profile": "string",
+        "cleanup_enabled": "boolean",
+        "cleanup_retention_days": "integer",
+        "duplicate_detection_enabled": "boolean",
+        "duplicate_scan_interval_hours": "integer",
+    }
+
+    updated = {}
+    for key, value in setting_update.items():
+        if key in setting_types:
+            await settings_service.set(
+                f"automation.{key}",
+                value,
+                value_type=setting_types[key],
+                category="automation",
+            )
+            updated[key] = value
+
+    await db.commit()
+
+    return {"message": "Setting updated", "updated": updated}

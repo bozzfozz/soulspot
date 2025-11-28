@@ -423,3 +423,149 @@ class AppSettingsService:
                 "spotify.remove_unfollowed_playlists", default=False
             ),
         }
+
+    # =========================================================================
+    # AUTOMATION WORKER SETTINGS
+    # =========================================================================
+    # Hey future me - diese Settings steuern die Automation Workers!
+    # WICHTIG: Alle sind default=False (opt-in) für sicheren Rollout.
+    # User müssen Automation explizit in Settings aktivieren.
+    # =========================================================================
+
+    async def is_watchlist_automation_enabled(self) -> bool:
+        """Check if Watchlist Worker (new release detection) is enabled.
+
+        Default is FALSE - user must explicitly enable in Settings.
+        When enabled, worker checks followed artists for new releases.
+        """
+        return await self.get_bool("automation.watchlist_enabled", default=False)
+
+    async def get_watchlist_interval_seconds(self) -> int:
+        """Get interval for watchlist checks in seconds.
+
+        Default is 3600 (1 hour) - how often to check for new releases.
+        """
+        return await self.get_int("automation.watchlist_interval_seconds", default=3600)
+
+    async def is_discography_automation_enabled(self) -> bool:
+        """Check if Discography Worker (completeness check) is enabled.
+
+        Default is FALSE. When enabled, worker scans for missing albums
+        in artist discographies and can trigger auto-downloads.
+        """
+        return await self.get_bool("automation.discography_enabled", default=False)
+
+    async def get_discography_interval_seconds(self) -> int:
+        """Get interval for discography checks in seconds.
+
+        Default is 86400 (24 hours) - discographies change slowly.
+        """
+        return await self.get_int(
+            "automation.discography_interval_seconds", default=86400
+        )
+
+    async def is_quality_upgrade_enabled(self) -> bool:
+        """Check if Quality Upgrade Worker is enabled.
+
+        Default is FALSE. When enabled, worker scans library for tracks
+        that could be upgraded to better quality (e.g., MP3 -> FLAC).
+        """
+        return await self.get_bool("automation.quality_upgrade_enabled", default=False)
+
+    async def get_quality_upgrade_interval_seconds(self) -> int:
+        """Get interval for quality upgrade scans in seconds.
+
+        Default is 86400 (24 hours) - quality opportunities don't change often.
+        """
+        return await self.get_int(
+            "automation.quality_upgrade_interval_seconds", default=86400
+        )
+
+    async def get_quality_upgrade_min_score(self) -> int:
+        """Get minimum improvement score to trigger quality upgrade.
+
+        Score 0-100. Higher = bigger improvement needed.
+        Default 20 = significant upgrade (e.g., 128kbps MP3 -> FLAC).
+        """
+        return await self.get_int("automation.quality_upgrade_min_score", default=20)
+
+    async def is_cleanup_automation_enabled(self) -> bool:
+        """Check if Cleanup Worker is enabled.
+
+        Default is FALSE. When enabled, worker identifies orphaned files
+        and stale DB entries. Does NOT auto-delete, just marks for review.
+        """
+        return await self.get_bool("automation.cleanup_enabled", default=False)
+
+    async def get_cleanup_interval_seconds(self) -> int:
+        """Get interval for cleanup scans in seconds.
+
+        Default is 86400 (24 hours).
+        """
+        return await self.get_int("automation.cleanup_interval_seconds", default=86400)
+
+    async def is_duplicate_detection_enabled(self) -> bool:
+        """Check if Duplicate Detector Worker is enabled.
+
+        Default is FALSE. When enabled, worker scans library for potential
+        duplicate tracks using metadata matching. Stores candidates for
+        manual review in duplicate_candidates table.
+        """
+        return await self.get_bool(
+            "automation.duplicate_detection_enabled", default=False
+        )
+
+    async def get_duplicate_detection_interval_seconds(self) -> int:
+        """Get interval for duplicate detection scans in seconds.
+
+        Default is 86400 (24 hours).
+        """
+        return await self.get_int(
+            "automation.duplicate_detection_interval_seconds", default=86400
+        )
+
+    async def get_automation_settings_summary(self) -> dict[str, Any]:
+        """Get summary of all automation settings for UI display.
+
+        Returns a dict with all automation settings for the Settings page.
+        """
+        return {
+            # Watchlist (New Release Detection)
+            "watchlist_enabled": await self.get_bool(
+                "automation.watchlist_enabled", default=False
+            ),
+            "watchlist_interval_seconds": await self.get_int(
+                "automation.watchlist_interval_seconds", default=3600
+            ),
+            # Discography Completeness
+            "discography_enabled": await self.get_bool(
+                "automation.discography_enabled", default=False
+            ),
+            "discography_interval_seconds": await self.get_int(
+                "automation.discography_interval_seconds", default=86400
+            ),
+            # Quality Upgrade
+            "quality_upgrade_enabled": await self.get_bool(
+                "automation.quality_upgrade_enabled", default=False
+            ),
+            "quality_upgrade_interval_seconds": await self.get_int(
+                "automation.quality_upgrade_interval_seconds", default=86400
+            ),
+            "quality_upgrade_min_score": await self.get_int(
+                "automation.quality_upgrade_min_score", default=20
+            ),
+            # Cleanup
+            "cleanup_enabled": await self.get_bool(
+                "automation.cleanup_enabled", default=False
+            ),
+            "cleanup_interval_seconds": await self.get_int(
+                "automation.cleanup_interval_seconds", default=86400
+            ),
+            # Duplicate Detection
+            "duplicate_detection_enabled": await self.get_bool(
+                "automation.duplicate_detection_enabled", default=False
+            ),
+            "duplicate_detection_interval_seconds": await self.get_int(
+                "automation.duplicate_detection_interval_seconds", default=86400
+            ),
+        }

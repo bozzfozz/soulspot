@@ -1,0 +1,540 @@
+{# Hey future me - Duplicate Review page!
+   Shows all detected duplicates with side-by-side comparison.
+   Users can keep one, keep both, or dismiss false positives.
+   Uses HTMX for dynamic updates without page reload.
+   The DuplicateDetectorWorker populates duplicate_candidates table,
+   this page reads from /api/library/duplicates endpoint. #}
+
+{% extends "base.html" %}
+
+{% block title %}Duplicate Review - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
+    <div style="display: flex; align-items: center; gap: var(--space-4);">
+        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-clone" style="color: white; font-size: 1.25rem;"></i>
+        </div>
+        <div>
+            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Duplicate Review</h1>
+            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Review and resolve duplicate tracks in your library</p>
+        </div>
+    </div>
+    <div style="display: flex; gap: var(--space-3);">
+        <button class="btn btn-outline"
+                hx-post="/api/library/duplicates/scan"
+                hx-target="#scan-status"
+                hx-swap="innerHTML">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            Scan for Duplicates
+        </button>
+        <a href="/library" class="btn btn-ghost">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Library
+        </a>
+    </div>
+</div>
+
+<!-- Scan Status -->
+<div id="scan-status" style="margin-bottom: var(--space-4);"></div>
+
+<!-- Stats Bar -->
+<div id="duplicate-stats" class="stats-bar" hx-get="/api/library/duplicates?limit=1" hx-trigger="load" hx-swap="none" hx-on::after-request="updateStats(event)">
+    <div class="stat-item">
+        <span class="stat-number" id="stat-pending">{{ stats.pending if stats else 0 }}</span>
+        <span class="stat-label">Pending Review</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-resolved">{{ stats.resolved if stats else 0 }}</span>
+        <span class="stat-label">Resolved</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-dismissed">{{ stats.dismissed if stats else 0 }}</span>
+        <span class="stat-label">Dismissed</span>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<div class="filter-tabs" style="margin-bottom: var(--space-6);">
+    <button class="filter-tab active" data-status="pending" onclick="filterDuplicates('pending')">
+        <i class="fa-solid fa-clock"></i> Pending
+    </button>
+    <button class="filter-tab" data-status="resolved" onclick="filterDuplicates('resolved')">
+        <i class="fa-solid fa-check"></i> Resolved
+    </button>
+    <button class="filter-tab" data-status="dismissed" onclick="filterDuplicates('dismissed')">
+        <i class="fa-solid fa-eye-slash"></i> Dismissed
+    </button>
+    <button class="filter-tab" data-status="all" onclick="filterDuplicates('all')">
+        <i class="fa-solid fa-list"></i> All
+    </button>
+</div>
+
+<!-- Duplicates List -->
+<div id="duplicates-container" hx-get="/api/library/duplicates?status=pending&limit=50" hx-trigger="load" hx-swap="innerHTML">
+    <!-- Loading state -->
+    <div class="loading-state">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--text-muted);"></i>
+        <p>Loading duplicates...</p>
+    </div>
+</div>
+
+<!-- Empty State Template (hidden, shown via JS) -->
+<template id="empty-state-template">
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="fa-solid fa-check-double"></i>
+        </div>
+        <h3>No duplicates found</h3>
+        <p>Your library is clean! Run a scan to check for new duplicates.</p>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+    .stats-bar {
+        display: flex;
+        gap: var(--space-6);
+        padding: var(--space-4) var(--space-6);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-primary);
+        margin-bottom: var(--space-6);
+    }
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .stat-number {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+    }
+    .stat-label {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+    }
+    
+    .filter-tabs {
+        display: flex;
+        gap: var(--space-2);
+        border-bottom: 1px solid var(--border-primary);
+        padding-bottom: var(--space-2);
+    }
+    .filter-tab {
+        padding: var(--space-2) var(--space-4);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        border-radius: var(--radius-md);
+        transition: all var(--transition-fast);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+    .filter-tab:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+    .filter-tab.active {
+        background: var(--accent-primary);
+        color: white;
+    }
+
+    .duplicate-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--border-primary);
+        margin-bottom: var(--space-4);
+        overflow: hidden;
+        transition: box-shadow var(--transition-fast);
+    }
+    .duplicate-card:hover {
+        box-shadow: var(--shadow-lg);
+    }
+    .duplicate-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-4) var(--space-5);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-primary);
+    }
+    .similarity-badge {
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-full);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+    }
+    .similarity-high { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .similarity-medium { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .similarity-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+
+    .duplicate-comparison {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: var(--space-4);
+        padding: var(--space-5);
+    }
+    .track-side {
+        background: var(--bg-primary);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+        border: 2px solid transparent;
+        transition: border-color var(--transition-fast);
+    }
+    .track-side:hover {
+        border-color: var(--accent-primary);
+    }
+    .track-side.selected {
+        border-color: var(--accent-primary);
+        background: rgba(var(--accent-primary-rgb), 0.05);
+    }
+    .track-title {
+        font-size: var(--font-size-lg);
+        font-weight: var(--font-weight-semibold);
+        margin-bottom: var(--space-2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .track-meta {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        margin-bottom: var(--space-1);
+    }
+    .track-meta i {
+        width: 16px;
+        text-align: center;
+        margin-right: var(--space-2);
+    }
+    .track-path {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+        word-break: break-all;
+        background: var(--bg-tertiary);
+        padding: var(--space-2);
+        border-radius: var(--radius-sm);
+        margin-top: var(--space-3);
+    }
+
+    .vs-divider {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-weight: var(--font-weight-bold);
+        font-size: var(--font-size-lg);
+    }
+    .vs-divider::before,
+    .vs-divider::after {
+        content: '';
+        width: 2px;
+        height: 30px;
+        background: var(--border-primary);
+    }
+
+    .duplicate-actions {
+        display: flex;
+        gap: var(--space-3);
+        padding: var(--space-4) var(--space-5);
+        background: var(--bg-tertiary);
+        border-top: 1px solid var(--border-primary);
+        flex-wrap: wrap;
+    }
+    .btn-keep {
+        background: var(--accent-primary);
+        color: white;
+    }
+    .btn-keep:hover {
+        background: var(--accent-hover);
+    }
+    .btn-dismiss {
+        background: transparent;
+        border: 1px solid var(--border-secondary);
+        color: var(--text-muted);
+    }
+    .btn-dismiss:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: var(--space-12);
+        color: var(--text-muted);
+    }
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto var(--space-4);
+        background: rgba(34, 197, 94, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: #22c55e;
+    }
+    .empty-state h3 {
+        font-size: var(--font-size-xl);
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    /* Resolution Animation */
+    .duplicate-card.resolving {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .duplicate-card.resolved-animation {
+        animation: slideOut 0.3s ease-out forwards;
+    }
+    @keyframes slideOut {
+        to {
+            opacity: 0;
+            transform: translateX(100%);
+            height: 0;
+            margin: 0;
+            padding: 0;
+        }
+    }
+</style>
+
+<script>
+// Hey future me - this handles the duplicate review UI interactions.
+// Main functions: filterDuplicates, resolveDuplicate, dismissDuplicate
+// Uses HTMX for API calls but some custom JS for animations and state.
+
+// Update stats after duplicates load
+function updateStats(event) {
+    // The API returns total in response, we could use that
+    // For now just rely on the initial render
+}
+
+// Filter duplicates by status
+function filterDuplicates(status) {
+    // Update active tab
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.status === status);
+    });
+    
+    // Build URL with status filter
+    let url = '/api/library/duplicates?limit=50';
+    if (status !== 'all') {
+        url += `&status=${status}`;
+    }
+    
+    // Use HTMX to load filtered results
+    htmx.ajax('GET', url, {
+        target: '#duplicates-container',
+        swap: 'innerHTML'
+    });
+}
+
+// Resolve a duplicate (keep_first, keep_second, keep_both)
+async function resolveDuplicate(duplicateId, action) {
+    const card = document.querySelector(`[data-duplicate-id="${duplicateId}"]`);
+    if (!card) return;
+    
+    card.classList.add('resolving');
+    
+    try {
+        const response = await fetch(`/api/library/duplicates/${duplicateId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+        
+        if (response.ok) {
+            card.classList.remove('resolving');
+            card.classList.add('resolved-animation');
+            setTimeout(() => card.remove(), 300);
+            
+            // Update stats
+            const pending = document.getElementById('stat-pending');
+            const resolved = document.getElementById('stat-resolved');
+            if (pending) pending.textContent = Math.max(0, parseInt(pending.textContent) - 1);
+            if (resolved) resolved.textContent = parseInt(resolved.textContent) + 1;
+            
+            // Show toast
+            showToast('Duplicate resolved successfully', 'success');
+        } else {
+            card.classList.remove('resolving');
+            const data = await response.json();
+            showToast(data.detail || 'Failed to resolve duplicate', 'error');
+        }
+    } catch (error) {
+        card.classList.remove('resolving');
+        showToast('Network error', 'error');
+    }
+}
+
+// Dismiss a duplicate as false positive
+async function dismissDuplicate(duplicateId) {
+    const card = document.querySelector(`[data-duplicate-id="${duplicateId}"]`);
+    if (!card) return;
+    
+    card.classList.add('resolving');
+    
+    try {
+        const response = await fetch(`/api/library/duplicates/dismiss/${duplicateId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            card.classList.remove('resolving');
+            card.classList.add('resolved-animation');
+            setTimeout(() => card.remove(), 300);
+            
+            // Update stats
+            const pending = document.getElementById('stat-pending');
+            const dismissed = document.getElementById('stat-dismissed');
+            if (pending) pending.textContent = Math.max(0, parseInt(pending.textContent) - 1);
+            if (dismissed) dismissed.textContent = parseInt(dismissed.textContent) + 1;
+            
+            showToast('Duplicate dismissed', 'info');
+        } else {
+            card.classList.remove('resolving');
+            showToast('Failed to dismiss duplicate', 'error');
+        }
+    } catch (error) {
+        card.classList.remove('resolving');
+        showToast('Network error', 'error');
+    }
+}
+
+// Simple toast notification
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-lg);
+        background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        font-weight: var(--font-weight-medium);
+        z-index: 1000;
+        animation: fadeInUp 0.3s ease-out;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Format duration from ms to mm:ss
+function formatDuration(ms) {
+    if (!ms) return '--:--';
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+// HTMX afterSwap handler - render duplicate cards from JSON
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    if (event.detail.target.id === 'duplicates-container') {
+        try {
+            const data = JSON.parse(event.detail.xhr.responseText);
+            renderDuplicates(data.duplicates || []);
+        } catch (e) {
+            // Response might already be HTML or empty
+            console.log('Could not parse response as JSON');
+        }
+    }
+});
+
+// Render duplicate cards from API response
+function renderDuplicates(duplicates) {
+    const container = document.getElementById('duplicates-container');
+    if (!duplicates || duplicates.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="fa-solid fa-check-double"></i>
+                </div>
+                <h3>No duplicates found</h3>
+                <p>Your library is clean! Run a scan to check for new duplicates.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = duplicates.map(dup => `
+        <div class="duplicate-card" data-duplicate-id="${dup.id}">
+            <div class="duplicate-header">
+                <div>
+                    <span class="match-type">${dup.match_type || 'metadata'} match</span>
+                </div>
+                <span class="similarity-badge ${getSimilarityClass(dup.similarity_score)}">
+                    ${dup.similarity_score}% similar
+                </span>
+            </div>
+            <div class="duplicate-comparison">
+                <div class="track-side" onclick="selectTrack(this, 'first')">
+                    <div class="track-title">${escapeHtml(dup.track_1_info?.title || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-user"></i>${escapeHtml(dup.track_1_info?.artist || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-compact-disc"></i>${escapeHtml(dup.track_1_info?.album || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-clock"></i>${formatDuration(dup.track_1_info?.duration_ms)}</div>
+                    ${dup.track_1_info?.bitrate ? `<div class="track-meta"><i class="fa-solid fa-signal"></i>${dup.track_1_info.bitrate} kbps</div>` : ''}
+                    ${dup.track_1_info?.format ? `<div class="track-meta"><i class="fa-solid fa-file-audio"></i>${dup.track_1_info.format}</div>` : ''}
+                    ${dup.track_1_info?.file_path ? `<div class="track-path">${escapeHtml(dup.track_1_info.file_path)}</div>` : ''}
+                </div>
+                <div class="vs-divider">VS</div>
+                <div class="track-side" onclick="selectTrack(this, 'second')">
+                    <div class="track-title">${escapeHtml(dup.track_2_info?.title || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-user"></i>${escapeHtml(dup.track_2_info?.artist || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-compact-disc"></i>${escapeHtml(dup.track_2_info?.album || 'Unknown')}</div>
+                    <div class="track-meta"><i class="fa-solid fa-clock"></i>${formatDuration(dup.track_2_info?.duration_ms)}</div>
+                    ${dup.track_2_info?.bitrate ? `<div class="track-meta"><i class="fa-solid fa-signal"></i>${dup.track_2_info.bitrate} kbps</div>` : ''}
+                    ${dup.track_2_info?.format ? `<div class="track-meta"><i class="fa-solid fa-file-audio"></i>${dup.track_2_info.format}</div>` : ''}
+                    ${dup.track_2_info?.file_path ? `<div class="track-path">${escapeHtml(dup.track_2_info.file_path)}</div>` : ''}
+                </div>
+            </div>
+            <div class="duplicate-actions">
+                <button class="btn btn-keep" onclick="resolveDuplicate('${dup.id}', 'keep_first')">
+                    <i class="fa-solid fa-arrow-left"></i> Keep First
+                </button>
+                <button class="btn btn-keep" onclick="resolveDuplicate('${dup.id}', 'keep_second')">
+                    Keep Second <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                <button class="btn btn-outline" onclick="resolveDuplicate('${dup.id}', 'keep_both')">
+                    <i class="fa-solid fa-check-double"></i> Keep Both
+                </button>
+                <button class="btn btn-dismiss" onclick="dismissDuplicate('${dup.id}')">
+                    <i class="fa-solid fa-eye-slash"></i> Dismiss
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getSimilarityClass(score) {
+    if (score >= 90) return 'similarity-high';
+    if (score >= 70) return 'similarity-medium';
+    return 'similarity-low';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function selectTrack(element, side) {
+    // Visual feedback when clicking a track side
+    const card = element.closest('.duplicate-card');
+    card.querySelectorAll('.track-side').forEach(el => el.classList.remove('selected'));
+    element.classList.add('selected');
+}
+</script>
+{% endblock %}

@@ -269,3 +269,80 @@ class QualityUpgradeService:
             model.processed = True
             model.download_id = str(download_id.value) if download_id else None
             logger.info(f"Marked quality upgrade candidate {candidate_id} as processed")
+
+    # Hey future me - diese Methode wird vom QualityUpgradeWorker aufgerufen!
+    # Anders als identify_upgrade_candidates() arbeitet sie mit einer EINZELNEN Track-ID.
+    # Das ist nötig, weil der Worker jeden Track einzeln durchgeht.
+    #
+    # GOTCHA: Diese Methode nutzt die gleiche Logik wie identify_upgrade_candidates,
+    # aber für einen einzelnen Track. In Zukunft könnte man das refactoren.
+    async def identify_upgrade_opportunities(
+        self,
+        track_id: TrackId,
+        quality_profile: str = "high",
+        min_improvement_score: float = 0.2,
+    ) -> list[QualityUpgradeCandidate]:
+        """Identify upgrade opportunities for a specific track.
+
+        Called by QualityUpgradeWorker for per-track scanning.
+
+        Args:
+            track_id: Track ID to check
+            quality_profile: Target quality profile (low, medium, high, lossless)
+            min_improvement_score: Minimum improvement score to consider
+
+        Returns:
+            List of upgrade candidates for this track
+        """
+        if quality_profile not in self.QUALITY_PROFILES:
+            quality_profile = "high"
+
+        target_profile = self.QUALITY_PROFILES[quality_profile]
+        target_bitrate: int = target_profile["min_bitrate"]  # type: ignore[assignment]
+        target_formats: list[str] = target_profile["formats"]  # type: ignore[assignment]
+
+        # Get the specific track
+        stmt = select(TrackModel).where(
+            TrackModel.id == str(track_id.value)
+        )
+        result = await self.session.execute(stmt)
+        track = result.scalar_one_or_none()
+
+        if not track:
+            return []
+
+        # Skip if already at target quality
+        current_bitrate = track.audio_bitrate or 128
+        current_format = (track.audio_format or "mp3").lower()
+
+        # Check if upgrade would be beneficial
+        if current_bitrate >= target_bitrate and current_format in target_formats:
+            return []
+
+        # Calculate improvement score
+        target_format = "flac" if quality_profile == "lossless" else "mp3"
+        improvement_score = self.calculate_improvement_score(
+            current_bitrate, current_format, target_bitrate, target_format
+        )
+
+        if improvement_score < min_improvement_score:
+            return []
+
+        # Create candidate entity (not persisted yet)
+        candidate = QualityUpgradeCandidate(
+            id=str(TrackId.generate().value),
+            track_id=track_id,
+            current_bitrate=current_bitrate,
+            current_format=current_format,
+            target_bitrate=target_bitrate,
+            target_format=target_format,
+            improvement_score=improvement_score,
+        )
+
+        logger.debug(
+            f"Found upgrade opportunity for track {track_id}: "
+            f"{current_format}@{current_bitrate}kbps -> {target_format}@{target_bitrate}kbps "
+            f"(score: {improvement_score})"
+        )
+
+        return [candidate]

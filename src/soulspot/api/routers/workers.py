@@ -180,6 +180,216 @@ def _get_spotify_sync_worker_status(request: Request) -> WorkerStatusInfo:
     )
 
 
+def _get_download_monitor_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Download Monitor Worker.
+
+    Hey future me - holt den Status vom DownloadMonitorWorker.
+    Der Worker überwacht slskd Downloads und updated Job Progress.
+    """
+    worker = getattr(request.app.state, "download_monitor_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Download Monitor",
+            icon="fa-solid fa-download",
+            settings_url="/settings?tab=downloads",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last poll time
+    last_poll_at = stats.get("last_poll_at")
+    if last_poll_at:
+        dt = datetime.fromisoformat(last_poll_at)
+        last_poll_formatted = _format_time_ago(dt)
+    else:
+        last_poll_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Download Monitor",
+        icon="fa-solid fa-download",
+        settings_url="/settings?tab=downloads",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "poll_interval_seconds": raw_status.get("poll_interval_seconds", 10),
+            "last_poll": last_poll_formatted,
+            "downloads_completed": stats.get("downloads_completed", 0),
+            "downloads_failed": stats.get("downloads_failed", 0),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
+def _get_automation_workers_status(request: Request) -> WorkerStatusInfo:
+    """Get combined status for Automation Workers.
+
+    Hey future me - kombiniert den Status aller 3 Automation Workers:
+    - WatchlistWorker: Neue Releases finden
+    - DiscographyWorker: Fehlende Alben finden
+    - QualityUpgradeWorker: Upgrade-Kandidaten finden
+
+    Alle 3 sind optional und default disabled via AppSettingsService.
+    """
+    manager = getattr(request.app.state, "automation_manager", None)
+
+    if manager is None:
+        return WorkerStatusInfo(
+            name="Automation",
+            icon="fa-solid fa-robot",
+            settings_url="/settings?tab=automation",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = manager.get_status()
+
+    # Check if all workers are running
+    all_running = all(raw_status.values())
+    any_running = any(raw_status.values())
+
+    if all_running:
+        status = "idle"
+    elif any_running:
+        status = "idle"  # Some running, some stopped
+    else:
+        status = "stopped"
+
+    return WorkerStatusInfo(
+        name="Automation",
+        icon="fa-solid fa-robot",
+        settings_url="/settings?tab=automation",
+        running=any_running,
+        status=status,
+        details={
+            "watchlist_running": raw_status.get("watchlist", False),
+            "discography_running": raw_status.get("discography", False),
+            "quality_upgrade_running": raw_status.get("quality_upgrade", False),
+        },
+    )
+
+
+def _get_cleanup_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Cleanup Worker.
+
+    Hey future me - holt den Status vom CleanupWorker.
+    Dieser Worker löscht alte Temp-Dateien und verwaiste Downloads.
+    ACHTUNG: Ist per Default DISABLED weil destruktiv!
+    """
+    worker = getattr(request.app.state, "cleanup_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Cleanup",
+            icon="fa-solid fa-broom",
+            settings_url="/settings?tab=automation",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last run time
+    last_run_at = stats.get("last_run_at")
+    if last_run_at:
+        dt = datetime.fromisoformat(last_run_at)
+        last_run_formatted = _format_time_ago(dt)
+    else:
+        last_run_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Cleanup",
+        icon="fa-solid fa-broom",
+        settings_url="/settings?tab=automation",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "dry_run": raw_status.get("dry_run", False),
+            "last_run": last_run_formatted,
+            "files_deleted": stats.get("files_deleted", 0),
+            "bytes_freed": stats.get("bytes_freed", 0),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
+def _get_duplicate_detector_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Duplicate Detector Worker.
+
+    Hey future me - holt den Status vom DuplicateDetectorWorker.
+    Dieser Worker findet Duplikate via Metadata-Hash.
+    Per Default DISABLED, läuft nur 1x pro Woche wenn enabled.
+    """
+    worker = getattr(request.app.state, "duplicate_detector_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Duplicate Detector",
+            icon="fa-solid fa-clone",
+            settings_url="/settings?tab=automation",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last scan time
+    last_scan_at = stats.get("last_scan_at")
+    if last_scan_at:
+        dt = datetime.fromisoformat(last_scan_at)
+        last_scan_formatted = _format_time_ago(dt)
+    else:
+        last_scan_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Duplicate Detector",
+        icon="fa-solid fa-clone",
+        settings_url="/settings?tab=automation",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "detection_method": raw_status.get("detection_method", "metadata-hash"),
+            "last_scan": last_scan_formatted,
+            "duplicates_found": stats.get("duplicates_found", 0),
+            "tracks_scanned": stats.get("tracks_scanned", 0),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
 # Hey future me – dieser Endpoint gibt JSON mit allen Worker-Statuses zurück.
 # Nützlich für Debugging und falls jemand die API direkt nutzen will.
 @router.get("/status")
@@ -189,6 +399,10 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     Returns status information for:
     - Token Refresh Worker: Keeps Spotify OAuth tokens fresh
     - Spotify Sync Worker: Automatically syncs Spotify data
+    - Download Monitor Worker: Tracks slskd download progress
+    - Automation Workers: Watchlist, Discography, Quality Upgrade
+    - Cleanup Worker: Removes orphaned files (disabled by default)
+    - Duplicate Detector Worker: Finds duplicate tracks (disabled by default)
 
     Each worker includes:
     - name: Display name
@@ -201,6 +415,10 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     workers = {
         "token_refresh": _get_token_worker_status(request),
         "spotify_sync": _get_spotify_sync_worker_status(request),
+        "download_monitor": _get_download_monitor_worker_status(request),
+        "automation": _get_automation_workers_status(request),
+        "cleanup": _get_cleanup_worker_status(request),
+        "duplicate_detector": _get_duplicate_detector_worker_status(request),
     }
 
     return AllWorkersStatus(workers=workers)

@@ -54,6 +54,10 @@
             <i class="fa-solid fa-palette"></i>
             Appearance
         </button>
+        <button class="tab-btn" data-tab="automation" onclick="switchTab('automation')">
+            <i class="fa-solid fa-robot"></i>
+            Automation
+        </button>
         <button class="tab-btn" data-tab="advanced" onclick="switchTab('advanced')">
             <i class="fa-solid fa-gear"></i>
             Advanced
@@ -477,6 +481,233 @@
             <div class="alert alert-info" style="margin-top: var(--space-6);">
                 <i class="fa-solid fa-info-circle"></i>
                 <span><strong>Theme Persistence:</strong> Your theme preference is saved in your browser and will be remembered on future visits.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Automation Settings Tab -->
+    <div id="tab-automation" class="tab-content" style="display: none;">
+        <div class="card" style="padding: var(--space-6);">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                <div>
+                    <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-1);">
+                        <i class="fa-solid fa-robot" style="color: var(--accent-primary); margin-right: var(--space-2);"></i>
+                        Automation & Background Workers
+                    </h2>
+                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Configure automatic tasks like watchlists, cleanup, and duplicate detection</p>
+                </div>
+            </div>
+
+            <!-- Watchlist Worker Section -->
+            <div style="margin-bottom: var(--space-8);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-eye" style="color: #1DB954;"></i>
+                    Artist Watchlist
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Automatically check for new releases from artists you follow
+                </p>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Watchlist Monitoring</div>
+                            <div class="sync-option-desc">Check Spotify for new releases from watched artists</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="automation-watchlist-enabled" onchange="toggleAutomationSetting('watchlist_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="watchlist-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="watchlist-interval">Check Interval</label>
+                        <div class="input-with-suffix">
+                            <input type="number" id="watchlist-interval" class="form-input" value="60" min="15" max="1440">
+                            <span class="input-suffix">minutes</span>
+                        </div>
+                        <p class="form-helper">How often to check for new releases (15-1440 min)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Discography Worker Section -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-compact-disc" style="color: #7c3aed;"></i>
+                    Discography Completion
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Identify and download missing albums from your watched artists
+                </p>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #7c3aed, #6366f1);">
+                            <i class="fa-solid fa-list-check"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Discography Scan</div>
+                            <div class="sync-option-desc">Find missing albums from watched artists</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="automation-discography-enabled" onchange="toggleAutomationSetting('discography_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="discography-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="discography-interval">Scan Interval</label>
+                        <div class="input-with-suffix">
+                            <input type="number" id="discography-interval" class="form-input" value="24" min="1" max="168">
+                            <span class="input-suffix">hours</span>
+                        </div>
+                        <p class="form-helper">How often to scan for missing albums (1-168 hours)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quality Upgrade Worker Section -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-arrow-up-right-dots" style="color: #f59e0b;"></i>
+                    Quality Upgrades
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Automatically find higher quality versions of your tracks (e.g., 128kbps → FLAC)
+                </p>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Quality Upgrade Detection</div>
+                            <div class="sync-option-desc">Find tracks that could be upgraded to better quality</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="automation-quality-enabled" onchange="toggleAutomationSetting('quality_upgrade_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="quality-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="quality-profile">Target Quality Profile</label>
+                        <select id="quality-profile" class="form-input">
+                            <option value="medium">Medium (192+ kbps)</option>
+                            <option value="high" selected>High (320 kbps)</option>
+                            <option value="lossless">Lossless (FLAC)</option>
+                        </select>
+                        <p class="form-helper">Minimum quality level for upgrades</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cleanup Worker Section -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-broom" style="color: #ef4444;"></i>
+                    Cleanup & Maintenance
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Automatically remove old temp files and orphaned downloads
+                </p>
+                
+                <div class="alert alert-warning" style="margin-bottom: var(--space-4);">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span><strong>Caution:</strong> Cleanup permanently deletes files. Enabled at your own risk.</span>
+                </div>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Auto-Cleanup</div>
+                            <div class="sync-option-desc">Remove old temp files and incomplete downloads</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="automation-cleanup-enabled" onchange="toggleAutomationSetting('cleanup_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="cleanup-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="cleanup-retention">Retention Period</label>
+                        <div class="input-with-suffix">
+                            <input type="number" id="cleanup-retention" class="form-input" value="7" min="1" max="90">
+                            <span class="input-suffix">days</span>
+                        </div>
+                        <p class="form-helper">Files older than this will be considered for cleanup</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Duplicate Detection Section -->
+            <div style="padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-clone" style="color: #06b6d4;"></i>
+                    Duplicate Detection
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Scan your library for potential duplicate tracks based on metadata
+                </p>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Duplicate Scanning</div>
+                            <div class="sync-option-desc">Find tracks that might be duplicates</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="automation-duplicate-enabled" onchange="toggleAutomationSetting('duplicate_detection_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="duplicate-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="duplicate-interval">Scan Interval</label>
+                        <div class="input-with-suffix">
+                            <input type="number" id="duplicate-interval" class="form-input" value="168" min="24" max="720">
+                            <span class="input-suffix">hours</span>
+                        </div>
+                        <p class="form-helper">How often to scan for duplicates (24-720 hours, default: weekly)</p>
+                    </div>
+
+                    <div style="margin-top: var(--space-4);">
+                        <a href="/library/duplicates" class="btn btn-outline">
+                            <i class="fa-solid fa-list"></i>
+                            View Duplicate Candidates
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-primary" onclick="saveAutomationSettings()">
+                    <i class="fa-solid fa-save"></i>
+                    Save Automation Settings
+                </button>
             </div>
         </div>
     </div>
@@ -1194,10 +1425,159 @@
         }
     }
 
+    // =====================================================
+    // Automation Settings Functions
+    // =====================================================
+    
+    // Hey future me – diese Funktion lädt die Automation Settings aus der DB.
+    // Die API gibt ein JSON mit allen Automation-bezogenen Settings zurück.
+    // Jeder Worker hat einen enable Toggle und optional Intervall/Optionen.
+    async function loadAutomationSettings() {
+        try {
+            const response = await fetch('/api/settings/automation');
+            if (!response.ok) throw new Error('Failed to load automation settings');
+            
+            const data = await response.json();
+            const settings = data.settings || data;
+            
+            // Watchlist
+            const watchlistToggle = document.getElementById('automation-watchlist-enabled');
+            if (watchlistToggle) {
+                watchlistToggle.checked = settings.watchlist_enabled ?? false;
+                updateAutomationOptionsState('watchlist', settings.watchlist_enabled ?? false);
+            }
+            const watchlistInterval = document.getElementById('watchlist-interval');
+            if (watchlistInterval) watchlistInterval.value = settings.watchlist_interval_minutes ?? 60;
+            
+            // Discography
+            const discographyToggle = document.getElementById('automation-discography-enabled');
+            if (discographyToggle) {
+                discographyToggle.checked = settings.discography_enabled ?? false;
+                updateAutomationOptionsState('discography', settings.discography_enabled ?? false);
+            }
+            const discographyInterval = document.getElementById('discography-interval');
+            if (discographyInterval) discographyInterval.value = (settings.discography_interval_hours ?? 24);
+            
+            // Quality Upgrade
+            const qualityToggle = document.getElementById('automation-quality-enabled');
+            if (qualityToggle) {
+                qualityToggle.checked = settings.quality_upgrade_enabled ?? false;
+                updateAutomationOptionsState('quality', settings.quality_upgrade_enabled ?? false);
+            }
+            const qualityProfile = document.getElementById('quality-profile');
+            if (qualityProfile) qualityProfile.value = settings.quality_profile ?? 'high';
+            
+            // Cleanup
+            const cleanupToggle = document.getElementById('automation-cleanup-enabled');
+            if (cleanupToggle) {
+                cleanupToggle.checked = settings.cleanup_enabled ?? false;
+                updateAutomationOptionsState('cleanup', settings.cleanup_enabled ?? false);
+            }
+            const cleanupRetention = document.getElementById('cleanup-retention');
+            if (cleanupRetention) cleanupRetention.value = settings.cleanup_retention_days ?? 7;
+            
+            // Duplicate Detection
+            const duplicateToggle = document.getElementById('automation-duplicate-enabled');
+            if (duplicateToggle) {
+                duplicateToggle.checked = settings.duplicate_detection_enabled ?? false;
+                updateAutomationOptionsState('duplicate', settings.duplicate_detection_enabled ?? false);
+            }
+            const duplicateInterval = document.getElementById('duplicate-interval');
+            if (duplicateInterval) duplicateInterval.value = settings.duplicate_scan_interval_hours ?? 168;
+            
+        } catch (error) {
+            console.error('Failed to load automation settings:', error);
+        }
+    }
+    
+    // Hey future me – Einzelne Automation Settings toggeln.
+    // Wird bei onChange der Checkboxen aufgerufen.
+    // Updated auch den UI State der Options-Sektion.
+    async function toggleAutomationSetting(settingName) {
+        const checkboxId = `automation-${settingName.replace(/_enabled$/, '').replace(/_/g, '-')}-enabled`;
+        const checkbox = document.getElementById(checkboxId);
+        if (!checkbox) return;
+        
+        const optionsKey = settingName.replace(/_enabled$/, '').replace(/_/g, '-');
+        updateAutomationOptionsState(optionsKey, checkbox.checked);
+        
+        // Auto-save on toggle change
+        try {
+            const response = await fetch('/api/settings/automation', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [settingName]: checkbox.checked })
+            });
+            
+            if (!response.ok) throw new Error('Failed to update setting');
+            
+            const status = checkbox.checked ? 'enabled' : 'disabled';
+            SoulSpot.showNotification(`${settingName.replace(/_/g, ' ')} ${status}`, 'success');
+        } catch (error) {
+            console.error('Failed to toggle automation setting:', error);
+            SoulSpot.showNotification('Failed to update setting', 'error');
+        }
+    }
+    
+    // Hey future me – Updated den UI State der Options-Sektion für einen Worker.
+    // Wenn disabled, werden die Optionen ausgegraut aber behalten ihren Wert.
+    function updateAutomationOptionsState(workerKey, enabled) {
+        // Map worker key to options container ID
+        const containerMap = {
+            'watchlist': 'watchlist-options',
+            'discography': 'discography-options', 
+            'quality': 'quality-options',
+            'cleanup': 'cleanup-options',
+            'duplicate': 'duplicate-options',
+            'duplicate-detection': 'duplicate-options',
+            'quality-upgrade': 'quality-options',
+        };
+        
+        const containerId = containerMap[workerKey] || `${workerKey}-options`;
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.style.opacity = enabled ? '1' : '0.5';
+            container.style.pointerEvents = enabled ? 'auto' : 'none';
+        }
+    }
+    
+    // Hey future me – Speichert alle Automation Settings auf einmal.
+    // Wird beim Klick auf "Save Automation Settings" aufgerufen.
+    async function saveAutomationSettings() {
+        const settings = {
+            watchlist_enabled: document.getElementById('automation-watchlist-enabled')?.checked ?? false,
+            watchlist_interval_minutes: parseInt(document.getElementById('watchlist-interval')?.value) || 60,
+            discography_enabled: document.getElementById('automation-discography-enabled')?.checked ?? false,
+            discography_interval_hours: parseInt(document.getElementById('discography-interval')?.value) || 24,
+            quality_upgrade_enabled: document.getElementById('automation-quality-enabled')?.checked ?? false,
+            quality_profile: document.getElementById('quality-profile')?.value || 'high',
+            cleanup_enabled: document.getElementById('automation-cleanup-enabled')?.checked ?? false,
+            cleanup_retention_days: parseInt(document.getElementById('cleanup-retention')?.value) || 7,
+            duplicate_detection_enabled: document.getElementById('automation-duplicate-enabled')?.checked ?? false,
+            duplicate_scan_interval_hours: parseInt(document.getElementById('duplicate-interval')?.value) || 168,
+        };
+        
+        try {
+            const response = await fetch('/api/settings/automation', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            
+            if (!response.ok) throw new Error('Failed to save automation settings');
+            
+            SoulSpot.showNotification('Automation settings saved', 'success');
+        } catch (error) {
+            console.error('Failed to save automation settings:', error);
+            SoulSpot.showNotification('Failed to save automation settings', 'error');
+        }
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         loadSettings();
         loadSpotifySyncSettings();
+        loadAutomationSettings();
     });
 </script>
 {% endblock %}

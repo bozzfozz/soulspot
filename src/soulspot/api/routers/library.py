@@ -619,3 +619,208 @@ async def cancel_import_job(
         )
 
     return {"job_id": job_id, "cancelled": True}
+
+
+# =====================================================
+# Duplicate Detection Endpoints
+# =====================================================
+
+
+class DuplicateCandidate(BaseModel):
+    """A pair of tracks that might be duplicates."""
+
+    id: str
+    track_1_id: str
+    track_1_title: str
+    track_1_artist: str
+    track_1_file_path: str | None
+    track_2_id: str
+    track_2_title: str
+    track_2_artist: str
+    track_2_file_path: str | None
+    similarity_score: int  # 0-100
+    match_type: str  # metadata, fingerprint
+    status: str  # pending, confirmed, dismissed
+    created_at: str
+
+
+class DuplicateCandidatesResponse(BaseModel):
+    """Response with list of duplicate candidates."""
+
+    candidates: list[DuplicateCandidate]
+    total: int
+    pending_count: int
+    confirmed_count: int
+    dismissed_count: int
+
+
+class ResolveDuplicateRequest(BaseModel):
+    """Request to resolve a duplicate candidate."""
+
+    action: str  # keep_first, keep_second, keep_both, dismiss
+
+
+# Hey future me – dieser Endpoint gibt alle Duplicate Candidates zurück.
+# Die Candidates werden vom DuplicateDetectorWorker erstellt und hier für Review angezeigt.
+@router.get("/duplicates")
+async def list_duplicate_candidates(
+    status: str | None = Query(None, description="Filter by status: pending, confirmed, dismissed"),
+    limit: int = Query(50, description="Max candidates to return"),
+    offset: int = Query(0, description="Offset for pagination"),
+    db: AsyncSession = Depends(get_db_session),
+) -> DuplicateCandidatesResponse:
+    """List duplicate track candidates for review.
+
+    Args:
+        status: Optional status filter
+        limit: Maximum candidates to return
+        offset: Pagination offset
+        db: Database session
+
+    Returns:
+        List of duplicate candidates with statistics
+    """
+    from sqlalchemy import func, select
+
+    from soulspot.infrastructure.persistence.models import (
+        DuplicateCandidateModel,
+        TrackModel,
+    )
+
+    # Build query
+    query = select(DuplicateCandidateModel)
+    if status:
+        query = query.where(DuplicateCandidateModel.status == status)
+    query = query.order_by(DuplicateCandidateModel.similarity_score.desc())
+    query = query.offset(offset).limit(limit)
+
+    result = await db.execute(query)
+    models = result.scalars().all()
+
+    # Get counts
+    count_query = select(
+        func.count().filter(DuplicateCandidateModel.status == "pending").label("pending"),
+        func.count().filter(DuplicateCandidateModel.status == "confirmed").label("confirmed"),
+        func.count().filter(DuplicateCandidateModel.status == "dismissed").label("dismissed"),
+        func.count().label("total"),
+    ).select_from(DuplicateCandidateModel)
+    count_result = await db.execute(count_query)
+    counts = count_result.one()
+
+    # Load track details for each candidate
+    candidates = []
+    for model in models:
+        # Get track 1
+        track_1 = await db.get(TrackModel, model.track_id_1)
+        # Get track 2
+        track_2 = await db.get(TrackModel, model.track_id_2)
+
+        candidates.append(
+            DuplicateCandidate(
+                id=model.id,
+                track_1_id=model.track_id_1,
+                track_1_title=track_1.title if track_1 else "Unknown",
+                track_1_artist=track_1.artist_name if track_1 else "Unknown",
+                track_1_file_path=track_1.file_path if track_1 else None,
+                track_2_id=model.track_id_2,
+                track_2_title=track_2.title if track_2 else "Unknown",
+                track_2_artist=track_2.artist_name if track_2 else "Unknown",
+                track_2_file_path=track_2.file_path if track_2 else None,
+                similarity_score=model.similarity_score,
+                match_type=model.match_type,
+                status=model.status,
+                created_at=model.created_at.isoformat(),
+            )
+        )
+
+    return DuplicateCandidatesResponse(
+        candidates=candidates,
+        total=counts.total,
+        pending_count=counts.pending,
+        confirmed_count=counts.confirmed,
+        dismissed_count=counts.dismissed,
+    )
+
+
+# Hey future me – dieser Endpoint resolved einen Duplicate Candidate.
+# Actions: keep_first (Track 1 behalten), keep_second (Track 2 behalten),
+# keep_both (beide behalten, als "nicht duplikat" markieren), dismiss (ignorieren).
+@router.post("/duplicates/{candidate_id}/resolve")
+async def resolve_duplicate(
+    candidate_id: str,
+    request: ResolveDuplicateRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Resolve a duplicate candidate.
+
+    Args:
+        candidate_id: Candidate ID
+        request: Resolution action
+        db: Database session
+
+    Returns:
+        Resolution result
+    """
+    from datetime import UTC, datetime
+
+    from soulspot.infrastructure.persistence.models import DuplicateCandidateModel
+
+    # Get candidate
+    candidate = await db.get(DuplicateCandidateModel, candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    action = request.action.lower()
+
+    if action == "dismiss":
+        candidate.status = "dismissed"
+        candidate.resolution_action = "dismissed"
+    elif action == "keep_both":
+        candidate.status = "dismissed"
+        candidate.resolution_action = "keep_both"
+    elif action == "keep_first":
+        candidate.status = "confirmed"
+        candidate.resolution_action = "keep_first"
+        # TODO: Queue deletion of track 2
+    elif action == "keep_second":
+        candidate.status = "confirmed"
+        candidate.resolution_action = "keep_second"
+        # TODO: Queue deletion of track 1
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
+
+    candidate.reviewed_at = datetime.now(UTC)
+    await db.commit()
+
+    return {
+        "candidate_id": candidate_id,
+        "action": action,
+        "status": candidate.status,
+        "message": f"Duplicate resolved with action: {action}",
+    }
+
+
+# Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.
+# Nützlich wenn der User nicht auf den nächsten automatischen Scan warten will.
+@router.post("/duplicates/scan")
+async def trigger_duplicate_scan(
+    request: Any,  # Request object for app.state access
+) -> dict[str, Any]:
+    """Trigger a manual duplicate scan.
+
+    Returns:
+        Scan job information
+    """
+    if not hasattr(request.app.state, "duplicate_detector_worker"):
+        raise HTTPException(
+            status_code=503,
+            detail="Duplicate detector worker not available",
+        )
+
+    worker = request.app.state.duplicate_detector_worker
+    job_id = await worker.trigger_scan_now()
+
+    return {
+        "message": "Duplicate scan started",
+        "job_id": job_id,
+    }

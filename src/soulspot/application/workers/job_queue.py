@@ -13,12 +13,29 @@ logger = logging.getLogger(__name__)
 
 
 class JobType(str, Enum):
-    """Type of background job."""
+    """Type of background job.
 
+    Hey future me - neue Job-Types hier eintragen!
+    Worker registrieren sich für bestimmte Types in lifecycle.py.
+    """
+
+    # Core download pipeline
     DOWNLOAD = "download"
     METADATA_ENRICHMENT = "metadata_enrichment"
     PLAYLIST_SYNC = "playlist_sync"
     LIBRARY_SCAN = "library_scan"
+
+    # Automation workers (optional, default disabled)
+    WATCHLIST_CHECK = "watchlist_check"
+    DISCOGRAPHY_SCAN = "discography_scan"
+    QUALITY_UPGRADE = "quality_upgrade"
+
+    # Maintenance workers
+    CLEANUP = "cleanup"
+    DUPLICATE_SCAN = "duplicate_scan"
+
+    # File management
+    AUTO_IMPORT = "auto_import"
 
 
 class JobStatus(str, Enum):

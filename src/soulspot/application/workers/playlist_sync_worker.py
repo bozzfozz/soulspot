@@ -1,7 +1,7 @@
 """Playlist sync worker for background playlist synchronization."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soulspot.application.use_cases import ImportSpotifyPlaylistUseCase
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
@@ -12,6 +12,9 @@ from soulspot.domain.ports import (
     ISpotifyClient,
     ITrackRepository,
 )
+
+if TYPE_CHECKING:
+    from soulspot.application.services.token_manager import DatabaseTokenManager
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,22 @@ class PlaylistSyncWorker:
             artist_repository=artist_repository,
             album_repository=album_repository,
         )
+        # Hey future me - token_manager wird via set_token_manager() gesetzt nach Construction!
+        # So vermeiden wir zirkuläre Dependencies und Worker können erstellt werden
+        # bevor app.state.db_token_manager bereit ist.
+        self._token_manager: "DatabaseTokenManager | None" = None
+
+    def set_token_manager(self, token_manager: "DatabaseTokenManager") -> None:
+        """Set the token manager for getting Spotify access tokens.
+
+        Called during app startup after DatabaseTokenManager is initialized.
+        This allows the worker to get fresh tokens automatically instead of
+        relying on tokens passed in job payload.
+
+        Args:
+            token_manager: Database-backed token manager
+        """
+        self._token_manager = token_manager
 
     # Yo, register this worker to handle PLAYLIST_SYNC jobs. Call after app startup when everything is ready.
     # If you register too early, jobs might fail because Spotify client isn't configured or DB isn't migrated!
@@ -67,11 +86,11 @@ class PlaylistSyncWorker:
         )
 
     # Listen up future me, this handler fetches a WHOLE playlist from Spotify and imports ALL tracks! For
-    # huge playlists (1000+ tracks), this can take MINUTES and hit Spotify rate limits. The access_token
-    # MUST be valid - if it's expired, job fails immediately. The fetch_all_tracks flag controls pagination -
-    # True means fetch every track (slow!), False might fetch only first 100 (faster but incomplete). IMPORTANT:
-    # We DON'T fail the job if some tracks fail to import! We log warnings but return success with error list.
-    # This is because partial sync is better than no sync - maybe track #500 is broken on Spotify, don't fail the whole thing!
+    # huge playlists (1000+ tracks), this can take MINUTES and hit Spotify rate limits. We now use
+    # DatabaseTokenManager to get fresh tokens automatically - no more expired tokens in job payload!
+    # The fetch_all_tracks flag controls pagination - True means fetch every track (slow!), False might
+    # fetch only first 100 (faster but incomplete). IMPORTANT: We DON'T fail the job if some tracks fail
+    # to import! We log warnings but return success with error list. Partial sync is better than no sync.
     async def _handle_playlist_sync_job(self, job: Job) -> Any:
         """Handle a playlist sync job.
 
@@ -83,13 +102,27 @@ class PlaylistSyncWorker:
         """
         # Extract payload
         playlist_id = job.payload.get("playlist_id")
-        access_token = job.payload.get("access_token")
         fetch_all_tracks = job.payload.get("fetch_all_tracks", True)
 
         if not playlist_id:
             raise ValueError("Missing playlist_id in job payload")
+
+        # Get access token from TokenManager (preferred) or fall back to payload
+        access_token = None
+        if self._token_manager:
+            token = await self._token_manager.get_valid_token()
+            if token:
+                access_token = token.access_token
+
+        # Fall back to payload for backwards compatibility
         if not access_token:
-            raise ValueError("Missing access_token in job payload")
+            access_token = job.payload.get("access_token")
+
+        if not access_token:
+            raise ValueError(
+                "No valid Spotify token available. "
+                "Either set token_manager or provide access_token in payload."
+            )
 
         # Execute use case
         from soulspot.application.use_cases.import_spotify_playlist import (
@@ -121,15 +154,14 @@ class PlaylistSyncWorker:
             "errors": response.errors,
         }
 
-    # Hey, this is the PUBLIC API for queueing a single playlist sync. The access_token is passed as payload
-    # (NOT in job metadata) because tokens are specific to this sync operation. fetch_all_tracks defaults True
-    # because users expect full sync! max_retries is 2 (not 3 like downloads) because playlist sync is less
-    # critical - if it fails twice, user can manually retry. Don't set max_retries too high or you'll spam
-    # Spotify API and get rate-limited! Returns job_id for tracking progress.
+    # Hey, this is the PUBLIC API for queueing a single playlist sync. With TokenManager, access_token
+    # is now OPTIONAL - the worker will get a fresh token automatically! If you still pass access_token,
+    # it's used as fallback for backwards compatibility. fetch_all_tracks defaults True because users
+    # expect full sync! max_retries is 2 (not 3 like downloads) because playlist sync is less critical.
     async def enqueue_playlist_sync(
         self,
         playlist_id: str,
-        access_token: str,
+        access_token: str | None = None,
         fetch_all_tracks: bool = True,
         max_retries: int = 2,
     ) -> str:
@@ -137,32 +169,34 @@ class PlaylistSyncWorker:
 
         Args:
             playlist_id: Spotify playlist ID
-            access_token: Spotify access token
+            access_token: Optional Spotify access token (uses TokenManager if not provided)
             fetch_all_tracks: Whether to fetch all tracks
             max_retries: Maximum retry attempts
 
         Returns:
             Job ID
         """
+        payload: dict[str, Any] = {
+            "playlist_id": playlist_id,
+            "fetch_all_tracks": fetch_all_tracks,
+        }
+        # Only include access_token if provided (for backwards compatibility)
+        if access_token:
+            payload["access_token"] = access_token
+
         return await self._job_queue.enqueue(
             job_type=JobType.PLAYLIST_SYNC,
-            payload={
-                "playlist_id": playlist_id,
-                "access_token": access_token,
-                "fetch_all_tracks": fetch_all_tracks,
-            },
+            payload=payload,
             max_retries=max_retries,
         )
 
-    # Yo, this is for "sync all my playlists" feature - queues multiple playlists in one call. It loops and
-    # calls enqueue_playlist_sync for each one - simple! But CAREFUL: if you pass 100 playlist_ids, you're
-    # creating 100 jobs that all need the same access_token. If token expires before jobs run, they ALL fail!
-    # Consider checking token expiry first and refreshing if needed. The jobs run in parallel (job queue handles
-    # concurrency), but Spotify rate limits might throttle them. Returns list of job_ids in same order as input.
+    # Yo, this is for "sync all my playlists" feature - queues multiple playlists in one call. With
+    # TokenManager, we don't need to worry about token expiry anymore - each job gets a fresh token!
+    # The jobs run in parallel (job queue handles concurrency), but Spotify rate limits might throttle them.
     async def enqueue_batch_sync(
         self,
         playlist_ids: list[str],
-        access_token: str,
+        access_token: str | None = None,
         fetch_all_tracks: bool = True,
         max_retries: int = 2,
     ) -> list[str]:
@@ -170,7 +204,7 @@ class PlaylistSyncWorker:
 
         Args:
             playlist_ids: Spotify playlist IDs
-            access_token: Spotify access token
+            access_token: Optional Spotify access token (uses TokenManager if not provided)
             fetch_all_tracks: Whether to fetch all tracks
             max_retries: Maximum retry attempts
 
@@ -187,3 +221,16 @@ class PlaylistSyncWorker:
             )
             job_ids.append(job_id)
         return job_ids
+
+    def get_status(self) -> dict[str, Any]:
+        """Get current worker status for monitoring/UI.
+
+        Hey future me - diese Methode ist für den Worker-Status-Indicator.
+        Gibt Infos zurück die das Frontend braucht.
+        """
+        return {
+            "name": "Playlist Sync",
+            "running": True,  # Worker is always "running" when registered
+            "status": "idle",
+            "has_token_manager": self._token_manager is not None,
+        }

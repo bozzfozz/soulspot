@@ -943,3 +943,135 @@ class AppSettingsModel(Base):
 
     # Index for fast category lookups (get all "spotify" settings)
     __table_args__ = (Index("ix_app_settings_category", "category"),)
+
+
+# =============================================================================
+# DUPLICATE CANDIDATES TABLE (for DuplicateDetectorWorker)
+# =============================================================================
+# Hey future me - this tracks POTENTIAL duplicates found by the worker!
+# The worker scans the library and finds tracks that might be duplicates
+# (same artist+title, similar duration). Stores them here for manual review.
+# User confirms/dismisses via UI - we DON'T auto-delete anything!
+# =============================================================================
+
+
+class DuplicateCandidateModel(Base):
+    """Potential duplicate track pairs for review.
+
+    DuplicateDetectorWorker populates this table. Users review in UI
+    and decide what to do (keep one, keep both, merge metadata, etc.).
+    """
+
+    __tablename__ = "duplicate_candidates"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # The two tracks that might be duplicates
+    # Constraint ensures track_id_1 < track_id_2 to avoid (A,B) and (B,A) rows
+    track_id_1: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tracks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    track_id_2: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tracks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Confidence score 0-100 (100 = definitely same track)
+    similarity_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    # How the match was found: 'metadata' or 'fingerprint' (future)
+    match_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="metadata"
+    )
+    # Review status: pending, confirmed, dismissed, auto_resolved
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # JSON with match details (which fields matched, individual scores)
+    match_details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What user did: keep_first, keep_second, keep_both, merged
+    resolution_action: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships to get track details easily
+    track_1: Mapped["TrackModel"] = relationship(
+        "TrackModel", foreign_keys=[track_id_1], lazy="joined"
+    )
+    track_2: Mapped["TrackModel"] = relationship(
+        "TrackModel", foreign_keys=[track_id_2], lazy="joined"
+    )
+
+    __table_args__ = (
+        sa.CheckConstraint("track_id_1 < track_id_2", name="ck_track_order"),
+        sa.UniqueConstraint("track_id_1", "track_id_2", name="uq_duplicate_pair"),
+        Index("ix_duplicate_candidates_status", "status"),
+    )
+
+
+# =============================================================================
+# ORPHANED FILES TABLE (for CleanupWorker)
+# =============================================================================
+# Hey future me - this tracks FILES and DB entries that are out of sync!
+# Two types:
+# - file_no_db: File exists on disk but no DB entry (e.g., manual file copy)
+# - db_no_file: DB entry exists but file missing (e.g., file deleted externally)
+# CleanupWorker detects these and stores for review. User decides action in UI.
+# =============================================================================
+
+
+class OrphanedFileModel(Base):
+    """Files or DB entries that are orphaned (missing counterpart).
+
+    CleanupWorker populates this. Users review in UI and decide action
+    (delete file, import to library, ignore, etc.).
+    """
+
+    __tablename__ = "orphaned_files"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # Path to the orphaned file (or expected path for db_no_file)
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=False, unique=True)
+    # Size in bytes (null for db_no_file type)
+    file_size_bytes: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
+    # Last modification time
+    file_modified_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    # Type: 'file_no_db' or 'db_no_file'
+    orphan_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    # Related track if this is a db_no_file orphan
+    related_track_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("tracks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Status: pending, resolved, ignored
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # Action taken: deleted, imported, linked, ignored
+    resolution_action: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    detected_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+
+    # Relationship to track (if applicable)
+    related_track: Mapped["TrackModel | None"] = relationship(
+        "TrackModel", foreign_keys=[related_track_id], lazy="joined"
+    )
+
+    __table_args__ = (
+        Index("ix_orphaned_files_status", "status"),
+        Index("ix_orphaned_files_type", "orphan_type"),
+    )
+

@@ -201,10 +201,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         app.state.job_queue = job_queue
 
+        # Create slskd client outside the session context (it doesn't need DB)
+        slskd_client = SlskdClient(settings.slskd)
+        app.state.slskd_client = slskd_client
+
         # Initialize download worker with repositories
         # Note: These will be created per-request in real usage, but we need instances for worker
+        # Hey future me - session bleibt im Scope nach dem break, das ist Python Verhalten!
+        session = None  # Initialize for type checker
         async for session in db.get_session():
-            slskd_client = SlskdClient(settings.slskd)
             track_repository = TrackRepository(session)
             download_repository = DownloadRepository(session)
 
@@ -237,6 +242,94 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings.download.max_concurrent_downloads,
         )
 
+        # =================================================================
+        # Start Download Monitor Worker (tracks slskd download progress)
+        # =================================================================
+        # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
+        # Er pollt slskd alle X Sekunden und updated Job.result mit Progress.
+        # Ohne ihn bleiben Jobs ewig in RUNNING Status ohne echten Progress.
+        from soulspot.application.workers.download_monitor_worker import (
+            DownloadMonitorWorker,
+        )
+
+        download_monitor_worker = DownloadMonitorWorker(
+            job_queue=job_queue,
+            slskd_client=slskd_client,
+            poll_interval_seconds=10,  # Poll every 10 seconds
+        )
+        await download_monitor_worker.start()
+        app.state.download_monitor_worker = download_monitor_worker
+        logger.info("Download monitor worker started (polls every 10s)")
+
+        # =================================================================
+        # Start Automation Workers (optional, controlled by settings)
+        # =================================================================
+        # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
+        # Sie laufen im Hintergrund und checken nur, ob enabled via AppSettingsService.
+        # Wenn disabled, loggen sie nur "skipping" und warten auf nächsten Interval.
+        from soulspot.application.workers.automation_workers import (
+            AutomationWorkerManager,
+        )
+
+        automation_manager = AutomationWorkerManager(
+            session=session,
+            spotify_client=spotify_client,
+            token_manager=db_token_manager,
+            watchlist_interval=3600,  # 1 hour
+            discography_interval=86400,  # 24 hours
+            quality_interval=86400,  # 24 hours
+        )
+        await automation_manager.start_all()
+        app.state.automation_manager = automation_manager
+        logger.info("Automation workers started (watchlist/discography/quality)")
+
+        # =================================================================
+        # Start Cleanup Worker (optional, default disabled)
+        # =================================================================
+        # Hey future me - dieser Worker ist GEFÄHRLICH weil er Dateien LÖSCHT!
+        # Deswegen ist er per Default disabled. User muss explizit enablen.
+        from pathlib import Path
+
+        from soulspot.application.services.app_settings_service import (
+            AppSettingsService,
+        )
+        from soulspot.application.workers.cleanup_worker import CleanupWorker
+
+        app_settings_service = AppSettingsService(session)
+        cleanup_worker = CleanupWorker(
+            job_queue=job_queue,
+            settings_service=app_settings_service,
+            downloads_path=Path(settings.storage.downloads_dir),
+            music_path=Path(settings.storage.music_dir),
+            dry_run=False,  # Set to True for testing
+        )
+        await cleanup_worker.start()
+        app.state.cleanup_worker = cleanup_worker
+        logger.info("Cleanup worker started (checks daily, disabled by default)")
+
+        # =================================================================
+        # Start Duplicate Detector Worker (optional, default disabled)
+        # =================================================================
+        # Hey future me - dieser Worker findet Duplikate via Metadata-Hash.
+        # Er ist CPU-intensiv, deswegen läuft er nur 1x pro Woche default.
+        from soulspot.application.workers.duplicate_detector_worker import (
+            DuplicateDetectorWorker,
+        )
+
+        async def get_session_factory() -> AsyncGenerator[Any, None]:
+            """Session factory for workers."""
+            async for s in db.get_session():
+                yield s
+
+        duplicate_detector_worker = DuplicateDetectorWorker(
+            job_queue=job_queue,
+            settings_service=app_settings_service,
+            session_factory=get_session_factory,
+        )
+        await duplicate_detector_worker.start()
+        app.state.duplicate_detector_worker = duplicate_detector_worker
+        logger.info("Duplicate detector worker started (weekly scan, disabled by default)")
+
         # Start auto-import service in the background
         from soulspot.application.services import AutoImportService
         from soulspot.infrastructure.persistence.repositories import (
@@ -266,6 +359,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         # Shutdown - always attempt cleanup
         logger.info("Shutting down application")
+
+        # Stop duplicate detector worker first (least critical)
+        if hasattr(app.state, "duplicate_detector_worker"):
+            try:
+                logger.info("Stopping duplicate detector worker...")
+                await app.state.duplicate_detector_worker.stop()
+                logger.info("Duplicate detector worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping duplicate detector worker: %s", e)
+
+        # Stop cleanup worker
+        if hasattr(app.state, "cleanup_worker"):
+            try:
+                logger.info("Stopping cleanup worker...")
+                await app.state.cleanup_worker.stop()
+                logger.info("Cleanup worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping cleanup worker: %s", e)
+
+        # Stop automation workers
+        if hasattr(app.state, "automation_manager"):
+            try:
+                logger.info("Stopping automation workers...")
+                await app.state.automation_manager.stop_all()
+                logger.info("Automation workers stopped")
+            except Exception as e:
+                logger.exception("Error stopping automation workers: %s", e)
+
+        # Stop download monitor worker
+        if hasattr(app.state, "download_monitor_worker"):
+            try:
+                logger.info("Stopping download monitor worker...")
+                await app.state.download_monitor_worker.stop()
+                logger.info("Download monitor worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping download monitor worker: %s", e)
 
         # Stop Spotify sync worker first (depends on token manager)
         if hasattr(app.state, "spotify_sync_worker"):
