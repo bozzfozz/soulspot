@@ -198,9 +198,7 @@ class CleanupWorker:
         files_to_delete = files_to_delete[:MAX_FILES_PER_RUN]
         total_size = sum(size for _, size in files_to_delete)
         if total_size > MAX_TOTAL_SIZE_MB * 1024 * 1024:
-            logger.warning(
-                f"Total size {total_size} exceeds limit, truncating cleanup"
-            )
+            logger.warning(f"Total size {total_size} exceeds limit, truncating cleanup")
             # Keep only files up to limit
             cumulative = 0
             for i, (_, size) in enumerate(files_to_delete):
@@ -231,7 +229,9 @@ class CleanupWorker:
         # Update stats (handle None case for type safety)
         files_del = self._stats.get("files_deleted")
         bytes_fr = self._stats.get("bytes_freed")
-        self._stats["files_deleted"] = (int(files_del) if files_del else 0) + deleted_count
+        self._stats["files_deleted"] = (
+            int(files_del) if files_del else 0
+        ) + deleted_count
         self._stats["bytes_freed"] = (int(bytes_fr) if bytes_fr else 0) + freed_bytes
 
         logger.info(

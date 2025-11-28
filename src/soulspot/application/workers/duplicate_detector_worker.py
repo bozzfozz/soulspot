@@ -231,7 +231,9 @@ class DuplicateDetectorWorker:
 
             await session.commit()
             dups = self._stats.get("duplicates_found")
-            self._stats["duplicates_found"] = (int(dups) if dups else 0) + candidates_added
+            self._stats["duplicates_found"] = (
+                int(dups) if dups else 0
+            ) + candidates_added
 
             logger.info(f"Stored {candidates_added} duplicate candidates")
 
@@ -250,7 +252,12 @@ class DuplicateDetectorWorker:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         result = await session.execute(
-            select(TrackModel.id, TrackModel.title, TrackModel.artist_id, TrackModel.duration_ms)
+            select(
+                TrackModel.id,
+                TrackModel.title,
+                TrackModel.artist_id,
+                TrackModel.duration_ms,
+            )
         )
         rows = result.all()
 

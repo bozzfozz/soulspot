@@ -154,24 +154,32 @@ class SpotifySyncService:
             # Check if image download is enabled
             should_download_images = False
             if self._settings_service and self._image_service:
-                should_download_images = await self._settings_service.should_download_images()
+                should_download_images = (
+                    await self._settings_service.should_download_images()
+                )
 
             # Add new artists
             for artist_data in spotify_artists:
                 if artist_data["id"] in to_add:
-                    await self._upsert_artist(artist_data, download_images=should_download_images)
+                    await self._upsert_artist(
+                        artist_data, download_images=should_download_images
+                    )
 
             # Update existing artists (in case name/image changed)
             for artist_data in spotify_artists:
                 if artist_data["id"] in unchanged:
-                    await self._upsert_artist(artist_data, download_images=should_download_images)
+                    await self._upsert_artist(
+                        artist_data, download_images=should_download_images
+                    )
 
             # Remove unfollowed artists (CASCADE deletes albums/tracks)
             if to_remove:
                 # Check if we should remove unfollowed artists
                 should_remove = True
                 if self._settings_service:
-                    should_remove = await self._settings_service.should_remove_unfollowed_artists()
+                    should_remove = (
+                        await self._settings_service.should_remove_unfollowed_artists()
+                    )
 
                 if should_remove:
                     # Clean up images before deleting artists
@@ -625,15 +633,16 @@ class SpotifySyncService:
             # Check if image download is enabled
             should_download_images = False
             if self._settings_service and self._image_service:
-                should_download_images = await self._settings_service.should_download_images()
+                should_download_images = (
+                    await self._settings_service.should_download_images()
+                )
 
             # Add new playlists
             for playlist_data in spotify_playlists:
                 spotify_uri = f"spotify:playlist:{playlist_data['id']}"
                 if spotify_uri in to_add or spotify_uri in unchanged:
                     await self._upsert_playlist(
-                        playlist_data,
-                        download_images=should_download_images
+                        playlist_data, download_images=should_download_images
                     )
 
             # Remove playlists that no longer exist on Spotify
@@ -644,7 +653,9 @@ class SpotifySyncService:
 
                 if should_remove:
                     removed_count = await self.repo.delete_playlists_by_uris(to_remove)
-                    logger.info(f"Removed {removed_count} deleted Spotify playlists from DB")
+                    logger.info(
+                        f"Removed {removed_count} deleted Spotify playlists from DB"
+                    )
 
                     # Cleanup orphaned images
                     if self._image_service:
@@ -860,9 +871,7 @@ class SpotifySyncService:
 
         return stats
 
-    async def _fetch_all_liked_songs(
-        self, access_token: str
-    ) -> list[dict[str, Any]]:
+    async def _fetch_all_liked_songs(self, access_token: str) -> list[dict[str, Any]]:
         """Fetch all liked songs from Spotify (handles pagination).
 
         Returns list of track data with added_at timestamp.
@@ -972,7 +981,9 @@ class SpotifySyncService:
             # Check if image download is enabled
             should_download_images = False
             if self._settings_service and self._image_service:
-                should_download_images = await self._settings_service.should_download_images()
+                should_download_images = (
+                    await self._settings_service.should_download_images()
+                )
 
             # Process saved albums
             for item in saved_albums:
@@ -1029,9 +1040,7 @@ class SpotifySyncService:
 
         return stats
 
-    async def _fetch_all_saved_albums(
-        self, access_token: str
-    ) -> list[dict[str, Any]]:
+    async def _fetch_all_saved_albums(self, access_token: str) -> list[dict[str, Any]]:
         """Fetch all saved albums from Spotify (handles pagination).
 
         Returns list of items with album data and added_at timestamp.
@@ -1188,7 +1197,9 @@ class SpotifySyncService:
     # FULL SYNC (ALL ENABLED SYNCS)
     # =========================================================================
 
-    async def run_full_sync(self, access_token: str, force: bool = False) -> dict[str, Any]:
+    async def run_full_sync(
+        self, access_token: str, force: bool = False
+    ) -> dict[str, Any]:
         """Run all enabled sync operations.
 
         Convenience method to run artists, playlists, liked songs, and saved albums
@@ -1218,6 +1229,8 @@ class SpotifySyncService:
         results["liked_songs"] = await self.sync_liked_songs(access_token, force=force)
 
         # Saved Albums sync
-        results["saved_albums"] = await self.sync_saved_albums(access_token, force=force)
+        results["saved_albums"] = await self.sync_saved_albums(
+            access_token, force=force
+        )
 
         return results

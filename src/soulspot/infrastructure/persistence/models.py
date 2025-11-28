@@ -1074,4 +1074,3 @@ class OrphanedFileModel(Base):
         Index("ix_orphaned_files_status", "status"),
         Index("ix_orphaned_files_type", "orphan_type"),
     )
-

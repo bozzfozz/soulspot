@@ -197,9 +197,7 @@ class SpotifySyncWorker:
             # Get access token - if not available, skip this cycle
             access_token = await self.token_manager.get_token_for_background()
             if not access_token:
-                logger.warning(
-                    "No valid Spotify token available, skipping sync cycle"
-                )
+                logger.warning("No valid Spotify token available, skipping sync cycle")
                 return
 
             # Get interval settings

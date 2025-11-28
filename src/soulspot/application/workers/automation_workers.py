@@ -186,29 +186,43 @@ class WatchlistWorker:
                         # Parse release date (can be YYYY, YYYY-MM, or YYYY-MM-DD)
                         try:
                             if len(release_date_str) == 4:  # YYYY
-                                release_date = datetime(int(release_date_str), 1, 1, tzinfo=UTC)
+                                release_date = datetime(
+                                    int(release_date_str), 1, 1, tzinfo=UTC
+                                )
                             elif len(release_date_str) == 7:  # YYYY-MM
                                 parts = release_date_str.split("-")
-                                release_date = datetime(int(parts[0]), int(parts[1]), 1, tzinfo=UTC)
+                                release_date = datetime(
+                                    int(parts[0]), int(parts[1]), 1, tzinfo=UTC
+                                )
                             else:  # YYYY-MM-DD
                                 parts = release_date_str.split("-")
                                 release_date = datetime(
-                                    int(parts[0]), int(parts[1]), int(parts[2]), tzinfo=UTC
+                                    int(parts[0]),
+                                    int(parts[1]),
+                                    int(parts[2]),
+                                    tzinfo=UTC,
                                 )
                         except (ValueError, IndexError):
-                            logger.warning(f"Could not parse release date: {release_date_str}")
+                            logger.warning(
+                                f"Could not parse release date: {release_date_str}"
+                            )
                             continue
 
                         # Check if this is a NEW release (after last check)
-                        if watchlist.last_checked_at is None or release_date > watchlist.last_checked_at:
-                            new_releases.append({
-                                "album_id": album.get("id"),
-                                "album_name": album.get("name"),
-                                "album_type": album.get("album_type"),
-                                "release_date": release_date_str,
-                                "total_tracks": album.get("total_tracks", 0),
-                                "images": album.get("images", []),
-                            })
+                        if (
+                            watchlist.last_checked_at is None
+                            or release_date > watchlist.last_checked_at
+                        ):
+                            new_releases.append(
+                                {
+                                    "album_id": album.get("id"),
+                                    "album_name": album.get("name"),
+                                    "album_type": album.get("album_type"),
+                                    "release_date": release_date_str,
+                                    "total_tracks": album.get("total_tracks", 0),
+                                    "images": album.get("images", []),
+                                }
+                            )
 
                     logger.info(
                         f"Found {len(new_releases)} new releases for artist {watchlist.artist_id} "

@@ -667,7 +667,9 @@ class ResolveDuplicateRequest(BaseModel):
 # Die Candidates werden vom DuplicateDetectorWorker erstellt und hier für Review angezeigt.
 @router.get("/duplicates")
 async def list_duplicate_candidates(
-    status: str | None = Query(None, description="Filter by status: pending, confirmed, dismissed"),
+    status: str | None = Query(
+        None, description="Filter by status: pending, confirmed, dismissed"
+    ),
     limit: int = Query(50, description="Max candidates to return"),
     offset: int = Query(0, description="Offset for pagination"),
     db: AsyncSession = Depends(get_db_session),
@@ -702,9 +704,15 @@ async def list_duplicate_candidates(
 
     # Get counts
     count_query = select(
-        func.count().filter(DuplicateCandidateModel.status == "pending").label("pending"),
-        func.count().filter(DuplicateCandidateModel.status == "confirmed").label("confirmed"),
-        func.count().filter(DuplicateCandidateModel.status == "dismissed").label("dismissed"),
+        func.count()
+        .filter(DuplicateCandidateModel.status == "pending")
+        .label("pending"),
+        func.count()
+        .filter(DuplicateCandidateModel.status == "confirmed")
+        .label("confirmed"),
+        func.count()
+        .filter(DuplicateCandidateModel.status == "dismissed")
+        .label("dismissed"),
         func.count().label("total"),
     ).select_from(DuplicateCandidateModel)
     count_result = await db.execute(count_query)
@@ -723,11 +731,15 @@ async def list_duplicate_candidates(
                 id=model.id,
                 track_1_id=model.track_id_1,
                 track_1_title=track_1.title if track_1 else "Unknown",
-                track_1_artist=track_1.artist.name if track_1 and track_1.artist else "Unknown",
+                track_1_artist=track_1.artist.name
+                if track_1 and track_1.artist
+                else "Unknown",
                 track_1_file_path=track_1.file_path if track_1 else None,
                 track_2_id=model.track_id_2,
                 track_2_title=track_2.title if track_2 else "Unknown",
-                track_2_artist=track_2.artist.name if track_2 and track_2.artist else "Unknown",
+                track_2_artist=track_2.artist.name
+                if track_2 and track_2.artist
+                else "Unknown",
                 track_2_file_path=track_2.file_path if track_2 else None,
                 similarity_score=model.similarity_score,
                 match_type=model.match_type,
@@ -908,7 +920,9 @@ def _track_model_to_entity(track_model: Any) -> Any:
         id=TrackId.from_string(track_model.id),
         title=track_model.title,
         artist_id=ArtistId.from_string(track_model.artist_id),
-        album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
+        album_id=AlbumId.from_string(track_model.album_id)
+        if track_model.album_id
+        else None,
         track_number=track_model.track_number,
         disc_number=track_model.disc_number,
     )
@@ -965,9 +979,7 @@ async def preview_batch_rename(
     from sqlalchemy import select
 
     stmt = (
-        select(TrackModel)
-        .where(TrackModel.file_path.isnot(None))
-        .limit(request.limit)
+        select(TrackModel).where(TrackModel.file_path.isnot(None)).limit(request.limit)
     )
     result = await db.execute(stmt)
     tracks = result.scalars().all()
@@ -987,14 +999,18 @@ async def preview_batch_rename(
         from soulspot.domain.value_objects import AlbumId as DomainAlbumId
         from soulspot.domain.value_objects import ArtistId as DomainArtistId
 
-        artist = await artist_repo.get_by_id(DomainArtistId.from_string(track_model.artist_id))
+        artist = await artist_repo.get_by_id(
+            DomainArtistId.from_string(track_model.artist_id)
+        )
         if not artist:
             continue
 
         # Get album (optional)
         album = None
         if track_model.album_id:
-            album = await album_repo.get_by_id(DomainAlbumId.from_string(track_model.album_id))
+            album = await album_repo.get_by_id(
+                DomainAlbumId.from_string(track_model.album_id)
+            )
 
         # Get current path
         current_path = str(track_model.file_path)
@@ -1011,7 +1027,9 @@ async def preview_batch_rename(
         except (ValueError, OSError, KeyError) as e:
             # Hey future me - log and skip files where renaming service fails (e.g., bad template,
             # missing metadata, or invalid characters). Continue processing other tracks.
-            logger.debug("Skipping track %s in batch rename preview: %s", track_model.id, e)
+            logger.debug(
+                "Skipping track %s in batch rename preview: %s", track_model.id, e
+            )
             continue
 
         # Check if path would change
@@ -1131,7 +1149,9 @@ async def execute_batch_rename(
         from soulspot.domain.value_objects import AlbumId as DomainAlbumId
         from soulspot.domain.value_objects import ArtistId as DomainArtistId
 
-        artist = await artist_repo.get_by_id(DomainArtistId.from_string(track_model.artist_id))
+        artist = await artist_repo.get_by_id(
+            DomainArtistId.from_string(track_model.artist_id)
+        )
         if not artist:
             results.append(
                 BatchRenameResult(
@@ -1148,7 +1168,9 @@ async def execute_batch_rename(
         # Get album (optional)
         album = None
         if track_model.album_id:
-            album = await album_repo.get_by_id(DomainAlbumId.from_string(track_model.album_id))
+            album = await album_repo.get_by_id(
+                DomainAlbumId.from_string(track_model.album_id)
+            )
 
         # Create track entity for renaming service
         track = _track_model_to_entity(track_model)

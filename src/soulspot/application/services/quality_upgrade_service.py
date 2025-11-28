@@ -302,9 +302,7 @@ class QualityUpgradeService:
         target_formats: list[str] = target_profile["formats"]  # type: ignore[assignment]
 
         # Get the specific track
-        stmt = select(TrackModel).where(
-            TrackModel.id == str(track_id.value)
-        )
+        stmt = select(TrackModel).where(TrackModel.id == str(track_id.value))
         result = await self.session.execute(stmt)
         track = result.scalar_one_or_none()
 

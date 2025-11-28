@@ -116,7 +116,9 @@ def _get_token_worker_status(request: Request) -> WorkerStatusInfo:
         status=status,
         details={
             "check_interval_seconds": raw_status.get("check_interval_seconds", 300),
-            "refresh_threshold_minutes": raw_status.get("refresh_threshold_minutes", 10),
+            "refresh_threshold_minutes": raw_status.get(
+                "refresh_threshold_minutes", 10
+            ),
         },
     )
 
@@ -481,7 +483,7 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
         "stopped": "Gestoppt",
     }
 
-    html = f'''
+    html = f"""
 <div class="worker-indicator-single" tabindex="0">
     <a href="{spotify_status.settings_url}"
        class="worker-icon"
@@ -520,6 +522,6 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
         </div>
     </div>
 </div>
-'''
+"""
 
     return HTMLResponse(content=html)

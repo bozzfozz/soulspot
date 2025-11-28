@@ -414,6 +414,8 @@ def test_clean_name_with_custom_replacements(tmp_path: Path) -> None:
 
     # Both custom - note: multiple spaces get collapsed to single space
     assert (
-        service._clean_name("Artist: Something/Other", colon_replacement=" ", slash_replacement="-")
+        service._clean_name(
+            "Artist: Something/Other", colon_replacement=" ", slash_replacement="-"
+        )
         == "Artist Something-Other"
     )

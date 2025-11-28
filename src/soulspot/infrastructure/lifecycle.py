@@ -330,7 +330,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         await duplicate_detector_worker.start()
         app.state.duplicate_detector_worker = duplicate_detector_worker
-        logger.info("Duplicate detector worker started (weekly scan, disabled by default)")
+        logger.info(
+            "Duplicate detector worker started (weekly scan, disabled by default)"
+        )
 
         # Start auto-import service in the background
         from soulspot.application.services import AutoImportService

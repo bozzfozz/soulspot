@@ -682,9 +682,21 @@ async def trigger_manual_sync(
             # Run all syncs
             results = await sync_service.run_full_sync(access_token, force=True)
             # Die Ergebnisse sind dicts mit details, extrahiere die Counts
-            artists_count = results.get('artists', {}).get('synced', 0) if results.get('artists') else 0
-            playlists_count = results.get('playlists', {}).get('synced', 0) if results.get('playlists') else 0
-            albums_count = results.get('saved_albums', {}).get('synced', 0) if results.get('saved_albums') else 0
+            artists_count = (
+                results.get("artists", {}).get("synced", 0)
+                if results.get("artists")
+                else 0
+            )
+            playlists_count = (
+                results.get("playlists", {}).get("synced", 0)
+                if results.get("playlists")
+                else 0
+            )
+            albums_count = (
+                results.get("saved_albums", {}).get("synced", 0)
+                if results.get("saved_albums")
+                else 0
+            )
             message = f"Full sync complete: {artists_count} artists, {playlists_count} playlists, {albums_count} albums"
 
         await db.commit()
@@ -707,8 +719,12 @@ class SyncWorkerStatus(BaseModel):
     """Status information for the Spotify sync worker."""
 
     running: bool = Field(description="Whether the worker is currently running")
-    check_interval_seconds: int = Field(description="How often the worker checks for due syncs")
-    last_sync: dict[str, str | None] = Field(description="Last sync time for each sync type")
+    check_interval_seconds: int = Field(
+        description="How often the worker checks for due syncs"
+    )
+    last_sync: dict[str, str | None] = Field(
+        description="Last sync time for each sync type"
+    )
     stats: dict[str, dict[str, Any]] = Field(description="Sync statistics")
 
 
@@ -1331,19 +1347,28 @@ async def get_naming_variables() -> dict[str, list[dict[str, str]]]:
     return {
         "artist": [
             {"variable": "{Artist Name}", "description": "Full artist name"},
-            {"variable": "{Artist CleanName}", "description": "Sanitized artist name (no special chars)"},
+            {
+                "variable": "{Artist CleanName}",
+                "description": "Sanitized artist name (no special chars)",
+            },
         ],
         "album": [
             {"variable": "{Album Title}", "description": "Full album title"},
             {"variable": "{Album CleanTitle}", "description": "Sanitized album title"},
-            {"variable": "{Album Type}", "description": "Album type (Album, Single, EP, Compilation)"},
+            {
+                "variable": "{Album Type}",
+                "description": "Album type (Album, Single, EP, Compilation)",
+            },
             {"variable": "{Release Year}", "description": "Release year (4 digits)"},
         ],
         "track": [
             {"variable": "{Track Title}", "description": "Full track title"},
             {"variable": "{Track CleanTitle}", "description": "Sanitized track title"},
             {"variable": "{Track Number}", "description": "Track number"},
-            {"variable": "{Track Number:00}", "description": "Track number zero-padded (01, 02, ...)"},
+            {
+                "variable": "{Track Number:00}",
+                "description": "Track number zero-padded (01, 02, ...)",
+            },
         ],
         "disc": [
             {"variable": "{Medium}", "description": "Disc number"},

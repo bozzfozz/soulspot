@@ -588,32 +588,34 @@ class AppSettingsService:
     # =========================================================================
 
     # Supported template variables for validation
-    NAMING_VARIABLES: frozenset[str] = frozenset({
-        # Artist variables
-        "Artist Name",
-        "Artist CleanName",
-        # Album variables
-        "Album Title",
-        "Album CleanTitle",
-        "Album Type",
-        "Release Year",
-        # Track variables
-        "Track Title",
-        "Track CleanTitle",
-        "Track Number",
-        "Track Number:00",
-        # Multi-disc variables
-        "Medium",
-        "Medium:00",
-        # Legacy variables (for backward compatibility)
-        "artist",
-        "album",
-        "title",
-        "track",
-        "track:02d",
-        "year",
-        "disc",
-    })
+    NAMING_VARIABLES: frozenset[str] = frozenset(
+        {
+            # Artist variables
+            "Artist Name",
+            "Artist CleanName",
+            # Album variables
+            "Album Title",
+            "Album CleanTitle",
+            "Album Type",
+            "Release Year",
+            # Track variables
+            "Track Title",
+            "Track CleanTitle",
+            "Track Number",
+            "Track Number:00",
+            # Multi-disc variables
+            "Medium",
+            "Medium:00",
+            # Legacy variables (for backward compatibility)
+            "artist",
+            "album",
+            "title",
+            "track",
+            "track:02d",
+            "year",
+            "disc",
+        }
+    )
 
     def validate_naming_template(self, template: str) -> tuple[bool, list[str]]:
         """Validate a naming template for invalid variables.
@@ -647,7 +649,10 @@ class AppSettingsService:
             if var not in self.NAMING_VARIABLES:
                 # Also check base name without format spec (e.g., "track" from "track:02d")
                 base_var = var.split(":")[0]
-                if base_var not in self.NAMING_VARIABLES and var not in self.NAMING_VARIABLES:
+                if (
+                    base_var not in self.NAMING_VARIABLES
+                    and var not in self.NAMING_VARIABLES
+                ):
                     invalid.append(var)
 
         return (len(invalid) == 0, invalid)
@@ -657,27 +662,37 @@ class AppSettingsService:
 
         Default: '{Artist Name}' - matches Lidarr standard.
         """
-        return await self.get_string(
-            "naming.artist_folder_format", default="{Artist Name}"
-        ) or "{Artist Name}"
+        return (
+            await self.get_string(
+                "naming.artist_folder_format", default="{Artist Name}"
+            )
+            or "{Artist Name}"
+        )
 
     async def get_album_folder_format(self) -> str:
         """Get template for album folder names.
 
         Default: '{Album Title} ({Release Year})' - matches Lidarr standard.
         """
-        return await self.get_string(
-            "naming.album_folder_format", default="{Album Title} ({Release Year})"
-        ) or "{Album Title} ({Release Year})"
+        return (
+            await self.get_string(
+                "naming.album_folder_format", default="{Album Title} ({Release Year})"
+            )
+            or "{Album Title} ({Release Year})"
+        )
 
     async def get_standard_track_format(self) -> str:
         """Get template for single-disc track filenames.
 
         Default: '{Track Number:00} - {Track Title}' - matches Lidarr standard.
         """
-        return await self.get_string(
-            "naming.standard_track_format", default="{Track Number:00} - {Track Title}"
-        ) or "{Track Number:00} - {Track Title}"
+        return (
+            await self.get_string(
+                "naming.standard_track_format",
+                default="{Track Number:00} - {Track Title}",
+            )
+            or "{Track Number:00} - {Track Title}"
+        )
 
     async def get_multi_disc_track_format(self) -> str:
         """Get template for multi-disc track filenames.
@@ -685,10 +700,13 @@ class AppSettingsService:
         Default: '{Medium:00}-{Track Number:00} - {Track Title}'
         Adds disc number prefix for multi-disc albums.
         """
-        return await self.get_string(
-            "naming.multi_disc_track_format",
-            default="{Medium:00}-{Track Number:00} - {Track Title}",
-        ) or "{Medium:00}-{Track Number:00} - {Track Title}"
+        return (
+            await self.get_string(
+                "naming.multi_disc_track_format",
+                default="{Medium:00}-{Track Number:00} - {Track Title}",
+            )
+            or "{Medium:00}-{Track Number:00} - {Track Title}"
+        )
 
     async def is_rename_tracks_enabled(self) -> bool:
         """Check if automatic file renaming on import is enabled.

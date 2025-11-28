@@ -36,7 +36,13 @@ def test_playlist_sync_all_endpoint_exists(client: TestClient) -> None:
     # Should return valid status, not 404
     assert response.status_code != 404, "Endpoint should exist"
     # 503 is acceptable when token manager is not initialized (test environment)
-    assert response.status_code in [200, 202, 401, 403, 503], "Endpoint should be accessible"
+    assert response.status_code in [
+        200,
+        202,
+        401,
+        403,
+        503,
+    ], "Endpoint should be accessible"
 
 
 def test_playlist_download_missing_endpoint_exists(client: TestClient) -> None:

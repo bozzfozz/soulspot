@@ -38,7 +38,13 @@ logger = logging.getLogger(__name__)
 # - Errored: Generic error
 # - Rejected: User rejected transfer
 SLSKD_COMPLETED_STATES = {"Completed", "CompletedSucceeded"}
-SLSKD_FAILED_STATES = {"Cancelled", "TimedOut", "Errored", "Rejected", "CompletedFailed"}
+SLSKD_FAILED_STATES = {
+    "Cancelled",
+    "TimedOut",
+    "Errored",
+    "Rejected",
+    "CompletedFailed",
+}
 SLSKD_ACTIVE_STATES = {"Queued", "Initializing", "InProgress", "Requested"}
 
 
@@ -242,13 +248,15 @@ class DownloadMonitorWorker:
         total_size = slskd_status.get("size", 0)
 
         # Update job.result with progress info
-        job.result.update({
-            "slskd_state": state,
-            "progress_percent": progress,
-            "bytes_downloaded": bytes_transferred,
-            "total_bytes": total_size,
-            "last_updated": datetime.now(UTC).isoformat(),
-        })
+        job.result.update(
+            {
+                "slskd_state": state,
+                "progress_percent": progress,
+                "bytes_downloaded": bytes_transferred,
+                "total_bytes": total_size,
+                "last_updated": datetime.now(UTC).isoformat(),
+            }
+        )
 
         # Check if download finished
         if state in SLSKD_COMPLETED_STATES:

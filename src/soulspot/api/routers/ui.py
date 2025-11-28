@@ -69,9 +69,7 @@ async def index(
             1 for d in active_downloads if d.status.value in ["pending", "queued"]
         ),
     }
-    return templates.TemplateResponse(
-        request, "index.html", context={"stats": stats}
-    )
+    return templates.TemplateResponse(request, "index.html", context={"stats": stats})
 
 
 @router.get("/playlists", response_class=HTMLResponse)
@@ -475,9 +473,7 @@ async def library(
         "broken_tracks": sum(1 for t in tracks if t.is_broken),  # type: ignore[attr-defined,misc]
     }
 
-    return templates.TemplateResponse(
-        request, "library.html", context={"stats": stats}
-    )
+    return templates.TemplateResponse(request, "library.html", context={"stats": stats})
 
 
 # =============================================================================
@@ -806,8 +802,12 @@ async def library_artist_detail(
                     "id": f"{artist_name}::{track.album.title}",
                     "title": track.album.title,
                     "track_count": 0,
-                    "year": track.album.release_year if hasattr(track.album, "release_year") else None,
-                    "artwork_url": track.album.artwork_url if hasattr(track.album, "artwork_url") else None,
+                    "year": track.album.release_year
+                    if hasattr(track.album, "release_year")
+                    else None,
+                    "artwork_url": track.album.artwork_url
+                    if hasattr(track.album, "artwork_url")
+                    else None,
                 }
             albums_dict[album_key]["track_count"] += 1
 

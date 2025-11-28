@@ -159,7 +159,9 @@ class SpotifyImageService:
                 return image_data
 
         except httpx.HTTPStatusError as e:
-            logger.warning(f"HTTP error downloading image from {url}: {e.response.status_code}")
+            logger.warning(
+                f"HTTP error downloading image from {url}: {e.response.status_code}"
+            )
             return None
         except httpx.RequestError as e:
             logger.warning(f"Network error downloading image from {url}: {e}")
@@ -484,6 +486,8 @@ class SpotifyImageService:
 
         total_deleted = sum(deleted.values())
         if total_deleted > 0:
-            logger.info(f"Cleaned up {total_deleted} orphaned Spotify images: {deleted}")
+            logger.info(
+                f"Cleaned up {total_deleted} orphaned Spotify images: {deleted}"
+            )
 
         return deleted
