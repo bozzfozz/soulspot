@@ -58,14 +58,175 @@ This file contains focused, repository-specific guidance to help AI coding agent
 - `pyproject.toml` (tooling and strict config)
 
 10. Useful examples to copy or follow
-- When adding async DB code, mirror patterns used in `src/soulspot/repository/*` and the session management in `alembic/env.py`.
+- When adding async DB code, mirror patterns used in `src/soulspot/infrastructure/persistence/repositories.py` and the session management in `alembic/env.py`.
 - For HTTP clients, prefer `httpx` and follow testing style in `tests/` using `pytest-httpx`.
 
 11. What not to assume
 - Do not assume `pip` is the canonical source of truth — the repo uses Poetry in `pyproject.toml`, but the `Makefile` contains pragmatic pip-based targets used by some workflows.
 - Do not assume synchronous DB usage; code is primarily async.
 
-12. When unsure — minimal reproducible steps to run locally
+12. Reserved (placeholder for future use)
+
+13. Verify Before Writing (PFLICHT)
+
+**Anweisung für alle Agenten:**  
+Bevor du Pfade, Konfigurationswerte, Dateinamen oder technische Details in Code oder Dokumentation schreibst, **MUSST** du diese im Repository verifizieren.
+
+**Was IMMER zu prüfen ist:**
+- **Dateipfade:** Prüfe `.env.example`, `settings.py`, `docker-compose.yml` für tatsächliche Pfade (z.B. DB-Pfad ist `./soulspot.db` lokal, `/config/soulspot.db` in Docker – NICHT `data/soulspot.db`)
+- **Konfigurationswerte:** Lies die tatsächlichen Defaults aus dem Code, nicht raten
+- **Klassennamen/Imports:** Nutze `grep_search` oder `read_file` um existierende Namen zu verifizieren
+- **Test-Dateipfade:** Prüfe die tatsächliche Verzeichnisstruktur unter `tests/`
+- **Port-Nummern, URLs, API-Endpunkte:** Verifiziere gegen den tatsächlichen Code
+
+**Verboten:**
+- Pfade oder Werte aus dem Gedächtnis oder "üblichen Konventionen" schreiben
+- Annahmen über Verzeichnisstrukturen ohne Verifizierung
+- Dateien referenzieren die nicht existieren
+
+**Beispiel-Workflow:**
+```
+❌ FALSCH: "Die DB liegt unter data/soulspot.db"
+✅ RICHTIG: Erst `.env.example` lesen → DATABASE_URL=sqlite+aiosqlite:///./soulspot.db → "Die DB liegt unter ./soulspot.db"
+```
+
+14. Häufige Fehlerquellen vermeiden (Lessons Learned)
+
+### 14.1 Interface-Repository-Sync
+Wenn du eine Methode zu einem Repository hinzufügst (z.B. `TrackRepository.get_by_isrc()`), **MUSST** du auch das entsprechende Interface in `src/soulspot/domain/ports/__init__.py` aktualisieren.
+
+```
+❌ FALSCH: Nur TrackRepository.get_by_isrc() hinzufügen
+✅ RICHTIG: Auch ITrackRepository.get_by_isrc() als abstrakte Methode hinzufügen
+```
+
+### 14.2 Export-Vollständigkeit
+Neue Klassen/Funktionen müssen in der `__init__.py` des Moduls exportiert werden, sonst sind sie nicht importierbar.
+
+**Checkliste bei neuen Klassen:**
+- [ ] Klasse in `__init__.py` importieren
+- [ ] Klasse zu `__all__` hinzufügen (falls vorhanden)
+
+### 14.3 Migration-Kette prüfen
+Bevor du eine neue Alembic-Migration erstellst:
+1. `ls alembic/versions/` ausführen um die letzte Revision zu finden
+2. `down_revision` auf die **tatsächlich letzte** Migration setzen
+3. Bei Merge-Konflikten: `alembic merge heads` nutzen
+
+### 14.4 Bestehenden Code nicht duplizieren
+**Vor jeder Implementierung:**
+1. `grep_search` nach ähnlichen Funktionsnamen/Patterns
+2. Prüfen ob Service/Repository/Helper bereits existiert
+3. Bestehende Patterns wiederverwenden statt neu erfinden
+
+```
+❌ FALSCH: Neue `get_spotify_token()` Funktion schreiben
+✅ RICHTIG: Erst suchen → DatabaseTokenManager existiert bereits → wiederverwenden
+```
+
+### 14.5 Async-Konsistenz
+**ALLE** Datenbankoperationen müssen `async`/`await` nutzen. Keine synchronen DB-Calls!
+
+```python
+# ❌ FALSCH
+def get_track(self, id):
+    return self.session.query(Track).get(id)
+
+# ✅ RICHTIG  
+async def get_track(self, id):
+    result = await self.session.execute(select(Track).where(Track.id == id))
+    return result.scalar_one_or_none()
+```
+
+### 14.6 Test-Datei-Struktur spiegelt Source-Struktur
+Tests müssen die Source-Struktur spiegeln:
+- `src/soulspot/application/services/foo.py` → `tests/unit/application/services/test_foo.py`
+- **NICHT:** `tests/unit/test_foo.py`
+
+### 14.7 Keine Placeholder/Stubs als "fertig" markieren
+Eine Funktion ist **NICHT fertig** wenn sie:
+- `pass` oder `...` enthält
+- `# TODO` hat
+- Nur `return None` ohne Logik
+- Einen `NotImplementedError` wirft
+
+### 14.8 Service-spezifische Namenskonvention (Erweiterbarkeit)
+
+Bei Klassen/Modulen die **service-spezifisch** sind (Spotify, Tidal, Deezer, etc.), **MUSS** der Service-Name im Namen enthalten sein für spätere Erweiterbarkeit.
+
+**Namensschema:**
+```
+{ServiceName}{Funktion}
+```
+
+**Beispiele:**
+| Generisch (❌) | Service-spezifisch (✅) | Warum |
+|---------------|------------------------|-------|
+| `Session` | `SpotifySession` | Tidal braucht später eigene `TidalSession` |
+| `TokenManager` | `SpotifyTokenManager` | Jeder Service hat eigene Token-Logik |
+| `AuthRouter` | `SpotifyAuthRouter` | OAuth-Flows unterscheiden sich |
+| `PlaylistSync` | `SpotifyPlaylistSync` | Tidal-Playlists haben andere API |
+| `sessions` (Tabelle) | `spotify_sessions` | DB-Schema muss Service unterscheiden |
+
+**Wann Service-Präfix verwenden:**
+- OAuth/Auth-Klassen → `SpotifyAuth`, `TidalAuth`
+- Session/Token-Management → `SpotifySession`, `SpotifyToken`
+- API-Client-Wrapper → `SpotifyClient`, `TidalClient`
+- Service-spezifische Repositories → `SpotifySessionRepository`
+- DB-Tabellen für Service-Daten → `spotify_sessions`, `tidal_tokens`
+
+**Wann KEIN Service-Präfix:**
+- Generische Utilities → `AudioFileProcessor`, `MetadataEnricher`
+- Domain-Entities → `Track`, `Artist`, `Album` (sind service-agnostisch)
+- Shared Infrastructure → `Database`, `CircuitBreaker`, `RateLimiter`
+
+**Zukunftssicherheit:**
+```python
+# ✅ Erweiterbar für mehrere Services
+class SpotifySession: ...
+class TidalSession: ...
+class DeezerSession: ...
+
+# ❌ Nicht erweiterbar - was wenn Tidal kommt?
+class Session: ...  # Welcher Service?
+```
+
+### 14.9 Dokumentation immer mitpflegen (DOC-SYNC)
+
+**Bei JEDER Code-Änderung prüfen:**
+
+1. **API-Änderungen** → `docs/api/` aktualisieren
+2. **Neue Features** → `README.md` oder Feature-Docs ergänzen
+3. **Config-Änderungen** → `.env.example` und `docs/guides/` anpassen
+4. **DB-Schema-Änderungen** → Migration UND Docs aktualisieren
+5. **Breaking Changes** → `CHANGELOG.md` und Migration-Guide
+
+**Dokumentations-Checkliste bei PRs:**
+- [ ] Betroffene Docs identifiziert
+- [ ] Code-Beispiele in Docs noch korrekt
+- [ ] Neue Funktionen dokumentiert
+- [ ] Veraltete Docs entfernt/aktualisiert
+
+**Wo Docs leben:**
+| Thema | Ort |
+|-------|-----|
+| API-Referenz | `docs/api/` |
+| User-Guides | `docs/guides/` |
+| Development | `docs/development/` |
+| Architektur | `docs/architecture/` (falls vorhanden) |
+| Beispiele | `docs/examples/` |
+
+**Verboten:**
+- Code ändern ohne zugehörige Docs zu prüfen
+- Neue Features ohne Dokumentation als "fertig" markieren
+- Veraltete Docs stehen lassen
+
+```
+❌ FALSCH: Feature implementieren → PR öffnen → Docs vergessen
+✅ RICHTIG: Feature implementieren → Docs aktualisieren → PR öffnen
+```
+
+15. When unsure — minimal reproducible steps to run locally
 1. `cp .env.example .env` and fill required keys (Spotify, SLSKD).
 2. `poetry install --with dev`
 3. `make docker-up` (or run services in local Python env if you prefer)
@@ -73,11 +234,13 @@ This file contains focused, repository-specific guidance to help AI coding agent
 
 If anything in this file is unclear or missing (CI details, secrets handling, or preferred workflow), please flag the area and I will refine the instructions.
 
+16. PR-Completion Checklist
+
 - "Bevor du einen PR öffnest oder eine Aufgabe als erledigt markierst, führe lokal: `ruff check . --config pyproject.toml`, `mypy --config-file mypy.ini .`, `bandit -r . -f json -o /tmp/bandit-report.json` aus und vermerke in der PR‑Beschreibung je Check Befehl, Exit‑Code, kurze Zahlen (Violations/Errors/HIGH‑Findings) sowie den CodeQL‑Workflow‑Status (GitHub Actions URL oder local run status). Öffne den PR nur, wenn alle Checks erfolgreich sind oder Ausnahmen dokumentiert und freigegeben wurden."
 
 
 
-## Future-Self Erklärungen als Kommentar für alle Funktionen
+17. Future-Self Erklärungen als Kommentar für alle Funktionen
 
 **Anweisung für alle Agenten:**  
 Jede neue Funktion (public, private, helper usw.) muss einen erklärenden Kommentar direkt davor bekommen.  
@@ -97,7 +260,7 @@ def get_uploaded_images():
 
 
 
-## 2.0 Prozessübersicht
+18. Prozessübersicht (Lifecycle)
 
 **Gesamter Lebenszyklus:**  
 Plan → Implement (Bulk) → Validate & Fixⁿ → Auto-Code-Review & Auto-Fixⁿ → Docs (DOC-PROOF) → Impact-Fix → Review → Release
@@ -195,8 +358,3 @@ Plan → Implement (Bulk) → Validate & Fixⁿ → Auto-Code-Review & Auto-Fix�
 - Wenn einer dieser Checks fehlschlägt, ist deine Aufgabe **nicht abgeschlossen**:
   - Fixe den Code, bis alle Checks erfolgreich sind.
   - Dokumentiere bei Bedarf Sonderfälle (z. B. legitime False Positives) in der Pull-Request-Beschreibung.
-
-
-
-
-
