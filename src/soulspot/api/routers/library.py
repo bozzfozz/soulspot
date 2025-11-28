@@ -887,6 +887,30 @@ class BatchRenameResponse(BaseModel):
     results: list[BatchRenameResult]
 
 
+# Hey future me - Helper function to convert TrackModel to Track entity
+# This centralizes the conversion logic and avoids code duplication.
+def _track_model_to_entity(track_model: Any) -> Any:
+    """Convert a TrackModel ORM object to a Track domain entity.
+
+    Args:
+        track_model: The TrackModel ORM object
+
+    Returns:
+        Track domain entity
+    """
+    from soulspot.domain.entities import Track
+    from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
+
+    return Track(
+        id=TrackId.from_string(track_model.id),
+        title=track_model.title,
+        artist_id=ArtistId.from_string(track_model.artist_id),
+        album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
+        track_number=track_model.track_number,
+        disc_number=track_model.disc_number,
+    )
+
+
 @router.post("/batch-rename/preview", response_model=BatchRenamePreviewResponse)
 async def preview_batch_rename(
     request: BatchRenamePreviewRequest,
@@ -974,18 +998,7 @@ async def preview_batch_rename(
         extension = current_path.rsplit(".", 1)[-1] if "." in current_path else "mp3"
 
         # Generate new filename using async method (uses DB templates)
-        # Create a minimal track-like object for the renaming service
-        from soulspot.domain.entities import Track
-        from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
-
-        track = Track(
-            id=TrackId.from_string(track_model.id),
-            title=track_model.title,
-            artist_id=ArtistId.from_string(track_model.artist_id),
-            album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
-            track_number=track_model.track_number,
-            disc_number=track_model.disc_number,
-        )
+        track = _track_model_to_entity(track_model)
 
         try:
             new_relative_path = await renaming_service.generate_filename_async(
@@ -1133,17 +1146,7 @@ async def execute_batch_rename(
             album = await album_repo.get_by_id(DomainAlbumId.from_string(track_model.album_id))
 
         # Create track entity for renaming service
-        from soulspot.domain.entities import Track
-        from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
-
-        track = Track(
-            id=TrackId.from_string(track_model.id),
-            title=track_model.title,
-            artist_id=ArtistId.from_string(track_model.artist_id),
-            album_id=AlbumId.from_string(track_model.album_id) if track_model.album_id else None,
-            track_number=track_model.track_number,
-            disc_number=track_model.disc_number,
-        )
+        track = _track_model_to_entity(track_model)
 
         # Generate new filename
         try:
