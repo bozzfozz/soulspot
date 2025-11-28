@@ -345,6 +345,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 artist_repository=ArtistRepository(session),
                 album_repository=AlbumRepository(session),
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
+                app_settings_service=app_settings_service,  # For dynamic naming templates
             )
             app.state.auto_import = auto_import_service
             auto_import_task = asyncio.create_task(auto_import_service.start())

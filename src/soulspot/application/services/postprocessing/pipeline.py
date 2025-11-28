@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from soulspot.application.services.postprocessing.artwork_service import ArtworkService
 from soulspot.application.services.postprocessing.id3_tagging_service import (
@@ -16,6 +17,9 @@ from soulspot.application.services.postprocessing.renaming_service import (
 from soulspot.config import Settings
 from soulspot.domain.entities import Track
 from soulspot.domain.ports import IAlbumRepository, IArtistRepository
+
+if TYPE_CHECKING:
+    from soulspot.application.services.app_settings_service import AppSettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +46,16 @@ class ProcessingResult:
 class PostProcessingPipeline:
     """Orchestrates all post-processing steps after download.
 
+    Hey future me - updated to support dynamic naming templates from DB!
+    If you pass app_settings_service, the renaming step will use DB templates
+    instead of static env var templates. This enables runtime-configurable
+    naming via the Settings UI.
+
     This pipeline:
     1. Downloads and embeds artwork
     2. Fetches and embeds lyrics
     3. Writes comprehensive ID3 tags
-    4. Renames file based on template
+    4. Renames file based on template (from DB if app_settings_service provided)
     5. Provides detailed error handling and logging
     """
 
@@ -59,6 +68,7 @@ class PostProcessingPipeline:
         lyrics_service: LyricsService | None = None,
         id3_tagging_service: ID3TaggingService | None = None,
         renaming_service: RenamingService | None = None,
+        app_settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize post-processing pipeline.
 
@@ -70,16 +80,22 @@ class PostProcessingPipeline:
             lyrics_service: Optional lyrics service (created if not provided)
             id3_tagging_service: Optional ID3 tagging service (created if not provided)
             renaming_service: Optional renaming service (created if not provided)
+            app_settings_service: Optional app settings service for dynamic naming templates
         """
         self._settings = settings
         self._artist_repository = artist_repository
         self._album_repository = album_repository
+        self._app_settings_service = app_settings_service
 
         # Initialize services
         self._artwork_service = artwork_service or ArtworkService(settings)
         self._lyrics_service = lyrics_service or LyricsService(settings)
         self._id3_tagging_service = id3_tagging_service or ID3TaggingService(settings)
         self._renaming_service = renaming_service or RenamingService(settings)
+
+        # Inject app_settings_service into renaming_service for dynamic templates
+        if app_settings_service:
+            self._renaming_service.set_app_settings_service(app_settings_service)
 
     # Hey future me: The post-processing orchestrator - runs ALL the steps in sequence
     # WHY sequential not parallel? Each step depends on previous (can't embed artwork until we have it)

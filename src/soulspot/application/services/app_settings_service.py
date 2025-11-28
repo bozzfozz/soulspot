@@ -569,3 +569,186 @@ class AppSettingsService:
                 "automation.duplicate_detection_interval_seconds", default=86400
             ),
         }
+
+    # =========================================================================
+    # LIBRARY NAMING SETTINGS
+    # =========================================================================
+    # Hey future me - these settings control how files/folders are named!
+    # Defaults match Lidarr's recommended format for compatibility.
+    # IMPORTANT: Only NEW downloads use these - existing files unchanged unless
+    # user triggers manual batch-rename.
+    #
+    # Available template variables (Lidarr-compatible):
+    # - {Artist Name}, {Artist CleanName}
+    # - {Album Title}, {Album CleanTitle}, {Album Type}, {Release Year}
+    # - {Track Title}, {Track CleanTitle}
+    # - {Track Number}, {Track Number:00} (with zero-padding)
+    # - {Medium}, {Medium:00} (disc number for multi-disc)
+    # =========================================================================
+
+    # Supported template variables for validation
+    NAMING_VARIABLES: set[str] = {
+        # Artist variables
+        "Artist Name",
+        "Artist CleanName",
+        # Album variables
+        "Album Title",
+        "Album CleanTitle",
+        "Album Type",
+        "Release Year",
+        # Track variables
+        "Track Title",
+        "Track CleanTitle",
+        "Track Number",
+        "Track Number:00",
+        # Multi-disc variables
+        "Medium",
+        "Medium:00",
+        # Legacy variables (for backward compatibility)
+        "artist",
+        "album",
+        "title",
+        "track",
+        "track:02d",
+        "year",
+        "disc",
+    }
+
+    def validate_naming_template(self, template: str) -> tuple[bool, list[str]]:
+        """Validate a naming template for invalid variables.
+
+        Checks that all {variable} placeholders in the template are in
+        the NAMING_VARIABLES set. Returns validation result and list of
+        invalid variables found.
+
+        Args:
+            template: Template string like "{Artist Name}/{Album Title}"
+
+        Returns:
+            Tuple of (is_valid, invalid_variables).
+            is_valid is True if all variables are valid.
+            invalid_variables is list of unknown variable names.
+
+        Example:
+            >>> validate_naming_template("{Artist Name} - {Invalid}")
+            (False, ["Invalid"])
+        """
+        import re
+
+        # Find all {variable} patterns, including those with :format specifiers
+        # Pattern matches {Var Name} or {var:format}
+        pattern = r"\{([^}]+)\}"
+        found_vars = re.findall(pattern, template)
+
+        invalid = []
+        for var in found_vars:
+            # Check if variable (with or without format spec) is valid
+            if var not in self.NAMING_VARIABLES:
+                # Also check base name without format spec (e.g., "track" from "track:02d")
+                base_var = var.split(":")[0]
+                if base_var not in self.NAMING_VARIABLES and var not in self.NAMING_VARIABLES:
+                    invalid.append(var)
+
+        return (len(invalid) == 0, invalid)
+
+    async def get_artist_folder_format(self) -> str:
+        """Get template for artist folder names.
+
+        Default: '{Artist Name}' - matches Lidarr standard.
+        """
+        return await self.get_string(
+            "naming.artist_folder_format", default="{Artist Name}"
+        ) or "{Artist Name}"
+
+    async def get_album_folder_format(self) -> str:
+        """Get template for album folder names.
+
+        Default: '{Album Title} ({Release Year})' - matches Lidarr standard.
+        """
+        return await self.get_string(
+            "naming.album_folder_format", default="{Album Title} ({Release Year})"
+        ) or "{Album Title} ({Release Year})"
+
+    async def get_standard_track_format(self) -> str:
+        """Get template for single-disc track filenames.
+
+        Default: '{Track Number:00} - {Track Title}' - matches Lidarr standard.
+        """
+        return await self.get_string(
+            "naming.standard_track_format", default="{Track Number:00} - {Track Title}"
+        ) or "{Track Number:00} - {Track Title}"
+
+    async def get_multi_disc_track_format(self) -> str:
+        """Get template for multi-disc track filenames.
+
+        Default: '{Medium:00}-{Track Number:00} - {Track Title}'
+        Adds disc number prefix for multi-disc albums.
+        """
+        return await self.get_string(
+            "naming.multi_disc_track_format",
+            default="{Medium:00}-{Track Number:00} - {Track Title}",
+        ) or "{Medium:00}-{Track Number:00} - {Track Title}"
+
+    async def is_rename_tracks_enabled(self) -> bool:
+        """Check if automatic file renaming on import is enabled.
+
+        Default: True - files are renamed according to template.
+        """
+        return await self.get_bool("naming.rename_tracks", default=True)
+
+    async def should_replace_illegal_characters(self) -> bool:
+        """Check if illegal filename characters should be replaced.
+
+        Default: True - characters like : ? * are replaced.
+        """
+        return await self.get_bool("naming.replace_illegal_characters", default=True)
+
+    async def should_create_artist_folder(self) -> bool:
+        """Check if artist folders should be created automatically.
+
+        Default: True - creates {Artist Name}/ folder if missing.
+        """
+        return await self.get_bool("naming.create_artist_folder", default=True)
+
+    async def should_create_album_folder(self) -> bool:
+        """Check if album folders should be created automatically.
+
+        Default: True - creates {Album Title}/ subfolder if missing.
+        """
+        return await self.get_bool("naming.create_album_folder", default=True)
+
+    async def get_colon_replacement(self) -> str:
+        """Get replacement string for colon character in filenames.
+
+        Default: ' -' (space dash) - Lidarr standard.
+        """
+        return await self.get_string("naming.colon_replacement", default=" -") or " -"
+
+    async def get_slash_replacement(self) -> str:
+        """Get replacement string for slash character in filenames.
+
+        Default: '-' (dash).
+        """
+        return await self.get_string("naming.slash_replacement", default="-") or "-"
+
+    async def get_naming_settings_summary(self) -> dict[str, Any]:
+        """Get summary of all naming settings for UI display.
+
+        Returns a dict with all naming settings for the Settings page.
+        Includes template formats and behavior toggles.
+        """
+        return {
+            # Template formats
+            "artist_folder_format": await self.get_artist_folder_format(),
+            "album_folder_format": await self.get_album_folder_format(),
+            "standard_track_format": await self.get_standard_track_format(),
+            "multi_disc_track_format": await self.get_multi_disc_track_format(),
+            # Behavior toggles
+            "rename_tracks": await self.is_rename_tracks_enabled(),
+            "replace_illegal_characters": await self.should_replace_illegal_characters(),
+            "create_artist_folder": await self.should_create_artist_folder(),
+            "create_album_folder": await self.should_create_album_folder(),
+            # Character replacements
+            "colon_replacement": await self.get_colon_replacement(),
+            "slash_replacement": await self.get_slash_replacement(),
+        }

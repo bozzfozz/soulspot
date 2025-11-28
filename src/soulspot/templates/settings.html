@@ -50,6 +50,10 @@
             <i class="fa-solid fa-download"></i>
             Downloads
         </button>
+        <button class="tab-btn" data-tab="library" onclick="switchTab('library')">
+            <i class="fa-solid fa-folder-tree"></i>
+            Library
+        </button>
         <button class="tab-btn" data-tab="appearance" onclick="switchTab('appearance')">
             <i class="fa-solid fa-palette"></i>
             Appearance
@@ -481,6 +485,259 @@
             <div class="alert alert-info" style="margin-top: var(--space-6);">
                 <i class="fa-solid fa-info-circle"></i>
                 <span><strong>Theme Persistence:</strong> Your theme preference is saved in your browser and will be remembered on future visits.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Library Naming Settings Tab -->
+    <div id="tab-library" class="tab-content" style="display: none;">
+        <div class="card" style="padding: var(--space-6);">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-6); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                <div>
+                    <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-1);">
+                        <i class="fa-solid fa-folder-tree" style="color: var(--accent-primary); margin-right: var(--space-2);"></i>
+                        Library File Naming
+                    </h2>
+                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Configure how files and folders are named. Compatible with Lidarr.</p>
+                </div>
+            </div>
+
+            <!-- Lidarr Compatibility Notice -->
+            <div class="alert alert-info" style="margin-bottom: var(--space-6);">
+                <i class="fa-solid fa-info-circle"></i>
+                <span><strong>Lidarr Compatible:</strong> Default settings match Lidarr's naming format for seamless coexistence on shared libraries.</span>
+            </div>
+
+            <!-- Template Formats Section -->
+            <div style="margin-bottom: var(--space-8);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-tags" style="color: #1DB954;"></i>
+                    Naming Templates
+                </h3>
+                
+                <div class="form-stack">
+                    <div class="form-group">
+                        <label class="form-label" for="naming-artist-folder">Artist Folder Format</label>
+                        <input type="text" id="naming-artist-folder" class="form-input" value="{Artist Name}" 
+                               oninput="validateAndPreviewNaming()">
+                        <p class="form-helper">Template for artist folder names. Variables: <code>{Artist Name}</code>, <code>{Artist CleanName}</code></p>
+                        <div id="naming-artist-folder-error" class="validation-error" style="display: none;"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="naming-album-folder">Album Folder Format</label>
+                        <input type="text" id="naming-album-folder" class="form-input" value="{Album Title} ({Release Year})"
+                               oninput="validateAndPreviewNaming()">
+                        <p class="form-helper">Template for album folder names. Variables: <code>{Album Title}</code>, <code>{Album CleanTitle}</code>, <code>{Album Type}</code>, <code>{Release Year}</code></p>
+                        <div id="naming-album-folder-error" class="validation-error" style="display: none;"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="naming-track-format">Track Filename Format</label>
+                        <input type="text" id="naming-track-format" class="form-input" value="{Track Number:00} - {Track Title}"
+                               oninput="validateAndPreviewNaming()">
+                        <p class="form-helper">Template for track filenames. Variables: <code>{Track Number}</code>, <code>{Track Number:00}</code>, <code>{Track Title}</code></p>
+                        <div id="naming-track-format-error" class="validation-error" style="display: none;"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="naming-multi-disc-format">Multi-Disc Track Format</label>
+                        <input type="text" id="naming-multi-disc-format" class="form-input" value="{Medium:00}-{Track Number:00} - {Track Title}"
+                               oninput="validateAndPreviewNaming()">
+                        <p class="form-helper">Template for multi-disc albums. Adds disc number prefix. Variables: <code>{Medium}</code>, <code>{Medium:00}</code></p>
+                        <div id="naming-multi-disc-format-error" class="validation-error" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Preview Section -->
+            <div style="margin-bottom: var(--space-8); padding: var(--space-5); background: var(--bg-secondary); border-radius: var(--radius-lg); border: 1px solid var(--border-primary);">
+                <h4 style="font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-eye" style="color: var(--accent-secondary);"></i>
+                    Live Preview
+                </h4>
+                <div id="naming-preview" style="font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--text-primary); word-break: break-all;">
+                    <div style="color: var(--text-muted); margin-bottom: var(--space-2);">/mnt/music/</div>
+                    <div id="preview-artist" style="padding-left: var(--space-4);">Pink Floyd/</div>
+                    <div id="preview-album" style="padding-left: var(--space-8);">The Dark Side of the Moon (1973)/</div>
+                    <div id="preview-track" style="padding-left: var(--space-12); color: var(--accent-primary);">01 - Speak to Me.flac</div>
+                </div>
+            </div>
+
+            <!-- Behavior Options Section -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-sliders" style="color: #7c3aed;"></i>
+                    Behavior Options
+                </h3>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #1DB954, #169c46);">
+                            <i class="fa-solid fa-file-signature"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Rename Tracks on Import</div>
+                            <div class="sync-option-desc">Automatically rename files according to templates</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="naming-rename-tracks" checked onchange="toggleNamingSetting('rename_tracks')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Replace Illegal Characters</div>
+                            <div class="sync-option-desc">Replace characters not allowed in filenames (: ? * " < > |)</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="naming-replace-illegal" checked onchange="toggleNamingSetting('replace_illegal_characters')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            <i class="fa-solid fa-folder-plus"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Create Artist Folders</div>
+                            <div class="sync-option-desc">Automatically create artist folder if it doesn't exist</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="naming-create-artist-folder" checked onchange="toggleNamingSetting('create_artist_folder')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="sync-option-card">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #ec4899, #db2777);">
+                            <i class="fa-solid fa-compact-disc"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Create Album Folders</div>
+                            <div class="sync-option-desc">Automatically create album folder if it doesn't exist</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="naming-create-album-folder" checked onchange="toggleNamingSetting('create_album_folder')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Character Replacements Section -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-text-slash" style="color: #ef4444;"></i>
+                    Character Replacements
+                </h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="naming-colon-replacement">Colon (:) Replacement</label>
+                        <input type="text" id="naming-colon-replacement" class="form-input" value=" -" style="max-width: 150px;">
+                        <p class="form-helper">Replace : with this string. Lidarr uses " -"</p>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="naming-slash-replacement">Slash (/) Replacement</label>
+                        <input type="text" id="naming-slash-replacement" class="form-input" value="-" style="max-width: 150px;">
+                        <p class="form-helper">Replace / with this string</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Available Variables Reference -->
+            <div style="margin-bottom: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <details style="cursor: pointer;">
+                    <summary style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="fa-solid fa-code" style="color: #06b6d4;"></i>
+                        Available Variables Reference
+                    </summary>
+                    <div style="padding: var(--space-4); background: var(--bg-secondary); border-radius: var(--radius-md); margin-top: var(--space-3);">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--space-4);">
+                            <div>
+                                <h5 style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: #1DB954;">Artist</h5>
+                                <ul style="font-size: var(--font-size-sm); color: var(--text-muted); list-style: none; padding: 0;">
+                                    <li><code>{Artist Name}</code> - Full artist name</li>
+                                    <li><code>{Artist CleanName}</code> - Sanitized name</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: #7c3aed;">Album</h5>
+                                <ul style="font-size: var(--font-size-sm); color: var(--text-muted); list-style: none; padding: 0;">
+                                    <li><code>{Album Title}</code> - Full album title</li>
+                                    <li><code>{Album CleanTitle}</code> - Sanitized title</li>
+                                    <li><code>{Album Type}</code> - Album/Single/EP</li>
+                                    <li><code>{Release Year}</code> - Release year</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: #f59e0b;">Track</h5>
+                                <ul style="font-size: var(--font-size-sm); color: var(--text-muted); list-style: none; padding: 0;">
+                                    <li><code>{Track Title}</code> - Full track title</li>
+                                    <li><code>{Track CleanTitle}</code> - Sanitized title</li>
+                                    <li><code>{Track Number}</code> - Track number</li>
+                                    <li><code>{Track Number:00}</code> - Zero-padded</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h5 style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-2); color: #06b6d4;">Disc</h5>
+                                <ul style="font-size: var(--font-size-sm); color: var(--text-muted); list-style: none; padding: 0;">
+                                    <li><code>{Medium}</code> - Disc number</li>
+                                    <li><code>{Medium:00}</code> - Zero-padded disc</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Batch Rename Section -->
+            <div style="padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #ec4899;"></i>
+                    Batch Rename (Manual)
+                </h3>
+                
+                <div class="alert alert-warning" style="margin-bottom: var(--space-4);">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span><strong>Note:</strong> Only NEW downloads are renamed automatically. Use batch rename to apply templates to existing files.</span>
+                </div>
+                
+                <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
+                    <button type="button" class="btn btn-outline" onclick="previewBatchRename()">
+                        <i class="fa-solid fa-eye"></i>
+                        Preview Changes
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="startBatchRename()" disabled id="btn-batch-rename">
+                        <i class="fa-solid fa-file-signature"></i>
+                        Rename Library Files
+                    </button>
+                </div>
+                
+                <div id="batch-rename-preview" style="display: none; margin-top: var(--space-4); padding: var(--space-4); background: var(--bg-secondary); border-radius: var(--radius-md); max-height: 300px; overflow-y: auto;">
+                    <!-- Preview results will be shown here -->
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-primary" onclick="saveNamingSettings()">
+                    <i class="fa-solid fa-save"></i>
+                    Save Library Settings
+                </button>
             </div>
         </div>
     </div>
@@ -1018,6 +1275,15 @@
     .input-suffix {
         font-size: var(--font-size-sm);
         color: var(--text-muted);
+    }
+    /* Validation Error */
+    .validation-error {
+        font-size: var(--font-size-xs);
+        color: #ef4444;
+        margin-top: var(--space-1);
+        padding: var(--space-2);
+        background: rgba(239, 68, 68, 0.1);
+        border-radius: var(--radius-sm);
     }
 </style>
 <script>
@@ -1578,6 +1844,370 @@
         loadSettings();
         loadSpotifySyncSettings();
         loadAutomationSettings();
+        loadNamingSettings();
     });
+
+    // =====================================================
+    // Library Naming Settings Functions
+    // =====================================================
+    
+    // Hey future me – diese Funktion lädt die Naming Settings aus der DB.
+    // Die API gibt alle naming.* Settings als JSON zurück.
+    // Wichtig: Die Felder sind snake_case (artist_folder_format) nicht camelCase!
+    async function loadNamingSettings() {
+        try {
+            const response = await fetch('/api/settings/naming');
+            if (!response.ok) throw new Error('Failed to load naming settings');
+            
+            const settings = await response.json();
+            
+            // Template formats
+            const artistFolder = document.getElementById('naming-artist-folder');
+            if (artistFolder) artistFolder.value = settings.artist_folder_format || '{Artist Name}';
+            
+            const albumFolder = document.getElementById('naming-album-folder');
+            if (albumFolder) albumFolder.value = settings.album_folder_format || '{Album Title} ({Release Year})';
+            
+            const trackFormat = document.getElementById('naming-track-format');
+            if (trackFormat) trackFormat.value = settings.standard_track_format || '{Track Number:00} - {Track Title}';
+            
+            const multiDiscFormat = document.getElementById('naming-multi-disc-format');
+            if (multiDiscFormat) multiDiscFormat.value = settings.multi_disc_track_format || '{Medium:00}-{Track Number:00} - {Track Title}';
+            
+            // Behavior toggles
+            const renameTracks = document.getElementById('naming-rename-tracks');
+            if (renameTracks) renameTracks.checked = settings.rename_tracks ?? true;
+            
+            const replaceIllegal = document.getElementById('naming-replace-illegal');
+            if (replaceIllegal) replaceIllegal.checked = settings.replace_illegal_characters ?? true;
+            
+            const createArtistFolder = document.getElementById('naming-create-artist-folder');
+            if (createArtistFolder) createArtistFolder.checked = settings.create_artist_folder ?? true;
+            
+            const createAlbumFolder = document.getElementById('naming-create-album-folder');
+            if (createAlbumFolder) createAlbumFolder.checked = settings.create_album_folder ?? true;
+            
+            // Character replacements
+            const colonReplacement = document.getElementById('naming-colon-replacement');
+            if (colonReplacement) colonReplacement.value = settings.colon_replacement || ' -';
+            
+            const slashReplacement = document.getElementById('naming-slash-replacement');
+            if (slashReplacement) slashReplacement.value = settings.slash_replacement || '-';
+            
+            // Update preview
+            updateNamingPreview();
+            
+        } catch (error) {
+            console.error('Failed to load naming settings:', error);
+        }
+    }
+    
+    // Hey future me – diese Funktion speichert alle Naming Settings auf einmal.
+    // Die API validiert die Templates und gibt 400 zurück bei ungültigen Variablen.
+    async function saveNamingSettings() {
+        const settings = {
+            artist_folder_format: document.getElementById('naming-artist-folder')?.value || '{Artist Name}',
+            album_folder_format: document.getElementById('naming-album-folder')?.value || '{Album Title} ({Release Year})',
+            standard_track_format: document.getElementById('naming-track-format')?.value || '{Track Number:00} - {Track Title}',
+            multi_disc_track_format: document.getElementById('naming-multi-disc-format')?.value || '{Medium:00}-{Track Number:00} - {Track Title}',
+            rename_tracks: document.getElementById('naming-rename-tracks')?.checked ?? true,
+            replace_illegal_characters: document.getElementById('naming-replace-illegal')?.checked ?? true,
+            create_artist_folder: document.getElementById('naming-create-artist-folder')?.checked ?? true,
+            create_album_folder: document.getElementById('naming-create-album-folder')?.checked ?? true,
+            colon_replacement: document.getElementById('naming-colon-replacement')?.value || ' -',
+            slash_replacement: document.getElementById('naming-slash-replacement')?.value || '-',
+        };
+        
+        try {
+            const response = await fetch('/api/settings/naming', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to save naming settings');
+            }
+            
+            SoulSpot.showNotification('Library settings saved', 'success');
+        } catch (error) {
+            console.error('Failed to save naming settings:', error);
+            SoulSpot.showNotification(error.message || 'Failed to save settings', 'error');
+        }
+    }
+    
+    // Hey future me – Einzelne Boolean Settings toggeln ohne alle zu speichern.
+    // Diese Methode verwendet PATCH statt PUT für einzelne Änderungen.
+    async function toggleNamingSetting(settingName) {
+        // For naming settings, we just update the preview and let the user save manually
+        // This is different from Spotify settings which auto-save on toggle
+        updateNamingPreview();
+    }
+    
+    // Hey future me – Validiert ein einzelnes Template und zeigt Fehler an.
+    // Ruft die /api/settings/naming/validate API auf.
+    // Bei Fehler wird die Fehlermeldung unter dem Input angezeigt.
+    async function validateNamingTemplate(template, fieldId) {
+        const errorEl = document.getElementById(`${fieldId}-error`);
+        if (!errorEl) return true;
+        
+        try {
+            const response = await fetch('/api/settings/naming/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ template })
+            });
+            
+            const result = await response.json();
+            
+            if (result.valid) {
+                errorEl.style.display = 'none';
+                return true;
+            } else {
+                errorEl.textContent = `Unknown variables: ${result.invalid_variables.join(', ')}`;
+                errorEl.style.display = 'block';
+                return false;
+            }
+        } catch (error) {
+            console.error('Validation error:', error);
+            return true; // Don't block on validation errors
+        }
+    }
+    
+    // Hey future me – Validiert alle Templates und aktualisiert die Preview.
+    // Wird bei jedem Input-Event aufgerufen (debounced wäre besser!).
+    let namingValidationTimeout;
+    async function validateAndPreviewNaming() {
+        // Debounce validation to avoid too many API calls
+        clearTimeout(namingValidationTimeout);
+        namingValidationTimeout = setTimeout(async () => {
+            const artistFolder = document.getElementById('naming-artist-folder')?.value;
+            const albumFolder = document.getElementById('naming-album-folder')?.value;
+            const trackFormat = document.getElementById('naming-track-format')?.value;
+            const multiDiscFormat = document.getElementById('naming-multi-disc-format')?.value;
+            
+            // Validate all templates
+            await Promise.all([
+                validateNamingTemplate(artistFolder, 'naming-artist-folder'),
+                validateNamingTemplate(albumFolder, 'naming-album-folder'),
+                validateNamingTemplate(trackFormat, 'naming-track-format'),
+                validateNamingTemplate(multiDiscFormat, 'naming-multi-disc-format'),
+            ]);
+            
+            // Update preview
+            updateNamingPreview();
+        }, 300);
+    }
+    
+    // Hey future me – Aktualisiert die Live Preview mit Sample-Daten.
+    // Ersetzt die Variablen durch Beispielwerte (Pink Floyd, The Dark Side of the Moon, etc.)
+    function updateNamingPreview() {
+        const sampleData = {
+            'Artist Name': 'Pink Floyd',
+            'Artist CleanName': 'Pink Floyd',
+            'Album Title': 'The Dark Side of the Moon',
+            'Album CleanTitle': 'The Dark Side of the Moon',
+            'Album Type': 'Album',
+            'Release Year': '1973',
+            'Track Title': 'Speak to Me',
+            'Track CleanTitle': 'Speak to Me',
+            'Track Number': '1',
+            'Track Number:00': '01',
+            'Medium': '1',
+            'Medium:00': '01',
+            // Legacy variables
+            'artist': 'Pink Floyd',
+            'album': 'The Dark Side of the Moon',
+            'title': 'Speak to Me',
+            'track': '1',
+            'track:02d': '01',
+            'year': '1973',
+            'disc': '1',
+        };
+        
+        function renderTemplate(template) {
+            let result = template;
+            for (const [key, value] of Object.entries(sampleData)) {
+                result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+            }
+            return result;
+        }
+        
+        const artistFolder = document.getElementById('naming-artist-folder')?.value || '{Artist Name}';
+        const albumFolder = document.getElementById('naming-album-folder')?.value || '{Album Title} ({Release Year})';
+        const trackFormat = document.getElementById('naming-track-format')?.value || '{Track Number:00} - {Track Title}';
+        
+        const previewArtist = document.getElementById('preview-artist');
+        const previewAlbum = document.getElementById('preview-album');
+        const previewTrack = document.getElementById('preview-track');
+        
+        if (previewArtist) previewArtist.textContent = renderTemplate(artistFolder) + '/';
+        if (previewAlbum) previewAlbum.textContent = renderTemplate(albumFolder) + '/';
+        if (previewTrack) previewTrack.textContent = renderTemplate(trackFormat) + '.flac';
+    }
+    
+    // Hey future me – Preview für Batch Rename.
+    // Zeigt an welche Dateien umbenannt würden (Dry Run).
+    // Ruft GET /api/library/batch-rename/preview auf und zeigt Ergebnisse in Tabelle.
+    async function previewBatchRename() {
+        const previewContainer = document.getElementById('batch-rename-preview');
+        const batchRenameBtn = document.getElementById('btn-batch-rename');
+        
+        if (!previewContainer) return;
+        
+        previewContainer.innerHTML = '<div style="text-align: center; padding: var(--space-4);"><i class="fa-solid fa-spinner fa-spin"></i> Scanning library...</div>';
+        previewContainer.style.display = 'block';
+        
+        try {
+            const response = await fetch('/api/library/batch-rename/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit: 100 })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.total_files === 0) {
+                previewContainer.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fa-solid fa-info-circle"></i>
+                        <span>No files found in library or rename_tracks is disabled.</span>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (data.files_to_rename === 0) {
+                previewContainer.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fa-solid fa-check-circle"></i>
+                        <span>All ${data.total_files} files already match the naming template!</span>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Build preview table
+            let html = `
+                <div class="alert alert-info" style="margin-bottom: var(--space-3);">
+                    <i class="fa-solid fa-info-circle"></i>
+                    <span><strong>${data.files_to_rename}</strong> of ${data.total_files} files would be renamed.</span>
+                </div>
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-default); border-radius: var(--radius-md);">
+                    <table class="table" style="margin: 0;">
+                        <thead style="position: sticky; top: 0; background: var(--bg-secondary);">
+                            <tr>
+                                <th style="width: 50%;">Current Path</th>
+                                <th style="width: 50%;">New Path</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const item of data.preview) {
+                if (!item.will_change) continue;
+                
+                const currentPath = item.current_path.split('/').slice(-3).join('/');
+                const newPath = item.new_path.split('/').slice(-3).join('/');
+                
+                html += `
+                    <tr>
+                        <td style="font-size: var(--font-size-sm); word-break: break-all;">${currentPath}</td>
+                        <td style="font-size: var(--font-size-sm); word-break: break-all; color: var(--text-success);">${newPath}</td>
+                    </tr>
+                `;
+            }
+            
+            html += '</tbody></table></div>';
+            previewContainer.innerHTML = html;
+            
+            // Enable the batch rename button after preview
+            if (batchRenameBtn) batchRenameBtn.disabled = false;
+            
+        } catch (error) {
+            console.error('Failed to preview batch rename:', error);
+            previewContainer.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Failed to generate preview: ${error.message}</span>
+                </div>
+            `;
+        }
+    }
+    
+    // Hey future me – Startet den Batch Rename Prozess.
+    // ACHTUNG: Das ist eine destruktive Operation! Dateien werden umbenannt.
+    // Ruft POST /api/library/batch-rename mit dry_run=false auf.
+    async function startBatchRename() {
+        if (!confirm('Are you sure you want to rename library files? This cannot be undone.\n\nMake sure Lidarr is not scanning at the same time!')) {
+            return;
+        }
+        
+        const batchRenameBtn = document.getElementById('btn-batch-rename');
+        const previewContainer = document.getElementById('batch-rename-preview');
+        
+        if (batchRenameBtn) {
+            batchRenameBtn.disabled = true;
+            batchRenameBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Renaming...';
+        }
+        
+        try {
+            const response = await fetch('/api/library/batch-rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dry_run: false })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Show results
+            if (previewContainer) {
+                if (data.failed > 0) {
+                    previewContainer.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Batch rename completed with errors: <strong>${data.successful}</strong> successful, <strong>${data.failed}</strong> failed.</span>
+                        </div>
+                    `;
+                } else {
+                    previewContainer.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <span>Batch rename completed successfully! <strong>${data.successful}</strong> files renamed.</span>
+                        </div>
+                    `;
+                }
+            }
+            
+            SoulSpot.showNotification(`Batch rename: ${data.successful} files renamed`, data.failed > 0 ? 'warning' : 'success');
+            
+        } catch (error) {
+            console.error('Failed to start batch rename:', error);
+            SoulSpot.showNotification('Failed to start batch rename: ' + error.message, 'error');
+            
+            if (previewContainer) {
+                previewContainer.innerHTML = `
+                    <div class="alert alert-error">
+                        <i class="fa-solid fa-times-circle"></i>
+                        <span>Batch rename failed: ${error.message}</span>
+                    </div>
+                `;
+            }
+        } finally {
+            if (batchRenameBtn) {
+                batchRenameBtn.disabled = true;
+                batchRenameBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Rename Files';
+            }
+        }
+    }
 </script>
 {% endblock %}

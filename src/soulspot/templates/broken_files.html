@@ -1,0 +1,338 @@
+{# Hey future me - Broken Files Review Page!
+   Zeigt alle beschädigten Dateien mit Option zum Re-Download.
+   Beschädigte Dateien sind solche die nicht abspielbar sind (corrupt, truncated, etc).
+   API: GET /api/library/broken-files liefert die Liste.
+   Re-Download: POST /api/library/re-download-broken queued alle kaputten Dateien. #}
+
+{% extends "base.html" %}
+
+{% block title %}Broken Files - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
+    <div style="display: flex; align-items: center; gap: var(--space-4);">
+        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-triangle-exclamation" style="color: white; font-size: 1.25rem;"></i>
+        </div>
+        <div>
+            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Broken Files</h1>
+            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Review and re-download corrupted or unplayable files</p>
+        </div>
+    </div>
+    <div style="display: flex; gap: var(--space-3);">
+        <button class="btn btn-primary" id="redownload-all-btn" onclick="redownloadAll()" disabled>
+            <i class="fa-solid fa-rotate"></i>
+            Re-download All
+        </button>
+        <a href="/library" class="btn btn-ghost">
+            <i class="fa-solid fa-arrow-left"></i>
+            Back to Library
+        </a>
+    </div>
+</div>
+
+<!-- Stats Bar -->
+<div class="stats-bar" id="broken-stats">
+    <div class="stat-item">
+        <span class="stat-number" id="stat-total">-</span>
+        <span class="stat-label">Broken Files</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-size">-</span>
+        <span class="stat-label">Total Size</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-queued">-</span>
+        <span class="stat-label">Queued for Re-download</span>
+    </div>
+</div>
+
+<!-- Broken Files List -->
+<div id="broken-files-container" class="card" style="padding: 0; overflow: hidden;">
+    <div class="loading-state">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--text-muted);"></i>
+        <p>Loading broken files...</p>
+    </div>
+</div>
+
+<!-- Empty State Template -->
+<template id="empty-state">
+    <div class="empty-state">
+        <div class="empty-icon" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;">
+            <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <h3>No Broken Files</h3>
+        <p>Your library is healthy! All files are playable.</p>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+    .stats-bar {
+        display: flex;
+        gap: var(--space-6);
+        padding: var(--space-4) var(--space-6);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-primary);
+        margin-bottom: var(--space-6);
+    }
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .stat-number {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+    }
+    .stat-label {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+    }
+
+    .broken-file-row {
+        display: grid;
+        grid-template-columns: 1fr 180px 180px 100px;
+        gap: var(--space-4);
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border-primary);
+        align-items: center;
+    }
+    .broken-file-row:last-child {
+        border-bottom: none;
+    }
+    .broken-file-row:hover {
+        background: var(--bg-tertiary);
+    }
+    .file-info {
+        overflow: hidden;
+    }
+    .file-title {
+        font-weight: var(--font-weight-semibold);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .file-path {
+        font-size: var(--font-size-xs);
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .file-artist {
+        color: var(--text-secondary);
+        font-size: var(--font-size-sm);
+    }
+    .file-error {
+        font-size: var(--font-size-sm);
+        color: #ef4444;
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+    .file-error i {
+        font-size: var(--font-size-xs);
+    }
+    .file-size {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        text-align: right;
+    }
+
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: var(--space-12);
+        color: var(--text-muted);
+    }
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto var(--space-4);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+    }
+    .empty-state h3 {
+        font-size: var(--font-size-xl);
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+
+    .table-header {
+        display: grid;
+        grid-template-columns: 1fr 180px 180px 100px;
+        gap: var(--space-4);
+        padding: var(--space-3) var(--space-4);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-primary);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-muted);
+    }
+</style>
+
+<script>
+// Hey future me - loads broken files from API and renders them.
+// Uses /api/library/broken-files for the list.
+
+let brokenFiles = [];
+
+async function loadBrokenFiles() {
+    const container = document.getElementById('broken-files-container');
+    
+    try {
+        const response = await fetch('/api/library/broken-files');
+        const data = await response.json();
+        
+        brokenFiles = data.broken_files || [];
+        
+        // Update stats
+        document.getElementById('stat-total').textContent = brokenFiles.length;
+        const totalSize = brokenFiles.reduce((sum, f) => sum + (f.file_size || 0), 0);
+        document.getElementById('stat-size').textContent = formatBytes(totalSize);
+        
+        // Enable re-download button if there are broken files
+        const btn = document.getElementById('redownload-all-btn');
+        btn.disabled = brokenFiles.length === 0;
+        
+        // Load summary for queued count
+        await loadSummary();
+        
+        // Render files
+        renderBrokenFiles(brokenFiles);
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                </div>
+                <h3>Error Loading Files</h3>
+                <p>${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+async function loadSummary() {
+    try {
+        const response = await fetch('/api/library/broken-files-summary');
+        const data = await response.json();
+        document.getElementById('stat-queued').textContent = data.queued_count || 0;
+    } catch (e) {
+        document.getElementById('stat-queued').textContent = '0';
+    }
+}
+
+function renderBrokenFiles(files) {
+    const container = document.getElementById('broken-files-container');
+    
+    if (!files || files.length === 0) {
+        const template = document.getElementById('empty-state');
+        container.innerHTML = template.innerHTML;
+        return;
+    }
+    
+    let html = `
+        <div class="table-header">
+            <span>Track</span>
+            <span>Artist</span>
+            <span>Error</span>
+            <span style="text-align: right;">Size</span>
+        </div>
+    `;
+    
+    for (const file of files) {
+        html += `
+            <div class="broken-file-row" data-track-id="${escapeHtml(file.id || '')}">
+                <div class="file-info">
+                    <div class="file-title">${escapeHtml(file.title || 'Unknown')}</div>
+                    <div class="file-path" title="${escapeHtml(file.file_path || '')}">${escapeHtml(file.file_path || 'No path')}</div>
+                </div>
+                <div class="file-artist">${escapeHtml(file.artist || 'Unknown Artist')}</div>
+                <div class="file-error">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                    ${escapeHtml(file.error_reason || 'Unknown error')}
+                </div>
+                <div class="file-size">${formatBytes(file.file_size || 0)}</div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+async function redownloadAll() {
+    const btn = document.getElementById('redownload-all-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Queuing...';
+    
+    try {
+        const response = await fetch('/api/library/re-download-broken', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority: 5 })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast(`Queued ${data.queued_count} files for re-download`, 'success');
+            await loadSummary();
+        } else {
+            showToast(data.detail || 'Failed to queue downloads', 'error');
+        }
+    } catch (error) {
+        showToast('Network error', 'error');
+    } finally {
+        btn.disabled = brokenFiles.length === 0;
+        btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Re-download All';
+    }
+}
+
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: var(--space-3) var(--space-5);
+        border-radius: var(--radius-lg);
+        background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        font-weight: var(--font-weight-medium);
+        z-index: 1000;
+        animation: fadeIn 0.2s ease-out;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Load on page ready
+document.addEventListener('DOMContentLoaded', loadBrokenFiles);
+</script>
+{% endblock %}

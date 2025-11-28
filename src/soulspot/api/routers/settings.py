@@ -971,3 +971,392 @@ async def patch_automation_setting(
     await db.commit()
 
     return {"message": "Setting updated", "updated": updated}
+
+
+# =============================================================================
+# LIBRARY NAMING SETTINGS
+# =============================================================================
+# Hey future me – diese Settings kontrollieren wie Dateien und Ordner benannt werden!
+# WICHTIG: Diese Settings müssen mit Lidarr kompatibel sein, da beide Tools auf
+# dieselbe Music Library zugreifen. Defaults sind Lidarr-Standard.
+#
+# Nur NEUE Downloads werden automatisch benannt. Bestehende Dateien bleiben
+# unverändert, es sei denn User löst manuellen Batch-Rename aus.
+# =============================================================================
+
+
+class NamingSettings(BaseModel):
+    """Library naming configuration for files and folders.
+
+    These settings control how files and folders are named when importing
+    music. Templates support variables like {Artist Name}, {Album Title}, etc.
+
+    Defaults match Lidarr's recommended format for compatibility.
+    """
+
+    # Template formats
+    artist_folder_format: str = Field(
+        default="{Artist Name}",
+        description="Template for artist folder names",
+        examples=["{Artist Name}", "{Artist CleanName}"],
+    )
+    album_folder_format: str = Field(
+        default="{Album Title} ({Release Year})",
+        description="Template for album folder names",
+        examples=["{Album Title} ({Release Year})", "{Album Title}"],
+    )
+    standard_track_format: str = Field(
+        default="{Track Number:00} - {Track Title}",
+        description="Template for single-disc track filenames",
+        examples=["{Track Number:00} - {Track Title}", "{track:02d} {title}"],
+    )
+    multi_disc_track_format: str = Field(
+        default="{Medium:00}-{Track Number:00} - {Track Title}",
+        description="Template for multi-disc track filenames",
+        examples=["{Medium:00}-{Track Number:00} - {Track Title}"],
+    )
+
+    # Behavior toggles
+    rename_tracks: bool = Field(
+        default=True,
+        description="Enable automatic file renaming on import",
+    )
+    replace_illegal_characters: bool = Field(
+        default=True,
+        description="Replace characters not allowed in filenames",
+    )
+    create_artist_folder: bool = Field(
+        default=True,
+        description="Create artist folder if it doesn't exist",
+    )
+    create_album_folder: bool = Field(
+        default=True,
+        description="Create album folder if it doesn't exist",
+    )
+
+    # Character replacements
+    colon_replacement: str = Field(
+        default=" -",
+        description="Replacement for colon character",
+        max_length=10,
+    )
+    slash_replacement: str = Field(
+        default="-",
+        description="Replacement for slash character",
+        max_length=10,
+    )
+
+
+class NamingValidationRequest(BaseModel):
+    """Request to validate a naming template."""
+
+    template: str = Field(description="Template string to validate")
+
+
+class NamingValidationResponse(BaseModel):
+    """Response from template validation."""
+
+    valid: bool = Field(description="Whether template is valid")
+    invalid_variables: list[str] = Field(
+        default_factory=list,
+        description="List of invalid variables found",
+    )
+    preview: str | None = Field(
+        default=None,
+        description="Preview of rendered template (if valid)",
+    )
+
+
+class NamingPreviewRequest(BaseModel):
+    """Request to preview naming with sample data."""
+
+    artist_folder_format: str = Field(default="{Artist Name}")
+    album_folder_format: str = Field(default="{Album Title} ({Release Year})")
+    standard_track_format: str = Field(default="{Track Number:00} - {Track Title}")
+
+
+class NamingPreviewResponse(BaseModel):
+    """Response with preview path."""
+
+    full_path: str = Field(description="Full rendered path")
+    artist_folder: str = Field(description="Rendered artist folder name")
+    album_folder: str = Field(description="Rendered album folder name")
+    track_filename: str = Field(description="Rendered track filename")
+
+
+@router.get("/naming")
+async def get_naming_settings(
+    db: AsyncSession = Depends(get_db),
+) -> NamingSettings:
+    """Get library naming settings.
+
+    Returns current file/folder naming configuration from database.
+    These settings determine how imported music is organized.
+
+    Returns:
+        Current naming settings
+    """
+    settings_service = AppSettingsService(db)
+    summary = await settings_service.get_naming_settings_summary()
+
+    return NamingSettings(**summary)
+
+
+@router.put("/naming")
+async def update_naming_settings(
+    settings_update: NamingSettings,
+    db: AsyncSession = Depends(get_db),
+) -> NamingSettings:
+    """Update library naming settings.
+
+    These changes take effect immediately for NEW imports.
+    Existing files are NOT renamed automatically.
+
+    Args:
+        settings_update: New settings values
+
+    Returns:
+        Updated settings
+    """
+    settings_service = AppSettingsService(db)
+
+    # Validate templates before saving
+    for template_field in [
+        "artist_folder_format",
+        "album_folder_format",
+        "standard_track_format",
+        "multi_disc_track_format",
+    ]:
+        template_value = getattr(settings_update, template_field)
+        is_valid, invalid_vars = settings_service.validate_naming_template(
+            template_value
+        )
+        if not is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid template for {template_field}: unknown variables {invalid_vars}",
+            )
+
+    # Update each setting
+    await settings_service.set(
+        "naming.artist_folder_format",
+        settings_update.artist_folder_format,
+        value_type="string",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.album_folder_format",
+        settings_update.album_folder_format,
+        value_type="string",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.standard_track_format",
+        settings_update.standard_track_format,
+        value_type="string",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.multi_disc_track_format",
+        settings_update.multi_disc_track_format,
+        value_type="string",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.rename_tracks",
+        settings_update.rename_tracks,
+        value_type="boolean",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.replace_illegal_characters",
+        settings_update.replace_illegal_characters,
+        value_type="boolean",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.create_artist_folder",
+        settings_update.create_artist_folder,
+        value_type="boolean",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.create_album_folder",
+        settings_update.create_album_folder,
+        value_type="boolean",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.colon_replacement",
+        settings_update.colon_replacement,
+        value_type="string",
+        category="naming",
+    )
+    await settings_service.set(
+        "naming.slash_replacement",
+        settings_update.slash_replacement,
+        value_type="string",
+        category="naming",
+    )
+
+    await db.commit()
+
+    return settings_update
+
+
+@router.post("/naming/validate")
+async def validate_naming_template(
+    request: NamingValidationRequest,
+    db: AsyncSession = Depends(get_db),
+) -> NamingValidationResponse:
+    """Validate a naming template.
+
+    Checks that all {variable} placeholders are valid.
+    Returns list of invalid variables if any found.
+
+    Args:
+        request: Template to validate
+
+    Returns:
+        Validation result with invalid variables if any
+    """
+    settings_service = AppSettingsService(db)
+    is_valid, invalid_vars = settings_service.validate_naming_template(request.template)
+
+    # Generate preview if valid
+    preview = None
+    if is_valid:
+        # Sample data for preview
+        sample_data = {
+            "Artist Name": "Pink Floyd",
+            "Artist CleanName": "Pink Floyd",
+            "Album Title": "The Dark Side of the Moon",
+            "Album CleanTitle": "The Dark Side of the Moon",
+            "Album Type": "Album",
+            "Release Year": "1973",
+            "Track Title": "Speak to Me",
+            "Track CleanTitle": "Speak to Me",
+            "Track Number": "1",
+            "Track Number:00": "01",
+            "Medium": "1",
+            "Medium:00": "01",
+            # Legacy variables
+            "artist": "Pink Floyd",
+            "album": "The Dark Side of the Moon",
+            "title": "Speak to Me",
+            "track": "1",
+            "track:02d": "01",
+            "year": "1973",
+            "disc": "1",
+        }
+
+        preview = request.template
+        for var, value in sample_data.items():
+            preview = preview.replace(f"{{{var}}}", value)
+
+    return NamingValidationResponse(
+        valid=is_valid,
+        invalid_variables=invalid_vars,
+        preview=preview,
+    )
+
+
+@router.post("/naming/preview")
+async def preview_naming_format(
+    request: NamingPreviewRequest,
+) -> NamingPreviewResponse:
+    """Preview how files will be named with current templates.
+
+    Uses sample data to show what the full path would look like.
+
+    Args:
+        request: Templates to preview
+
+    Returns:
+        Full path preview with sample artist/album/track
+    """
+    # Sample data for preview
+    sample = {
+        "Artist Name": "Pink Floyd",
+        "Artist CleanName": "Pink Floyd",
+        "Album Title": "The Dark Side of the Moon",
+        "Album CleanTitle": "The Dark Side of the Moon",
+        "Album Type": "Album",
+        "Release Year": "1973",
+        "Track Title": "Speak to Me",
+        "Track CleanTitle": "Speak to Me",
+        "Track Number": "1",
+        "Track Number:00": "01",
+        "Medium": "1",
+        "Medium:00": "01",
+        # Legacy variables
+        "artist": "Pink Floyd",
+        "album": "The Dark Side of the Moon",
+        "title": "Speak to Me",
+        "track": "1",
+        "track:02d": "01",
+        "year": "1973",
+        "disc": "1",
+    }
+
+    def render_template(template: str, data: dict[str, str]) -> str:
+        result = template
+        for var, value in data.items():
+            result = result.replace(f"{{{var}}}", value)
+        return result
+
+    artist_folder = render_template(request.artist_folder_format, sample)
+    album_folder = render_template(request.album_folder_format, sample)
+    track_filename = render_template(request.standard_track_format, sample) + ".flac"
+
+    full_path = f"/mnt/music/{artist_folder}/{album_folder}/{track_filename}"
+
+    return NamingPreviewResponse(
+        full_path=full_path,
+        artist_folder=artist_folder,
+        album_folder=album_folder,
+        track_filename=track_filename,
+    )
+
+
+@router.get("/naming/variables")
+async def get_naming_variables() -> dict[str, list[dict[str, str]]]:
+    """Get list of available template variables.
+
+    Returns all supported variables grouped by category.
+    Useful for building template editors in UI.
+
+    Returns:
+        Variables grouped by category with descriptions
+    """
+    return {
+        "artist": [
+            {"variable": "{Artist Name}", "description": "Full artist name"},
+            {"variable": "{Artist CleanName}", "description": "Sanitized artist name (no special chars)"},
+        ],
+        "album": [
+            {"variable": "{Album Title}", "description": "Full album title"},
+            {"variable": "{Album CleanTitle}", "description": "Sanitized album title"},
+            {"variable": "{Album Type}", "description": "Album type (Album, Single, EP, Compilation)"},
+            {"variable": "{Release Year}", "description": "Release year (4 digits)"},
+        ],
+        "track": [
+            {"variable": "{Track Title}", "description": "Full track title"},
+            {"variable": "{Track CleanTitle}", "description": "Sanitized track title"},
+            {"variable": "{Track Number}", "description": "Track number"},
+            {"variable": "{Track Number:00}", "description": "Track number zero-padded (01, 02, ...)"},
+        ],
+        "disc": [
+            {"variable": "{Medium}", "description": "Disc number"},
+            {"variable": "{Medium:00}", "description": "Disc number zero-padded"},
+        ],
+        "legacy": [
+            {"variable": "{artist}", "description": "Artist name (legacy)"},
+            {"variable": "{album}", "description": "Album title (legacy)"},
+            {"variable": "{title}", "description": "Track title (legacy)"},
+            {"variable": "{track}", "description": "Track number (legacy)"},
+            {"variable": "{track:02d}", "description": "Track number padded (legacy)"},
+            {"variable": "{year}", "description": "Release year (legacy)"},
+            {"variable": "{disc}", "description": "Disc number (legacy)"},
+        ],
+    }

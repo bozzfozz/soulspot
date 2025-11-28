@@ -1,0 +1,412 @@
+{# Hey future me - Incomplete Albums Review Page!
+   Zeigt Alben bei denen Tracks fehlen (laut Spotify/MusicBrainz).
+   Ein Album mit 12 Tracks auf Spotify aber nur 8 lokal = incomplete.
+   API: GET /api/library/incomplete-albums mit Filtern.
+   Filter: incomplete_only (default true), min_track_count (default 3, filtert Singles raus).
+   ACHTUNG: Die API braucht Spotify-Credentials um expected_tracks zu kennen! #}
+
+{% extends "base.html" %}
+
+{% block title %}Incomplete Albums - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
+    <div style="display: flex; align-items: center; gap: var(--space-4);">
+        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-list-check" style="color: white; font-size: 1.25rem;"></i>
+        </div>
+        <div>
+            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Incomplete Albums</h1>
+            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Albums with missing tracks compared to Spotify/MusicBrainz</p>
+        </div>
+    </div>
+    <a href="/library" class="btn btn-ghost">
+        <i class="fa-solid fa-arrow-left"></i>
+        Back to Library
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <div class="filter-group">
+        <label class="filter-label">
+            <input type="checkbox" id="filter-incomplete-only" checked onchange="loadAlbums()">
+            <span>Show incomplete only</span>
+        </label>
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Min tracks:</label>
+        <select id="filter-min-tracks" onchange="loadAlbums()">
+            <option value="1">1 (include singles)</option>
+            <option value="3" selected>3 (default)</option>
+            <option value="5">5</option>
+            <option value="8">8 (full albums only)</option>
+        </select>
+    </div>
+</div>
+
+<!-- Stats Bar -->
+<div class="stats-bar">
+    <div class="stat-item">
+        <span class="stat-number" id="stat-total">-</span>
+        <span class="stat-label">Albums Checked</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-incomplete">-</span>
+        <span class="stat-label">Incomplete</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-number" id="stat-missing">-</span>
+        <span class="stat-label">Missing Tracks</span>
+    </div>
+</div>
+
+<!-- Albums Grid -->
+<div id="albums-container" class="albums-grid">
+    <div class="loading-state">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--text-muted);"></i>
+        <p>Loading albums...</p>
+    </div>
+</div>
+
+<!-- Empty State Template -->
+<template id="empty-state">
+    <div class="empty-state">
+        <div class="empty-icon" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;">
+            <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <h3>All Albums Complete</h3>
+        <p>Your library has all tracks for the checked albums!</p>
+    </div>
+</template>
+
+<!-- No Data State Template -->
+<template id="no-data-state">
+    <div class="empty-state">
+        <div class="empty-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+            <i class="fa-solid fa-info-circle"></i>
+        </div>
+        <h3>No Album Data</h3>
+        <p>Album completeness checking requires Spotify connection.<br>Please connect Spotify in Settings first.</p>
+        <a href="/settings" class="btn btn-primary" style="margin-top: var(--space-4);">
+            <i class="fa-solid fa-cog"></i> Go to Settings
+        </a>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+    .filters-bar {
+        display: flex;
+        gap: var(--space-6);
+        padding: var(--space-4) var(--space-5);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-primary);
+        margin-bottom: var(--space-4);
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+    .filter-label {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+    .filter-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent-primary);
+    }
+    .filter-label select {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-md);
+        padding: var(--space-1) var(--space-2);
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+    }
+
+    .stats-bar {
+        display: flex;
+        gap: var(--space-6);
+        padding: var(--space-4) var(--space-6);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-primary);
+        margin-bottom: var(--space-6);
+    }
+    .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .stat-number {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+    }
+    .stat-label {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+    }
+
+    .albums-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: var(--space-4);
+    }
+
+    .album-card {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--border-primary);
+        overflow: hidden;
+        transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .album-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    .album-header {
+        display: flex;
+        gap: var(--space-4);
+        padding: var(--space-4);
+    }
+    .album-cover {
+        width: 80px;
+        height: 80px;
+        border-radius: var(--radius-lg);
+        background: var(--bg-tertiary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+    }
+    .album-cover img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .album-cover i {
+        font-size: 2rem;
+        color: var(--text-muted);
+    }
+    .album-info {
+        flex: 1;
+        overflow: hidden;
+    }
+    .album-title {
+        font-weight: var(--font-weight-semibold);
+        font-size: var(--font-size-base);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: var(--space-1);
+    }
+    .album-artist {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .album-tracks {
+        font-size: var(--font-size-sm);
+        margin-top: var(--space-2);
+    }
+    .tracks-have {
+        color: #22c55e;
+        font-weight: var(--font-weight-semibold);
+    }
+    .tracks-expected {
+        color: var(--text-muted);
+    }
+    .tracks-missing {
+        color: #ef4444;
+        font-weight: var(--font-weight-semibold);
+    }
+
+    .album-progress {
+        padding: 0 var(--space-4) var(--space-4);
+    }
+    .progress-bar {
+        height: 6px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-full);
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: var(--radius-full);
+        transition: width 0.3s ease;
+    }
+    .progress-complete {
+        background: #22c55e;
+    }
+    .progress-incomplete {
+        background: linear-gradient(90deg, #22c55e, #f59e0b);
+    }
+    .progress-low {
+        background: linear-gradient(90deg, #22c55e, #ef4444);
+    }
+
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: var(--space-12);
+        color: var(--text-muted);
+        grid-column: 1 / -1;
+    }
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto var(--space-4);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+    }
+    .empty-state h3 {
+        font-size: var(--font-size-xl);
+        color: var(--text-primary);
+        margin-bottom: var(--space-2);
+    }
+</style>
+
+<script>
+// Hey future me - loads incomplete albums from API.
+// Uses /api/library/incomplete-albums with filters.
+// Note: This endpoint needs Spotify credentials to work properly!
+
+let albums = [];
+
+async function loadAlbums() {
+    const container = document.getElementById('albums-container');
+    container.innerHTML = `
+        <div class="loading-state">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--text-muted);"></i>
+            <p>Loading albums...</p>
+        </div>
+    `;
+    
+    const incompleteOnly = document.getElementById('filter-incomplete-only').checked;
+    const minTracks = document.getElementById('filter-min-tracks').value;
+    
+    try {
+        const url = `/api/library/incomplete-albums?incomplete_only=${incompleteOnly}&min_track_count=${minTracks}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        albums = data.albums || [];
+        
+        // Update stats
+        document.getElementById('stat-total').textContent = data.total_count || 0;
+        document.getElementById('stat-incomplete').textContent = data.incomplete_count || 0;
+        
+        // Calculate total missing tracks
+        const totalMissing = albums.reduce((sum, a) => {
+            const missing = (a.expected_tracks || 0) - (a.local_tracks || 0);
+            return sum + Math.max(0, missing);
+        }, 0);
+        document.getElementById('stat-missing').textContent = totalMissing;
+        
+        // Render albums
+        renderAlbums(albums);
+        
+    } catch (error) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                    <i class="fa-solid fa-exclamation-circle"></i>
+                </div>
+                <h3>Error Loading Albums</h3>
+                <p>${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+function renderAlbums(albumsList) {
+    const container = document.getElementById('albums-container');
+    
+    if (!albumsList || albumsList.length === 0) {
+        // Check if we likely have no Spotify data vs actually complete
+        const incompleteOnly = document.getElementById('filter-incomplete-only').checked;
+        if (incompleteOnly) {
+            const template = document.getElementById('empty-state');
+            container.innerHTML = template.innerHTML;
+        } else {
+            const template = document.getElementById('no-data-state');
+            container.innerHTML = template.innerHTML;
+        }
+        return;
+    }
+    
+    let html = '';
+    
+    for (const album of albumsList) {
+        const localTracks = album.local_tracks || 0;
+        const expectedTracks = album.expected_tracks || 0;
+        const missingTracks = Math.max(0, expectedTracks - localTracks);
+        const percentage = expectedTracks > 0 ? Math.round((localTracks / expectedTracks) * 100) : 0;
+        
+        // Progress bar color based on completeness
+        let progressClass = 'progress-complete';
+        if (percentage < 50) {
+            progressClass = 'progress-low';
+        } else if (percentage < 100) {
+            progressClass = 'progress-incomplete';
+        }
+        
+        html += `
+            <div class="album-card">
+                <div class="album-header">
+                    <div class="album-cover">
+                        ${album.artwork_url 
+                            ? `<img src="${escapeHtml(album.artwork_url)}" alt="Album cover" loading="lazy">` 
+                            : '<i class="fa-solid fa-compact-disc"></i>'}
+                    </div>
+                    <div class="album-info">
+                        <div class="album-title" title="${escapeHtml(album.title || 'Unknown Album')}">${escapeHtml(album.title || 'Unknown Album')}</div>
+                        <div class="album-artist">${escapeHtml(album.artist || 'Unknown Artist')}</div>
+                        <div class="album-tracks">
+                            <span class="tracks-have">${localTracks}</span>
+                            <span class="tracks-expected">/ ${expectedTracks} tracks</span>
+                            ${missingTracks > 0 ? `<span class="tracks-missing"> (${missingTracks} missing)</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+                <div class="album-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill ${progressClass}" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Load on page ready
+document.addEventListener('DOMContentLoaded', loadAlbums);
+</script>
+{% endblock %}
