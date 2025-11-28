@@ -5,12 +5,12 @@ applyTo: "alembic/**/*.py,src/soulspot/infrastructure/persistence/**/*.py"
 # Database & Migration Instructions
 
 ## SQLAlchemy Models
-Models live in `src/soulspot/infrastructure/persistence/models/`. Use SQLAlchemy 2.0 syntax:
+Models live in `src/soulspot/infrastructure/persistence/models.py`. Use SQLAlchemy 2.0 syntax:
 
 ```python
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from .base import Base
+from soulspot.infrastructure.persistence.models import Base
 
 class Track(Base):
     __tablename__ = "tracks"
@@ -79,7 +79,7 @@ alembic current
 ```
 
 ## Repository Pattern
-Use repositories in `src/soulspot/infrastructure/persistence/repositories/`:
+Repositories are in `src/soulspot/infrastructure/persistence/repositories.py`:
 
 ```python
 class TrackRepository:

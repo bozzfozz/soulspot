@@ -69,3 +69,10 @@ Use `ruff` for automatic sorting: `ruff check --fix`
 - Use `pytest-asyncio` for async tests
 - Use `pytest-httpx` for HTTP client mocking
 - Target coverage: 80%+ overall, 100% for service layer
+
+## Key Files Reference
+- Entry point: `src/soulspot/main.py`
+- Settings: `src/soulspot/config/settings.py`
+- Models: `src/soulspot/infrastructure/persistence/models.py`
+- Repositories: `src/soulspot/infrastructure/persistence/repositories.py`
+- Database session: `src/soulspot/infrastructure/persistence/database.py`

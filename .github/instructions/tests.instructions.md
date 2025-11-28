@@ -58,6 +58,8 @@ async def test_spotify_api_call(httpx_mock):
 ### Database Testing
 For integration tests, use in-memory SQLite:
 ```python
+from soulspot.infrastructure.persistence.models import Base
+
 @pytest.fixture
 async def db_session():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
