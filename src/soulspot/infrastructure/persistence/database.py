@@ -93,9 +93,14 @@ class Database:
     # Use it with "async for session in db.get_session():" - NOT "session = await db.get_session()".
     # I spent 2 hours debugging that once. The auto-commit happens ONLY if no exception occurs.
     # If anything goes wrong, we rollback and re-raise. The except block catches EVERYTHING
-    # intentionally - we don't want partial transactions committed. The finally ensures session.close()
-    # even if rollback fails (though that's rare). Don't put business logic here - this is just
-    # transaction management!
+    # intentionally - we don't want partial transactions committed.
+    #
+    # IMPORTANT: The `async with self._session_factory() as session:` context manager handles
+    # session cleanup automatically when exiting. Do NOT call session.close() explicitly here!
+    # SQLAlchemy's async_sessionmaker's __aexit__ already closes the session. Calling close()
+    # again causes IllegalStateChangeError because the session is already in a closing state.
+    # This was a nasty bug - "Method 'close()' can't be called here; method '_connection_for_bind()'
+    # is already in progress" - the fix is simply removing the redundant close() call.
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
         async with self._session_factory() as session:
@@ -107,14 +112,15 @@ class Database:
                 # transaction integrity. All exceptions are re-raised for proper handling.
                 await session.rollback()
                 raise
-            finally:
-                await session.close()
 
     # Hey, this is basically IDENTICAL to get_session() but it's a context manager instead of
     # a generator. Use it with "async with db.session_scope() as session:" - this is the PREFERRED
     # way! It's clearer and harder to mess up than get_session(). I should probably deprecate
     # get_session() but it's used in some old code. Same transaction semantics: commit on success,
-    # rollback on exception, always close.
+    # rollback on exception.
+    #
+    # IMPORTANT: Same as get_session() - the async context manager handles cleanup automatically.
+    # Do NOT call session.close() explicitly! See get_session() comment for why.
     @asynccontextmanager
     async def session_scope(self) -> AsyncGenerator[AsyncSession, None]:
         """Provide a transactional scope for database operations."""
@@ -127,8 +133,6 @@ class Database:
                 # transaction integrity. All exceptions are re-raised for proper handling.
                 await session.rollback()
                 raise
-            finally:
-                await session.close()
 
     # Yo, dispose() closes ALL connections in the pool and shuts down the engine. CRITICAL on
     # shutdown or you'll leave dangling connections! Postgres might complain about "too many
