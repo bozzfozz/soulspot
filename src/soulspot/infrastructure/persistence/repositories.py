@@ -1175,9 +1175,10 @@ class PlaylistRepository(IPlaylistRepository):
         # Get playlist tracks in order
         track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
 
-        # Convert source string to PlaylistSource enum
+        # Convert source string to PlaylistSource enum (case-insensitive)
+        # Hey future me - DB stores uppercase (SPOTIFY, MANUAL) but enum has lowercase values
         try:
-            source = PlaylistSource(model.source)
+            source = PlaylistSource(model.source.lower())
         except ValueError as e:
             raise ValidationException(
                 f"Invalid playlist source '{model.source}' for playlist {model.id}"
@@ -1212,9 +1213,10 @@ class PlaylistRepository(IPlaylistRepository):
         # Get playlist tracks in order
         track_ids = [TrackId.from_string(pt.track_id) for pt in model.playlist_tracks]
 
-        # Convert source string to PlaylistSource enum
+        # Convert source string to PlaylistSource enum (case-insensitive)
+        # Hey future me - DB stores uppercase (SPOTIFY, MANUAL) but enum has lowercase values
         try:
-            source = PlaylistSource(model.source)
+            source = PlaylistSource(model.source.lower())
         except ValueError as e:
             raise ValidationException(
                 f"Invalid playlist source '{model.source}' for playlist {model.id}"
@@ -1269,9 +1271,10 @@ class PlaylistRepository(IPlaylistRepository):
             track_ids = [
                 TrackId.from_string(pt.track_id) for pt in model.playlist_tracks
             ]
-            # Convert source string to PlaylistSource enum
+            # Convert source string to PlaylistSource enum (case-insensitive)
+            # Hey future me - DB stores uppercase (SPOTIFY, MANUAL) but enum has lowercase values
             try:
-                source = PlaylistSource(model.source)
+                source = PlaylistSource(model.source.lower())
             except ValueError as e:
                 raise ValidationException(
                     f"Invalid playlist source '{model.source}' for playlist {model.id}"
