@@ -492,7 +492,7 @@ class TestDuplicateDetectorWorker:
         return DuplicateDetectorWorker(
             job_queue=mock_job_queue,
             settings_service=mock_settings,
-            session_factory=mock_session_factory,
+            session_scope=mock_session_factory,
         )
 
     def test_init(

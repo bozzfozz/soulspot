@@ -74,8 +74,9 @@ class LibraryScanWorker:
             f"Starting library scan job {job.id} " f"(incremental={incremental})"
         )
 
-        # Create fresh session for this job
-        async for session in self.db.get_session():
+        # Create fresh session for this job using session_scope context manager
+        # Hey future me - using session_scope ensures proper connection cleanup!
+        async with self.db.session_scope() as session:
             try:
                 service = LibraryScannerService(
                     session=session,
@@ -107,6 +108,3 @@ class LibraryScanWorker:
             except Exception as e:
                 logger.error(f"Library scan job {job.id} failed: {e}")
                 raise
-
-        # This shouldn't happen but satisfies type checker
-        raise RuntimeError("Database session generator yielded nothing")
