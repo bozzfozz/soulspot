@@ -212,9 +212,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # The session is committed/rolled back within each worker operation.
         # This is different from request-scoped sessions which are short-lived.
         #
-        # NOTE: This is intentionally a long-lived session. The workers inside
-        # commit/rollback as needed. The context manager ensures proper cleanup
-        # on app shutdown.
+        # IMPORTANT: Transaction isolation and error handling:
+        # - Each worker method is responsible for committing or rolling back its own transactions
+        # - If one worker's transaction fails, it should rollback and NOT affect other workers
+        # - The shared session means workers should NOT hold transactions open for long periods
+        # - Use explicit commit() after each logical operation, not at the end of a loop
+        # - On exception, always rollback() before re-raising to clean up the transaction
+        #
+        # Example pattern for workers:
+        #   try:
+        #       result = await repo.do_something()
+        #       await session.commit()  # Commit immediately after successful operation
+        #   except Exception as e:
+        #       await session.rollback()  # Always rollback on error
+        #       raise
+        #
+        # The context manager ensures the session is properly closed on app shutdown.
         async with db.session_scope() as worker_session:
             # Initialize download worker with repositories
             track_repository = TrackRepository(worker_session)

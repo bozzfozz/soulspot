@@ -374,10 +374,25 @@ class DatabaseTokenManager:
             spotify_client: Spotify client for refresh operations
             session_scope: Async context manager factory for DB sessions (preferred)
             get_db_session: DEPRECATED - Async generator for DB sessions (kept for backwards compatibility)
+
+        Raises:
+            ValueError: If neither session_scope nor get_db_session is provided
         """
         self._spotify_client = spotify_client
-        self._session_scope = session_scope
-        self._get_db_session = get_db_session  # DEPRECATED
+
+        # Backwards compatibility: prefer session_scope, but allow get_db_session as context manager
+        # Hey future me - if get_db_session was used correctly (as context manager), it should work!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif get_db_session is not None:
+            # Use get_db_session as fallback - assume it's also a context manager factory
+            self._session_scope = get_db_session
+            logger.warning(
+                "DatabaseTokenManager: Using deprecated get_db_session parameter. "
+                "Migrate to session_scope for better connection handling."
+            )
+        else:
+            raise ValueError("Either session_scope or get_db_session must be provided")
 
     # Hey future me - THIS is the main method for background workers! Returns access_token string
     # if valid token exists, None otherwise. Workers should check for None and skip work gracefully.

@@ -277,10 +277,24 @@ class DatabaseSessionStore:
             session_timeout_seconds: Session timeout in seconds
             session_scope: Async context manager factory for DB sessions (preferred)
             get_db_session: DEPRECATED - Async generator for DB sessions (kept for backwards compatibility)
+
+        Note:
+            If neither session_scope nor get_db_session is provided, the store
+            operates in memory-only mode (no persistence to database).
         """
         self.session_timeout_seconds = session_timeout_seconds
-        self._session_scope = session_scope
-        self._get_db_session = get_db_session  # DEPRECATED - kept for backwards compatibility
+
+        # Backwards compatibility: prefer session_scope, but allow get_db_session as fallback
+        # Hey future me - if get_db_session is a context manager factory, it should work!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif get_db_session is not None:
+            # Use get_db_session as fallback - assume it's also a context manager factory
+            self._session_scope = get_db_session
+        else:
+            # Memory-only mode - no database persistence
+            self._session_scope = None
+
         self._sessions: dict[str, Session] = {}  # In-memory cache
         self._db_loaded = False  # Track if we've loaded sessions from DB yet
 
@@ -297,7 +311,7 @@ class DatabaseSessionStore:
         could be expensive with many sessions. Each session is fetched
         from the database individually when requested if not in cache.
         """
-        if self._db_loaded or (not self._session_scope and not self._get_db_session):
+        if self._db_loaded or not self._session_scope:
             return
 
         # Sessions are loaded on-demand in get_session() and get_session_by_state()

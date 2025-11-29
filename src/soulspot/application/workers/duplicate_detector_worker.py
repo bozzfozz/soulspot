@@ -79,7 +79,7 @@ class DuplicateDetectorWorker:
         self,
         job_queue: JobQueue,
         settings_service: AppSettingsService,
-        session_scope: Any,  # Async context manager factory for DB sessions
+        session_scope: Any | None = None,
         # DEPRECATED: session_factory kept for backwards compatibility
         session_factory: Any | None = None,
     ) -> None:
@@ -89,12 +89,23 @@ class DuplicateDetectorWorker:
             job_queue: Job queue for creating scan jobs
             settings_service: Settings service for config
             session_scope: Async context manager factory for DB sessions (preferred)
-            session_factory: DEPRECATED - Async session factory (kept for backwards compatibility)
+            session_factory: DEPRECATED - Falls back to session_scope behavior if provided
+
+        Raises:
+            ValueError: If neither session_scope nor session_factory is provided
         """
         self._job_queue = job_queue
         self._settings = settings_service
-        self._session_scope = session_scope
-        self._session_factory = session_factory  # DEPRECATED
+
+        # Backwards compatibility: if only session_factory provided, use it as session_scope
+        # Hey future me - session_factory was already a context manager in _run_scan!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif session_factory is not None:
+            # Use session_factory as fallback (it was already used as context manager)
+            self._session_scope = session_factory
+        else:
+            raise ValueError("Either session_scope or session_factory must be provided")
 
         self._running = False
         self._task: asyncio.Task[None] | None = None
