@@ -477,10 +477,10 @@ class SpotifySyncWorker:
         """Force an immediate sync (bypass cooldown).
 
         Args:
-            sync_type: Specific sync to run, or None for all
+            sync_type: Specific sync to run, or None for all.
 
         Returns:
-            Dict with sync results
+            Dict with sync results.
 
         Hey future me - this method uses db.session_scope() context manager just like
         _check_and_run_syncs(). The old code called self._get_db_session() which didn't

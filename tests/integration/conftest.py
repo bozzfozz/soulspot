@@ -69,7 +69,7 @@ async def db_session(db: Database) -> AsyncGenerator[AsyncSession, None]:
     
     Hey future me - we use session_scope context manager instead of get_session generator!
     The context manager properly handles connection cleanup. Do NOT call session.close()
-    explicitly - the context manager's __aexit__ already does that, and calling it again
+    explicitly - the context manager's exit handler already does that, and calling it again
     causes IllegalStateChangeError ("Method 'close()' can't be called here").
     """
     async with db.session_scope() as session:
