@@ -397,25 +397,21 @@ class DatabaseTokenManager:
         # handles GeneratorExit properly, so NO explicit close() needed!
         # See database.py for details on the race condition fix (Nov 2025).
         async for db_session in self._get_db_session():
-            try:
-                repo = SpotifyTokenRepository(db_session)
-                token_model = await repo.get_active_token()
+            repo = SpotifyTokenRepository(db_session)
+            token_model = await repo.get_active_token()
 
-                if not token_model:
-                    logger.debug("No active token available for background work")
-                    return None
+            if not token_model:
+                logger.debug("No active token available for background work")
+                return None
 
-                # Check if expired (shouldn't happen with TokenRefreshWorker)
-                if token_model.is_expired():
-                    logger.warning(
-                        "Token is expired - TokenRefreshWorker may not be running"
-                    )
-                    return None
+            # Check if expired (shouldn't happen with TokenRefreshWorker)
+            if token_model.is_expired():
+                logger.warning(
+                    "Token is expired - TokenRefreshWorker may not be running"
+                )
+                return None
 
-                return token_model.access_token
-
-            # No finally block needed - get_session() generator handles cleanup!
-            break
+            return token_model.access_token
 
         return None
 
@@ -486,70 +482,66 @@ class DatabaseTokenManager:
         )
 
         async for db_session in self._get_db_session():
+            repo = SpotifyTokenRepository(db_session)
+            token_model = await repo.get_expiring_soon(minutes=threshold_minutes)
+
+            if not token_model:
+                # No token expiring soon, nothing to do
+                return False
+
+            logger.info(
+                "Token expires at %s, refreshing proactively",
+                token_model.token_expires_at.isoformat(),
+            )
+
             try:
-                repo = SpotifyTokenRepository(db_session)
-                token_model = await repo.get_expiring_soon(minutes=threshold_minutes)
-
-                if not token_model:
-                    # No token expiring soon, nothing to do
-                    return False
-
-                logger.info(
-                    "Token expires at %s, refreshing proactively",
-                    token_model.token_expires_at.isoformat(),
+                # Call Spotify to refresh
+                token_response = await self._spotify_client.refresh_token(
+                    token_model.refresh_token
                 )
 
-                try:
-                    # Call Spotify to refresh
-                    token_response = await self._spotify_client.refresh_token(
-                        token_model.refresh_token
-                    )
+                # Calculate new expiration
+                expires_in = token_response.get("expires_in", 3600)
+                new_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
-                    # Calculate new expiration
-                    expires_in = token_response.get("expires_in", 3600)
-                    new_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
+                # Update in DB
+                await repo.update_after_refresh(
+                    access_token=token_response["access_token"],
+                    token_expires_at=new_expires_at,
+                    refresh_token=token_response.get(
+                        "refresh_token"
+                    ),  # Spotify may rotate
+                )
+                await db_session.commit()
 
-                    # Update in DB
-                    await repo.update_after_refresh(
-                        access_token=token_response["access_token"],
-                        token_expires_at=new_expires_at,
-                        refresh_token=token_response.get(
-                            "refresh_token"
-                        ),  # Spotify may rotate
-                    )
-                    await db_session.commit()
+                logger.info(
+                    "Token refreshed successfully (expires in %ds)", expires_in
+                )
+                return True
 
-                    logger.info(
-                        "Token refreshed successfully (expires in %ds)", expires_in
-                    )
-                    return True
+            except httpx.HTTPStatusError as e:
+                # HTTP error from Spotify (401, 403 = user revoked access)
+                error_msg = f"Spotify refresh failed: HTTP {e.response.status_code}"
+                logger.error(error_msg)
+                await repo.mark_invalid(error_msg)
+                await db_session.commit()
+                return False
 
-                except httpx.HTTPStatusError as e:
-                    # HTTP error from Spotify (401, 403 = user revoked access)
-                    error_msg = f"Spotify refresh failed: HTTP {e.response.status_code}"
-                    logger.error(error_msg)
-                    await repo.mark_invalid(error_msg)
-                    await db_session.commit()
-                    return False
+            except httpx.HTTPError as e:
+                # Network error (timeout, connection refused, etc.)
+                error_msg = f"Network error during refresh: {str(e)}"
+                logger.error(error_msg)
+                # Don't mark invalid for network errors - might be temporary
+                # Let next refresh cycle retry
+                return False
 
-                except httpx.HTTPError as e:
-                    # Network error (timeout, connection refused, etc.)
-                    error_msg = f"Network error during refresh: {str(e)}"
-                    logger.error(error_msg)
-                    # Don't mark invalid for network errors - might be temporary
-                    # Let next refresh cycle retry
-                    return False
-
-                except Exception as e:
-                    # Unexpected error
-                    error_msg = f"Unexpected refresh error: {str(e)}"
-                    logger.exception(error_msg)
-                    await repo.mark_invalid(error_msg)
-                    await db_session.commit()
-                    return False
-
-            # No finally block needed - get_session() generator handles cleanup!
-            break
+            except Exception as e:
+                # Unexpected error
+                error_msg = f"Unexpected refresh error: {str(e)}"
+                logger.exception(error_msg)
+                await repo.mark_invalid(error_msg)
+                await db_session.commit()
+                return False
 
         return False
 
@@ -573,43 +565,39 @@ class DatabaseTokenManager:
         )
 
         async for db_session in self._get_db_session():
-            try:
-                repo = SpotifyTokenRepository(db_session)
-                token_model = await repo.get_token_status()
+            repo = SpotifyTokenRepository(db_session)
+            token_model = await repo.get_token_status()
 
-                if not token_model:
-                    return TokenStatus(
-                        exists=False,
-                        is_valid=False,
-                        needs_reauth=True,
-                        expires_in_minutes=None,
-                        last_error=None,
-                        last_error_at=None,
-                    )
-
-                # Calculate expires_in_minutes
-                # Use ensure_utc_aware() to handle naive datetimes from SQLite
-                from soulspot.infrastructure.persistence.models import ensure_utc_aware
-
-                now = datetime.now(UTC)
-                expires_at = ensure_utc_aware(token_model.token_expires_at)
-                if expires_at > now:
-                    delta = expires_at - now
-                    expires_in_minutes = int(delta.total_seconds() / 60)
-                else:
-                    expires_in_minutes = 0
-
+            if not token_model:
                 return TokenStatus(
-                    exists=True,
-                    is_valid=token_model.is_valid,
-                    needs_reauth=not token_model.is_valid or token_model.is_expired(),
-                    expires_in_minutes=expires_in_minutes,
-                    last_error=token_model.last_error,
-                    last_error_at=token_model.last_error_at,
+                    exists=False,
+                    is_valid=False,
+                    needs_reauth=True,
+                    expires_in_minutes=None,
+                    last_error=None,
+                    last_error_at=None,
                 )
 
-            # No finally block needed - get_session() generator handles cleanup!
-            break
+            # Calculate expires_in_minutes
+            # Use ensure_utc_aware() to handle naive datetimes from SQLite
+            from soulspot.infrastructure.persistence.models import ensure_utc_aware
+
+            now = datetime.now(UTC)
+            expires_at = ensure_utc_aware(token_model.token_expires_at)
+            if expires_at > now:
+                delta = expires_at - now
+                expires_in_minutes = int(delta.total_seconds() / 60)
+            else:
+                expires_in_minutes = 0
+
+            return TokenStatus(
+                exists=True,
+                is_valid=token_model.is_valid,
+                needs_reauth=not token_model.is_valid or token_model.is_expired(),
+                expires_in_minutes=expires_in_minutes,
+                last_error=token_model.last_error,
+                last_error_at=token_model.last_error_at,
+            )
 
         # Fallback (shouldn't reach here)
         return TokenStatus(
@@ -641,7 +629,9 @@ class DatabaseTokenManager:
                 result = await repo.mark_invalid("Manually invalidated by user")
                 await db_session.commit()
                 return result
-            # No finally block needed - get_session() generator handles cleanup!
-            break
+            except Exception as e:
+                logger.error(f"Failed to invalidate token: {e}")
+                await db_session.rollback()
+                raise
 
         return False
