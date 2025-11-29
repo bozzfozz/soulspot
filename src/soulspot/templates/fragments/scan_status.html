@@ -10,8 +10,8 @@
     <span><i class="bi bi-file-earmark"></i> Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
     <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
     <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
-    {% if stats.errors > 0 %}
-    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors }}</strong></span>
+    {% if stats.errors | default(0) > 0 %}
+    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors | default(0) }}</strong></span>
     {% endif %}
 </div>
 
@@ -28,21 +28,21 @@
     <span><i class="bi bi-file-earmark"></i> Files Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
     <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
     <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
-    {% if stats.errors > 0 %}
-    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors }}</strong></span>
+    {% if stats.errors | default(0) > 0 %}
+    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors | default(0) }}</strong></span>
     {% endif %}
 </div>
 
-{% if stats.new_artists > 0 or stats.new_albums > 0 or stats.new_tracks > 0 %}
+{% if stats.new_artists | default(0) > 0 or stats.new_albums | default(0) > 0 or stats.new_tracks | default(0) > 0 %}
 <div class="scan-stats" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
-    {% if stats.new_artists > 0 %}
-    <span><i class="bi bi-person-plus"></i> New Artists: <strong>{{ stats.new_artists }}</strong></span>
+    {% if stats.new_artists | default(0) > 0 %}
+    <span><i class="bi bi-person-plus"></i> New Artists: <strong>{{ stats.new_artists | default(0) }}</strong></span>
     {% endif %}
-    {% if stats.new_albums > 0 %}
-    <span><i class="bi bi-disc"></i> New Albums: <strong>{{ stats.new_albums }}</strong></span>
+    {% if stats.new_albums | default(0) > 0 %}
+    <span><i class="bi bi-disc"></i> New Albums: <strong>{{ stats.new_albums | default(0) }}</strong></span>
     {% endif %}
-    {% if stats.new_tracks > 0 %}
-    <span><i class="bi bi-music-note-beamed"></i> New Tracks: <strong>{{ stats.new_tracks }}</strong></span>
+    {% if stats.new_tracks | default(0) > 0 %}
+    <span><i class="bi bi-music-note-beamed"></i> New Tracks: <strong>{{ stats.new_tracks | default(0) }}</strong></span>
     {% endif %}
 </div>
 {% endif %}
