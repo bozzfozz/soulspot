@@ -434,12 +434,6 @@ async def get_broken_files_summary(
 # =============================================================================
 
 
-class ImportScanRequest(BaseModel):
-    """Request to start a library import scan."""
-
-    incremental: bool = True  # Only scan new/modified files
-
-
 class ImportScanResponse(BaseModel):
     """Response from import scan start."""
 

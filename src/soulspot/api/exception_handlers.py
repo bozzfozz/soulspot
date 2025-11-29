@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # decode any bytes we find. Also handles nested dicts and lists. Called from
 # request_validation_exception_handler before building the JSON response.
 def _sanitize_validation_errors(
-    errors: list[dict[str, Any]] | Any,
+    errors: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Sanitize validation errors by converting bytes to strings.
 
@@ -166,7 +166,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         is not JSON serializable" which crashes the error response itself!
         """
         # Sanitize errors - convert bytes to strings for JSON serialization
-        sanitized_errors = _sanitize_validation_errors(exc.errors())
+        # Note: exc.errors() returns Sequence[Any] but is always a list in practice
+        sanitized_errors = _sanitize_validation_errors(list(exc.errors()))
 
         logger.warning(
             "Request validation error at %s: %s",
