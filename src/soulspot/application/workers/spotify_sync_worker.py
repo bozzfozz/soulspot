@@ -477,60 +477,61 @@ class SpotifySyncWorker:
         """Force an immediate sync (bypass cooldown).
 
         Args:
-            sync_type: Specific sync to run, or None for all
+            sync_type: Specific sync to run, or None for all.
 
         Returns:
-            Dict with sync results
+            Dict with sync results.
+
+        Hey future me - this method uses db.session_scope() context manager just like
+        _check_and_run_syncs(). The old code called self._get_db_session() which didn't
+        exist, causing AttributeError. Now we properly use the context manager pattern
+        to ensure connections are returned to the pool.
         """
         results: dict[str, Any] = {}
 
-        # Get a fresh DB session - use anext to get single session
-        session_gen = self._get_db_session()
-        try:
-            session = await anext(session_gen)
-        except StopAsyncIteration:
-            return {"error": "Failed to get database session"}
+        # Hey future me - use session_scope context manager for proper connection cleanup!
+        # This is the same pattern used in _check_and_run_syncs().
+        async with self.db.session_scope() as session:
+            try:
+                # Get access token
+                access_token = await self.token_manager.get_token_for_background()
+                if not access_token:
+                    return {"error": "No valid Spotify token available"}
 
-        try:
-            # Get access token
-            access_token = await self.token_manager.get_token_for_background()
-            if not access_token:
-                return {"error": "No valid Spotify token available"}
+                now = datetime.utcnow()
 
-            now = datetime.utcnow()
+                if sync_type is None or sync_type == "artists":
+                    try:
+                        await self._run_artists_sync(session, access_token, now)
+                        results["artists"] = "success"
+                    except Exception as e:
+                        results["artists"] = f"error: {e}"
 
-            if sync_type is None or sync_type == "artists":
-                try:
-                    await self._run_artists_sync(session, access_token, now)
-                    results["artists"] = "success"
-                except Exception as e:
-                    results["artists"] = f"error: {e}"
+                if sync_type is None or sync_type == "playlists":
+                    try:
+                        await self._run_playlists_sync(session, access_token, now)
+                        results["playlists"] = "success"
+                    except Exception as e:
+                        results["playlists"] = f"error: {e}"
 
-            if sync_type is None or sync_type == "playlists":
-                try:
-                    await self._run_playlists_sync(session, access_token, now)
-                    results["playlists"] = "success"
-                except Exception as e:
-                    results["playlists"] = f"error: {e}"
+                if sync_type is None or sync_type == "liked":
+                    try:
+                        await self._run_liked_songs_sync(session, access_token, now)
+                        results["liked_songs"] = "success"
+                    except Exception as e:
+                        results["liked_songs"] = f"error: {e}"
 
-            if sync_type is None or sync_type == "liked":
-                try:
-                    await self._run_liked_songs_sync(session, access_token, now)
-                    results["liked_songs"] = "success"
-                except Exception as e:
-                    results["liked_songs"] = f"error: {e}"
+                if sync_type is None or sync_type == "albums":
+                    try:
+                        await self._run_saved_albums_sync(session, access_token, now)
+                        results["saved_albums"] = "success"
+                    except Exception as e:
+                        results["saved_albums"] = f"error: {e}"
 
-            if sync_type is None or sync_type == "albums":
-                try:
-                    await self._run_saved_albums_sync(session, access_token, now)
-                    results["saved_albums"] = "success"
-                except Exception as e:
-                    results["saved_albums"] = f"error: {e}"
+                await session.commit()
 
-            await session.commit()
-
-        except Exception as e:
-            await session.rollback()
-            results["error"] = str(e)
+            except Exception as e:
+                await session.rollback()
+                results["error"] = str(e)
 
         return results

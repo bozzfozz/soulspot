@@ -3,9 +3,11 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
+    get_db_session,
     get_import_playlist_use_case,
     get_playlist_repository,
     get_queue_playlist_downloads_use_case,
@@ -432,10 +434,10 @@ async def get_playlist(
 # for eager loading relations though. Track without file_path = missing which makes sense.
 @router.get("/{playlist_id}/missing-tracks")
 async def get_missing_tracks(
-    request: Request,
     playlist_id: str,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get tracks that are in the playlist but not downloaded to the library.
 
@@ -443,15 +445,14 @@ async def get_missing_tracks(
         playlist_id: Playlist ID
         playlist_repository: Playlist repository
         track_repository: Track repository
+        session: Database session
 
     Returns:
         List of missing tracks
     """
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     try:
@@ -460,9 +461,6 @@ async def get_missing_tracks(
 
         if not playlist:
             raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Get session for direct DB query
-        session: AsyncSession = await anext(get_db_session(request))
 
         # Find tracks without file_path
         missing_tracks = []
@@ -680,8 +678,8 @@ async def sync_all_playlists(
 @router.post("/{playlist_id}/download-missing")
 async def download_missing_tracks(
     playlist_id: str,
-    request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Download all missing tracks from a playlist.
 
@@ -693,17 +691,15 @@ async def download_missing_tracks(
 
     Args:
         playlist_id: Playlist ID
-        request: Request object
         playlist_repository: Playlist repository
+        session: Database session
 
     Returns:
         Download status with list of missing tracks
     """
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     try:
@@ -712,10 +708,6 @@ async def download_missing_tracks(
 
         if not playlist:
             raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Get session from dependency
-        session_gen = get_db_session(request)
-        session: AsyncSession = await anext(session_gen)
 
         # Find tracks without file_path
         missing_track_ids = []

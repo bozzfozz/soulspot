@@ -62,14 +62,26 @@ def get_session_store(request: Request) -> DatabaseSessionStore:
     return cast(DatabaseSessionStore, request.app.state.session_store)
 
 
-# Hey, this is a FastAPI dependency - extracts DB from app.state and yields a session. The "async
-# for" syntax is weird but REQUIRED because db.get_session() is an async generator. FastAPI handles
-# cleanup automatically (session.close(), rollback on error). Use this in endpoint params like:
-# "session: AsyncSession = Depends(get_db_session)". Don't call this directly outside FastAPI!
+# Hey future me - this is a FastAPI dependency that yields a DB session to endpoints.
+# We use the session_scope() context manager instead of the get_session() async generator
+# because the context manager pattern properly handles connection cleanup.
+#
+# The old "async for session in db.get_session()" pattern caused "GC cleaning up non-checked-in
+# connection" warnings because:
+# 1. FastAPI calls the generator, gets one session, then breaks out
+# 2. The break triggers GeneratorExit during SQLAlchemy operations
+# 3. Connection cleanup fails, leaving it for GC to clean up
+#
+# The session_scope() context manager is cleaner and avoids these race conditions.
+# Use this in endpoint params like: "session: AsyncSession = Depends(get_db_session)"
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    """Get database session from app state."""
+    """Get database session from app state.
+
+    Uses session_scope() context manager for proper connection lifecycle management.
+    FastAPI automatically handles cleanup when the request completes.
+    """
     db: Database = request.app.state.db
-    async for session in db.get_session():
+    async with db.session_scope() as session:
         yield session
 
 

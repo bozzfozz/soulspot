@@ -3,9 +3,11 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
+    get_db_session,
     get_enrich_metadata_use_case,
     get_search_and_download_use_case,
     get_spotify_client,
@@ -170,38 +172,34 @@ async def search_tracks(
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
 
 
-# Yo future me, this gets ONE track's full details with artist/album names! Uses anext() to grab
-# DB session from generator - bit sketchy (should use Depends). joinedload() eagerly loads relationships
-# to avoid N+1 queries. The hasattr checks on album are because Album model might not have "artist" or
-# "year" fields depending on how it's set up. genre is hardcoded None (TODO) - should add to Track model.
-# Returns flat dict which is easy for frontend to consume. The unique() call prevents duplicate results
-# when joins create multiple rows. scalar_one_or_none() returns Track or None - perfect for 404 check.
+# Yo future me, this gets ONE track's full details with artist/album names! Uses Depends(get_db_session)
+# to properly manage DB session lifecycle. joinedload() eagerly loads relationships to avoid N+1 queries.
+# The hasattr checks on album are because Album model might not have "artist" or "year" fields depending
+# on how it's set up. genre is hardcoded None (TODO) - should add to Track model. Returns flat dict which
+# is easy for frontend to consume. The unique() call prevents duplicate results when joins create multiple
+# rows. scalar_one_or_none() returns Track or None - perfect for 404 check.
 @router.get("/{track_id}")
 async def get_track(
-    request: Request,
     track_id: str,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get track details.
 
     Args:
         track_id: Track ID
         track_repository: Track repository
+        session: Database session
 
     Returns:
         Track details
     """
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     try:
-        # Get session for direct DB query to include artist/album names
-        session: AsyncSession = await anext(get_db_session(request))
-
         stmt = (
             select(TrackModel)
             .where(TrackModel.id == track_id)
