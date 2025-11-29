@@ -3,7 +3,8 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from soulspot.api.dependencies import (
     get_job_queue,
     get_library_scanner_service,
 )
+from soulspot.api.templates import templates
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.use_cases.check_album_completeness import (
     CheckAlbumCompletenessUseCase,
@@ -493,7 +495,7 @@ async def get_import_scan_status(
     job_id: str,
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> dict[str, Any]:
-    """Get import scan job status.
+    """Get import scan job status (JSON API).
 
     Args:
         job_id: Job ID from start_import_scan
@@ -527,6 +529,58 @@ async def get_import_scan_status(
         response["stats"] = job.result.get("stats", job.result)
 
     return response
+
+
+@router.get("/import/status/{job_id}/html", response_class=HTMLResponse)
+async def get_import_scan_status_html(
+    request: Request,
+    job_id: str,
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> HTMLResponse:
+    """Get import scan job status as HTML fragment for HTMX.
+
+    Args:
+        request: FastAPI request
+        job_id: Job ID from start_import_scan
+        job_queue: Job queue instance
+
+    Returns:
+        HTML fragment with scan progress
+    """
+    job = await job_queue.get_job(job_id)
+
+    if not job:
+        return templates.TemplateResponse(
+            request,
+            "fragments/scan_status_error.html",
+            context={"error": "Job not found"},
+        )
+
+    # Build context for template
+    context = {
+        "job_id": job.id,
+        "status": job.status.value,
+        "is_running": job.status == JobStatus.RUNNING,
+        "is_completed": job.status == JobStatus.COMPLETED,
+        "is_failed": job.status == JobStatus.FAILED,
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "error": job.error,
+        "progress": 0,
+        "stats": {},
+    }
+
+    # Extract progress and stats from job result
+    if job.result and isinstance(job.result, dict):
+        context["progress"] = job.result.get("progress", 0)
+        context["stats"] = job.result.get("stats", {})
+
+    return templates.TemplateResponse(
+        request,
+        "fragments/scan_status.html",
+        context=context,
+    )
 
 
 @router.get("/import/summary")

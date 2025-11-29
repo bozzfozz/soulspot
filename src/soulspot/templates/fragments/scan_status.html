@@ -1,0 +1,132 @@
+{% if is_running %}
+<div class="progress-container">
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: {{ progress | round(1) }}%;"></div>
+    </div>
+    <span class="progress-text">{{ progress | round(1) }}%</span>
+</div>
+
+<div class="scan-stats" style="margin-top: 1rem;">
+    <span><i class="bi bi-file-earmark"></i> Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
+    <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
+    <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
+    {% if stats.errors > 0 %}
+    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors }}</strong></span>
+    {% endif %}
+</div>
+
+<p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
+    <i class="bi bi-clock"></i> Total files: {{ stats.total_files | default(0) }}
+</p>
+
+{% elif is_completed %}
+<div class="alert alert-success">
+    <i class="bi bi-check-circle"></i> <strong>Scan Completed</strong>
+</div>
+
+<div class="scan-stats" style="margin-bottom: 1rem;">
+    <span><i class="bi bi-file-earmark"></i> Files Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
+    <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
+    <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
+    {% if stats.errors > 0 %}
+    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors }}</strong></span>
+    {% endif %}
+</div>
+
+{% if stats.new_artists > 0 or stats.new_albums > 0 or stats.new_tracks > 0 %}
+<div class="scan-stats" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+    {% if stats.new_artists > 0 %}
+    <span><i class="bi bi-person-plus"></i> New Artists: <strong>{{ stats.new_artists }}</strong></span>
+    {% endif %}
+    {% if stats.new_albums > 0 %}
+    <span><i class="bi bi-disc"></i> New Albums: <strong>{{ stats.new_albums }}</strong></span>
+    {% endif %}
+    {% if stats.new_tracks > 0 %}
+    <span><i class="bi bi-music-note-beamed"></i> New Tracks: <strong>{{ stats.new_tracks }}</strong></span>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if started_at and completed_at %}
+<p class="text-muted" style="margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
+    <i class="bi bi-clock"></i> Duration: {{ ((completed_at - started_at).total_seconds() * 1000) | round(0) }}ms
+</p>
+{% endif %}
+
+{% elif is_failed %}
+<div class="alert alert-danger">
+    <i class="bi bi-x-circle"></i> <strong>Scan Failed</strong>
+    {% if error %}
+    <p style="margin-top: 0.5rem; margin-bottom: 0;">{{ error }}</p>
+    {% endif %}
+</div>
+
+{% else %}
+<div class="progress-container">
+    <div class="progress-bar">
+        <div class="progress-fill" style="width: 0%;"></div>
+    </div>
+    <span class="progress-text">Starting...</span>
+</div>
+<p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
+    <i class="bi bi-hourglass-split"></i> Status: {{ status }}
+</p>
+{% endif %}
+
+<style>
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--surface-base);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-weight: 600;
+    min-width: 60px;
+    text-align: right;
+}
+
+.scan-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.scan-stats span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.alert {
+    padding: 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.alert-success {
+    background: var(--success-alpha, rgba(34, 197, 94, 0.1));
+    border: 1px solid var(--success, #22c55e);
+    color: var(--success, #22c55e);
+}
+
+.alert-danger {
+    background: var(--error-alpha, rgba(239, 68, 68, 0.1));
+    border: 1px solid var(--error, #ef4444);
+    color: var(--error, #ef4444);
+}
+</style>

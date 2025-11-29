@@ -1,0 +1,17 @@
+<div class="alert alert-danger">
+    <i class="bi bi-x-circle"></i> <strong>Error</strong>
+    <p style="margin-top: 0.5rem; margin-bottom: 0;">{{ error }}</p>
+</div>
+
+<style>
+.alert {
+    padding: 1rem;
+    border-radius: 6px;
+}
+
+.alert-danger {
+    background: var(--error-alpha, rgba(239, 68, 68, 0.1));
+    border: 1px solid var(--error, #ef4444);
+    color: var(--error, #ef4444);
+}
+</style>

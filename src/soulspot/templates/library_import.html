@@ -290,7 +290,7 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
                             </h3>
                         </div>
                         <div class="card-body"
-                             ${!isCompleted ? `hx-get="/api/library/import/status/${response.job_id}" hx-trigger="load, every 2s" hx-swap="innerHTML"` : ''}>
+                             ${!isCompleted ? `hx-get="/api/library/import/status/${response.job_id}/html" hx-trigger="load, every 2s" hx-swap="innerHTML"` : ''}>
                             ${isCompleted ? `
                                 <div class="scan-stats" style="margin-bottom: 1rem;">
                                     <span><i class="bi bi-file-earmark"></i> Files Scanned: <strong>${stats.scanned || 0}</strong></span>
@@ -315,9 +315,6 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
                                     </div>
                                     <span class="progress-text">Starting...</span>
                                 </div>
-                                <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
-                                    Job ID: <code>${response.job_id}</code>
-                                </p>
                             `}
                         </div>
                     </div>
