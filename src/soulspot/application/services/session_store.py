@@ -330,6 +330,11 @@ class DatabaseSessionStore:
                 SessionRepository,
             )
 
+            # IMPORTANT: We use "async for ... break" pattern here instead of "async with".
+            # The break exits the generator early, so the context manager in db.get_session()
+            # does NOT automatically close the session. We MUST call close() explicitly!
+            # This is different from Database.session_scope() where context manager handles cleanup.
+            # See: https://peps.python.org/pep-0525/#finalization
             async for db_session in self._get_db_session():
                 try:
                     repo = SessionRepository(db_session)
@@ -339,6 +344,7 @@ class DatabaseSessionStore:
                     # Don't fail the request if DB write fails - session still works in memory
                     await db_session.rollback()
                 finally:
+                    # Required! break exits generator early, context manager won't auto-close
                     await db_session.close()
                 break
 
@@ -378,6 +384,7 @@ class DatabaseSessionStore:
                     SessionRepository,
                 )
 
+                # See create_session() comment - explicit close() required with "async for...break"
                 async for db_session in self._get_db_session():
                     try:
                         repo = SessionRepository(db_session)
@@ -386,7 +393,7 @@ class DatabaseSessionStore:
                     except Exception:
                         await db_session.rollback()
                     finally:
-                        await db_session.close()
+                        await db_session.close()  # Required! See create_session()
                     break
             return session
 
@@ -396,6 +403,7 @@ class DatabaseSessionStore:
                 SessionRepository,
             )
 
+            # See create_session() comment - explicit close() required with "async for...break"
             async for db_session in self._get_db_session():
                 try:
                     repo = SessionRepository(db_session)
@@ -409,7 +417,7 @@ class DatabaseSessionStore:
                 except Exception:
                     await db_session.rollback()
                 finally:
-                    await db_session.close()
+                    await db_session.close()  # Required! See create_session()
                 break
 
         return None
@@ -509,7 +517,7 @@ class DatabaseSessionStore:
                 except Exception:
                     await db_session.rollback()
                 finally:
-                    await db_session.close()
+                    await db_session.close()  # Required! See create_session()
                 break
 
         return session
@@ -547,7 +555,7 @@ class DatabaseSessionStore:
                 except Exception:
                     await db_session.rollback()
                 finally:
-                    await db_session.close()
+                    await db_session.close()  # Required! See create_session()
                 break
 
         return memory_deleted or db_deleted
@@ -589,7 +597,7 @@ class DatabaseSessionStore:
                 except Exception:
                     await db_session.rollback()
                 finally:
-                    await db_session.close()
+                    await db_session.close()  # Required! See create_session()
                 break
 
         return memory_count + db_count

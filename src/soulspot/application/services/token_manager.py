@@ -393,6 +393,10 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
+        # IMPORTANT: We use "async for ... break" pattern - explicit close() required!
+        # The break exits the generator early before context manager cleanup runs.
+        # Without explicit close(), session stays open until GC collects the generator.
+        # See session_store.py:create_session() for detailed explanation.
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
@@ -412,7 +416,7 @@ class DatabaseTokenManager:
                 return token_model.access_token
 
             finally:
-                await db_session.close()
+                await db_session.close()  # Required! See comment above
             break
 
         return None
@@ -443,6 +447,7 @@ class DatabaseTokenManager:
 
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
+        # See get_valid_token() comment - explicit close() required with "async for...break"
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
@@ -459,7 +464,7 @@ class DatabaseTokenManager:
                 await db_session.rollback()
                 raise
             finally:
-                await db_session.close()
+                await db_session.close()  # Required! See get_valid_token()
             break
 
     # Listen - TokenRefreshWorker calls this every 5 min! Checks if token expires soon
@@ -547,7 +552,7 @@ class DatabaseTokenManager:
                     return False
 
             finally:
-                await db_session.close()
+                await db_session.close()  # Required! See get_valid_token()
             break
 
         return False
@@ -608,7 +613,7 @@ class DatabaseTokenManager:
                 )
 
             finally:
-                await db_session.close()
+                await db_session.close()  # Required! See get_valid_token()
             break
 
         # Fallback (shouldn't reach here)
@@ -642,7 +647,7 @@ class DatabaseTokenManager:
                 await db_session.commit()
                 return result
             finally:
-                await db_session.close()
+                await db_session.close()  # Required! See get_valid_token()
             break
 
         return False

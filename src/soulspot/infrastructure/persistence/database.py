@@ -96,11 +96,19 @@ class Database:
     # intentionally - we don't want partial transactions committed.
     #
     # IMPORTANT: The `async with self._session_factory() as session:` context manager handles
-    # session cleanup automatically when exiting. Do NOT call session.close() explicitly here!
+    # session cleanup automatically when exiting. Do NOT call session.close() explicitly HERE!
     # SQLAlchemy's async_sessionmaker's __aexit__ already closes the session. Calling close()
     # again causes IllegalStateChangeError because the session is already in a closing state.
     # This was a nasty bug - "Method 'close()' can't be called here; method '_connection_for_bind()'
     # is already in progress" - the fix is simply removing the redundant close() call.
+    #
+    # HOWEVER: If you use "async for session in db.get_session(): ... break" pattern (early exit),
+    # you MUST call session.close() explicitly in the consumer code! The break exits the generator
+    # before the context manager's __aexit__ runs. See session_store.py and token_manager.py.
+    # Pattern comparison:
+    #   - "async for ... (full iteration)" → auto-close ✓
+    #   - "async for ... break" → manual close() required in consumer!
+    #   - "async with db.session_scope()" → auto-close ✓ (preferred for single operations)
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
         async with self._session_factory() as session:
