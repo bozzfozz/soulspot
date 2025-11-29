@@ -6,6 +6,7 @@ and validation errors into proper HTTP responses with appropriate status codes.
 
 import json
 import logging
+from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -20,6 +21,42 @@ from soulspot.domain.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Hey future me - this helper converts bytes to strings in validation error dicts!
+# Pydantic's exc.errors() can include raw request body as bytes in the 'input' field,
+# which causes "TypeError: Object of type bytes is not JSON serializable" when we
+# try to return it in a JSONResponse. We recursively walk the error structure and
+# decode any bytes we find. Also handles nested dicts and lists. Called from
+# request_validation_exception_handler before building the JSON response.
+def _sanitize_validation_errors(
+    errors: list[dict[str, Any]] | Any,
+) -> list[dict[str, Any]]:
+    """Sanitize validation errors by converting bytes to strings.
+
+    Args:
+        errors: List of validation error dictionaries from Pydantic
+
+    Returns:
+        Sanitized list where bytes are converted to strings
+    """
+
+    def _sanitize_value(value: Any) -> Any:
+        """Recursively sanitize a value, converting bytes to strings."""
+        if isinstance(value, bytes):
+            try:
+                return value.decode("utf-8")
+            except UnicodeDecodeError:
+                return value.decode("latin-1")
+        elif isinstance(value, dict):
+            return {k: _sanitize_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [_sanitize_value(item) for item in value]
+        elif isinstance(value, tuple):
+            return tuple(_sanitize_value(item) for item in value)
+        return value
+
+    return [_sanitize_value(error) for error in errors]
 
 
 # Hey future me, this registers GLOBAL exception handlers for the entire app! FastAPI will call
@@ -120,16 +157,26 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def request_validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        """Handle Pydantic request validation errors with 422 Unprocessable Entity."""
+        """Handle Pydantic request validation errors with 422 Unprocessable Entity.
+
+        Hey future me - this handler converts validation errors to JSON responses.
+        IMPORTANT: exc.errors() can contain bytes objects (e.g., raw request body)
+        which are NOT JSON-serializable! We must sanitize them first by converting
+        bytes to strings. Without this, you get "TypeError: Object of type bytes
+        is not JSON serializable" which crashes the error response itself!
+        """
+        # Sanitize errors - convert bytes to strings for JSON serialization
+        sanitized_errors = _sanitize_validation_errors(exc.errors())
+
         logger.warning(
             "Request validation error at %s: %s",
             request.url.path,
-            exc.errors(),
-            extra={"path": request.url.path, "errors": exc.errors()},
+            sanitized_errors,
+            extra={"path": request.url.path, "errors": sanitized_errors},
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"detail": exc.errors()},
+            content={"detail": sanitized_errors},
         )
 
     @app.exception_handler(json.JSONDecodeError)

@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -455,9 +455,10 @@ class ImportScanResponse(BaseModel):
 # - Incremental scan (only new/modified files based on mtime)
 # - Metadata extraction via mutagen
 # Poll /import/status/{job_id} to check progress!
+# NOTE: Accepts Form data (from HTMX hx-vals) instead of JSON body for browser compatibility.
 @router.post("/import/scan", response_model=ImportScanResponse)
 async def start_import_scan(
-    request: ImportScanRequest = ImportScanRequest(),
+    incremental: bool = Form(True),
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> ImportScanResponse:
     """Start a library import scan as background job.
@@ -466,7 +467,7 @@ async def start_import_scan(
     into the database with fuzzy artist/album matching.
 
     Args:
-        request: Scan request with incremental flag
+        incremental: If True, only scan new/modified files (default: True)
         job_queue: Job queue for background processing
 
     Returns:
@@ -476,7 +477,7 @@ async def start_import_scan(
         # Queue the scan job
         job_id = await job_queue.enqueue(
             job_type=JobType.LIBRARY_SCAN,
-            payload={"incremental": request.incremental},
+            payload={"incremental": incremental},
             max_retries=1,  # Don't retry full scans
             priority=5,  # Medium priority
         )
@@ -484,7 +485,7 @@ async def start_import_scan(
         return ImportScanResponse(
             job_id=job_id,
             status="pending",
-            message=f"Library import scan queued (incremental={request.incremental})",
+            message=f"Library import scan queued (incremental={incremental})",
         )
 
     except Exception as e:
