@@ -49,6 +49,7 @@ from .models import (
     SessionModel,
     SpotifyTokenModel,
     TrackModel,
+    ensure_utc_aware,
 )
 
 # Type variable for generic repository
@@ -3004,7 +3005,10 @@ class SpotifyBrowseRepository:
             self.session.add(model)
 
     async def should_sync(self, sync_type: str) -> bool:
-        """Check if sync is due based on cooldown."""
+        """Check if sync is due based on cooldown.
+
+        Hey future me - use ensure_utc_aware() because SQLite returns naive datetimes!
+        """
         status = await self.get_sync_status(sync_type)
         if not status:
             return True  # Never synced
@@ -3012,7 +3016,7 @@ class SpotifyBrowseRepository:
             return False  # Already running
         if not status.next_sync_at:
             return True
-        return bool(datetime.now(UTC) >= status.next_sync_at)
+        return bool(datetime.now(UTC) >= ensure_utc_aware(status.next_sync_at))
 
     # =========================================================================
     # PLAYLISTS (SPOTIFY-SYNCED)

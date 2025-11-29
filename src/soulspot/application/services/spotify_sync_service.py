@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+from soulspot.infrastructure.persistence.models import ensure_utc_aware
 from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
 if TYPE_CHECKING:
@@ -343,11 +344,12 @@ class SpotifySyncService:
                 return stats
 
             # Check cooldown based on albums_synced_at
+            # Hey future me - use ensure_utc_aware() because SQLite returns naive datetimes!
             if not force and artist.albums_synced_at:
                 from datetime import timedelta
 
                 cooldown = timedelta(minutes=self.ALBUMS_SYNC_COOLDOWN)
-                if datetime.now(UTC) < artist.albums_synced_at + cooldown:
+                if datetime.now(UTC) < ensure_utc_aware(artist.albums_synced_at) + cooldown:
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_albums_by_artist(artist_id)
                     return stats
@@ -451,11 +453,12 @@ class SpotifySyncService:
                 return stats
 
             # Check cooldown
+            # Hey future me - use ensure_utc_aware() because SQLite returns naive datetimes!
             if not force and album.tracks_synced_at:
                 from datetime import timedelta
 
                 cooldown = timedelta(minutes=self.TRACKS_SYNC_COOLDOWN)
-                if datetime.now(UTC) < album.tracks_synced_at + cooldown:
+                if datetime.now(UTC) < ensure_utc_aware(album.tracks_synced_at) + cooldown:
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_tracks_by_album(album_id)
                     return stats
