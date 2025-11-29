@@ -1,7 +1,7 @@
 """Add album types (Lidarr-style) and enrichment candidates table.
 
 Revision ID: nn25010ppr58
-Revises: mm24007nnp55
+Revises: ll25009ooq57
 Create Date: 2025-11-29 10:00:00.000000
 
 Hey future me - this is a BIG migration with two parts:
@@ -32,7 +32,7 @@ from sqlalchemy.dialects import sqlite
 
 # revision identifiers, used by Alembic.
 revision = "nn25010ppr58"
-down_revision = "mm24007nnp55"
+down_revision = "ll25009ooq57"
 branch_labels = None
 depends_on = None
 
