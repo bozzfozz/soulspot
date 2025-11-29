@@ -1,6 +1,6 @@
 """Rename local library tables to soulspot_ prefix.
 
-Revision ID: ll25008oop56
+Revision ID: ll25009ooq57
 Revises: kk24007nno55
 Create Date: 2025-11-28
 
@@ -23,7 +23,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "ll25008oop56"
+revision = "ll25009ooq57"
 down_revision = "kk24007nno55"
 branch_labels = None
 depends_on = None
