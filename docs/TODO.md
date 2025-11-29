@@ -6,7 +6,16 @@
 
 ## 🔴 Hohe Priorität
 
-*(aktuell keine)*
+### Database-First Architecture ✅ ERLEDIGT
+
+**Implementiert:**
+- ✅ `spotify_artists.html` - Message: "Keine Künstler in der Datenbank" (statt "nicht verbunden")
+- ✅ `import_playlist.html` - Sync-Status statt Connection-Status
+- ✅ `onboarding.html` - Sync-Terminologie 
+- ✅ `incomplete_albums.html` - DB-First Message
+- ✅ `/spotify/artists` Backend - lädt IMMER aus DB, Sync optional
+
+**Prinzip:** Spotify = Datenquelle → Sync → DB/Artwork → Frontend zeigt lokale Daten
 
 ---
 
@@ -17,13 +26,29 @@
 - [ ] E2E Tests für Duplicate Review UI
 - [ ] Tests für Automation Workers im Zusammenspiel
 
-### Fehlende UI-Seiten
-- [ ] Broken Files UI (`/library/broken-files`) - aktuell nur API
-- [ ] Incomplete Albums UI (`/library/incomplete-albums`) - aktuell nur API
+### Fehlende UI-Seiten ✅ BEREITS IMPLEMENTIERT
+
+- ✅ Broken Files UI (`/library/broken-files`) - vollständig funktionsfähig
+- ✅ Incomplete Albums UI (`/library/incomplete-albums`) - vollständig funktionsfähig
+
+**Status:** Beide Pages existieren bereits mit API-Endpoints und HTMX-Integration.
 
 ---
 
 ## 🟢 Niedrige Priorität (Refactoring)
+
+### Leere Router entfernen ✅ BEREIT ZUM LÖSCHEN
+
+Die folgenden Router sind leer und werden nicht in `routers/__init__.py` importiert:
+
+```bash
+rm src/soulspot/api/routers/albums.py
+rm src/soulspot/api/routers/dashboard.py
+rm src/soulspot/api/routers/widget_templates.py
+rm src/soulspot/api/routers/widgets.py
+```
+
+**Status:** Sicher zu löschen - keine Abhängigkeiten gefunden.
 
 ### Große Router aufteilen
 

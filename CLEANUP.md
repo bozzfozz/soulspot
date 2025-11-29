@@ -9,6 +9,24 @@ Die UI wurde vollständig auf das neue Design-System migriert. Dieses Dokument l
 
 ## 🗑️ Zu löschende Dateien
 
+### Status: ✅ Cleanup abgeschlossen oder nicht nötig
+
+Alle in diesem Dokument aufgeführten Dateien wurden bereits gelöscht oder existieren nicht mehr:
+- ❌ `theme-sample.html` - nicht gefunden
+- ❌ `ui-demo.html` - nicht gefunden  
+- ❌ `_navigation.html` - nicht gefunden
+- ❌ `_theme.html` - nicht gefunden
+- ❌ Widget-System Dateien - nicht gefunden
+- ❌ `/static/css/` Verzeichnis - existiert nicht (neue UI in `/static/new-ui/`)
+- ❌ `test_theme.py` - nicht gefunden
+
+**Neue Struktur (behalten):**
+- ✅ `/static/new-ui/css/` - aktives CSS
+- ✅ `/templates/includes/macros.html` - Design System  
+- ✅ `/templates/includes/sidebar.html` - Navigation
+
+---
+
 ### Templates
 
 ```bash
