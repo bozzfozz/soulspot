@@ -35,7 +35,15 @@ depends_on = None
 
 
 def _drop_index_if_exists(index_name: str) -> None:
-    """Drop an index if it exists (SQLite compatible)."""
+    """Drop an index if it exists (SQLite compatible).
+
+    Note: DDL statements cannot use parameterized queries for object names.
+    The index_name must be part of the SQL string itself. All callers pass
+    hardcoded constant strings, not user input, so SQL injection is not possible.
+    """
+    # Validate index name contains only safe characters (alphanumeric + underscore)
+    if not index_name.replace("_", "").isalnum():
+        raise ValueError(f"Invalid index name: {index_name}")
     op.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
 
 
