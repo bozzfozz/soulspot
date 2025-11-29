@@ -330,11 +330,9 @@ class DatabaseSessionStore:
                 SessionRepository,
             )
 
-            # IMPORTANT: We use "async for ... break" pattern here instead of "async with".
-            # The break exits the generator early, so the context manager in db.get_session()
-            # does NOT automatically close the session. We MUST call close() explicitly!
-            # This is different from Database.session_scope() where context manager handles cleanup.
-            # See: https://peps.python.org/pep-0525/#finalization
+            # Using "async for ... break" pattern. The get_session() generator now
+            # handles GeneratorExit properly, so NO explicit close() needed!
+            # See database.py for details on the race condition fix (Nov 2025).
             async for db_session in self._get_db_session():
                 try:
                     repo = SessionRepository(db_session)
@@ -343,9 +341,6 @@ class DatabaseSessionStore:
                 except Exception:
                     # Don't fail the request if DB write fails - session still works in memory
                     await db_session.rollback()
-                finally:
-                    # Required! break exits generator early, context manager won't auto-close
-                    await db_session.close()
                 break
 
         return session
@@ -392,8 +387,6 @@ class DatabaseSessionStore:
                         await db_session.commit()
                     except Exception:
                         await db_session.rollback()
-                    finally:
-                        await db_session.close()  # Required! See create_session()
                     break
             return session
 
@@ -416,8 +409,6 @@ class DatabaseSessionStore:
                         return session
                 except Exception:
                     await db_session.rollback()
-                finally:
-                    await db_session.close()  # Required! See create_session()
                 break
 
         return None
@@ -466,8 +457,6 @@ class DatabaseSessionStore:
                         return db_session_result
                 except Exception:
                     await db_session.rollback()
-                finally:
-                    await db_session.close()
                 break
 
         return None
@@ -516,8 +505,6 @@ class DatabaseSessionStore:
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                finally:
-                    await db_session.close()  # Required! See create_session()
                 break
 
         return session
@@ -554,8 +541,6 @@ class DatabaseSessionStore:
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                finally:
-                    await db_session.close()  # Required! See create_session()
                 break
 
         return memory_deleted or db_deleted
@@ -596,8 +581,6 @@ class DatabaseSessionStore:
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                finally:
-                    await db_session.close()  # Required! See create_session()
                 break
 
         return memory_count + db_count

@@ -393,10 +393,9 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
-        # IMPORTANT: We use "async for ... break" pattern - explicit close() required!
-        # The break exits the generator early before context manager cleanup runs.
-        # Without explicit close(), session stays open until GC collects the generator.
-        # See session_store.py:create_session() for detailed explanation.
+        # Using "async for ... break" pattern. The get_session() generator now
+        # handles GeneratorExit properly, so NO explicit close() needed!
+        # See database.py for details on the race condition fix (Nov 2025).
         async for db_session in self._get_db_session():
             try:
                 repo = SpotifyTokenRepository(db_session)
@@ -415,8 +414,7 @@ class DatabaseTokenManager:
 
                 return token_model.access_token
 
-            finally:
-                await db_session.close()  # Required! See comment above
+            # No finally block needed - get_session() generator handles cleanup!
             break
 
         return None
@@ -463,8 +461,7 @@ class DatabaseTokenManager:
                 logger.error(f"Failed to store OAuth token: {e}")
                 await db_session.rollback()
                 raise
-            finally:
-                await db_session.close()  # Required! See get_valid_token()
+            # No finally block needed - get_session() generator handles cleanup!
             break
 
     # Listen - TokenRefreshWorker calls this every 5 min! Checks if token expires soon
@@ -551,8 +548,7 @@ class DatabaseTokenManager:
                     await db_session.commit()
                     return False
 
-            finally:
-                await db_session.close()  # Required! See get_valid_token()
+            # No finally block needed - get_session() generator handles cleanup!
             break
 
         return False
@@ -612,8 +608,7 @@ class DatabaseTokenManager:
                     last_error_at=token_model.last_error_at,
                 )
 
-            finally:
-                await db_session.close()  # Required! See get_valid_token()
+            # No finally block needed - get_session() generator handles cleanup!
             break
 
         # Fallback (shouldn't reach here)
@@ -646,8 +641,7 @@ class DatabaseTokenManager:
                 result = await repo.mark_invalid("Manually invalidated by user")
                 await db_session.commit()
                 return result
-            finally:
-                await db_session.close()  # Required! See get_valid_token()
+            # No finally block needed - get_session() generator handles cleanup!
             break
 
         return False

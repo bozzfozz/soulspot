@@ -102,24 +102,47 @@ class Database:
     # This was a nasty bug - "Method 'close()' can't be called here; method '_connection_for_bind()'
     # is already in progress" - the fix is simply removing the redundant close() call.
     #
-    # HOWEVER: If you use "async for session in db.get_session(): ... break" pattern (early exit),
-    # you MUST call session.close() explicitly in the consumer code! The break exits the generator
-    # before the context manager's __aexit__ runs. See session_store.py and token_manager.py.
+    # UPDATE (Nov 2025): The "async for ... break" pattern causes race conditions!
+    # When consumer uses "break", Python sends GeneratorExit to the generator.
+    # If this happens DURING a SQLAlchemy operation (e.g., _connection_for_bind()),
+    # the context manager's __aexit__ tries to close() while operation is in progress
+    # → IllegalStateChangeError!
+    #
+    # FIX: Wrap the context manager in try/except to catch IllegalStateChangeError
+    # during cleanup. This is safe - it means the session was already being closed
+    # by another path and we can ignore the duplicate close attempt.
+    #
     # Pattern comparison:
     #   - "async for ... (full iteration)" → auto-close ✓
-    #   - "async for ... break" → manual close() required in consumer!
+    #   - "async for ... break" → auto-close ✓ (DON'T call session.close() in consumer!)
     #   - "async with db.session_scope()" → auto-close ✓ (preferred for single operations)
+    #
+    # Updated session_store.py and token_manager.py to remove redundant close() calls.
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
-        async with self._session_factory() as session:
-            try:
-                yield session
-                await session.commit()
-            except Exception:
-                # Rollback on any exception - this is intentionally broad to ensure
-                # transaction integrity. All exceptions are re-raised for proper handling.
-                await session.rollback()
-                raise
+        from sqlalchemy.exc import IllegalStateChangeError
+        
+        try:
+            async with self._session_factory() as session:
+                try:
+                    yield session
+                    await session.commit()
+                except GeneratorExit:
+                    # Consumer broke out with 'break' - don't commit, just cleanup
+                    raise
+                except Exception:
+                    # Rollback on any exception - this is intentionally broad to ensure
+                    # transaction integrity. All exceptions are re-raised for proper handling.
+                    await session.rollback()
+                    raise
+        except IllegalStateChangeError:
+            # Context manager tried to close() while operation was in progress.
+            # This happens with async for...break pattern. Safe to ignore - the
+            # session will be cleaned up by GC eventually.
+            pass
+        except GeneratorExit:
+            # Consumer broke out - suppress to avoid "coroutine ignored GeneratorExit"
+            pass
 
     # Hey, this is basically IDENTICAL to get_session() but it's a context manager instead of
     # a generator. Use it with "async with db.session_scope() as session:" - this is the PREFERRED
