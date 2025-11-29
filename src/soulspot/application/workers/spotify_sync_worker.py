@@ -18,12 +18,14 @@
 # - Wenn Sync fehlschlägt: Loggen und beim nächsten Durchlauf nochmal versuchen
 # - Kein Crash der Loop!
 # - Bei Token-Fehler (401): Worker läuft weiter, aber skippt Syncs bis Token wieder da ist
+#
+# UPDATE (Nov 2025): Now uses session_scope context manager instead of async generator
+# to fix "GC cleaning up non-checked-in connection" errors.
 """Background worker for automatic Spotify data synchronization."""
 
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -124,11 +126,6 @@ class SpotifySyncWorker:
             self._task = None
         logger.info("Spotify sync worker stopped")
 
-    async def _get_db_session(self) -> AsyncGenerator[Any, None]:
-        """Get a database session from the pool."""
-        async for session in self.db.get_session():
-            yield session
-
     async def _run_loop(self) -> None:
         """Main worker loop - checks and runs syncs periodically.
 
@@ -168,79 +165,77 @@ class SpotifySyncWorker:
         Hey future me - diese Methode wird alle check_interval_seconds aufgerufen.
         Sie holt die aktuellen Settings aus der DB (damit Runtime-Änderungen wirken)
         und führt alle fälligen Syncs aus.
+
+        UPDATE (Nov 2025): Now uses session_scope context manager instead of
+        async generator to fix "GC cleaning up non-checked-in connection" errors.
         """
-        # Get a fresh DB session for this cycle - use anext to get single session
-        session_gen = self._get_db_session()
-        try:
-            session = await anext(session_gen)
-        except StopAsyncIteration:
-            logger.error("Failed to get database session for sync cycle")
-            return
+        # Get a fresh DB session for this cycle using session_scope context manager
+        # Hey future me - using session_scope ensures proper connection cleanup!
+        async with self.db.session_scope() as session:
+            try:
+                # Import here to avoid circular imports
+                from soulspot.application.services.app_settings_service import (
+                    AppSettingsService,
+                )
 
-        try:
-            # Import here to avoid circular imports
-            from soulspot.application.services.app_settings_service import (
-                AppSettingsService,
-            )
+                settings_service = AppSettingsService(session)
 
-            settings_service = AppSettingsService(session)
+                # Check master toggle first
+                auto_sync_enabled = await settings_service.get_bool(
+                    "spotify.auto_sync_enabled", default=True
+                )
 
-            # Check master toggle first
-            auto_sync_enabled = await settings_service.get_bool(
-                "spotify.auto_sync_enabled", default=True
-            )
+                if not auto_sync_enabled:
+                    logger.debug("Spotify auto-sync is disabled, skipping")
+                    return
 
-            if not auto_sync_enabled:
-                logger.debug("Spotify auto-sync is disabled, skipping")
-                return
+                # Get access token - if not available, skip this cycle
+                access_token = await self.token_manager.get_token_for_background()
+                if not access_token:
+                    logger.warning("No valid Spotify token available, skipping sync cycle")
+                    return
 
-            # Get access token - if not available, skip this cycle
-            access_token = await self.token_manager.get_token_for_background()
-            if not access_token:
-                logger.warning("No valid Spotify token available, skipping sync cycle")
-                return
+                # Get interval settings
+                artists_interval = await settings_service.get_int(
+                    "spotify.artists_sync_interval_minutes", default=5
+                )
+                playlists_interval = await settings_service.get_int(
+                    "spotify.playlists_sync_interval_minutes", default=10
+                )
 
-            # Get interval settings
-            artists_interval = await settings_service.get_int(
-                "spotify.artists_sync_interval_minutes", default=5
-            )
-            playlists_interval = await settings_service.get_int(
-                "spotify.playlists_sync_interval_minutes", default=10
-            )
+                # Check which syncs are enabled and due
+                now = datetime.utcnow()
 
-            # Check which syncs are enabled and due
-            now = datetime.utcnow()
+                # Artists sync
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_artists", default=True
+                ) and self._is_sync_due("artists", artists_interval, now):
+                    await self._run_artists_sync(session, access_token, now)
 
-            # Artists sync
-            if await settings_service.get_bool(
-                "spotify.auto_sync_artists", default=True
-            ) and self._is_sync_due("artists", artists_interval, now):
-                await self._run_artists_sync(session, access_token, now)
+                # Playlists sync
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_playlists", default=True
+                ) and self._is_sync_due("playlists", playlists_interval, now):
+                    await self._run_playlists_sync(session, access_token, now)
 
-            # Playlists sync
-            if await settings_service.get_bool(
-                "spotify.auto_sync_playlists", default=True
-            ) and self._is_sync_due("playlists", playlists_interval, now):
-                await self._run_playlists_sync(session, access_token, now)
+                # Liked Songs sync (uses playlists interval)
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_liked_songs", default=True
+                ) and self._is_sync_due("liked_songs", playlists_interval, now):
+                    await self._run_liked_songs_sync(session, access_token, now)
 
-            # Liked Songs sync (uses playlists interval)
-            if await settings_service.get_bool(
-                "spotify.auto_sync_liked_songs", default=True
-            ) and self._is_sync_due("liked_songs", playlists_interval, now):
-                await self._run_liked_songs_sync(session, access_token, now)
+                # Saved Albums sync (uses playlists interval)
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_saved_albums", default=True
+                ) and self._is_sync_due("saved_albums", playlists_interval, now):
+                    await self._run_saved_albums_sync(session, access_token, now)
 
-            # Saved Albums sync (uses playlists interval)
-            if await settings_service.get_bool(
-                "spotify.auto_sync_saved_albums", default=True
-            ) and self._is_sync_due("saved_albums", playlists_interval, now):
-                await self._run_saved_albums_sync(session, access_token, now)
+                # Commit any changes
+                await session.commit()
 
-            # Commit any changes
-            await session.commit()
-
-        except Exception as e:
-            logger.error(f"Error in sync cycle: {e}", exc_info=True)
-            await session.rollback()
+            except Exception as e:
+                logger.error(f"Error in sync cycle: {e}", exc_info=True)
+                await session.rollback()
 
     def _is_sync_due(
         self, sync_type: str, interval_minutes: int, now: datetime

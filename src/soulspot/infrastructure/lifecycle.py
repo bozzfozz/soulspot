@@ -8,7 +8,6 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
-from typing import Any
 
 from fastapi import FastAPI
 
@@ -127,14 +126,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize database-backed session store for OAuth persistence
         from soulspot.application.services.session_store import DatabaseSessionStore
 
-        async def get_db_session_for_store() -> AsyncGenerator[Any, None]:
-            """Get DB session for session store operations."""
-            async for session in db.get_session():
-                yield session
-
+        # Hey future me - we pass the session_scope context manager factory directly!
+        # This ensures proper connection cleanup (no more "GC cleaning up non-checked-in connection" errors).
+        # The old get_session() generator pattern leaked connections when used with "async for ... break".
         session_store = DatabaseSessionStore(
             session_timeout_seconds=settings.api.session_max_age,
-            get_db_session=get_db_session_for_store,
+            session_scope=db.session_scope,
         )
         app.state.session_store = session_store
         logger.info("Session store initialized with database persistence")
@@ -151,9 +148,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         spotify_client = SpotifyClient(settings.spotify)
 
+        # Hey future me - same pattern as session_store: pass session_scope context manager factory!
         db_token_manager = DatabaseTokenManager(
             spotify_client=spotify_client,
-            get_db_session=get_db_session_for_store,
+            session_scope=db.session_scope,
         )
         app.state.db_token_manager = db_token_manager
         logger.info("Database token manager initialized for background workers")
@@ -205,13 +203,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         slskd_client = SlskdClient(settings.slskd)
         app.state.slskd_client = slskd_client
 
-        # Initialize download worker with repositories
-        # Note: These will be created per-request in real usage, but we need instances for worker
-        # Hey future me - session bleibt im Scope nach dem break, das ist Python Verhalten!
-        session = None  # Initialize for type checker
-        async for session in db.get_session():
-            track_repository = TrackRepository(session)
-            download_repository = DownloadRepository(session)
+        # =================================================================
+        # Create a single long-lived session for background workers
+        # =================================================================
+        # Hey future me - some workers (AutomationWorkerManager, CleanupWorker) need
+        # a long-lived session that stays open for the app's lifetime. We use a
+        # session_scope context manager that spans the entire app lifecycle.
+        # The session is committed/rolled back within each worker operation.
+        # This is different from request-scoped sessions which are short-lived.
+        #
+        # IMPORTANT: Transaction isolation and error handling:
+        # - Each worker method is responsible for committing or rolling back its own transactions
+        # - If one worker's transaction fails, it should rollback and NOT affect other workers
+        # - The shared session means workers should NOT hold transactions open for long periods
+        # - Use explicit commit() after each logical operation, not at the end of a loop
+        # - On exception, always rollback() before re-raising to clean up the transaction
+        #
+        # Example pattern for workers:
+        #   try:
+        #       result = await repo.do_something()
+        #       await session.commit()  # Commit immediately after successful operation
+        #   except Exception as e:
+        #       await session.rollback()  # Always rollback on error
+        #       raise
+        #
+        # The context manager ensures the session is properly closed on app shutdown.
+        async with db.session_scope() as worker_session:
+            # Initialize download worker with repositories
+            track_repository = TrackRepository(worker_session)
+            download_repository = DownloadRepository(worker_session)
 
             download_worker = DownloadWorker(
                 job_queue=job_queue,
@@ -232,131 +252,120 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.library_scan_worker = library_scan_worker
             logger.info("Library scan worker registered")
 
-            break
+            # Start job queue workers
+            await job_queue.start(num_workers=settings.download.num_workers)
+            logger.info(
+                "Job queue started with %d workers, max concurrent downloads: %d",
+                settings.download.num_workers,
+                settings.download.max_concurrent_downloads,
+            )
 
-        # Start job queue workers
-        await job_queue.start(num_workers=settings.download.num_workers)
-        logger.info(
-            "Job queue started with %d workers, max concurrent downloads: %d",
-            settings.download.num_workers,
-            settings.download.max_concurrent_downloads,
-        )
+            # =================================================================
+            # Start Download Monitor Worker (tracks slskd download progress)
+            # =================================================================
+            # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
+            # Er pollt slskd alle X Sekunden und updated Job.result mit Progress.
+            # Ohne ihn bleiben Jobs ewig in RUNNING Status ohne echten Progress.
+            from soulspot.application.workers.download_monitor_worker import (
+                DownloadMonitorWorker,
+            )
 
-        # =================================================================
-        # Start Download Monitor Worker (tracks slskd download progress)
-        # =================================================================
-        # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
-        # Er pollt slskd alle X Sekunden und updated Job.result mit Progress.
-        # Ohne ihn bleiben Jobs ewig in RUNNING Status ohne echten Progress.
-        from soulspot.application.workers.download_monitor_worker import (
-            DownloadMonitorWorker,
-        )
+            download_monitor_worker = DownloadMonitorWorker(
+                job_queue=job_queue,
+                slskd_client=slskd_client,
+                poll_interval_seconds=10,  # Poll every 10 seconds
+            )
+            await download_monitor_worker.start()
+            app.state.download_monitor_worker = download_monitor_worker
+            logger.info("Download monitor worker started (polls every 10s)")
 
-        download_monitor_worker = DownloadMonitorWorker(
-            job_queue=job_queue,
-            slskd_client=slskd_client,
-            poll_interval_seconds=10,  # Poll every 10 seconds
-        )
-        await download_monitor_worker.start()
-        app.state.download_monitor_worker = download_monitor_worker
-        logger.info("Download monitor worker started (polls every 10s)")
+            # =================================================================
+            # Start Automation Workers (optional, controlled by settings)
+            # =================================================================
+            # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
+            # Sie laufen im Hintergrund und checken nur, ob enabled via AppSettingsService.
+            # Wenn disabled, loggen sie nur "skipping" und warten auf nächsten Interval.
+            from soulspot.application.workers.automation_workers import (
+                AutomationWorkerManager,
+            )
 
-        # =================================================================
-        # Start Automation Workers (optional, controlled by settings)
-        # =================================================================
-        # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
-        # Sie laufen im Hintergrund und checken nur, ob enabled via AppSettingsService.
-        # Wenn disabled, loggen sie nur "skipping" und warten auf nächsten Interval.
-        from soulspot.application.workers.automation_workers import (
-            AutomationWorkerManager,
-        )
+            automation_manager = AutomationWorkerManager(
+                session=worker_session,
+                spotify_client=spotify_client,
+                token_manager=db_token_manager,
+                watchlist_interval=3600,  # 1 hour
+                discography_interval=86400,  # 24 hours
+                quality_interval=86400,  # 24 hours
+            )
+            await automation_manager.start_all()
+            app.state.automation_manager = automation_manager
+            logger.info("Automation workers started (watchlist/discography/quality)")
 
-        # Ensure session was acquired from the loop
-        if session is None:
-            raise RuntimeError("Failed to acquire database session for workers")
+            # =================================================================
+            # Start Cleanup Worker (optional, default disabled)
+            # =================================================================
+            # Hey future me - dieser Worker ist GEFÄHRLICH weil er Dateien LÖSCHT!
+            # Deswegen ist er per Default disabled. User muss explizit enablen.
+            from soulspot.application.services.app_settings_service import (
+                AppSettingsService,
+            )
+            from soulspot.application.workers.cleanup_worker import CleanupWorker
 
-        automation_manager = AutomationWorkerManager(
-            session=session,
-            spotify_client=spotify_client,
-            token_manager=db_token_manager,
-            watchlist_interval=3600,  # 1 hour
-            discography_interval=86400,  # 24 hours
-            quality_interval=86400,  # 24 hours
-        )
-        await automation_manager.start_all()
-        app.state.automation_manager = automation_manager
-        logger.info("Automation workers started (watchlist/discography/quality)")
+            app_settings_service = AppSettingsService(worker_session)
+            cleanup_worker = CleanupWorker(
+                job_queue=job_queue,
+                settings_service=app_settings_service,
+                downloads_path=settings.storage.download_path,
+                music_path=settings.storage.music_path,
+                dry_run=False,  # Set to True for testing
+            )
+            await cleanup_worker.start()
+            app.state.cleanup_worker = cleanup_worker
+            logger.info("Cleanup worker started (checks daily, disabled by default)")
 
-        # =================================================================
-        # Start Cleanup Worker (optional, default disabled)
-        # =================================================================
-        # Hey future me - dieser Worker ist GEFÄHRLICH weil er Dateien LÖSCHT!
-        # Deswegen ist er per Default disabled. User muss explizit enablen.
-        from soulspot.application.services.app_settings_service import (
-            AppSettingsService,
-        )
-        from soulspot.application.workers.cleanup_worker import CleanupWorker
+            # =================================================================
+            # Start Duplicate Detector Worker (optional, default disabled)
+            # =================================================================
+            # Hey future me - dieser Worker findet Duplikate via Metadata-Hash.
+            # Er ist CPU-intensiv, deswegen läuft er nur 1x pro Woche default.
+            from soulspot.application.workers.duplicate_detector_worker import (
+                DuplicateDetectorWorker,
+            )
 
-        app_settings_service = AppSettingsService(session)
-        cleanup_worker = CleanupWorker(
-            job_queue=job_queue,
-            settings_service=app_settings_service,
-            downloads_path=settings.storage.download_path,
-            music_path=settings.storage.music_path,
-            dry_run=False,  # Set to True for testing
-        )
-        await cleanup_worker.start()
-        app.state.cleanup_worker = cleanup_worker
-        logger.info("Cleanup worker started (checks daily, disabled by default)")
+            # Hey future me - pass session_scope context manager for proper connection cleanup!
+            duplicate_detector_worker = DuplicateDetectorWorker(
+                job_queue=job_queue,
+                settings_service=app_settings_service,
+                session_scope=db.session_scope,
+            )
+            await duplicate_detector_worker.start()
+            app.state.duplicate_detector_worker = duplicate_detector_worker
+            logger.info(
+                "Duplicate detector worker started (weekly scan, disabled by default)"
+            )
 
-        # =================================================================
-        # Start Duplicate Detector Worker (optional, default disabled)
-        # =================================================================
-        # Hey future me - dieser Worker findet Duplikate via Metadata-Hash.
-        # Er ist CPU-intensiv, deswegen läuft er nur 1x pro Woche default.
-        from soulspot.application.workers.duplicate_detector_worker import (
-            DuplicateDetectorWorker,
-        )
+            # Start auto-import service in the background
+            from soulspot.application.services import AutoImportService
+            from soulspot.infrastructure.persistence.repositories import (
+                AlbumRepository,
+                ArtistRepository,
+            )
 
-        async def get_session_factory() -> AsyncGenerator[Any, None]:
-            """Session factory for workers."""
-            async for s in db.get_session():
-                yield s
-
-        duplicate_detector_worker = DuplicateDetectorWorker(
-            job_queue=job_queue,
-            settings_service=app_settings_service,
-            session_factory=get_session_factory,
-        )
-        await duplicate_detector_worker.start()
-        app.state.duplicate_detector_worker = duplicate_detector_worker
-        logger.info(
-            "Duplicate detector worker started (weekly scan, disabled by default)"
-        )
-
-        # Start auto-import service in the background
-        from soulspot.application.services import AutoImportService
-        from soulspot.infrastructure.persistence.repositories import (
-            AlbumRepository,
-            ArtistRepository,
-        )
-
-        # Create repositories for auto-import service
-        async for session in db.get_session():
+            # Create auto-import service using the worker session
             auto_import_service = AutoImportService(
                 settings=settings,
                 track_repository=track_repository,
-                artist_repository=ArtistRepository(session),
-                album_repository=AlbumRepository(session),
+                artist_repository=ArtistRepository(worker_session),
+                album_repository=AlbumRepository(worker_session),
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
                 app_settings_service=app_settings_service,  # For dynamic naming templates
             )
             app.state.auto_import = auto_import_service
             auto_import_task = asyncio.create_task(auto_import_service.start())
             logger.info("Auto-import service started")
-            break
 
-        yield
+            # Yield to keep the app running - session stays open during app lifetime
+            yield
 
     except Exception as e:
         logger.exception("Error during application startup: %s", e)

@@ -70,24 +70,42 @@ class DuplicateDetectorWorker:
 
     Results are stored in duplicate_candidates table for user review.
     The worker does NOT auto-delete - humans decide what's a real duplicate.
+
+    UPDATE (Nov 2025): Now uses session_scope context manager instead of session_factory
+    to fix "GC cleaning up non-checked-in connection" errors.
     """
 
     def __init__(
         self,
         job_queue: JobQueue,
         settings_service: AppSettingsService,
-        session_factory: Any,  # Callable[[], AsyncSession]
+        session_scope: Any | None = None,
+        # DEPRECATED: session_factory kept for backwards compatibility
+        session_factory: Any | None = None,
     ) -> None:
         """Initialize duplicate detector worker.
 
         Args:
             job_queue: Job queue for creating scan jobs
             settings_service: Settings service for config
-            session_factory: Async session factory for DB access
+            session_scope: Async context manager factory for DB sessions (preferred)
+            session_factory: DEPRECATED - Falls back to session_scope behavior if provided
+
+        Raises:
+            ValueError: If neither session_scope nor session_factory is provided
         """
         self._job_queue = job_queue
         self._settings = settings_service
-        self._session_factory = session_factory
+
+        # Backwards compatibility: if only session_factory provided, use it as session_scope
+        # Hey future me - session_factory was already a context manager in _run_scan!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif session_factory is not None:
+            # Use session_factory as fallback (it was already used as context manager)
+            self._session_scope = session_factory
+        else:
+            raise ValueError("Either session_scope or session_factory must be provided")
 
         self._running = False
         self._task: asyncio.Task[None] | None = None
@@ -181,7 +199,8 @@ class DuplicateDetectorWorker:
         """
         logger.info("Starting duplicate detection scan")
 
-        async with self._session_factory() as session:
+        # Hey future me - using session_scope context manager ensures proper connection cleanup!
+        async with self._session_scope() as session:
             # Load all tracks (simplified - in production use batching)
             tracks = await self._load_tracks(session)
             self._stats["tracks_scanned"] = len(tracks)

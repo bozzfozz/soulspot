@@ -252,6 +252,10 @@ class SessionStore:
 # The in-memory dict (_sessions) acts as a WRITE-THROUGH CACHE - reads check memory first (fast!),
 # writes go to BOTH memory and DB. When app restarts, we LOAD sessions from DB on first access.
 # This is backward compatible with SessionStore - just swap dependencies to use this class instead!
+#
+# UPDATE (Nov 2025): Now uses session_scope context manager instead of async generator to fix
+# "GC cleaning up non-checked-in connection" errors. The old "async for ... break" pattern
+# leaked connections to the garbage collector.
 class DatabaseSessionStore:
     """Database-backed session store with persistence across restarts.
 
@@ -263,16 +267,34 @@ class DatabaseSessionStore:
     def __init__(
         self,
         session_timeout_seconds: int = 3600,
+        session_scope: Any | None = None,
+        # DEPRECATED: get_db_session is kept for backwards compatibility but session_scope is preferred
         get_db_session: Any | None = None,
     ) -> None:
         """Initialize database-backed session store.
 
         Args:
             session_timeout_seconds: Session timeout in seconds
-            get_db_session: Async function that returns AsyncSession for DB ops
+            session_scope: Async context manager factory for DB sessions (preferred)
+            get_db_session: DEPRECATED - Async generator for DB sessions (kept for backwards compatibility)
+
+        Note:
+            If neither session_scope nor get_db_session is provided, the store
+            operates in memory-only mode (no persistence to database).
         """
         self.session_timeout_seconds = session_timeout_seconds
-        self._get_db_session = get_db_session
+
+        # Backwards compatibility: prefer session_scope, but allow get_db_session as fallback
+        # Hey future me - if get_db_session is a context manager factory, it should work!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif get_db_session is not None:
+            # Use get_db_session as fallback - assume it's also a context manager factory
+            self._session_scope = get_db_session
+        else:
+            # Memory-only mode - no database persistence
+            self._session_scope = None
+
         self._sessions: dict[str, Session] = {}  # In-memory cache
         self._db_loaded = False  # Track if we've loaded sessions from DB yet
 
@@ -289,7 +311,7 @@ class DatabaseSessionStore:
         could be expensive with many sessions. Each session is fetched
         from the database individually when requested if not in cache.
         """
-        if self._db_loaded or not self._get_db_session:
+        if self._db_loaded or not self._session_scope:
             return
 
         # Sessions are loaded on-demand in get_session() and get_session_by_state()
@@ -325,15 +347,14 @@ class DatabaseSessionStore:
         self._sessions[session_id] = session
 
         # Persist to database (async, survives restarts)
-        if self._get_db_session:
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        # The old "async for ... break" pattern leaked connections to the GC.
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            # Using "async for ... break" pattern. The get_session() generator now
-            # handles GeneratorExit properly, so NO explicit close() needed!
-            # See database.py for details on the race condition fix (Nov 2025).
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     await repo.create(session)
@@ -341,7 +362,6 @@ class DatabaseSessionStore:
                 except Exception:
                     # Don't fail the request if DB write fails - session still works in memory
                     await db_session.rollback()
-                break
 
         return session
 
@@ -374,30 +394,29 @@ class DatabaseSessionStore:
 
         if session:
             # Update in DB too (refresh last_accessed_at)
-            if self._get_db_session:
+            # Hey future me - using context manager pattern ensures proper connection cleanup!
+            if self._session_scope:
                 from soulspot.infrastructure.persistence.repositories import (
                     SessionRepository,
                 )
 
-                # See create_session() comment - explicit close() required with "async for...break"
-                async for db_session in self._get_db_session():
+                async with self._session_scope() as db_session:
                     try:
                         repo = SessionRepository(db_session)
                         await repo.get(session_id)  # This updates last_accessed_at
                         await db_session.commit()
                     except Exception:
                         await db_session.rollback()
-                    break
             return session
 
         # Not in memory - check DB (restart scenario)
-        if self._get_db_session:
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            # See create_session() comment - explicit close() required with "async for...break"
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     session = await repo.get(session_id)
@@ -409,7 +428,6 @@ class DatabaseSessionStore:
                         return session
                 except Exception:
                     await db_session.rollback()
-                break
 
         return None
 
@@ -438,12 +456,13 @@ class DatabaseSessionStore:
                 return session
 
         # Not in memory - check DB
-        if self._get_db_session:
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     db_session_result = await repo.get_by_oauth_state(state)
@@ -457,7 +476,6 @@ class DatabaseSessionStore:
                         return db_session_result
                 except Exception:
                     await db_session.rollback()
-                break
 
         return None
 
@@ -493,19 +511,19 @@ class DatabaseSessionStore:
         session.refresh_access()
 
         # Update in DB
-        if self._get_db_session:
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     await repo.update(session_id, **kwargs)
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                break
 
         return session
 
@@ -528,20 +546,20 @@ class DatabaseSessionStore:
             memory_deleted = True
 
         # Delete from DB
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
         db_deleted = False
-        if self._get_db_session:
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     db_deleted = await repo.delete(session_id)
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                break
 
         return memory_deleted or db_deleted
 
@@ -568,19 +586,19 @@ class DatabaseSessionStore:
         memory_count = len(expired_ids)
 
         # Cleanup DB
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
         db_count = 0
-        if self._get_db_session:
+        if self._session_scope:
             from soulspot.infrastructure.persistence.repositories import (
                 SessionRepository,
             )
 
-            async for db_session in self._get_db_session():
+            async with self._session_scope() as db_session:
                 try:
                     repo = SessionRepository(db_session)
                     db_count = await repo.cleanup_expired(self.session_timeout_seconds)
                     await db_session.commit()
                 except Exception:
                     await db_session.rollback()
-                break
 
         return memory_count + db_count

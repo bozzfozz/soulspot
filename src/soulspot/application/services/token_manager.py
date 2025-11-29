@@ -356,21 +356,43 @@ class DatabaseTokenManager:
     - store_from_oauth(): Save token after OAuth callback
     - refresh_expiring_tokens(): Proactive refresh (called by TokenRefreshWorker)
     - get_status(): Get token status for UI display
+
+    UPDATE (Nov 2025): Now uses session_scope context manager instead of async generator
+    to fix "GC cleaning up non-checked-in connection" errors.
     """
 
     def __init__(
         self,
         spotify_client: ISpotifyClient,
-        get_db_session: Any,  # Async generator function that yields AsyncSession
+        session_scope: Any | None = None,
+        # DEPRECATED: get_db_session kept for backwards compatibility
+        get_db_session: Any | None = None,
     ) -> None:
         """Initialize database token manager.
 
         Args:
             spotify_client: Spotify client for refresh operations
-            get_db_session: Async function that yields database sessions
+            session_scope: Async context manager factory for DB sessions (preferred)
+            get_db_session: DEPRECATED - Async generator for DB sessions (kept for backwards compatibility)
+
+        Raises:
+            ValueError: If neither session_scope nor get_db_session is provided
         """
         self._spotify_client = spotify_client
-        self._get_db_session = get_db_session
+
+        # Backwards compatibility: prefer session_scope, but allow get_db_session as context manager
+        # Hey future me - if get_db_session was used correctly (as context manager), it should work!
+        if session_scope is not None:
+            self._session_scope = session_scope
+        elif get_db_session is not None:
+            # Use get_db_session as fallback - assume it's also a context manager factory
+            self._session_scope = get_db_session
+            logger.warning(
+                "DatabaseTokenManager: Using deprecated get_db_session parameter. "
+                "Migrate to session_scope for better connection handling."
+            )
+        else:
+            raise ValueError("Either session_scope or get_db_session must be provided")
 
     # Hey future me - THIS is the main method for background workers! Returns access_token string
     # if valid token exists, None otherwise. Workers should check for None and skip work gracefully.
@@ -393,10 +415,13 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
-        # Using "async for ... break" pattern. The get_session() generator now
-        # handles GeneratorExit properly, so NO explicit close() needed!
-        # See database.py for details on the race condition fix (Nov 2025).
-        async for db_session in self._get_db_session():
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        # The old "async for ... break" pattern leaked connections to the GC.
+        if not self._session_scope:
+            logger.warning("No session_scope configured for DatabaseTokenManager")
+            return None
+
+        async with self._session_scope() as db_session:
             repo = SpotifyTokenRepository(db_session)
             token_model = await repo.get_active_token()
 
@@ -412,8 +437,6 @@ class DatabaseTokenManager:
                 return None
 
             return token_model.access_token
-
-        return None
 
     # Yo - OAuth callback calls this! Stores new token after successful authentication.
     # Sets is_valid=True and clears any previous errors. This is the "reset" point.
@@ -441,8 +464,12 @@ class DatabaseTokenManager:
 
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
-        # See get_valid_token() comment - explicit close() required with "async for...break"
-        async for db_session in self._get_db_session():
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if not self._session_scope:
+            logger.error("No session_scope configured for DatabaseTokenManager")
+            raise RuntimeError("session_scope not configured")
+
+        async with self._session_scope() as db_session:
             try:
                 repo = SpotifyTokenRepository(db_session)
                 await repo.upsert_token(
@@ -457,8 +484,6 @@ class DatabaseTokenManager:
                 logger.error(f"Failed to store OAuth token: {e}")
                 await db_session.rollback()
                 raise
-            # No finally block needed - get_session() generator handles cleanup!
-            break
 
     # Listen - TokenRefreshWorker calls this every 5 min! Checks if token expires soon
     # and proactively refreshes it. If refresh fails, marks token invalid (triggers UI warning).
@@ -481,7 +506,12 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
-        async for db_session in self._get_db_session():
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if not self._session_scope:
+            logger.warning("No session_scope configured for DatabaseTokenManager")
+            return False
+
+        async with self._session_scope() as db_session:
             repo = SpotifyTokenRepository(db_session)
             token_model = await repo.get_expiring_soon(minutes=threshold_minutes)
 
@@ -543,8 +573,6 @@ class DatabaseTokenManager:
                 await db_session.commit()
                 return False
 
-        return False
-
     # Hey - UI calls this for the token status endpoint and warning banner!
     # Returns structured status info regardless of token validity.
     async def get_status(self) -> TokenStatus:
@@ -564,7 +592,18 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
-        async for db_session in self._get_db_session():
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if not self._session_scope:
+            return TokenStatus(
+                exists=False,
+                is_valid=False,
+                needs_reauth=True,
+                expires_in_minutes=None,
+                last_error="session_scope not configured",
+                last_error_at=None,
+            )
+
+        async with self._session_scope() as db_session:
             repo = SpotifyTokenRepository(db_session)
             token_model = await repo.get_token_status()
 
@@ -599,16 +638,6 @@ class DatabaseTokenManager:
                 last_error_at=token_model.last_error_at,
             )
 
-        # Fallback (shouldn't reach here)
-        return TokenStatus(
-            exists=False,
-            is_valid=False,
-            needs_reauth=True,
-            expires_in_minutes=None,
-            last_error=None,
-            last_error_at=None,
-        )
-
     # Yo - manually mark token as invalid (e.g., user clicked "disconnect Spotify")
     async def invalidate(self) -> bool:
         """Manually invalidate the token.
@@ -623,7 +652,12 @@ class DatabaseTokenManager:
             SpotifyTokenRepository,
         )
 
-        async for db_session in self._get_db_session():
+        # Hey future me - using context manager pattern ensures proper connection cleanup!
+        if not self._session_scope:
+            logger.error("No session_scope configured for DatabaseTokenManager")
+            return False
+
+        async with self._session_scope() as db_session:
             try:
                 repo = SpotifyTokenRepository(db_session)
                 result = await repo.mark_invalid("Manually invalidated by user")
@@ -633,5 +667,3 @@ class DatabaseTokenManager:
                 logger.error(f"Failed to invalidate token: {e}")
                 await db_session.rollback()
                 raise
-
-        return False
