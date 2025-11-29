@@ -65,12 +65,15 @@ async def db(
 
 @pytest.fixture(scope="function")
 async def db_session(db: Database) -> AsyncGenerator[AsyncSession, None]:
-    """Provide a database session for tests."""
-    async for session in db.get_session():
-        try:
-            yield session
-        finally:
-            await session.close()
+    """Provide a database session for tests.
+    
+    Hey future me - we use session_scope context manager instead of get_session generator!
+    The context manager properly handles connection cleanup. Do NOT call session.close()
+    explicitly - the context manager's __aexit__ already does that, and calling it again
+    causes IllegalStateChangeError ("Method 'close()' can't be called here").
+    """
+    async with db.session_scope() as session:
+        yield session
 
 
 @pytest.fixture(scope="function")
@@ -107,9 +110,13 @@ async def app_with_db(test_settings: Settings, db: Database):
     app.state.db = db
 
     # Initialize session store for auth endpoints
+    # Hey future me - pass session_scope context manager factory, NOT the Database object!
+    # The old code passed `db` directly which caused "GC cleaning up non-checked-in connection"
+    # errors because DatabaseSessionStore needs a context manager factory to properly
+    # manage connection lifecycle.
     from soulspot.application.services.session_store import DatabaseSessionStore
 
-    session_store = DatabaseSessionStore(db)
+    session_store = DatabaseSessionStore(session_scope=db.session_scope)
     app.state.session_store = session_store
 
     # Add mock job queue to avoid 503 errors in download endpoint tests

@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
+    get_db_session,
     get_download_repository,
     get_job_queue,
     get_library_scanner_service,
@@ -98,25 +100,25 @@ async def playlists(
     )
 
 
-# Yo this is HTMX partial for missing tracks in a playlist! Uses anext() to get session from generator
-# which is sketchy (same pattern as before). Does N queries in loop for each track - bad performance.
-# joinedload helps but still not great. Returns error.html template for 404/400 errors which is clean
-# HTMX pattern. Track model has artist/album relationships so we check if track_model.artist exists
-# before accessing .name. Missing tracks are those without file_path. Built for HTMX so returns HTML
-# partial not full page. The missing_tracks list could be huge if playlist has 100s of missing tracks -
-# no pagination! Template must handle long lists gracefully (scrolling, lazy loading, etc).
+# Yo this is HTMX partial for missing tracks in a playlist! Uses Depends(get_db_session) to properly
+# manage DB session lifecycle. Does N queries in loop for each track - bad performance. joinedload helps
+# but still not great. Returns error.html template for 404/400 errors which is clean HTMX pattern.
+# Track model has artist/album relationships so we check if track_model.artist exists before accessing
+# .name. Missing tracks are those without file_path. Built for HTMX so returns HTML partial not full page.
+# The missing_tracks list could be huge if playlist has 100s of missing tracks - no pagination! Template
+# must handle long lists gracefully (scrolling, lazy loading, etc).
 @router.get("/playlists/{playlist_id}/missing-tracks", response_class=HTMLResponse)
 async def playlist_missing_tracks(
     request: Request,
     playlist_id: str,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Return missing tracks partial for a playlist."""
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.domain.value_objects import PlaylistId
     from soulspot.infrastructure.persistence.models import TrackModel
 
@@ -134,9 +136,6 @@ async def playlist_missing_tracks(
                 },
                 status_code=404,
             )
-
-        # Get session for direct DB query
-        session = await anext(get_db_session(request))
 
         # Find tracks without file_path (missing tracks)
         missing_tracks = []
@@ -574,19 +573,16 @@ async def library_import_jobs_list(
 async def library_artists(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Library artists browser page."""
     from sqlalchemy import func, select
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import (
         AlbumModel,
         ArtistModel,
         TrackModel,
     )
-
-    # Get session for direct DB query
-    session = await anext(get_db_session(request))
 
     # Subquery for track count per artist
     track_count_subq = (
@@ -643,16 +639,13 @@ async def library_artists(
 async def library_albums(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Library albums browser page."""
     from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import AlbumModel, TrackModel
-
-    # Get session for direct DB query
-    session = await anext(get_db_session(request))
 
     # Query albums with artist join and track count subquery
     track_count_subq = (
@@ -690,28 +683,26 @@ async def library_albums(
     )
 
 
-# IMPORTANT: Library tracks page with SQLAlchemy direct queries! Uses anext() to get session - same
-# sketchy pattern. select() with joinedload() is proper way to eagerly load relationships and avoid N+1.
-# unique() on result prevents duplicate Track objects when joins create multiple rows. scalars().all()
-# gets list of Track models. The track data extraction handles None values gracefully with "Unknown".
-# Sorts by artist/album/title in memory using .sort() with lambda - could be slow for 10000s of tracks!
-# Should use ORDER BY in SQL query instead. The type: ignore is needed for .lower() on potentially None
-# values. Good use of joinedload to prevent N+1 queries. Returns full HTML page with all tracks - could
-# be HUGE! Should paginate or use virtual scrolling for big libraries. This loads everything into memory!
+# IMPORTANT: Library tracks page with SQLAlchemy direct queries! Uses Depends(get_db_session) to
+# properly manage DB session lifecycle. select() with joinedload() is proper way to eagerly load
+# relationships and avoid N+1. unique() on result prevents duplicate Track objects when joins create
+# multiple rows. scalars().all() gets list of Track models. The track data extraction handles None
+# values gracefully with "Unknown". Sorts by artist/album/title in memory using .sort() with lambda -
+# could be slow for 10000s of tracks! Should use ORDER BY in SQL query instead. The type: ignore is
+# needed for .lower() on potentially None values. Good use of joinedload to prevent N+1 queries.
+# Returns full HTML page with all tracks - could be HUGE! Should paginate or use virtual scrolling
+# for big libraries. This loads everything into memory!
 @router.get("/library/tracks", response_class=HTMLResponse)
 async def library_tracks(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Library tracks browser page."""
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
-
-    # Get session for direct DB query
-    session = await anext(get_db_session(request))
 
     # Query with joined loads for artist and album
     stmt = select(TrackModel).options(
@@ -756,6 +747,7 @@ async def library_artist_detail(
     request: Request,
     artist_name: str,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Artist detail page with albums and tracks."""
     from urllib.parse import unquote
@@ -763,13 +755,9 @@ async def library_artist_detail(
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     artist_name = unquote(artist_name)
-
-    # Get session for direct DB query
-    session = await anext(get_db_session(request))
 
     # Query tracks with joined loads for artist and album
     stmt = (
@@ -864,6 +852,7 @@ async def library_album_detail(
     request: Request,
     album_key: str,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Album detail page with track listing."""
     from urllib.parse import unquote
@@ -871,7 +860,6 @@ async def library_album_detail(
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     album_key = unquote(album_key)
@@ -889,9 +877,6 @@ async def library_album_detail(
         )
 
     artist_name, album_title = album_key.split("::", 1)
-
-    # Get session for direct DB query
-    session = await anext(get_db_session(request))
 
     # Query tracks for this album
     stmt = (
@@ -972,29 +957,27 @@ async def library_album_detail(
     )
 
 
-# Yo, this returns an HTMX partial for the metadata editor modal! Uses anext() to grab DB session
-# (sketchy pattern). Queries one track with joinedload for artist/album. Returns error.html partial
-# for 404/400 instead of raising HTTPException - nice HTMX pattern. album_artist and genre are hardcoded
-# None (TODOs) - should add these fields to Track/Album models. year comes from album relationship if
-# it exists. The track_data dict matches what the metadata_editor.html template expects. This is a
-# modal fragment, not full page. Template should have form fields pre-filled with current values.
+# Yo, this returns an HTMX partial for the metadata editor modal! Uses Depends(get_db_session) to
+# properly manage DB session lifecycle. Queries one track with joinedload for artist/album. Returns
+# error.html partial for 404/400 instead of raising HTTPException - nice HTMX pattern. album_artist
+# and genre are hardcoded None (TODOs) - should add these fields to Track/Album models. year comes
+# from album relationship if it exists. The track_data dict matches what the metadata_editor.html
+# template expects. This is a modal fragment, not full page. Template should have form fields
+# pre-filled with current values.
 @router.get("/tracks/{track_id}/metadata-editor", response_class=HTMLResponse)
 async def track_metadata_editor(
     request: Request,
     track_id: str,
     _track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Return metadata editor modal for a track."""
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_db_session
     from soulspot.infrastructure.persistence.models import TrackModel
 
     try:
-        # Get session for direct DB query
-        session = await anext(get_db_session(request))
-
         stmt = (
             select(TrackModel)
             .where(TrackModel.id == track_id)
@@ -1170,7 +1153,7 @@ async def spotify_artists_page(
     try:
         # Hey future me - ALWAYS load from DB first! Token only needed for sync, not display.
         # This is Database-First architecture: Spotify syncs data → DB stores it → Frontend shows DB data.
-        
+
         # Get artists from DB (regardless of token status)
         artist_models = await sync_service.get_artists(limit=500)
 
