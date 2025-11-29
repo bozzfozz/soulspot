@@ -1145,16 +1145,33 @@ async def spotify_artists_page(
 
     Uses SHARED server-side token from DatabaseTokenManager, so any device
     on the network can access this page without per-browser session cookies.
+
+    Hey future me - IMPORTANT: Sync FIRST, then load from DB!
+    This ensures freshly synced data is visible immediately without refresh.
+    The flow is: Sync (if needed/cooldown) → Commit → Load from DB → Render.
     """
     artists = []
     sync_stats = None
     error = None
 
     try:
-        # Hey future me - ALWAYS load from DB first! Token only needed for sync, not display.
-        # This is Database-First architecture: Spotify syncs data → DB stores it → Frontend shows DB data.
+        # Hey future me - Database-First architecture:
+        # 1. Sync to DB first (if token available and cooldown passed)
+        # 2. Then ALWAYS load from DB for display
+        # This ensures fresh data is visible immediately after sync!
 
-        # Get artists from DB (regardless of token status)
+        # Step 1: Try to sync if token available (respects cooldown)
+        access_token = None
+        if hasattr(request.app.state, "db_token_manager"):
+            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+            access_token = await db_token_manager.get_token_for_background()
+
+        if access_token:
+            # Auto-sync (respects cooldown) - updates DB and commits
+            sync_stats = await sync_service.sync_followed_artists(access_token)
+
+        # Step 2: ALWAYS load from DB (regardless of token status)
+        # This shows data even if user isn't authenticated - persistence works!
         artist_models = await sync_service.get_artists(limit=500)
 
         # Convert to template-friendly format
@@ -1181,16 +1198,6 @@ async def spotify_artists_page(
                     "follower_count": artist.follower_count,
                 }
             )
-
-        # OPTIONAL: Try to sync if token available (respects cooldown)
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
-        if access_token:
-            # Auto-sync (respects cooldown) - updates DB in background
-            sync_stats = await sync_service.sync_followed_artists(access_token)
 
     except Exception as e:
         error = str(e)
