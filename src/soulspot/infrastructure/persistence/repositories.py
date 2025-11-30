@@ -2820,6 +2820,14 @@ class SpotifyBrowseRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def count_albums(self) -> int:
+        """Count total saved albums from Spotify."""
+        from .models import SpotifyAlbumModel
+
+        stmt = select(func.count(SpotifyAlbumModel.spotify_id))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def count_albums_by_artist(self, artist_id: str) -> int:
         """Count albums for an artist."""
         from .models import SpotifyAlbumModel
@@ -2923,6 +2931,14 @@ class SpotifyBrowseRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def count_tracks(self) -> int:
+        """Count total tracks from Spotify (all albums)."""
+        from .models import SpotifyTrackModel
+
+        stmt = select(func.count(SpotifyTrackModel.spotify_id))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     async def count_tracks_by_album(self, album_id: str) -> int:
         """Count tracks in an album."""

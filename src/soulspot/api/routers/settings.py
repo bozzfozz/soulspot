@@ -686,27 +686,44 @@ async def get_spotify_db_stats(
     """Get database statistics for Spotify-synced entities.
 
     Counts how many artists, albums, tracks, and playlists were synced from Spotify.
-    This is different from image stats which counts files on disk.
+    This counts from BOTH:
+    1. Local entities with Spotify URIs (enriched with Spotify data)
+    2. Spotify browse tables (spotify_artists, spotify_albums, spotify_tracks from auto-sync)
 
     Returns:
-        Counts of each entity type with Spotify URI/source
+        Counts of each entity type from Spotify
     """
     from soulspot.infrastructure.persistence.repositories import (
         AlbumRepository,
         ArtistRepository,
         PlaylistRepository,
+        SpotifyBrowseRepository,
         TrackRepository,
     )
 
+    # Count local entities with Spotify URIs
     artist_repo = ArtistRepository(db)
     album_repo = AlbumRepository(db)
     track_repo = TrackRepository(db)
     playlist_repo = PlaylistRepository(db)
 
-    artists_count = await artist_repo.count_with_spotify_uri()
-    albums_count = await album_repo.count_with_spotify_uri()
-    tracks_count = await track_repo.count_with_spotify_uri()
-    playlists_count = await playlist_repo.count_by_source("spotify")
+    local_artists_count = await artist_repo.count_with_spotify_uri()
+    local_albums_count = await album_repo.count_with_spotify_uri()
+    local_tracks_count = await track_repo.count_with_spotify_uri()
+    local_playlists_count = await playlist_repo.count_by_source("spotify")
+
+    # Count Spotify browse data (from auto-sync)
+    spotify_repo = SpotifyBrowseRepository(db)
+    spotify_artists_count = await spotify_repo.count_artists()
+    spotify_albums_count = await spotify_repo.count_albums()
+    spotify_tracks_count = await spotify_repo.count_tracks()
+
+    # Combine local and synced Spotify data (avoid double counting by taking max)
+    # If a track is both local (from Spotify) AND in spotify_tracks, count it once
+    artists_count = max(local_artists_count, spotify_artists_count)
+    albums_count = max(local_albums_count, spotify_albums_count)
+    tracks_count = max(local_tracks_count, spotify_tracks_count)
+    playlists_count = local_playlists_count
 
     total = artists_count + albums_count + tracks_count + playlists_count
 

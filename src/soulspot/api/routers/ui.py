@@ -16,6 +16,7 @@ from soulspot.api.dependencies import (
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
+    get_spotify_browse_repository,
     get_spotify_sync_service,
     get_track_repository,
 )
@@ -30,6 +31,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +55,25 @@ router = APIRouter()
 # might be expensive if there are thousands of historical downloads (needs index on status field). The
 # stats are current snapshot, could be stale by time page renders. Consider WebSocket updates? Returns
 # full HTML page via Jinja2 template. Template must exist at src/soulspot/templates/index.html or crash!
+# UPDATE: Now also counts Spotify synced data (artists, albums, tracks from Spotify browse)
 @router.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     track_repository: TrackRepository = Depends(get_track_repository),
     download_repository: DownloadRepository = Depends(get_download_repository),
+    spotify_repository: "SpotifyBrowseRepository" = Depends(get_spotify_browse_repository),
 ) -> Any:
     """Dashboard page with real statistics."""
     # Get real statistics from repositories
     playlists = await playlist_repository.list_all()
     tracks = await track_repository.list_all()
     active_downloads = await download_repository.list_active()
+
+    # Get Spotify synced data counts
+    spotify_artists = await spotify_repository.count_artists()
+    spotify_albums = await spotify_repository.count_albums()
+    spotify_tracks = await spotify_repository.count_tracks()
 
     stats = {
         "playlists": len(playlists),
@@ -73,6 +82,10 @@ async def index(
         "queue_size": sum(
             1 for d in active_downloads if d.status.value in ["pending", "queued"]
         ),
+        # Spotify synced data
+        "spotify_artists": spotify_artists,
+        "spotify_albums": spotify_albums,
+        "spotify_tracks": spotify_tracks,
     }
     return templates.TemplateResponse(request, "index.html", context={"stats": stats})
 

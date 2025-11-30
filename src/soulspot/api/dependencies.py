@@ -404,6 +404,17 @@ def get_download_repository(
     return DownloadRepository(session)
 
 
+# Hey future me - SpotifyBrowseRepository handles synced Spotify data (followed artists, albums, tracks).
+# This is SEPARATE from the local library! Use this for dashboard stats that show Spotify data.
+def get_spotify_browse_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> "SpotifyBrowseRepository":
+    """Get Spotify browse repository instance for Spotify synced data."""
+    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
+
+    return SpotifyBrowseRepository(session)
+
+
 # Hey future me, this is a USE CASE - application layer orchestration! It coordinates SpotifyClient and
 # multiple repositories to import a playlist from Spotify into our DB. Use cases encapsulate business
 # logic that spans multiple repositories/services. Created fresh per request with all dependencies injected.
