@@ -689,6 +689,7 @@ async def get_spotify_db_stats(
     This counts from BOTH:
     1. Local entities with Spotify URIs (enriched with Spotify data)
     2. Spotify browse tables (spotify_artists, spotify_albums, spotify_tracks from auto-sync)
+    3. Liked Songs tracks (stored in soulspot_tracks with spotify_uri)
 
     Returns:
         Counts of each entity type from Spotify
@@ -717,12 +718,24 @@ async def get_spotify_db_stats(
     spotify_artists_count = await spotify_repo.count_artists()
     spotify_albums_count = await spotify_repo.count_albums()
     spotify_tracks_count = await spotify_repo.count_tracks()
+    
+    # Count Liked Songs tracks (they're in soulspot_tracks but also need to be counted)
+    # Hey future me - Liked Songs sync creates tracks in soulspot_tracks with spotify_uri.
+    # The local_tracks_count above should already include them, but we also count 
+    # from the Liked Songs playlist to ensure accuracy.
+    liked_songs_count = await spotify_repo.count_liked_songs_tracks()
 
-    # Combine local and synced Spotify data (avoid double counting by taking max)
-    # If a track is both local (from Spotify) AND in spotify_tracks, count it once
+    # Combine: use the HIGHER count between local and spotify tables
+    # local_tracks_count includes Liked Songs (after our fix) and manually added tracks
+    # spotify_tracks_count is album tracks from lazy-loading
+    # liked_songs_count ensures we count Liked Songs even if not yet in soulspot_tracks
     artists_count = max(local_artists_count, spotify_artists_count)
     albums_count = max(local_albums_count, spotify_albums_count)
-    tracks_count = max(local_tracks_count, spotify_tracks_count)
+    
+    # For tracks: combine spotify_tracks (album tracks) + liked_songs OR local_tracks
+    # Hey future me - we take max because after sync, liked songs go INTO soulspot_tracks
+    # So local_tracks_count should equal liked_songs_count once sync completes
+    tracks_count = max(local_tracks_count, spotify_tracks_count + liked_songs_count)
     playlists_count = local_playlists_count
 
     total = artists_count + albums_count + tracks_count + playlists_count

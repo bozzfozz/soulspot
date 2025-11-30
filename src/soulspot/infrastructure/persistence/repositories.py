@@ -1236,6 +1236,7 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
+            cover_url=model.cover_url,  # Spotify playlist cover image
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -1274,6 +1275,7 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
+            cover_url=model.cover_url,  # Spotify playlist cover image
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -2743,6 +2745,47 @@ class SpotifyBrowseRepository:
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def get_artists_pending_album_sync(self, limit: int = 5) -> list[Any]:
+        """Get artists whose albums haven't been synced yet.
+
+        Hey future me - this is for gradual background album sync!
+        We find artists where albums_synced_at IS NULL (never synced).
+        The limit parameter controls how many artists to sync per cycle
+        to avoid API rate limits. Default 5 = ~5 API calls per cycle.
+
+        Args:
+            limit: Maximum number of artists to return (default 5)
+
+        Returns:
+            List of SpotifyArtistModel objects without synced albums
+        """
+        from .models import SpotifyArtistModel
+
+        stmt = (
+            select(SpotifyArtistModel)
+            .where(SpotifyArtistModel.albums_synced_at.is_(None))
+            .order_by(SpotifyArtistModel.name)  # Alphabetical for predictability
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_artists_pending_album_sync(self) -> int:
+        """Count artists whose albums haven't been synced yet.
+
+        Useful for progress tracking in UI.
+
+        Returns:
+            Number of artists still needing album sync
+        """
+        from .models import SpotifyArtistModel
+
+        stmt = select(func.count(SpotifyArtistModel.spotify_id)).where(
+            SpotifyArtistModel.albums_synced_at.is_(None)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def upsert_artist(
         self,
         spotify_id: str,
@@ -2852,6 +2895,88 @@ class SpotifyBrowseRepository:
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def get_new_albums_since(
+        self, artist_id: str, since_date: datetime | None
+    ) -> list[Any]:
+        """Get albums for an artist released after a specific date.
+
+        Hey future me - this is for the Watchlist/New Release feature!
+        Instead of hitting Spotify API every time, we use the pre-synced
+        albums from spotify_albums table. The Background Album Sync keeps
+        this data fresh, so we just query locally.
+
+        If since_date is None, returns all albums (first check scenario).
+
+        Args:
+            artist_id: Spotify artist ID
+            since_date: Only return albums with created_at > since_date
+
+        Returns:
+            List of SpotifyAlbumModel objects
+        """
+        from .models import SpotifyAlbumModel
+
+        if since_date is None:
+            # First check - return all albums
+            stmt = (
+                select(SpotifyAlbumModel)
+                .where(SpotifyAlbumModel.artist_id == artist_id)
+                .order_by(SpotifyAlbumModel.release_date.desc())
+            )
+        else:
+            # Return only albums added to DB after since_date
+            # Hey - we use created_at, not release_date, because:
+            # 1. Album might have been released before we started tracking
+            # 2. We want "new to us" not "new release date"
+            stmt = (
+                select(SpotifyAlbumModel)
+                .where(
+                    SpotifyAlbumModel.artist_id == artist_id,
+                    SpotifyAlbumModel.created_at > since_date,
+                )
+                .order_by(SpotifyAlbumModel.release_date.desc())
+            )
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_artist_albums_sync_status(self, artist_id: str) -> dict[str, Any]:
+        """Get sync status for an artist's albums.
+
+        Returns info about whether albums are synced and how fresh the data is.
+        Used by Watchlist/Discography workers to decide if they need fresh data.
+
+        Args:
+            artist_id: Spotify artist ID
+
+        Returns:
+            Dict with sync status info
+        """
+        from .models import SpotifyArtistModel
+
+        stmt = select(SpotifyArtistModel).where(
+            SpotifyArtistModel.spotify_id == artist_id
+        )
+        result = await self.session.execute(stmt)
+        artist = result.scalar_one_or_none()
+
+        if not artist:
+            return {
+                "artist_exists": False,
+                "albums_synced": False,
+                "albums_synced_at": None,
+                "album_count": 0,
+            }
+
+        album_count = await self.count_albums_by_artist(artist_id)
+
+        return {
+            "artist_exists": True,
+            "albums_synced": artist.albums_synced_at is not None,
+            "albums_synced_at": artist.albums_synced_at,
+            "album_count": album_count,
+        }
 
     async def upsert_album(
         self,
@@ -3306,12 +3431,117 @@ class SpotifyBrowseRepository:
 
         return added_count
 
-    async def _ensure_track_exists(self, track_data: dict[str, Any]) -> None:
-        """Ensure a track exists in the tracks table.
+    async def _get_or_create_artist(self, artist_data: dict[str, Any]) -> str:
+        """Get or create an artist entry and return its ID.
 
-        Creates minimal track entry if not exists.
+        Hey future me - this creates a minimal artist in soulspot_artists for
+        Liked Songs sync. We need a real artist_id for the TrackModel FK.
+        The artist is identified by spotify_uri to prevent duplicates.
+
+        Args:
+            artist_data: Artist dict from Spotify API with 'id' and 'name'
+
+        Returns:
+            The artist ID (UUID string) for use as FK in TrackModel
         """
+        from .models import ArtistModel
 
+        spotify_id = artist_data.get("id", "")
+        artist_name = artist_data.get("name", "Unknown Artist")
+        spotify_uri = f"spotify:artist:{spotify_id}" if spotify_id else None
+
+        # Try to find existing artist by spotify_uri first
+        if spotify_uri:
+            stmt = select(ArtistModel).where(ArtistModel.spotify_uri == spotify_uri)
+            result = await self.session.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing:
+                return existing.id
+
+        # Try to find by name as fallback (for artists without Spotify ID)
+        stmt = select(ArtistModel).where(ArtistModel.name == artist_name)
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing.id
+
+        # Create new artist with minimal data
+        new_artist = ArtistModel(
+            name=artist_name,
+            spotify_uri=spotify_uri,
+        )
+        self.session.add(new_artist)
+        await self.session.flush()  # Get the generated ID
+        return new_artist.id
+
+    async def _get_or_create_album(
+        self, album_data: dict[str, Any], artist_id: str
+    ) -> str | None:
+        """Get or create an album entry and return its ID.
+
+        Hey future me - albums need an artist_id FK, so call _get_or_create_artist
+        BEFORE this method. Returns None if album_data is empty/invalid.
+
+        Args:
+            album_data: Album dict from Spotify API with 'id', 'name', etc.
+            artist_id: The artist ID (from _get_or_create_artist) for the FK
+
+        Returns:
+            The album ID (UUID string) for use as FK in TrackModel, or None
+        """
+        from .models import AlbumModel
+
+        if not album_data or not album_data.get("name"):
+            return None
+
+        spotify_id = album_data.get("id", "")
+        album_name = album_data.get("name", "Unknown Album")
+        spotify_uri = f"spotify:album:{spotify_id}" if spotify_id else None
+        
+        # Convert release_date string (e.g. "2020-01-15" or "2020") to release_year int
+        release_date_str = album_data.get("release_date", "")
+        release_year: int | None = None
+        if release_date_str:
+            try:
+                release_year = int(release_date_str[:4])  # Extract year from YYYY-MM-DD
+            except (ValueError, IndexError):
+                pass
+
+        # Extract artwork URL from images array
+        images = album_data.get("images", [])
+        artwork_url = images[0].get("url") if images else None
+
+        # Try to find existing album by spotify_uri
+        if spotify_uri:
+            stmt = select(AlbumModel).where(AlbumModel.spotify_uri == spotify_uri)
+            result = await self.session.execute(stmt)
+            existing = result.scalar_one_or_none()
+            if existing:
+                return existing.id
+
+        # Create new album with minimal data
+        new_album = AlbumModel(
+            title=album_name,
+            artist_id=artist_id,
+            release_year=release_year,
+            spotify_uri=spotify_uri,
+            artwork_url=artwork_url,
+        )
+        self.session.add(new_album)
+        await self.session.flush()  # Get the generated ID
+        return new_album.id
+
+    async def _ensure_track_exists(self, track_data: dict[str, Any]) -> None:
+        """Ensure a track exists in the soulspot_tracks table.
+
+        Hey future me - this is for Liked Songs sync. We create real TrackModel
+        entries with proper FK relations to Artist and Album. The old code was
+        broken because it tried to use 'artist' and 'album' as string fields,
+        but TrackModel needs artist_id (FK) not a string. That caused the
+        '_sa_instance_state' error.
+
+        Flow: Get/Create Artist → Get/Create Album → Create Track with FKs
+        """
         from .models import TrackModel
 
         spotify_id = track_data.get("id")
@@ -3327,33 +3557,34 @@ class SpotifyBrowseRepository:
         if existing:
             return
 
-        # Create track entry
+        # Extract track metadata
         name = track_data.get("name", "Unknown")
         duration_ms = track_data.get("duration_ms", 0)
-        explicit = track_data.get("explicit", False)
 
-        # Get artist info
+        # Get artist - MUST exist for FK constraint
         artists = track_data.get("artists", [])
-        artist_name = artists[0].get("name") if artists else "Unknown"
+        if artists:
+            artist_id = await self._get_or_create_artist(artists[0])
+        else:
+            # Create placeholder artist if none provided
+            artist_id = await self._get_or_create_artist({"name": "Unknown Artist"})
 
-        # Get album info
-        album = track_data.get("album", {})
-        album_name = album.get("name")
+        # Get album (optional, nullable FK)
+        album_data = track_data.get("album", {})
+        album_id = await self._get_or_create_album(album_data, artist_id)
 
         # ISRC if available
         external_ids = track_data.get("external_ids", {})
         isrc = external_ids.get("isrc")
 
+        # Create track with proper FK references
         model = TrackModel(
-            id=spotify_id,  # Use Spotify ID as primary key for consistency
             title=name,
-            artist=artist_name,
-            album=album_name,
+            artist_id=artist_id,  # Correct FK field
+            album_id=album_id,  # Correct FK field (nullable)
             duration_ms=duration_ms,
-            is_explicit=explicit,
             isrc=isrc,
             spotify_uri=spotify_uri,
-            source="SPOTIFY",
         )
         self.session.add(model)
 

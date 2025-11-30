@@ -86,6 +86,7 @@ class SpotifySyncWorker:
             "playlists": None,
             "liked_songs": None,
             "saved_albums": None,
+            "artist_albums": None,  # Gradual background album sync
         }
 
         # Track sync stats for monitoring
@@ -94,6 +95,7 @@ class SpotifySyncWorker:
             "playlists": {"count": 0, "last_result": None, "last_error": None},
             "liked_songs": {"count": 0, "last_result": None, "last_error": None},
             "saved_albums": {"count": 0, "last_result": None, "last_error": None},
+            "artist_albums": {"count": 0, "last_result": None, "last_error": None, "pending": 0},
         }
 
     async def start(self) -> None:
@@ -229,6 +231,22 @@ class SpotifySyncWorker:
                     "spotify.auto_sync_saved_albums", default=True
                 ) and self._is_sync_due("saved_albums", playlists_interval, now):
                     await self._run_saved_albums_sync(session, access_token, now)
+
+                # Gradual Artist Albums sync - loads albums for a few artists per cycle
+                # Hey future me - this syncs albums gradually to avoid API rate limits!
+                # Default: 5 artists per cycle, every 2 minutes = ~150 artists/hour
+                artist_albums_interval = await settings_service.get_int(
+                    "spotify.artist_albums_sync_interval_minutes", default=2
+                )
+                artists_per_cycle = await settings_service.get_int(
+                    "spotify.artist_albums_per_cycle", default=5
+                )
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_artist_albums", default=True
+                ) and self._is_sync_due("artist_albums", artist_albums_interval, now):
+                    await self._run_artist_albums_sync(
+                        session, access_token, now, artists_per_cycle
+                    )
 
                 # Commit any changes
                 await session.commit()
@@ -452,6 +470,123 @@ class SpotifySyncWorker:
             logger.error(f"Saved albums sync failed: {e}", exc_info=True)
             raise
 
+    async def _run_artist_albums_sync(
+        self, session: Any, access_token: str, now: datetime, artists_per_cycle: int = 5
+    ) -> None:
+        """Run gradual artist albums sync.
+
+        Hey future me - this is the GRADUAL background album sync!
+        Instead of syncing all 358+ artists at once (would hit API limits),
+        we sync a few artists per cycle. With default settings:
+        - 5 artists per cycle
+        - Every 2 minutes
+        - = 150 artists/hour
+        - = All 358 artists done in ~2.5 hours
+
+        This runs AFTER the initial artist sync, gradually filling in albums
+        for artists that haven't had their albums synced yet.
+
+        Args:
+            session: Database session
+            access_token: Spotify OAuth token
+            now: Current timestamp
+            artists_per_cycle: How many artists to process (default 5)
+        """
+        try:
+            from soulspot.application.services.app_settings_service import (
+                AppSettingsService,
+            )
+            from soulspot.application.services.spotify_image_service import (
+                SpotifyImageService,
+            )
+            from soulspot.application.services.spotify_sync_service import (
+                SpotifySyncService,
+            )
+            from soulspot.infrastructure.integrations.spotify_client import (
+                SpotifyClient,
+            )
+            from soulspot.infrastructure.persistence.repositories import (
+                SpotifyBrowseRepository,
+            )
+
+            # Get artists that need album sync
+            repo = SpotifyBrowseRepository(session)
+            pending_artists = await repo.get_artists_pending_album_sync(
+                limit=artists_per_cycle
+            )
+            pending_count = await repo.count_artists_pending_album_sync()
+
+            if not pending_artists:
+                # All artists have been synced - nothing to do
+                logger.debug("No artists pending album sync")
+                self._sync_stats["artist_albums"]["pending"] = 0
+                return
+
+            logger.info(
+                f"Starting gradual artist albums sync: {len(pending_artists)} artists "
+                f"this cycle, {pending_count} total pending"
+            )
+
+            # Set up services
+            spotify_client = SpotifyClient(self.settings.spotify)
+            image_service = SpotifyImageService(self.settings)
+            settings_service = AppSettingsService(session)
+
+            sync_service = SpotifySyncService(
+                spotify_client=spotify_client,
+                session=session,
+                image_service=image_service,
+                settings_service=settings_service,
+            )
+
+            synced_count = 0
+            total_albums = 0
+
+            for artist in pending_artists:
+                try:
+                    # Sync albums for this artist
+                    result = await sync_service.sync_artist_albums(
+                        access_token=access_token,
+                        artist_id=artist.spotify_id,
+                        force=True,  # Skip cooldown since we're doing gradual sync
+                    )
+
+                    if result.get("synced"):
+                        synced_count += 1
+                        total_albums += result.get("total", 0)
+                        logger.debug(
+                            f"Synced {result.get('total', 0)} albums for {artist.name}"
+                        )
+
+                    # Small delay between artists to be nice to the API
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to sync albums for artist {artist.name}: {e}"
+                    )
+                    # Continue with next artist, don't fail the whole batch
+
+            # Update tracking
+            self._last_sync["artist_albums"] = now
+            self._sync_stats["artist_albums"]["count"] += 1
+            self._sync_stats["artist_albums"]["last_result"] = {
+                "artists_synced": synced_count,
+                "total_albums": total_albums,
+            }
+            self._sync_stats["artist_albums"]["last_error"] = None
+            self._sync_stats["artist_albums"]["pending"] = pending_count - synced_count
+
+            logger.info(
+                f"Gradual artist albums sync complete: {synced_count} artists, "
+                f"{total_albums} albums, {pending_count - synced_count} still pending"
+            )
+
+        except Exception as e:
+            self._sync_stats["artist_albums"]["last_error"] = str(e)
+            logger.error(f"Artist albums sync failed: {e}", exc_info=True)
+            raise
+
     @property
     def is_running(self) -> bool:
         """Check if worker is currently running."""
@@ -527,6 +662,16 @@ class SpotifySyncWorker:
                         results["saved_albums"] = "success"
                     except Exception as e:
                         results["saved_albums"] = f"error: {e}"
+
+                if sync_type is None or sync_type == "artist_albums":
+                    try:
+                        # Force sync a batch of pending artists
+                        await self._run_artist_albums_sync(
+                            session, access_token, now, artists_per_cycle=10
+                        )
+                        results["artist_albums"] = "success"
+                    except Exception as e:
+                        results["artist_albums"] = f"error: {e}"
 
                 await session.commit()
 

@@ -209,22 +209,28 @@ async def import_playlist(request: Request) -> Any:
     return templates.TemplateResponse(request, "import_playlist.html")
 
 
-# Listen, this renders the full playlist detail page with ALL tracks! Does N queries in a loop
-# (one per track_id) which is SLOW for big playlists. Should batch fetch tracks in one query.
-# The type: ignore comments are for accessing Track.artist/album which are relationships not
-# direct attributes. track.is_broken is also a computed property that might not exist on all
-# Track entities. Returns error.html template for 404/400 - nice UX pattern. The isoformat()
-# calls convert datetimes to ISO strings for template rendering. This builds entire playlist
+# Listen, this renders the full playlist detail page with ALL tracks! Uses batch query with
+# joinedload to avoid N+1 queries - we fetch all tracks with artist/album in ONE query.
+# The cover_url comes from Playlist entity for Spotify playlists (extracted during sync).
+# Returns error.html template for 404/400 - nice UX pattern. This builds entire playlist
 # data in memory before passing to template - could be huge for 1000+ track playlists!
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
 async def playlist_detail(
     request: Request,
     playlist_id: str,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Playlist detail page with tracks."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
     from soulspot.domain.value_objects import PlaylistId
+    from soulspot.infrastructure.persistence.models import (
+        PlaylistModel,
+        PlaylistTrackModel,
+        TrackModel,
+    )
 
     try:
         playlist_id_obj = PlaylistId.from_string(playlist_id)
@@ -242,25 +248,32 @@ async def playlist_detail(
                 status_code=404,
             )
 
-        # Get track details for the playlist
-        tracks = []
-        for track_id in playlist.track_ids:
-            track = await track_repository.get_by_id(track_id)
-            if track:
-                tracks.append(
-                    {
-                        "id": str(track.id.value),
-                        "title": track.title,
-                        "artist": track.artist,  # type: ignore[attr-defined]
-                        "album": track.album,  # type: ignore[attr-defined]
-                        "duration_ms": track.duration_ms,
-                        "spotify_uri": str(track.spotify_uri)
-                        if track.spotify_uri
-                        else None,
-                        "file_path": track.file_path,
-                        "is_broken": track.is_broken,  # type: ignore[attr-defined]
-                    }
-                )
+        # Batch fetch all tracks with artist/album in ONE query via PlaylistTrackModel
+        # Hey future me - this avoids the N+1 problem! We join playlist_tracks → tracks → artist/album
+        stmt = (
+            select(TrackModel)
+            .join(PlaylistTrackModel, PlaylistTrackModel.track_id == TrackModel.id)
+            .where(PlaylistTrackModel.playlist_id == playlist_id)
+            .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+            .order_by(PlaylistTrackModel.position)
+        )
+        result = await session.execute(stmt)
+        track_models = result.unique().scalars().all()
+
+        # Convert ORM models to template-friendly dicts
+        tracks = [
+            {
+                "id": track.id,
+                "title": track.title,
+                "artist": track.artist.name if track.artist else "Unknown Artist",
+                "album": track.album.title if track.album else "Unknown Album",
+                "duration_ms": track.duration_ms,
+                "spotify_uri": track.spotify_uri,
+                "file_path": track.file_path,
+                "is_broken": track.is_broken,
+            }
+            for track in track_models
+        ]
 
         playlist_data = {
             "id": str(playlist.id.value),
@@ -272,6 +285,7 @@ async def playlist_detail(
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
+            "cover_url": playlist.cover_url,  # Spotify playlist cover image
         }
 
         return templates.TemplateResponse(

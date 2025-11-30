@@ -1,7 +1,7 @@
 # Automation & Watchlists
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-11-25
+> **Version:** 1.1  
+> **Last Updated:** 2025-11-30
 
 ---
 
@@ -20,6 +20,7 @@ Das Automation-System ermöglicht automatisierte Downloads basierend auf Regeln,
 - **Automatische Checks**: Regelmäßige Prüfung auf neue Alben/Singles
 - **Auto-Download**: Neue Releases werden automatisch heruntergeladen
 - **Qualitätsprofile**: Konfigurierbare Qualitätseinstellungen pro Watchlist
+- **Lokale Datennutzung** ⭐ NEU: Nutzt gecachte `spotify_albums` Daten statt API-Calls
 
 ### Filter-Regeln
 
@@ -40,8 +41,9 @@ Definiere komplexe Workflows:
 
 Prüfe, ob du alle Alben eines Künstlers hast:
 
-- **Vollständigkeitsprüfung**: Vergleich mit Spotify-Discographie
+- **Vollständigkeitsprüfung**: Vergleich mit lokaler `spotify_albums` Tabelle ⭐ NEU
 - **Fehlende Alben**: Liste aller Alben, die dir fehlen
+- **Keine API-Calls**: Nutzt gecachte Daten vom Artist Albums Background Sync
 
 ### Quality Upgrades
 
@@ -381,16 +383,21 @@ Höhere Priorität = wird zuerst ausgewertet. Bei Konflikten zwischen Whitelist 
 ```mermaid
 graph TD
     A[Watchlist aktiv] --> B{Check-Intervall erreicht?}
-    B -->|Ja| C[Spotify API abfragen]
-    C --> D{Neue Releases?}
-    D -->|Ja| E[Filter anwenden]
-    E --> F{Erlaubt?}
-    F -->|Ja| G[Download starten]
-    F -->|Nein| H[Übersprungen]
-    D -->|Nein| I[Warten]
-    G --> I
-    H --> I
+    B -->|Ja| C{Albums lokal gecached?}
+    C -->|Ja| D[Lokale spotify_albums abfragen]
+    C -->|Nein| E[Spotify API abfragen]
+    D --> F{Neue Releases?}
+    E --> F
+    F -->|Ja| G[Filter anwenden]
+    G --> H{Erlaubt?}
+    H -->|Ja| I[Download starten]
+    H -->|Nein| J[Übersprungen]
+    F -->|Nein| K[Warten]
+    I --> K
+    J --> K
 ```
+
+> **Hinweis:** Nach dem initialen Artist Albums Background Sync nutzen Watchlists die lokale `spotify_albums` Tabelle. Nur Artists ohne `albums_synced_at` Timestamp lösen einen API-Call aus.
 
 ### Filter-Beispiel: Nur FLAC erlauben
 
@@ -443,3 +450,29 @@ graph TD
 - [Followed Artists](./followed-artists.md) - Bulk-Erstellung von Watchlists
 - [Download Management](./download-management.md) - Queue-Verwaltung
 - [Settings](./settings.md) - Allgemeine Automation-Einstellungen
+- [Spotify Sync](./spotify-sync.md) - Artist Albums Background Sync
+
+---
+
+## Changelog
+
+### Version 1.1 (2025-11-30)
+
+- ✅ **Lokale Datennutzung** - Watchlists und Discography nutzen `spotify_albums`
+  - WatchlistWorker prüft zuerst `albums_synced_at` Timestamp
+  - Falls gecached: Liest aus `spotify_albums` via `SpotifyBrowseRepository`
+  - Nur Fallback auf Spotify API wenn keine lokalen Daten
+- ✅ **DiscographyService Optimierung** - Keine API-Calls mehr
+  - Vergleicht `soulspot_albums` (besitzt) mit `spotify_albums` (verfügbar)
+  - Nutzt `SpotifyBrowseRepository.get_albums_by_artist()`
+- ✅ Deutlich reduzierte API-Rate-Limit-Probleme
+- ✅ Schnellere Watchlist-Checks nach initialem Sync
+
+### Version 1.0 (2025-11-25)
+
+- ✅ Initial Release
+- ✅ Artist Watchlists mit Auto-Download
+- ✅ Filter-System (Whitelist/Blacklist)
+- ✅ Automation Rules
+- ✅ Discography Check
+- ✅ Quality Upgrades

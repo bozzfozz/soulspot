@@ -110,27 +110,36 @@ class WatchlistWorker:
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
 
-    # Hey future me: Watchlist worker - background daemon that polls Spotify for new releases
-    # WHY check every hour? Balance between finding new releases quickly vs API rate limits
-    # WHY separate worker? Long-running process, can't block main application
+    # Hey future me: Watchlist worker - background daemon that checks for new releases
     #
-    # TOKEN HANDLING (2025 update):
-    # Uses DatabaseTokenManager.get_token_for_background() to get valid access token.
-    # If token invalid (user revoked, refresh failed), skips work and logs warning.
-    # UI shows red banner to user → user re-authenticates → worker resumes automatically.
-    # This is GRACEFUL DEGRADATION - no crashes, just paused automation until re-auth.
+    # OPTIMIZATION (Nov 2025): Now uses pre-synced spotify_albums instead of API calls!
+    # The Artist Albums Background Sync keeps spotify_albums fresh. We just query locally.
+    # This reduces API calls from N (one per artist per check) to 0 for most checks.
+    #
+    # Flow:
+    # 1. Get due watchlists
+    # 2. For each watchlist, get local artist's spotify_uri
+    # 3. Check if albums are synced (albums_synced_at not null)
+    # 4. If synced: query spotify_albums for new albums since last_checked_at
+    # 5. If not synced: trigger album sync for this artist (or skip)
+    # 6. Process new releases as before
+    #
+    # TOKEN HANDLING: Still needed for triggering album sync if albums not yet synced.
     async def _check_watchlists(self) -> None:
-        """Check all due watchlists for new releases."""
+        """Check all due watchlists for new releases using pre-synced album data."""
         try:
-            # Hey - get access token from DatabaseTokenManager!
-            # This is the CRITICAL integration point for background token management.
+            # Import repositories here to avoid circular deps
+            from soulspot.infrastructure.persistence.repositories import (
+                ArtistRepository,
+                SpotifyBrowseRepository,
+            )
+
+            # Get access token (needed if we have to trigger album sync)
             access_token = None
             if self._token_manager:
                 access_token = await self._token_manager.get_token_for_background()
 
             if not access_token:
-                # Token invalid or missing - skip this cycle gracefully
-                # UI warning banner shows "Spotify-Verbindung unterbrochen"
                 logger.warning(
                     "No valid Spotify token available - skipping watchlist check. "
                     "User needs to re-authenticate via UI."
@@ -146,87 +155,75 @@ class WatchlistWorker:
 
             logger.info(f"Checking {len(watchlists)} watchlists for new releases")
 
+            # Set up repositories
+            artist_repo = ArtistRepository(self.session)
+            spotify_repo = SpotifyBrowseRepository(self.session)
+
             for watchlist in watchlists:
                 try:
-                    # Check for new releases using Spotify API
-                    logger.info(f"Checking watchlist for artist {watchlist.artist_id}")
+                    logger.debug(f"Checking watchlist for artist {watchlist.artist_id}")
 
-                    # Get access token (this should be obtained from the session or config)
-                    # For now, we'll skip if no spotify_client is available
-                    if not self.spotify_client:
+                    # Step 1: Get local artist to find spotify_uri
+                    local_artist = await artist_repo.get_by_id(watchlist.artist_id)
+                    if not local_artist:
                         logger.warning(
-                            "Spotify client not available, skipping release check"
+                            f"Local artist {watchlist.artist_id} not found, skipping"
                         )
+                        continue
+
+                    if not local_artist.spotify_uri:
+                        logger.warning(
+                            f"Artist {local_artist.name} has no Spotify URI, skipping"
+                        )
+                        continue
+
+                    # Extract Spotify ID from URI (spotify:artist:XXXXX)
+                    spotify_artist_id = str(local_artist.spotify_uri).split(":")[-1]
+
+                    # Step 2: Check if albums are synced for this artist
+                    sync_status = await spotify_repo.get_artist_albums_sync_status(
+                        spotify_artist_id
+                    )
+
+                    if not sync_status["albums_synced"]:
+                        # Albums not synced yet - trigger sync and skip this check
+                        # The Background Sync will catch up, we'll find new releases next cycle
+                        logger.info(
+                            f"Albums not yet synced for {local_artist.name}, "
+                            "will be handled by background sync"
+                        )
+                        # Just update last_checked_at so we don't spam logs
                         watchlist.update_check(releases_found=0, downloads_triggered=0)
                         await self.watchlist_service.repository.update(watchlist)
                         await self.session.commit()
                         continue
 
-                    # Hey future me - jetzt holen wir ECHTE Releases von Spotify!
-                    # get_artist_albums() gibt albums+singles zurück (include_groups in client).
-                    # Wir filtern nach release_date > last_checked_at für "neue" Releases.
-                    logger.info(
-                        f"Fetching albums from Spotify for artist {watchlist.artist_id}"
+                    # Step 3: Get new albums since last check from LOCAL data
+                    # Hey future me - this is the KEY optimization! No API call here!
+                    new_album_models = await spotify_repo.get_new_albums_since(
+                        artist_id=spotify_artist_id,
+                        since_date=watchlist.last_checked_at,
                     )
 
-                    # Fetch artist albums from Spotify API
-                    all_albums = await self.spotify_client.get_artist_albums(
-                        artist_id=str(watchlist.artist_id.value),
-                        access_token=access_token,
-                        limit=50,  # Get more to catch all recent releases
-                    )
-
-                    # Filter for NEW releases (released after last check)
+                    # Convert to the expected format
                     new_releases: list[dict[str, Any]] = []
-                    for album in all_albums:
-                        release_date_str = album.get("release_date", "")
-                        if not release_date_str:
-                            continue
-
-                        # Parse release date (can be YYYY, YYYY-MM, or YYYY-MM-DD)
-                        try:
-                            if len(release_date_str) == 4:  # YYYY
-                                release_date = datetime(
-                                    int(release_date_str), 1, 1, tzinfo=UTC
-                                )
-                            elif len(release_date_str) == 7:  # YYYY-MM
-                                parts = release_date_str.split("-")
-                                release_date = datetime(
-                                    int(parts[0]), int(parts[1]), 1, tzinfo=UTC
-                                )
-                            else:  # YYYY-MM-DD
-                                parts = release_date_str.split("-")
-                                release_date = datetime(
-                                    int(parts[0]),
-                                    int(parts[1]),
-                                    int(parts[2]),
-                                    tzinfo=UTC,
-                                )
-                        except (ValueError, IndexError):
-                            logger.warning(
-                                f"Could not parse release date: {release_date_str}"
-                            )
-                            continue
-
-                        # Check if this is a NEW release (after last check)
-                        if (
-                            watchlist.last_checked_at is None
-                            or release_date > watchlist.last_checked_at
-                        ):
-                            new_releases.append(
-                                {
-                                    "album_id": album.get("id"),
-                                    "album_name": album.get("name"),
-                                    "album_type": album.get("album_type"),
-                                    "release_date": release_date_str,
-                                    "total_tracks": album.get("total_tracks", 0),
-                                    "images": album.get("images", []),
-                                }
-                            )
+                    for album in new_album_models:
+                        new_releases.append(
+                            {
+                                "album_id": album.spotify_id,
+                                "album_name": album.name,
+                                "album_type": album.album_type,
+                                "release_date": album.release_date,
+                                "total_tracks": album.total_tracks,
+                                "images": [{"url": album.image_url}]
+                                if album.image_url
+                                else [],
+                            }
+                        )
 
                     logger.info(
-                        f"Found {len(new_releases)} new releases for artist {watchlist.artist_id} "
-                        f"(total albums checked: {len(all_albums)})"
+                        f"Found {len(new_releases)} new releases for {local_artist.name} "
+                        f"(total albums in DB: {sync_status['album_count']})"
                     )
 
                     # Trigger automation workflows for new releases if auto_download is enabled

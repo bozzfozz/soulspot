@@ -77,18 +77,32 @@ class DiscographyService:
     # WHY check this? User downloads 3 Pink Floyd albums, but they have 15 studio albums - which 12 are missing?
     # GOTCHA: Spotify returns compilations, live albums, singles - you might not WANT them all
     # Consider adding filter for album_type (album vs single vs compilation)
+    #
+    # OPTIMIZATION (Nov 2025): Now uses pre-synced spotify_albums instead of API calls!
+    # The Artist Albums Background Sync keeps spotify_albums fresh. We compare:
+    # - spotify_albums (all known albums from Spotify) vs
+    # - soulspot_albums (local library / downloaded albums)
+    # No API call needed for most checks!
     async def check_discography(
         self, artist_id: ArtistId, access_token: str
     ) -> DiscographyInfo:
         """Check discography completeness for an artist.
 
+        Uses pre-synced spotify_albums data instead of API calls.
+        Compares known albums (from spotify_albums) with owned albums (soulspot_albums).
+
         Args:
-            artist_id: Artist ID
-            access_token: Spotify access token
+            artist_id: Artist ID (local soulspot_artists.id)
+            access_token: Spotify access token (kept for API compatibility, rarely used now)
 
         Returns:
             Discography information
         """
+        from soulspot.infrastructure.persistence.models import SpotifyAlbumModel
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyBrowseRepository,
+        )
+
         # Get artist from database
         stmt = select(ArtistModel).where(ArtistModel.id == str(artist_id.value))
         result = await self.session.execute(stmt)
@@ -104,7 +118,7 @@ class DiscographyService:
                 missing_albums=[],
             )
 
-        # Get owned albums from database
+        # Get owned albums from local library (soulspot_albums)
         stmt_albums = select(AlbumModel).where(
             AlbumModel.artist_id == str(artist_id.value)
         )
@@ -114,9 +128,12 @@ class DiscographyService:
             album.spotify_uri for album in owned_albums if album.spotify_uri
         }
 
-        # Get all albums from Spotify
-        if not self.spotify_client:
-            logger.warning("Spotify client not available for discography check")
+        # Get Spotify artist ID from URI
+        spotify_artist_id = (
+            artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
+        )
+        if not spotify_artist_id:
+            logger.warning(f"Artist {artist.name} has no Spotify URI")
             return DiscographyInfo(
                 artist_id=str(artist_id.value),
                 artist_name=artist.name,
@@ -125,61 +142,61 @@ class DiscographyService:
                 missing_albums=[],
             )
 
-        try:
-            # Get artist's albums from Spotify
-            spotify_artist_id = (
-                artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
+        # Check if albums are synced for this artist
+        spotify_repo = SpotifyBrowseRepository(self.session)
+        sync_status = await spotify_repo.get_artist_albums_sync_status(spotify_artist_id)
+
+        if not sync_status["albums_synced"]:
+            # Albums not synced yet - can't determine missing albums
+            # The Background Sync will eventually sync them
+            logger.info(
+                f"Albums not yet synced for {artist.name}, "
+                "waiting for background sync"
             )
-            if not spotify_artist_id:
-                logger.warning(f"Artist {artist_id} has no Spotify URI")
-                return DiscographyInfo(
-                    artist_id=str(artist_id.value),
-                    artist_name=artist.name,
-                    total_albums=len(owned_albums),
-                    owned_albums=len(owned_albums),
-                    missing_albums=[],
+            return DiscographyInfo(
+                artist_id=str(artist_id.value),
+                artist_name=artist.name,
+                total_albums=len(owned_albums),  # Best guess
+                owned_albums=len(owned_albums),
+                missing_albums=[],  # Can't determine yet
+            )
+
+        # Get all known albums from spotify_albums (pre-synced data - NO API CALL!)
+        stmt_spotify = select(SpotifyAlbumModel).where(
+            SpotifyAlbumModel.artist_id == spotify_artist_id
+        )
+        result = await self.session.execute(stmt_spotify)
+        all_spotify_albums = result.scalars().all()
+
+        # Find missing albums (in spotify_albums but not in soulspot_albums)
+        missing_albums = []
+        for album in all_spotify_albums:
+            album_uri = f"spotify:album:{album.spotify_id}"
+            if album_uri not in owned_spotify_uris:
+                missing_albums.append(
+                    {
+                        "name": album.name,
+                        "spotify_uri": album_uri,
+                        "spotify_id": album.spotify_id,
+                        "release_date": album.release_date or "",
+                        "total_tracks": album.total_tracks,
+                        "album_type": album.album_type,
+                        "image_url": album.image_url,
+                    }
                 )
 
-            all_albums = await self.spotify_client.get_artist_albums(
-                spotify_artist_id, access_token
-            )
+        logger.info(
+            f"Discography check for {artist.name}: "
+            f"{len(owned_albums)}/{len(all_spotify_albums)} albums (from local data)"
+        )
 
-            # Find missing albums
-            missing_albums = []
-            for album in all_albums:
-                album_uri = album.get("uri", "")
-                if album_uri not in owned_spotify_uris:
-                    missing_albums.append(
-                        {
-                            "name": album.get("name", ""),
-                            "spotify_uri": album_uri,
-                            "release_date": album.get("release_date", ""),
-                            "total_tracks": album.get("total_tracks", 0),
-                            "album_type": album.get("album_type", ""),
-                        }
-                    )
-
-            logger.info(
-                f"Discography check for {artist.name}: {len(owned_albums)}/{len(all_albums)} albums"
-            )
-
-            return DiscographyInfo(
-                artist_id=str(artist_id.value),
-                artist_name=artist.name,
-                total_albums=len(all_albums),
-                owned_albums=len(owned_albums),
-                missing_albums=missing_albums,
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to check discography: {e}")
-            return DiscographyInfo(
-                artist_id=str(artist_id.value),
-                artist_name=artist.name,
-                total_albums=len(owned_albums),
-                owned_albums=len(owned_albums),
-                missing_albums=[],
-            )
+        return DiscographyInfo(
+            artist_id=str(artist_id.value),
+            artist_name=artist.name,
+            total_albums=len(all_spotify_albums),
+            owned_albums=len(owned_albums),
+            missing_albums=missing_albums,
+        )
 
     # Listen - batch discography check for multiple artists
     # WHY limit param? Checking 1000 artists = 1000 Spotify API calls = rate limit hell

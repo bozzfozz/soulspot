@@ -1,6 +1,6 @@
 # Spotify Auto-Sync
 
-> **Version:** 1.2  
+> **Version:** 1.3  
 > **Last Updated:** 2025-11-30
 
 ---
@@ -16,8 +16,9 @@ Das Spotify Auto-Sync Feature synchronisiert automatisch Daten von deinem Spotif
 - ❤️ **Liked Songs** - Synchronisiert deine "Gefällt mir"-Songs
 - 💿 **Saved Albums** - Synchronisiert gespeicherte Alben
 - 🖼️ **Lokale Bilderspeicherung** - Lädt Künstler-, Album- und Playlist-Cover herunter
-- 📊 **Database Statistics** - Zeigt Anzahl synchronisierter Entities ⭐ NEU
+- 📊 **Database Statistics** - Zeigt Anzahl synchronisierter Entities
 - ⚙️ **Background Worker** - Automatischer Sync ohne manuelles Eingreifen
+- 🎵 **Artist Albums Background Sync** - Graduelle Album-Synchronisation aller Artists ⭐ NEU
 
 ---
 
@@ -125,6 +126,63 @@ Synchronisiert Alben, die du in deiner Spotify-Bibliothek gespeichert hast.
 | `is_saved` | `true` wenn in Bibliothek gespeichert |
 | `saved_at` | Zeitpunkt des Speicherns |
 
+### Artist Albums (Background Sync) ⭐ NEU
+
+Synchronisiert **alle Alben** aller gefolgten Artists graduell im Hintergrund.
+
+**Warum graduell?**
+- Jeder Artist erfordert einen separaten Spotify API-Call
+- Bei 500+ Artists würde ein Full-Sync die Rate-Limits sprengen
+- Graduelle Sync: 5 Artists alle 2 Minuten = nachhaltig
+
+**Funktionsweise:**
+
+```
+┌─────────────────────────────────────┐
+│   Artist Albums Background Sync     │
+│   (alle 2 Min, 5 Artists/Zyklus)    │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────┐
+│   Prüft: albums_synced_at IS NULL    │
+│   oder älter als 24 Stunden          │
+└──────────────┬───────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────┐
+│   Für jeden Artist:                  │
+│   1. Spotify API: get_artist_albums  │
+│   2. Upsert in spotify_albums        │
+│   3. Update albums_synced_at         │
+│   4. 0.5s Pause (Rate Limit)         │
+└──────────────────────────────────────┘
+```
+
+**Gespeicherte Felder in `spotify_albums`:**
+
+| Feld | Beschreibung |
+|------|--------------|
+| `spotify_id` | Eindeutige Spotify-Album-ID |
+| `artist_id` | Verknüpfung zum Artist |
+| `name` | Album-Name |
+| `album_type` | `album`, `single`, `compilation` |
+| `release_date` | Veröffentlichungsdatum |
+| `total_tracks` | Anzahl Tracks |
+| `image_url` | URL zum Album-Cover |
+
+**Nutzung durch andere Features:**
+- **Watchlists**: Prüfen neue Releases lokal statt via API
+- **Discography Check**: Vergleicht lokale Daten statt API-Calls
+
+**Default Settings:**
+
+| Setting | Default | Beschreibung |
+|---------|---------|-------------|
+| `auto_sync_artist_albums` | `true` | Feature aktivieren |
+| `artist_albums_sync_interval_minutes` | `2` | Intervall zwischen Sync-Zyklen |
+| `artist_albums_per_cycle` | `5` | Artists pro Zyklus |
+
 ---
 
 ## Bilderspeicherung
@@ -175,6 +233,9 @@ Diese Einstellungen werden in der `app_settings` Tabelle gespeichert und können
 | `download_images` | boolean | `true` | Bilder lokal speichern |
 | `remove_unfollowed_artists` | boolean | `true` | Entfolgte Künstler entfernen |
 | `remove_unfollowed_playlists` | boolean | `false` | Gelöschte Playlists entfernen |
+| `auto_sync_artist_albums` | boolean | `true` | Artist Albums Background Sync |
+| `artist_albums_sync_interval_minutes` | int | `2` | Intervall für Album-Sync |
+| `artist_albums_per_cycle` | int | `5` | Artists pro Sync-Zyklus |
 
 ### Setting Keys (DB)
 
@@ -191,6 +252,9 @@ spotify.playlists_sync_interval_minutes
 spotify.download_images
 spotify.remove_unfollowed_artists
 spotify.remove_unfollowed_playlists
+spotify.auto_sync_artist_albums
+spotify.artist_albums_sync_interval_minutes
+spotify.artist_albums_per_cycle
 ```
 
 ---
@@ -333,6 +397,7 @@ Triggert einen manuellen Sync.
 | `playlists` | Nur Playlists synken |
 | `liked` | Nur Liked Songs synken |
 | `albums` | Nur Saved Albums synken |
+| `artist_albums` | Artist Albums Background Sync triggern |
 | `all` | Alle Sync-Typen ausführen |
 
 **Response:**
@@ -575,6 +640,26 @@ INFO  - Artist sync complete: 42 synced, 3 removed
 ---
 
 ## Changelog
+
+### Version 1.3 (2025-11-30)
+
+- ✅ **Artist Albums Background Sync** - Graduelle Album-Synchronisation
+  - Synct 5 Artists alle 2 Minuten (konfigurierbar)
+  - Respektiert Spotify API Rate-Limits
+  - Speichert alle Alben in `spotify_albums` Tabelle
+  - Aktualisiert `albums_synced_at` Timestamp pro Artist
+- ✅ **Lokale Datennutzung** - Watchlists und Discography nutzen lokale Daten
+  - WatchlistWorker prüft `spotify_albums` statt Spotify API
+  - DiscographyService vergleicht lokale Tabellen
+  - Drastisch reduzierte API-Calls nach initialem Sync
+- ✅ Neue Settings: `auto_sync_artist_albums`, `artist_albums_sync_interval_minutes`, `artist_albums_per_cycle`
+- ✅ Repository-Methoden: `get_artists_pending_album_sync()`, `get_new_albums_since()`
+
+### Version 1.2 (2025-11-29)
+
+- ✅ **Liked Songs Sync Fix** - Korrektes FK-Handling
+- ✅ **Playlist Cover URLs** - Cover werden korrekt angezeigt
+- ✅ **DB Stats Enhancement** - Inkludiert Liked Songs in Track-Count
 
 ### Version 1.1 (2025-11-28)
 
