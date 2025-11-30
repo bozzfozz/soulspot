@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from soulspot.api.routers import (
     artist_songs,
     artists,
+    artwork,
     auth,
     automation,
     downloads,
@@ -32,6 +33,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(artists.router, tags=["Artists"])
 api_router.include_router(artist_songs.router, tags=["Artist Songs"])
+api_router.include_router(artwork.router, tags=["Artwork"])
 api_router.include_router(playlists.router, prefix="/playlists", tags=["Playlists"])
 api_router.include_router(tracks.router, prefix="/tracks", tags=["Tracks"])
 api_router.include_router(downloads.router, prefix="/downloads", tags=["Downloads"])
@@ -46,6 +48,7 @@ __all__ = [
     "api_router",
     "artist_songs",
     "artists",
+    "artwork",
     "auth",
     "automation",
     "downloads",

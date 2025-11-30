@@ -52,16 +52,21 @@
     <div class="albums-grid">
         {% for album in albums %}
         <a href="/ui/library/albums/{{ album.artist|urlencode }}::{{ album.title|urlencode }}" 
-           class="album-card"
+           class="album-card{% if album.is_compilation %} compilation{% endif %}"
            data-title="{{ album.title|lower }}"
            data-artist="{{ album.artist|lower }}"
            data-year="{{ album.year or 0 }}"
            data-track-count="{{ album.track_count }}">
             <div class="album-cover">
-                {% if album.artwork_url %}
+                {% if album.artwork_path %}
+                <img src="/api/artwork/{{ album.artwork_path }}" alt="{{ album.title }}" loading="lazy">
+                {% elif album.artwork_url %}
                 <img src="{{ album.artwork_url }}" alt="{{ album.title }}" loading="lazy">
                 {% else %}
                 <i class="bi bi-disc"></i>
+                {% endif %}
+                {% if album.is_compilation %}
+                <span class="compilation-badge" title="Compilation"><i class="bi bi-collection"></i></span>
                 {% endif %}
             </div>
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
@@ -111,6 +116,10 @@
         transform: translateY(-4px);
         box-shadow: var(--shadow-xl);
     }
+    /* Compilation albums have a subtle gradient border */
+    .album-card.compilation {
+        border: 1px solid rgba(139, 92, 246, 0.3);
+    }
     .album-cover {
         aspect-ratio: 1;
         background: linear-gradient(135deg, #22c55e, #16a34a);
@@ -123,6 +132,17 @@
         color: rgba(255, 255, 255, 0.4);
         transition: transform var(--transition-fast);
         overflow: hidden;
+        position: relative;
+    }
+    .compilation-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(139, 92, 246, 0.9);
+        color: white;
+        padding: 4px 6px;
+        border-radius: var(--radius-sm);
+        font-size: var(--font-size-xs);
     }
     .album-cover img {
         width: 100%;

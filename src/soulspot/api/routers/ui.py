@@ -511,35 +511,56 @@ async def onboarding(request: Request) -> Any:
     return templates.TemplateResponse(request, "onboarding.html")
 
 
-# Yo, this is the library overview page with aggregated stats! Loads ALL tracks into memory using
-# list_all() - could be 10000s of tracks! The set() operations to count unique artists/albums work
-# but require loading everything first. Should use DB aggregation queries (COUNT DISTINCT) instead.
-# The track.artist/album type: ignore is for relationship attributes. broken_tracks uses is_broken
-# property that might not exist on all Track entities. Stats are recalculated on every page load - no
-# caching! This gets slow with big libraries. Consider Redis caching or pre-computing stats.
+# Yo, this is the library overview page with aggregated stats! 
+# IMPORTANT: Shows ONLY local files (tracks with file_path)!
+# Uses efficient SQL COUNT queries instead of loading all data into memory.
 @router.get("/library", response_class=HTMLResponse)
 async def library(
     request: Request,
     track_repository: TrackRepository = Depends(get_track_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library browser page."""
-    tracks = await track_repository.list_all()
+    """Library browser page - shows stats for local files only."""
+    from sqlalchemy import func, select
 
-    # Get unique artists and albums
-    artists_set = set()
-    albums_set = set()
-    for track in tracks:
-        if track.artist:  # type: ignore[attr-defined]
-            artists_set.add(track.artist)  # type: ignore[attr-defined]
-        if track.album:  # type: ignore[attr-defined]
-            albums_set.add(track.album)  # type: ignore[attr-defined]
+    from soulspot.infrastructure.persistence.models import TrackModel
+
+    # Count tracks with local files
+    total_tracks_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None)
+    )
+    total_tracks_result = await session.execute(total_tracks_stmt)
+    total_tracks = total_tracks_result.scalar() or 0
+
+    # Count unique artists with local files
+    artists_stmt = select(func.count(func.distinct(TrackModel.artist_id))).where(
+        TrackModel.file_path.isnot(None)
+    )
+    artists_result = await session.execute(artists_stmt)
+    total_artists = artists_result.scalar() or 0
+
+    # Count unique albums with local files
+    albums_stmt = select(func.count(func.distinct(TrackModel.album_id))).where(
+        TrackModel.file_path.isnot(None),
+        TrackModel.album_id.isnot(None),
+    )
+    albums_result = await session.execute(albums_stmt)
+    total_albums = albums_result.scalar() or 0
+
+    # Count broken tracks (local files that are broken)
+    broken_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None),
+        TrackModel.is_broken == True,  # noqa: E712
+    )
+    broken_result = await session.execute(broken_stmt)
+    broken_tracks = broken_result.scalar() or 0
 
     stats = {
-        "total_tracks": len(tracks),
-        "total_artists": len(artists_set),
-        "total_albums": len(albums_set),
-        "tracks_with_files": sum(1 for t in tracks if t.file_path),
-        "broken_tracks": sum(1 for t in tracks if t.is_broken),  # type: ignore[attr-defined,misc]
+        "total_tracks": total_tracks,
+        "total_artists": total_artists,
+        "total_albums": total_albums,
+        "tracks_with_files": total_tracks,  # Same as total since we filter by file_path
+        "broken_tracks": broken_tracks,
     }
 
     return templates.TemplateResponse(request, "library.html", context={"stats": stats})
@@ -639,13 +660,14 @@ async def library_import_jobs_list(
 # Now includes image_url from Spotify CDN. SQL does aggregation via subqueries instead
 # of loading all tracks into Python memory. Still no pagination (TODO for big libraries).
 # image_url comes from Spotify sync – falls back to None if artist wasn't synced.
+# IMPORTANT: Only shows artists with at least ONE local file (file_path IS NOT NULL)!
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library artists browser page."""
+    """Library artists browser page - only artists with local files."""
     from sqlalchemy import func, select
 
     from soulspot.infrastructure.persistence.models import (
@@ -654,29 +676,38 @@ async def library_artists(
         TrackModel,
     )
 
-    # Subquery for track count per artist
+    # Subquery for track count per artist - ONLY count tracks with local files!
     track_count_subq = (
         select(TrackModel.artist_id, func.count(TrackModel.id).label("track_count"))
+        .where(TrackModel.file_path.isnot(None))
         .group_by(TrackModel.artist_id)
         .subquery()
     )
 
-    # Subquery for album count per artist
+    # Subquery for album count per artist - ONLY albums with at least one local track
+    albums_with_files_subq = (
+        select(func.distinct(TrackModel.album_id))
+        .where(TrackModel.file_path.isnot(None))
+        .where(TrackModel.album_id.isnot(None))
+        .subquery()
+    )
     album_count_subq = (
         select(AlbumModel.artist_id, func.count(AlbumModel.id).label("album_count"))
+        .where(AlbumModel.id.in_(select(albums_with_files_subq)))
         .group_by(AlbumModel.artist_id)
         .subquery()
     )
 
-    # Main query joining artist with counts
+    # Main query - only artists that have at least one local track
     stmt = (
         select(
             ArtistModel,
             track_count_subq.c.track_count,
             album_count_subq.c.album_count,
         )
-        .outerjoin(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
+        .join(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
         .outerjoin(album_count_subq, ArtistModel.id == album_count_subq.c.artist_id)
+        .where(track_count_subq.c.track_count > 0)
         .order_by(ArtistModel.name)
     )
     result = await session.execute(stmt)
@@ -705,28 +736,33 @@ async def library_artists(
 # This gives us access to artwork_url from Spotify CDN. SQL does the grouping via
 # relationship, not manual Python dict. Still no pagination (TODO for big libraries).
 # The artwork_url comes from Spotify sync – if album wasn't synced, falls back to None.
+# IMPORTANT: Only shows albums with at least ONE local file (file_path IS NOT NULL)!
+# Also handles "Various Artists" compilations properly via album_artist field.
 @router.get("/library/albums", response_class=HTMLResponse)
 async def library_albums(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library albums browser page."""
+    """Library albums browser page - only albums with local files."""
     from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
     from soulspot.infrastructure.persistence.models import AlbumModel, TrackModel
 
-    # Query albums with artist join and track count subquery
+    # Subquery for track count - ONLY count tracks with local files
     track_count_subq = (
         select(TrackModel.album_id, func.count(TrackModel.id).label("track_count"))
+        .where(TrackModel.file_path.isnot(None))
         .group_by(TrackModel.album_id)
         .subquery()
     )
 
+    # Only get albums that have at least one local track
     stmt = (
         select(AlbumModel, track_count_subq.c.track_count)
-        .outerjoin(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
+        .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
+        .where(track_count_subq.c.track_count > 0)
         .options(joinedload(AlbumModel.artist))
         .order_by(AlbumModel.title)
     )
@@ -734,13 +770,17 @@ async def library_albums(
     rows = result.unique().all()
 
     # Convert to template-friendly format with artwork_url
+    # Hey future me - album_artist overrides artist.name for compilations/Various Artists!
+    # artwork_path is local file, artwork_url is Spotify CDN - template prefers local
     albums = [
         {
             "title": album.title,
-            "artist": album.artist.name if album.artist else "Unknown Artist",
+            "artist": album.album_artist or (album.artist.name if album.artist else "Unknown Artist"),
             "track_count": track_count or 0,
             "year": album.release_year,
             "artwork_url": album.artwork_url,  # Spotify CDN URL or None
+            "artwork_path": album.artwork_path,  # Local file path or None
+            "is_compilation": "compilation" in (album.secondary_types or []),
         }
         for album, track_count in rows
     ]
@@ -762,21 +802,24 @@ async def library_albums(
 # needed for .lower() on potentially None values. Good use of joinedload to prevent N+1 queries.
 # Returns full HTML page with all tracks - could be HUGE! Should paginate or use virtual scrolling
 # for big libraries. This loads everything into memory!
+# IMPORTANT: Only shows tracks with local files (file_path IS NOT NULL)!
 @router.get("/library/tracks", response_class=HTMLResponse)
 async def library_tracks(
     request: Request,
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library tracks browser page."""
+    """Library tracks browser page - only tracks with local files."""
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
     from soulspot.infrastructure.persistence.models import TrackModel
 
-    # Query with joined loads for artist and album
-    stmt = select(TrackModel).options(
-        joinedload(TrackModel.artist), joinedload(TrackModel.album)
+    # Query with joined loads for artist and album - ONLY tracks with local files!
+    stmt = (
+        select(TrackModel)
+        .where(TrackModel.file_path.isnot(None))
+        .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
     )
     result = await session.execute(stmt)
     track_models = result.unique().scalars().all()

@@ -1711,4 +1711,3 @@ async def reject_enrichment_candidate(
         "success": True,
         "message": "Candidate rejected",
     }
-
