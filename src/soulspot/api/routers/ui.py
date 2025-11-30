@@ -100,9 +100,8 @@ async def playlists(
     from sqlalchemy import func, select
 
     from soulspot.infrastructure.persistence.models import (
-        PlaylistModel,
+        PlaylistTrackModel,
         TrackModel,
-        playlist_tracks,
     )
 
     playlists_list = await playlist_repository.list_all()
@@ -110,17 +109,18 @@ async def playlists(
     # Hey future me - calculate aggregate stats for the dashboard!
     # We need total_tracks, downloaded_tracks, pending_tracks across ALL playlists.
     # Using a single query with joins is way more efficient than N+1 queries.
+    # Note: playlist_tracks is PlaylistTrackModel, not a raw table!
 
     # Count total tracks across all playlists (tracks can be in multiple playlists)
-    total_tracks_stmt = select(func.count(func.distinct(playlist_tracks.c.track_id)))
+    total_tracks_stmt = select(func.count(func.distinct(PlaylistTrackModel.track_id)))
     total_tracks_result = await session.execute(total_tracks_stmt)
     total_tracks = total_tracks_result.scalar() or 0
 
     # Count downloaded tracks (have file_path) that are in any playlist
     downloaded_stmt = (
-        select(func.count(func.distinct(playlist_tracks.c.track_id)))
-        .select_from(playlist_tracks)
-        .join(TrackModel, TrackModel.id == playlist_tracks.c.track_id)
+        select(func.count(func.distinct(PlaylistTrackModel.track_id)))
+        .select_from(PlaylistTrackModel)
+        .join(TrackModel, TrackModel.id == PlaylistTrackModel.track_id)
         .where(TrackModel.file_path.isnot(None))
     )
     downloaded_result = await session.execute(downloaded_stmt)
