@@ -94,11 +94,43 @@ async def index(
 async def playlists(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """List playlists page with real data."""
+    from sqlalchemy import func, select
+
+    from soulspot.infrastructure.persistence.models import (
+        PlaylistModel,
+        TrackModel,
+        playlist_tracks,
+    )
+
     playlists_list = await playlist_repository.list_all()
 
+    # Hey future me - calculate aggregate stats for the dashboard!
+    # We need total_tracks, downloaded_tracks, pending_tracks across ALL playlists.
+    # Using a single query with joins is way more efficient than N+1 queries.
+
+    # Count total tracks across all playlists (tracks can be in multiple playlists)
+    total_tracks_stmt = select(func.count(func.distinct(playlist_tracks.c.track_id)))
+    total_tracks_result = await session.execute(total_tracks_stmt)
+    total_tracks = total_tracks_result.scalar() or 0
+
+    # Count downloaded tracks (have file_path) that are in any playlist
+    downloaded_stmt = (
+        select(func.count(func.distinct(playlist_tracks.c.track_id)))
+        .select_from(playlist_tracks)
+        .join(TrackModel, TrackModel.id == playlist_tracks.c.track_id)
+        .where(TrackModel.file_path.isnot(None))
+    )
+    downloaded_result = await session.execute(downloaded_stmt)
+    downloaded_tracks = downloaded_result.scalar() or 0
+
+    pending_tracks = total_tracks - downloaded_tracks
+
     # Convert to template-friendly format
+    # Hey future me - cover_url is essential for the grid view!
+    # Without it, all playlists show placeholder images even though covers exist.
     playlists_data = [
         {
             "id": str(playlist.id.value),
@@ -106,13 +138,21 @@ async def playlists(
             "description": playlist.description,
             "track_count": len(playlist.track_ids),
             "source": playlist.source.value,
+            "cover_url": playlist.cover_url,
             "created_at": playlist.created_at.isoformat(),
         }
         for playlist in playlists_list
     ]
 
     return templates.TemplateResponse(
-        request, "playlists.html", context={"playlists": playlists_data}
+        request,
+        "playlists.html",
+        context={
+            "playlists": playlists_data,
+            "total_tracks": total_tracks,
+            "downloaded_tracks": downloaded_tracks,
+            "pending_tracks": pending_tracks,
+        },
     )
 
 

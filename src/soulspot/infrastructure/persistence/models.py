@@ -274,6 +274,10 @@ class PlaylistModel(Base):
     is_liked_songs: Mapped[bool] = mapped_column(
         sa.Boolean(), nullable=False, server_default="0", default=False
     )
+    # True if playlist is blacklisted (won't be re-synced from Spotify)
+    is_blacklisted: Mapped[bool] = mapped_column(
+        sa.Boolean(), nullable=False, server_default="0", default=False
+    )
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False

@@ -743,3 +743,242 @@ async def download_missing_tracks(
         raise HTTPException(
             status_code=500, detail=f"Failed to identify missing tracks: {str(e)}"
         ) from e
+
+
+# Hey future me - Delete playlist endpoint!
+# This permanently removes a playlist and all its track associations.
+# Tracks themselves are NOT deleted (they might be in other playlists or library).
+# Use blacklist if you just want to hide it from sync.
+@router.delete("/{playlist_id}")
+async def delete_playlist(
+    playlist_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Delete a playlist.
+
+    Args:
+        playlist_id: UUID of the playlist to delete
+
+    Returns:
+        Success message with deleted playlist info
+    """
+    from sqlalchemy import delete, select
+
+    from soulspot.infrastructure.persistence.models import PlaylistModel
+
+    try:
+        # Get playlist first to return info
+        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+        result = await session.execute(stmt)
+        playlist = result.scalar_one_or_none()
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        playlist_name = playlist.name
+
+        # Delete playlist (cascade deletes playlist_tracks associations)
+        delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
+        await session.execute(delete_stmt)
+        await session.commit()
+
+        return {
+            "message": f"Playlist '{playlist_name}' deleted",
+            "playlist_id": playlist_id,
+            "playlist_name": playlist_name,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete playlist: {str(e)}"
+        ) from e
+
+
+# Hey future me - Blacklist endpoint!
+# Blacklisted playlists are hidden from sync but NOT deleted.
+# The sync worker checks is_blacklisted before re-importing.
+# User can un-blacklist later to restore syncing.
+@router.post("/{playlist_id}/blacklist")
+async def blacklist_playlist(
+    playlist_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Blacklist a playlist (excludes from future syncs).
+
+    Args:
+        playlist_id: UUID of the playlist to blacklist
+
+    Returns:
+        Success message with updated playlist info
+    """
+    from sqlalchemy import select, update
+
+    from soulspot.infrastructure.persistence.models import PlaylistModel
+
+    try:
+        # Get playlist to check it exists
+        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+        result = await session.execute(stmt)
+        playlist = result.scalar_one_or_none()
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        # Update is_blacklisted to True
+        update_stmt = (
+            update(PlaylistModel)
+            .where(PlaylistModel.id == playlist_id)
+            .values(is_blacklisted=True)
+        )
+        await session.execute(update_stmt)
+        await session.commit()
+
+        return {
+            "message": f"Playlist '{playlist.name}' blacklisted",
+            "playlist_id": playlist_id,
+            "playlist_name": playlist.name,
+            "is_blacklisted": True,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to blacklist playlist: {str(e)}"
+        ) from e
+
+
+# Hey future me - Un-blacklist endpoint to restore syncing!
+@router.post("/{playlist_id}/unblacklist")
+async def unblacklist_playlist(
+    playlist_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Remove playlist from blacklist (re-enables syncing).
+
+    Args:
+        playlist_id: UUID of the playlist to unblacklist
+
+    Returns:
+        Success message with updated playlist info
+    """
+    from sqlalchemy import select, update
+
+    from soulspot.infrastructure.persistence.models import PlaylistModel
+
+    try:
+        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+        result = await session.execute(stmt)
+        playlist = result.scalar_one_or_none()
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        update_stmt = (
+            update(PlaylistModel)
+            .where(PlaylistModel.id == playlist_id)
+            .values(is_blacklisted=False)
+        )
+        await session.execute(update_stmt)
+        await session.commit()
+
+        return {
+            "message": f"Playlist '{playlist.name}' removed from blacklist",
+            "playlist_id": playlist_id,
+            "playlist_name": playlist.name,
+            "is_blacklisted": False,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to unblacklist playlist: {str(e)}"
+        ) from e
+
+
+# Hey future me - Delete AND blacklist in one call!
+# Useful when user wants to remove a playlist and prevent it from coming back.
+@router.delete("/{playlist_id}/blacklist")
+async def delete_and_blacklist_playlist(
+    playlist_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Delete playlist and add its Spotify URI to blacklist.
+
+    This prevents the playlist from being re-imported during sync.
+    Stores the Spotify URI in app_settings for checking during sync.
+
+    Args:
+        playlist_id: UUID of the playlist to delete and blacklist
+
+    Returns:
+        Success message
+    """
+    from sqlalchemy import select
+
+    from soulspot.infrastructure.persistence.models import AppSettingModel, PlaylistModel
+
+    try:
+        # Get playlist info first
+        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+        result = await session.execute(stmt)
+        playlist = result.scalar_one_or_none()
+
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        playlist_name = playlist.name
+        spotify_uri = playlist.spotify_uri
+
+        # If it has a Spotify URI, store it in the blacklist setting
+        if spotify_uri:
+            # Get current blacklist from app_settings
+            blacklist_key = "spotify.playlist_blacklist"
+            setting_stmt = select(AppSettingModel).where(
+                AppSettingModel.key == blacklist_key
+            )
+            setting_result = await session.execute(setting_stmt)
+            setting = setting_result.scalar_one_or_none()
+
+            if setting:
+                # Append to existing list
+                import json
+
+                current_list = json.loads(setting.value) if setting.value else []
+                if spotify_uri not in current_list:
+                    current_list.append(spotify_uri)
+                setting.value = json.dumps(current_list)
+            else:
+                # Create new setting
+                import json
+
+                new_setting = AppSettingModel(
+                    key=blacklist_key,
+                    value=json.dumps([spotify_uri]),
+                    value_type="json",
+                    category="spotify",
+                    description="List of blacklisted Spotify playlist URIs",
+                )
+                session.add(new_setting)
+
+        # Delete the playlist
+        await session.delete(playlist)
+        await session.commit()
+
+        return {
+            "message": f"Playlist '{playlist_name}' deleted and blacklisted",
+            "playlist_id": playlist_id,
+            "playlist_name": playlist_name,
+            "spotify_uri": spotify_uri,
+            "blacklisted": bool(spotify_uri),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete and blacklist playlist: {str(e)}"
+        ) from e

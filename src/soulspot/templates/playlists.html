@@ -73,39 +73,71 @@
 {% if playlists %}
 <div class="grid grid-cols-5">
     {% for playlist in playlists %}
-    <a href="/playlists/{{ playlist.id }}" class="media-card">
-        <div class="media-card-image">
-            <img src="{{ playlist.cover_url or 'https://via.placeholder.com/300x300?text=' + (playlist.name[:1] if playlist.name else 'P') }}"
-                alt="{{ playlist.name }}">
-            <div class="media-card-overlay">
-                <div class="media-card-actions">
-                    <button class="btn-icon btn-primary"
-                        onclick="event.preventDefault(); playPlaylist('{{ playlist.id }}')">
-                        <i class="bi bi-play-fill"></i>
-                    </button>
-                    <button class="btn-icon" onclick="event.preventDefault(); downloadPlaylist('{{ playlist.id }}')">
-                        <i class="bi bi-download"></i>
-                    </button>
+    <div class="media-card" style="position: relative;">
+        <!-- Dropdown Menu Button (top-right corner) -->
+        <div class="playlist-menu" style="position: absolute; top: 8px; right: 8px; z-index: 10;">
+            <button class="btn-icon playlist-menu-btn" 
+                    onclick="event.preventDefault(); event.stopPropagation(); togglePlaylistMenu('{{ playlist.id }}')"
+                    style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); border-radius: var(--radius-full);">
+                <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <div id="menu-{{ playlist.id }}" class="playlist-dropdown" style="display: none;">
+                <a href="/playlists/{{ playlist.id }}" class="dropdown-item">
+                    <i class="bi bi-eye"></i> View Details
+                </a>
+                <button class="dropdown-item" onclick="event.preventDefault(); syncPlaylist('{{ playlist.id }}', '{{ playlist.name }}')">
+                    <i class="bi bi-arrow-clockwise"></i> Sync
+                </button>
+                <button class="dropdown-item" onclick="event.preventDefault(); downloadPlaylist('{{ playlist.id }}')">
+                    <i class="bi bi-download"></i> Download All
+                </button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item text-warning" onclick="event.preventDefault(); blacklistPlaylist('{{ playlist.id }}', '{{ playlist.name }}')">
+                    <i class="bi bi-eye-slash"></i> Blacklist
+                </button>
+                <button class="dropdown-item text-danger" onclick="event.preventDefault(); deletePlaylist('{{ playlist.id }}', '{{ playlist.name }}')">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+                <button class="dropdown-item text-danger" onclick="event.preventDefault(); deleteAndBlacklistPlaylist('{{ playlist.id }}', '{{ playlist.name }}')">
+                    <i class="bi bi-x-circle"></i> Delete & Blacklist
+                </button>
+            </div>
+        </div>
+        
+        <a href="/playlists/{{ playlist.id }}" style="display: block;">
+            <div class="media-card-image">
+                <img src="{{ playlist.cover_url or 'https://via.placeholder.com/300x300?text=' + (playlist.name[:1] if playlist.name else 'P') }}"
+                    alt="{{ playlist.name }}">
+                <div class="media-card-overlay">
+                    <div class="media-card-actions">
+                        <button class="btn-icon btn-primary"
+                            onclick="event.preventDefault(); event.stopPropagation(); playPlaylist('{{ playlist.id }}')">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        <button class="btn-icon" onclick="event.preventDefault(); event.stopPropagation(); downloadPlaylist('{{ playlist.id }}')">
+                            <i class="bi bi-download"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="media-card-content">
-            <div class="media-card-title">{{ playlist.name }}</div>
-            <div class="media-card-subtitle">{{ playlist.track_count|default(0) }} tracks</div>
-            <div class="media-card-meta">
-                {% if playlist.downloaded_count %}
-                <span class="badge badge-success">
-                    {{ playlist.downloaded_count }} downloaded
-                </span>
-                {% endif %}
-                {% if playlist.pending_count %}
-                <span class="badge badge-warning">
-                    {{ playlist.pending_count }} pending
-                </span>
-                {% endif %}
+            <div class="media-card-content">
+                <div class="media-card-title">{{ playlist.name }}</div>
+                <div class="media-card-subtitle">{{ playlist.track_count|default(0) }} tracks</div>
+                <div class="media-card-meta">
+                    {% if playlist.downloaded_count %}
+                    <span class="badge badge-success">
+                        {{ playlist.downloaded_count }} downloaded
+                    </span>
+                    {% endif %}
+                    {% if playlist.pending_count %}
+                    <span class="badge badge-warning">
+                        {{ playlist.pending_count }} pending
+                    </span>
+                    {% endif %}
+                </div>
             </div>
-        </div>
-    </a>
+        </a>
+    </div>
     {% endfor %}
 </div>
 
@@ -143,7 +175,102 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<style>
+    /* Hey future me - Dropdown menu styles for playlist cards!
+       The menu appears on the top-right corner of each playlist cover.
+       Uses absolute positioning so it doesn't affect card layout. */
+    .playlist-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        min-width: 180px;
+        overflow: hidden;
+        z-index: 100;
+    }
+    
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        padding: var(--space-3) var(--space-4);
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+        text-align: left;
+        text-decoration: none;
+        cursor: pointer;
+        transition: background-color var(--transition-fast);
+    }
+    
+    .dropdown-item:hover {
+        background: var(--bg-tertiary);
+    }
+    
+    .dropdown-item.text-warning {
+        color: #eab308;
+    }
+    
+    .dropdown-item.text-danger {
+        color: #ef4444;
+    }
+    
+    .dropdown-divider {
+        height: 1px;
+        background: var(--border-primary);
+        margin: var(--space-1) 0;
+    }
+    
+    .playlist-menu-btn {
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+    }
+    
+    .media-card:hover .playlist-menu-btn {
+        opacity: 1;
+    }
+</style>
 <script>
+    // Hey future me - Playlist management functions!
+    // togglePlaylistMenu: Opens/closes the dropdown, closes others first
+    // deletePlaylist: Confirms and deletes permanently
+    // blacklistPlaylist: Hides from sync without deleting
+    // deleteAndBlacklistPlaylist: Both in one action
+    
+    let activeMenu = null;
+    
+    function togglePlaylistMenu(playlistId) {
+        const menu = document.getElementById('menu-' + playlistId);
+        
+        // Close any open menu first
+        if (activeMenu && activeMenu !== menu) {
+            activeMenu.style.display = 'none';
+        }
+        
+        // Toggle this menu
+        if (menu.style.display === 'none') {
+            menu.style.display = 'block';
+            activeMenu = menu;
+        } else {
+            menu.style.display = 'none';
+            activeMenu = null;
+        }
+    }
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+        if (activeMenu && !e.target.closest('.playlist-menu')) {
+            activeMenu.style.display = 'none';
+            activeMenu = null;
+        }
+    });
+
     function playPlaylist(playlistId) {
         console.log('Playing playlist:', playlistId);
     }
@@ -154,6 +281,79 @@
             swap: 'none'
         });
         SoulSpot.showNotification('Playlist added to download queue', 'success');
+    }
+    
+    function syncPlaylist(playlistId, playlistName) {
+        SoulSpot.showNotification('Syncing ' + playlistName + '...', 'info');
+        fetch('/api/playlists/' + playlistId + '/sync', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            SoulSpot.showNotification('✓ ' + playlistName + ' synchronized • ' + data.total_tracks + ' tracks', 'success');
+            setTimeout(() => location.reload(), 1000);
+        })
+        .catch(error => {
+            SoulSpot.showNotification('Failed to sync playlist', 'error');
+        });
+    }
+    
+    function deletePlaylist(playlistId, playlistName) {
+        if (!confirm('Delete "' + playlistName + '"?\n\nThis will remove the playlist but tracks will remain in your library.')) {
+            return;
+        }
+        
+        fetch('/api/playlists/' + playlistId, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            SoulSpot.showNotification('Playlist deleted', 'success');
+            // Remove the card from DOM
+            const card = document.querySelector('[data-playlist-id="' + playlistId + '"]') || 
+                         document.getElementById('menu-' + playlistId).closest('.media-card');
+            if (card) card.remove();
+        })
+        .catch(error => {
+            SoulSpot.showNotification('Failed to delete playlist', 'error');
+        });
+    }
+    
+    function blacklistPlaylist(playlistId, playlistName) {
+        if (!confirm('Blacklist "' + playlistName + '"?\n\nThe playlist will remain but won\'t be updated during Spotify sync.')) {
+            return;
+        }
+        
+        fetch('/api/playlists/' + playlistId + '/blacklist', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            SoulSpot.showNotification('Playlist blacklisted - won\'t sync anymore', 'success');
+        })
+        .catch(error => {
+            SoulSpot.showNotification('Failed to blacklist playlist', 'error');
+        });
+    }
+    
+    function deleteAndBlacklistPlaylist(playlistId, playlistName) {
+        if (!confirm('Delete AND Blacklist "' + playlistName + '"?\n\nThis will delete the playlist AND prevent it from being re-imported during Spotify sync.')) {
+            return;
+        }
+        
+        fetch('/api/playlists/' + playlistId + '/blacklist', {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            SoulSpot.showNotification('Playlist deleted and blacklisted', 'success');
+            // Remove the card from DOM
+            const card = document.getElementById('menu-' + playlistId).closest('.media-card');
+            if (card) card.remove();
+        })
+        .catch(error => {
+            SoulSpot.showNotification('Failed to delete playlist', 'error');
+        });
     }
 </script>
 {% endblock %}

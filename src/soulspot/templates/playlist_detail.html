@@ -331,15 +331,63 @@
         }
     }
 
-    // Show notification on HTMX success
+    // Hey future me - HTMX response handler for sync/download actions
+    // The sync endpoint returns JSON, but we want a nice notification + HTML update
+    // Watch out: hx-target="#sync-status" would show raw JSON, so we intercept here!
+    document.body.addEventListener('htmx:beforeSwap', function(evt) {
+        const target = evt.detail.elt;
+        
+        // Handle sync response - parse JSON and show nice notification
+        if (target.matches('[hx-post*="sync"]')) {
+            try {
+                const response = JSON.parse(evt.detail.xhr.responseText);
+                
+                // Build nice notification message
+                let message = `✓ ${response.playlist_name || 'Playlist'} synchronized`;
+                if (response.total_tracks !== undefined) {
+                    message += ` • ${response.total_tracks} tracks`;
+                }
+                if (response.tracks_failed > 0) {
+                    message += ` • ${response.tracks_failed} failed`;
+                    SoulSpot.showNotification(message, 'warning');
+                } else {
+                    SoulSpot.showNotification(message, 'success');
+                }
+                
+                // Build HTML for sync-status instead of raw JSON
+                const statusHtml = `
+                    <div class="alert alert-success" style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: var(--radius-lg);">
+                        <i class="bi bi-check-circle" style="color: #22c55e; font-size: var(--font-size-xl);"></i>
+                        <div>
+                            <div style="font-weight: var(--font-weight-medium);">Sync erfolgreich</div>
+                            <div style="font-size: var(--font-size-sm); color: var(--text-muted);">
+                                ${response.total_tracks} Tracks synchronisiert${response.tracks_failed > 0 ? `, ${response.tracks_failed} fehlgeschlagen` : ''}
+                            </div>
+                        </div>
+                        <button onclick="this.parentElement.remove()" style="margin-left: auto; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                `;
+                evt.detail.serverResponse = statusHtml;
+                
+                // Reload page after short delay to show updated tracks
+                setTimeout(() => location.reload(), 1500);
+                
+            } catch (e) {
+                // Fallback if JSON parsing fails
+                SoulSpot.showNotification('Playlist sync completed', 'success');
+            }
+        }
+    });
+    
     document.body.addEventListener('htmx:afterRequest', function(evt) {
         if (evt.detail.successful) {
             const target = evt.detail.elt;
             if (target.matches('[hx-post*="download"]')) {
                 SoulSpot.showNotification('Added to download queue', 'success');
-            } else if (target.matches('[hx-post*="sync"]')) {
-                SoulSpot.showNotification('Playlist sync started', 'info');
             }
+            // Sync notification is now handled in htmx:beforeSwap
         }
     });
 
