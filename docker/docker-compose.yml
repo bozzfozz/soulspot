@@ -40,8 +40,8 @@ services:
       # WARNING: You MUST set SLSKD_PASSWORD to a strong value in production!
       - SLSKD_PASSWORD=${SLSKD_PASSWORD:-}
       
-      # Database (Container path)
-      - DATABASE_URL=sqlite+aiosqlite:///config/soulspot.db
+      # Database (Container path - 4 slashes for absolute path!)
+      - DATABASE_URL=sqlite+aiosqlite:////config/soulspot.db
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]

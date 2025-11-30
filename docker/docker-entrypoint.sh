@@ -121,8 +121,8 @@ if [ ${#MISSING_VARS[@]} -ne 0 ]; then
     echo ""
 fi
 
-# Update DATABASE_URL to use /config directory
-export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///config/soulspot.db}"
+# Update DATABASE_URL to use /config directory (4 slashes for absolute path!)
+export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:////config/soulspot.db}"
 echo -e "${GREEN}✓${NC} Database: $DATABASE_URL"
 
 # Update storage paths to use container paths
