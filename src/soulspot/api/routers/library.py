@@ -740,6 +740,7 @@ async def list_duplicate_candidates(
         List of duplicate candidates with statistics
     """
     from sqlalchemy import func, select
+    from sqlalchemy.orm import joinedload
 
     from soulspot.infrastructure.persistence.models import (
         DuplicateCandidateModel,
@@ -775,10 +776,15 @@ async def list_duplicate_candidates(
     # Load track details for each candidate
     candidates = []
     for model in models:
-        # Get track 1
-        track_1 = await db.get(TrackModel, model.track_id_1)
-        # Get track 2
-        track_2 = await db.get(TrackModel, model.track_id_2)
+        # Get track 1 with artist relationship loaded
+        track_1_query = select(TrackModel).where(TrackModel.id == model.track_id_1).options(joinedload(TrackModel.artist))
+        track_1_result = await db.execute(track_1_query)
+        track_1 = track_1_result.unique().scalar_one_or_none()
+
+        # Get track 2 with artist relationship loaded
+        track_2_query = select(TrackModel).where(TrackModel.id == model.track_id_2).options(joinedload(TrackModel.artist))
+        track_2_result = await db.execute(track_2_query)
+        track_2 = track_2_result.unique().scalar_one_or_none()
 
         candidates.append(
             DuplicateCandidate(

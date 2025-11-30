@@ -442,7 +442,7 @@ class AppSettingsService:
         Returns:
             Log level string (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
-        return await self.get_str("general.log_level", default=env_default)
+        return await self.get_string("general.log_level", default=env_default) or env_default
 
     async def set_log_level(self, level: str) -> None:
         """Set log level in DB and apply immediately to all loggers.
@@ -501,7 +501,7 @@ class AppSettingsService:
         Returns:
             Application display name
         """
-        return await self.get_str("general.app_name", default=env_default)
+        return await self.get_string("general.app_name", default=env_default) or env_default
 
     async def get_general_settings_summary(self, env_settings: dict[str, Any] | None = None) -> dict[str, Any]:
         """Get summary of all general settings for UI display.
@@ -520,8 +520,8 @@ class AppSettingsService:
         }
 
         return {
-            "app_name": await self.get_str("general.app_name", default=defaults.get("app_name", "SoulSpot")),
-            "log_level": await self.get_str("general.log_level", default=defaults.get("log_level", "INFO")),
+            "app_name": await self.get_string("general.app_name", default=defaults.get("app_name", "SoulSpot")) or defaults.get("app_name", "SoulSpot"),
+            "log_level": await self.get_string("general.log_level", default=defaults.get("log_level", "INFO")) or defaults.get("log_level", "INFO"),
             "debug": await self.get_bool("general.debug", default=defaults.get("debug", False)),
         }
 

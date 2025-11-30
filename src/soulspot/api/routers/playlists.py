@@ -370,6 +370,7 @@ async def list_playlists(
                 "description": playlist.description,
                 "source": playlist.source.value,
                 "track_count": len(playlist.track_ids),
+                "cover_url": playlist.cover_url,
                 "spotify_uri": str(playlist.spotify_uri)
                 if playlist.spotify_uri
                 else None,
@@ -414,6 +415,7 @@ async def get_playlist(
             "name": playlist.name,
             "description": playlist.description,
             "source": playlist.source.value,
+            "cover_url": playlist.cover_url,
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
             "track_ids": [str(track_id.value) for track_id in playlist.track_ids],
             "track_count": len(playlist.track_ids),

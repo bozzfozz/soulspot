@@ -125,12 +125,19 @@ class ImportSpotifyPlaylistUseCase(
 
         # 2. Create or update playlist entity
         playlist_id = PlaylistId.generate()
+        
+        # Extract cover URL from Spotify if available
+        cover_url = None
+        if spotify_playlist.get("images") and len(spotify_playlist["images"]) > 0:
+            cover_url = spotify_playlist["images"][0].get("url")
+        
         playlist = Playlist(
             id=playlist_id,
             name=spotify_playlist["name"],
             description=spotify_playlist.get("description"),
             source=PlaylistSource.SPOTIFY,
             spotify_uri=SpotifyUri(f"spotify:playlist:{request.playlist_id}"),
+            cover_url=cover_url,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -143,6 +150,7 @@ class ImportSpotifyPlaylistUseCase(
             # Update existing playlist
             existing_playlist.name = playlist.name
             existing_playlist.description = playlist.description
+            existing_playlist.cover_url = cover_url
             existing_playlist.updated_at = datetime.now(UTC)
             await self._playlist_repository.update(existing_playlist)
             playlist = existing_playlist

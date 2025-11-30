@@ -138,7 +138,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             startup_settings_service = AppSettingsService(startup_session)
             try:
                 # Load log level from DB (if set), otherwise keep env default
-                db_log_level = await startup_settings_service.get_str(
+                db_log_level = await startup_settings_service.get_string(
                     "general.log_level", default=None
                 )
                 if db_log_level:
