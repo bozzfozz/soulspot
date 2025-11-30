@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from soulspot.domain.exceptions import TokenRefreshException
 from soulspot.domain.ports import ISpotifyClient
 
 if TYPE_CHECKING:
@@ -181,20 +182,30 @@ class TokenManager:
     # it using refresh_token. If refresh fails (network error, invalid refresh token, etc), logs warning
     # and returns None. This means callers get None for BOTH "no token" and "refresh failed" - they can't
     # distinguish! The expires_soon() check (5 min threshold) means we proactively refresh before expiry.
+    #
+    # UPDATE: Now also catches TokenRefreshException for invalid refresh tokens. When this happens,
+    # we mark the token as invalid (is_valid=False) so the UI can show a warning banner.
     async def get_valid_token(self, user_id: str) -> str | None:
         """Get a valid access token, refreshing if necessary.
+
+        If the access token is expired or expiring soon, this method automatically
+        uses the refresh token to get a new access token. The new token is stored
+        for future use.
 
         Args:
             user_id: User ID associated with the token
 
         Returns:
-            Valid access token or None if not available
+            Valid access token or None if:
+            - No token exists for user
+            - No refresh token available
+            - Refresh failed (network error, invalid refresh token, etc.)
         """
         token_info = self._tokens.get(user_id)
         if not token_info:
             return None
 
-        # Refresh if expired or expiring soon
+        # Refresh if expired or expiring soon (within 5 min threshold)
         if token_info.expires_soon():
             if token_info.refresh_token:
                 try:
@@ -203,8 +214,20 @@ class TokenManager:
                     if refreshed_token:
                         return refreshed_token.access_token
                     return None
+                except TokenRefreshException as e:
+                    # Hey future me - this is the INVALID REFRESH TOKEN case!
+                    # The refresh token is dead - user must re-authenticate.
+                    # Mark token as invalid so UI can show warning.
+                    logger.error(
+                        "Refresh token invalid for user %s: %s (requires re-auth)",
+                        user_id,
+                        e.message,
+                    )
+                    if token_info:
+                        token_info.is_valid = False
+                    return None
                 except (httpx.HTTPError, ValueError) as e:
-                    # If refresh fails, token might be invalid
+                    # Other errors (network, missing token, etc.)
                     logger.warning(
                         "Failed to refresh token for user %s: %s",
                         user_id,
@@ -534,7 +557,10 @@ class DatabaseTokenManager:
                 expires_in = token_response.get("expires_in", 3600)
                 new_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
-                # Update in DB
+                # Update in DB - store new access token and (possibly new) refresh token
+                # Hey future me - Spotify MAY return a new refresh_token, or may not!
+                # If they don't return one, we keep using the old one (that's why get() is used).
+                # If they DO return one, we must store it - the old one might be invalidated!
                 await repo.update_after_refresh(
                     access_token=token_response["access_token"],
                     token_expires_at=new_expires_at,
@@ -549,8 +575,17 @@ class DatabaseTokenManager:
                 )
                 return True
 
+            except TokenRefreshException as e:
+                # Hey future me - this is the NEW exception for invalid refresh tokens!
+                # The refresh token is dead (revoked, expired, etc.) - user MUST re-authenticate.
+                error_msg = f"Token refresh failed (requires re-auth): {e.message}"
+                logger.error(error_msg)
+                await repo.mark_invalid(error_msg)
+                await db_session.commit()
+                return False
+
             except httpx.HTTPStatusError as e:
-                # HTTP error from Spotify (401, 403 = user revoked access)
+                # HTTP error from Spotify (other than 400/401/403 which are caught above)
                 error_msg = f"Spotify refresh failed: HTTP {e.response.status_code}"
                 logger.error(error_msg)
                 await repo.mark_invalid(error_msg)

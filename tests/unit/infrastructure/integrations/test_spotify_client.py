@@ -657,3 +657,160 @@ class TestSpotifyClientArtistAPI:
         assert call_args[1]["params"]["type"] == "artist"
         assert call_args[1]["params"]["limit"] == 10
         assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+
+class TestSpotifyClientTokenRefreshErrors:
+    """Test Spotify client token refresh error handling.
+
+    Hey future me - these tests verify that the client properly handles
+    invalid refresh tokens by raising TokenRefreshException. This is CRITICAL
+    for the re-authentication flow!
+    """
+
+    async def test_refresh_token_invalid_grant_error(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that invalid_grant error raises TokenRefreshException.
+
+        This happens when the refresh token has been revoked (user removed
+        app access in Spotify settings) or has expired.
+        """
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        mock_client = AsyncMock()
+
+        # Spotify returns 400 with invalid_grant when refresh token is revoked
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "error": "invalid_grant",
+            "error_description": "Refresh token revoked",
+        }
+
+        mock_client.post.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        with pytest.raises(TokenRefreshException) as exc_info:
+            await spotify_client.refresh_token("revoked-refresh-token")
+
+        # Verify exception details
+        assert exc_info.value.error_code == "invalid_grant"
+        assert exc_info.value.http_status == 400
+        assert exc_info.value.requires_reauth is True
+        assert "Refresh token invalid" in str(exc_info.value)
+
+    async def test_refresh_token_401_unauthorized_error(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that 401 error raises TokenRefreshException."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.json.return_value = {
+            "error": "unauthorized",
+            "error_description": "Access denied",
+        }
+
+        mock_client.post.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        with pytest.raises(TokenRefreshException) as exc_info:
+            await spotify_client.refresh_token("bad-refresh-token")
+
+        assert exc_info.value.http_status == 401
+        assert exc_info.value.requires_reauth is True
+
+    async def test_refresh_token_403_forbidden_error(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that 403 error raises TokenRefreshException."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.json.return_value = {
+            "error": "forbidden",
+            "error_description": "Forbidden",
+        }
+
+        mock_client.post.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        with pytest.raises(TokenRefreshException) as exc_info:
+            await spotify_client.refresh_token("forbidden-refresh-token")
+
+        assert exc_info.value.http_status == 403
+        assert exc_info.value.requires_reauth is True
+
+    async def test_refresh_token_400_non_invalid_grant_error(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that other 400 errors fall through to raise_for_status.
+
+        If Spotify returns 400 but it's NOT invalid_grant, we should
+        let raise_for_status handle it (might be a temporary issue).
+        """
+        import httpx
+
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "error": "bad_request",
+            "error_description": "Malformed request",
+        }
+        # Make raise_for_status actually raise
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Bad Request",
+            request=MagicMock(),
+            response=mock_response,
+        )
+
+        mock_client.post.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await spotify_client.refresh_token("malformed-request")
+
+    async def test_refresh_token_stores_new_refresh_token(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that new refresh token from Spotify is included in response.
+
+        Hey future me - Spotify MAY return a new refresh_token when refreshing!
+        The caller MUST store the new refresh_token if provided, because
+        the old one might be invalidated (token rotation).
+        """
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "access_token": "new-access-token",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "new-rotated-refresh-token",  # Spotify rotated the token!
+            "scope": "user-follow-read playlist-read-private",
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.post.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.refresh_token("old-refresh-token")
+
+        # Verify the new refresh token is in the response
+        assert result["access_token"] == "new-access-token"
+        assert result["refresh_token"] == "new-rotated-refresh-token"
+        assert result["expires_in"] == 3600

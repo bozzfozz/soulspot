@@ -58,3 +58,35 @@ class DuplicateEntityException(DomainException):
         super().__init__(f"{entity_type} with id {entity_id} already exists")
         self.entity_type = entity_type
         self.entity_id = entity_id
+
+
+class TokenRefreshException(DomainException):
+    """Raised when token refresh fails and re-authentication is required.
+
+    Hey future me - this exception is thrown when Spotify's refresh token is no longer valid.
+    Common causes:
+    - User revoked app access in Spotify settings
+    - Refresh token expired (usually doesn't happen with Spotify, but possible)
+    - App credentials changed
+    - Spotify flagged the token as suspicious
+
+    When this is caught, the UI should show a warning banner prompting user to re-authenticate.
+    Background workers should skip work gracefully (no crash loop!).
+    """
+
+    def __init__(
+        self,
+        message: str = "Token refresh failed. Please re-authenticate with Spotify.",
+        error_code: str | None = None,
+        http_status: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.error_code = error_code  # e.g., "invalid_grant"
+        self.http_status = http_status  # e.g., 400, 401
+
+    @property
+    def requires_reauth(self) -> bool:
+        """Check if error requires user re-authentication."""
+        # Hey - 400 with invalid_grant means refresh token is dead
+        # 401/403 mean access denied (user revoked, etc.)
+        return self.error_code == "invalid_grant" or self.http_status in (400, 401, 403)

@@ -178,19 +178,34 @@ class SpotifyClient(ISpotifyClient):
     # BUT if the user revokes access or your app gets de-authorized, this will fail with 400.
     # Handle that gracefully by redirecting them back to the auth flow. Don't spam this
     # endpoint - only refresh when you actually need a new token, not preemptively!
+    #
+    # UPDATE: Now includes better error handling for invalid refresh tokens. Spotify returns
+    # 400 Bad Request with error="invalid_grant" when refresh token is revoked. We raise
+    # TokenRefreshException in this case to signal that re-authentication is required.
     async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
         """
-        Refresh access token.
+        Refresh access token using refresh token.
+
+        When access token expires, use this method to get a new one without
+        requiring user to log in again.
 
         Args:
-            refresh_token: Refresh token
+            refresh_token: Refresh token from previous authentication
 
         Returns:
-            Token response with new access_token and expires_in
+            Token response with:
+            - access_token: New access token
+            - token_type: Usually "Bearer"
+            - expires_in: Seconds until expiration (usually 3600)
+            - refresh_token: New refresh token (if Spotify rotated it, else absent)
+            - scope: Granted scopes (space-separated)
 
         Raises:
-            httpx.HTTPError: If the request fails
+            TokenRefreshException: If refresh token is invalid/revoked (requires re-auth)
+            httpx.HTTPStatusError: For other HTTP errors (network, server issues)
         """
+        from soulspot.domain.exceptions import TokenRefreshException
+
         client = await self._get_client()
 
         data = {
@@ -204,6 +219,36 @@ class SpotifyClient(ISpotifyClient):
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+
+        # Hey future me - check for invalid_grant BEFORE raise_for_status!
+        # Spotify returns 400 with {"error": "invalid_grant"} when refresh token is revoked.
+        # This is different from other 4xx errors - it specifically means re-auth is required.
+        if response.status_code == 400:
+            try:
+                error_data = response.json()
+                error_code = error_data.get("error", "")
+                error_description = error_data.get(
+                    "error_description", "Refresh token is invalid or has been revoked"
+                )
+
+                if error_code == "invalid_grant":
+                    raise TokenRefreshException(
+                        message=f"Refresh token invalid: {error_description}. Please re-authenticate with Spotify.",
+                        error_code=error_code,
+                        http_status=400,
+                    )
+            except (ValueError, KeyError):
+                # JSON parsing failed, fall through to raise_for_status
+                pass
+
+        # For 401/403, also raise TokenRefreshException (access denied)
+        if response.status_code in (401, 403):
+            raise TokenRefreshException(
+                message="Spotify access denied. Please re-authenticate with Spotify.",
+                error_code="access_denied",
+                http_status=response.status_code,
+            )
+
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 

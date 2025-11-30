@@ -10,6 +10,7 @@ from soulspot.application.services.session_store import (
     DatabaseSessionStore,
 )
 from soulspot.application.services.token_manager import TokenManager
+from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
@@ -209,10 +210,18 @@ async def get_spotify_token_from_session(
             )
 
         try:
-            # Refresh the token
+            # Refresh the token using the stored refresh token
+            # Hey future me - this is the KEY part of token renewal!
+            # spotify_client.refresh_token() will:
+            # 1. Send refresh_token to Spotify's token endpoint
+            # 2. Return new access_token (and possibly new refresh_token)
+            # 3. Raise TokenRefreshException if refresh token is invalid/revoked
             token_data = await spotify_client.refresh_token(session.refresh_token)
 
-            # Update session with new token
+            # Update session with new tokens
+            # Hey - Spotify MAY return a new refresh_token or might not!
+            # If they don't return one, we keep using the old one.
+            # If they DO return a new one, we MUST store it (old one might be invalidated).
             session.set_tokens(
                 access_token=token_data["access_token"],
                 refresh_token=token_data.get(
@@ -221,7 +230,7 @@ async def get_spotify_token_from_session(
                 expires_in=token_data.get("expires_in", 3600),
             )
 
-            # Persist session changes to database
+            # Persist session changes to database for future requests
             await session_store.update_session(
                 session.session_id,
                 access_token=session.access_token,
@@ -230,7 +239,18 @@ async def get_spotify_token_from_session(
             )
 
             return cast(str, token_data["access_token"])
+
+        except TokenRefreshException as e:
+            # Hey future me - this is the INVALID REFRESH TOKEN case!
+            # The refresh token is dead (user revoked access, token expired, etc.)
+            # User MUST re-authenticate manually - no way to auto-recover from this.
+            raise HTTPException(
+                status_code=401,
+                detail=f"Refresh token invalid. {e.message}",
+            ) from e
+
         except Exception as e:
+            # Other errors (network, unexpected) - also require re-auth to be safe
             raise HTTPException(
                 status_code=401,
                 detail=f"Failed to refresh token. Please re-authenticate with Spotify: {str(e)}",

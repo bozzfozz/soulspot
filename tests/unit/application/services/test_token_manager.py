@@ -316,3 +316,99 @@ class TestTokenManager:
         # Try to refresh token
         with pytest.raises(ValueError, match="No refresh token available"):
             await token_manager.refresh_token("user-123")
+
+    async def test_get_valid_token_when_refresh_token_invalid(
+        self,
+        token_manager: TokenManager,
+        spotify_client_mock: AsyncMock,
+    ) -> None:
+        """Test getting valid token when refresh token is invalid/revoked.
+
+        Hey future me - this tests the scenario where user revoked access in Spotify settings.
+        The refresh token is dead - spotify_client.refresh_token() raises TokenRefreshException.
+        get_valid_token() should return None and mark token as invalid (is_valid=False).
+        """
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        # Store an expired token (will trigger refresh)
+        token_info = TokenInfo(
+            access_token="expired-token",
+            refresh_token="invalid-refresh-token",
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+        token_manager._tokens["user-123"] = token_info
+
+        # Mock refresh token to raise TokenRefreshException (invalid refresh token)
+        spotify_client_mock.refresh_token.side_effect = TokenRefreshException(
+            message="Refresh token invalid: Token has been revoked",
+            error_code="invalid_grant",
+            http_status=400,
+        )
+
+        # Get valid token (should fail and return None)
+        token = await token_manager.get_valid_token("user-123")
+
+        # Assert
+        assert token is None
+        spotify_client_mock.refresh_token.assert_called_once_with("invalid-refresh-token")
+
+        # Token should be marked as invalid
+        stored_token = token_manager._tokens.get("user-123")
+        assert stored_token is not None
+        assert stored_token.is_valid is False
+
+
+class TestTokenRefreshException:
+    """Test TokenRefreshException behavior."""
+
+    def test_exception_with_invalid_grant(self) -> None:
+        """Test exception for invalid_grant error."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        exc = TokenRefreshException(
+            message="Refresh token invalid",
+            error_code="invalid_grant",
+            http_status=400,
+        )
+
+        assert exc.error_code == "invalid_grant"
+        assert exc.http_status == 400
+        assert exc.requires_reauth is True
+        assert "Refresh token invalid" in str(exc)
+
+    def test_exception_with_401_error(self) -> None:
+        """Test exception for 401 unauthorized error."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        exc = TokenRefreshException(
+            message="Access denied",
+            error_code="access_denied",
+            http_status=401,
+        )
+
+        assert exc.http_status == 401
+        assert exc.requires_reauth is True
+
+    def test_exception_with_403_error(self) -> None:
+        """Test exception for 403 forbidden error."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        exc = TokenRefreshException(
+            message="Forbidden",
+            error_code=None,
+            http_status=403,
+        )
+
+        assert exc.http_status == 403
+        assert exc.requires_reauth is True
+
+    def test_exception_default_values(self) -> None:
+        """Test exception with default values."""
+        from soulspot.domain.exceptions import TokenRefreshException
+
+        exc = TokenRefreshException()
+
+        assert exc.error_code is None
+        assert exc.http_status is None
+        assert exc.requires_reauth is False
+        assert "Please re-authenticate with Spotify" in str(exc)
