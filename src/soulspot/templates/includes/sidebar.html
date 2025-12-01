@@ -42,6 +42,10 @@
             <div class="sidebar-section-title">
                 <i class="bi bi-spotify" style="color: #1DB954; margin-right: 6px;"></i>Spotify
             </div>
+            <a href="/auth" class="sidebar-item {% if request.url.path == '/auth' %}active{% endif %}">
+                <i class="bi bi-plug sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Connect</span>
+            </a>
             <a href="/playlists" class="sidebar-item {% if '/playlists' in request.url.path and '/import' not in request.url.path %}active{% endif %}">
                 <i class="bi bi-list-ul sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Playlists</span>
@@ -84,6 +88,18 @@
             <a href="/library/tracks" class="sidebar-item {% if '/library/tracks' in request.url.path %}active{% endif %}">
                 <i class="bi bi-music-note sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Tracks</span>
+            </a>
+            <a href="/library/incomplete-albums" class="sidebar-item {% if '/library/incomplete-albums' in request.url.path %}active{% endif %}">
+                <i class="bi bi-pie-chart sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Incomplete</span>
+            </a>
+            <a href="/library/duplicates" class="sidebar-item {% if '/library/duplicates' in request.url.path %}active{% endif %}">
+                <i class="bi bi-files sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Duplicates</span>
+            </a>
+            <a href="/library/broken-files" class="sidebar-item {% if '/library/broken-files' in request.url.path %}active{% endif %}">
+                <i class="bi bi-exclamation-triangle sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Broken Files</span>
             </a>
         </div>
 
