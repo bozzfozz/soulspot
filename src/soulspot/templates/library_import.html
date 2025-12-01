@@ -5,132 +5,166 @@
 {% block content %}
 <div class="page-header">
     <div class="header-content">
-        <h1>
-            <i class="bi bi-folder2-open"></i>
-            Library Import
-        </h1>
-        <p class="subtitle">Scan and import your local music collection</p>
+        <div class="header-icon-wrapper">
+            <div class="header-icon">
+                <i class="bi bi-folder2-open"></i>
+            </div>
+            <div class="header-icon-glow"></div>
+        </div>
+        <div>
+            <h1>Library Import</h1>
+            <p class="subtitle">Scan and import your local music collection</p>
+        </div>
     </div>
 </div>
 
-<!-- Summary Stats -->
+<!-- Summary Stats with animated counters -->
 <div class="stats-grid" id="summary-stats">
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="stat-card stat-card-animated" style="--delay: 0;">
+        <div class="stat-icon stat-icon-artists">
             <i class="bi bi-person"></i>
         </div>
         <div class="stat-content">
-            <span class="stat-value" id="total-artists">{{ summary.total_artists | default(0) }}</span>
+            <span class="stat-value counter" data-target="{{ summary.total_artists | default(0) }}" id="total-artists">0</span>
             <span class="stat-label">Artists</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="stat-card stat-card-animated" style="--delay: 1;">
+        <div class="stat-icon stat-icon-albums">
             <i class="bi bi-disc"></i>
         </div>
         <div class="stat-content">
-            <span class="stat-value" id="total-albums">{{ summary.total_albums | default(0) }}</span>
+            <span class="stat-value counter" data-target="{{ summary.total_albums | default(0) }}" id="total-albums">0</span>
             <span class="stat-label">Albums</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="stat-card stat-card-animated" style="--delay: 2;">
+        <div class="stat-icon stat-icon-tracks">
             <i class="bi bi-music-note"></i>
         </div>
         <div class="stat-content">
-            <span class="stat-value" id="total-tracks">{{ summary.total_tracks | default(0) }}</span>
+            <span class="stat-value counter" data-target="{{ summary.total_tracks | default(0) }}" id="total-tracks">0</span>
             <span class="stat-label">Tracks</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon">
+    <div class="stat-card stat-card-animated" style="--delay: 3;">
+        <div class="stat-icon stat-icon-files">
             <i class="bi bi-file-earmark-music"></i>
         </div>
         <div class="stat-content">
-            <span class="stat-value" id="local-files">{{ summary.local_files | default(0) }}</span>
+            <span class="stat-value counter" data-target="{{ summary.local_files | default(0) }}" id="local-files">0</span>
             <span class="stat-label">Local Files</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 </div>
 
 <!-- Scan Controls -->
-<div class="card" style="margin-top: 1.5rem;">
+<div class="card scan-card" style="margin-top: 1.5rem;">
     <div class="card-header">
-        <h3><i class="bi bi-play-fill"></i> Start Scan</h3>
+        <h3><i class="bi bi-play-circle"></i> Start Scan</h3>
     </div>
     <div class="card-body">
-        <p class="text-muted" style="margin-bottom: 1rem;">
-            <i class="bi bi-folder"></i>
-            Music Path: <code>{{ summary.music_path | default('/music') }}</code>
-        </p>
+        <div class="music-path-display">
+            <i class="bi bi-folder-fill"></i>
+            <span>Music Path:</span>
+            <code>{{ summary.music_path | default('/music') }}</code>
+        </div>
 
-        <div class="scan-options" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div class="scan-options">
             <!-- Incremental Scan (Default) -->
             <button 
-                class="btn btn-primary"
+                class="btn btn-scan btn-scan-primary"
                 id="btn-incremental-scan"
                 hx-post="/api/library/import/scan"
                 hx-vals='{"incremental": true}'
                 hx-target="#scan-status"
                 hx-swap="innerHTML"
-                hx-indicator="#scan-loading"
             >
-                <i class="bi bi-lightning"></i>
-                Incremental Scan
+                <div class="btn-scan-icon">
+                    <i class="bi bi-lightning-charge-fill"></i>
+                </div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">Incremental Scan</span>
+                    <span class="btn-scan-desc">Only new or modified files</span>
+                </div>
+                <div class="btn-scan-arrow">
+                    <i class="bi bi-chevron-right"></i>
+                </div>
             </button>
 
             <!-- Full Scan -->
             <button 
-                class="btn btn-secondary"
+                class="btn btn-scan btn-scan-secondary"
                 id="btn-full-scan"
                 hx-post="/api/library/import/scan"
                 hx-vals='{"incremental": false}'
                 hx-target="#scan-status"
                 hx-swap="innerHTML"
-                hx-indicator="#scan-loading"
             >
-                <i class="bi bi-arrow-clockwise"></i>
-                Full Scan
+                <div class="btn-scan-icon">
+                    <i class="bi bi-arrow-repeat"></i>
+                </div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">Full Scan</span>
+                    <span class="btn-scan-desc">Re-scan all files, update metadata</span>
+                </div>
+                <div class="btn-scan-arrow">
+                    <i class="bi bi-chevron-right"></i>
+                </div>
             </button>
         </div>
-
-        <div class="scan-info" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
-            <p><strong>Incremental:</strong> Only scan new or modified files (fast)</p>
-            <p><strong>Full:</strong> Re-scan all files, update metadata (slow)</p>
-        </div>
     </div>
-</div>
-
-<!-- Loading Indicator -->
-<div id="scan-loading" class="htmx-indicator" style="text-align: center; padding: 1rem;">
-    <div class="loading-spinner"></div>
-    <p>Starting scan...</p>
 </div>
 
 <!-- Scan Status -->
 <div id="scan-status" style="margin-top: 1.5rem;">
     {% if active_job %}
-    <div class="card">
+    <div class="card scan-progress-card">
         <div class="card-header">
-            <h3><i class="bi bi-list-task"></i> Scan in Progress</h3>
+            <h3>
+                <span class="scanning-indicator"></span>
+                Scan in Progress
+            </h3>
         </div>
         <div class="card-body"
              hx-get="/api/library/import/status/{{ active_job.job_id }}"
              hx-trigger="every 2s"
              hx-swap="outerHTML">
-            <div class="progress-container">
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: {{ active_job.progress | default(0) }}%;"></div>
+            <div class="progress-container-fancy">
+                <div class="progress-bar-fancy">
+                    <div class="progress-fill-fancy" style="width: {{ active_job.progress | default(0) }}%;">
+                        <div class="progress-shimmer"></div>
+                    </div>
                 </div>
-                <span class="progress-text">{{ active_job.progress | default(0) | round(1) }}%</span>
+                <span class="progress-percentage">{{ active_job.progress | default(0) | round(1) }}%</span>
             </div>
             
             {% if active_job.stats %}
-            <div class="scan-stats" style="margin-top: 1rem;">
-                <span><i class="bi bi-file-earmark"></i> Scanned: {{ active_job.stats.scanned | default(0) }}</span>
-                <span><i class="bi bi-check text-success"></i> Imported: {{ active_job.stats.imported | default(0) }}</span>
-                <span><i class="bi bi-skip-forward"></i> Skipped: {{ active_job.stats.skipped | default(0) }}</span>
-                <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: {{ active_job.stats.errors | default(0) }}</span>
+            <div class="scan-live-stats">
+                <div class="live-stat">
+                    <i class="bi bi-file-earmark"></i>
+                    <span class="live-stat-value">{{ active_job.stats.scanned | default(0) }}</span>
+                    <span class="live-stat-label">Scanned</span>
+                </div>
+                <div class="live-stat live-stat-success">
+                    <i class="bi bi-check-circle-fill"></i>
+                    <span class="live-stat-value">{{ active_job.stats.imported | default(0) }}</span>
+                    <span class="live-stat-label">Imported</span>
+                </div>
+                <div class="live-stat">
+                    <i class="bi bi-skip-forward-fill"></i>
+                    <span class="live-stat-value">{{ active_job.stats.skipped | default(0) }}</span>
+                    <span class="live-stat-label">Skipped</span>
+                </div>
+                <div class="live-stat live-stat-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span class="live-stat-value">{{ active_job.stats.errors | default(0) }}</span>
+                    <span class="live-stat-label">Errors</span>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -143,15 +177,77 @@
     <div class="card-header">
         <h3><i class="bi bi-clock-history"></i> Recent Scans</h3>
     </div>
-    <div class="card-body"
+    <div class="card-body recent-scans-container"
          hx-get="/library/import/jobs-list"
          hx-trigger="load, every 30s"
          hx-swap="innerHTML">
-        <p class="text-muted">Loading recent jobs...</p>
+        <div class="loading-placeholder">
+            <div class="spinner-ring"></div>
+            <p>Loading recent scans...</p>
+        </div>
     </div>
 </div>
 
 <style>
+/* Header with animated icon */
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.header-icon-wrapper {
+    position: relative;
+}
+
+.header-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--accent-primary), #7c3aed);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: white;
+    position: relative;
+    z-index: 1;
+}
+
+.header-icon-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--accent-primary), #7c3aed);
+    border-radius: 20px;
+    filter: blur(20px);
+    opacity: 0.4;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); }
+}
+
+.header-content h1 {
+    margin: 0;
+    font-size: 2rem;
+}
+
+.subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+}
+
+/* Animated Stats Cards */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -161,23 +257,84 @@
 
 .stat-card {
     background: var(--surface-elevated);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 1.25rem;
     display: flex;
     align-items: center;
     gap: 1rem;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card-animated {
+    opacity: 0;
+    animation: card-appear 0.5s ease forwards;
+    animation-delay: calc(var(--delay) * 0.1s);
+}
+
+@keyframes card-appear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-shine {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    animation: shine 3s ease-in-out infinite;
+    animation-delay: calc(var(--delay) * 0.5s);
+}
+
+@keyframes shine {
+    0%, 100% { left: -100%; }
+    50% { left: 100%; }
 }
 
 .stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--accent-primary-alpha);
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent-primary);
-    font-size: 1.25rem;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.stat-icon-artists {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1));
+    color: #a855f7;
+}
+
+.stat-icon-albums {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+    color: #22c55e;
+}
+
+.stat-icon-tracks {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+    color: #3b82f6;
+}
+
+.stat-icon-files {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.1));
+    color: #f97316;
 }
 
 .stat-content {
@@ -187,153 +344,513 @@
 
 .stat-value {
     font-size: 1.75rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
     font-size: 0.85rem;
     color: var(--text-muted);
+    font-weight: 500;
 }
 
-.progress-container {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+/* Scan Card */
+.scan-card {
+    border: 1px solid var(--border-subtle);
 }
 
-.progress-bar {
-    flex: 1;
-    height: 8px;
-    background: var(--surface-base);
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.progress-fill {
-    height: 100%;
-    background: var(--accent-primary);
-    transition: width 0.3s ease;
-}
-
-.progress-text {
-    font-weight: 600;
-    min-width: 60px;
-    text-align: right;
-}
-
-.scan-stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1.5rem;
-}
-
-.scan-stats span {
+.music-path-display {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--surface-base);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
 }
 
-.scan-options .btn {
-    min-width: 180px;
+.music-path-display i {
+    color: var(--accent-primary);
 }
 
-.scan-info p {
-    margin: 0.25rem 0;
+.music-path-display code {
+    background: var(--surface-elevated);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
 }
 
-.loading-spinner {
-    width: 32px;
-    height: 32px;
+/* Scan Buttons */
+.scan-options {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-scan {
+    flex: 1;
+    min-width: 280px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.btn-scan-primary {
+    background: linear-gradient(135deg, var(--accent-primary), #7c3aed);
+    color: white;
+}
+
+.btn-scan-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(var(--accent-primary-rgb), 0.4);
+}
+
+.btn-scan-secondary {
+    background: var(--surface-elevated);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
+}
+
+.btn-scan-secondary:hover {
+    border-color: var(--accent-primary);
+    background: var(--surface-hover);
+}
+
+.btn-scan-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.btn-scan-primary .btn-scan-icon {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-scan-secondary .btn-scan-icon {
+    background: var(--surface-base);
+    color: var(--accent-primary);
+}
+
+.btn-scan-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.btn-scan-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.btn-scan-desc {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+.btn-scan-arrow {
+    opacity: 0.6;
+    transition: transform 0.2s ease;
+}
+
+.btn-scan:hover .btn-scan-arrow {
+    transform: translateX(4px);
+    opacity: 1;
+}
+
+/* Scan Progress Card */
+.scan-progress-card {
+    border: 2px solid var(--accent-primary);
+    background: linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.05) 0%, transparent 100%);
+}
+
+.scanning-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    margin-right: 0.5rem;
+    animation: pulse-indicator 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-indicator {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.progress-container-fancy {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.progress-bar-fancy {
+    flex: 1;
+    height: 12px;
+    background: var(--surface-base);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill-fancy {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), #7c3aed);
+    border-radius: 6px;
+    transition: width 0.5s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-percentage {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    min-width: 70px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Live Stats during scan */
+.scan-live-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+}
+
+.live-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: var(--surface-base);
+    border-radius: 10px;
+    text-align: center;
+}
+
+.live-stat i {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-muted);
+}
+
+.live-stat-success i {
+    color: #22c55e;
+}
+
+.live-stat-warning i {
+    color: #f59e0b;
+}
+
+.live-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Recent Scans Container */
+.recent-scans-container {
+    min-height: 100px;
+}
+
+.loading-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+/* Spinner Ring */
+.spinner-ring {
+    width: 40px;
+    height: 40px;
     border: 3px solid var(--surface-elevated);
     border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: spin 1s linear infinite;
-    margin: 0 auto;
+    margin-bottom: 1rem;
 }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
 
-.htmx-indicator {
-    display: none;
+/* Recent Scans Table Styles */
+.recent-scans-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
 }
 
-.htmx-request .htmx-indicator {
-    display: block;
+.recent-scans-table thead th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-subtle);
 }
 
-.htmx-request.htmx-indicator {
-    display: block;
+.recent-scans-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.recent-scans-table tbody tr:hover {
+    background: var(--surface-hover);
+}
+
+.recent-scans-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
+}
+
+.recent-scans-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.scan-date {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.scan-date-main {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.scan-date-time {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-badge-completed {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.status-badge-failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.status-badge-running {
+    background: rgba(var(--accent-primary-rgb), 0.15);
+    color: var(--accent-primary);
+}
+
+.status-badge-running i {
+    animation: spin 1s linear infinite;
+}
+
+.status-badge-pending {
+    background: rgba(156, 163, 175, 0.15);
+    color: #9ca3af;
+}
+
+.stat-cell {
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-cell-imported {
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.stat-cell-errors {
+    font-weight: 600;
+}
+
+.stat-cell-errors.has-errors {
+    color: #f59e0b;
+}
+
+.empty-scans {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.empty-scans i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
 }
 </style>
 
 <script>
+// Animated counter for stats
+function animateCounters() {
+    const counters = document.querySelectorAll('.counter');
+    counters.forEach(counter => {
+        const target = parseInt(counter.dataset.target) || 0;
+        const duration = 1500;
+        const step = target / (duration / 16);
+        let current = 0;
+        
+        const updateCounter = () => {
+            current += step;
+            if (current < target) {
+                counter.textContent = Math.floor(current).toLocaleString();
+                requestAnimationFrame(updateCounter);
+            } else {
+                counter.textContent = target.toLocaleString();
+            }
+        };
+        
+        // Start animation when element is visible
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    updateCounter();
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        observer.observe(counter);
+    });
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', animateCounters);
+
 // Handle scan response
 document.body.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail.pathInfo.requestPath === '/api/library/import/scan') {
         try {
             const response = JSON.parse(evt.detail.xhr.responseText);
             if (response.job_id) {
-                // Show clean scan status card
                 const statusDiv = document.getElementById('scan-status');
                 const stats = response.stats || {};
                 const isCompleted = response.status === 'completed';
                 
                 statusDiv.innerHTML = `
-                    <div class="card">
+                    <div class="card ${isCompleted ? '' : 'scan-progress-card'}">
                         <div class="card-header">
                             <h3>
-                                <i class="bi bi-${isCompleted ? 'check-circle text-success' : 'hourglass-split'}"></i> 
-                                ${isCompleted ? 'Scan Completed' : 'Scan Started'}
+                                ${isCompleted 
+                                    ? '<i class="bi bi-check-circle-fill text-success"></i>' 
+                                    : '<span class="scanning-indicator"></span>'}
+                                ${isCompleted ? 'Scan Completed' : 'Scanning...'}
                             </h3>
                         </div>
                         <div class="card-body"
                              ${!isCompleted ? `hx-get="/api/library/import/status/${response.job_id}/html" hx-trigger="load, every 2s" hx-swap="innerHTML"` : ''}>
                             ${isCompleted ? `
-                                <div class="scan-stats" style="margin-bottom: 1rem;">
-                                    <span><i class="bi bi-file-earmark"></i> Files Scanned: <strong>${stats.scanned || 0}</strong></span>
-                                    <span><i class="bi bi-check text-success"></i> Imported: <strong>${stats.imported || 0}</strong></span>
-                                    <span><i class="bi bi-skip-forward"></i> Skipped: <strong>${stats.skipped || 0}</strong></span>
-                                    ${stats.errors > 0 ? `<span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>${stats.errors}</strong></span>` : ''}
+                                <div class="scan-live-stats" style="margin-bottom: 1rem;">
+                                    <div class="live-stat">
+                                        <i class="bi bi-file-earmark"></i>
+                                        <span class="live-stat-value">${(stats.scanned || 0).toLocaleString()}</span>
+                                        <span class="live-stat-label">Scanned</span>
+                                    </div>
+                                    <div class="live-stat live-stat-success">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        <span class="live-stat-value">${(stats.imported || 0).toLocaleString()}</span>
+                                        <span class="live-stat-label">Imported</span>
+                                    </div>
+                                    <div class="live-stat">
+                                        <i class="bi bi-skip-forward-fill"></i>
+                                        <span class="live-stat-value">${(stats.skipped || 0).toLocaleString()}</span>
+                                        <span class="live-stat-label">Skipped</span>
+                                    </div>
+                                    <div class="live-stat ${stats.errors > 0 ? 'live-stat-warning' : ''}">
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                        <span class="live-stat-value">${(stats.errors || 0).toLocaleString()}</span>
+                                        <span class="live-stat-label">Errors</span>
+                                    </div>
                                 </div>
                                 ${stats.new_artists > 0 || stats.new_albums > 0 || stats.new_tracks > 0 ? `
-                                <div class="scan-stats" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
-                                    ${stats.new_artists > 0 ? `<span><i class="bi bi-person-plus"></i> New Artists: <strong>${stats.new_artists}</strong></span>` : ''}
-                                    ${stats.new_albums > 0 ? `<span><i class="bi bi-disc"></i> New Albums: <strong>${stats.new_albums}</strong></span>` : ''}
-                                    ${stats.new_tracks > 0 ? `<span><i class="bi bi-music-note-beamed"></i> New Tracks: <strong>${stats.new_tracks}</strong></span>` : ''}
+                                <div style="padding-top: 1rem; border-top: 1px solid var(--border-subtle); display: flex; flex-wrap: wrap; gap: 1.5rem; font-size: 0.9rem;">
+                                    ${stats.new_artists > 0 ? `<span><i class="bi bi-person-plus text-success"></i> ${stats.new_artists} new artists</span>` : ''}
+                                    ${stats.new_albums > 0 ? `<span><i class="bi bi-disc text-success"></i> ${stats.new_albums} new albums</span>` : ''}
+                                    ${stats.new_tracks > 0 ? `<span><i class="bi bi-music-note-beamed text-success"></i> ${stats.new_tracks} new tracks</span>` : ''}
                                 </div>
                                 ` : ''}
-                                <p class="text-muted" style="margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
-                                    <i class="bi bi-clock"></i> Completed in ${stats.completed_at && stats.started_at ? calculateDuration(stats.started_at, stats.completed_at) : 'N/A'}
-                                </p>
                             ` : `
-                                <div class="progress-container">
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" style="width: 0%;"></div>
+                                <div class="progress-container-fancy">
+                                    <div class="progress-bar-fancy">
+                                        <div class="progress-fill-fancy" style="width: 0%;">
+                                            <div class="progress-shimmer"></div>
+                                        </div>
                                     </div>
-                                    <span class="progress-text">Starting...</span>
+                                    <span class="progress-percentage">0%</span>
                                 </div>
+                                <p style="text-align: center; color: var(--text-muted); margin: 0;">
+                                    <i class="bi bi-hourglass-split"></i> Initializing scan...
+                                </p>
                             `}
                         </div>
                     </div>
                 `;
                 htmx.process(statusDiv);
                 
-                // Reload summary stats after completion
+                // Reload page after completion to update stats
                 if (isCompleted && stats.imported > 0) {
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
+                    setTimeout(() => window.location.reload(), 2000);
                 }
             }
         } catch (e) {
             console.error('Error parsing scan response:', e);
             document.getElementById('scan-status').innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> Error starting scan. Check console for details.</p>
+                <div class="card" style="border-color: #ef4444;">
+                    <div class="card-body" style="text-align: center; padding: 2rem;">
+                        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p style="margin: 0;">Error starting scan. Please try again.</p>
                     </div>
                 </div>
             `;
@@ -341,12 +858,9 @@ document.body.addEventListener('htmx:afterRequest', function(evt) {
     }
 });
 
-// Helper function to calculate duration
+// Calculate duration helper
 function calculateDuration(start, end) {
-    const startTime = new Date(start);
-    const endTime = new Date(end);
-    const durationMs = endTime - startTime;
-    
+    const durationMs = new Date(end) - new Date(start);
     if (durationMs < 1000) return `${durationMs}ms`;
     if (durationMs < 60000) return `${(durationMs / 1000).toFixed(1)}s`;
     return `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s`;

@@ -609,17 +609,15 @@ async def library_import_jobs_list(
     _request: Request,  # noqa: ARG001
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> Any:
-    """HTMX partial: Recent import jobs list."""
+    """HTMX partial: Recent import jobs list with beautiful styling."""
     jobs = await job_queue.list_jobs(job_type=JobType.LIBRARY_SCAN, limit=10)
 
     jobs_data: list[dict[str, Any]] = [
         {
             "job_id": job.id,
             "status": job.status.value,
-            "created_at": job.created_at.strftime("%Y-%m-%d %H:%M"),
-            "completed_at": job.completed_at.strftime("%Y-%m-%d %H:%M")
-            if job.completed_at
-            else None,
+            "created_at": job.created_at,
+            "completed_at": job.completed_at,
             "stats": job.result
             if isinstance(job.result, dict) and "progress" not in job.result
             else None,
@@ -627,31 +625,81 @@ async def library_import_jobs_list(
         for job in jobs
     ]
 
-    # Return simple HTML table
+    # Return empty state with nice styling
     if not jobs_data:
-        return HTMLResponse("<p class='text-muted'>No recent scans found.</p>")
+        return HTMLResponse(
+            """<div class="empty-scans">
+                <i class="bi bi-inbox"></i>
+                <p>No recent scans found</p>
+                <p style="font-size: 0.85rem;">Start a scan to see your import history here</p>
+            </div>"""
+        )
 
-    html = "<table class='table'><thead><tr>"
-    html += "<th>Date</th><th>Status</th><th>Imported</th><th>Errors</th>"
-    html += "</tr></thead><tbody>"
+    # Build beautiful table HTML
+    html = """<table class="recent-scans-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Files</th>
+                <th>Imported</th>
+                <th>Errors</th>
+            </tr>
+        </thead>
+        <tbody>"""
 
     for job in jobs_data:
-        status_class = {
-            "completed": "text-success",
-            "failed": "text-danger",
-            "running": "text-warning",
-            "pending": "text-muted",
-        }.get(job["status"], "")
+        # Format date nicely
+        date_str = job["created_at"].strftime("%b %d, %Y")
+        time_str = job["created_at"].strftime("%H:%M")
 
-        imported = job["stats"].get("imported", "-") if job["stats"] else "-"
-        errors = job["stats"].get("errors", "-") if job["stats"] else "-"
+        # Status badge styling
+        status = job["status"]
+        status_config = {
+            "completed": ("check-circle-fill", "completed", "Completed"),
+            "failed": ("x-circle-fill", "failed", "Failed"),
+            "running": ("arrow-repeat", "running", "Running"),
+            "pending": ("hourglass", "pending", "Pending"),
+        }.get(status, ("question-circle", "pending", status.title()))
 
-        html += "<tr>"
-        html += f"<td>{job['created_at']}</td>"
-        html += f"<td class='{status_class}'>{job['status']}</td>"
-        html += f"<td>{imported}</td>"
-        html += f"<td>{errors}</td>"
-        html += "</tr>"
+        icon, badge_class, label = status_config
+
+        # Stats
+        stats = job["stats"] or {}
+        scanned = stats.get("scanned", "-")
+        imported = stats.get("imported", "-")
+        errors = stats.get("errors", 0)
+
+        # Format numbers with locale
+        if isinstance(scanned, int):
+            scanned = f"{scanned:,}"
+        if isinstance(imported, int):
+            imported = f"{imported:,}"
+        if isinstance(errors, int):
+            errors_display = f"{errors:,}"
+            errors_class = "has-errors" if errors > 0 else ""
+        else:
+            errors_display = str(errors)
+            errors_class = ""
+
+        html += f"""
+            <tr>
+                <td>
+                    <div class="scan-date">
+                        <span class="scan-date-main">{date_str}</span>
+                        <span class="scan-date-time">{time_str}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="status-badge status-badge-{badge_class}">
+                        <i class="bi bi-{icon}"></i>
+                        {label}
+                    </span>
+                </td>
+                <td class="stat-cell">{scanned}</td>
+                <td class="stat-cell stat-cell-imported">{imported}</td>
+                <td class="stat-cell stat-cell-errors {errors_class}">{errors_display}</td>
+            </tr>"""
 
     html += "</tbody></table>"
     return HTMLResponse(html)
