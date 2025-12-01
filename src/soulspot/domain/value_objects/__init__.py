@@ -12,8 +12,14 @@ from soulspot.domain.value_objects.album_types import (
     PrimaryAlbumType,
     SecondaryAlbumType,
     VARIOUS_ARTISTS_PATTERNS,
+    DIVERSITY_THRESHOLD,
+    DOMINANT_ARTIST_THRESHOLD,
+    MIN_TRACKS_FOR_DIVERSITY,
+    CompilationDetectionResult,
     is_various_artists,
+    calculate_track_diversity,
     detect_compilation_from_track_artists,
+    detect_compilation,
 )
 
 

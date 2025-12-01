@@ -24,7 +24,7 @@ from soulspot.domain.entities import Album, Artist, Track
 from soulspot.domain.value_objects import AlbumId, ArtistId, FilePath, TrackId
 from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
-    detect_compilation_from_track_artists,
+    detect_compilation,
     is_various_artists,
 )
 from soulspot.infrastructure.persistence.models import (
@@ -652,14 +652,23 @@ class LibraryScannerService:
             logger.debug(f"Fuzzy matched album '{title}' (score: {best_score})")
             return self._album_cache[best_match_key], False, True
 
-        # Determine secondary_types (compilation detection)
-        # Hey future me - compilation is detected if:
-        # 1. compilation flag is True in metadata (TCMP, cpil tags)
-        # 2. album_artist matches "Various Artists" patterns
+        # Determine secondary_types using Lidarr-style compilation detection
+        # Hey future me - this uses the new detect_compilation() with full heuristics!
+        # We pass explicit_flag (from TCMP/cpil) and album_artist, track_artists come later
+        # via post-scan analysis (when we have all tracks for diversity calculation).
+        detection_result = detect_compilation(
+            album_artist=album_artist,
+            track_artists=None,  # Not available yet at single-file scan time
+            explicit_flag=is_compilation if is_compilation else None,
+        )
+        
         secondary_types: list[str] = []
-        if is_compilation or (album_artist and is_various_artists(album_artist)):
+        if detection_result.is_compilation:
             secondary_types.append(SecondaryAlbumType.COMPILATION.value)
-            logger.debug(f"Album '{title}' detected as compilation (album_artist={album_artist})")
+            logger.debug(
+                f"Album '{title}' detected as compilation: "
+                f"reason={detection_result.reason}, confidence={detection_result.confidence:.0%}"
+            )
 
         # Create new album
         album = Album(

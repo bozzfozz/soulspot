@@ -54,6 +54,65 @@
             {% endif %}
         </div>
         {% endif %}
+        
+        {# Compilation Badge & Detection Info #}
+        {% if album.is_compilation %}
+        <div style="margin-top: var(--space-3); display: flex; align-items: center; gap: var(--space-3);">
+            <span class="badge" style="background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3);">
+                <i class="bi bi-collection" style="margin-right: var(--space-1);"></i>
+                Compilation
+            </span>
+            <button type="button" 
+                    class="btn btn-sm btn-ghost"
+                    onclick="showCompilationInfo()"
+                    title="Why detected as compilation?">
+                <i class="bi bi-info-circle"></i>
+            </button>
+            <button type="button"
+                    class="btn btn-sm btn-ghost"
+                    onclick="toggleCompilationStatus(false)"
+                    title="Not a compilation? Click to remove">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </div>
+        {% else %}
+        {# Show "Mark as compilation" option for non-compilations #}
+        <div style="margin-top: var(--space-3);">
+            <button type="button"
+                    class="btn btn-sm btn-ghost"
+                    onclick="toggleCompilationStatus(true)"
+                    style="color: var(--text-muted);"
+                    title="Mark as compilation">
+                <i class="bi bi-collection"></i>
+                Mark as Compilation
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# Compilation Detection Info Modal #}
+<div id="compilation-info-modal" class="modal" style="display: none;">
+    <div class="modal-backdrop" onclick="closeCompilationInfo()"></div>
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3><i class="bi bi-collection" style="color: #a78bfa; margin-right: var(--space-2);"></i>Compilation Detection</h3>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="closeCompilationInfo()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="modal-body" id="compilation-info-content">
+            <div class="loading-spinner">Loading detection info...</div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="verifyWithMusicBrainz()">
+                <i class="bi bi-cloud-check"></i>
+                Verify with MusicBrainz
+            </button>
+            <button type="button" class="btn btn-primary" onclick="closeCompilationInfo()">
+                Close
+            </button>
+        </div>
     </div>
 </div>
 
@@ -465,5 +524,211 @@ document.addEventListener('DOMContentLoaded', function() {
     
     updateBulkActions();
 });
+
+// =============================================================================
+// Compilation Detection Features
+// =============================================================================
+
+const ALBUM_ID = '{{ album.id }}';
+
+function showCompilationInfo() {
+    const modal = document.getElementById('compilation-info-modal');
+    const content = document.getElementById('compilation-info-content');
+    
+    modal.style.display = 'flex';
+    content.innerHTML = '<div class="loading-spinner">Loading detection info...</div>';
+    
+    fetch(`/api/library/compilations/${ALBUM_ID}/detection-info`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span class="badge ${data.is_compilation ? 'badge-purple' : 'badge-secondary'}">
+                            ${data.is_compilation ? 'Compilation' : 'Not a Compilation'}
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Detection Method:</span>
+                        <span class="info-value">${formatDetectionReason(data.detection_reason)}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Confidence:</span>
+                        <div style="display: flex; align-items: center; gap: var(--space-2);">
+                            <div class="progress-bar" style="width: 100px; height: 8px;">
+                                <div class="progress-fill" style="width: ${data.confidence * 100}%; background: ${getConfidenceColor(data.confidence)};"></div>
+                            </div>
+                            <span>${Math.round(data.confidence * 100)}%</span>
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Track Diversity:</span>
+                        <span class="info-value">${data.unique_artists} unique artist(s) / ${data.track_count} tracks 
+                            (${Math.round(data.diversity_ratio * 100)}%)
+                        </span>
+                    </div>
+                    <div style="margin-top: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md); font-size: var(--font-size-sm);">
+                        <i class="bi bi-info-circle" style="margin-right: var(--space-2); color: var(--accent-primary);"></i>
+                        ${data.explanation}
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading compilation info:', error);
+            content.innerHTML = `
+                <div class="alert alert-error">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Failed to load detection info. Please try again.
+                </div>
+            `;
+        });
+}
+
+function closeCompilationInfo() {
+    document.getElementById('compilation-info-modal').style.display = 'none';
+}
+
+function formatDetectionReason(reason) {
+    const reasons = {
+        'explicit_flag': '<i class="bi bi-tag"></i> Explicit Tag (TCMP/cpil)',
+        'album_artist_pattern': '<i class="bi bi-person-badge"></i> Album Artist Pattern',
+        'track_diversity': '<i class="bi bi-people"></i> Track Artist Diversity',
+        'no_dominant_artist': '<i class="bi bi-diagram-3"></i> No Dominant Artist',
+        'borderline_diversity': '<i class="bi bi-question-circle"></i> Borderline (Uncertain)',
+        'no_indicators': '<i class="bi bi-dash-circle"></i> No Compilation Indicators',
+        'mb_various_artists': '<i class="bi bi-cloud-check"></i> MusicBrainz: Various Artists',
+        'mb_compilation_type': '<i class="bi bi-cloud-check"></i> MusicBrainz: Compilation Type',
+        'mb_not_compilation': '<i class="bi bi-cloud-check"></i> MusicBrainz: Not Compilation',
+        'manual_override': '<i class="bi bi-person-check"></i> Manual Override',
+    };
+    return reasons[reason] || reason;
+}
+
+function getConfidenceColor(confidence) {
+    if (confidence >= 0.9) return '#22c55e';
+    if (confidence >= 0.7) return '#eab308';
+    return '#ef4444';
+}
+
+async function toggleCompilationStatus(setAsCompilation) {
+    const action = setAsCompilation ? 'mark as compilation' : 'remove compilation status';
+    
+    if (!confirm(`Are you sure you want to ${action}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/library/compilations/set-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                album_id: ALBUM_ID,
+                is_compilation: setAsCompilation,
+                reason: 'manual_override'
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to update compilation status');
+        }
+        
+        SoulSpot.showNotification(
+            setAsCompilation ? 'Marked as compilation' : 'Removed compilation status',
+            'success'
+        );
+        
+        // Reload page to reflect changes
+        setTimeout(() => location.reload(), 1000);
+        
+    } catch (error) {
+        console.error('Error updating compilation status:', error);
+        SoulSpot.showNotification('Failed to update status. Please try again.', 'error');
+    }
+}
+
+async function verifyWithMusicBrainz() {
+    const content = document.getElementById('compilation-info-content');
+    content.innerHTML = `
+        <div style="text-align: center; padding: var(--space-6);">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: var(--space-4); color: var(--text-muted);">
+                Querying MusicBrainz...<br>
+                <small>(This may take a few seconds due to rate limits)</small>
+            </p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/api/library/compilations/verify-musicbrainz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                album_id: ALBUM_ID,
+                update_if_confirmed: true
+            })
+        });
+        
+        const data = await response.json();
+        
+        let resultHtml = `
+            <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                <div class="info-row">
+                    <span class="info-label">MusicBrainz Result:</span>
+                    <span class="badge ${data.is_compilation ? 'badge-purple' : 'badge-secondary'}">
+                        ${data.is_compilation ? 'Compilation' : 'Not a Compilation'}
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Reason:</span>
+                    <span class="info-value">${formatDetectionReason(data.reason)}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Confidence:</span>
+                    <span class="info-value">${Math.round(data.confidence * 100)}%</span>
+                </div>
+        `;
+        
+        if (data.mbid) {
+            resultHtml += `
+                <div class="info-row">
+                    <span class="info-label">MusicBrainz ID:</span>
+                    <a href="https://musicbrainz.org/release-group/${data.mbid}" 
+                       target="_blank" 
+                       style="color: var(--accent-primary);">
+                        ${data.mbid.substring(0, 8)}...
+                        <i class="bi bi-box-arrow-up-right" style="font-size: 0.8em;"></i>
+                    </a>
+                </div>
+            `;
+        }
+        
+        if (data.updated) {
+            resultHtml += `
+                <div class="alert alert-success" style="margin-top: var(--space-4);">
+                    <i class="bi bi-check-circle"></i>
+                    Album status updated based on MusicBrainz data.
+                </div>
+            `;
+        }
+        
+        resultHtml += '</div>';
+        content.innerHTML = resultHtml;
+        
+        if (data.updated) {
+            setTimeout(() => location.reload(), 2000);
+        }
+        
+    } catch (error) {
+        console.error('Error verifying with MusicBrainz:', error);
+        content.innerHTML = `
+            <div class="alert alert-error">
+                <i class="bi bi-exclamation-triangle"></i>
+                Failed to verify with MusicBrainz. Please try again later.
+            </div>
+        `;
+    }
+}
 </script>
 {% endblock %}

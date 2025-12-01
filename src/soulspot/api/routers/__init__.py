@@ -16,6 +16,7 @@ from soulspot.api.routers import (
     artwork,
     auth,
     automation,
+    compilations,
     downloads,
     library,
     metadata,
@@ -40,6 +41,7 @@ api_router.include_router(downloads.router, prefix="/downloads", tags=["Download
 api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])
 api_router.include_router(metadata.router, prefix="/metadata", tags=["Metadata"])
 api_router.include_router(library.router, tags=["Library"])
+api_router.include_router(compilations.router, tags=["Compilations"])
 api_router.include_router(automation.router, tags=["Automation"])
 api_router.include_router(sse.router, tags=["SSE"])
 api_router.include_router(workers.router, prefix="/workers", tags=["Workers"])
@@ -51,6 +53,7 @@ __all__ = [
     "artwork",
     "auth",
     "automation",
+    "compilations",
     "downloads",
     "library",
     "metadata",

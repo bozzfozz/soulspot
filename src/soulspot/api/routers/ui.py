@@ -1055,7 +1055,21 @@ async def library_album_detail(
         else None
     )
 
+    # Get album ID and is_compilation for compilation features
+    album_id = (
+        track_models[0].album.id
+        if track_models and track_models[0].album
+        else None
+    )
+    
+    # Check if album is a compilation (secondary_types contains "compilation")
+    is_compilation = False
+    if track_models and track_models[0].album:
+        secondary_types = getattr(track_models[0].album, "secondary_types", None) or []
+        is_compilation = "compilation" in secondary_types
+
     album_data = {
+        "id": album_id,  # Needed for API calls
         "title": album_title,
         "artist": artist_name,
         "artist_slug": artist_name,
@@ -1063,6 +1077,7 @@ async def library_album_detail(
         "year": year,
         "total_duration_ms": total_duration_ms,
         "artwork_url": artwork_url,  # Spotify CDN URL or None
+        "is_compilation": is_compilation,  # For compilation badge and override UI
     }
 
     return templates.TemplateResponse(

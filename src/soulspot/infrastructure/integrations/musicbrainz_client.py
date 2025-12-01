@@ -266,3 +266,166 @@ class MusicBrainzClient(IMusicBrainzClient):
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
+
+    # =============================================================================
+    # COMPILATION DETECTION - Various Artists Verification
+    # =============================================================================
+    
+    # MusicBrainz's official "Various Artists" MBID - this is THE canonical VA!
+    # All true compilations reference this artist. If album's artist-credit contains
+    # this ID, it's a compilation for sure. Lidarr uses this same approach.
+    VARIOUS_ARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377"
+
+    async def lookup_release_group(self, release_group_id: str) -> dict[str, Any] | None:
+        """Lookup a release group (album concept) by MusicBrainz ID.
+        
+        Hey future me - release GROUP is the abstract "album" while release is a specific
+        pressing/edition. Release groups have the "type" field we need for compilation detection!
+        
+        Args:
+            release_group_id: MusicBrainz release group ID
+            
+        Returns:
+            Release group info with type, or None if not found.
+        """
+        try:
+            response = await self._rate_limited_request(
+                "GET",
+                f"/release-group/{release_group_id}",
+                params={
+                    "fmt": "json",
+                    "inc": "artists+releases",
+                },
+            )
+            response.raise_for_status()
+            return cast(dict[str, Any], response.json())
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise
+
+    async def search_release_group(
+        self, artist: str | None, album: str, limit: int = 5
+    ) -> list[dict[str, Any]]:
+        """Search for release groups (albums) by artist and title.
+        
+        Hey future me - this is how we verify compilations! Search for the album,
+        check if result has "Compilation" in secondary-types or artist is Various Artists.
+        
+        Args:
+            artist: Artist name (optional - useful for regular albums)
+            album: Album title
+            limit: Max results
+            
+        Returns:
+            List of release group matches with type info.
+        """
+        # Build Lucene query
+        query_parts = [f'releasegroup:"{album}"']
+        if artist:
+            query_parts.append(f'artist:"{artist}"')
+
+        query = " AND ".join(query_parts)
+
+        response = await self._rate_limited_request(
+            "GET",
+            "/release-group",
+            params={
+                "query": query,
+                "fmt": "json",
+                "limit": limit,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        return cast(list[dict[str, Any]], data.get("release-groups", []))
+
+    async def verify_compilation(
+        self, album_title: str, album_artist: str | None = None
+    ) -> dict[str, Any]:
+        """Verify if an album is a compilation via MusicBrainz.
+        
+        Hey future me - this is the Phase 3 compilation verification!
+        Call this for borderline cases (50-75% diversity) where local heuristics aren't sure.
+        
+        Detection methods (in order):
+        1. Artist credit contains Various Artists MBID → True
+        2. Release group secondary-type-list contains "Compilation" → True
+        3. Primary-type is "Compilation" → True (rare but happens)
+        4. Not found or no indicators → False (uncertain)
+        
+        Args:
+            album_title: Album title to search
+            album_artist: Optional artist name (helps narrow search)
+            
+        Returns:
+            Dict with:
+            - is_compilation: bool
+            - confidence: float (0.0-1.0)
+            - reason: str (mb_various_artists, mb_compilation_type, mb_not_found, etc.)
+            - mbid: str | None (release group MBID if found)
+            - match_score: int (0-100 from MusicBrainz search)
+        """
+        result: dict[str, Any] = {
+            "is_compilation": False,
+            "confidence": 0.0,
+            "reason": "mb_not_searched",
+            "mbid": None,
+            "match_score": 0,
+        }
+        
+        try:
+            # Search for release group
+            release_groups = await self.search_release_group(
+                artist=album_artist,
+                album=album_title,
+                limit=5,
+            )
+            
+            if not release_groups:
+                result["reason"] = "mb_not_found"
+                result["confidence"] = 0.3  # Low confidence - MB might just not have it
+                return result
+            
+            # Check top result (highest score)
+            top_match = release_groups[0]
+            result["mbid"] = top_match.get("id")
+            result["match_score"] = top_match.get("score", 0)
+            
+            # Check 1: Artist credit contains Various Artists
+            artist_credit = top_match.get("artist-credit", [])
+            for credit in artist_credit:
+                artist_data = credit.get("artist", {})
+                if artist_data.get("id") == self.VARIOUS_ARTISTS_MBID:
+                    result["is_compilation"] = True
+                    result["reason"] = "mb_various_artists"
+                    result["confidence"] = 0.95
+                    return result
+            
+            # Check 2: Secondary type is "Compilation"
+            secondary_types = top_match.get("secondary-type-list", [])
+            if "Compilation" in secondary_types:
+                result["is_compilation"] = True
+                result["reason"] = "mb_compilation_type"
+                result["confidence"] = 0.9
+                return result
+            
+            # Check 3: Primary type is "Compilation" (rare)
+            primary_type = top_match.get("primary-type", "")
+            if primary_type.lower() == "compilation":
+                result["is_compilation"] = True
+                result["reason"] = "mb_primary_compilation"
+                result["confidence"] = 0.9
+                return result
+            
+            # Not a compilation in MusicBrainz
+            result["is_compilation"] = False
+            result["reason"] = "mb_not_compilation"
+            result["confidence"] = 0.8 if result["match_score"] >= 90 else 0.6
+            return result
+            
+        except Exception as e:
+            result["reason"] = f"mb_error: {type(e).__name__}"
+            result["confidence"] = 0.0
+            return result

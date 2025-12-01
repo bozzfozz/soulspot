@@ -70,12 +70,116 @@ Das System verwendet zwei Typ-Dimensionen wie Lidarr/MusicBrainz:
 - `primary_type = "album"`
 - `secondary_types = ["live", "compilation"]`
 
-### Various Artists Detection
+### Various Artists Detection (Lidarr-Style)
 
-Das System erkennt Compilations automatisch durch:
-- TPE2 Tag (Album Artist) in Audiodateien
-- TCMP Flag (iTunes Compilation)
-- Artist-Namen wie "Various Artists", "VA", "V.A."
+Das System erkennt Compilations automatisch durch mehrere Heuristiken (in Prioritätsreihenfolge):
+
+#### 1. Explicit Compilation Flags (höchste Priorität)
+- **TCMP** Tag (ID3 - iTunes Compilation)
+- **cpil** Tag (MP4)
+- **COMPILATION** Tag (Vorbis/FLAC)
+
+#### 2. Album Artist Pattern Matching
+Erkannte Patterns (case-insensitive):
+- "Various Artists", "VA", "V.A.", "V/A"
+- "Diverse", "Verschiedene", "Verschiedene Künstler" (German)
+- "Varios Artistas" (Spanish)
+- "Artistes Divers" (French)
+- "Artisti Vari" (Italian)
+- "Sampler", "Compilation", "Soundtrack", "OST"
+- "Unknown Artist", "[Unknown]"
+
+#### 3. Track Artist Diversity Analysis
+Lidarr-kompatible Schwellenwerte:
+- **≥75% Diversity**: Wenn ≥75% der Tracks unterschiedliche Künstler haben → Compilation
+- **<25% Dominant**: Wenn kein Künstler >25% der Tracks hat → Compilation
+- **Minimum 3 Tracks**: Diversity-Analyse benötigt mindestens 3 Tracks
+
+#### Detection Timing
+- **Scan-Zeit**: Explicit Flags + Album Artist Patterns werden sofort erkannt
+- **Post-Scan**: Track Diversity Analyse erfolgt nach dem Scan aller Tracks eines Albums
+
+#### Detection Result Tracking
+Jede Erkennung speichert:
+```python
+CompilationDetectionResult(
+    is_compilation=True,
+    reason="track_diversity",  # explicit_flag, album_artist_pattern, track_diversity, no_dominant_artist
+    confidence=0.85,           # 0.0 - 1.0
+    details={                  # Extra Info für Debugging
+        "diversity_ratio": 0.9,
+        "unique_artists": 9,
+        "total_tracks": 10
+    }
+)
+```
+
+#### API: Compilation Analyzer
+
+Manuelle Re-Analyse aller Alben nach dem Scan:
+
+```python
+from soulspot.application.services import CompilationAnalyzerService
+
+analyzer = CompilationAnalyzerService(session)
+
+# Einzelnes Album analysieren
+result = await analyzer.analyze_album(album_id)
+
+# Alle Alben analysieren (nur nicht bereits erkannte)
+results = await analyzer.analyze_all_albums(only_undetected=True)
+
+# Statistiken abrufen
+stats = await analyzer.get_compilation_stats()
+# -> {"total_albums": 500, "compilation_albums": 45, "compilation_percent": 9.0}
+```
+
+#### REST API Endpoints
+
+| Endpoint | Method | Beschreibung |
+|----------|--------|--------------|
+| `/api/library/compilations/analyze` | POST | Einzelnes Album analysieren |
+| `/api/library/compilations/analyze-all` | POST | Alle Alben analysieren |
+| `/api/library/compilations/stats` | GET | Compilation-Statistiken |
+| `/api/library/compilations/set-status` | POST | Status manuell setzen |
+| `/api/library/compilations/verify-musicbrainz` | POST | MusicBrainz-Verifikation |
+| `/api/library/compilations/verify-borderline` | POST | Bulk MusicBrainz-Verifikation |
+| `/api/library/compilations/{id}/detection-info` | GET | Detection-Details für UI |
+
+#### MusicBrainz-Verifikation (Phase 3)
+
+Für borderline Cases (50-75% Diversity) kann MusicBrainz als autoritative Quelle genutzt werden:
+
+```python
+# Mit MusicBrainz-Client initialisieren
+from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
+
+mb_client = MusicBrainzClient(settings.musicbrainz)
+analyzer = CompilationAnalyzerService(session, musicbrainz_client=mb_client)
+
+# Einzelnes Album verifizieren
+result = await analyzer.verify_with_musicbrainz(album_id)
+# -> {"verified": True, "is_compilation": True, "reason": "mb_compilation_type", "mbid": "..."}
+
+# Alle borderline Alben verifizieren (LANGSAM wegen Rate Limit!)
+results = await analyzer.verify_borderline_albums(limit=20)
+```
+
+**ACHTUNG:** MusicBrainz hat strenge Rate Limits (1 Anfrage/Sekunde). Bulk-Verifikation kann mehrere Minuten dauern!
+
+#### Manual Override
+
+Benutzer können den Compilation-Status manuell überschreiben:
+
+```python
+# Als Compilation markieren
+await analyzer.set_compilation_status(album_id, is_compilation=True, reason="manual_override")
+
+# Compilation-Status entfernen
+await analyzer.set_compilation_status(album_id, is_compilation=False, reason="user_correction")
+```
+
+Die UI zeigt entsprechende Buttons im Album-Detail.
 
 ---
 
