@@ -41,17 +41,31 @@ from soulspot.infrastructure.persistence.repositories import (
 logger = logging.getLogger(__name__)
 
 # Supported audio file extensions
+# Hey future me - alle gängigen Formate! Mutagen unterstützt die meisten davon.
 AUDIO_EXTENSIONS = {
+    # Lossy
     ".mp3",
-    ".flac",
     ".m4a",
+    ".aac",
     ".ogg",
     ".opus",
-    ".wav",
-    ".aac",
     ".wma",
-    ".ape",
+    # Lossless
+    ".flac",
+    ".wav",
+    ".aiff",
+    ".aif",
     ".alac",
+    ".ape",
+    ".wv",      # WavPack
+    ".tta",     # True Audio
+    ".dsd",     # DSD Audio
+    ".dsf",     # DSD Stream File
+    ".dff",     # DSDIFF
+    # Other
+    ".mpc",     # Musepack
+    ".mp4",     # Can contain audio
+    ".webm",    # Can contain audio (Opus/Vorbis)
 }
 
 
@@ -135,6 +149,20 @@ class LibraryScannerService:
             if not self.music_path.exists():
                 raise FileNotFoundError(f"Music path does not exist: {self.music_path}")
 
+            # Log detailed path info for debugging
+            logger.info(f"Scanning music library at: {self.music_path}")
+            logger.info(f"Music path is absolute: {self.music_path.is_absolute()}")
+            logger.info(f"Music path resolved: {self.music_path.resolve()}")
+            
+            # Count subdirectories for debugging
+            try:
+                subdirs = [d for d in self.music_path.iterdir() if d.is_dir()]
+                logger.info(f"Found {len(subdirs)} top-level subdirectories in music path")
+                if subdirs[:5]:
+                    logger.info(f"First 5 subdirs: {[d.name for d in subdirs[:5]]}")
+            except Exception as e:
+                logger.warning(f"Could not list subdirectories: {e}")
+
             # Discover all audio files
             all_files = self._discover_audio_files(self.music_path)
             stats["total_files"] = len(all_files)
@@ -203,17 +231,54 @@ class LibraryScannerService:
     def _discover_audio_files(self, directory: Path) -> list[Path]:
         """Recursively discover all audio files in directory.
 
+        Hey future me - followlinks=True ist wichtig für Symlink-Ordner!
+        Viele Setups haben /music als Symlink zu einer externen Platte.
+
         Args:
             directory: Root directory to scan
 
         Returns:
             List of audio file paths
         """
+        from collections import Counter
+        
         audio_files: list[Path] = []
-        for root, _, files in os.walk(directory):
-            for filename in files:
-                if Path(filename).suffix.lower() in AUDIO_EXTENSIONS:
-                    audio_files.append(Path(root) / filename)
+        skipped_dirs: list[str] = []
+        all_extensions: Counter[str] = Counter()
+        total_files_seen = 0
+        
+        # followlinks=True folgt Symlinks zu anderen Ordnern
+        for root, dirs, files in os.walk(directory, followlinks=True):
+            # Log wenn wir Zugriffsprobleme haben
+            try:
+                for filename in files:
+                    total_files_seen += 1
+                    ext = Path(filename).suffix.lower()
+                    all_extensions[ext] += 1
+                    if ext in AUDIO_EXTENSIONS:
+                        audio_files.append(Path(root) / filename)
+            except PermissionError as e:
+                skipped_dirs.append(root)
+                logger.warning(f"Permission denied: {root} - {e}")
+        
+        # Log extension statistics for debugging
+        logger.info(f"Total files seen: {total_files_seen}")
+        logger.info(f"Audio files matched: {len(audio_files)}")
+        
+        # Show top 10 extensions found
+        top_extensions = all_extensions.most_common(15)
+        logger.info(f"Top file extensions found: {top_extensions}")
+        
+        # Show which audio extensions were found
+        audio_ext_counts = {ext: all_extensions[ext] for ext in AUDIO_EXTENSIONS if all_extensions[ext] > 0}
+        logger.info(f"Audio extensions found: {audio_ext_counts}")
+        
+        if skipped_dirs:
+            logger.warning(
+                f"Skipped {len(skipped_dirs)} directories due to permissions: "
+                f"{skipped_dirs[:5]}{'...' if len(skipped_dirs) > 5 else ''}"
+            )
+        
         return audio_files
 
     async def _filter_changed_files(self, files: list[Path]) -> list[Path]:
