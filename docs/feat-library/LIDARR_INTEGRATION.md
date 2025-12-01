@@ -473,6 +473,9 @@ Lidarr tracks album types from MusicBrainz:
 ### Standard Metadata Profile
 
 ```python
+from dataclasses import dataclass, field
+
+
 @dataclass
 class LidarrMetadataProfile:
     """
@@ -627,7 +630,73 @@ class SoulSpotLidarrConfig:
 
 ### Library Scanner Integration
 
+The following example shows how to implement a scanner for Lidarr-organized libraries:
+
 ```python
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+
+# Type definitions for scanner results
+@dataclass
+class AlbumFolderInfo:
+    title: str
+    year: Optional[int]
+    disambiguation: Optional[str]
+
+
+@dataclass
+class TrackFileInfo:
+    track_number: int
+    disc_number: int
+    title: str
+    extension: str
+    artist: Optional[str] = None
+
+
+@dataclass
+class TrackInfo:
+    title: str
+    track_number: int
+    disc_number: int
+    path: Path
+
+
+@dataclass
+class AlbumInfo:
+    title: str
+    year: Optional[int]
+    disambiguation: Optional[str]
+    path: Path
+    tracks: list[TrackInfo] = None
+    
+    def __post_init__(self):
+        if self.tracks is None:
+            self.tracks = []
+
+
+@dataclass
+class ArtistInfo:
+    name: str
+    path: Path
+    albums: list[AlbumInfo] = None
+    
+    def __post_init__(self):
+        if self.albums is None:
+            self.albums = []
+
+
+@dataclass
+class LibraryScanResult:
+    artists: list[ArtistInfo]
+
+
+# Supported audio file extensions
+AUDIO_EXTENSIONS = {'.flac', '.mp3', '.m4a', '.ogg', '.opus', '.wav', '.ape', '.wv', '.alac'}
+
+
 class LidarrLibraryScanner:
     """
     # Hey future me – this scanner reads an existing Lidarr library
@@ -805,10 +874,35 @@ UNIVERSAL_FORMAT = {
 
 ### Import Process
 
+The following example demonstrates the import workflow pattern:
+
 ```python
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+@dataclass
+class LibraryImportError:
+    """Error during library import."""
+    artist_name: str
+    error_message: str
+
+
+@dataclass
+class ImportResult:
+    """Result of library import operation."""
+    imported: int
+    skipped: int
+    errors: list[LibraryImportError]
+
+
 async def import_lidarr_library(
     source_path: Path,
     config: SoulSpotLidarrConfig,
+    artist_service: Any,  # Your ArtistService implementation
+    album_service: Any,   # Your AlbumService implementation
+    track_service: Any,   # Your TrackService implementation
 ) -> ImportResult:
     """
     # Hey future me – this imports an existing Lidarr library.
@@ -821,7 +915,7 @@ async def import_lidarr_library(
     
     imported_artists = []
     skipped_items = []
-    errors = []
+    errors: list[LibraryImportError] = []
     
     for artist_info in scan_result.artists:
         try:
@@ -853,7 +947,7 @@ async def import_lidarr_library(
             imported_artists.append(artist)
             
         except Exception as e:
-            errors.append(ImportError(artist_info.name, str(e)))
+            errors.append(LibraryImportError(artist_info.name, str(e)))
     
     return ImportResult(
         imported=len(imported_artists),
