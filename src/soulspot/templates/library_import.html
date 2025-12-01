@@ -131,9 +131,9 @@
             </h3>
         </div>
         <div class="card-body"
-             hx-get="/api/library/import/status/{{ active_job.job_id }}"
+             hx-get="/api/library/import/status/{{ active_job.job_id }}/html"
              hx-trigger="every 2s"
-             hx-swap="outerHTML">
+             hx-swap="innerHTML">
             <div class="progress-container-fancy">
                 <div class="progress-bar-fancy">
                     <div class="progress-fill-fancy" style="width: {{ active_job.progress | default(0) }}%;">

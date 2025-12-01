@@ -1,132 +1,372 @@
+{# Hey future me - this is the HTMX fragment for scan status updates!
+   Used by library import page to show live progress. Polled every 2s.
+   Must match the styling in library_import.html! #}
+
 {% if is_running %}
-<div class="progress-container">
-    <div class="progress-bar">
-        <div class="progress-fill" style="width: {{ progress | round(1) }}%;"></div>
+<!-- Running State - Show animated progress -->
+<div class="progress-container-fancy">
+    <div class="progress-bar-fancy">
+        <div class="progress-fill-fancy" style="width: {{ progress | round(1) }}%;">
+            <div class="progress-shimmer"></div>
+        </div>
     </div>
-    <span class="progress-text">{{ progress | round(1) }}%</span>
+    <span class="progress-percentage">{{ progress | round(1) }}%</span>
 </div>
 
-<div class="scan-stats" style="margin-top: 1rem;">
-    <span><i class="bi bi-file-earmark"></i> Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
-    <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
-    <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
-    {% if stats.errors | default(0) > 0 %}
-    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors | default(0) }}</strong></span>
-    {% endif %}
+<div class="scan-live-stats">
+    <div class="live-stat">
+        <i class="bi bi-file-earmark"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.scanned | default(0)) }}</span>
+        <span class="live-stat-label">Scanned</span>
+    </div>
+    <div class="live-stat live-stat-success">
+        <i class="bi bi-check-circle-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.imported | default(0)) }}</span>
+        <span class="live-stat-label">Imported</span>
+    </div>
+    <div class="live-stat">
+        <i class="bi bi-skip-forward-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.skipped | default(0)) }}</span>
+        <span class="live-stat-label">Skipped</span>
+    </div>
+    <div class="live-stat {% if stats.errors | default(0) > 0 %}live-stat-warning{% endif %}">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.errors | default(0)) }}</span>
+        <span class="live-stat-label">Errors</span>
+    </div>
 </div>
 
-<p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
-    <i class="bi bi-clock"></i> Total files: {{ stats.total_files | default(0) }}
+<p style="text-align: center; color: var(--text-muted); margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
+    <i class="bi bi-folder"></i> Total files: {{ "{:,}".format(stats.total_files | default(0)) }}
 </p>
 
 {% elif is_completed %}
-<div class="alert alert-success">
-    <i class="bi bi-check-circle"></i> <strong>Scan Completed</strong>
+<!-- Completed State - Show success summary -->
+<div class="completion-banner">
+    <div class="completion-icon">
+        <i class="bi bi-check-circle-fill"></i>
+    </div>
+    <div class="completion-text">
+        <strong>Scan Completed</strong>
+        <span>Successfully processed your music library</span>
+    </div>
 </div>
 
-<div class="scan-stats" style="margin-bottom: 1rem;">
-    <span><i class="bi bi-file-earmark"></i> Files Scanned: <strong>{{ stats.scanned | default(0) }}</strong></span>
-    <span><i class="bi bi-check text-success"></i> Imported: <strong>{{ stats.imported | default(0) }}</strong></span>
-    <span><i class="bi bi-skip-forward"></i> Skipped: <strong>{{ stats.skipped | default(0) }}</strong></span>
+<div class="scan-live-stats" style="margin-top: 1.5rem;">
+    <div class="live-stat">
+        <i class="bi bi-file-earmark"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.scanned | default(0)) }}</span>
+        <span class="live-stat-label">Scanned</span>
+    </div>
+    <div class="live-stat live-stat-success">
+        <i class="bi bi-check-circle-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.imported | default(0)) }}</span>
+        <span class="live-stat-label">Imported</span>
+    </div>
+    <div class="live-stat">
+        <i class="bi bi-skip-forward-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.skipped | default(0)) }}</span>
+        <span class="live-stat-label">Skipped</span>
+    </div>
     {% if stats.errors | default(0) > 0 %}
-    <span><i class="bi bi-exclamation-triangle text-warning"></i> Errors: <strong>{{ stats.errors | default(0) }}</strong></span>
+    <div class="live-stat live-stat-warning">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span class="live-stat-value">{{ "{:,}".format(stats.errors | default(0)) }}</span>
+        <span class="live-stat-label">Errors</span>
+    </div>
     {% endif %}
 </div>
 
 {% if stats.new_artists | default(0) > 0 or stats.new_albums | default(0) > 0 or stats.new_tracks | default(0) > 0 %}
-<div class="scan-stats" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+<div class="new-items-summary">
     {% if stats.new_artists | default(0) > 0 %}
-    <span><i class="bi bi-person-plus"></i> New Artists: <strong>{{ stats.new_artists | default(0) }}</strong></span>
+    <span class="new-item">
+        <i class="bi bi-person-plus-fill"></i>
+        {{ "{:,}".format(stats.new_artists) }} new artists
+    </span>
     {% endif %}
     {% if stats.new_albums | default(0) > 0 %}
-    <span><i class="bi bi-disc"></i> New Albums: <strong>{{ stats.new_albums | default(0) }}</strong></span>
+    <span class="new-item">
+        <i class="bi bi-disc-fill"></i>
+        {{ "{:,}".format(stats.new_albums) }} new albums
+    </span>
     {% endif %}
     {% if stats.new_tracks | default(0) > 0 %}
-    <span><i class="bi bi-music-note-beamed"></i> New Tracks: <strong>{{ stats.new_tracks | default(0) }}</strong></span>
+    <span class="new-item">
+        <i class="bi bi-music-note-beamed"></i>
+        {{ "{:,}".format(stats.new_tracks) }} new tracks
+    </span>
     {% endif %}
 </div>
 {% endif %}
 
 {% if started_at and completed_at %}
-<p class="text-muted" style="margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
-    <i class="bi bi-clock"></i> Duration: {{ ((completed_at - started_at).total_seconds() * 1000) | round(0) }}ms
+<p style="text-align: center; color: var(--text-muted); margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
+    <i class="bi bi-clock"></i> Completed in 
+    {% set duration_secs = (completed_at - started_at).total_seconds() %}
+    {% if duration_secs < 60 %}
+        {{ duration_secs | round(1) }}s
+    {% else %}
+        {{ (duration_secs / 60) | int }}m {{ (duration_secs % 60) | int }}s
+    {% endif %}
 </p>
 {% endif %}
 
+<div style="text-align: center; margin-top: 1.5rem;">
+    <button class="btn btn-primary" onclick="window.location.reload()">
+        <i class="bi bi-arrow-clockwise"></i> Refresh Stats
+    </button>
+</div>
+
 {% elif is_failed %}
-<div class="alert alert-danger">
-    <i class="bi bi-x-circle"></i> <strong>Scan Failed</strong>
-    {% if error %}
-    <p style="margin-top: 0.5rem; margin-bottom: 0;">{{ error }}</p>
-    {% endif %}
+<!-- Failed State - Show error -->
+<div class="failure-banner">
+    <div class="failure-icon">
+        <i class="bi bi-x-circle-fill"></i>
+    </div>
+    <div class="failure-text">
+        <strong>Scan Failed</strong>
+        {% if error %}
+        <span>{{ error }}</span>
+        {% else %}
+        <span>An unexpected error occurred</span>
+        {% endif %}
+    </div>
+</div>
+
+<div style="text-align: center; margin-top: 1.5rem;">
+    <button class="btn btn-secondary" onclick="window.location.reload()">
+        <i class="bi bi-arrow-clockwise"></i> Try Again
+    </button>
 </div>
 
 {% else %}
-<div class="progress-container">
-    <div class="progress-bar">
-        <div class="progress-fill" style="width: 0%;"></div>
-    </div>
-    <span class="progress-text">Starting...</span>
+<!-- Pending/Starting State -->
+<div class="starting-state">
+    <div class="spinner-ring-large"></div>
+    <p>Initializing scan...</p>
+    <p class="text-muted" style="font-size: 0.85rem;">Status: {{ status }}</p>
 </div>
-<p class="text-muted" style="margin-top: 0.5rem; font-size: 0.85rem;">
-    <i class="bi bi-hourglass-split"></i> Status: {{ status }}
-</p>
 {% endif %}
 
 <style>
-.progress-container {
+/* Progress Bar Styles */
+.progress-container-fancy {
     display: flex;
     align-items: center;
     gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
-.progress-bar {
+.progress-bar-fancy {
     flex: 1;
-    height: 8px;
+    height: 12px;
     background: var(--surface-base);
-    border-radius: 4px;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill-fancy {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), #7c3aed);
+    border-radius: 6px;
+    transition: width 0.5s ease;
+    position: relative;
     overflow: hidden;
 }
 
-.progress-fill {
+.progress-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
     height: 100%;
-    background: var(--accent-primary);
-    transition: width 0.3s ease;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 1.5s ease-in-out infinite;
 }
 
-.progress-text {
-    font-weight: 600;
-    min-width: 60px;
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-percentage {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    min-width: 70px;
     text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
-.scan-stats {
+/* Live Stats Grid */
+.scan-live-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+}
+
+.live-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: var(--surface-base);
+    border-radius: 10px;
+    text-align: center;
+}
+
+.live-stat i {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-muted);
+}
+
+.live-stat-success i {
+    color: #22c55e;
+}
+
+.live-stat-warning i {
+    color: #f59e0b;
+}
+
+.live-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.live-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Completion Banner */
+.completion-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05));
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 12px;
+}
+
+.completion-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(34, 197, 94, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #22c55e;
+}
+
+.completion-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.completion-text strong {
+    font-size: 1.1rem;
+    color: #22c55e;
+}
+
+.completion-text span {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* New Items Summary */
+.new-items-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 1.5rem;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-subtle);
 }
 
-.scan-stats span {
+.new-item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    color: #22c55e;
+    font-size: 0.9rem;
 }
 
-.alert {
-    padding: 1rem;
-    border-radius: 6px;
+.new-item i {
+    font-size: 1rem;
+}
+
+/* Failure Banner */
+.failure-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 12px;
+}
+
+.failure-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(239, 68, 68, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #ef4444;
+}
+
+.failure-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.failure-text strong {
+    font-size: 1.1rem;
+    color: #ef4444;
+}
+
+.failure-text span {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+/* Starting State */
+.starting-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+}
+
+.spinner-ring-large {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--surface-elevated);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
     margin-bottom: 1rem;
 }
 
-.alert-success {
-    background: var(--success-alpha, rgba(34, 197, 94, 0.1));
-    border: 1px solid var(--success, #22c55e);
-    color: var(--success, #22c55e);
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
-.alert-danger {
-    background: var(--error-alpha, rgba(239, 68, 68, 0.1));
-    border: 1px solid var(--error, #ef4444);
-    color: var(--error, #ef4444);
+.starting-state p {
+    margin: 0.25rem 0;
 }
 </style>
