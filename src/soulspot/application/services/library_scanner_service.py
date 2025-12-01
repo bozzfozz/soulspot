@@ -16,7 +16,7 @@ from typing import Any
 
 from mutagen import File as MutagenFile  # type: ignore[attr-defined]
 from rapidfuzz import fuzz
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.config import Settings
@@ -121,8 +121,14 @@ class LibraryScannerService:
 
         This is the MAIN entry point! Call this from JobQueue handler.
 
+        Hey future me - Full Scan (incremental=False) does THREE things:
+        1. Scans ALL files (not just changed ones)
+        2. REMOVES tracks from DB whose files no longer exist
+        3. CLEANS UP orphaned albums and artists
+
         Args:
-            incremental: If True, only scan new/modified files
+            incremental: If True, only scan new/modified files.
+                        If False, full rescan + cleanup of missing files!
             progress_callback: Optional callback for progress updates
 
         Returns:
@@ -142,6 +148,10 @@ class LibraryScannerService:
             "new_tracks": 0,
             "matched_artists": 0,
             "matched_albums": 0,
+            # New stats for cleanup
+            "removed_tracks": 0,
+            "removed_albums": 0,
+            "removed_artists": 0,
         }
 
         try:
@@ -153,6 +163,7 @@ class LibraryScannerService:
             logger.info(f"Scanning music library at: {self.music_path}")
             logger.info(f"Music path is absolute: {self.music_path.is_absolute()}")
             logger.info(f"Music path resolved: {self.music_path.resolve()}")
+            logger.info(f"Scan mode: {'incremental' if incremental else 'FULL (with cleanup)'}")
             
             # Count subdirectories for debugging
             try:
@@ -165,9 +176,21 @@ class LibraryScannerService:
 
             # Discover all audio files
             all_files = self._discover_audio_files(self.music_path)
+            all_file_paths = {str(f) for f in all_files}
             stats["total_files"] = len(all_files)
 
             logger.info(f"Found {len(all_files)} audio files in {self.music_path}")
+
+            # For FULL scan: Remove tracks whose files no longer exist
+            if not incremental:
+                cleanup_stats = await self._cleanup_missing_files(all_file_paths)
+                stats["removed_tracks"] = cleanup_stats["removed_tracks"]
+                stats["removed_albums"] = cleanup_stats["removed_albums"]
+                stats["removed_artists"] = cleanup_stats["removed_artists"]
+                
+                # Clear caches after cleanup (they may reference deleted entities)
+                self._artist_cache.clear()
+                self._album_cache.clear()
 
             # Filter to only new/modified files if incremental
             if incremental:
@@ -179,6 +202,7 @@ class LibraryScannerService:
                 )
             else:
                 files_to_scan = all_files
+                logger.info(f"Full scan: processing all {len(files_to_scan)} files")
 
             # Pre-load artist/album caches for faster fuzzy matching
             await self._load_caches()
@@ -835,6 +859,122 @@ class LibraryScannerService:
 
         return None
 
+    async def _cleanup_missing_files(self, existing_file_paths: set[str]) -> dict[str, int]:
+        """Remove tracks from DB whose files no longer exist on disk.
+
+        Hey future me - this is the CLEANUP phase of full scan!
+        Called ONLY during full scan (incremental=False).
+        
+        Also removes orphaned albums (no tracks) and artists (no albums/tracks).
+
+        Args:
+            existing_file_paths: Set of file paths that currently exist on disk
+
+        Returns:
+            Dict with cleanup statistics
+        """
+        stats = {
+            "removed_tracks": 0,
+            "removed_albums": 0,
+            "removed_artists": 0,
+        }
+
+        # Step 1: Find tracks with file_path that no longer exist
+        logger.info("Checking for tracks with missing files...")
+        
+        stmt = select(TrackModel.id, TrackModel.file_path, TrackModel.title).where(
+            TrackModel.file_path.isnot(None)
+        )
+        result = await self.session.execute(stmt)
+        db_tracks = result.all()
+        
+        tracks_to_remove: list[str] = []
+        for track_id, file_path, title in db_tracks:
+            if file_path not in existing_file_paths:
+                tracks_to_remove.append(track_id)
+                logger.debug(f"Track file missing: {title} ({file_path})")
+        
+        if tracks_to_remove:
+            logger.info(f"Removing {len(tracks_to_remove)} tracks with missing files...")
+            
+            # Delete tracks in batches
+            for i in range(0, len(tracks_to_remove), 100):
+                batch = tracks_to_remove[i:i + 100]
+                delete_stmt = delete(TrackModel).where(TrackModel.id.in_(batch))
+                await self.session.execute(delete_stmt)
+            
+            stats["removed_tracks"] = len(tracks_to_remove)
+            logger.info(f"Removed {len(tracks_to_remove)} tracks")
+        else:
+            logger.info("No tracks with missing files found")
+
+        # Step 2: Remove orphaned albums (albums with no tracks)
+        logger.info("Checking for orphaned albums...")
+        
+        orphan_albums_stmt = (
+            select(AlbumModel.id, AlbumModel.title)
+            .outerjoin(TrackModel, AlbumModel.id == TrackModel.album_id)
+            .group_by(AlbumModel.id)
+            .having(func.count(TrackModel.id) == 0)
+        )
+        orphan_albums_result = await self.session.execute(orphan_albums_stmt)
+        orphan_albums = orphan_albums_result.all()
+        
+        if orphan_albums:
+            album_ids = [album_id for album_id, _ in orphan_albums]
+            logger.info(f"Removing {len(album_ids)} orphaned albums...")
+            
+            for album_id, title in orphan_albums:
+                logger.debug(f"Removing orphaned album: {title}")
+            
+            delete_albums_stmt = delete(AlbumModel).where(AlbumModel.id.in_(album_ids))
+            await self.session.execute(delete_albums_stmt)
+            stats["removed_albums"] = len(album_ids)
+            logger.info(f"Removed {len(album_ids)} orphaned albums")
+        else:
+            logger.info("No orphaned albums found")
+
+        # Step 3: Remove orphaned artists (artists with no tracks AND no albums)
+        logger.info("Checking for orphaned artists...")
+        
+        # Artists that have neither tracks nor albums
+        orphan_artists_stmt = (
+            select(ArtistModel.id, ArtistModel.name)
+            .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
+            .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
+            .group_by(ArtistModel.id)
+            .having(
+                (func.count(TrackModel.id) == 0) & 
+                (func.count(AlbumModel.id) == 0)
+            )
+        )
+        orphan_artists_result = await self.session.execute(orphan_artists_stmt)
+        orphan_artists = orphan_artists_result.all()
+        
+        if orphan_artists:
+            artist_ids = [artist_id for artist_id, _ in orphan_artists]
+            logger.info(f"Removing {len(artist_ids)} orphaned artists...")
+            
+            for artist_id, name in orphan_artists:
+                logger.debug(f"Removing orphaned artist: {name}")
+            
+            delete_artists_stmt = delete(ArtistModel).where(ArtistModel.id.in_(artist_ids))
+            await self.session.execute(delete_artists_stmt)
+            stats["removed_artists"] = len(artist_ids)
+            logger.info(f"Removed {len(artist_ids)} orphaned artists")
+        else:
+            logger.info("No orphaned artists found")
+
+        # Commit cleanup changes
+        await self.session.commit()
+        
+        logger.info(
+            f"Cleanup complete: {stats['removed_tracks']} tracks, "
+            f"{stats['removed_albums']} albums, {stats['removed_artists']} artists removed"
+        )
+        
+        return stats
+
     async def get_scan_summary(self) -> dict[str, Any]:
         """Get summary of current library state."""
         artist_count = await self.artist_repo.count_all()
@@ -860,7 +1000,3 @@ class LibraryScannerService:
             "local_files": local_count,
             "music_path": str(self.music_path),
         }
-
-
-# Import func for count queries
-from sqlalchemy import func  # noqa: E402
