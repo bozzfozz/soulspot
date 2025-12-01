@@ -1,191 +1,930 @@
-{# Hey future me - this is the NEW dashboard page!
-   Uses macros for stat_card and page_header.
-   Stats come from the backend as a dict with playlists, tracks, downloads, queue_size, active_downloads.
-   Recent activity and playlists are passed separately.
-   The HTMX auto-refresh is for stats every 30s - might cause issues if API endpoint changes. #}
+{# Hey future me - this is the main dashboard page!
+   Uses REAL stats from backend via SQL COUNT queries.
+   Stats include: playlists, tracks, downloads (completed), queue_size, spotify synced data.
+   Recent playlists and recent activity are shown below stats.
+   Has animated counters and stat cards like library_import.html! #}
 
 {% extends "base.html" %}
 
 {% block title %}Dashboard - SoulSpot{% endblock %}
 
-{% import "includes/macros.html" as macros %}
-
 {% block content %}
-<!-- Page Header -->
-{{ macros.page_header(
-    title="Dashboard",
-    subtitle="Welcome back! Here's what's happening with your music library.",
-    action_text="Import Playlist",
-    action_url="/playlists/import",
-    action_icon="bi bi-plus-lg",
-    action_class="btn-primary"
-) }}
-
-<!-- Stats Grid -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-    {{ macros.stat_card("Total Playlists", stats.playlists|default(0), "bi bi-list-ul", "12% from last month", "positive") }}
-    {{ macros.stat_card("Total Tracks", stats.tracks|default(0), "bi bi-music-note", "8% from last month", "positive") }}
-    {{ macros.stat_card("Downloaded", stats.downloads|default(0), "bi bi-download", "24% from last month", "positive") }}
-
-    <!-- Queue (Custom for badge) -->
-    <div class="stat-card">
-        <div class="stat-card-icon">
-            <i class="bi bi-clock"></i>
-        </div>
-        <div class="stat-card-content">
-            <div class="stat-card-label">In Queue</div>
-            <div class="stat-card-value">{{ stats.queue_size|default(0) }}</div>
-            {% if stats.queue_size and stats.queue_size > 0 %}
-            <div class="stat-card-change">
-                <span class="badge badge-warning">{{ stats.active_downloads|default(0) }} active</span>
+<!-- Page Header with animated icon -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon">
+                <i class="bi bi-house-heart-fill"></i>
             </div>
-            {% endif %}
+            <div class="header-icon-glow"></div>
         </div>
+        <div>
+            <h1>Dashboard</h1>
+            <p class="subtitle">Your music at a glance</p>
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="/playlists/import" class="btn btn-primary btn-glow">
+            <i class="bi bi-plus-lg"></i>
+            Import Playlist
+        </a>
     </div>
 </div>
 
+<!-- Stats Grid with animated counters -->
+<div class="stats-grid" id="summary-stats">
+    <div class="stat-card stat-card-animated" style="--delay: 0;">
+        <div class="stat-icon stat-icon-playlists">
+            <i class="bi bi-collection-play"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value counter" data-target="{{ stats.playlists | default(0) }}">0</span>
+            <span class="stat-label">Playlists</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 1;">
+        <div class="stat-icon stat-icon-tracks">
+            <i class="bi bi-music-note-list"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value counter" data-target="{{ stats.tracks | default(0) }}">0</span>
+            <span class="stat-label">Tracks</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 2;">
+        <div class="stat-icon stat-icon-downloaded">
+            <i class="bi bi-download"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value counter" data-target="{{ stats.tracks_downloaded | default(0) }}">0</span>
+            <span class="stat-label">Downloaded</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 3;">
+        <div class="stat-icon stat-icon-queue {% if stats.queue_size > 0 %}stat-icon-active{% endif %}">
+            <i class="bi bi-clock-history"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value counter" data-target="{{ stats.queue_size | default(0) }}">0</span>
+            <span class="stat-label">In Queue</span>
+            {% if stats.active_downloads > 0 %}
+            <span class="stat-badge stat-badge-active">
+                <span class="pulse-dot"></span>
+                {{ stats.active_downloads }} active
+            </span>
+            {% endif %}
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+</div>
+
+<!-- Spotify Synced Data (if any) -->
+{% if stats.spotify_artists > 0 or stats.spotify_albums > 0 or stats.spotify_tracks > 0 %}
+<div class="spotify-sync-banner" style="margin-top: 1.5rem;">
+    <div class="spotify-sync-icon">
+        <i class="bi bi-spotify"></i>
+    </div>
+    <div class="spotify-sync-content">
+        <span class="spotify-sync-title">Spotify Library Synced</span>
+        <span class="spotify-sync-stats">
+            {{ stats.spotify_artists | default(0) }} artists
+            • {{ stats.spotify_albums | default(0) }} albums
+            • {{ stats.spotify_tracks | default(0) }} tracks
+        </span>
+    </div>
+    <a href="/playlists/import" class="btn btn-spotify btn-sm">
+        <i class="bi bi-arrow-repeat"></i>
+        Sync
+    </a>
+</div>
+{% endif %}
+
 <!-- Recent Playlists -->
-<div class="mb-8">
-    <div class="flex items-center justify-between mb-6">
-        <h2>Recent Playlists</h2>
+<div class="section-card" style="margin-top: 2rem;">
+    <div class="section-header">
+        <h2><i class="bi bi-collection-play"></i> Recent Playlists</h2>
         <a href="/playlists" class="btn btn-outline btn-sm">
             View All
             <i class="bi bi-arrow-right"></i>
         </a>
     </div>
 
-    <div class="grid grid-cols-6">
+    <div class="playlists-grid">
         {% if playlists %}
         {% for playlist in playlists[:6] %}
-        <div class="media-card">
-            <div class="media-card-image">
-                <img src="{{ playlist.cover_url or 'https://via.placeholder.com/300x300?text=Playlist' }}"
-                    alt="{{ playlist.name }}">
-                <div class="media-card-overlay">
-                    <div class="media-card-actions">
-                        <button class="btn-icon btn-primary">
-                            <i class="bi bi-play-fill"></i>
-                        </button>
-                        <button class="btn-icon">
-                            <i class="bi bi-three-dots"></i>
-                        </button>
+        <a href="/playlists/{{ playlist.id }}" class="playlist-card playlist-card-animated" style="--delay: {{ loop.index0 }};">
+            <div class="playlist-image">
+                <img src="{{ playlist.cover_url or 'https://via.placeholder.com/200x200?text=♪' }}"
+                    alt="{{ playlist.name }}"
+                    loading="lazy">
+                <div class="playlist-overlay">
+                    <div class="play-button">
+                        <i class="bi bi-play-fill"></i>
                     </div>
                 </div>
             </div>
-            <div class="media-card-content">
-                <div class="media-card-title">{{ playlist.name }}</div>
-                <div class="media-card-subtitle">{{ playlist.track_count }} tracks</div>
-                <div class="media-card-meta">
-                    <span class="badge badge-success">{{ playlist.downloaded_count|default(0) }} downloaded</span>
-                </div>
+            <div class="playlist-info">
+                <div class="playlist-name">{{ playlist.name }}</div>
+                <div class="playlist-meta">{{ playlist.track_count }} tracks</div>
             </div>
-        </div>
+        </a>
         {% endfor %}
         {% else %}
-        <div class="card" style="grid-column: 1 / -1;">
-            <div style="text-align: center; padding: 3rem;">
-                <i class="bi bi-list-ul" style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
-                <h3>No Playlists Yet</h3>
-                <p class="text-muted" style="margin-top: 0.5rem;">Import your first playlist from Spotify to get
-                    started.</p>
-                <a href="/playlists/import" class="btn btn-primary" style="margin-top: 1.5rem;">
-                    <i class="bi bi-plus-lg"></i>
-                    Import Playlist
-                </a>
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="bi bi-collection-play"></i>
             </div>
+            <h3>No Playlists Yet</h3>
+            <p>Import your first playlist from Spotify to get started.</p>
+            <a href="/playlists/import" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i>
+                Import Playlist
+            </a>
         </div>
         {% endif %}
     </div>
 </div>
 
 <!-- Recent Activity -->
-<div class="mb-8">
-    <div class="flex items-center justify-between mb-6">
-        <h2>Recent Activity</h2>
+<div class="section-card" style="margin-top: 2rem;">
+    <div class="section-header">
+        <h2><i class="bi bi-activity"></i> Recent Activity</h2>
         <a href="/downloads" class="btn btn-outline btn-sm">
             View All
             <i class="bi bi-arrow-right"></i>
         </a>
     </div>
 
-    <div class="card">
+    <div class="activity-list">
         {% if recent_activity %}
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
-            {% for activity in recent_activity[:5] %}
-            <div
-                style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--radius-md);">
-                <div style="width: 48px; height: 48px; flex-shrink: 0;">
-                    <img src="{{ activity.album_art or 'https://via.placeholder.com/48x48?text=♪' }}"
-                        alt="{{ activity.title }}"
-                        style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm);">
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                    <div style="font-weight: var(--font-weight-medium); color: var(--text-primary);">{{ activity.title }}</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--text-muted); margin-top: 0.25rem;">{{ activity.artist }}</div>
-                </div>
-                <div>
-                    {% if activity.status == 'completed' %}
-                    <span class="badge badge-success">
-                        <i class="bi bi-check"></i>
-                        Completed
-                    </span>
-                    {% elif activity.status == 'downloading' %}
-                    <span class="badge badge-info">
-                        <i class="bi bi-arrow-repeat bi-spin"></i>
-                        Downloading
-                    </span>
-                    {% elif activity.status == 'failed' %}
-                    <span class="badge badge-error">
-                        <i class="bi bi-x"></i>
-                        Failed
-                    </span>
-                    {% endif %}
-                </div>
-                <div style="font-size: var(--font-size-sm); color: var(--text-muted);">
-                    {{ activity.timestamp }}
-                </div>
+        {% for activity in recent_activity[:5] %}
+        <div class="activity-item activity-item-animated" style="--delay: {{ loop.index0 }};">
+            <div class="activity-artwork">
+                <img src="{{ activity.album_art or 'https://via.placeholder.com/48x48?text=♪' }}"
+                    alt="{{ activity.title }}">
             </div>
-            {% endfor %}
+            <div class="activity-info">
+                <div class="activity-title">{{ activity.title }}</div>
+                <div class="activity-artist">{{ activity.artist }}</div>
+            </div>
+            <div class="activity-status">
+                {% if activity.status == 'completed' %}
+                <span class="status-badge status-completed">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Completed
+                </span>
+                {% elif activity.status == 'downloading' %}
+                <span class="status-badge status-downloading">
+                    <span class="spinner-small"></span>
+                    Downloading
+                </span>
+                {% elif activity.status == 'failed' %}
+                <span class="status-badge status-failed">
+                    <i class="bi bi-x-circle-fill"></i>
+                    Failed
+                </span>
+                {% elif activity.status == 'queued' or activity.status == 'pending' %}
+                <span class="status-badge status-queued">
+                    <i class="bi bi-clock"></i>
+                    Queued
+                </span>
+                {% endif %}
+            </div>
+            <div class="activity-time">{{ activity.timestamp }}</div>
         </div>
+        {% endfor %}
         {% else %}
-        <div style="text-align: center; padding: 3rem;">
-            <i class="bi bi-clock-history"
-                style="font-size: 3rem; color: var(--text-muted); margin-bottom: 1rem;"></i>
-            <h3>No Recent Activity</h3>
-            <p class="text-muted" style="margin-top: 0.5rem;">Your download activity will appear here.</p>
+        <div class="empty-state empty-state-small">
+            <i class="bi bi-clock-history"></i>
+            <p>No recent activity</p>
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Spotify Connection Status -->
-<div class="card">
-    <div class="flex items-center gap-4">
-        <div
-            style="width: 64px; height: 64px; background: var(--bg-success); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
-            <i class="bi bi-spotify" style="font-size: 2rem; color: var(--color-success);"></i>
+<!-- Quick Actions -->
+<div class="quick-actions" style="margin-top: 2rem;">
+    <a href="/library" class="quick-action-card">
+        <div class="quick-action-icon">
+            <i class="bi bi-folder-fill"></i>
         </div>
-        <div style="flex: 1;">
-            <h3>Spotify Connected</h3>
-            <p class="text-muted" style="margin-top: 0.25rem;">Your Spotify account is connected and ready to sync.</p>
+        <div class="quick-action-content">
+            <span class="quick-action-title">Local Library</span>
+            <span class="quick-action-desc">Browse your downloaded music</span>
         </div>
-        <a href="/playlists/import" class="btn btn-primary">
-            <i class="bi bi-arrow-repeat"></i>
-            Sync Now
-        </a>
-    </div>
+        <i class="bi bi-chevron-right quick-action-arrow"></i>
+    </a>
+    <a href="/downloads" class="quick-action-card">
+        <div class="quick-action-icon">
+            <i class="bi bi-cloud-download-fill"></i>
+        </div>
+        <div class="quick-action-content">
+            <span class="quick-action-title">Downloads</span>
+            <span class="quick-action-desc">Manage your download queue</span>
+        </div>
+        <i class="bi bi-chevron-right quick-action-arrow"></i>
+    </a>
+    <a href="/library/import" class="quick-action-card">
+        <div class="quick-action-icon">
+            <i class="bi bi-folder-plus"></i>
+        </div>
+        <div class="quick-action-content">
+            <span class="quick-action-title">Import Files</span>
+            <span class="quick-action-desc">Scan your local music folder</span>
+        </div>
+        <i class="bi bi-chevron-right quick-action-arrow"></i>
+    </a>
 </div>
 
+<style>
+/* Page Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.header-icon-wrapper {
+    position: relative;
+}
+
+.header-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: white;
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+}
+
+.header-icon-glow {
+    position: absolute;
+    inset: -8px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
+    border-radius: 24px;
+    animation: pulse-glow 2s ease-in-out infinite;
+    z-index: -1;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.page-header .subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.btn-glow {
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    transition: all 0.3s ease;
+}
+
+.btn-glow:hover {
+    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+    transform: translateY(-2px);
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+    .stats-grid { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    border-color: var(--border-color);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card-animated {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fade-slide-up 0.5s ease forwards;
+    animation-delay: calc(var(--delay) * 0.1s);
+}
+
+@keyframes fade-slide-up {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.stat-icon-playlists {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%);
+    color: var(--color-primary);
+}
+
+.stat-icon-tracks {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%);
+    color: var(--color-success);
+}
+
+.stat-icon-downloaded {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
+    color: #3b82f6;
+}
+
+.stat-icon-queue {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+    color: var(--color-warning);
+}
+
+.stat-icon-active {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+}
+
+.stat-badge-active {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary);
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: currentColor;
+    border-radius: 50%;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.stat-shine {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    animation: shine 3s ease-in-out infinite;
+    animation-delay: calc(var(--delay) * 0.5s);
+}
+
+@keyframes shine {
+    0%, 100% { left: -100%; }
+    50% { left: 100%; }
+}
+
+/* Spotify Sync Banner */
+.spotify-sync-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(30, 215, 96, 0.1) 0%, rgba(30, 215, 96, 0.05) 100%);
+    border: 1px solid rgba(30, 215, 96, 0.2);
+    border-radius: 12px;
+}
+
+.spotify-sync-icon {
+    width: 48px;
+    height: 48px;
+    background: #1ed760;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #000;
+}
+
+.spotify-sync-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.spotify-sync-title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.spotify-sync-stats {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.btn-spotify {
+    background: #1ed760;
+    color: #000;
+    border: none;
+}
+
+.btn-spotify:hover {
+    background: #1db954;
+    color: #000;
+}
+
+/* Section Cards */
+.section-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 1.5rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.section-header h2 i {
+    color: var(--color-primary);
+}
+
+/* Playlists Grid */
+.playlists-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+    .playlists-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .playlists-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 480px) {
+    .playlists-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.playlist-card {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    transition: transform 0.3s ease;
+}
+
+.playlist-card:hover {
+    transform: translateY(-8px);
+}
+
+.playlist-card-animated {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fade-slide-up 0.4s ease forwards;
+    animation-delay: calc(var(--delay) * 0.08s);
+}
+
+.playlist-image {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+}
+
+.playlist-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.playlist-card:hover .playlist-image img {
+    transform: scale(1.05);
+}
+
+.playlist-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.playlist-card:hover .playlist-overlay {
+    opacity: 1;
+}
+
+.play-button {
+    width: 48px;
+    height: 48px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    transform: scale(0.8);
+    transition: transform 0.2s ease;
+}
+
+.playlist-card:hover .play-button {
+    transform: scale(1);
+}
+
+.playlist-info {
+    padding: 0.75rem 0.25rem;
+}
+
+.playlist-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.playlist-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Activity List */
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.875rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.activity-item:hover {
+    background: var(--bg-hover);
+}
+
+.activity-item-animated {
+    opacity: 0;
+    transform: translateX(-20px);
+    animation: fade-slide-right 0.4s ease forwards;
+    animation-delay: calc(var(--delay) * 0.08s);
+}
+
+@keyframes fade-slide-right {
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.activity-artwork {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.activity-artwork img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.activity-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-title {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.activity-artist {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.125rem;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--color-success);
+}
+
+.status-downloading {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary);
+}
+
+.status-failed {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error);
+}
+
+.status-queued {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--color-warning);
+}
+
+.spinner-small {
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.activity-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 768px) {
+    .quick-actions { grid-template-columns: 1fr; }
+}
+
+.quick-action-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.quick-action-card:hover {
+    border-color: var(--color-primary);
+    background: var(--bg-tertiary);
+    transform: translateX(4px);
+}
+
+.quick-action-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.quick-action-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.quick-action-title {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.quick-action-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.quick-action-arrow {
+    color: var(--text-muted);
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.quick-action-card:hover .quick-action-arrow {
+    color: var(--color-primary);
+    transform: translateX(4px);
+}
+
+/* Empty State */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem 2rem;
+}
+
+.empty-icon {
+    width: 80px;
+    height: 80px;
+    background: var(--bg-tertiary);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--text-muted);
+    margin: 0 auto 1.5rem;
+}
+
+.empty-state h3 {
+    margin: 0 0 0.5rem;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    margin: 0 0 1.5rem;
+    color: var(--text-muted);
+}
+
+.empty-state-small {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.empty-state-small i {
+    font-size: 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state-small p {
+    margin: 0;
+    color: var(--text-muted);
+}
+</style>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-    // Auto-refresh stats every 30 seconds
-    setInterval(() => {
-        htmx.ajax('GET', '/api/stats', {
-            target: '.stat-card',
-            swap: 'outerHTML'
-        });
-    }, 30000);
+// Animated counters
+function animateCounters() {
+    const counters = document.querySelectorAll('.counter');
+    
+    counters.forEach(counter => {
+        const target = parseInt(counter.getAttribute('data-target')) || 0;
+        const duration = 1500;
+        const startTime = performance.now();
+        
+        const updateCounter = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Easing function for smooth animation
+            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+            const current = Math.floor(easeOutQuart * target);
+            
+            counter.textContent = current.toLocaleString();
+            
+            if (progress < 1) {
+                requestAnimationFrame(updateCounter);
+            } else {
+                counter.textContent = target.toLocaleString();
+            }
+        };
+        
+        // Start animation when element is visible
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    updateCounter();
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+        
+        observer.observe(counter);
+    });
+}
+
+// Run on page load
+document.addEventListener('DOMContentLoaded', animateCounters);
 </script>
 {% endblock %}

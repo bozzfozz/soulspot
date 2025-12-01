@@ -330,6 +330,11 @@ class IDownloadRepository(ABC):
         """List all active downloads (not finished)."""
         pass
 
+    @abstractmethod
+    async def list_recent(self, limit: int = 5) -> list[Download]:
+        """List recently completed or active downloads."""
+        pass
+
 
 # External Integration Ports
 

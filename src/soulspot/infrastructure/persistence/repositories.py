@@ -1601,6 +1601,77 @@ class DownloadRepository(IDownloadRepository):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def list_recent(self, limit: int = 5) -> list[Download]:
+        """List recently completed or active downloads with track info.
+
+        Hey future me - this is for the dashboard recent activity!
+        Returns downloads ordered by completed_at (newest first), falling back to created_at.
+        Eager-loads the track + artist + album relationships so we can show title/artist/artwork.
+        """
+        from sqlalchemy.orm import selectinload
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        stmt = (
+            select(DownloadModel)
+            .options(
+                selectinload(DownloadModel.track).selectinload(TrackModel.artist),
+                selectinload(DownloadModel.track).selectinload(TrackModel.album),
+            )
+            .order_by(
+                DownloadModel.completed_at.desc().nullslast(),
+                DownloadModel.created_at.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        downloads = []
+        for model in models:
+            # Convert status string to DownloadStatus enum
+            try:
+                status = DownloadStatus(model.status)
+            except ValueError:
+                status = DownloadStatus.PENDING
+
+            # Create download with track metadata if available
+            download = Download(
+                id=DownloadId.from_string(model.id),
+                track_id=TrackId.from_string(model.track_id),
+                status=status,
+                priority=model.priority,
+                target_path=FilePath.from_string(model.target_path)
+                if model.target_path
+                else None,
+                source_url=model.source_url,
+                progress_percent=model.progress_percent,
+                error_message=model.error_message,
+                started_at=model.started_at,
+                completed_at=model.completed_at,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+
+            # Attach track info as extra attributes for dashboard display
+            # Hey future me - album_art comes from Track -> Album -> artwork_url!
+            if model.track:
+                download.track_title = model.track.title  # type: ignore[attr-defined]
+                download.artist_name = (  # type: ignore[attr-defined]
+                    model.track.artist.name if model.track.artist else None
+                )
+                download.album_art_url = (  # type: ignore[attr-defined]
+                    model.track.album.artwork_url if model.track.album else None
+                )
+            else:
+                download.track_title = None  # type: ignore[attr-defined]
+                download.artist_name = None  # type: ignore[attr-defined]
+                download.album_art_url = None  # type: ignore[attr-defined]
+
+            downloads.append(download)
+
+        return downloads
+
 
 class ArtistWatchlistRepository:
     """SQLAlchemy implementation of Artist Watchlist repository."""
