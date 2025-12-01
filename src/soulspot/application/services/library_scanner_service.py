@@ -545,7 +545,7 @@ class LibraryScannerService:
         """Extract audio metadata using mutagen.
 
         Hey future me - this now ALWAYS returns a dict, even if extraction fails!
-        At minimum: {\"format\": \".mp3\", \"duration_ms\": 0}
+        At minimum: {"format": ".mp3", "duration_ms": 0}
         This prevents tracks from being skipped due to metadata errors.
 
         Args:
@@ -553,7 +553,7 @@ class LibraryScannerService:
 
         Returns:
             Dict with metadata (at least format and duration_ms)
-        \"\"\"
+        """
         metadata: dict[str, Any] = {
             "format": file_path.suffix.lstrip(".").lower(),
             "duration_ms": 0,
@@ -1057,7 +1057,6 @@ class LibraryScannerService:
             Dict with statistics about detected compilations
         """
         from soulspot.domain.value_objects.album_types import (
-            SecondaryAlbumType,
             calculate_track_diversity,
         )
 

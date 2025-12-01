@@ -1,6 +1,6 @@
 {# Hey future me - Library overview page!
-   Shows stats, browse cards for artists/albums/tracks, and library management actions.
-   The scan button triggers an async library scan via HTMX. #}
+   Shows stats, browse cards, scan controls, and library management actions.
+   Merged from library_import.html - all in one place now! #}
 
 {% extends "base.html" %}
 
@@ -8,97 +8,83 @@
 
 {% block content %}
 <!-- Page Header -->
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
-    <div style="display: flex; align-items: center; gap: var(--space-4);">
-        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #22c55e, #16a34a); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
-            <i class="bi bi-vinyl" style="color: white; font-size: 1.25rem;"></i>
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon">
+                <i class="bi bi-vinyl"></i>
+            </div>
+            <div class="header-icon-glow"></div>
         </div>
         <div>
-            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Music Library</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Browse and manage your music collection</p>
+            <h1>Music Library</h1>
+            <p class="subtitle">Browse and manage your music collection</p>
         </div>
     </div>
-    <button class="btn btn-primary btn-lg"
-            hx-post="/api/library/scan"
-            hx-vals='{"scan_path": "/mnt/music"}'
-            hx-target="#scan-status">
-        <i class="bi bi-search"></i>
-        Scan Library
-    </button>
 </div>
 
-<!-- Scan Status -->
-<div id="scan-status" style="margin-bottom: var(--space-6);"></div>
-
-<!-- Library Stats -->
-<div class="stats-grid" style="margin-bottom: var(--space-8);">
-    <div class="stat-card">
-        <div class="stat-icon" style="background: rgba(var(--accent-primary-rgb), 0.1); color: var(--accent-primary);">
-            <i class="bi bi-music-note"></i>
-        </div>
+<!-- Summary Stats with animated counters -->
+<div class="stats-grid" id="summary-stats">
+    <div class="stat-card stat-card-animated" style="--delay: 0;">
+        <div class="stat-icon stat-icon-artists"><i class="bi bi-person"></i></div>
         <div class="stat-content">
-            <div class="stat-value">{{ stats.total_tracks }}</div>
-            <div class="stat-label">Total Tracks</div>
+            <span class="stat-value counter" data-target="{{ stats.total_artists | default(0) }}">0</span>
+            <span class="stat-label">Artists</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;">
-            <i class="bi bi-person"></i>
-        </div>
+    <div class="stat-card stat-card-animated" style="--delay: 1;">
+        <div class="stat-icon stat-icon-albums"><i class="bi bi-disc"></i></div>
         <div class="stat-content">
-            <div class="stat-value">{{ stats.total_artists }}</div>
-            <div class="stat-label">Artists</div>
+            <span class="stat-value counter" data-target="{{ stats.total_albums | default(0) }}">0</span>
+            <span class="stat-label">Albums</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;">
-            <i class="bi bi-disc"></i>
-        </div>
+    <div class="stat-card stat-card-animated" style="--delay: 2;">
+        <div class="stat-icon stat-icon-tracks"><i class="bi bi-music-note"></i></div>
         <div class="stat-content">
-            <div class="stat-value">{{ stats.total_albums }}</div>
-            <div class="stat-label">Albums</div>
+            <span class="stat-value counter" data-target="{{ stats.total_tracks | default(0) }}">0</span>
+            <span class="stat-label">Tracks</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-            <i class="bi bi-check"></i>
-        </div>
+    <div class="stat-card stat-card-animated" style="--delay: 3;">
+        <div class="stat-icon stat-icon-files"><i class="bi bi-file-earmark-music"></i></div>
         <div class="stat-content">
-            <div class="stat-value">{{ stats.tracks_with_files }}</div>
-            <div class="stat-label">Downloaded</div>
+            <span class="stat-value counter" data-target="{{ stats.tracks_with_files | default(0) }}">0</span>
+            <span class="stat-label">Local Files</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background: rgba(234, 179, 8, 0.1); color: #eab308;">
-            <i class="bi bi-exclamation-triangle"></i>
-        </div>
+    <div class="stat-card stat-card-animated" style="--delay: 4;">
+        <div class="stat-icon stat-icon-broken"><i class="bi bi-exclamation-triangle"></i></div>
         <div class="stat-content">
-            <div class="stat-value">{{ stats.broken_tracks }}</div>
-            <div class="stat-label">Broken Files</div>
+            <span class="stat-value counter" data-target="{{ stats.broken_tracks | default(0) }}">0</span>
+            <span class="stat-label">Broken</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 </div>
 
 <!-- Browse Options -->
-<div class="browse-grid" style="margin-bottom: var(--space-8);">
+<div class="browse-grid">
     <a href="/library/artists" class="browse-card">
         <div class="browse-icon" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1));">
             <i class="bi bi-person" style="color: #a855f7; font-size: 2.5rem;"></i>
         </div>
         <h3>Browse Artists</h3>
-        <p><span style="color: #a855f7; font-weight: var(--font-weight-semibold);">{{ stats.total_artists }}</span> artists</p>
+        <p><span style="color: #a855f7; font-weight: 600;">{{ stats.total_artists }}</span> artists</p>
         <span class="browse-link">Explore <i class="bi bi-arrow-right"></i></span>
     </a>
-
     <a href="/library/albums" class="browse-card">
         <div class="browse-icon" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));">
             <i class="bi bi-disc" style="color: #22c55e; font-size: 2.5rem;"></i>
         </div>
         <h3>Browse Albums</h3>
-        <p><span style="color: #22c55e; font-weight: var(--font-weight-semibold);">{{ stats.total_albums }}</span> albums</p>
+        <p><span style="color: #22c55e; font-weight: 600;">{{ stats.total_albums }}</span> albums</p>
         <span class="browse-link">Explore <i class="bi bi-arrow-right"></i></span>
     </a>
-
     <a href="/library/compilations" class="browse-card">
         <div class="browse-icon" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.1));">
             <i class="bi bi-collection" style="color: #8b5cf6; font-size: 2.5rem;"></i>
@@ -107,16 +93,14 @@
         <p>Various Artists & Collections</p>
         <span class="browse-link">Explore <i class="bi bi-arrow-right"></i></span>
     </a>
-
     <a href="/library/tracks" class="browse-card">
         <div class="browse-icon" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));">
             <i class="bi bi-music-note" style="color: #3b82f6; font-size: 2.5rem;"></i>
         </div>
         <h3>Browse Tracks</h3>
-        <p><span style="color: #3b82f6; font-weight: var(--font-weight-semibold);">{{ stats.total_tracks }}</span> tracks</p>
+        <p><span style="color: #3b82f6; font-weight: 600;">{{ stats.total_tracks }}</span> tracks</p>
         <span class="browse-link">Explore <i class="bi bi-arrow-right"></i></span>
     </a>
-
     <a href="/automation/followed-artists" class="browse-card">
         <div class="browse-icon" style="background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(236, 72, 153, 0.1));">
             <i class="bi bi-heart" style="color: #ec4899; font-size: 2.5rem;"></i>
@@ -127,196 +111,295 @@
     </a>
 </div>
 
-<!-- Library Management -->
-<div class="card" style="padding: var(--space-6);">
-    <h2 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-5);">Library Management</h2>
-    <div class="action-grid">
-        <a href="/library/broken-files" class="btn btn-outline">
-            <i class="bi bi-exclamation-triangle"></i>
-            View Broken Files
-        </a>
-        <a href="/library/duplicates" class="btn btn-outline">
-            <i class="bi bi-files"></i>
-            View Duplicates
-        </a>
-        <a href="/library/incomplete-albums" class="btn btn-outline">
-            <i class="bi bi-list-check"></i>
-            Incomplete Albums
-        </a>
-        <button class="btn btn-outline"
-                id="analyze-compilations-btn"
-                hx-post="/api/library/compilations/analyze-all?only_undetected=false&min_tracks=2"
-                hx-target="#compilation-status"
-                hx-indicator="#compilation-spinner">
-            <i class="bi bi-collection"></i>
-            <span id="compilation-spinner" class="htmx-indicator spinner-small" style="margin-left: 0.5rem;"></span>
-            Detect Compilations
-        </button>
-        <button class="btn btn-error"
-                hx-post="/api/library/re-download-broken"
-                hx-confirm="Re-download all broken files?">
-            <i class="bi bi-arrow-repeat"></i>
-            Re-download Broken
-        </button>
+<!-- Scan Controls -->
+<div class="card scan-card">
+    <div class="card-header"><h3><i class="bi bi-hdd-stack"></i> Library Scanner</h3></div>
+    <div class="card-body">
+        <div class="music-path-display">
+            <i class="bi bi-folder-fill"></i>
+            <span>Music Path:</span>
+            <code>{{ stats.music_path | default('/music') }}</code>
+        </div>
+        <div class="scan-options">
+            <button class="btn btn-scan btn-scan-primary" id="btn-incremental-scan"
+                    hx-post="/api/library/import/scan" hx-vals='{"incremental": true}'
+                    hx-target="#scan-status" hx-swap="innerHTML">
+                <div class="btn-scan-icon"><i class="bi bi-lightning-charge-fill"></i></div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">Incremental Scan</span>
+                    <span class="btn-scan-desc">Only new or modified files</span>
+                </div>
+                <div class="btn-scan-arrow"><i class="bi bi-chevron-right"></i></div>
+            </button>
+            <button class="btn btn-scan btn-scan-secondary" id="btn-full-scan"
+                    hx-post="/api/library/import/scan" hx-vals='{"incremental": false}'
+                    hx-target="#scan-status" hx-swap="innerHTML">
+                <div class="btn-scan-icon"><i class="bi bi-arrow-repeat"></i></div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">Full Scan</span>
+                    <span class="btn-scan-desc">Re-scan all files, update metadata</span>
+                </div>
+                <div class="btn-scan-arrow"><i class="bi bi-chevron-right"></i></div>
+            </button>
+        </div>
     </div>
-    <div id="compilation-status" style="margin-top: var(--space-4);"></div>
+</div>
+
+<!-- Scan Status -->
+<div id="scan-status">
+    {% if active_job %}
+    <div class="card scan-progress-card">
+        <div class="card-header"><h3><span class="scanning-indicator"></span>Scan in Progress</h3></div>
+        <div class="card-body" hx-get="/api/library/import/status/{{ active_job.job_id }}/html" hx-trigger="every 2s" hx-swap="innerHTML">
+            <div class="progress-container-fancy">
+                <div class="progress-bar-fancy">
+                    <div class="progress-fill-fancy" style="width: {{ active_job.progress | default(0) }}%;"><div class="progress-shimmer"></div></div>
+                </div>
+                <span class="progress-percentage">{{ active_job.progress | default(0) | round(1) }}%</span>
+            </div>
+            {% if active_job.stats %}
+            <div class="scan-live-stats">
+                <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value">{{ active_job.stats.scanned | default(0) }}</span><span class="live-stat-label">Scanned</span></div>
+                <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value">{{ active_job.stats.imported | default(0) }}</span><span class="live-stat-label">Imported</span></div>
+                <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value">{{ active_job.stats.skipped | default(0) }}</span><span class="live-stat-label">Skipped</span></div>
+                <div class="live-stat live-stat-warning"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value">{{ active_job.stats.errors | default(0) }}</span><span class="live-stat-label">Errors</span></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Library Management -->
+<div class="card">
+    <div class="card-header"><h3><i class="bi bi-tools"></i> Library Management</h3></div>
+    <div class="card-body">
+        <div class="action-grid">
+            <a href="/library/broken-files" class="btn btn-outline"><i class="bi bi-exclamation-triangle"></i>View Broken Files</a>
+            <a href="/library/duplicates" class="btn btn-outline"><i class="bi bi-files"></i>View Duplicates</a>
+            <a href="/library/incomplete-albums" class="btn btn-outline"><i class="bi bi-list-check"></i>Incomplete Albums</a>
+            <button class="btn btn-outline" id="analyze-compilations-btn"
+                    hx-post="/api/library/compilations/analyze-all?only_undetected=false&min_tracks=2"
+                    hx-target="#compilation-status" hx-indicator="#compilation-spinner">
+                <i class="bi bi-collection"></i><span id="compilation-spinner" class="htmx-indicator spinner-small"></span>Detect Compilations
+            </button>
+            <button class="btn btn-outline btn-outline-warning" hx-post="/api/library/re-download-broken" hx-confirm="Re-download all broken files?">
+                <i class="bi bi-arrow-repeat"></i>Re-download Broken
+            </button>
+        </div>
+        <div id="compilation-status" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+
+<!-- Recent Scans -->
+<div class="card">
+    <div class="card-header"><h3><i class="bi bi-clock-history"></i> Recent Scans</h3></div>
+    <div class="card-body recent-scans-container" hx-get="/library/import/jobs-list" hx-trigger="load, every 30s" hx-swap="innerHTML">
+        <div class="loading-placeholder"><div class="spinner-ring"></div><p>Loading recent scans...</p></div>
+    </div>
+</div>
+
+<!-- Danger Zone -->
+<div class="card danger-zone-card">
+    <div class="card-header danger-zone-header"><h3><i class="bi bi-exclamation-triangle-fill"></i> Danger Zone</h3></div>
+    <div class="card-body">
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">These actions are destructive and cannot be undone.</p>
+        <div class="danger-action">
+            <div class="danger-action-info">
+                <h4><i class="bi bi-trash3"></i> Clear Local Library</h4>
+                <p>Delete all locally imported tracks, albums, and artists. Spotify data will NOT be affected.</p>
+            </div>
+            <button class="btn btn-danger" id="clear-library-btn"
+                    hx-delete="/api/library/clear" hx-target="#clear-library-status" hx-swap="innerHTML"
+                    hx-confirm="Delete ALL local library data? Spotify data will NOT be affected.">
+                <i class="bi bi-trash3-fill"></i>Clear Library
+            </button>
+        </div>
+        <div id="clear-library-status" style="margin-top: 1rem;"></div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <style>
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: var(--space-4);
-    }
-    .stat-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-lg);
-        padding: var(--space-5);
-        display: flex;
-        align-items: center;
-        gap: var(--space-4);
-        border: 1px solid var(--border-primary);
-        transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-    }
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
-    }
-    .stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: var(--radius-lg);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: var(--font-size-xl);
-    }
-    .stat-value {
-        font-size: var(--font-size-2xl);
-        font-weight: var(--font-weight-bold);
-    }
-    .stat-label {
-        font-size: var(--font-size-sm);
-        color: var(--text-muted);
-    }
-    .browse-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: var(--space-6);
-    }
-    .browse-card {
-        background: var(--bg-secondary);
-        border-radius: var(--radius-xl);
-        padding: var(--space-8);
-        text-align: center;
-        text-decoration: none;
-        color: var(--text-primary);
-        border: 1px solid var(--border-primary);
-        transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-    }
-    .browse-card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-xl);
-    }
-    .browse-icon {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto var(--space-4);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform var(--transition-fast);
-    }
-    .browse-card:hover .browse-icon {
-        transform: scale(1.1);
-    }
-    .browse-card h3 {
-        font-size: var(--font-size-xl);
-        font-weight: var(--font-weight-bold);
-        margin-bottom: var(--space-2);
-    }
-    .browse-card p {
-        color: var(--text-muted);
-        font-size: var(--font-size-sm);
-        margin-bottom: var(--space-4);
-    }
-    .browse-link {
-        color: var(--accent-primary);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        display: inline-flex;
-        align-items: center;
-        gap: var(--space-1);
-        transition: transform var(--transition-fast);
-    }
-    .browse-card:hover .browse-link {
-        transform: translateX(4px);
-    }
-    .action-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: var(--space-4);
-    }
-    .spinner-small {
-        width: 14px;
-        height: 14px;
-        border: 2px solid currentColor;
-        border-top-color: transparent;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        display: inline-block;
-    }
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .compilation-result {
-        padding: var(--space-3) var(--space-4);
-        border-radius: var(--radius-md);
-        font-size: var(--font-size-sm);
-    }
-    .compilation-result.success {
-        background: rgba(34, 197, 94, 0.1);
-        border: 1px solid rgba(34, 197, 94, 0.2);
-        color: #22c55e;
-    }
-    .compilation-result.info {
-        background: rgba(59, 130, 246, 0.1);
-        border: 1px solid rgba(59, 130, 246, 0.2);
-        color: #3b82f6;
-    }
+.page-header { margin-bottom: 2rem; }
+.header-content { display: flex; align-items: center; gap: 1.5rem; }
+.header-icon-wrapper { position: relative; }
+.header-icon { width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg, #22c55e, #16a34a); display: flex; align-items: center; justify-content: center; font-size: 1.75rem; color: white; position: relative; z-index: 1; }
+.header-icon-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: linear-gradient(135deg, #22c55e, #16a34a); border-radius: 20px; filter: blur(20px); opacity: 0.4; animation: pulse-glow 2s ease-in-out infinite; }
+@keyframes pulse-glow { 0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); } 50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); } }
+.header-content h1 { margin: 0; font-size: 2rem; }
+.subtitle { margin: 0.25rem 0 0; color: var(--text-muted); }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.stat-card { background: var(--surface-elevated, var(--bg-secondary)); border-radius: 12px; padding: 1.25rem; display: flex; align-items: center; gap: 1rem; position: relative; overflow: hidden; border: 1px solid var(--border-subtle, var(--border-primary)); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15); }
+.stat-card-animated { opacity: 0; animation: card-appear 0.5s ease forwards; animation-delay: calc(var(--delay) * 0.1s); }
+@keyframes card-appear { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.stat-shine { position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent); animation: shine 3s ease-in-out infinite; animation-delay: calc(var(--delay) * 0.5s); }
+@keyframes shine { 0%, 100% { left: -100%; } 50% { left: 100%; } }
+.stat-icon { width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+.stat-icon-artists { background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.1)); color: #a855f7; }
+.stat-icon-albums { background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1)); color: #22c55e; }
+.stat-icon-tracks { background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1)); color: #3b82f6; }
+.stat-icon-files { background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(249, 115, 22, 0.1)); color: #f97316; }
+.stat-icon-broken { background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.1)); color: #eab308; }
+.stat-content { display: flex; flex-direction: column; }
+.stat-value { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+.browse-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+.browse-card { background: var(--surface-elevated, var(--bg-secondary)); border-radius: 16px; padding: 2rem; text-align: center; text-decoration: none; color: var(--text-primary); border: 1px solid var(--border-subtle, var(--border-primary)); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.browse-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2); }
+.browse-icon { width: 80px; height: 80px; margin: 0 auto 1rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease; }
+.browse-card:hover .browse-icon { transform: scale(1.1); }
+.browse-card h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem; }
+.browse-card p { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem; }
+.browse-link { color: var(--accent-primary); font-size: 0.875rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.25rem; transition: transform 0.2s ease; }
+.browse-card:hover .browse-link { transform: translateX(4px); }
+.card { background: var(--surface-elevated, var(--bg-secondary)); border-radius: 12px; border: 1px solid var(--border-subtle, var(--border-primary)); margin-bottom: 1.5rem; }
+.card-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-subtle, var(--border-primary)); }
+.card-header h3 { margin: 0; font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+.card-body { padding: 1.5rem; }
+.scan-card { border: 1px solid var(--border-subtle, var(--border-primary)); }
+.music-path-display { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; background: var(--surface-base, var(--bg-tertiary)); border-radius: 8px; margin-bottom: 1.5rem; font-size: 0.9rem; color: var(--text-muted); }
+.music-path-display i { color: var(--accent-primary); }
+.music-path-display code { background: var(--surface-elevated, var(--bg-secondary)); padding: 0.25rem 0.5rem; border-radius: 4px; font-family: var(--font-mono, monospace); color: var(--text-primary); }
+.scan-options { display: flex; gap: 1rem; flex-wrap: wrap; }
+.btn-scan { flex: 1; min-width: 260px; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: 12px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s ease; text-align: left; }
+.btn-scan-primary { background: linear-gradient(135deg, var(--accent-primary), #7c3aed); color: white; }
+.btn-scan-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(var(--accent-primary-rgb), 0.4); }
+.btn-scan-secondary { background: var(--surface-elevated, var(--bg-secondary)); border-color: var(--border-primary); color: var(--text-primary); }
+.btn-scan-secondary:hover { border-color: var(--accent-primary); background: var(--surface-hover, var(--bg-tertiary)); }
+.btn-scan-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+.btn-scan-primary .btn-scan-icon { background: rgba(255, 255, 255, 0.2); }
+.btn-scan-secondary .btn-scan-icon { background: var(--surface-base, var(--bg-tertiary)); color: var(--accent-primary); }
+.btn-scan-content { flex: 1; display: flex; flex-direction: column; }
+.btn-scan-title { font-weight: 600; font-size: 1rem; }
+.btn-scan-desc { font-size: 0.8rem; opacity: 0.8; }
+.btn-scan-arrow { opacity: 0.6; transition: transform 0.2s ease; }
+.btn-scan:hover .btn-scan-arrow { transform: translateX(4px); opacity: 1; }
+.scan-progress-card { border: 2px solid var(--accent-primary); background: linear-gradient(180deg, rgba(var(--accent-primary-rgb), 0.05) 0%, transparent 100%); }
+.scanning-indicator { display: inline-block; width: 12px; height: 12px; background: var(--accent-primary); border-radius: 50%; margin-right: 0.5rem; animation: pulse-indicator 1.5s ease-in-out infinite; }
+@keyframes pulse-indicator { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.2); } }
+.progress-container-fancy { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.progress-bar-fancy { flex: 1; height: 12px; background: var(--surface-base, var(--bg-tertiary)); border-radius: 6px; overflow: hidden; position: relative; }
+.progress-fill-fancy { height: 100%; background: linear-gradient(90deg, var(--accent-primary), #7c3aed); border-radius: 6px; transition: width 0.5s ease; position: relative; overflow: hidden; }
+.progress-shimmer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 1.5s ease-in-out infinite; }
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.progress-percentage { font-size: 1.25rem; font-weight: 700; color: var(--accent-primary); min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+.scan-live-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; }
+.live-stat { display: flex; flex-direction: column; align-items: center; padding: 1rem; background: var(--surface-base, var(--bg-tertiary)); border-radius: 10px; text-align: center; }
+.live-stat i { font-size: 1.25rem; margin-bottom: 0.5rem; color: var(--text-muted); }
+.live-stat-success i { color: #22c55e; }
+.live-stat-warning i { color: #f59e0b; }
+.live-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.live-stat-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+.btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.75rem 1rem; background: transparent; border: 1px solid var(--border-primary); border-radius: 8px; color: var(--text-primary); font-weight: 500; text-decoration: none; cursor: pointer; transition: all 0.2s ease; }
+.btn-outline:hover { background: var(--surface-hover, var(--bg-tertiary)); border-color: var(--accent-primary); }
+.btn-outline-warning:hover { border-color: #f59e0b; color: #f59e0b; }
+.spinner-small { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; margin-left: 0.5rem; }
+.spinner-ring { width: 40px; height: 40px; border: 3px solid var(--surface-elevated, var(--bg-secondary)); border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.recent-scans-container { min-height: 100px; }
+.loading-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; color: var(--text-muted); }
+.compilation-result { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; }
+.compilation-result.success { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #22c55e; }
+.compilation-result.info { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.danger-zone-card { border: 1px solid rgba(239, 68, 68, 0.3); background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent); }
+.danger-zone-header { background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid rgba(239, 68, 68, 0.2); }
+.danger-zone-header h3 { color: #ef4444; }
+.danger-action { display: flex; justify-content: space-between; align-items: center; gap: 2rem; padding: 1rem; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 12px; }
+.danger-action-info h4 { margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; }
+.danger-action-info h4 i { color: #ef4444; }
+.danger-action-info p { margin: 0; font-size: 0.875rem; color: var(--text-muted); line-height: 1.5; }
+.btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s ease; white-space: nowrap; flex-shrink: 0; }
+.btn-danger:hover { background: linear-gradient(135deg, #dc2626, #b91c1c); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); }
+.recent-scans-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.recent-scans-table thead th { padding: 0.75rem 1rem; text-align: left; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle, var(--border-primary)); }
+.recent-scans-table tbody tr { transition: background-color 0.15s ease; }
+.recent-scans-table tbody tr:hover { background: var(--surface-hover, var(--bg-tertiary)); }
+.recent-scans-table td { padding: 1rem; border-bottom: 1px solid var(--border-subtle, var(--border-primary)); vertical-align: middle; }
+.status-badge { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 500; }
+.status-badge-completed { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.status-badge-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.status-badge-running { background: rgba(var(--accent-primary-rgb), 0.15); color: var(--accent-primary); }
+.status-badge-running i { animation: spin 1s linear infinite; }
+.empty-scans { text-align: center; padding: 3rem; color: var(--text-muted); }
+.empty-scans i { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+@media (max-width: 768px) { .header-content { flex-direction: column; text-align: center; } .scan-options { flex-direction: column; } .btn-scan { min-width: 100%; } .danger-action { flex-direction: column; align-items: stretch; } .btn-danger { justify-content: center; } }
 </style>
 
 <script>
-// Handle compilation analysis response
+function animateCounters() {
+    const counters = document.querySelectorAll('.counter');
+    counters.forEach(counter => {
+        const target = parseInt(counter.dataset.target) || 0;
+        const duration = 1500;
+        const step = target / (duration / 16);
+        let current = 0;
+        const updateCounter = () => {
+            current += step;
+            if (current < target) { counter.textContent = Math.floor(current).toLocaleString(); requestAnimationFrame(updateCounter); }
+            else { counter.textContent = target.toLocaleString(); }
+        };
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => { if (entry.isIntersecting) { updateCounter(); observer.unobserve(entry.target); } });
+        }, { threshold: 0.5 });
+        observer.observe(counter);
+    });
+}
+document.addEventListener('DOMContentLoaded', animateCounters);
+
+document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.pathInfo.requestPath === '/api/library/import/scan') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.responseText);
+            if (response.job_id) {
+                const statusDiv = document.getElementById('scan-status');
+                const stats = response.stats || {};
+                const isCompleted = response.status === 'completed';
+                statusDiv.innerHTML = `
+                    <div class="card ${isCompleted ? '' : 'scan-progress-card'}">
+                        <div class="card-header"><h3>${isCompleted ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<span class="scanning-indicator"></span>'}${isCompleted ? 'Scan Completed' : 'Scanning...'}</h3></div>
+                        <div class="card-body" ${!isCompleted ? `hx-get="/api/library/import/status/${response.job_id}/html" hx-trigger="load, every 2s" hx-swap="innerHTML"` : ''}>
+                            ${isCompleted ? `
+                                <div class="scan-live-stats" style="margin-bottom: 1rem;">
+                                    <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value">${(stats.scanned || 0).toLocaleString()}</span><span class="live-stat-label">Scanned</span></div>
+                                    <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value">${(stats.imported || 0).toLocaleString()}</span><span class="live-stat-label">Imported</span></div>
+                                    <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value">${(stats.skipped || 0).toLocaleString()}</span><span class="live-stat-label">Skipped</span></div>
+                                    <div class="live-stat ${stats.errors > 0 ? 'live-stat-warning' : ''}"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value">${(stats.errors || 0).toLocaleString()}</span><span class="live-stat-label">Errors</span></div>
+                                </div>
+                            ` : `<div class="progress-container-fancy"><div class="progress-bar-fancy"><div class="progress-fill-fancy" style="width: 0%;"><div class="progress-shimmer"></div></div></div><span class="progress-percentage">0%</span></div><p style="text-align: center; color: var(--text-muted); margin: 0;"><i class="bi bi-hourglass-split"></i> Initializing scan...</p>`}
+                        </div>
+                    </div>`;
+                htmx.process(statusDiv);
+                if (isCompleted && stats.imported > 0) { setTimeout(() => window.location.reload(), 2000); }
+            }
+        } catch (e) { document.getElementById('scan-status').innerHTML = `<div class="card" style="border-color: #ef4444;"><div class="card-body" style="text-align: center; padding: 2rem;"><i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem; margin-bottom: 1rem;"></i><p style="margin: 0;">Error starting scan.</p></div></div>`; }
+    }
+});
+
 document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'compilation-status') {
         try {
             const response = JSON.parse(evt.detail.xhr.response);
             const statusDiv = document.getElementById('compilation-status');
-            
-            if (response.changed_count > 0) {
-                statusDiv.innerHTML = `
-                    <div class="compilation-result success">
-                        <i class="bi bi-check-circle-fill"></i>
-                        Analyzed ${response.analyzed_count} albums. 
-                        <strong>${response.changed_count}</strong> marked as compilations.
-                        <a href="/library/compilations" style="margin-left: 0.5rem;">View →</a>
-                    </div>
-                `;
-            } else {
-                statusDiv.innerHTML = `
-                    <div class="compilation-result info">
-                        <i class="bi bi-info-circle-fill"></i>
-                        Analyzed ${response.analyzed_count} albums. No new compilations detected.
-                    </div>
-                `;
-            }
-        } catch (e) {
-            console.error('Error parsing compilation response', e);
-        }
+            if (response.changed_count > 0) { statusDiv.innerHTML = `<div class="compilation-result success"><i class="bi bi-check-circle-fill"></i>Analyzed ${response.analyzed_count} albums. <strong>${response.changed_count}</strong> marked as compilations. <a href="/library/compilations" style="margin-left: 0.5rem;">View →</a></div>`; }
+            else { statusDiv.innerHTML = `<div class="compilation-result info"><i class="bi bi-info-circle-fill"></i>Analyzed ${response.analyzed_count} albums. No new compilations detected.</div>`; }
+        } catch (e) { console.error('Error parsing compilation response', e); }
+    }
+    if (evt.detail.target.id === 'clear-library-status') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            document.getElementById('clear-library-status').innerHTML = `<div class="compilation-result success" style="background: rgba(34, 197, 94, 0.1);"><i class="bi bi-check-circle-fill"></i>Library cleared! Deleted: <strong>${response.deleted_tracks}</strong> tracks, <strong>${response.deleted_albums}</strong> albums, <strong>${response.deleted_artists}</strong> artists.</div>`;
+            setTimeout(() => window.location.reload(), 3000);
+        } catch (e) { console.error('Error parsing clear library response', e); }
+    }
+});
+
+document.body.addEventListener('htmx:responseError', function(evt) {
+    if (evt.detail.target.id === 'clear-library-status') {
+        document.getElementById('clear-library-status').innerHTML = `<div class="compilation-result" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;"><i class="bi bi-x-circle-fill"></i>Error clearing library. Please try again.</div>`;
     }
 });
 </script>

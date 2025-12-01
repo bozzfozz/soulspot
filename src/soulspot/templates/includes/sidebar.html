@@ -69,11 +69,7 @@
                 <i class="bi bi-grid sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Overview</span>
             </a>
-            <a href="/library/import" class="sidebar-item {% if '/library/import' in request.url.path %}active{% endif %}">
-                <i class="bi bi-upload sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Import</span>
-            </a>
-            <a href="/library/artists" class="sidebar-item {% if '/library/artists' in request.url.path and '/import' not in request.url.path %}active{% endif %}">
+            <a href="/library/artists" class="sidebar-item {% if '/library/artists' in request.url.path %}active{% endif %}">
                 <i class="bi bi-person sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Artists</span>
             </a>

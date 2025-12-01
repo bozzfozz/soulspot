@@ -587,13 +587,16 @@ async def onboarding(request: Request) -> Any:
 # Yo, this is the library overview page with aggregated stats!
 # IMPORTANT: Shows ONLY local files (tracks with file_path)!
 # Uses efficient SQL COUNT queries instead of loading all data into memory.
+# Merged with library_import.html for a single unified view!
 @router.get("/library", response_class=HTMLResponse)
 async def library(
     request: Request,
     track_repository: TrackRepository = Depends(get_track_repository),  # noqa: ARG001
     session: AsyncSession = Depends(get_db_session),
+    scanner: LibraryScannerService = Depends(get_library_scanner_service),
+    job_queue: JobQueue = Depends(get_job_queue),
 ) -> Any:
-    """Library browser page - shows stats for local files only."""
+    """Library browser page - shows stats, scan controls, and management."""
     from sqlalchemy import func, select
 
     from soulspot.infrastructure.persistence.models import TrackModel
@@ -628,30 +631,7 @@ async def library(
     broken_result = await session.execute(broken_stmt)
     broken_tracks = broken_result.scalar() or 0
 
-    stats = {
-        "total_tracks": total_tracks,
-        "total_artists": total_artists,
-        "total_albums": total_albums,
-        "tracks_with_files": total_tracks,  # Same as total since we filter by file_path
-        "broken_tracks": broken_tracks,
-    }
-
-    return templates.TemplateResponse(request, "library.html", context={"stats": stats})
-
-
-# =============================================================================
-# LIBRARY IMPORT UI ROUTES
-# =============================================================================
-
-
-@router.get("/library/import", response_class=HTMLResponse)
-async def library_import_page(
-    request: Request,
-    scanner: LibraryScannerService = Depends(get_library_scanner_service),
-    job_queue: JobQueue = Depends(get_job_queue),
-) -> Any:
-    """Library import page with scan controls and status."""
-    # Get current summary
+    # Get music path from scanner summary
     summary = await scanner.get_scan_summary()
 
     # Check for active scan job
@@ -666,14 +646,33 @@ async def library_import_page(
             "stats": job.result.get("stats") if job.result else None,
         }
 
+    stats = {
+        "total_tracks": total_tracks,
+        "total_artists": total_artists,
+        "total_albums": total_albums,
+        "tracks_with_files": total_tracks,  # Same as total since we filter by file_path
+        "broken_tracks": broken_tracks,
+        "music_path": summary.get("music_path", "/music"),
+    }
+
     return templates.TemplateResponse(
         request,
-        "library_import.html",
-        context={
-            "summary": summary,
-            "active_job": active_job,
-        },
+        "library.html",
+        context={"stats": stats, "active_job": active_job},
     )
+
+
+# =============================================================================
+# LIBRARY IMPORT UI ROUTES
+# =============================================================================
+
+
+@router.get("/library/import", response_class=HTMLResponse)
+async def library_import_page(request: Request) -> Any:  # noqa: ARG001
+    """Redirect to unified library page (merged with import)."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/library", status_code=302)
 
 
 @router.get("/library/import/jobs-list", response_class=HTMLResponse)
