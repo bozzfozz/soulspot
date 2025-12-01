@@ -557,12 +557,20 @@ class LibraryScannerService:
             self._artist_cache[row[1].lower()] = artist_id
 
         # Load all albums
-        album_stmt = select(AlbumModel.id, AlbumModel.title, AlbumModel.artist_id)
+        # Hey future me - nutze album_artist für Cache-Key bei Kompilationen!
+        # Sonst werden Tracks verschiedener Künstler zu verschiedenen Alben zugeordnet.
+        album_stmt = select(
+            AlbumModel.id,
+            AlbumModel.title,
+            AlbumModel.artist_id,
+            AlbumModel.album_artist,
+        )
         result = await self.session.execute(album_stmt)
         for row in result.all():
             album_id = AlbumId.from_string(row[0])
-            # Key: "album_title|artist_id" for uniqueness
-            cache_key = f"{row[1].lower()}|{row[2]}"
+            # Nutze album_artist wenn vorhanden (für Kompilationen), sonst artist_id
+            album_key = row[3].lower() if row[3] else row[2]
+            cache_key = f"{row[1].lower()}|{album_key}"
             self._album_cache[cache_key] = album_id
 
         logger.debug(
@@ -642,18 +650,23 @@ class LibraryScannerService:
         title_lower = title.lower()
         artist_id_str = str(artist_id.value)
 
+        # Hey future me - für Kompilationen nutze album_artist statt track artist!
+        # Sonst wird jeder Track-Künstler ein neues Album erstellen.
+        # Beispiel: "Greatest Hits" mit 30 Künstlern = 30 Alben ohne diesen Fix!
+        album_key = album_artist.lower() if album_artist else artist_id_str
+
         # Exact match first
-        cache_key = f"{title_lower}|{artist_id_str}"
+        cache_key = f"{title_lower}|{album_key}"
         if cache_key in self._album_cache:
             return self._album_cache[cache_key], False, False
 
-        # Fuzzy match (only for same artist)
+        # Fuzzy match (only for same album_artist/artist)
         best_match_key: str | None = None
         best_score: float = 0.0
 
         for cached_key, _cached_album_id in self._album_cache.items():
             cached_title, cached_artist = cached_key.rsplit("|", 1)
-            if cached_artist != artist_id_str:
+            if cached_artist != album_key:
                 continue
 
             score = fuzz.ratio(title_lower, cached_title)
