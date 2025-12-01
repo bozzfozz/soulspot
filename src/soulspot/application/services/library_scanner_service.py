@@ -247,10 +247,18 @@ class LibraryScannerService:
 
                 except Exception as e:
                     stats["errors"] += 1
+                    error_msg = str(e)
                     stats["error_files"].append(
-                        {"path": str(file_path), "error": str(e)}
+                        {"path": str(file_path), "error": error_msg}
                     )
-                    logger.warning(f"Error importing {file_path}: {e}")
+                    # Log with traceback for debugging metadata issues
+                    logger.warning(
+                        f"Error importing {file_path.name}: {error_msg} "
+                        f"(format: {file_path.suffix})",
+                        exc_info=False,  # Don't spam with full traceback, just the message
+                    )
+                    # Continue with next file instead of crashing
+                    continue
 
             # Final commit for remaining files
             await self.session.commit()
@@ -402,13 +410,25 @@ class LibraryScannerService:
             result["imported"] = True
             return result
 
-        # Extract metadata
+        # Extract metadata - try to get as much as possible, use fallbacks for missing data
         metadata = self._extract_metadata(file_path)
         if not metadata:
-            raise ValueError(f"Could not extract metadata from {file_path}")
+            # Hey future me - fallback to minimal metadata if extraction fails completely!
+            # This happens with corrupted files or unknown formats.
+            # We can still import the track using folder/filename info.
+            metadata = {
+                "format": file_path.suffix.lstrip(".").lower(),
+                "duration_ms": 0,
+            }
+            logger.info(
+                f"Using fallback metadata for {file_path.name} "
+                f"(tag extraction failed, will use filename)"
+            )
 
         artist_name = metadata.get("artist", "Unknown Artist")
         album_name = metadata.get("album")
+        # Hey future me - if no title in tags, use filename without extension
+        # This ensures we can import files without metadata tags at all!
         track_title = metadata.get("title") or file_path.stem
 
         # Hey future me - album_artist (TPE2) is crucial for compilation detection!
@@ -521,43 +541,56 @@ class LibraryScannerService:
     # METADATA EXTRACTION
     # =========================================================================
 
-    def _extract_metadata(self, file_path: Path) -> dict[str, Any] | None:
+    def _extract_metadata(self, file_path: Path) -> dict[str, Any]:
         """Extract audio metadata using mutagen.
+
+        Hey future me - this now ALWAYS returns a dict, even if extraction fails!
+        At minimum: {\"format\": \".mp3\", \"duration_ms\": 0}
+        This prevents tracks from being skipped due to metadata errors.
 
         Args:
             file_path: Path to audio file
 
         Returns:
-            Dict with metadata or None if extraction failed
-        """
+            Dict with metadata (at least format and duration_ms)
+        \"\"\"
+        metadata: dict[str, Any] = {
+            "format": file_path.suffix.lstrip(".").lower(),
+            "duration_ms": 0,
+        }
+
         try:
             audio = MutagenFile(file_path)
             if audio is None:
-                return None
+                logger.debug(f"MutagenFile returned None for {file_path}")
+                return metadata
 
-            metadata: dict[str, Any] = {
-                "format": file_path.suffix.lstrip(".").lower(),
-            }
-
-            # Duration
-            if hasattr(audio.info, "length"):
+            # Duration (most important info besides filename)
+            if hasattr(audio.info, "length") and audio.info.length:
                 metadata["duration_ms"] = int(audio.info.length * 1000)
 
             # Audio quality
-            if hasattr(audio.info, "bitrate"):
+            if hasattr(audio.info, "bitrate") and audio.info.bitrate:
                 metadata["bitrate"] = audio.info.bitrate
-            if hasattr(audio.info, "sample_rate"):
+            if hasattr(audio.info, "sample_rate") and audio.info.sample_rate:
                 metadata["sample_rate"] = audio.info.sample_rate
 
             # Extract tags based on format
             if hasattr(audio, "tags") and audio.tags:
-                metadata.update(self._extract_tags(audio))
+                tag_data = self._extract_tags(audio)
+                metadata.update(tag_data)
+                logger.debug(f"Extracted tags for {file_path.name}: {list(tag_data.keys())}")
+            else:
+                logger.debug(f"No tags found in {file_path.name} (format: {metadata['format']})")
 
             return metadata
 
         except Exception as e:
-            logger.warning(f"Error extracting metadata from {file_path}: {e}")
-            return None
+            logger.warning(
+                f"Error extracting full metadata from {file_path}: {e}. "
+                f"Using fallback: format={metadata['format']}"
+            )
+            return metadata
 
     def _extract_tags(self, audio: Any) -> dict[str, Any]:
         """Extract common tags from audio file.
