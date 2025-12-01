@@ -54,42 +54,119 @@ router = APIRouter()
 # hits DB on every page load - no caching. Could be slow with large library. Active downloads query
 # might be expensive if there are thousands of historical downloads (needs index on status field). The
 # stats are current snapshot, could be stale by time page renders. Consider WebSocket updates? Returns
-# full HTML page via Jinja2 template. Template must exist at src/soulspot/templates/index.html or crash!
-# UPDATE: Now also counts Spotify synced data (artists, albums, tracks from Spotify browse)
+# full HTML page via Jinja2 template.
+# UPDATE: Now uses dashboard.html with animated UI and real DB stats!
 @router.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
     download_repository: DownloadRepository = Depends(get_download_repository),
     spotify_repository: "SpotifyBrowseRepository" = Depends(
         get_spotify_browse_repository
     ),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Dashboard page with real statistics."""
-    # Get real statistics from repositories
-    playlists = await playlist_repository.list_all()
-    tracks = await track_repository.list_all()
-    active_downloads = await download_repository.list_active()
+    """Main dashboard page with real statistics and animated UI."""
+    from sqlalchemy import func, select
+
+    from soulspot.infrastructure.persistence.models import (
+        DownloadModel,
+        PlaylistModel,
+        PlaylistTrackModel,
+        TrackModel,
+    )
+
+    # Count playlists
+    playlists_stmt = select(func.count(PlaylistModel.id))
+    playlists_result = await session.execute(playlists_stmt)
+    playlist_count = playlists_result.scalar() or 0
+
+    # Count tracks with local files (downloaded)
+    tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None)
+    )
+    tracks_result = await session.execute(tracks_with_files_stmt)
+    tracks_downloaded = tracks_result.scalar() or 0
+
+    # Count total tracks in playlists
+    total_tracks_stmt = select(func.count(func.distinct(PlaylistTrackModel.track_id)))
+    total_tracks_result = await session.execute(total_tracks_stmt)
+    total_tracks = total_tracks_result.scalar() or 0
+
+    # Count completed downloads
+    completed_stmt = select(func.count(DownloadModel.id)).where(
+        DownloadModel.status == "completed"
+    )
+    completed_result = await session.execute(completed_stmt)
+    completed_downloads = completed_result.scalar() or 0
+
+    # Count queue (pending/queued downloads)
+    queue_stmt = select(func.count(DownloadModel.id)).where(
+        DownloadModel.status.in_(["pending", "queued", "downloading"])
+    )
+    queue_result = await session.execute(queue_stmt)
+    queue_size = queue_result.scalar() or 0
+
+    # Count active downloads
+    active_stmt = select(func.count(DownloadModel.id)).where(
+        DownloadModel.status == "downloading"
+    )
+    active_result = await session.execute(active_stmt)
+    active_downloads = active_result.scalar() or 0
 
     # Get Spotify synced data counts
     spotify_artists = await spotify_repository.count_artists()
     spotify_albums = await spotify_repository.count_albums()
     spotify_tracks = await spotify_repository.count_tracks()
 
+    # Get recent playlists for display (limit 6)
+    playlists_list = await playlist_repository.list_all()
+    recent_playlists = [
+        {
+            "id": str(p.id.value),
+            "name": p.name,
+            "description": p.description,
+            "track_count": p.track_count,
+            "cover_url": p.cover_url,
+            "downloaded_count": 0,
+        }
+        for p in playlists_list[:6]
+    ]
+
+    # Get recent activity (completed downloads)
+    recent_downloads = await download_repository.list_recent(limit=5)
+    recent_activity = [
+        {
+            "title": d.track_title or "Unknown Track",
+            "artist": d.artist_name or "Unknown Artist",
+            "album_art": d.album_art_url,
+            "status": d.status.value,
+            "timestamp": d.completed_at.strftime("%H:%M") if d.completed_at else "--:--",
+        }
+        for d in recent_downloads
+    ]
+
     stats = {
-        "playlists": len(playlists),
-        "tracks": len(tracks),
-        "downloads": len(active_downloads),
-        "queue_size": sum(
-            1 for d in active_downloads if d.status.value in ["pending", "queued"]
-        ),
-        # Spotify synced data
+        "playlists": playlist_count,
+        "tracks": total_tracks,
+        "tracks_downloaded": tracks_downloaded,
+        "downloads": completed_downloads,
+        "queue_size": queue_size,
+        "active_downloads": active_downloads,
         "spotify_artists": spotify_artists,
         "spotify_albums": spotify_albums,
         "spotify_tracks": spotify_tracks,
     }
-    return templates.TemplateResponse(request, "index.html", context={"stats": stats})
+
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        context={
+            "stats": stats,
+            "playlists": recent_playlists,
+            "recent_activity": recent_activity,
+        },
+    )
 
 
 @router.get("/playlists", response_class=HTMLResponse)
@@ -489,128 +566,13 @@ async def settings(request: Request) -> Any:
     return templates.TemplateResponse(request, "settings.html")
 
 
-# Hey, this is the new customizable dashboard! page=None means content loads via HTMX after initial
-# render. edit_mode controls whether user sees widget drag-drop editor or read-only view. The actual
-# widgets are loaded dynamically via widget template API, not embedded in this response. This keeps
-# the initial page load fast - widgets hydrate themselves via data endpoints or SSE connections.
+# Alias for /dashboard - redirects to main page (/) for backwards compatibility
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(
-    request: Request,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    track_repository: TrackRepository = Depends(get_track_repository),
-    download_repository: DownloadRepository = Depends(get_download_repository),
-    spotify_repository: "SpotifyBrowseRepository" = Depends(
-        get_spotify_browse_repository
-    ),
-    session: AsyncSession = Depends(get_db_session),
-) -> Any:
-    """Dynamic dashboard with real statistics.
+async def dashboard(request: Request) -> Any:  # noqa: ARG001
+    """Dashboard alias - redirects to main page."""
+    from fastapi.responses import RedirectResponse
 
-    Hey future me - this loads REAL stats from the database!
-    Uses efficient SQL COUNT queries instead of loading all data.
-    Shows: playlists, tracks (with files), downloads, queue size.
-    Also includes Spotify synced data and recent playlists for display.
-    """
-    from sqlalchemy import func, select
-
-    from soulspot.infrastructure.persistence.models import (
-        DownloadModel,
-        PlaylistModel,
-        PlaylistTrackModel,
-        TrackModel,
-    )
-
-    # Count playlists
-    playlists_stmt = select(func.count(PlaylistModel.id))
-    playlists_result = await session.execute(playlists_stmt)
-    playlist_count = playlists_result.scalar() or 0
-
-    # Count tracks with local files (downloaded)
-    tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
-    )
-    tracks_result = await session.execute(tracks_with_files_stmt)
-    tracks_downloaded = tracks_result.scalar() or 0
-
-    # Count total tracks in playlists
-    total_tracks_stmt = select(func.count(func.distinct(PlaylistTrackModel.track_id)))
-    total_tracks_result = await session.execute(total_tracks_stmt)
-    total_tracks = total_tracks_result.scalar() or 0
-
-    # Count completed downloads
-    completed_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "completed"
-    )
-    completed_result = await session.execute(completed_stmt)
-    completed_downloads = completed_result.scalar() or 0
-
-    # Count queue (pending/queued downloads)
-    queue_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status.in_(["pending", "queued", "downloading"])
-    )
-    queue_result = await session.execute(queue_stmt)
-    queue_size = queue_result.scalar() or 0
-
-    # Count active downloads
-    active_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "downloading"
-    )
-    active_result = await session.execute(active_stmt)
-    active_downloads = active_result.scalar() or 0
-
-    # Get Spotify synced data counts
-    spotify_artists = await spotify_repository.count_artists()
-    spotify_albums = await spotify_repository.count_albums()
-    spotify_tracks = await spotify_repository.count_tracks()
-
-    # Get recent playlists for display (limit 6)
-    playlists_list = await playlist_repository.list_all()
-    recent_playlists = [
-        {
-            "id": str(p.id.value),
-            "name": p.name,
-            "description": p.description,
-            "track_count": p.track_count,
-            "cover_url": p.cover_url,
-            "downloaded_count": 0,  # Could compute but expensive
-        }
-        for p in playlists_list[:6]
-    ]
-
-    # Get recent activity (completed downloads)
-    recent_downloads = await download_repository.list_recent(limit=5)
-    recent_activity = [
-        {
-            "title": d.track_title or "Unknown Track",
-            "artist": d.artist_name or "Unknown Artist",
-            "album_art": d.album_art_url,
-            "status": d.status.value,
-            "timestamp": d.completed_at.strftime("%H:%M") if d.completed_at else "--:--",
-        }
-        for d in recent_downloads
-    ]
-
-    stats = {
-        "playlists": playlist_count,
-        "tracks": total_tracks,
-        "tracks_downloaded": tracks_downloaded,
-        "downloads": completed_downloads,
-        "queue_size": queue_size,
-        "active_downloads": active_downloads,
-        "spotify_artists": spotify_artists,
-        "spotify_albums": spotify_albums,
-        "spotify_tracks": spotify_tracks,
-    }
-
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        context={
-            "stats": stats,
-            "playlists": recent_playlists,
-            "recent_activity": recent_activity,
-        },
-    )
+    return RedirectResponse(url="/", status_code=302)
 
 
 # This is the first-run wizard for new users! Shows "connect Spotify" flow and basic setup. Should
