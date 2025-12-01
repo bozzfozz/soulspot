@@ -4,9 +4,9 @@
 # etc) and mounts them under /api prefix (check main.py where api_router is mounted). Each include_router()
 # adds a prefix ("/auth", "/playlists", etc) so endpoints become /api/auth/login, /api/playlists/import, etc.
 # The tags parameter groups endpoints in OpenAPI/Swagger docs - super helpful for API exploration! Order matters
-# here - routers are tried in order for route matching (but shouldn't overlap anyway). library/automation/
-# dashboard/widgets/widget_templates/sse have NO prefix because they define prefix in their own router
-# (prefix="/library" in router.py). The __all__ export makes these importable from soulspot.api.routers.
+# here - routers are tried in order for route matching (but shouldn't overlap anyway). library/automation/sse
+# routers have NO prefix here because they define their own prefix in their router files (e.g. prefix="/library"
+# in library.py). The __all__ export makes these importable from soulspot.api.routers.
 
 from fastapi import APIRouter
 
