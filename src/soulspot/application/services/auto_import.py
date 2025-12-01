@@ -386,22 +386,18 @@ class AutoImportService:
             # Strategy 2: Title + Artist lookup (fallback)
             if title:
                 matches = await self._track_repository.search_by_title_artist(
-                    title=title,
-                    artist_name=artist,
-                    limit=1
+                    title=title, artist_name=artist, limit=1
                 )
                 if matches:
                     track = matches[0]
                     logger.info(
                         "Matched track by title/artist: '%s' by '%s'",
                         track.title,
-                        artist or "unknown"
+                        artist or "unknown",
                     )
                     return track
                 logger.debug(
-                    "No track found for title='%s', artist='%s'",
-                    title,
-                    artist
+                    "No track found for title='%s', artist='%s'", title, artist
                 )
 
             logger.debug("Could not match track for: %s", file_path)

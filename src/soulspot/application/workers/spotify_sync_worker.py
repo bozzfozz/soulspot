@@ -95,7 +95,12 @@ class SpotifySyncWorker:
             "playlists": {"count": 0, "last_result": None, "last_error": None},
             "liked_songs": {"count": 0, "last_result": None, "last_error": None},
             "saved_albums": {"count": 0, "last_result": None, "last_error": None},
-            "artist_albums": {"count": 0, "last_result": None, "last_error": None, "pending": 0},
+            "artist_albums": {
+                "count": 0,
+                "last_result": None,
+                "last_error": None,
+                "pending": 0,
+            },
         }
 
     async def start(self) -> None:
@@ -194,7 +199,9 @@ class SpotifySyncWorker:
                 # Get access token - if not available, skip this cycle
                 access_token = await self.token_manager.get_token_for_background()
                 if not access_token:
-                    logger.warning("No valid Spotify token available, skipping sync cycle")
+                    logger.warning(
+                        "No valid Spotify token available, skipping sync cycle"
+                    )
                     return
 
                 # Get interval settings

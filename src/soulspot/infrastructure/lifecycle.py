@@ -144,9 +144,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 if db_log_level:
                     # Apply the DB-stored log level
                     await startup_settings_service.set_log_level(db_log_level)
-                    logger.info(
-                        "Applied log level from database: %s", db_log_level
-                    )
+                    logger.info("Applied log level from database: %s", db_log_level)
                 else:
                     logger.debug(
                         "No log level in database, using env default: %s",

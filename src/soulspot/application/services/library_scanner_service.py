@@ -25,7 +25,6 @@ from soulspot.domain.value_objects import AlbumId, ArtistId, FilePath, TrackId
 from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
     detect_compilation,
-    is_various_artists,
 )
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
@@ -292,7 +291,7 @@ class LibraryScannerService:
         artist_name = metadata.get("artist", "Unknown Artist")
         album_name = metadata.get("album")
         track_title = metadata.get("title") or file_path.stem
-        
+
         # Hey future me - album_artist (TPE2) is crucial for compilation detection!
         # If TPE2 is "Various Artists" but artist is different, it's a compilation.
         album_artist = metadata.get("album_artist")
@@ -509,7 +508,7 @@ class LibraryScannerService:
                 if field_name == "compilation" and value:
                     if isinstance(value, bool):
                         value = value
-                    elif isinstance(value, (int, float)):
+                    elif isinstance(value, int | float):
                         value = bool(value)
                     elif isinstance(value, str):
                         value = value.lower() in ("1", "true", "yes")
@@ -661,7 +660,7 @@ class LibraryScannerService:
             track_artists=None,  # Not available yet at single-file scan time
             explicit_flag=is_compilation if is_compilation else None,
         )
-        
+
         secondary_types: list[str] = []
         if detection_result.is_compilation:
             secondary_types.append(SecondaryAlbumType.COMPILATION.value)
@@ -679,10 +678,10 @@ class LibraryScannerService:
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
-        
+
         # Add album via repository, then update model directly for new fields
         await self.album_repo.add(album)
-        
+
         # Get the model and set the new fields (album_artist, secondary_types)
         # Hey - we need to update the model directly because Album entity doesn't have these yet
         stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))

@@ -14,6 +14,7 @@ from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,

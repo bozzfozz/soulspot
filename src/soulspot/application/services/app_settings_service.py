@@ -442,7 +442,10 @@ class AppSettingsService:
         Returns:
             Log level string (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
-        return await self.get_string("general.log_level", default=env_default) or env_default
+        return (
+            await self.get_string("general.log_level", default=env_default)
+            or env_default
+        )
 
     async def set_log_level(self, level: str) -> None:
         """Set log level in DB and apply immediately to all loggers.
@@ -456,7 +459,9 @@ class AppSettingsService:
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         level_upper = level.upper()
         if level_upper not in valid_levels:
-            raise ValueError(f"Invalid log level: {level}. Must be one of {valid_levels}")
+            raise ValueError(
+                f"Invalid log level: {level}. Must be one of {valid_levels}"
+            )
 
         # Save to DB
         await self.set(
@@ -501,9 +506,14 @@ class AppSettingsService:
         Returns:
             Application display name
         """
-        return await self.get_string("general.app_name", default=env_default) or env_default
+        return (
+            await self.get_string("general.app_name", default=env_default)
+            or env_default
+        )
 
-    async def get_general_settings_summary(self, env_settings: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def get_general_settings_summary(
+        self, env_settings: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Get summary of all general settings for UI display.
 
         Args:
@@ -520,9 +530,17 @@ class AppSettingsService:
         }
 
         return {
-            "app_name": await self.get_string("general.app_name", default=defaults.get("app_name", "SoulSpot")) or defaults.get("app_name", "SoulSpot"),
-            "log_level": await self.get_string("general.log_level", default=defaults.get("log_level", "INFO")) or defaults.get("log_level", "INFO"),
-            "debug": await self.get_bool("general.debug", default=defaults.get("debug", False)),
+            "app_name": await self.get_string(
+                "general.app_name", default=defaults.get("app_name", "SoulSpot")
+            )
+            or defaults.get("app_name", "SoulSpot"),
+            "log_level": await self.get_string(
+                "general.log_level", default=defaults.get("log_level", "INFO")
+            )
+            or defaults.get("log_level", "INFO"),
+            "debug": await self.get_bool(
+                "general.debug", default=defaults.get("debug", False)
+            ),
         }
 
     # =========================================================================

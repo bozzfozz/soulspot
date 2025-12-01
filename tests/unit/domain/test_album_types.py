@@ -9,8 +9,6 @@ We test:
 Test data is based on real-world scenarios from music collections.
 """
 
-import pytest
-
 from soulspot.domain.value_objects.album_types import (
     DIVERSITY_THRESHOLD,
     DOMINANT_ARTIST_THRESHOLD,
@@ -61,7 +59,10 @@ class TestSecondaryAlbumType:
 
     def test_from_string_compilation(self) -> None:
         """Test parsing 'compilation' string."""
-        assert SecondaryAlbumType.from_string("compilation") == SecondaryAlbumType.COMPILATION
+        assert (
+            SecondaryAlbumType.from_string("compilation")
+            == SecondaryAlbumType.COMPILATION
+        )
 
     def test_from_string_live(self) -> None:
         """Test parsing 'live' string."""
@@ -69,7 +70,10 @@ class TestSecondaryAlbumType:
 
     def test_from_string_soundtrack(self) -> None:
         """Test parsing 'soundtrack' string."""
-        assert SecondaryAlbumType.from_string("soundtrack") == SecondaryAlbumType.SOUNDTRACK
+        assert (
+            SecondaryAlbumType.from_string("soundtrack")
+            == SecondaryAlbumType.SOUNDTRACK
+        )
 
     def test_from_string_dj_mix_variations(self) -> None:
         """Test DJ mix variations."""
@@ -92,7 +96,7 @@ class TestSecondaryAlbumType:
 
 class TestIsVariousArtists:
     """Tests for is_various_artists() function.
-    
+
     Hey future me - this validates pattern matching for album_artist tag!
     Common patterns: "Various Artists", "VA", "V.A.", "Sampler", etc.
     """
@@ -125,7 +129,9 @@ class TestIsVariousArtists:
         """Test real artist names are NOT detected as VA."""
         assert is_various_artists("The Beatles") is False
         assert is_various_artists("Pink Floyd") is False
-        assert is_various_artists("Variousthing Band") is False  # Contains "various" but not VA
+        assert (
+            is_various_artists("Variousthing Band") is False
+        )  # Contains "various" but not VA
         assert is_various_artists("Vari-Speed") is False
 
     def test_edge_cases(self) -> None:
@@ -144,7 +150,7 @@ class TestIsVariousArtists:
 
 class TestCalculateTrackDiversity:
     """Tests for calculate_track_diversity() function.
-    
+
     Hey future me - this is the core metric for Lidarr-style detection!
     diversity_ratio = unique_artists / total_tracks
     """
@@ -153,7 +159,7 @@ class TestCalculateTrackDiversity:
         """Test album where all tracks are by same artist."""
         artists = ["Pink Floyd", "Pink Floyd", "Pink Floyd", "Pink Floyd"]
         ratio, details = calculate_track_diversity(artists)
-        
+
         assert ratio == 0.25  # 1 unique / 4 total
         assert details["unique_artists"] == 1
         assert details["total_tracks"] == 4
@@ -164,7 +170,7 @@ class TestCalculateTrackDiversity:
         """Test compilation where every track has different artist."""
         artists = ["Artist A", "Artist B", "Artist C", "Artist D"]
         ratio, details = calculate_track_diversity(artists)
-        
+
         assert ratio == 1.0  # 4 unique / 4 total
         assert details["unique_artists"] == 4
         assert details["total_tracks"] == 4
@@ -175,7 +181,7 @@ class TestCalculateTrackDiversity:
         # 3 unique artists across 5 tracks = 60% diversity
         artists = ["Artist A", "Artist A", "Artist B", "Artist C", "Artist A"]
         ratio, details = calculate_track_diversity(artists)
-        
+
         assert ratio == 0.6  # 3 unique / 5 total
         assert details["unique_artists"] == 3
         assert details["total_tracks"] == 5
@@ -187,13 +193,13 @@ class TestCalculateTrackDiversity:
         """Test that artist comparison is case-insensitive."""
         artists = ["Artist A", "artist a", "ARTIST A", "Artist B"]
         ratio, details = calculate_track_diversity(artists)
-        
+
         assert details["unique_artists"] == 2  # "Artist A" (3 variants) + "Artist B"
 
     def test_empty_list(self) -> None:
         """Test empty artist list."""
         ratio, details = calculate_track_diversity([])
-        
+
         assert ratio == 0.0
         assert details["unique_artists"] == 0
         assert details["total_tracks"] == 0
@@ -213,7 +219,7 @@ class TestCalculateTrackDiversity:
 
 class TestDetectCompilation:
     """Tests for detect_compilation() full heuristic function.
-    
+
     Hey future me - this is the MAIN entry point! Test order matters:
     1. explicit_flag (highest priority)
     2. album_artist patterns
@@ -227,7 +233,7 @@ class TestDetectCompilation:
             track_artists=["Pink Floyd"] * 10,  # All same artist
             explicit_flag=True,  # BUT flag says compilation!
         )
-        
+
         assert result.is_compilation is True
         assert result.reason == "explicit_flag"
         assert result.confidence == 1.0
@@ -239,7 +245,7 @@ class TestDetectCompilation:
             track_artists=None,
             explicit_flag=None,
         )
-        
+
         assert result.is_compilation is True
         assert result.reason == "album_artist_pattern"
         assert result.confidence == 0.95
@@ -247,7 +253,7 @@ class TestDetectCompilation:
     def test_album_artist_va_pattern_german(self) -> None:
         """Test German VA pattern."""
         result = detect_compilation(album_artist="Verschiedene Künstler")
-        
+
         assert result.is_compilation is True
         assert result.reason == "album_artist_pattern"
 
@@ -260,7 +266,7 @@ class TestDetectCompilation:
             track_artists=track_artists,
             explicit_flag=None,
         )
-        
+
         assert result.is_compilation is True
         assert result.reason == "track_diversity"
         assert "diversity_ratio" in result.details
@@ -275,7 +281,7 @@ class TestDetectCompilation:
             track_artists=track_artists,
             explicit_flag=None,
         )
-        
+
         assert result.is_compilation is True
         # Could be "track_diversity" (100%) or "no_dominant_artist"
         assert result.reason in ("track_diversity", "no_dominant_artist")
@@ -288,7 +294,7 @@ class TestDetectCompilation:
             track_artists=track_artists,
             explicit_flag=None,
         )
-        
+
         assert result.is_compilation is False
         assert result.reason == "no_indicators"
 
@@ -301,7 +307,7 @@ class TestDetectCompilation:
             track_artists=track_artists,
             explicit_flag=None,
         )
-        
+
         # Should NOT detect as compilation (not enough data)
         assert result.is_compilation is False
         assert result.reason == "no_indicators"
@@ -315,7 +321,7 @@ class TestDetectCompilation:
             track_artists=track_artists,
             explicit_flag=None,
         )
-        
+
         # 60% is borderline - should NOT be detected as compilation
         # because dominant artist (A) has 60% > 25% threshold
         assert result.is_compilation is False
@@ -330,15 +336,12 @@ class TestCompilationDetectionResult:
         """Test that result can be used as boolean."""
         positive = CompilationDetectionResult(True, "test", 1.0)
         negative = CompilationDetectionResult(False, "test", 0.5)
-        
+
         assert bool(positive) is True
         assert bool(negative) is False
-        
+
         # Can use in if statements
-        if positive:
-            passed = True
-        else:
-            passed = False
+        passed = bool(positive)
         assert passed is True
 
     def test_to_dict(self) -> None:
@@ -349,7 +352,7 @@ class TestCompilationDetectionResult:
             confidence=0.85,
             details={"diversity_ratio": 0.9},
         )
-        
+
         d = result.to_dict()
         assert d["is_compilation"] is True
         assert d["reason"] == "track_diversity"
@@ -360,7 +363,7 @@ class TestCompilationDetectionResult:
         """Test string representation."""
         result = CompilationDetectionResult(True, "explicit_flag", 1.0)
         repr_str = repr(result)
-        
+
         assert "True" in repr_str
         assert "explicit_flag" in repr_str
         assert "100%" in repr_str

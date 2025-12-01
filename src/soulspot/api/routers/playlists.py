@@ -919,7 +919,10 @@ async def delete_and_blacklist_playlist(
     """
     from sqlalchemy import select
 
-    from soulspot.infrastructure.persistence.models import AppSettingModel, PlaylistModel
+    from soulspot.infrastructure.persistence.models import (
+        AppSettingModel,
+        PlaylistModel,
+    )
 
     try:
         # Get playlist info first

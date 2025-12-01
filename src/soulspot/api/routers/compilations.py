@@ -32,45 +32,48 @@ router = APIRouter(prefix="/library/compilations", tags=["library", "compilation
 # Request/Response Models
 # =============================================================================
 
+
 class AnalyzeAlbumRequest(BaseModel):
     """Request to analyze a single album."""
+
     album_id: str = Field(..., description="UUID of the album to analyze")
 
 
 class AnalyzeAllRequest(BaseModel):
     """Request to analyze all albums."""
+
     only_undetected: bool = Field(
         default=True,
-        description="Only analyze albums not already marked as compilations"
+        description="Only analyze albums not already marked as compilations",
     )
     min_tracks: int = Field(
-        default=3,
-        ge=2,
-        description="Minimum track count for diversity analysis"
+        default=3, ge=2, description="Minimum track count for diversity analysis"
     )
 
 
 class SetCompilationRequest(BaseModel):
     """Request to manually set compilation status."""
+
     album_id: str = Field(..., description="UUID of the album")
     is_compilation: bool = Field(..., description="True = mark as compilation")
     reason: str = Field(
         default="manual_override",
-        description="Reason for the override (for audit trail)"
+        description="Reason for the override (for audit trail)",
     )
 
 
 class VerifyMusicBrainzRequest(BaseModel):
     """Request to verify via MusicBrainz."""
+
     album_id: str = Field(..., description="UUID of the album to verify")
     update_if_confirmed: bool = Field(
-        default=True,
-        description="Update DB if MusicBrainz gives confident answer"
+        default=True, description="Update DB if MusicBrainz gives confident answer"
     )
 
 
 class AnalysisResultResponse(BaseModel):
     """Response for single album analysis."""
+
     album_id: str
     album_title: str
     previous_is_compilation: bool
@@ -86,6 +89,7 @@ class AnalysisResultResponse(BaseModel):
 
 class BulkAnalysisResponse(BaseModel):
     """Response for bulk analysis."""
+
     analyzed_count: int
     changed_count: int
     results: list[dict[str, Any]]
@@ -93,6 +97,7 @@ class BulkAnalysisResponse(BaseModel):
 
 class CompilationStatsResponse(BaseModel):
     """Response for compilation statistics."""
+
     total_albums: int
     compilation_albums: int
     various_artists_albums: int
@@ -103,26 +108,27 @@ class CompilationStatsResponse(BaseModel):
 # Endpoints
 # =============================================================================
 
+
 @router.post("/analyze", response_model=AnalysisResultResponse)
 async def analyze_album(
     request: AnalyzeAlbumRequest,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Analyze a single album for compilation status.
-    
+
     Uses Lidarr-style heuristics:
     1. Explicit compilation flags (TCMP/cpil)
     2. Album artist pattern matching (Various Artists, VA, etc.)
     3. Track artist diversity (≥75% unique or <25% dominant)
-    
+
     Returns detection result with reason and confidence.
     """
     analyzer = CompilationAnalyzerService(session)
     result = await analyzer.analyze_album(request.album_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="Album not found")
-    
+
     return result.to_dict()
 
 
@@ -132,10 +138,10 @@ async def analyze_all_albums(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Analyze all albums for compilation status.
-    
+
     Use after library scan or as periodic cleanup task.
     By default only analyzes albums not already marked as compilations.
-    
+
     WARNING: Can be slow for large libraries. Consider running as background job.
     """
     analyzer = CompilationAnalyzerService(session)
@@ -143,7 +149,7 @@ async def analyze_all_albums(
         only_undetected=request.only_undetected,
         min_tracks=request.min_tracks,
     )
-    
+
     return {
         "analyzed_count": len(results),
         "changed_count": sum(1 for r in results if r.changed),
@@ -156,7 +162,7 @@ async def get_compilation_stats(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get statistics about compilations in the library.
-    
+
     Returns counts and percentages of compilation albums.
     """
     analyzer = CompilationAnalyzerService(session)
@@ -169,7 +175,7 @@ async def set_compilation_status(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Manually set compilation status for an album.
-    
+
     Use when automatic detection is wrong and user wants to override.
     The reason is stored for audit trail.
     """
@@ -179,10 +185,10 @@ async def set_compilation_status(
         is_compilation=request.is_compilation,
         reason=request.reason,
     )
-    
+
     if not success:
         raise HTTPException(status_code=404, detail="Album not found")
-    
+
     return {
         "success": True,
         "album_id": request.album_id,
@@ -198,10 +204,10 @@ async def verify_with_musicbrainz(
     mb_client: MusicBrainzClient = Depends(get_musicbrainz_client),
 ) -> dict[str, Any]:
     """Verify compilation status via MusicBrainz API.
-    
+
     Use for borderline cases where local heuristics are uncertain.
     MusicBrainz has authoritative data on album types.
-    
+
     NOTE: MusicBrainz has strict rate limits (1 req/sec). Don't call this
     in rapid succession for many albums - use verify-borderline instead.
     """
@@ -210,7 +216,7 @@ async def verify_with_musicbrainz(
         album_id=request.album_id,
         update_if_confirmed=request.update_if_confirmed,
     )
-    
+
     return result
 
 
@@ -221,16 +227,16 @@ async def verify_borderline_albums(
     mb_client: MusicBrainzClient = Depends(get_musicbrainz_client),
 ) -> dict[str, Any]:
     """Verify borderline albums via MusicBrainz in bulk.
-    
+
     Finds albums where local heuristics are uncertain (50-75% diversity)
     and queries MusicBrainz for authoritative answer.
-    
+
     WARNING: This is SLOW due to MusicBrainz rate limits (1 req/sec).
     With limit=20, expect ~20 seconds minimum. Run as background task!
     """
     analyzer = CompilationAnalyzerService(session, musicbrainz_client=mb_client)
     results = await analyzer.verify_borderline_albums(limit=limit)
-    
+
     return {
         "verified_count": sum(1 for r in results if r.get("verified")),
         "updated_count": sum(1 for r in results if r.get("updated")),
@@ -242,22 +248,23 @@ async def verify_borderline_albums(
 # Album Detail Enhancement (for UI)
 # =============================================================================
 
+
 @router.get("/{album_id}/detection-info")
 async def get_detection_info(
     album_id: str,
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get detailed compilation detection info for an album.
-    
+
     Returns current status, detection reason, and track diversity metrics.
     Useful for UI to show WHY an album was/wasn't detected as compilation.
     """
     analyzer = CompilationAnalyzerService(session)
     result = await analyzer.analyze_album(album_id)
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="Album not found")
-    
+
     # Return full details including explanation
     return {
         "album_id": result.album_id,
@@ -268,8 +275,7 @@ async def get_detection_info(
         "track_count": result.track_count,
         "unique_artists": result.unique_artists,
         "diversity_ratio": (
-            result.unique_artists / result.track_count 
-            if result.track_count > 0 else 0
+            result.unique_artists / result.track_count if result.track_count > 0 else 0
         ),
         "explanation": _format_detection_explanation(result),
     }
@@ -277,19 +283,20 @@ async def get_detection_info(
 
 def _format_detection_explanation(result: AlbumAnalysisResult) -> str:
     """Format human-readable explanation of detection result.
-    
+
     Hey future me - this is what the UI shows to explain WHY an album
     was detected as compilation (or not).
     """
     reason = result.detection_reason
     confidence = result.confidence
-    
+
     # Guard against ZeroDivisionError when track_count is 0
     diversity_percent = (
         round(result.unique_artists / result.track_count * 100)
-        if result.track_count > 0 else 0
+        if result.track_count > 0
+        else 0
     )
-    
+
     explanations = {
         "explicit_flag": (
             "Detected via explicit compilation flag (TCMP/cpil tag) in audio files. "
@@ -326,9 +333,7 @@ def _format_detection_explanation(result: AlbumAnalysisResult) -> str:
         "mb_not_compilation": (
             "Verified via MusicBrainz: Album is NOT marked as compilation."
         ),
-        "manual_override": (
-            "Compilation status was manually set by user."
-        ),
+        "manual_override": ("Compilation status was manually set by user."),
     }
-    
+
     return explanations.get(reason, f"Detection reason: {reason}")

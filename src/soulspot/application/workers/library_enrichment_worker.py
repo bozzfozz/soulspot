@@ -75,9 +75,7 @@ class LibraryEnrichmentWorker:
         payload = job.payload
         triggered_by = payload.get("triggered_by", "manual")
 
-        logger.info(
-            f"Starting enrichment job {job.id} (triggered_by={triggered_by})"
-        )
+        logger.info(f"Starting enrichment job {job.id} (triggered_by={triggered_by})")
 
         async with self.db.session_scope() as session:
             try:

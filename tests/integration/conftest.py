@@ -66,7 +66,7 @@ async def db(
 @pytest.fixture(scope="function")
 async def db_session(db: Database) -> AsyncGenerator[AsyncSession, None]:
     """Provide a database session for tests.
-    
+
     Hey future me - we use session_scope context manager instead of get_session generator!
     The context manager properly handles connection cleanup. Do NOT call session.close()
     explicitly - the context manager's exit handler already does that, and calling it again

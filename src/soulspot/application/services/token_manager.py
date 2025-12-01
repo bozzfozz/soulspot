@@ -570,9 +570,7 @@ class DatabaseTokenManager:
                 )
                 await db_session.commit()
 
-                logger.info(
-                    "Token refreshed successfully (expires in %ds)", expires_in
-                )
+                logger.info("Token refreshed successfully (expires in %ds)", expires_in)
                 return True
 
             except TokenRefreshException as e:

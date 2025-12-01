@@ -64,7 +64,9 @@ class MockSpotifySyncService:
             "removed": 0,
         }
 
-    async def get_artists(self, limit: int = 100, offset: int = 0) -> list[MockSpotifyArtist]:
+    async def get_artists(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[MockSpotifyArtist]:
         """Track that get_artists was called and return mock data."""
         self.get_artists_called = True
         self.sync_call_order.append("get_artists")
@@ -261,7 +263,9 @@ async def test_sync_adds_new_artists_visible_immediately() -> None:
     # Override sync to simulate adding an artist during sync
     original_sync = sync_service.sync_followed_artists
 
-    async def sync_that_adds_artist(access_token: str, force: bool = False) -> dict[str, Any]:
+    async def sync_that_adds_artist(
+        access_token: str, force: bool = False
+    ) -> dict[str, Any]:
         # Simulate the sync adding a new artist to the DB
         sync_service.add_artist(
             MockSpotifyArtist(

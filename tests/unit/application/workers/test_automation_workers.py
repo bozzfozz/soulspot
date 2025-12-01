@@ -112,7 +112,14 @@ class TestWatchlistWorker:
     async def test_check_watchlists_with_watchlists_no_spotify(
         self, worker, mock_session
     ):
-        """Test checking watchlists without Spotify client."""
+        """Test checking watchlists where artist has no Spotify URI.
+
+        Hey future me - the code path is:
+        1. Get watchlists due for check
+        2. Get local artist via ArtistRepository
+        3. If artist has no spotify_uri, log warning and continue (skip watchlist)
+        So when artist has no spotify_uri, watchlist is NOT updated (skipped).
+        """
         # Mock token manager to return a valid token
         mock_token_manager = MagicMock()
         mock_token_manager.get_token_for_background = AsyncMock(
@@ -128,52 +135,55 @@ class TestWatchlistWorker:
         mock_watchlist.id.value = "watchlist-123"
         mock_watchlist.update_check = MagicMock()
 
-        # Set no spotify client
-        worker.spotify_client = None
+        # Create mock artist WITHOUT spotify_uri (the "no spotify" case)
+        mock_artist = MagicMock()
+        mock_artist.id = "artist-123"
+        mock_artist.name = "Test Artist"
+        mock_artist.spotify_uri = None  # No Spotify URI
 
-        with patch.object(
-            worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
-        ) as mock_list:
+        # Mock the ArtistRepository class - patch at the source module
+        mock_artist_repo = MagicMock()
+        mock_artist_repo.get_by_id = AsyncMock(return_value=mock_artist)
+
+        with (
+            patch.object(
+                worker.watchlist_service, "list_due_for_check", new_callable=AsyncMock
+            ) as mock_list,
+            patch(
+                "soulspot.infrastructure.persistence.repositories.ArtistRepository",
+                return_value=mock_artist_repo,
+            ),
+            patch(
+                "soulspot.infrastructure.persistence.repositories.SpotifyBrowseRepository"
+            ),
+        ):
             mock_list.return_value = [mock_watchlist]
 
-            with patch.object(
-                worker.watchlist_service.repository, "update", new_callable=AsyncMock
-            ) as mock_update:
-                await worker._check_watchlists()
+            await worker._check_watchlists()
 
-                # Should update watchlist with 0 releases
-                mock_watchlist.update_check.assert_called_once_with(
-                    releases_found=0, downloads_triggered=0
-                )
-                mock_update.assert_called_once_with(mock_watchlist)
-                mock_session.commit.assert_called_once()
+            # Artist has no spotify_uri, so watchlist is SKIPPED (not updated)
+            # The code does 'continue' when spotify_uri is None
+            mock_watchlist.update_check.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_check_watchlists_with_auto_download(
         self, worker, mock_session, mock_spotify_client
     ):
-        """Test checking watchlists with auto_download enabled."""
+        """Test checking watchlists with auto_download enabled.
+
+        Hey future me - the code path is:
+        1. Get watchlists due for check
+        2. Get local artist via ArtistRepository (must have spotify_uri!)
+        3. Check sync status via SpotifyBrowseRepository
+        4. Get new albums from SpotifyBrowseRepository
+        5. Trigger workflow for each new release if auto_download enabled
+        """
         # Mock token manager to return a valid token
         mock_token_manager = MagicMock()
         mock_token_manager.get_token_for_background = AsyncMock(
             return_value="valid-token"
         )
         worker._token_manager = mock_token_manager
-
-        # Mock Spotify client to return albums with new releases
-        mock_spotify_client.get_artist_albums = AsyncMock(
-            return_value=[
-                {
-                    "id": "album-123",
-                    "name": "New Album",
-                    "album_type": "album",
-                    "release_date": "2025-11-01",  # Recent release
-                    "total_tracks": 10,
-                    "images": [],
-                }
-            ]
-        )
-        worker.spotify_client = mock_spotify_client
 
         # Create mock watchlist with auto_download enabled
         mock_watchlist = MagicMock()
@@ -184,7 +194,33 @@ class TestWatchlistWorker:
         mock_watchlist.auto_download = True
         mock_watchlist.quality_profile = "high"
         mock_watchlist.update_check = MagicMock()
-        mock_watchlist.last_checked_at = None  # No previous check, all releases are new
+        mock_watchlist.last_checked_at = None  # No previous check
+
+        # Create mock artist WITH spotify_uri (required for the happy path)
+        mock_artist = MagicMock()
+        mock_artist.id = "artist-123"
+        mock_artist.name = "Test Artist"
+        mock_artist.spotify_uri = "spotify:artist:abc123"
+
+        # Mock the ArtistRepository class - patch at the source module
+        mock_artist_repo = MagicMock()
+        mock_artist_repo.get_by_id = AsyncMock(return_value=mock_artist)
+
+        # Create mock album returned by SpotifyBrowseRepository
+        mock_album = MagicMock()
+        mock_album.spotify_id = "album-123"
+        mock_album.name = "New Album"
+        mock_album.album_type = "album"
+        mock_album.release_date = "2025-11-01"
+        mock_album.total_tracks = 10
+        mock_album.image_url = "https://example.com/image.jpg"
+
+        # Mock the SpotifyBrowseRepository class - patch at the source module
+        mock_spotify_repo = MagicMock()
+        mock_spotify_repo.get_artist_albums_sync_status = AsyncMock(
+            return_value={"albums_synced": True, "album_count": 5}
+        )
+        mock_spotify_repo.get_new_albums_since = AsyncMock(return_value=[mock_album])
 
         with (
             patch.object(
@@ -195,6 +231,14 @@ class TestWatchlistWorker:
             ) as mock_trigger,
             patch.object(
                 worker.watchlist_service.repository, "update", new_callable=AsyncMock
+            ),
+            patch(
+                "soulspot.infrastructure.persistence.repositories.ArtistRepository",
+                return_value=mock_artist_repo,
+            ),
+            patch(
+                "soulspot.infrastructure.persistence.repositories.SpotifyBrowseRepository",
+                return_value=mock_spotify_repo,
             ),
         ):
             mock_list.return_value = [mock_watchlist]
