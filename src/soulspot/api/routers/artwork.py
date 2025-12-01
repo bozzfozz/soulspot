@@ -9,7 +9,6 @@ Security: Uses Path.resolve() + is_relative_to() to prevent path traversal attac
 """
 
 import logging
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException

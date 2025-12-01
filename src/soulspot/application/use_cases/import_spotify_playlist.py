@@ -125,12 +125,12 @@ class ImportSpotifyPlaylistUseCase(
 
         # 2. Create or update playlist entity
         playlist_id = PlaylistId.generate()
-        
+
         # Extract cover URL from Spotify if available
         cover_url = None
         if spotify_playlist.get("images") and len(spotify_playlist["images"]) > 0:
             cover_url = spotify_playlist["images"][0].get("url")
-        
+
         playlist = Playlist(
             id=playlist_id,
             name=spotify_playlist["name"],

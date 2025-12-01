@@ -40,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.spotify_image_service import SpotifyImageService
 from soulspot.domain.entities import Album, Artist
-from soulspot.domain.value_objects import SpotifyUri
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
@@ -106,8 +105,8 @@ class LocalLibraryEnrichmentService:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: "ISpotifyClient",
-        settings: "Settings",
+        spotify_client: ISpotifyClient,
+        settings: Settings,
         access_token: str,
     ) -> None:
         """Initialize enrichment service.
@@ -197,7 +196,11 @@ class LocalLibraryEnrichmentService:
                 stats["artists_failed"] += 1
                 if result.error:
                     stats["errors"].append(
-                        {"type": "artist", "name": result.entity_name, "error": result.error}
+                        {
+                            "type": "artist",
+                            "name": result.entity_name,
+                            "error": result.error,
+                        }
                     )
 
             # Rate limiting
@@ -226,7 +229,11 @@ class LocalLibraryEnrichmentService:
                 stats["albums_failed"] += 1
                 if result.error:
                     stats["errors"].append(
-                        {"type": "album", "name": result.entity_name, "error": result.error}
+                        {
+                            "type": "album",
+                            "name": result.entity_name,
+                            "error": result.error,
+                        }
                     )
 
             # Rate limiting
@@ -408,6 +415,7 @@ class LocalLibraryEnrichmentService:
         # Update genres if we have them and artist doesn't
         if candidate.extra_info.get("genres") and not model.genres:
             import json
+
             model.genres = json.dumps(candidate.extra_info["genres"])
 
         model.updated_at = datetime.now(UTC)
@@ -609,7 +617,9 @@ class LocalLibraryEnrichmentService:
 
             # Calculate scores
             title_score = fuzz.ratio(local_title.lower(), sp_title.lower()) / 100.0
-            artist_score = fuzz.ratio(local_artist.lower(), sp_artist_name.lower()) / 100.0
+            artist_score = (
+                fuzz.ratio(local_artist.lower(), sp_artist_name.lower()) / 100.0
+            )
 
             # Combined score
             confidence = (title_score * 0.5) + (artist_score * 0.5)

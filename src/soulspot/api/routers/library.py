@@ -777,12 +777,20 @@ async def list_duplicate_candidates(
     candidates = []
     for model in models:
         # Get track 1 with artist relationship loaded
-        track_1_query = select(TrackModel).where(TrackModel.id == model.track_id_1).options(joinedload(TrackModel.artist))
+        track_1_query = (
+            select(TrackModel)
+            .where(TrackModel.id == model.track_id_1)
+            .options(joinedload(TrackModel.artist))
+        )
         track_1_result = await db.execute(track_1_query)
         track_1 = track_1_result.unique().scalar_one_or_none()
 
         # Get track 2 with artist relationship loaded
-        track_2_query = select(TrackModel).where(TrackModel.id == model.track_id_2).options(joinedload(TrackModel.artist))
+        track_2_query = (
+            select(TrackModel)
+            .where(TrackModel.id == model.track_id_2)
+            .options(joinedload(TrackModel.artist))
+        )
         track_2_result = await db.execute(track_2_query)
         track_2 = track_2_result.unique().scalar_one_or_none()
 
@@ -1520,7 +1528,9 @@ async def get_enrichment_candidates(
         EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
     )
     if entity_type:
-        count_stmt = count_stmt.where(EnrichmentCandidateModel.entity_type == entity_type)
+        count_stmt = count_stmt.where(
+            EnrichmentCandidateModel.entity_type == entity_type
+        )
 
     count_result = await db.execute(count_stmt)
     total = count_result.scalar() or 0

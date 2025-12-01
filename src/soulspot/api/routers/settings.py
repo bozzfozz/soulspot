@@ -214,7 +214,7 @@ async def update_settings(
     try:
         await settings_service.set_log_level(settings_update.general.log_level)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     await settings_service.set(
         "general.debug",
@@ -718,10 +718,10 @@ async def get_spotify_db_stats(
     spotify_artists_count = await spotify_repo.count_artists()
     spotify_albums_count = await spotify_repo.count_albums()
     spotify_tracks_count = await spotify_repo.count_tracks()
-    
+
     # Count Liked Songs tracks (they're in soulspot_tracks but also need to be counted)
     # Hey future me - Liked Songs sync creates tracks in soulspot_tracks with spotify_uri.
-    # The local_tracks_count above should already include them, but we also count 
+    # The local_tracks_count above should already include them, but we also count
     # from the Liked Songs playlist to ensure accuracy.
     liked_songs_count = await spotify_repo.count_liked_songs_tracks()
 
@@ -731,7 +731,7 @@ async def get_spotify_db_stats(
     # liked_songs_count ensures we count Liked Songs even if not yet in soulspot_tracks
     artists_count = max(local_artists_count, spotify_artists_count)
     albums_count = max(local_albums_count, spotify_albums_count)
-    
+
     # For tracks: combine spotify_tracks (album tracks) + liked_songs OR local_tracks
     # Hey future me - we take max because after sync, liked songs go INTO soulspot_tracks
     # So local_tracks_count should equal liked_songs_count once sync completes

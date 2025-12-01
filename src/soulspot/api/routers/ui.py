@@ -62,7 +62,9 @@ async def index(
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     track_repository: TrackRepository = Depends(get_track_repository),
     download_repository: DownloadRepository = Depends(get_download_repository),
-    spotify_repository: "SpotifyBrowseRepository" = Depends(get_spotify_browse_repository),
+    spotify_repository: "SpotifyBrowseRepository" = Depends(
+        get_spotify_browse_repository
+    ),
 ) -> Any:
     """Dashboard page with real statistics."""
     # Get real statistics from repositories
@@ -267,7 +269,6 @@ async def playlist_detail(
 
     from soulspot.domain.value_objects import PlaylistId
     from soulspot.infrastructure.persistence.models import (
-        PlaylistModel,
         PlaylistTrackModel,
         TrackModel,
     )
@@ -511,13 +512,13 @@ async def onboarding(request: Request) -> Any:
     return templates.TemplateResponse(request, "onboarding.html")
 
 
-# Yo, this is the library overview page with aggregated stats! 
+# Yo, this is the library overview page with aggregated stats!
 # IMPORTANT: Shows ONLY local files (tracks with file_path)!
 # Uses efficient SQL COUNT queries instead of loading all data into memory.
 @router.get("/library", response_class=HTMLResponse)
 async def library(
     request: Request,
-    track_repository: TrackRepository = Depends(get_track_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),  # noqa: ARG001
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Library browser page - shows stats for local files only."""
@@ -775,7 +776,8 @@ async def library_albums(
     albums = [
         {
             "title": album.title,
-            "artist": album.album_artist or (album.artist.name if album.artist else "Unknown Artist"),
+            "artist": album.album_artist
+            or (album.artist.name if album.artist else "Unknown Artist"),
             "track_count": track_count or 0,
             "year": album.release_year,
             "artwork_url": album.artwork_url,  # Spotify CDN URL or None
@@ -1057,11 +1059,9 @@ async def library_album_detail(
 
     # Get album ID and is_compilation for compilation features
     album_id = (
-        track_models[0].album.id
-        if track_models and track_models[0].album
-        else None
+        track_models[0].album.id if track_models and track_models[0].album else None
     )
-    
+
     # Check if album is a compilation (secondary_types contains "compilation")
     is_compilation = False
     if track_models and track_models[0].album:

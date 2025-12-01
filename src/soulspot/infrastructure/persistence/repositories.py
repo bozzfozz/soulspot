@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
@@ -577,9 +578,7 @@ class AlbumRepository(IAlbumRepository):
             # Hey - secondary_types is JSON array, we check if 'compilation' is NOT in it
             # SQLite JSON functions: json_each() to unnest, or check string contains
             # Simpler approach: exclude where secondary_types contains "compilation"
-            stmt = stmt.where(
-                ~AlbumModel.secondary_types.contains('"compilation"')
-            )
+            stmt = stmt.where(~AlbumModel.secondary_types.contains('"compilation"'))
 
         result = await self.session.execute(stmt)
         models = result.scalars().all()
@@ -595,7 +594,9 @@ class AlbumRepository(IAlbumRepository):
                 artwork_path=FilePath.from_string(model.artwork_path)
                 if model.artwork_path
                 else None,
-                artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
+                artwork_url=model.artwork_url
+                if hasattr(model, "artwork_url")
+                else None,
                 created_at=model.created_at,
                 updated_at=model.updated_at,
             )
@@ -621,9 +622,7 @@ class AlbumRepository(IAlbumRepository):
         )
 
         if not include_compilations:
-            stmt = stmt.where(
-                ~AlbumModel.secondary_types.contains('"compilation"')
-            )
+            stmt = stmt.where(~AlbumModel.secondary_types.contains('"compilation"'))
 
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -1100,9 +1099,8 @@ class TrackRepository(ITrackRepository):
 
         # If artist name provided, join with artist table and filter
         if artist_name:
-            stmt = (
-                stmt.join(ArtistModel, TrackModel.artist_id == ArtistModel.id)
-                .where(func.lower(ArtistModel.name) == func.lower(artist_name))
+            stmt = stmt.join(ArtistModel, TrackModel.artist_id == ArtistModel.id).where(
+                func.lower(ArtistModel.name) == func.lower(artist_name)
             )
 
         stmt = stmt.limit(limit)
@@ -3497,15 +3495,13 @@ class SpotifyBrowseRepository:
         spotify_id = album_data.get("id", "")
         album_name = album_data.get("name", "Unknown Album")
         spotify_uri = f"spotify:album:{spotify_id}" if spotify_id else None
-        
+
         # Convert release_date string (e.g. "2020-01-15" or "2020") to release_year int
         release_date_str = album_data.get("release_date", "")
         release_year: int | None = None
         if release_date_str:
-            try:
+            with contextlib.suppress(ValueError, IndexError):
                 release_year = int(release_date_str[:4])  # Extract year from YYYY-MM-DD
-            except (ValueError, IndexError):
-                pass
 
         # Extract artwork URL from images array
         images = album_data.get("images", [])

@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession

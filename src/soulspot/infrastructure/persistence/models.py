@@ -6,11 +6,11 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import (
+    JSON,
     Float,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     func,
@@ -112,7 +112,9 @@ class AlbumModel(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     artist_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("soulspot_artists.id", ondelete="CASCADE"), nullable=False
+        String(36),
+        ForeignKey("soulspot_artists.id", ondelete="CASCADE"),
+        nullable=False,
     )
     release_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     spotify_uri: Mapped[str | None] = mapped_column(
@@ -129,7 +131,7 @@ class AlbumModel(Base):
     # from Spotify. UI can show artwork_url immediately while downloading, then switch to
     # artwork_path once local file exists. Nullable because not all albums have covers!
     artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    
+
     # Hey future me - Lidarr-style dual album type system! This allows proper handling of
     # compilations, soundtracks, live albums etc. An album can be "album" (primary) AND
     # "compilation" + "live" (secondary). Examples:
@@ -147,7 +149,7 @@ class AlbumModel(Base):
     secondary_types: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    
+
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -158,7 +160,7 @@ class AlbumModel(Base):
     tracks: Mapped[list["TrackModel"]] = relationship(
         "TrackModel", back_populates="album", cascade="all, delete-orphan"
     )
-    
+
     # Hey future me - helper property to check if this is a compilation
     @property
     def is_compilation(self) -> bool:
@@ -189,7 +191,9 @@ class TrackModel(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     artist_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("soulspot_artists.id", ondelete="CASCADE"), nullable=False
+        String(36),
+        ForeignKey("soulspot_artists.id", ondelete="CASCADE"),
+        nullable=False,
     )
     album_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("soulspot_albums.id", ondelete="SET NULL"), nullable=True
@@ -301,7 +305,9 @@ class PlaylistTrackModel(Base):
         String(36), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True
     )
     track_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("soulspot_tracks.id", ondelete="CASCADE"), primary_key=True
+        String(36),
+        ForeignKey("soulspot_tracks.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
@@ -1160,7 +1166,10 @@ class EnrichmentCandidateModel(Base):
         sa.DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     __table_args__ = (

@@ -349,7 +349,10 @@ class SpotifySyncService:
                 from datetime import timedelta
 
                 cooldown = timedelta(minutes=self.ALBUMS_SYNC_COOLDOWN)
-                if datetime.now(UTC) < ensure_utc_aware(artist.albums_synced_at) + cooldown:
+                if (
+                    datetime.now(UTC)
+                    < ensure_utc_aware(artist.albums_synced_at) + cooldown
+                ):
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_albums_by_artist(artist_id)
                     return stats
@@ -458,7 +461,10 @@ class SpotifySyncService:
                 from datetime import timedelta
 
                 cooldown = timedelta(minutes=self.TRACKS_SYNC_COOLDOWN)
-                if datetime.now(UTC) < ensure_utc_aware(album.tracks_synced_at) + cooldown:
+                if (
+                    datetime.now(UTC)
+                    < ensure_utc_aware(album.tracks_synced_at) + cooldown
+                ):
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_tracks_by_album(album_id)
                     return stats

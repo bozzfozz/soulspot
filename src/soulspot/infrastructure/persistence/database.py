@@ -121,7 +121,7 @@ class Database:
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get database session."""
         from sqlalchemy.exc import IllegalStateChangeError
-        
+
         try:
             async with self._session_factory() as session:
                 try:

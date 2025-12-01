@@ -349,7 +349,9 @@ class TestTokenManager:
 
         # Assert
         assert token is None
-        spotify_client_mock.refresh_token.assert_called_once_with("invalid-refresh-token")
+        spotify_client_mock.refresh_token.assert_called_once_with(
+            "invalid-refresh-token"
+        )
 
         # Token should be marked as invalid
         stored_token = token_manager._tokens.get("user-123")

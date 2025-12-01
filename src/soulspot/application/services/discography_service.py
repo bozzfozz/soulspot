@@ -84,7 +84,9 @@ class DiscographyService:
     # - soulspot_albums (local library / downloaded albums)
     # No API call needed for most checks!
     async def check_discography(
-        self, artist_id: ArtistId, access_token: str
+        self,
+        artist_id: ArtistId,
+        access_token: str,  # noqa: ARG002
     ) -> DiscographyInfo:
         """Check discography completeness for an artist.
 
@@ -144,7 +146,9 @@ class DiscographyService:
 
         # Check if albums are synced for this artist
         spotify_repo = SpotifyBrowseRepository(self.session)
-        sync_status = await spotify_repo.get_artist_albums_sync_status(spotify_artist_id)
+        sync_status = await spotify_repo.get_artist_albums_sync_status(
+            spotify_artist_id
+        )
 
         if not sync_status["albums_synced"]:
             # Albums not synced yet - can't determine missing albums
