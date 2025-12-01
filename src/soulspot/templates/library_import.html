@@ -172,6 +172,52 @@
     {% endif %}
 </div>
 
+<!-- Post-Scan Actions -->
+<div class="card" style="margin-top: 1.5rem;">
+    <div class="card-header">
+        <h3><i class="bi bi-magic"></i> Post-Scan Actions</h3>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">
+            Run these after scanning to organize your library better.
+        </p>
+        <div class="post-scan-actions">
+            <button class="btn btn-scan btn-scan-secondary"
+                    id="analyze-compilations-btn"
+                    hx-post="/api/library/compilations/analyze-all"
+                    hx-vals='{"only_undetected": false, "min_tracks": 2}'
+                    hx-target="#compilation-status"
+                    hx-indicator="#compilation-spinner">
+                <div class="btn-scan-icon">
+                    <i class="bi bi-collection"></i>
+                </div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">Detect Compilations</span>
+                    <span class="btn-scan-desc">Find Various Artists & mixed albums</span>
+                </div>
+                <div class="btn-scan-arrow">
+                    <span id="compilation-spinner" class="htmx-indicator spinner-small"></span>
+                    <i class="bi bi-chevron-right"></i>
+                </div>
+            </button>
+            
+            <a href="/library/compilations" class="btn btn-scan btn-scan-tertiary">
+                <div class="btn-scan-icon">
+                    <i class="bi bi-eye"></i>
+                </div>
+                <div class="btn-scan-content">
+                    <span class="btn-scan-title">View Compilations</span>
+                    <span class="btn-scan-desc">Browse detected compilation albums</span>
+                </div>
+                <div class="btn-scan-arrow">
+                    <i class="bi bi-chevron-right"></i>
+                </div>
+            </a>
+        </div>
+        <div id="compilation-status" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+
 <!-- Recent Jobs -->
 <div class="card" style="margin-top: 1.5rem;">
     <div class="card-header">
@@ -424,6 +470,61 @@
 .btn-scan-secondary:hover {
     border-color: var(--accent-primary);
     background: var(--surface-hover);
+}
+
+.btn-scan-tertiary {
+    background: var(--surface-base);
+    border-color: var(--border-subtle);
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.btn-scan-tertiary:hover {
+    border-color: var(--border-primary);
+    background: var(--surface-hover);
+    color: var(--text-primary);
+}
+
+.btn-scan-tertiary .btn-scan-icon {
+    background: var(--surface-elevated);
+    color: var(--text-muted);
+}
+
+.post-scan-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.compilation-result {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.compilation-result.success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+}
+
+.compilation-result.info {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.spinner-small {
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
 }
 
 .btn-scan-icon {
@@ -865,5 +966,35 @@ function calculateDuration(start, end) {
     if (durationMs < 60000) return `${(durationMs / 1000).toFixed(1)}s`;
     return `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s`;
 }
+
+// Handle compilation analysis response
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'compilation-status') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            const statusDiv = document.getElementById('compilation-status');
+            
+            if (response.changed_count > 0) {
+                statusDiv.innerHTML = `
+                    <div class="compilation-result success">
+                        <i class="bi bi-check-circle-fill"></i>
+                        Analyzed ${response.analyzed_count} albums. 
+                        <strong>${response.changed_count}</strong> marked as compilations.
+                        <a href="/library/compilations" style="margin-left: 0.5rem; color: inherit; text-decoration: underline;">View →</a>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="compilation-result info">
+                        <i class="bi bi-info-circle-fill"></i>
+                        Analyzed ${response.analyzed_count} albums. No new compilations detected.
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('Error parsing compilation response', e);
+        }
+    }
+});
 </script>
 {% endblock %}

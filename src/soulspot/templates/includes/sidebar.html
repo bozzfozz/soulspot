@@ -61,6 +61,10 @@
             <div class="sidebar-section-title">
                 <i class="bi bi-folder2-open" style="color: var(--accent-primary); margin-right: 6px;"></i>Library
             </div>
+            <a href="/library" class="sidebar-item {% if request.url.path == '/library' %}active{% endif %}">
+                <i class="bi bi-grid sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Overview</span>
+            </a>
             <a href="/library/import" class="sidebar-item {% if '/library/import' in request.url.path %}active{% endif %}">
                 <i class="bi bi-upload sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Import</span>
@@ -72,6 +76,10 @@
             <a href="/library/albums" class="sidebar-item {% if '/library/albums' in request.url.path %}active{% endif %}">
                 <i class="bi bi-disc sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Albums</span>
+            </a>
+            <a href="/library/compilations" class="sidebar-item {% if '/library/compilations' in request.url.path %}active{% endif %}">
+                <i class="bi bi-collection sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Compilations</span>
             </a>
             <a href="/library/tracks" class="sidebar-item {% if '/library/tracks' in request.url.path %}active{% endif %}">
                 <i class="bi bi-music-note sidebar-item-icon"></i>
