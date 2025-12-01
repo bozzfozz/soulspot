@@ -233,6 +233,37 @@
     </div>
 </div>
 
+<!-- Danger Zone -->
+<div class="card danger-zone-card" style="margin-top: 2rem;">
+    <div class="card-header danger-zone-header">
+        <h3><i class="bi bi-exclamation-triangle-fill"></i> Danger Zone</h3>
+    </div>
+    <div class="card-body">
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">
+            These actions are destructive and cannot be undone. Use with caution!
+        </p>
+        
+        <div class="danger-action">
+            <div class="danger-action-info">
+                <h4><i class="bi bi-trash3"></i> Clear Local Library</h4>
+                <p>Delete all locally imported tracks, albums, and artists from the database. 
+                   Spotify-synced data and playlists will NOT be affected.
+                   You can re-import by running a Full Scan afterwards.</p>
+            </div>
+            <button class="btn btn-danger"
+                    id="clear-library-btn"
+                    hx-delete="/api/library/clear"
+                    hx-target="#clear-library-status"
+                    hx-swap="innerHTML"
+                    hx-confirm="Are you sure you want to delete ALL local library data? This will remove all imported tracks, albums, and artists. Spotify data will NOT be affected.">
+                <i class="bi bi-trash3-fill"></i>
+                Clear Library
+            </button>
+        </div>
+        <div id="clear-library-status" style="margin-top: 1rem;"></div>
+    </div>
+</div>
+
 <style>
 /* Header with animated icon */
 .page-header {
@@ -830,6 +861,93 @@
     margin-bottom: 1rem;
     opacity: 0.5;
 }
+
+/* Danger Zone Styles */
+.danger-zone-card {
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent);
+}
+
+.danger-zone-header {
+    background: rgba(239, 68, 68, 0.1);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.danger-zone-header h3 {
+    color: #ef4444;
+}
+
+.danger-zone-header h3 i {
+    color: #ef4444;
+}
+
+.danger-action {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    padding: 1rem;
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-radius: 12px;
+}
+
+.danger-action-info h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.danger-action-info h4 i {
+    color: #ef4444;
+}
+
+.danger-action-info p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-danger:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+    .danger-action {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .btn-danger {
+        justify-content: center;
+    }
+}
 </style>
 
 <script>
@@ -993,6 +1111,44 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
         } catch (e) {
             console.error('Error parsing compilation response', e);
         }
+    }
+    
+    // Handle clear library response
+    if (evt.detail.target.id === 'clear-library-status') {
+        try {
+            const response = JSON.parse(evt.detail.xhr.response);
+            const statusDiv = document.getElementById('clear-library-status');
+            
+            statusDiv.innerHTML = `
+                <div class="compilation-result success" style="background: #4ade80;">
+                    <i class="bi bi-check-circle-fill"></i>
+                    Library cleared successfully!
+                    Deleted: <strong>${response.deleted_tracks}</strong> tracks,
+                    <strong>${response.deleted_albums}</strong> albums,
+                    <strong>${response.deleted_artists}</strong> artists.
+                </div>
+            `;
+            
+            // Optionally refresh page after a delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } catch (e) {
+            console.error('Error parsing clear library response', e);
+        }
+    }
+});
+
+// Handle clear library errors
+document.body.addEventListener('htmx:responseError', function(evt) {
+    if (evt.detail.target.id === 'clear-library-status') {
+        const statusDiv = document.getElementById('clear-library-status');
+        statusDiv.innerHTML = `
+            <div class="compilation-result" style="background: #f87171;">
+                <i class="bi bi-x-circle-fill"></i>
+                Error clearing library. Please try again.
+            </div>
+        `;
     }
 });
 </script>

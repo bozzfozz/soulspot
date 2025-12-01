@@ -175,8 +175,10 @@ class LibraryScannerService:
                 logger.warning(f"Could not list subdirectories: {e}")
 
             # Discover all audio files
-            all_files = self._discover_audio_files(self.music_path)
-            all_file_paths = {str(f) for f in all_files}
+            # Hey future me - ALWAYS use resolved absolute paths for consistency!
+            # Otherwise ./music/track.mp3 vs /music/track.mp3 won't match in DB lookups.
+            all_files = self._discover_audio_files(self.music_path.resolve())
+            all_file_paths = {str(f.resolve()) for f in all_files}
             stats["total_files"] = len(all_files)
 
             logger.info(f"Found {len(all_files)} audio files in {self.music_path}")
@@ -207,7 +209,12 @@ class LibraryScannerService:
             # Pre-load artist/album caches for faster fuzzy matching
             await self._load_caches()
 
-            # Process each file
+            # Process each file with batch commits for stability
+            # Hey future me - commit every 100 files to:
+            # 1. Prevent memory issues with 5000+ tracks
+            # 2. Not lose everything if something fails at file 4999
+            BATCH_SIZE = 100
+            
             for i, file_path in enumerate(files_to_scan):
                 try:
                     result = await self._import_file(file_path)
@@ -226,6 +233,11 @@ class LibraryScannerService:
                         if result.get("new_track"):
                             stats["new_tracks"] += 1
 
+                    # Batch commit every BATCH_SIZE files
+                    if (i + 1) % BATCH_SIZE == 0:
+                        await self.session.commit()
+                        logger.debug(f"Committed batch {(i + 1) // BATCH_SIZE} ({i + 1} files)")
+
                     # Progress callback
                     if progress_callback:
                         progress = (i + 1) / len(files_to_scan) * 100
@@ -238,6 +250,7 @@ class LibraryScannerService:
                     )
                     logger.warning(f"Error importing {file_path}: {e}")
 
+            # Final commit for remaining files
             await self.session.commit()
             stats["completed_at"] = datetime.now(UTC).isoformat()
 
@@ -325,7 +338,9 @@ class LibraryScannerService:
 
         changed_files = []
         for file_path in files:
-            path_str = str(file_path)
+            # Hey future me - ALWAYS resolve to absolute path for DB comparison!
+            # DB stores absolute paths, so ./music/x.mp3 won't match /music/x.mp3
+            path_str = str(file_path.resolve())
 
             # New file (not in DB)
             if path_str not in known_files:
@@ -335,6 +350,9 @@ class LibraryScannerService:
             # Check if modified since last scan
             last_scanned = known_files[path_str]
             if last_scanned:
+                # Handle timezone-naive datetimes from SQLite
+                if last_scanned.tzinfo is None:
+                    last_scanned = last_scanned.replace(tzinfo=UTC)
                 file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC)
                 if file_mtime > last_scanned:
                     changed_files.append(file_path)
@@ -423,6 +441,8 @@ class LibraryScannerService:
             result["matched_album"] = is_matched_album
 
         # Create track
+        # Hey future me - ALWAYS store resolved absolute path!
+        # Otherwise incremental scan won't find the track in DB.
         track = Track(
             id=TrackId.generate(),
             title=track_title,
@@ -431,7 +451,7 @@ class LibraryScannerService:
             duration_ms=metadata.get("duration_ms", 0),
             track_number=metadata.get("track_number"),
             disc_number=metadata.get("disc_number", 1),
-            file_path=FilePath.from_string(str(file_path)),
+            file_path=FilePath.from_string(str(file_path.resolve())),
             genres=[metadata["genre"]] if metadata.get("genre") else [],
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -478,8 +498,11 @@ class LibraryScannerService:
         self.session.add(model)
 
     async def _get_track_by_file_path(self, file_path: Path) -> TrackModel | None:
-        """Get track by file path."""
-        stmt = select(TrackModel).where(TrackModel.file_path == str(file_path))
+        """Get track by file path.
+        
+        Hey future me - use resolved path for consistent DB lookup!
+        """
+        stmt = select(TrackModel).where(TrackModel.file_path == str(file_path.resolve()))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
