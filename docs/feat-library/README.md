@@ -1,8 +1,8 @@
 # SoulSpot Library Management
 
 ## Document Information
-- **Version**: 1.0
-- **Last Updated**: 2025-11-28
+- **Version**: 1.1
+- **Last Updated**: 2025-12-01
 - **Status**: Draft
 - **Reference**: [Lidarr](https://github.com/Lidarr/Lidarr) Library Management Patterns
 
@@ -30,6 +30,7 @@ This documentation describes the Library Management system for SoulSpot, inspire
 
 | Document | Description |
 |----------|-------------|
+| **[LIDARR_INTEGRATION.md](./LIDARR_INTEGRATION.md)** | 🆕 Complete guide for Lidarr library compatibility |
 | **[DATA_MODELS.md](./DATA_MODELS.md)** | Artist, Album, Track data structures and relationships |
 | **[API_REFERENCE.md](./API_REFERENCE.md)** | REST API endpoints for library operations |
 | **[UI_PATTERNS.md](./UI_PATTERNS.md)** | Views, filters, sorting, and UI components |
@@ -169,13 +170,15 @@ If current file is MP3-256, system will upgrade to FLAC when available.
 
 ```
 docs/feat-library/
-├── README.md              # This file (Overview)
-├── DATA_MODELS.md         # Entity structures
-├── API_REFERENCE.md       # REST endpoints
-├── UI_PATTERNS.md         # View modes and components
-├── QUALITY_PROFILES.md    # Quality system
-├── NAMING_CONVENTIONS.md  # File/folder naming
-└── WORKFLOWS.md           # User workflows
+├── README.md                    # This file (Overview)
+├── LIDARR_INTEGRATION.md        # 🆕 Lidarr compatibility guide
+├── DATA_MODELS.md               # Entity structures
+├── API_REFERENCE.md             # REST endpoints
+├── UI_PATTERNS.md               # View modes and components
+├── ARTWORK_IMPLEMENTATION.md    # Artwork handling
+├── QUALITY_PROFILES.md          # Quality system
+├── NAMING_CONVENTIONS.md        # File/folder naming
+└── WORKFLOWS.md                 # User workflows
 ```
 
 ---
@@ -189,4 +192,4 @@ docs/feat-library/
 ---
 
 **Status**: 📝 Draft — Awaiting Implementation  
-**Last Updated**: 2025-11-28
+**Last Updated**: 2025-12-01
