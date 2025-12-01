@@ -22,6 +22,31 @@ from soulspot.domain.value_objects.album_types import (
     is_various_artists,
 )
 
+# Folder parsing exports (Lidarr library structure parsing)
+from soulspot.domain.value_objects.folder_parsing import (
+    LibraryFolderParser,
+    LibraryScanResult,
+    ParsedAlbumFolder,
+    ParsedTrackFilename,
+    ScannedAlbum,
+    ScannedArtist,
+    ScannedTrack,
+    is_audio_file,
+    is_disc_folder,
+    parse_album_folder,
+    parse_track_filename,
+)
+
+# Naming exports (Lidarr-style file/folder naming)
+from soulspot.domain.value_objects.naming import (
+    ColonReplacement,
+    MultiDiscStyle,
+    NamingConfig,
+    NamingService,
+    clean_name,
+    sort_name,
+)
+
 
 # Hey future me, ArtistId is a VALUE OBJECT (Domain-Driven Design)! It's NOT just a UUID - it's a
 # type-safe wrapper that ensures IDs are always valid UUIDs. The @dataclass(frozen=True) makes it
