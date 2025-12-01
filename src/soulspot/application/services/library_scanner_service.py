@@ -152,6 +152,8 @@ class LibraryScannerService:
             "removed_tracks": 0,
             "removed_albums": 0,
             "removed_artists": 0,
+            # New stats for diversity analysis
+            "compilations_detected": 0,
         }
 
         try:
@@ -252,11 +254,20 @@ class LibraryScannerService:
 
             # Final commit for remaining files
             await self.session.commit()
+            
+            # POST-SCAN: Diversity analysis for albums without album_artist tag
+            # Hey future me - this is the SPOTIFY/LIDARR logic:
+            # If album has >4 unique track artists AND no album_artist set → Compilation!
+            diversity_stats = await self._analyze_album_diversity()
+            stats["compilations_detected"] = diversity_stats["compilations_detected"]
+            
+            await self.session.commit()
             stats["completed_at"] = datetime.now(UTC).isoformat()
 
             logger.info(
                 f"Library scan complete: {stats['imported']} imported, "
-                f"{stats['skipped']} skipped, {stats['errors']} errors"
+                f"{stats['skipped']} skipped, {stats['errors']} errors, "
+                f"{stats['compilations_detected']} compilations detected via diversity"
             )
 
         except Exception as e:
@@ -841,44 +852,45 @@ class LibraryScannerService:
     # =========================================================================
 
     def _detect_album_artist_from_path(self, file_path: Path) -> str | None:
-        """Detect album_artist from folder structure (Lidarr-style organization).
+        """Detect album_artist from folder structure (Lidarr/Plex/Jellyfin-style).
 
-        Hey future me - this handles Lidarr's folder convention!
-        Lidarr stores music as: /music/Artist Name/Album Name/track.mp3
-        For compilations: /music/Various Artists (add compilations...)/Album Name/track.mp3
+        Hey future me - this NOW walks UP the ENTIRE directory tree!
+        Handles NESTED structures like CD1, CD2, Disc1, etc.
 
-        We look at parent directories and check if any match VA patterns.
+        Supported structures:
+        - /music/Various Artists/Album/track.mp3 (standard Lidarr)
+        - /music/Various Artists/Album/CD1/track.mp3 (multi-CD)
+        - /music/Various Artists/Album/CD1/CD2/track.mp3 (deep nesting)
+        - /music/VA/Album/Disc 1/track.mp3 (abbreviated + disc folders)
+        - /music/Compilations/Album/track.mp3 (alternative naming)
 
         Args:
             file_path: Path to the audio file
 
         Returns:
-            Detected album_artist or None if no VA pattern found
+            Detected album_artist (e.g., "Various Artists") or None
         """
-        # Check grandparent folder (artist folder in Lidarr structure)
-        # file_path = /music/Various Artists/Album Name/01 - Track.mp3
-        #                   ^^^^^^^^^^^^^^^^ this is grandparent
-        try:
-            grandparent = file_path.parent.parent.name
-            if grandparent and is_various_artists(grandparent):
+        # Walk UP the directory tree from the track location
+        # Stop at music_path root to avoid going outside the library
+        current = file_path.parent  # Start from track's directory
+        music_root = self.music_path.resolve()
+
+        while current != music_root and current != current.parent:
+            folder_name = current.name
+
+            if folder_name and is_various_artists(folder_name):
                 # Extract clean name (remove Lidarr suffixes like "(add compilations...)")
-                clean_name = grandparent
-                # Remove parenthetical suffixes like "(add compilations to this artist)"
+                clean_name = folder_name
                 if "(" in clean_name:
                     clean_name = clean_name[: clean_name.index("(")].strip()
-                # Normalize to "Various Artists" if it matches VA pattern
-                return clean_name if clean_name else "Various Artists"
-        except (ValueError, IndexError):
-            pass
 
-        # Also check parent folder (album folder) - some setups use:
-        # /music/Various Artists/01 - Track.mp3 (flat structure)
-        try:
-            parent = file_path.parent.name
-            if parent and is_various_artists(parent):
-                return "Various Artists"
-        except (ValueError, IndexError):
-            pass
+                logger.debug(
+                    f"Detected VA folder '{folder_name}' for track: {file_path.name}"
+                )
+                return clean_name if clean_name else "Various Artists"
+
+            # Move up one level
+            current = current.parent
 
         return None
 
@@ -996,6 +1008,100 @@ class LibraryScannerService:
             f"{stats['removed_albums']} albums, {stats['removed_artists']} artists removed"
         )
         
+        return stats
+
+    async def _analyze_album_diversity(self) -> dict[str, int]:
+        """Post-scan analysis: Detect compilations via track artist diversity.
+
+        Hey future me - this is the SPOTIFY/LIDARR/PLEX logic!
+        If an album has >4 unique track artists AND no album_artist set,
+        it's automatically a compilation.
+
+        This runs AFTER all tracks are imported, because we need ALL tracks
+        to calculate diversity properly.
+
+        Returns:
+            Dict with statistics about detected compilations
+        """
+        from soulspot.domain.value_objects.album_types import (
+            SecondaryAlbumType,
+            calculate_track_diversity,
+        )
+
+        stats = {"compilations_detected": 0, "albums_analyzed": 0}
+
+        # Find albums that:
+        # 1. Have local files (file_path is not null on tracks)
+        # 2. Don't have album_artist set (no VA pattern detected from tags/folders)
+        # 3. Don't already have "compilation" in secondary_types
+        logger.info("Analyzing album diversity for compilation detection...")
+
+        # Get all albums with their track artists
+        albums_stmt = (
+            select(
+                AlbumModel.id,
+                AlbumModel.title,
+                AlbumModel.album_artist,
+                AlbumModel.secondary_types,
+            )
+        )
+        albums_result = await self.session.execute(albums_stmt)
+        albums = albums_result.all()
+
+        for album_id, album_title, album_artist, secondary_types in albums:
+            # Skip albums that already have album_artist or are already compilations
+            if album_artist and is_various_artists(album_artist):
+                continue
+            if secondary_types and "compilation" in secondary_types:
+                continue
+
+            # Get all track artists for this album
+            tracks_stmt = (
+                select(ArtistModel.name)
+                .join(TrackModel, ArtistModel.id == TrackModel.artist_id)
+                .where(TrackModel.album_id == album_id)
+                .where(TrackModel.file_path.isnot(None))  # Only local files
+            )
+            tracks_result = await self.session.execute(tracks_stmt)
+            track_artists = [row[0] for row in tracks_result.all()]
+
+            if len(track_artists) < 3:
+                # Not enough tracks to analyze
+                continue
+
+            stats["albums_analyzed"] += 1
+
+            # Calculate diversity
+            diversity_ratio, details = calculate_track_diversity(track_artists)
+            unique_artists = details.get("unique_artists", 0)
+
+            # SPOTIFY LOGIC: >4 unique artists = compilation
+            # Also check diversity ratio (>75% unique = compilation)
+            if unique_artists > 4 or diversity_ratio >= 0.75:
+                # Update album to be a compilation
+                current_types = secondary_types or []
+                if "compilation" not in current_types:
+                    current_types.append("compilation")
+
+                # Update the album model
+                update_stmt = (
+                    select(AlbumModel).where(AlbumModel.id == album_id)
+                )
+                update_result = await self.session.execute(update_stmt)
+                album_model = update_result.scalar_one()
+                album_model.secondary_types = current_types
+                album_model.album_artist = "Various Artists"
+
+                stats["compilations_detected"] += 1
+                logger.info(
+                    f"Detected compilation via diversity: '{album_title}' "
+                    f"({unique_artists} unique artists, {diversity_ratio:.0%} diversity)"
+                )
+
+        logger.info(
+            f"Diversity analysis complete: {stats['albums_analyzed']} albums analyzed, "
+            f"{stats['compilations_detected']} compilations detected"
+        )
         return stats
 
     async def get_scan_summary(self) -> dict[str, Any]:
