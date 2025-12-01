@@ -4,10 +4,6 @@ Tests the regex patterns and parsing functions for extracting metadata
 from Lidarr-organized folder and file names.
 """
 
-from pathlib import Path
-
-import pytest
-
 from soulspot.domain.value_objects.folder_parsing import (
     is_audio_file,
     is_disc_folder,

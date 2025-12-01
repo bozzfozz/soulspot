@@ -239,7 +239,7 @@ class LibraryScannerService:
                 prep_results = await asyncio.gather(*prep_tasks, return_exceptions=False)
 
                 # Import each file with precomputed metadata
-                for file_path, prep_result in zip(batch, prep_results, strict=False):
+                for file_path, prep_result in zip(batch, prep_results, strict=True):
                     try:
                         result = await self._import_file(file_path, precomputed=prep_result)
                         stats["scanned"] += 1

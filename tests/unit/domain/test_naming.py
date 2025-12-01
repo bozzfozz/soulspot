@@ -6,8 +6,6 @@ file and folder names following Lidarr conventions.
 
 from pathlib import Path
 
-import pytest
-
 from soulspot.domain.value_objects.naming import (
     ColonReplacement,
     MultiDiscStyle,

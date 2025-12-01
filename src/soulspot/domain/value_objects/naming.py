@@ -484,13 +484,15 @@ def sort_name(name: str) -> str:
         name: The name to convert.
 
     Returns:
-        Sortable version with article at end.
+        Sortable version with article at end if present, otherwise unchanged.
 
     Example:
         >>> sort_name("The Beatles")
         "Beatles, The"
         >>> sort_name("Michael Jackson")
-        "Jackson, Michael"  # Wait, this is wrong! See note below.
+        "Michael Jackson"
+        >>> sort_name("A Tribe Called Quest")
+        "Tribe Called Quest, A"
     """
     if not name:
         return ""
