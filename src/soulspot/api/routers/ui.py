@@ -126,7 +126,7 @@ async def index(
             "id": str(p.id.value),
             "name": p.name,
             "description": p.description,
-            "track_count": p.track_count,
+            "track_count": p.track_count(),
             "cover_url": p.cover_url,
             "downloaded_count": 0,
         }
