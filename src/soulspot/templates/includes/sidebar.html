@@ -70,21 +70,20 @@
                 <span class="sidebar-item-text">Overview</span>
             </a>
             <a href="/library/artists" class="sidebar-item {% if '/library/artists' in request.url.path %}active{% endif %}">
-                <i class="bi bi-person sidebar-item-icon"></i>
+                <i class="bi bi-people sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Artists</span>
-            </a>
-            <a href="/library/albums" class="sidebar-item {% if '/library/albums' in request.url.path %}active{% endif %}">
-                <i class="bi bi-disc sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Albums</span>
             </a>
             <a href="/library/compilations" class="sidebar-item {% if '/library/compilations' in request.url.path %}active{% endif %}">
                 <i class="bi bi-collection sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Compilations</span>
             </a>
-            <a href="/library/tracks" class="sidebar-item {% if '/library/tracks' in request.url.path %}active{% endif %}">
-                <i class="bi bi-music-note sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Tracks</span>
-            </a>
+        </div>
+        
+        <!-- Library Tools Section -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                <i class="bi bi-tools" style="color: var(--text-muted); margin-right: 6px;"></i>Tools
+            </div>
             <a href="/library/incomplete-albums" class="sidebar-item {% if '/library/incomplete-albums' in request.url.path %}active{% endif %}">
                 <i class="bi bi-pie-chart sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Incomplete</span>
