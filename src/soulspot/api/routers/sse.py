@@ -23,7 +23,9 @@ from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ui/sse", tags=["sse"])
+# Hey future me - SSE router prefix changed from /ui/sse to /sse for consistency!
+# Since this router is under api_router (mounted at /api), final path is /api/sse/*
+router = APIRouter(prefix="/sse", tags=["sse"])
 
 
 # Yo future me, this wraps SSE event data! SSE format is quirky text-based protocol with specific syntax.
@@ -208,7 +210,7 @@ async def event_stream(
 
     Example client-side usage:
     ```javascript
-    const eventSource = new EventSource('/api/ui/sse/stream');
+    const eventSource = new EventSource('/api/sse/stream');
 
     eventSource.addEventListener('downloads_update', (event) => {
         const data = JSON.parse(event.data);

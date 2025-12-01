@@ -293,7 +293,7 @@ View detailed information about a specific playlist and manage its tracks.
   - `hx-target="#sync-status"`
   - Updates sync status
 - **Export Modal**:
-  - `hx-get="/ui/playlists/{id}/export-modal"`
+  - `hx-get="/playlists/{id}/export-modal"`
   - `hx-target="#export-modal"`
   - Opens export dialog
 - **Download Track**:

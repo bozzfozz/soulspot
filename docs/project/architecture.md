@@ -557,7 +557,7 @@ Fragment-Loading-Pattern `ui/templates/partials/status_block.j2`:
 
 ```jinja
 <section id="status-block"
-         hx-get="/ui/status/fragment"
+         hx-get="/status/fragment"
          hx-trigger="load, every 30s"
          hx-swap="outerHTML">
   <p>Lädt Status...</p>
@@ -568,7 +568,7 @@ Form-Submit-Pattern:
 
 ```html
 <form
-  hx-post="/ui/items/create"
+  hx-post="/items/create"
   hx-target="#items-list"
   hx-swap="innerHTML"
 >

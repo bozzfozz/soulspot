@@ -177,7 +177,7 @@ Active Jobs widget polls for updates:
 
 ### Server-Sent Events (SSE)
 Real-time updates using SSE:
-- Endpoint: `/api/ui/sse/stream`
+- Endpoint: `/api/sse/stream`
 - Event types: `connected`, `downloads_update`, `heartbeat`, `error`
 - Connection health monitoring with 30-second heartbeat
 - Automatic reconnection with exponential backoff

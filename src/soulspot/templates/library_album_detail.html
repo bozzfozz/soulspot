@@ -13,9 +13,9 @@
 <!-- Breadcrumb -->
 <nav style="margin-bottom: var(--space-4);">
     <ol style="display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm);">
-        <li><a href="/ui/library" style="color: var(--accent-primary);">Library</a></li>
+        <li><a href="/library" style="color: var(--accent-primary);">Library</a></li>
         <li style="color: var(--text-muted);"><i class="bi bi-chevron-right" style="font-size: 0.6rem; margin: 0 var(--space-2);"></i></li>
-        <li><a href="/ui/library/albums" style="color: var(--accent-primary);">Albums</a></li>
+        <li><a href="/library/albums" style="color: var(--accent-primary);">Albums</a></li>
         <li style="color: var(--text-muted);"><i class="bi bi-chevron-right" style="font-size: 0.6rem; margin: 0 var(--space-2);"></i>{{ album.title }}</li>
     </ol>
 </nav>
@@ -31,7 +31,7 @@
     </div>
     <div style="flex: 1; min-width: 200px;">
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ album.title }}</h1>
-        <a href="/ui/library/artists/{{ album.artist_slug }}" style="color: var(--accent-primary); font-size: var(--font-size-lg); font-weight: var(--font-weight-medium);">{{ album.artist }}</a>
+        <a href="/library/artists/{{ album.artist_slug }}" style="color: var(--accent-primary); font-size: var(--font-size-lg); font-weight: var(--font-weight-medium);">{{ album.artist }}</a>
         <div style="display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-3); color: var(--text-muted); font-size: var(--font-size-sm);">
             {% if album.year %}
             <span><i class="bi bi-calendar" style="margin-right: var(--space-2);"></i>{{ album.year }}</span>

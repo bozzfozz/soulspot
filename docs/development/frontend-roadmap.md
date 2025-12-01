@@ -154,7 +154,7 @@ A comprehensive SSE infrastructure and widget template system that enables:
 #### Key Features Implemented
 
 **1. Server-Sent Events (SSE) Infrastructure**
-- ✅ FastAPI streaming endpoint (`/api/ui/sse/stream`)
+- ✅ FastAPI streaming endpoint (`/api/sse/stream`)
 - ✅ SSE event encoding with proper formatting
 - ✅ Event types: `connected`, `downloads_update`, `heartbeat`, `error`
 - ✅ Connection health monitoring with 30s heartbeats
@@ -193,7 +193,7 @@ A comprehensive SSE infrastructure and widget template system that enables:
 
 **SSE Architecture:**
 ```
-Client (EventSource) → /api/ui/sse/stream → StreamingResponse
+Client (EventSource) → /api/sse/stream → StreamingResponse
                      ↓
                 Event Generator (async)
                      ↓

@@ -305,7 +305,7 @@ class TestSSEEndpoints:
         # Use a timeout to prevent hanging
         try:
             async with asyncio.timeout(2.0):  # 2 second timeout
-                async with async_client.stream("GET", "/api/ui/sse/stream") as response:
+                async with async_client.stream("GET", "/api/sse/stream") as response:
                     assert response.status_code == 200
                     assert "text/event-stream" in response.headers.get(
                         "content-type", ""
@@ -324,7 +324,7 @@ class TestSSEEndpoints:
         # SSE test endpoint also uses streaming
         try:
             async with asyncio.timeout(2.0):  # 2 second timeout
-                async with async_client.stream("GET", "/api/ui/sse/test") as response:
+                async with async_client.stream("GET", "/api/sse/test") as response:
                     assert response.status_code == 200
                     assert "text/event-stream" in response.headers.get(
                         "content-type", ""

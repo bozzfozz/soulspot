@@ -279,7 +279,7 @@ For real-time updates, enable SSE support:
     return;
   }
 
-  const sseClient = new SSEClient('/api/ui/sse/stream', {
+  const sseClient = new SSEClient('/api/sse/stream', {
     debug: true,
     reconnectInterval: 3000
   });

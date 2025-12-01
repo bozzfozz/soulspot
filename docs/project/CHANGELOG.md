@@ -56,11 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Real-Time Updates Infrastructure
 - **Server-Sent Events (SSE) System**: Complete implementation for real-time dashboard updates
-  - FastAPI streaming endpoint at `/api/ui/sse/stream` with proper SSE formatting
+  - FastAPI streaming endpoint at `/api/sse/stream` with proper SSE formatting
   - Event types: `connected`, `downloads_update`, `heartbeat`, `error`
   - Connection health monitoring with 30-second heartbeat intervals
   - Client disconnect detection and automatic cleanup
-  - Test endpoint at `/api/ui/sse/test` for debugging
+  - Test endpoint at `/api/sse/test` for debugging
   
 - **SSE JavaScript Client**: Robust browser-side EventSource wrapper
   - `SSEClient` class with automatic reconnection logic
