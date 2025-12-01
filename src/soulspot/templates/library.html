@@ -145,8 +145,7 @@
         </a>
         <button class="btn btn-outline"
                 id="analyze-compilations-btn"
-                hx-post="/api/library/compilations/analyze-all"
-                hx-vals='{"only_undetected": false, "min_tracks": 2}'
+                hx-post="/api/library/compilations/analyze-all?only_undetected=false&min_tracks=2"
                 hx-target="#compilation-status"
                 hx-indicator="#compilation-spinner">
             <i class="bi bi-collection"></i>

@@ -134,20 +134,25 @@ async def analyze_album(
 
 @router.post("/analyze-all", response_model=BulkAnalysisResponse)
 async def analyze_all_albums(
-    request: AnalyzeAllRequest,
     session: AsyncSession = Depends(get_db_session),
+    only_undetected: bool = False,
+    min_tracks: int = 2,
 ) -> dict[str, Any]:
     """Analyze all albums for compilation status.
 
     Use after library scan or as periodic cleanup task.
-    By default only analyzes albums not already marked as compilations.
+    By default analyzes ALL albums (only_undetected=False for HTMX compatibility).
 
     WARNING: Can be slow for large libraries. Consider running as background job.
+    
+    Args:
+        only_undetected: If True, skip albums already marked as compilations
+        min_tracks: Minimum track count for diversity analysis (default 2)
     """
     analyzer = CompilationAnalyzerService(session)
     results = await analyzer.analyze_all_albums(
-        only_undetected=request.only_undetected,
-        min_tracks=request.min_tracks,
+        only_undetected=only_undetected,
+        min_tracks=min_tracks,
     )
 
     return {
