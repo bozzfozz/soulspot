@@ -25,6 +25,7 @@ from soulspot.domain.value_objects import AlbumId, ArtistId, FilePath, TrackId
 from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
     detect_compilation,
+    is_various_artists,
 )
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
@@ -296,6 +297,20 @@ class LibraryScannerService:
         # If TPE2 is "Various Artists" but artist is different, it's a compilation.
         album_artist = metadata.get("album_artist")
         is_compilation = metadata.get("compilation", False)
+
+        # FOLDER NAME FALLBACK for album_artist!
+        # Hey future me - Lidarr stores compilations in "Various Artists" folder.
+        # If album_artist tag is missing, check if parent folder looks like a VA folder.
+        # Common patterns: "Various Artists", "Various Artists (add compilations...)", "VA"
+        if not album_artist:
+            album_artist = self._detect_album_artist_from_path(file_path)
+            if album_artist:
+                logger.debug(
+                    f"Detected album_artist from folder structure: {album_artist}"
+                )
+                # If we detected VA from folder, mark as compilation
+                if is_various_artists(album_artist):
+                    is_compilation = True
 
         # Find or create artist (fuzzy matching)
         artist_id, is_new_artist, is_matched = await self._find_or_create_artist(
@@ -699,6 +714,48 @@ class LibraryScannerService:
     # =========================================================================
     # UTILITY METHODS
     # =========================================================================
+
+    def _detect_album_artist_from_path(self, file_path: Path) -> str | None:
+        """Detect album_artist from folder structure (Lidarr-style organization).
+
+        Hey future me - this handles Lidarr's folder convention!
+        Lidarr stores music as: /music/Artist Name/Album Name/track.mp3
+        For compilations: /music/Various Artists (add compilations...)/Album Name/track.mp3
+
+        We look at parent directories and check if any match VA patterns.
+
+        Args:
+            file_path: Path to the audio file
+
+        Returns:
+            Detected album_artist or None if no VA pattern found
+        """
+        # Check grandparent folder (artist folder in Lidarr structure)
+        # file_path = /music/Various Artists/Album Name/01 - Track.mp3
+        #                   ^^^^^^^^^^^^^^^^ this is grandparent
+        try:
+            grandparent = file_path.parent.parent.name
+            if grandparent and is_various_artists(grandparent):
+                # Extract clean name (remove Lidarr suffixes like "(add compilations...)")
+                clean_name = grandparent
+                # Remove parenthetical suffixes like "(add compilations to this artist)"
+                if "(" in clean_name:
+                    clean_name = clean_name[: clean_name.index("(")].strip()
+                # Normalize to "Various Artists" if it matches VA pattern
+                return clean_name if clean_name else "Various Artists"
+        except (ValueError, IndexError):
+            pass
+
+        # Also check parent folder (album folder) - some setups use:
+        # /music/Various Artists/01 - Track.mp3 (flat structure)
+        try:
+            parent = file_path.parent.name
+            if parent and is_various_artists(parent):
+                return "Various Artists"
+        except (ValueError, IndexError):
+            pass
+
+        return None
 
     async def get_scan_summary(self) -> dict[str, Any]:
         """Get summary of current library state."""

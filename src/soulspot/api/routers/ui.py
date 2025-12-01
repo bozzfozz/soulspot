@@ -953,6 +953,71 @@ async def library_albums(
     )
 
 
+# Hey future me - Compilations browser page! Shows only albums that are compilations.
+# Compilations are albums where secondary_types contains "compilation".
+# These are typically "Various Artists" albums with mixed artists.
+# The UI groups them separately from regular artist albums for better organization.
+# This replaces the need to browse "Various Artists" as an artist - more intuitive!
+@router.get("/library/compilations", response_class=HTMLResponse)
+async def library_compilations(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Library compilations browser page - only compilation albums with local files."""
+    from sqlalchemy import func, select
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.infrastructure.persistence.models import AlbumModel, TrackModel
+
+    # Subquery for track count - ONLY count tracks with local files
+    track_count_subq = (
+        select(TrackModel.album_id, func.count(TrackModel.id).label("track_count"))
+        .where(TrackModel.file_path.isnot(None))
+        .group_by(TrackModel.album_id)
+        .subquery()
+    )
+
+    # Only get compilation albums that have at least one local track
+    # SQLite JSON containment check: secondary_types LIKE '%"compilation"%'
+    stmt = (
+        select(AlbumModel, track_count_subq.c.track_count)
+        .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
+        .where(track_count_subq.c.track_count > 0)
+        .where(AlbumModel.secondary_types.contains(["compilation"]))
+        .options(joinedload(AlbumModel.artist))
+        .order_by(AlbumModel.title)
+    )
+    result = await session.execute(stmt)
+    rows = result.unique().all()
+
+    # Convert to template-friendly format
+    # For compilations, album_artist is more relevant than artist (often "Various Artists")
+    compilations = [
+        {
+            "id": album.id,
+            "title": album.title,
+            "album_artist": album.album_artist or "Various Artists",
+            "artist": album.artist.name if album.artist else "Unknown Artist",
+            "track_count": track_count or 0,
+            "year": album.release_year,
+            "artwork_url": album.artwork_url,
+            "artwork_path": album.artwork_path,
+            "primary_type": album.primary_type,
+            "secondary_types": album.secondary_types or [],
+        }
+        for album, track_count in rows
+    ]
+
+    # Sort alphabetically by title
+    compilations.sort(key=lambda x: x["title"].lower())
+
+    return templates.TemplateResponse(
+        request,
+        "library_compilations.html",
+        context={"compilations": compilations, "total_count": len(compilations)},
+    )
+
+
 # IMPORTANT: Library tracks page with SQLAlchemy direct queries! Uses Depends(get_db_session) to
 # properly manage DB session lifecycle. select() with joinedload() is proper way to eagerly load
 # relationships and avoid N+1. unique() on result prevents duplicate Track objects when joins create

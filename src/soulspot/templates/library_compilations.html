@@ -1,0 +1,473 @@
+{# Hey future me - Compilations browse page!
+   Shows all compilation albums (Various Artists, soundtracks, etc.)
+   These are albums with secondary_types containing "compilation".
+   Separated from regular artist albums for better navigation.
+   Works independently of folder structure - uses DB metadata! #}
+
+{% extends "base.html" %}
+
+{% block title %}Compilations - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav style="margin-bottom: var(--space-4);">
+    <ol style="display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm);">
+        <li><a href="/library" style="color: var(--accent-primary);">Library</a></li>
+        <li style="color: var(--text-muted);"><i class="bi bi-chevron-right" style="font-size: 0.6rem; margin: 0 var(--space-2);"></i>Compilations</li>
+    </ol>
+</nav>
+
+<!-- Page Header -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                <i class="bi bi-collection"></i>
+            </div>
+            <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);"></div>
+        </div>
+        <div>
+            <h1>Compilations</h1>
+            <p class="subtitle">{{ total_count }} compilation albums • Various Artists & mixed collections</p>
+        </div>
+    </div>
+    <div class="header-actions">
+        <input type="text" 
+               id="compilation-search"
+               placeholder="Search compilations..."
+               class="form-input"
+               style="min-width: 200px;">
+        <select id="sort-filter" class="form-select">
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="title-desc">Title (Z-A)</option>
+            <option value="year-desc">Year (Newest)</option>
+            <option value="year-asc">Year (Oldest)</option>
+            <option value="tracks-desc">Most Tracks</option>
+        </select>
+    </div>
+</div>
+
+<!-- Info Banner -->
+<div class="info-banner">
+    <i class="bi bi-info-circle"></i>
+    <div>
+        <strong>What are compilations?</strong>
+        <p>Compilations are albums with tracks from multiple artists - like "Various Artists" collections, soundtracks, best-of compilations, or DJ mixes. They're detected automatically based on metadata.</p>
+    </div>
+</div>
+
+<!-- Compilations Grid -->
+<div id="compilations-list">
+    {% if compilations %}
+    <div class="compilations-grid">
+        {% for comp in compilations %}
+        <a href="/library/albums/{{ comp.album_artist|urlencode }}::{{ comp.title|urlencode }}" 
+           class="compilation-card"
+           data-title="{{ comp.title|lower }}"
+           data-artist="{{ comp.album_artist|lower }}"
+           data-year="{{ comp.year or 0 }}"
+           data-track-count="{{ comp.track_count }}">
+            <div class="compilation-cover">
+                {% if comp.artwork_path %}
+                <img src="/api/artwork/{{ comp.artwork_path }}" alt="{{ comp.title }}" loading="lazy">
+                {% elif comp.artwork_url %}
+                <img src="{{ comp.artwork_url }}" alt="{{ comp.title }}" loading="lazy">
+                {% else %}
+                <div class="cover-placeholder">
+                    <i class="bi bi-collection"></i>
+                </div>
+                {% endif %}
+                <div class="compilation-overlay">
+                    <div class="play-button">
+                        <i class="bi bi-play-fill"></i>
+                    </div>
+                </div>
+                <!-- Type badges -->
+                <div class="type-badges">
+                    {% if 'soundtrack' in comp.secondary_types %}
+                    <span class="type-badge type-soundtrack" title="Soundtrack"><i class="bi bi-film"></i></span>
+                    {% endif %}
+                    {% if 'live' in comp.secondary_types %}
+                    <span class="type-badge type-live" title="Live"><i class="bi bi-mic"></i></span>
+                    {% endif %}
+                    {% if 'dj-mix' in comp.secondary_types %}
+                    <span class="type-badge type-djmix" title="DJ Mix"><i class="bi bi-disc"></i></span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="compilation-info">
+                <h3 class="compilation-title" title="{{ comp.title }}">{{ comp.title }}</h3>
+                <p class="compilation-artist" title="{{ comp.album_artist }}">{{ comp.album_artist }}</p>
+                <div class="compilation-meta">
+                    <span><i class="bi bi-music-note"></i> {{ comp.track_count }} tracks</span>
+                    {% if comp.year %}
+                    <span>{{ comp.year }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">
+            <i class="bi bi-collection"></i>
+        </div>
+        <h3>No Compilations Found</h3>
+        <p>No compilation albums detected in your library yet.</p>
+        <p style="font-size: var(--font-size-sm); color: var(--text-muted); margin-top: var(--space-2);">
+            Compilations are automatically detected during library scan based on "Various Artists" metadata and track artist diversity.
+        </p>
+        <a href="/library/import" class="btn btn-primary" style="margin-top: var(--space-4);">
+            <i class="bi bi-folder2-open"></i>
+            Scan Music Folder
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+/* Page Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+    gap: var(--space-4);
+}
+
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.header-icon-wrapper {
+    position: relative;
+}
+
+.header-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+}
+
+.header-icon-glow {
+    position: absolute;
+    inset: -8px;
+    border-radius: 24px;
+    animation: pulse-glow 2s ease-in-out infinite;
+    z-index: -1;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+.page-header h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    margin: 0;
+}
+
+.page-header .subtitle {
+    margin: var(--space-1) 0 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+/* Info Banner */
+.info-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-6);
+}
+
+.info-banner > i {
+    color: #8b5cf6;
+    font-size: 1.25rem;
+    margin-top: 2px;
+}
+
+.info-banner strong {
+    display: block;
+    margin-bottom: var(--space-1);
+    color: var(--text-primary);
+}
+
+.info-banner p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+/* Grid */
+.compilations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-5);
+}
+
+/* Card */
+.compilation-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+.compilation-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    border-color: rgba(139, 92, 246, 0.4);
+}
+
+/* Cover */
+.compilation-cover {
+    position: relative;
+    aspect-ratio: 1;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    overflow: hidden;
+}
+
+.compilation-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.compilation-card:hover .compilation-cover img {
+    transform: scale(1.05);
+}
+
+.cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.compilation-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.compilation-card:hover .compilation-overlay {
+    opacity: 1;
+}
+
+.play-button {
+    width: 56px;
+    height: 56px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: white;
+    transform: scale(0.8);
+    transition: transform 0.2s ease;
+}
+
+.compilation-card:hover .play-button {
+    transform: scale(1);
+}
+
+/* Type badges */
+.type-badges {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+    display: flex;
+    gap: var(--space-1);
+}
+
+.type-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: white;
+    backdrop-filter: blur(4px);
+}
+
+.type-soundtrack { background: rgba(59, 130, 246, 0.9); }
+.type-live { background: rgba(239, 68, 68, 0.9); }
+.type-djmix { background: rgba(245, 158, 11, 0.9); }
+
+/* Info */
+.compilation-info {
+    padding: var(--space-4);
+}
+
+.compilation-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    margin: 0 0 var(--space-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s ease;
+}
+
+.compilation-card:hover .compilation-title {
+    color: #8b5cf6;
+}
+
+.compilation-artist {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin: 0 0 var(--space-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compilation-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.compilation-meta i {
+    margin-right: var(--space-1);
+}
+
+/* Empty State */
+.empty-state {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-xl);
+    padding: var(--space-12);
+    text-align: center;
+}
+
+.empty-icon {
+    width: 96px;
+    height: 96px;
+    margin: 0 auto var(--space-6);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: #8b5cf6;
+}
+
+.empty-state h3 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-3);
+}
+
+.empty-state > p {
+    color: var(--text-muted);
+    margin-bottom: 0;
+}
+</style>
+
+<script>
+// Client-side search and sorting for compilations
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('compilation-search');
+    const sortFilter = document.getElementById('sort-filter');
+    const grid = document.querySelector('.compilations-grid');
+    
+    function getSortValue(card, field) {
+        switch(field) {
+            case 'title': return card.getAttribute('data-title') || '';
+            case 'artist': return card.getAttribute('data-artist') || '';
+            case 'year': return parseInt(card.getAttribute('data-year')) || 0;
+            case 'tracks': return parseInt(card.getAttribute('data-track-count')) || 0;
+            default: return card.getAttribute('data-title') || '';
+        }
+    }
+    
+    function filterAndSort() {
+        if (!grid) return;
+        
+        const searchTerm = (searchInput?.value || '').toLowerCase();
+        const sortValue = sortFilter?.value || 'title-asc';
+        const [sortField, sortDir] = sortValue.split('-');
+        const cards = Array.from(document.querySelectorAll('.compilation-card'));
+        
+        // Filter by search term
+        cards.forEach(card => {
+            const title = card.getAttribute('data-title') || '';
+            const artist = card.getAttribute('data-artist') || '';
+            card.style.display = (title.includes(searchTerm) || artist.includes(searchTerm)) ? '' : 'none';
+        });
+        
+        // Sort visible cards
+        const visible = cards.filter(c => c.style.display !== 'none');
+        visible.sort((a, b) => {
+            const aVal = getSortValue(a, sortField);
+            const bVal = getSortValue(b, sortField);
+            
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+            return sortDir === 'asc' 
+                ? String(aVal).localeCompare(String(bVal))
+                : String(bVal).localeCompare(String(aVal));
+        });
+        
+        visible.forEach(card => grid.appendChild(card));
+    }
+    
+    let debounce;
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounce);
+            debounce = setTimeout(filterAndSort, 200);
+        });
+    }
+    
+    if (sortFilter) {
+        sortFilter.addEventListener('change', filterAndSort);
+    }
+});
+</script>
+{% endblock %}
