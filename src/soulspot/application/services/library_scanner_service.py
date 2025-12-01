@@ -7,9 +7,11 @@
 # The goal: import existing music collection, avoid re-downloading already owned tracks!
 """Library scanner service for importing local music files into database."""
 
+import asyncio
 import hashlib
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -83,8 +85,9 @@ class LibraryScannerService:
     """
 
     # Fuzzy matching threshold (0-100). Higher = stricter matching.
-    # 85% works well for "Pink Floyd" vs "The Pink Floyd" or typos
-    FUZZY_THRESHOLD = 85
+    # 75% works well with token_set_ratio for "Pink Floyd" vs "The Pink Floyd"
+    # token_set_ratio handles articles better than plain ratio
+    FUZZY_THRESHOLD = 75
 
     def __init__(
         self,
@@ -107,6 +110,11 @@ class LibraryScannerService:
         # Cache for fuzzy matching (avoid repeated DB queries)
         self._artist_cache: dict[str, ArtistId] = {}
         self._album_cache: dict[str, AlbumId] = {}
+        
+        # Thread pool for CPU-intensive work (metadata extraction, hashing)
+        # Hey future me - this runs metadata parsing and SHA256 in parallel threads
+        # so the event loop stays responsive. DB work stays async/serial.
+        self._executor = ThreadPoolExecutor(max_workers=min(8, max(2, os.cpu_count() or 4)))
 
     # =========================================================================
     # MAIN SCAN METHODS
@@ -211,54 +219,68 @@ class LibraryScannerService:
             # Pre-load artist/album caches for faster fuzzy matching
             await self._load_caches()
 
-            # Process each file with batch commits for stability
-            # Hey future me - commit every 100 files to:
-            # 1. Prevent memory issues with 5000+ tracks
-            # 2. Not lose everything if something fails at file 4999
+            # Process files in parallel batches with concurrent metadata prep
+            # Hey future me - wir bereiten Metadaten in Threads vor, während wir async die DB schreiben.
+            # Das halten wir synchron pro Batch, um DB-Deadlocks zu vermeiden.
             BATCH_SIZE = 100
+            CONCURRENT_PREP = min(12, max(4, os.cpu_count() or 4))
             
-            for i, file_path in enumerate(files_to_scan):
-                try:
-                    result = await self._import_file(file_path)
-                    stats["scanned"] += 1
+            processed = 0
+            for batch_start in range(0, len(files_to_scan), CONCURRENT_PREP):
+                batch = files_to_scan[batch_start : batch_start + CONCURRENT_PREP]
+                
+                # Prepare metadata/hashes concurrently in thread pool
+                loop = asyncio.get_event_loop()
+                prep_tasks = [
+                    loop.run_in_executor(self._executor, self._prep_file_sync, fp)
+                    for fp in batch
+                ]
+                prep_results = await asyncio.gather(*prep_tasks, return_exceptions=False)
+                
+                # Import each file with precomputed metadata
+                for file_path, prep_result in zip(batch, prep_results):
+                    try:
+                        result = await self._import_file(file_path, precomputed=prep_result)
+                        stats["scanned"] += 1
 
-                    if result["imported"]:
-                        stats["imported"] += 1
-                        if result.get("new_artist"):
-                            stats["new_artists"] += 1
-                        if result.get("matched_artist"):
-                            stats["matched_artists"] += 1
-                        if result.get("new_album"):
-                            stats["new_albums"] += 1
-                        if result.get("matched_album"):
-                            stats["matched_albums"] += 1
-                        if result.get("new_track"):
-                            stats["new_tracks"] += 1
+                        if result["imported"]:
+                            stats["imported"] += 1
+                            if result.get("new_artist"):
+                                stats["new_artists"] += 1
+                            if result.get("matched_artist"):
+                                stats["matched_artists"] += 1
+                            if result.get("new_album"):
+                                stats["new_albums"] += 1
+                            if result.get("matched_album"):
+                                stats["matched_albums"] += 1
+                            if result.get("new_track"):
+                                stats["new_tracks"] += 1
 
-                    # Batch commit every BATCH_SIZE files
-                    if (i + 1) % BATCH_SIZE == 0:
-                        await self.session.commit()
-                        logger.debug(f"Committed batch {(i + 1) // BATCH_SIZE} ({i + 1} files)")
+                        processed += 1
+                        
+                        # Batch commit every BATCH_SIZE files
+                        if processed % BATCH_SIZE == 0:
+                            await self.session.commit()
+                            logger.debug(f"Committed batch {processed // BATCH_SIZE} ({processed} files)")
 
-                    # Progress callback
-                    if progress_callback:
-                        progress = (i + 1) / len(files_to_scan) * 100
-                        await progress_callback(progress, stats)
+                        # Progress callback
+                        if progress_callback:
+                            progress = processed / len(files_to_scan) * 100
+                            await progress_callback(progress, stats)
 
-                except Exception as e:
-                    stats["errors"] += 1
-                    error_msg = str(e)
-                    stats["error_files"].append(
-                        {"path": str(file_path), "error": error_msg}
-                    )
-                    # Log with traceback for debugging metadata issues
-                    logger.warning(
-                        f"Error importing {file_path.name}: {error_msg} "
-                        f"(format: {file_path.suffix})",
-                        exc_info=False,  # Don't spam with full traceback, just the message
-                    )
-                    # Continue with next file instead of crashing
-                    continue
+                    except Exception as e:
+                        stats["errors"] += 1
+                        error_msg = str(e)
+                        stats["error_files"].append(
+                            {"path": str(file_path), "error": error_msg}
+                        )
+                        logger.warning(
+                            f"Error importing {file_path.name}: {error_msg} "
+                            f"(format: {file_path.suffix})",
+                            exc_info=False,
+                        )
+                        processed += 1
+                        continue
 
             # Final commit for remaining files
             await self.session.commit()
@@ -382,13 +404,56 @@ class LibraryScannerService:
     # FILE IMPORT
     # =========================================================================
 
-    async def _import_file(self, file_path: Path) -> dict[str, Any]:
-        """Import a single audio file into the database.
+    def _prep_file_sync(self, file_path: Path) -> dict[str, Any]:
+        """Synchronously prepare file metadata and hash (runs in thread pool).
 
-        Extracts metadata, finds/creates artist and album, creates track.
+        Hey future me - this runs in a ThreadPoolExecutor so CPU-intensive work
+        doesn't block the async event loop. Only metadata extraction and hashing!
 
         Args:
             file_path: Path to audio file
+
+        Returns:
+            Dict with precomputed metadata and hash
+        """
+        try:
+            metadata = self._extract_metadata(file_path)
+        except Exception as e:
+            logger.warning(f"Metadata extraction failed for {file_path}: {e}")
+            metadata = {
+                "format": file_path.suffix.lstrip(".").lower(),
+                "duration_ms": 0,
+            }
+
+        try:
+            file_hash = self._compute_file_hash(file_path)
+        except Exception as e:
+            logger.warning(f"Hash computation failed for {file_path}: {e}")
+            file_hash = ""
+
+        file_size = 0
+        try:
+            file_size = file_path.stat().st_size
+        except OSError:
+            pass
+
+        return {
+            "metadata": metadata,
+            "hash": file_hash,
+            "size": file_size,
+        }
+
+    async def _import_file(
+        self, file_path: Path, precomputed: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Import a single audio file into the database.
+
+        Extracts metadata, finds/creates artist and album, creates track.
+        If precomputed dict is provided, uses its metadata and hash instead of recomputing.
+
+        Args:
+            file_path: Path to audio file
+            precomputed: Optional precomputed metadata, hash, and size
 
         Returns:
             Dict with import result (imported, new_artist, matched_artist, etc.)
@@ -410,8 +475,24 @@ class LibraryScannerService:
             result["imported"] = True
             return result
 
-        # Extract metadata - try to get as much as possible, use fallbacks for missing data
-        metadata = self._extract_metadata(file_path)
+        # Use precomputed metadata/hash if available, otherwise extract now
+        if precomputed:
+            metadata = precomputed.get("metadata", {})
+            file_hash = precomputed.get("hash", "")
+            file_size = precomputed.get("size", 0)
+        else:
+            # Fallback: extract metadata synchronously (slower!)
+            metadata = self._extract_metadata(file_path)
+            try:
+                file_hash = self._compute_file_hash(file_path)
+            except Exception as e:
+                logger.warning(f"Hash computation failed for {file_path}: {e}")
+                file_hash = ""
+            try:
+                file_size = file_path.stat().st_size
+            except OSError:
+                file_size = 0
+        
         if not metadata:
             # Hey future me - fallback to minimal metadata if extraction fails completely!
             # This happens with corrupted files or unknown formats.
@@ -489,7 +570,7 @@ class LibraryScannerService:
         )
 
         # Add file metadata to track model directly
-        await self._add_track_with_file_info(track, file_path, metadata)
+        await self._add_track_with_file_info(track, file_path, metadata, precomputed=precomputed)
 
         result["imported"] = True
         result["new_track"] = True
@@ -500,9 +581,22 @@ class LibraryScannerService:
         track: Track,
         file_path: Path,
         metadata: dict[str, Any],
+        precomputed: dict[str, Any] | None = None,
     ) -> None:
-        """Add track with additional file info (hash, size, format, etc.)."""
+        """Add track with additional file info (hash, size, format, etc.).
+
+        If precomputed dict is provided, uses precomputed hash/size instead of computing.
+        """
         primary_genre = track.genres[0] if track.genres else None
+
+        # Use precomputed hash/size if available
+        if precomputed:
+            file_hash = precomputed.get("hash", "")
+            file_size = precomputed.get("size", 0)
+        else:
+            # Fallback: compute now (slower, only if precomputed wasn't used)
+            file_hash = self._compute_file_hash(file_path)
+            file_size = file_path.stat().st_size
 
         model = TrackModel(
             id=str(track.id.value),
@@ -515,8 +609,8 @@ class LibraryScannerService:
             file_path=str(track.file_path) if track.file_path else None,
             genre=primary_genre,
             # File info
-            file_size=file_path.stat().st_size,
-            file_hash=self._compute_file_hash(file_path),
+            file_size=file_size,
+            file_hash=file_hash,
             file_hash_algorithm="sha256",
             audio_bitrate=metadata.get("bitrate"),
             audio_format=metadata.get("format"),
@@ -710,7 +804,9 @@ class LibraryScannerService:
         result = await self.session.execute(artist_stmt)
         for row in result.all():
             artist_id = ArtistId.from_string(row[0])
-            self._artist_cache[row[1].lower()] = artist_id
+            # Use normalized name as cache key for better matching!
+            normalized = self._normalize_artist_name(row[1])
+            self._artist_cache[normalized] = artist_id
 
         # Load all albums
         # Hey future me - nutze album_artist für Cache-Key bei Kompilationen!
@@ -734,6 +830,29 @@ class LibraryScannerService:
             f"{len(self._album_cache)} albums"
         )
 
+    def _normalize_artist_name(self, name: str) -> str:
+        """Normalize artist name for better matching.
+        
+        Hey future me - this is CRITICAL for deduplication!
+        Fixes common issues:
+        - "The Beatles" → "Beatles"
+        - Extra whitespace trimming
+        - Lowercase everything
+        """
+        if not name:
+            return ""
+        
+        # Remove common articles at start (case-insensitive)
+        articles = ("the ", "a ", "an ", "les ", "la ", "le ")
+        normalized = name.lower().strip()
+        
+        for article in articles:
+            if normalized.startswith(article):
+                normalized = normalized[len(article):].strip()
+                break
+        
+        return normalized.strip()
+
     async def _find_or_create_artist(self, name: str) -> tuple[ArtistId, bool, bool]:
         """Find existing artist by fuzzy matching or create new.
 
@@ -744,17 +863,21 @@ class LibraryScannerService:
             Tuple of (artist_id, is_new, is_fuzzy_matched)
         """
         name_lower = name.lower()
+        name_normalized = self._normalize_artist_name(name)
 
-        # Exact match first
+        # Exact match first (try both normalized and original name)
+        if name_normalized in self._artist_cache:
+            return self._artist_cache[name_normalized], False, False
         if name_lower in self._artist_cache:
             return self._artist_cache[name_lower], False, False
 
-        # Fuzzy match
+        # Fuzzy match using token_set_ratio (better for "The X" vs "X")
         best_match: str | None = None
         best_score: float = 0.0
 
         for cached_name in self._artist_cache:
-            score = fuzz.ratio(name_lower, cached_name)
+            # Use token_set_ratio for better matching with articles
+            score = fuzz.token_set_ratio(name_normalized, cached_name)
             if score > best_score:
                 best_score = score
                 best_match = cached_name
@@ -762,22 +885,23 @@ class LibraryScannerService:
         # Use fuzzy match if above threshold
         if best_match and best_score >= self.FUZZY_THRESHOLD:
             logger.debug(
-                f"Fuzzy matched artist '{name}' to '{best_match}' (score: {best_score})"
+                f"Fuzzy matched artist '{name}' (normalized: '{name_normalized}') "
+                f"to cached '{best_match}' (score: {best_score})"
             )
             return self._artist_cache[best_match], False, True
 
         # Create new artist
         artist = Artist(
             id=ArtistId.generate(),
-            name=name,
+            name=name,  # Store original name, not normalized
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
         await self.artist_repo.add(artist)
 
-        # Add to cache
-        self._artist_cache[name_lower] = artist.id
-        logger.debug(f"Created new artist: {name}")
+        # Add to cache using normalized name
+        self._artist_cache[name_normalized] = artist.id
+        logger.debug(f"Created new artist: {name} (normalized: {name_normalized})")
 
         return artist.id, True, False
 
@@ -825,7 +949,8 @@ class LibraryScannerService:
             if cached_artist != album_key:
                 continue
 
-            score = fuzz.ratio(title_lower, cached_title)
+            # Use token_set_ratio for better album title matching
+            score = fuzz.token_set_ratio(title_lower, cached_title)
             if score > best_score:
                 best_score = score
                 best_match_key = cached_key
