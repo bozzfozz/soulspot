@@ -706,15 +706,19 @@ class AppSettingsService:
     # =========================================================================
 
     # Supported template variables for validation
+    # Hey future me - these match Lidarr's naming variables for compatibility!
+    # Disambiguation fields are placeholders for future MusicBrainz integration.
     NAMING_VARIABLES: frozenset[str] = frozenset(
         {
             # Artist variables
             "Artist Name",
             "Artist CleanName",
+            "Artist Disambiguation",  # e.g., "UK band" vs "US band"
             # Album variables
             "Album Title",
             "Album CleanTitle",
-            "Album Type",
+            "Album Type",  # Album, EP, Single, Live Album, Compilation, etc.
+            "Album Disambiguation",  # e.g., "Deluxe Edition", "Remastered"
             "Release Year",
             # Track variables
             "Track Title",

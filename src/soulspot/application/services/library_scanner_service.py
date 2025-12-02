@@ -1,9 +1,9 @@
 # Hey future me - this service scans the local music directory and imports files into the DB!
 # Key features:
 # 1. JOB QUEUE integration - runs as background job (use JobQueue for async scanning)
-# 2. FUZZY MATCHING - finds existing artists/albums with 85% similarity (rapidfuzz)
+# 2. LIDARR FOLDER PARSING - Artist/Album/Track from folder structure (100% accurate!)
 # 3. INCREMENTAL SCAN - only processes new/changed files based on mtime
-# 4. COMPILATION DETECTION - reads TPE2 (Album Artist) tag, detects "Various Artists"
+# 4. COMPILATION DETECTION - from folder structure ("Various Artists" folder)
 # The goal: import existing music collection, avoid re-downloading already owned tracks!
 """Library scanner service for importing local music files into database."""
 
@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 from mutagen import File as MutagenFile  # type: ignore[attr-defined]
-from rapidfuzz import fuzz
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +28,17 @@ from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
     detect_compilation,
     is_various_artists,
+)
+from soulspot.domain.value_objects.folder_parsing import (
+    AUDIO_EXTENSIONS,
+    LibraryFolderParser,
+    LibraryScanResult,
+    ScannedAlbum,
+    ScannedArtist,
+    ScannedTrack,
+    is_disc_folder,
+    parse_album_folder,
+    parse_track_filename,
 )
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
@@ -43,52 +53,24 @@ from soulspot.infrastructure.persistence.repositories import (
 
 logger = logging.getLogger(__name__)
 
-# Supported audio file extensions
-# Hey future me - alle gängigen Formate! Mutagen unterstützt die meisten davon.
-AUDIO_EXTENSIONS = {
-    # Lossy
-    ".mp3",
-    ".m4a",
-    ".aac",
-    ".ogg",
-    ".opus",
-    ".wma",
-    # Lossless
-    ".flac",
-    ".wav",
-    ".aiff",
-    ".aif",
-    ".alac",
-    ".ape",
-    ".wv",      # WavPack
-    ".tta",     # True Audio
-    ".dsd",     # DSD Audio
-    ".dsf",     # DSD Stream File
-    ".dff",     # DSDIFF
-    # Other
-    ".mpc",     # Musepack
-    ".mp4",     # Can contain audio
-    ".webm",    # Can contain audio (Opus/Vorbis)
-}
+# AUDIO_EXTENSIONS is now imported from folder_parsing module (single source of truth)
 
 
 class LibraryScannerService:
-    """Service for scanning local music directory and importing to database.
+    """Service for scanning Lidarr-organized music library and importing to database.
+
+    Hey future me - this is now LIDARR-FIRST! Artist/Album/Track come from folder structure,
+    not from ID3 tags. Mutagen is only used for audio info (duration, bitrate, genre).
 
     This service handles:
-    1. Discovering audio files in the music directory
-    2. Extracting metadata via mutagen (title, artist, album, etc.)
-    3. Fuzzy-matching artists and albums (85% threshold)
+    1. Parsing Lidarr folder structure: /Artist/Album (Year)/NN - Title.ext
+    2. Extracting audio info via mutagen (duration, bitrate, sample_rate, genre)
+    3. Exact name matching for artists/albums (no fuzzy matching needed!)
     4. Incremental scanning (only new/modified files)
-    5. Tracking scan progress for UI feedback
+    5. Compilation detection via "Various Artists" folder
 
     Works with JobQueue for background processing!
     """
-
-    # Fuzzy matching threshold (0-100). Higher = stricter matching.
-    # 75% works well with token_set_ratio for "Pink Floyd" vs "The Pink Floyd"
-    # token_set_ratio handles articles better than plain ratio
-    FUZZY_THRESHOLD = 75
 
     def __init__(
         self,
@@ -108,7 +90,8 @@ class LibraryScannerService:
         self.track_repo = TrackRepository(session)
         self.music_path = settings.storage.music_path
 
-        # Cache for fuzzy matching (avoid repeated DB queries)
+        # Cache for exact name matching (avoid repeated DB queries)
+        # Key: lowercase name, Value: entity ID
         self._artist_cache: dict[str, ArtistId] = {}
         self._album_cache: dict[str, AlbumId] = {}
 
@@ -126,11 +109,15 @@ class LibraryScannerService:
         incremental: bool = True,
         progress_callback: Any | None = None,
     ) -> dict[str, Any]:
-        """Scan the entire music library.
+        """Scan the entire music library using Lidarr folder structure.
 
         This is the MAIN entry point! Call this from JobQueue handler.
 
-        Hey future me - Full Scan (incremental=False) does THREE things:
+        Hey future me - this now uses LibraryFolderParser for STRUCTURED scanning!
+        Artist/Album/Track metadata comes from folder structure, not ID3 tags.
+        Mutagen is only used for audio info (duration, bitrate, genre).
+
+        Full Scan (incremental=False) does THREE things:
         1. Scans ALL files (not just changed ones)
         2. REMOVES tracks from DB whose files no longer exist
         3. CLEANS UP orphaned albums and artists
@@ -155,13 +142,13 @@ class LibraryScannerService:
             "new_artists": 0,
             "new_albums": 0,
             "new_tracks": 0,
-            "matched_artists": 0,
-            "matched_albums": 0,
-            # New stats for cleanup
+            "existing_artists": 0,
+            "existing_albums": 0,
+            # Cleanup stats (full scan only)
             "removed_tracks": 0,
             "removed_albums": 0,
             "removed_artists": 0,
-            # New stats for diversity analysis
+            # Compilation stats
             "compilations_detected": 0,
         }
 
@@ -171,28 +158,29 @@ class LibraryScannerService:
                 raise FileNotFoundError(f"Music path does not exist: {self.music_path}")
 
             # Log detailed path info for debugging
-            logger.info(f"Scanning music library at: {self.music_path}")
-            logger.info(f"Music path is absolute: {self.music_path.is_absolute()}")
-            logger.info(f"Music path resolved: {self.music_path.resolve()}")
+            music_root = self.music_path.resolve()
+            logger.info(f"Scanning Lidarr-organized library at: {music_root}")
             logger.info(f"Scan mode: {'incremental' if incremental else 'FULL (with cleanup)'}")
 
-            # Count subdirectories for debugging
-            try:
-                subdirs = [d for d in self.music_path.iterdir() if d.is_dir()]
-                logger.info(f"Found {len(subdirs)} top-level subdirectories in music path")
-                if subdirs[:5]:
-                    logger.info(f"First 5 subdirs: {[d.name for d in subdirs[:5]]}")
-            except Exception as e:
-                logger.warning(f"Could not list subdirectories: {e}")
+            # Use LibraryFolderParser for structured discovery
+            # Hey future me - this parses the entire Artist→Album→Track hierarchy ONCE!
+            # Much faster than parsing each file's path separately.
+            parser = LibraryFolderParser(music_root)
+            scan_result: LibraryScanResult = parser.scan()
 
-            # Discover all audio files
-            # Hey future me - ALWAYS use resolved absolute paths for consistency!
-            # Otherwise ./music/track.mp3 vs /music/track.mp3 won't match in DB lookups.
-            all_files = self._discover_audio_files(self.music_path.resolve())
-            all_file_paths = {str(f.resolve()) for f in all_files}
-            stats["total_files"] = len(all_files)
+            logger.info(
+                f"LibraryFolderParser found: {scan_result.total_artists} artists, "
+                f"{scan_result.total_albums} albums, {scan_result.total_tracks} tracks"
+            )
 
-            logger.info(f"Found {len(all_files)} audio files in {self.music_path}")
+            # Collect all file paths for cleanup check
+            all_file_paths: set[str] = set()
+            for artist in scan_result.artists:
+                for album in artist.albums:
+                    for track in album.tracks:
+                        all_file_paths.add(str(track.path.resolve()))
+
+            stats["total_files"] = len(all_file_paths)
 
             # For FULL scan: Remove tracks whose files no longer exist
             if not incremental:
@@ -201,108 +189,111 @@ class LibraryScannerService:
                 stats["removed_albums"] = cleanup_stats["removed_albums"]
                 stats["removed_artists"] = cleanup_stats["removed_artists"]
 
-                # Clear caches after cleanup (they may reference deleted entities)
+                # Clear caches after cleanup
                 self._artist_cache.clear()
                 self._album_cache.clear()
 
-            # Filter to only new/modified files if incremental
-            if incremental:
-                files_to_scan = await self._filter_changed_files(all_files)
-                stats["skipped"] = len(all_files) - len(files_to_scan)
-                logger.info(
-                    f"Incremental scan: {len(files_to_scan)} new/modified, "
-                    f"{stats['skipped']} unchanged"
-                )
-            else:
-                files_to_scan = all_files
-                logger.info(f"Full scan: processing all {len(files_to_scan)} files")
-
-            # Pre-load artist/album caches for faster fuzzy matching
+            # Pre-load artist/album caches for exact name matching
             await self._load_caches()
 
-            # Process files in parallel batches with concurrent metadata prep
-            # Hey future me - wir bereiten Metadaten in Threads vor, während wir async die DB schreiben.
-            # Das halten wir synchron pro Batch, um DB-Deadlocks zu vermeiden.
+            # Process structured data: Artist → Album → Tracks
+            # Hey future me - this is the BIG CHANGE! We iterate by structure, not by file.
+            # Artist/Album are created ONCE per folder, then tracks are added.
             BATCH_SIZE = 100
-            CONCURRENT_PREP = min(12, max(4, os.cpu_count() or 4))
-
             processed = 0
-            for batch_start in range(0, len(files_to_scan), CONCURRENT_PREP):
-                batch = files_to_scan[batch_start : batch_start + CONCURRENT_PREP]
+            total_tracks = scan_result.total_tracks
 
-                # Prepare metadata/hashes concurrently in thread pool
-                loop = asyncio.get_event_loop()
-                prep_tasks = [
-                    loop.run_in_executor(self._executor, self._prep_file_sync, fp)
-                    for fp in batch
-                ]
-                prep_results = await asyncio.gather(*prep_tasks, return_exceptions=False)
+            for scanned_artist in scan_result.artists:
+                # Get or create artist (exact name match, no fuzzy!)
+                artist_id, is_new_artist = await self._get_or_create_artist_exact(
+                    scanned_artist.name
+                )
+                if is_new_artist:
+                    stats["new_artists"] += 1
+                else:
+                    stats["existing_artists"] += 1
 
-                # Import each file with precomputed metadata
-                for file_path, prep_result in zip(batch, prep_results, strict=True):
-                    try:
-                        result = await self._import_file(file_path, precomputed=prep_result)
-                        stats["scanned"] += 1
+                # Check if this is a VA artist (for compilation detection)
+                is_va_artist = is_various_artists(scanned_artist.name)
 
-                        if result["imported"]:
-                            stats["imported"] += 1
-                            if result.get("new_artist"):
-                                stats["new_artists"] += 1
-                            if result.get("matched_artist"):
-                                stats["matched_artists"] += 1
-                            if result.get("new_album"):
-                                stats["new_albums"] += 1
-                            if result.get("matched_album"):
-                                stats["matched_albums"] += 1
-                            if result.get("new_track"):
+                for scanned_album in scanned_artist.albums:
+                    # Get or create album (exact name match)
+                    album_id, is_new_album = await self._get_or_create_album_exact(
+                        title=scanned_album.title,
+                        artist_id=artist_id,
+                        release_year=scanned_album.year,
+                        is_compilation=is_va_artist,
+                        album_artist=scanned_artist.name if is_va_artist else None,
+                    )
+                    if is_new_album:
+                        stats["new_albums"] += 1
+                        if is_va_artist:
+                            stats["compilations_detected"] += 1
+                    else:
+                        stats["existing_albums"] += 1
+
+                    # Process tracks in this album
+                    for scanned_track in scanned_album.tracks:
+                        try:
+                            # Check if file changed (incremental mode)
+                            if incremental:
+                                existing = await self._get_track_by_file_path(scanned_track.path)
+                                if existing:
+                                    # Update last_scanned_at
+                                    existing.last_scanned_at = datetime.now(UTC)
+                                    stats["skipped"] += 1
+                                    processed += 1
+                                    continue
+
+                            # Import track with folder-based metadata
+                            result = await self._import_track_from_scan(
+                                scanned_track=scanned_track,
+                                artist_id=artist_id,
+                                album_id=album_id,
+                                is_va_album=is_va_artist,
+                            )
+
+                            stats["scanned"] += 1
+                            if result["imported"]:
+                                stats["imported"] += 1
                                 stats["new_tracks"] += 1
 
-                        processed += 1
+                            processed += 1
 
-                        # Batch commit every BATCH_SIZE files
-                        if processed % BATCH_SIZE == 0:
-                            await self.session.commit()
-                            logger.debug(f"Committed batch {processed // BATCH_SIZE} ({processed} files)")
+                            # Batch commit
+                            if processed % BATCH_SIZE == 0:
+                                await self.session.commit()
+                                logger.debug(f"Committed batch ({processed} tracks)")
 
-                        # Progress callback
-                        if progress_callback:
-                            progress = processed / len(files_to_scan) * 100
-                            await progress_callback(progress, stats)
+                            # Progress callback
+                            if progress_callback and total_tracks > 0:
+                                progress = processed / total_tracks * 100
+                                await progress_callback(progress, stats)
 
-                    except Exception as e:
-                        stats["errors"] += 1
-                        error_msg = str(e)
-                        stats["error_files"].append(
-                            {"path": str(file_path), "error": error_msg}
-                        )
-                        logger.warning(
-                            f"Error importing {file_path.name}: {error_msg} "
-                            f"(format: {file_path.suffix})",
-                            exc_info=False,
-                        )
-                        processed += 1
-                        continue
+                        except Exception as e:
+                            stats["errors"] += 1
+                            stats["error_files"].append(
+                                {"path": str(scanned_track.path), "error": str(e)}
+                            )
+                            logger.warning(
+                                f"Error importing {scanned_track.path.name}: {e}",
+                                exc_info=False,
+                            )
+                            processed += 1
 
-            # Final commit for remaining files
-            await self.session.commit()
-
-            # POST-SCAN: Diversity analysis for albums without album_artist tag
-            # Hey future me - this is the SPOTIFY/LIDARR logic:
-            # If album has >4 unique track artists AND no album_artist set → Compilation!
-            diversity_stats = await self._analyze_album_diversity()
-            stats["compilations_detected"] = diversity_stats["compilations_detected"]
-
+            # Final commit
             await self.session.commit()
             stats["completed_at"] = datetime.now(UTC).isoformat()
 
             logger.info(
                 f"Library scan complete: {stats['imported']} imported, "
                 f"{stats['skipped']} skipped, {stats['errors']} errors, "
-                f"{stats['compilations_detected']} compilations detected via diversity"
+                f"{stats['new_artists']} new artists, {stats['new_albums']} new albums, "
+                f"{stats['compilations_detected']} compilations"
             )
 
         except Exception as e:
-            logger.error(f"Library scan failed: {e}")
+            logger.error(f"Library scan failed: {e}", exc_info=True)
             stats["error"] = str(e)
 
         return stats
@@ -310,8 +301,8 @@ class LibraryScannerService:
     def _discover_audio_files(self, directory: Path) -> list[Path]:
         """Recursively discover all audio files in directory.
 
-        Hey future me - followlinks=True ist wichtig für Symlink-Ordner!
-        Viele Setups haben /music als Symlink zu einer externen Platte.
+        NOTE: This method is kept for backward compatibility but scan_library()
+        now uses LibraryFolderParser which provides structured Artist→Album→Track data.
 
         Args:
             directory: Root directory to scan
@@ -326,9 +317,7 @@ class LibraryScannerService:
         all_extensions: Counter[str] = Counter()
         total_files_seen = 0
 
-        # followlinks=True folgt Symlinks zu anderen Ordnern
         for root, _dirs, files in os.walk(directory, followlinks=True):
-            # Log wenn wir Zugriffsprobleme haben
             try:
                 for filename in files:
                     total_files_seen += 1
@@ -340,25 +329,220 @@ class LibraryScannerService:
                 skipped_dirs.append(root)
                 logger.warning(f"Permission denied: {root} - {e}")
 
-        # Log extension statistics for debugging
-        logger.info(f"Total files seen: {total_files_seen}")
-        logger.info(f"Audio files matched: {len(audio_files)}")
-
-        # Show top 10 extensions found
-        top_extensions = all_extensions.most_common(15)
-        logger.info(f"Top file extensions found: {top_extensions}")
-
-        # Show which audio extensions were found
-        audio_ext_counts = {ext: all_extensions[ext] for ext in AUDIO_EXTENSIONS if all_extensions[ext] > 0}
-        logger.info(f"Audio extensions found: {audio_ext_counts}")
-
-        if skipped_dirs:
-            logger.warning(
-                f"Skipped {len(skipped_dirs)} directories due to permissions: "
-                f"{skipped_dirs[:5]}{'...' if len(skipped_dirs) > 5 else ''}"
-            )
-
+        logger.debug(f"Total files seen: {total_files_seen}, audio files: {len(audio_files)}")
         return audio_files
+
+    # =========================================================================
+    # EXACT NAME MATCHING (Lidarr folder structure)
+    # =========================================================================
+
+    async def _get_or_create_artist_exact(self, name: str) -> tuple[ArtistId, bool]:
+        """Get existing artist by exact name or create new.
+
+        Hey future me - NO FUZZY MATCHING! Lidarr folder structure guarantees
+        artist name is correct. If folder says "The Beatles", that's the name.
+
+        Args:
+            name: Artist name from folder structure
+
+        Returns:
+            Tuple of (artist_id, is_new)
+        """
+        name_lower = name.lower().strip()
+
+        # Check cache first (exact match)
+        if name_lower in self._artist_cache:
+            return self._artist_cache[name_lower], False
+
+        # Check database
+        stmt = select(ArtistModel).where(func.lower(ArtistModel.name) == name_lower)
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            artist_id = ArtistId.from_string(existing.id)
+            self._artist_cache[name_lower] = artist_id
+            return artist_id, False
+
+        # Create new artist
+        artist = Artist(
+            id=ArtistId.generate(),
+            name=name,  # Keep original casing from folder
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        await self.artist_repo.add(artist)
+
+        # Add to cache
+        self._artist_cache[name_lower] = artist.id
+        logger.debug(f"Created new artist: {name}")
+
+        return artist.id, True
+
+    async def _get_or_create_album_exact(
+        self,
+        title: str,
+        artist_id: ArtistId,
+        release_year: int | None = None,
+        is_compilation: bool = False,
+        album_artist: str | None = None,
+    ) -> tuple[AlbumId, bool]:
+        """Get existing album by exact title+artist or create new.
+
+        Hey future me - NO FUZZY MATCHING! Lidarr folder structure guarantees
+        album title is correct. "Thriller (1982)" folder → title="Thriller", year=1982.
+
+        Args:
+            title: Album title from folder structure
+            artist_id: Parent artist ID
+            release_year: Year parsed from folder (if present)
+            is_compilation: True if under "Various Artists" folder
+            album_artist: Album artist name (for compilations)
+
+        Returns:
+            Tuple of (album_id, is_new)
+        """
+        title_lower = title.lower().strip()
+        artist_id_str = str(artist_id.value)
+
+        # For compilations, use album_artist as key instead of track artist
+        album_key = album_artist.lower() if album_artist else artist_id_str
+        cache_key = f"{title_lower}|{album_key}"
+
+        # Check cache first
+        if cache_key in self._album_cache:
+            return self._album_cache[cache_key], False
+
+        # Check database (exact match on title + artist_id)
+        stmt = select(AlbumModel).where(
+            func.lower(AlbumModel.title) == title_lower,
+            AlbumModel.artist_id == artist_id_str,
+        )
+        result = await self.session.execute(stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            album_id = AlbumId.from_string(existing.id)
+            self._album_cache[cache_key] = album_id
+            return album_id, False
+
+        # Determine secondary_types
+        secondary_types: list[str] = []
+        if is_compilation:
+            secondary_types.append(SecondaryAlbumType.COMPILATION.value)
+
+        # Create new album
+        album = Album(
+            id=AlbumId.generate(),
+            title=title,  # Keep original casing from folder
+            artist_id=artist_id,
+            release_year=release_year,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        await self.album_repo.add(album)
+
+        # Update model with extra fields (album_artist, secondary_types)
+        stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))
+        result = await self.session.execute(stmt)
+        album_model = result.scalar_one()
+        album_model.album_artist = album_artist
+        album_model.secondary_types = secondary_types
+
+        # Add to cache
+        self._album_cache[cache_key] = album.id
+        logger.debug(f"Created new album: {title} (year={release_year}, compilation={is_compilation})")
+
+        return album.id, True
+
+    async def _import_track_from_scan(
+        self,
+        scanned_track: ScannedTrack,
+        artist_id: ArtistId,
+        album_id: AlbumId,
+        is_va_album: bool = False,
+    ) -> dict[str, Any]:
+        """Import a track from LibraryFolderParser scan result.
+
+        Hey future me - this uses folder-based metadata (title, track_number, disc_number)
+        and only calls Mutagen for audio info (duration, bitrate, genre).
+
+        Args:
+            scanned_track: Track info from folder parser
+            artist_id: Parent artist ID (from folder)
+            album_id: Parent album ID (from folder)
+            is_va_album: True if this is a VA compilation
+
+        Returns:
+            Dict with import result
+        """
+        result = {"imported": False, "new_track": False}
+
+        file_path = scanned_track.path
+
+        # For VA tracks, the actual track artist may be in the filename
+        # (e.g., "01 - Michael Jackson - Billie Jean.flac")
+        track_artist_id = artist_id
+        if is_va_album and scanned_track.artist:
+            # Get or create the actual track artist
+            track_artist_id, _ = await self._get_or_create_artist_exact(scanned_track.artist)
+
+        # Extract audio info only (duration, bitrate, sample_rate, genre)
+        # NOT artist/album/title - those come from folder structure!
+        audio_info = self._extract_audio_info(file_path)
+
+        # Create track entity
+        track = Track(
+            id=TrackId.generate(),
+            title=scanned_track.title,  # From folder parsing!
+            artist_id=track_artist_id,
+            album_id=album_id,
+            duration_ms=audio_info.get("duration_ms", 0),
+            track_number=scanned_track.track_number,  # From folder parsing!
+            disc_number=scanned_track.disc_number,  # From folder parsing!
+            file_path=FilePath.from_string(str(file_path.resolve())),
+            genres=[audio_info["genre"]] if audio_info.get("genre") else [],
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        # Compute file hash and size
+        file_hash = ""
+        file_size = 0
+        try:
+            file_hash = self._compute_file_hash(file_path)
+            file_size = file_path.stat().st_size
+        except Exception as e:
+            logger.warning(f"Could not compute hash/size for {file_path}: {e}")
+
+        # Create track model with file info
+        primary_genre = track.genres[0] if track.genres else None
+        model = TrackModel(
+            id=str(track.id.value),
+            title=track.title,
+            artist_id=str(track.artist_id.value),
+            album_id=str(track.album_id.value) if track.album_id else None,
+            duration_ms=track.duration_ms,
+            track_number=track.track_number,
+            disc_number=track.disc_number,
+            file_path=str(track.file_path) if track.file_path else None,
+            genre=primary_genre,
+            file_size=file_size,
+            file_hash=file_hash,
+            file_hash_algorithm="sha256",
+            audio_bitrate=audio_info.get("bitrate"),
+            audio_format=audio_info.get("format"),
+            audio_sample_rate=audio_info.get("sample_rate"),
+            last_scanned_at=datetime.now(UTC),
+            is_broken=False,
+            created_at=track.created_at,
+            updated_at=track.updated_at,
+        )
+        self.session.add(model)
+
+        result["imported"] = True
+        result["new_track"] = True
+        return result
 
     async def _filter_changed_files(self, files: list[Path]) -> list[Path]:
         """Filter to only new or modified files (incremental scan).
@@ -402,11 +586,23 @@ class LibraryScannerService:
         return changed_files
 
     # =========================================================================
-    # FILE IMPORT
+    # FILE IMPORT (LEGACY - kept for backward compatibility)
+    # =========================================================================
+    # Hey future me - these methods are DEPRECATED since the refactoring to
+    # folder-structure-first scanning. The new primary path uses:
+    #   scan_library() -> LibraryFolderParser -> _import_track_from_scan()
+    # These old methods used ID3 tags as primary source which caused:
+    #   - 109 artists instead of 13 (fuzzy matching failures)
+    #   - Slow scans (full tag extraction per file)
+    # Keep them for now in case we need fallback, but plan to remove in v4.0.
     # =========================================================================
 
     def _prep_file_sync(self, file_path: Path) -> dict[str, Any]:
-        """Synchronously prepare file metadata and hash (runs in thread pool).
+        """DEPRECATED: Synchronously prepare file metadata and hash.
+
+        .. deprecated::
+            Use _import_track_from_scan() with LibraryFolderParser instead.
+            This method extracted full ID3 tags which was slow and unreliable.
 
         Hey future me - this runs in a ThreadPoolExecutor so CPU-intensive work
         doesn't block the async event loop. Only metadata extraction and hashing!
@@ -445,7 +641,12 @@ class LibraryScannerService:
     async def _import_file(
         self, file_path: Path, precomputed: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Import a single audio file into the database.
+        """DEPRECATED: Import a single audio file into the database.
+
+        .. deprecated::
+            Use _import_track_from_scan() with ScannedTrack from LibraryFolderParser.
+            This method relied on ID3 tags for artist/album identification which
+            caused duplicate artists (109 instead of 13) due to tag inconsistencies.
 
         Extracts metadata, finds/creates artist and album, creates track.
         If precomputed dict is provided, uses its metadata and hash instead of recomputing.
@@ -657,11 +858,24 @@ class LibraryScannerService:
         return result.scalar_one_or_none()
 
     # =========================================================================
-    # METADATA EXTRACTION
+    # METADATA EXTRACTION (LEGACY - used internally by deprecated methods)
+    # =========================================================================
+    # Hey future me - _extract_metadata() extracts ALL tags including artist/album/title.
+    # This is still used by:
+    #   - _prep_file_sync() (deprecated)
+    #   - _import_file() (deprecated)  
+    # The new primary path uses _extract_audio_info() which only extracts technical data:
+    #   - duration_ms, bitrate, sample_rate, format, genre
+    # Consider removing once all old import methods are removed.
     # =========================================================================
 
     def _extract_metadata(self, file_path: Path) -> dict[str, Any]:
-        """Extract audio metadata using mutagen.
+        """Extract full audio metadata using mutagen (including ID3 tags).
+
+        .. note::
+            For the new folder-first scanning, use _extract_audio_info() instead
+            which only extracts technical audio data (duration, bitrate, etc.)
+            without parsing artist/album/title from tags.
 
         Hey future me - this now ALWAYS returns a dict, even if extraction fails!
         At minimum: {"format": ".mp3", "duration_ms": 0}
@@ -818,24 +1032,104 @@ class LibraryScannerService:
                 sha256.update(chunk)
         return sha256.hexdigest()
 
+    def _extract_audio_info(self, file_path: Path) -> dict[str, Any]:
+        """Extract ONLY audio technical info from file (NOT artist/album/title!).
+
+        Hey future me - this is the NEW simplified extraction for Lidarr-based scanning!
+        We ONLY extract:
+        - duration_ms (from audio stream)
+        - bitrate (from audio stream)
+        - sample_rate (from audio stream)
+        - format (from file extension)
+        - genre (from ID3 tag - this is the ONLY tag we read!)
+
+        Artist, album, title come from FOLDER STRUCTURE, not from tags!
+
+        Args:
+            file_path: Path to audio file
+
+        Returns:
+            Dict with audio info (duration_ms, bitrate, sample_rate, format, genre)
+        """
+        audio_info: dict[str, Any] = {
+            "format": file_path.suffix.lstrip(".").lower(),
+            "duration_ms": 0,
+        }
+
+        try:
+            audio = MutagenFile(file_path)
+            if audio is None:
+                return audio_info
+
+            # Duration from audio stream
+            if hasattr(audio.info, "length") and audio.info.length:
+                audio_info["duration_ms"] = int(audio.info.length * 1000)
+
+            # Bitrate from audio stream
+            if hasattr(audio.info, "bitrate") and audio.info.bitrate:
+                audio_info["bitrate"] = audio.info.bitrate
+
+            # Sample rate from audio stream
+            if hasattr(audio.info, "sample_rate") and audio.info.sample_rate:
+                audio_info["sample_rate"] = audio.info.sample_rate
+
+            # Genre is the ONLY tag we extract (not in folder structure)
+            if hasattr(audio, "tags") and audio.tags:
+                genre = self._extract_genre_tag(audio.tags)
+                if genre:
+                    audio_info["genre"] = genre
+
+            return audio_info
+
+        except Exception as e:
+            logger.warning(f"Error extracting audio info from {file_path}: {e}")
+            return audio_info
+
+    def _extract_genre_tag(self, tags: Any) -> str | None:
+        """Extract genre from audio tags.
+
+        Hey future me - genre is the ONLY tag we need from ID3/Vorbis/MP4!
+        Everything else (artist, album, title) comes from folder structure.
+
+        Args:
+            tags: Audio tags from mutagen
+
+        Returns:
+            Genre string or None
+        """
+        # Genre tag mappings for different formats
+        genre_tags = ["TCON", "genre", "©gen"]
+
+        for tag_key in genre_tags:
+            if tag_key in tags:
+                value = tags[tag_key]
+                if isinstance(value, list) and value:
+                    value = value[0]
+                if hasattr(value, "text"):
+                    value = value.text[0] if isinstance(value.text, list) else value.text
+                if value:
+                    return str(value)
+        return None
+
     # =========================================================================
-    # FUZZY MATCHING
+    # CACHE LOADING (for exact name matching)
     # =========================================================================
 
     async def _load_caches(self) -> None:
-        """Pre-load artist and album names for fuzzy matching."""
-        # Load all artists
+        """Pre-load artist and album names for exact matching.
+
+        Hey future me - NO FUZZY MATCHING anymore! Just lowercase exact match.
+        Lidarr folder structure guarantees correct names.
+        """
+        # Load all artists (key = lowercase name)
         artist_stmt = select(ArtistModel.id, ArtistModel.name)
         result = await self.session.execute(artist_stmt)
         for row in result.all():
             artist_id = ArtistId.from_string(row[0])
-            # Use normalized name as cache key for better matching!
-            normalized = self._normalize_artist_name(row[1])
-            self._artist_cache[normalized] = artist_id
+            name_lower = row[1].lower().strip()
+            self._artist_cache[name_lower] = artist_id
 
-        # Load all albums
-        # Hey future me - nutze album_artist für Cache-Key bei Kompilationen!
-        # Sonst werden Tracks verschiedener Künstler zu verschiedenen Alben zugeordnet.
+        # Load all albums (key = "title_lower|artist_key")
         album_stmt = select(
             AlbumModel.id,
             AlbumModel.title,
@@ -845,7 +1139,7 @@ class LibraryScannerService:
         result = await self.session.execute(album_stmt)
         for row in result.all():
             album_id = AlbumId.from_string(row[0])
-            # Nutze album_artist wenn vorhanden (für Kompilationen), sonst artist_id
+            # Use album_artist if present (for compilations), otherwise artist_id
             album_key = row[3].lower() if row[3] else row[2]
             cache_key = f"{row[1].lower()}|{album_key}"
             self._album_cache[cache_key] = album_id
@@ -854,181 +1148,6 @@ class LibraryScannerService:
             f"Loaded caches: {len(self._artist_cache)} artists, "
             f"{len(self._album_cache)} albums"
         )
-
-    def _normalize_artist_name(self, name: str) -> str:
-        """Normalize artist name for better matching.
-
-        Hey future me - this is CRITICAL for deduplication!
-        Fixes common issues:
-        - "The Beatles" → "Beatles"
-        - Extra whitespace trimming
-        - Lowercase everything
-        """
-        if not name:
-            return ""
-
-        # Remove common articles at start (case-insensitive)
-        articles = ("the ", "a ", "an ", "les ", "la ", "le ")
-        normalized = name.lower().strip()
-
-        for article in articles:
-            if normalized.startswith(article):
-                normalized = normalized[len(article):].strip()
-                break
-
-        return normalized.strip()
-
-    async def _find_or_create_artist(self, name: str) -> tuple[ArtistId, bool, bool]:
-        """Find existing artist by fuzzy matching or create new.
-
-        Args:
-            name: Artist name from metadata
-
-        Returns:
-            Tuple of (artist_id, is_new, is_fuzzy_matched)
-        """
-        name_lower = name.lower()
-        name_normalized = self._normalize_artist_name(name)
-
-        # Exact match first (try both normalized and original name)
-        if name_normalized in self._artist_cache:
-            return self._artist_cache[name_normalized], False, False
-        if name_lower in self._artist_cache:
-            return self._artist_cache[name_lower], False, False
-
-        # Fuzzy match using token_set_ratio (better for "The X" vs "X")
-        best_match: str | None = None
-        best_score: float = 0.0
-
-        for cached_name in self._artist_cache:
-            # Use token_set_ratio for better matching with articles
-            score = fuzz.token_set_ratio(name_normalized, cached_name)
-            if score > best_score:
-                best_score = score
-                best_match = cached_name
-
-        # Use fuzzy match if above threshold
-        if best_match and best_score >= self.FUZZY_THRESHOLD:
-            logger.debug(
-                f"Fuzzy matched artist '{name}' (normalized: '{name_normalized}') "
-                f"to cached '{best_match}' (score: {best_score})"
-            )
-            return self._artist_cache[best_match], False, True
-
-        # Create new artist
-        artist = Artist(
-            id=ArtistId.generate(),
-            name=name,  # Store original name, not normalized
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        await self.artist_repo.add(artist)
-
-        # Add to cache using normalized name
-        self._artist_cache[name_normalized] = artist.id
-        logger.debug(f"Created new artist: {name} (normalized: {name_normalized})")
-
-        return artist.id, True, False
-
-    async def _find_or_create_album(
-        self,
-        title: str,
-        artist_id: ArtistId,
-        release_year: int | None = None,
-        album_artist: str | None = None,
-        is_compilation: bool = False,
-    ) -> tuple[AlbumId, bool, bool]:
-        """Find existing album by fuzzy matching or create new.
-
-        Now supports album_artist (TPE2) and compilation detection!
-
-        Args:
-            title: Album title from metadata
-            artist_id: Artist ID (track-level artist)
-            release_year: Optional release year
-            album_artist: Album-level artist (TPE2 tag) - often "Various Artists" for compilations
-            is_compilation: True if compilation flag is set in metadata
-
-        Returns:
-            Tuple of (album_id, is_new, is_fuzzy_matched)
-        """
-        title_lower = title.lower()
-        artist_id_str = str(artist_id.value)
-
-        # Hey future me - für Kompilationen nutze album_artist statt track artist!
-        # Sonst wird jeder Track-Künstler ein neues Album erstellen.
-        # Beispiel: "Greatest Hits" mit 30 Künstlern = 30 Alben ohne diesen Fix!
-        album_key = album_artist.lower() if album_artist else artist_id_str
-
-        # Exact match first
-        cache_key = f"{title_lower}|{album_key}"
-        if cache_key in self._album_cache:
-            return self._album_cache[cache_key], False, False
-
-        # Fuzzy match (only for same album_artist/artist)
-        best_match_key: str | None = None
-        best_score: float = 0.0
-
-        for cached_key, _cached_album_id in self._album_cache.items():
-            cached_title, cached_artist = cached_key.rsplit("|", 1)
-            if cached_artist != album_key:
-                continue
-
-            # Use token_set_ratio for better album title matching
-            score = fuzz.token_set_ratio(title_lower, cached_title)
-            if score > best_score:
-                best_score = score
-                best_match_key = cached_key
-
-        # Use fuzzy match if above threshold
-        if best_match_key and best_score >= self.FUZZY_THRESHOLD:
-            logger.debug(f"Fuzzy matched album '{title}' (score: {best_score})")
-            return self._album_cache[best_match_key], False, True
-
-        # Determine secondary_types using Lidarr-style compilation detection
-        # Hey future me - this uses the new detect_compilation() with full heuristics!
-        # We pass explicit_flag (from TCMP/cpil) and album_artist, track_artists come later
-        # via post-scan analysis (when we have all tracks for diversity calculation).
-        detection_result = detect_compilation(
-            album_artist=album_artist,
-            track_artists=None,  # Not available yet at single-file scan time
-            explicit_flag=is_compilation if is_compilation else None,
-        )
-
-        secondary_types: list[str] = []
-        if detection_result.is_compilation:
-            secondary_types.append(SecondaryAlbumType.COMPILATION.value)
-            logger.debug(
-                f"Album '{title}' detected as compilation: "
-                f"reason={detection_result.reason}, confidence={detection_result.confidence:.0%}"
-            )
-
-        # Create new album
-        album = Album(
-            id=AlbumId.generate(),
-            title=title,
-            artist_id=artist_id,
-            release_year=release_year,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-
-        # Add album via repository, then update model directly for new fields
-        await self.album_repo.add(album)
-
-        # Get the model and set the new fields (album_artist, secondary_types)
-        # Hey - we need to update the model directly because Album entity doesn't have these yet
-        stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))
-        result = await self.session.execute(stmt)
-        album_model = result.scalar_one()
-        album_model.album_artist = album_artist
-        album_model.secondary_types = secondary_types
-
-        # Add to cache
-        self._album_cache[cache_key] = album.id
-        logger.debug(f"Created new album: {title}")
-
-        return album.id, True, False
 
     # =========================================================================
     # UTILITY METHODS

@@ -51,6 +51,11 @@ class Artist:
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
     image_url: str | None = None
+    # Hey future me - disambiguation is for Lidarr-style naming templates!
+    # Sourced from MusicBrainz to differentiate artists with the same name.
+    # Example: "Genesis" has disambiguation "English rock band" vs other Genesis artists.
+    # Used in {Artist Disambiguation} naming variable.
+    disambiguation: str | None = None
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata_sources: dict[str, str] = field(default_factory=dict)
@@ -82,6 +87,8 @@ class Artist:
 # optional (some albums don't have clear release dates, compilations, etc). artwork_path points to
 # local file (FilePath value object validates it). Genres/tags are list[str] not set[str] to preserve
 # order from APIs. The metadata_sources dict is critical - don't overwrite user-edited fields!
+# Hey future me - primary_type and secondary_types are Lidarr-style album typing! Used in naming
+# templates via {Album Type}. Examples: "Album", "EP", "Single", "Compilation", "Live", "Soundtrack".
 @dataclass
 class Album:
     """Album entity representing a music album."""
@@ -94,6 +101,17 @@ class Album:
     musicbrainz_id: str | None = None
     artwork_path: FilePath | None = None
     artwork_url: str | None = None  # Spotify CDN URL for album cover
+    # Hey future me - Lidarr-style dual album type system for naming templates!
+    # primary_type: Album, EP, Single, Broadcast, Other
+    # secondary_types: Compilation, Soundtrack, Spokenword, Interview, Audiobook, Live, Remix, DJ-mix
+    # Used in {Album Type} variable - combines primary + secondary for display
+    primary_type: str = "Album"
+    secondary_types: list[str] = field(default_factory=list)
+    # Hey future me - disambiguation is for Lidarr-style naming templates!
+    # Sourced from MusicBrainz to differentiate album editions/versions.
+    # Example: "Thriller (25th Anniversary Edition)" has disambiguation "25th Anniversary Edition".
+    # Used in {Album Disambiguation} naming variable.
+    disambiguation: str | None = None
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata_sources: dict[str, str] = field(default_factory=dict)
@@ -108,6 +126,43 @@ class Album:
         """Validate album data."""
         if not self.title or not self.title.strip():
             raise ValueError("Album title cannot be empty")
+
+    @property
+    def is_compilation(self) -> bool:
+        """Check if album is a compilation (Various Artists, etc.)."""
+        return "compilation" in [t.lower() for t in (self.secondary_types or [])]
+
+    @property
+    def album_type_display(self) -> str:
+        """Get display string for album type (used in {Album Type} template variable).
+
+        Hey future me - this formats the album type for Lidarr-style naming templates!
+        Priority: Secondary types first (more specific), then primary type.
+        Examples:
+          - primary="Album", secondary=[] → "Album"
+          - primary="Album", secondary=["Live"] → "Live Album"
+          - primary="EP", secondary=["Remix"] → "Remix EP"
+          - primary="Album", secondary=["Compilation", "Live"] → "Live Compilation"
+        """
+        secondary = self.secondary_types or []
+        primary = self.primary_type or "Album"
+
+        # Title-case everything for consistency
+        primary = primary.title()
+        secondary = [s.title() for s in secondary]
+
+        if not secondary:
+            return primary
+
+        # Special handling: if "Compilation" is in secondary, use it as base
+        if "Compilation" in secondary:
+            other_secondary = [s for s in secondary if s != "Compilation"]
+            if other_secondary:
+                return f"{' '.join(other_secondary)} Compilation"
+            return "Compilation"
+
+        # Otherwise combine: "Live Album", "Remix EP", etc.
+        return f"{' '.join(secondary)} {primary}"
         if self.release_year is not None and (
             self.release_year < 1900 or self.release_year > 2100
         ):

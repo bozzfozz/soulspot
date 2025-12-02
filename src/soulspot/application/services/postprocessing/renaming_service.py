@@ -141,6 +141,22 @@ class RenamingService:
         Returns:
             Generated filename (including path components)
         """
+        # Hey future me - Album Type now uses the album_type_display property!
+        album_type = "Album"
+        if album and hasattr(album, "album_type_display"):
+            album_type = album.album_type_display
+        elif album and hasattr(album, "primary_type") and album.primary_type:
+            album_type = album.primary_type.title()
+
+        # Hey future me - Disambiguation is now sourced from Artist/Album entities!
+        artist_disambiguation = ""
+        if hasattr(artist, "disambiguation") and artist.disambiguation:
+            artist_disambiguation = artist.disambiguation
+
+        album_disambiguation = ""
+        if album and hasattr(album, "disambiguation") and album.disambiguation:
+            album_disambiguation = album.disambiguation
+
         # Prepare template variables with both old and new naming conventions
         variables = {
             # Legacy variables (for backward compatibility)
@@ -152,13 +168,13 @@ class RenamingService:
             "year": album.release_year if album else "",
             # New standardized variables
             "Artist CleanName": self._clean_name(artist.name),
-            "Artist Disambiguation": "",  # TODO: Add disambiguation support - e.g., "The Band (US)" vs "The Band (UK)"
+            "Artist Disambiguation": artist_disambiguation,
             "Track CleanTitle": self._clean_name(track.title),
             "Album CleanTitle": self._clean_name(album.title)
             if album
             else "Unknown Album",
-            "Album Disambiguation": "",  # TODO: Add disambiguation support - use MusicBrainz release disambiguation
-            "Album Type": "Album",  # TODO: Add album type detection - Album/Single/EP/Compilation from MusicBrainz
+            "Album Disambiguation": album_disambiguation,
+            "Album Type": album_type,
             "Release Year": str(album.release_year)
             if album and album.release_year
             else "",
@@ -263,6 +279,26 @@ class RenamingService:
         colon_replacement = self._cached_colon_replacement or " -"
         slash_replacement = self._cached_slash_replacement or "-"
 
+        # Hey future me - Album Type now uses the album_type_display property!
+        # This combines primary_type and secondary_types into a Lidarr-compatible string.
+        # Examples: "Album", "EP", "Live Album", "Compilation", "Remix EP"
+        album_type = "Album"
+        if album and hasattr(album, "album_type_display"):
+            album_type = album.album_type_display
+        elif album and hasattr(album, "primary_type") and album.primary_type:
+            album_type = album.primary_type.title()
+
+        # Hey future me - Disambiguation is now sourced from Artist/Album entities!
+        # Format: Empty string if None, otherwise the disambiguation text (without parentheses).
+        # The template itself handles the parentheses via { (Album Disambiguation)} syntax.
+        artist_disambiguation = ""
+        if hasattr(artist, "disambiguation") and artist.disambiguation:
+            artist_disambiguation = artist.disambiguation
+
+        album_disambiguation = ""
+        if album and hasattr(album, "disambiguation") and album.disambiguation:
+            album_disambiguation = album.disambiguation
+
         return {
             # Legacy variables (for backward compatibility)
             "artist": artist.name,
@@ -276,7 +312,7 @@ class RenamingService:
             "Artist CleanName": self._clean_name(
                 artist.name, colon_replacement, slash_replacement
             ),
-            "Artist Disambiguation": "",
+            "Artist Disambiguation": artist_disambiguation,
             "Track Title": track.title,
             "Track CleanTitle": self._clean_name(
                 track.title, colon_replacement, slash_replacement
@@ -289,8 +325,8 @@ class RenamingService:
                 colon_replacement,
                 slash_replacement,
             ),
-            "Album Disambiguation": "",
-            "Album Type": "Album",  # TODO: Detect from MusicBrainz
+            "Album Disambiguation": album_disambiguation,
+            "Album Type": album_type,
             "Release Year": str(album.release_year)
             if album and album.release_year
             else "",

@@ -1396,13 +1396,17 @@ async def validate_naming_template(
     # Generate preview if valid
     preview = None
     if is_valid:
-        # Sample data for preview
+        # Sample data for preview - matches Lidarr naming variables
+        # Hey future me - Album Type shows "Album" in preview, but in real usage
+        # it comes from album.album_type_display property (e.g., "Live Album", "Compilation")
         sample_data = {
             "Artist Name": "Pink Floyd",
             "Artist CleanName": "Pink Floyd",
+            "Artist Disambiguation": "",  # Empty in most cases, e.g., "(UK band)" when needed
             "Album Title": "The Dark Side of the Moon",
             "Album CleanTitle": "The Dark Side of the Moon",
             "Album Type": "Album",
+            "Album Disambiguation": "",  # Empty in most cases, e.g., "(Deluxe Edition)" when needed
             "Release Year": "1973",
             "Track Title": "Speak to Me",
             "Track CleanTitle": "Speak to Me",

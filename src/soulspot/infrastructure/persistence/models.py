@@ -86,6 +86,11 @@ class ArtistModel(Base):
     # won't have this data until next Spotify sync. Migration dd18990ggh48 adds these.
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Hey future me - disambiguation is for Lidarr-style naming templates!
+    # Sourced from MusicBrainz to differentiate artists with the same name.
+    # Example: "Genesis" has disambiguation "English rock band" vs other Genesis artists.
+    # Used in {Artist Disambiguation} naming variable. Added in migration pp27012rrs60.
+    disambiguation: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -149,6 +154,11 @@ class AlbumModel(Base):
     secondary_types: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
+    # Hey future me - disambiguation is for Lidarr-style naming templates!
+    # Sourced from MusicBrainz to differentiate album editions/versions.
+    # Example: "Thriller (25th Anniversary Edition)" has disambiguation "25th Anniversary Edition".
+    # Used in {Album Disambiguation} naming variable. Added in migration pp27012rrs60.
+    disambiguation: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
