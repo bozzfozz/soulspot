@@ -124,23 +124,24 @@
 <!-- Scan Status -->
 <div id="scan-status">
     {% if active_job %}
-    <div class="card scan-progress-card">
+    <div class="card scan-progress-card" id="active-scan-card" data-job-id="{{ active_job.job_id }}">
         <div class="card-header"><h3><span class="scanning-indicator"></span>Scan in Progress</h3></div>
-        <div class="card-body" hx-get="/api/library/import/status/{{ active_job.job_id }}/html" hx-trigger="every 2s" hx-swap="innerHTML">
+        <div class="card-body" id="scan-progress-content">
             <div class="progress-container-fancy">
                 <div class="progress-bar-fancy">
-                    <div class="progress-fill-fancy" style="width: {{ active_job.progress | default(0) }}%;"><div class="progress-shimmer"></div></div>
+                    <div class="progress-fill-fancy" id="progress-fill" style="width: {{ active_job.progress | default(0) }}%;"><div class="progress-shimmer"></div></div>
                 </div>
-                <span class="progress-percentage">{{ active_job.progress | default(0) | round(1) }}%</span>
+                <span class="progress-percentage" id="progress-text">{{ active_job.progress | default(0) | round(1) }}%</span>
             </div>
-            {% if active_job.stats %}
-            <div class="scan-live-stats">
-                <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value">{{ active_job.stats.scanned | default(0) }}</span><span class="live-stat-label">Scanned</span></div>
-                <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value">{{ active_job.stats.imported | default(0) }}</span><span class="live-stat-label">Imported</span></div>
-                <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value">{{ active_job.stats.skipped | default(0) }}</span><span class="live-stat-label">Skipped</span></div>
-                <div class="live-stat live-stat-warning"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value">{{ active_job.stats.errors | default(0) }}</span><span class="live-stat-label">Errors</span></div>
+            <div class="scan-live-stats" id="scan-stats">
+                <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value" id="stat-scanned">{{ active_job.stats.scanned | default(0) }}</span><span class="live-stat-label">Scanned</span></div>
+                <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value" id="stat-imported">{{ active_job.stats.imported | default(0) }}</span><span class="live-stat-label">Imported</span></div>
+                <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value" id="stat-skipped">{{ active_job.stats.skipped | default(0) }}</span><span class="live-stat-label">Skipped</span></div>
+                <div class="live-stat live-stat-warning" id="stat-errors-container"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value" id="stat-errors">{{ active_job.stats.errors | default(0) }}</span><span class="live-stat-label">Errors</span></div>
             </div>
-            {% endif %}
+            <p style="text-align: center; color: var(--text-muted); margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
+                <i class="bi bi-folder"></i> Total files: <span id="stat-total">{{ active_job.stats.total_files | default(0) }}</span>
+            </p>
         </div>
     </div>
     {% endif %}
@@ -308,6 +309,157 @@
 </style>
 
 <script>
+// Hey future me - SSE (Server-Sent Events) implementation for real-time scan progress!
+// This replaces the inefficient polling every 2 seconds with push-based updates.
+// Browser maintains single persistent connection, server pushes updates as they happen.
+// Result: Smooth progress bar, instant stats updates, no request overhead.
+
+let scanEventSource = null;
+
+function formatNumber(num) {
+    return (num || 0).toLocaleString();
+}
+
+function initScanSSE(jobId) {
+    // Close existing connection if any
+    if (scanEventSource) {
+        scanEventSource.close();
+        scanEventSource = null;
+    }
+
+    console.log('[SSE] Connecting to scan progress stream:', jobId);
+    scanEventSource = new EventSource(`/api/library/import/status/${jobId}/stream`);
+
+    scanEventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        console.log('[SSE] Received:', data.status, data.progress + '%');
+
+        // Update progress bar smoothly
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        if (progressFill) progressFill.style.width = data.progress + '%';
+        if (progressText) progressText.textContent = data.progress.toFixed(1) + '%';
+
+        // Update stats
+        const stats = data.stats || {};
+        const statScanned = document.getElementById('stat-scanned');
+        const statImported = document.getElementById('stat-imported');
+        const statSkipped = document.getElementById('stat-skipped');
+        const statErrors = document.getElementById('stat-errors');
+        const statTotal = document.getElementById('stat-total');
+
+        if (statScanned) statScanned.textContent = formatNumber(stats.scanned);
+        if (statImported) statImported.textContent = formatNumber(stats.imported);
+        if (statSkipped) statSkipped.textContent = formatNumber(stats.skipped);
+        if (statErrors) statErrors.textContent = formatNumber(stats.errors);
+        if (statTotal) statTotal.textContent = formatNumber(stats.total_files);
+
+        // Handle completion
+        if (data.done || data.is_completed || data.is_failed) {
+            console.log('[SSE] Scan finished:', data.status);
+            scanEventSource.close();
+            scanEventSource = null;
+
+            if (data.is_completed) {
+                showScanCompleted(data);
+            } else if (data.is_failed) {
+                showScanFailed(data);
+            }
+        }
+    };
+
+    scanEventSource.onerror = function(error) {
+        console.error('[SSE] Connection error:', error);
+        // SSE auto-reconnects, but log for debugging
+        // If connection permanently fails, fall back to polling
+        if (scanEventSource.readyState === EventSource.CLOSED) {
+            console.log('[SSE] Connection closed, falling back to polling');
+            fallbackToPolling(jobId);
+        }
+    };
+}
+
+function fallbackToPolling(jobId) {
+    // Fallback to HTMX polling if SSE fails (e.g., proxy issues)
+    const statusDiv = document.getElementById('scan-status');
+    if (statusDiv) {
+        const cardBody = statusDiv.querySelector('.card-body');
+        if (cardBody) {
+            cardBody.setAttribute('hx-get', `/api/library/import/status/${jobId}/html`);
+            cardBody.setAttribute('hx-trigger', 'every 2s');
+            cardBody.setAttribute('hx-swap', 'innerHTML');
+            htmx.process(cardBody);
+        }
+    }
+}
+
+function showScanCompleted(data) {
+    const stats = data.stats || {};
+    const statusDiv = document.getElementById('scan-status');
+    if (!statusDiv) return;
+
+    statusDiv.innerHTML = `
+        <div class="card">
+            <div class="card-header"><h3><i class="bi bi-check-circle-fill" style="color: #22c55e;"></i> Scan Completed</h3></div>
+            <div class="card-body">
+                <div class="completion-banner" style="display: flex; align-items: center; gap: 1rem; padding: 1.25rem; background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05)); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; margin-bottom: 1.5rem;">
+                    <div style="width: 48px; height: 48px; background: rgba(34, 197, 94, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #22c55e;">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                    <div>
+                        <strong style="color: #22c55e; font-size: 1.1rem;">Scan Completed</strong>
+                        <span style="display: block; font-size: 0.9rem; color: var(--text-muted);">Successfully processed your music library</span>
+                    </div>
+                </div>
+                <div class="scan-live-stats">
+                    <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value">${formatNumber(stats.scanned)}</span><span class="live-stat-label">Scanned</span></div>
+                    <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value">${formatNumber(stats.imported)}</span><span class="live-stat-label">Imported</span></div>
+                    <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value">${formatNumber(stats.skipped)}</span><span class="live-stat-label">Skipped</span></div>
+                    ${stats.errors > 0 ? `<div class="live-stat live-stat-warning"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value">${formatNumber(stats.errors)}</span><span class="live-stat-label">Errors</span></div>` : ''}
+                </div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="window.location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh Stats
+                    </button>
+                </div>
+            </div>
+        </div>`;
+
+    // Refresh recent scans list
+    htmx.trigger(document.querySelector('.recent-scans-container'), 'refresh');
+
+    // Auto-reload if items imported (to update stats)
+    if (stats.imported > 0) {
+        setTimeout(() => window.location.reload(), 3000);
+    }
+}
+
+function showScanFailed(data) {
+    const statusDiv = document.getElementById('scan-status');
+    if (!statusDiv) return;
+
+    statusDiv.innerHTML = `
+        <div class="card" style="border-color: #ef4444;">
+            <div class="card-header" style="background: rgba(239, 68, 68, 0.1);"><h3 style="color: #ef4444;"><i class="bi bi-x-circle-fill"></i> Scan Failed</h3></div>
+            <div class="card-body">
+                <div style="display: flex; align-items: center; gap: 1rem; padding: 1.25rem; background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05)); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px;">
+                    <div style="width: 48px; height: 48px; background: rgba(239, 68, 68, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #ef4444;">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                    <div>
+                        <strong style="color: #ef4444; font-size: 1.1rem;">Scan Failed</strong>
+                        <span style="display: block; font-size: 0.9rem; color: var(--text-muted);">${data.error || 'An unexpected error occurred'}</span>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="btn btn-secondary" onclick="window.location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Try Again
+                    </button>
+                </div>
+            </div>
+        </div>`;
+}
+
 function animateCounters() {
     const counters = document.querySelectorAll('.counter');
     counters.forEach(counter => {
@@ -326,34 +478,64 @@ function animateCounters() {
         observer.observe(counter);
     });
 }
-document.addEventListener('DOMContentLoaded', animateCounters);
 
+document.addEventListener('DOMContentLoaded', function() {
+    animateCounters();
+
+    // Check if there's an active scan on page load and connect SSE
+    const activeScanCard = document.getElementById('active-scan-card');
+    if (activeScanCard) {
+        const jobId = activeScanCard.dataset.jobId;
+        if (jobId) {
+            console.log('[SSE] Found active scan on page load:', jobId);
+            initScanSSE(jobId);
+        }
+    }
+});
+
+// Handle new scan started via HTMX
 document.body.addEventListener('htmx:afterRequest', function(evt) {
     if (evt.detail.pathInfo.requestPath === '/api/library/import/scan') {
         try {
             const response = JSON.parse(evt.detail.xhr.responseText);
             if (response.job_id) {
                 const statusDiv = document.getElementById('scan-status');
-                const stats = response.stats || {};
-                const isCompleted = response.status === 'completed';
+                // Create initial scan card with SSE data attribute
                 statusDiv.innerHTML = `
-                    <div class="card ${isCompleted ? '' : 'scan-progress-card'}">
-                        <div class="card-header"><h3>${isCompleted ? '<i class="bi bi-check-circle-fill text-success"></i>' : '<span class="scanning-indicator"></span>'}${isCompleted ? 'Scan Completed' : 'Scanning...'}</h3></div>
-                        <div class="card-body" ${!isCompleted ? `hx-get="/api/library/import/status/${response.job_id}/html" hx-trigger="load, every 2s" hx-swap="innerHTML"` : ''}>
-                            ${isCompleted ? `
-                                <div class="scan-live-stats" style="margin-bottom: 1rem;">
-                                    <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value">${(stats.scanned || 0).toLocaleString()}</span><span class="live-stat-label">Scanned</span></div>
-                                    <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value">${(stats.imported || 0).toLocaleString()}</span><span class="live-stat-label">Imported</span></div>
-                                    <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value">${(stats.skipped || 0).toLocaleString()}</span><span class="live-stat-label">Skipped</span></div>
-                                    <div class="live-stat ${stats.errors > 0 ? 'live-stat-warning' : ''}"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value">${(stats.errors || 0).toLocaleString()}</span><span class="live-stat-label">Errors</span></div>
+                    <div class="card scan-progress-card" id="active-scan-card" data-job-id="${response.job_id}">
+                        <div class="card-header"><h3><span class="scanning-indicator"></span>Scan in Progress</h3></div>
+                        <div class="card-body" id="scan-progress-content">
+                            <div class="progress-container-fancy">
+                                <div class="progress-bar-fancy">
+                                    <div class="progress-fill-fancy" id="progress-fill" style="width: 0%;"><div class="progress-shimmer"></div></div>
                                 </div>
-                            ` : `<div class="progress-container-fancy"><div class="progress-bar-fancy"><div class="progress-fill-fancy" style="width: 0%;"><div class="progress-shimmer"></div></div></div><span class="progress-percentage">0%</span></div><p style="text-align: center; color: var(--text-muted); margin: 0;"><i class="bi bi-hourglass-split"></i> Initializing scan...</p>`}
+                                <span class="progress-percentage" id="progress-text">0%</span>
+                            </div>
+                            <div class="scan-live-stats" id="scan-stats">
+                                <div class="live-stat"><i class="bi bi-file-earmark"></i><span class="live-stat-value" id="stat-scanned">0</span><span class="live-stat-label">Scanned</span></div>
+                                <div class="live-stat live-stat-success"><i class="bi bi-check-circle-fill"></i><span class="live-stat-value" id="stat-imported">0</span><span class="live-stat-label">Imported</span></div>
+                                <div class="live-stat"><i class="bi bi-skip-forward-fill"></i><span class="live-stat-value" id="stat-skipped">0</span><span class="live-stat-label">Skipped</span></div>
+                                <div class="live-stat live-stat-warning" id="stat-errors-container"><i class="bi bi-exclamation-triangle-fill"></i><span class="live-stat-value" id="stat-errors">0</span><span class="live-stat-label">Errors</span></div>
+                            </div>
+                            <p style="text-align: center; color: var(--text-muted); margin-top: 1rem; margin-bottom: 0; font-size: 0.85rem;">
+                                <i class="bi bi-folder"></i> Total files: <span id="stat-total">0</span>
+                            </p>
                         </div>
                     </div>`;
-                htmx.process(statusDiv);
-                if (isCompleted && stats.imported > 0) { setTimeout(() => window.location.reload(), 2000); }
+
+                // Initialize SSE connection for real-time updates
+                initScanSSE(response.job_id);
             }
-        } catch (e) { document.getElementById('scan-status').innerHTML = `<div class="card" style="border-color: #ef4444;"><div class="card-body" style="text-align: center; padding: 2rem;"><i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem; margin-bottom: 1rem;"></i><p style="margin: 0;">Error starting scan.</p></div></div>`; }
+        } catch (e) {
+            console.error('Error handling scan response:', e);
+            document.getElementById('scan-status').innerHTML = `
+                <div class="card" style="border-color: #ef4444;">
+                    <div class="card-body" style="text-align: center; padding: 2rem;">
+                        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p style="margin: 0;">Error starting scan.</p>
+                    </div>
+                </div>`;
+        }
     }
 });
 
@@ -378,6 +560,13 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
 document.body.addEventListener('htmx:responseError', function(evt) {
     if (evt.detail.target.id === 'clear-library-status') {
         document.getElementById('clear-library-status').innerHTML = `<div class="compilation-result" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;"><i class="bi bi-x-circle-fill"></i>Error clearing library. Please try again.</div>`;
+    }
+});
+
+// Cleanup SSE on page unload
+window.addEventListener('beforeunload', function() {
+    if (scanEventSource) {
+        scanEventSource.close();
     }
 });
 </script>

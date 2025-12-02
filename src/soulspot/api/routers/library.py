@@ -589,6 +589,109 @@ async def get_import_scan_status_html(
     )
 
 
+# Hey future me - SSE endpoint for real-time scan progress!
+# Replaces inefficient polling (every 2s) with server-pushed events.
+# Browser opens persistent connection, we push JSON events as progress changes.
+# Format: "data: {...json...}\n\n" - standard SSE protocol.
+# Connection closes automatically when scan completes/fails.
+@router.get("/import/status/{job_id}/stream")
+async def stream_import_scan_status(
+    job_id: str,
+    job_queue: JobQueue = Depends(get_job_queue),
+) -> Any:
+    """Stream import scan job status via Server-Sent Events (SSE).
+
+    Real-time progress updates without polling overhead. Browser receives
+    push notifications as scan progresses. Much more efficient than
+    polling every 2 seconds!
+
+    Args:
+        job_id: Job ID from start_import_scan
+        job_queue: Job queue instance
+
+    Returns:
+        SSE event stream with progress updates
+
+    Event format:
+        data: {"status": "running", "progress": 45.5, "stats": {...}}
+
+    Final event when complete:
+        data: {"status": "completed", "progress": 100, "stats": {...}, "done": true}
+    """
+    import asyncio
+    import json
+
+    from starlette.responses import StreamingResponse
+
+    async def event_generator() -> Any:
+        """Generate SSE events as scan progresses."""
+        last_progress = -1.0
+        poll_interval = 0.3  # Check every 300ms, but only send if changed
+
+        while True:
+            job = await job_queue.get_job(job_id)
+
+            if not job:
+                # Job not found - send error and close
+                yield f"data: {json.dumps({'error': 'Job not found', 'done': True})}\n\n"
+                break
+
+            # Build event data
+            progress = 0.0
+            stats: dict[str, Any] = {}
+
+            if job.result and isinstance(job.result, dict):
+                progress = job.result.get("progress", 0.0)
+                stats = job.result.get("stats", {})
+
+            event_data = {
+                "job_id": job.id,
+                "status": job.status.value,
+                "progress": round(progress, 1),
+                "stats": stats,
+                "is_running": job.status == JobStatus.RUNNING,
+                "is_completed": job.status == JobStatus.COMPLETED,
+                "is_failed": job.status == JobStatus.FAILED,
+            }
+
+            # Add timestamps if available
+            if job.started_at:
+                event_data["started_at"] = job.started_at.isoformat()
+            if job.completed_at:
+                event_data["completed_at"] = job.completed_at.isoformat()
+            if job.error:
+                event_data["error"] = job.error
+
+            # Only send if progress changed (avoid flooding)
+            # Or if status changed (completed/failed)
+            if progress != last_progress or job.status in (
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+            ):
+                last_progress = progress
+                yield f"data: {json.dumps(event_data)}\n\n"
+
+            # Check if scan finished
+            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                # Send final "done" event so client knows to close
+                event_data["done"] = True
+                yield f"data: {json.dumps(event_data)}\n\n"
+                break
+
+            # Wait before next check
+            await asyncio.sleep(poll_interval)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
+
+
 @router.get("/import/summary")
 async def get_import_summary(
     scanner: LibraryScannerService = Depends(get_library_scanner_service),

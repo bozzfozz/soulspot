@@ -1,6 +1,6 @@
 {# Hey future me - this is the HTMX fragment for scan status updates!
-   Used by library import page to show live progress. Polled every 2s.
-   Must match the styling in library_import.html! #}
+   Used as FALLBACK when SSE fails. Primary updates now via SSE in library.html.
+   Also used for initial server-side render. Must match the styling in library.html! #}
 
 {% if is_running %}
 <!-- Running State - Show animated progress -->
