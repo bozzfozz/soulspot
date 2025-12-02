@@ -33,7 +33,7 @@
 
 <!-- Stats Grid with animated counters -->
 <div class="stats-grid" id="summary-stats">
-    <div class="stat-card stat-card-animated" style="--delay: 0;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
         <div class="stat-icon stat-icon-playlists">
             <i class="bi bi-collection-play"></i>
         </div>
@@ -43,7 +43,7 @@
         </div>
         <div class="stat-shine"></div>
     </div>
-    <div class="stat-card stat-card-animated" style="--delay: 1;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1;">
         <div class="stat-icon stat-icon-tracks">
             <i class="bi bi-music-note-list"></i>
         </div>
@@ -53,7 +53,7 @@
         </div>
         <div class="stat-shine"></div>
     </div>
-    <div class="stat-card stat-card-animated" style="--delay: 2;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2;">
         <div class="stat-icon stat-icon-downloaded">
             <i class="bi bi-download"></i>
         </div>
@@ -63,7 +63,7 @@
         </div>
         <div class="stat-shine"></div>
     </div>
-    <div class="stat-card stat-card-animated" style="--delay: 3;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 3;">
         <div class="stat-icon stat-icon-queue {% if stats.queue_size > 0 %}stat-icon-active{% endif %}">
             <i class="bi bi-clock-history"></i>
         </div>
@@ -71,7 +71,7 @@
             <span class="stat-value counter" data-target="{{ stats.queue_size | default(0) }}">0</span>
             <span class="stat-label">In Queue</span>
             {% if stats.active_downloads > 0 %}
-            <span class="stat-badge stat-badge-active">
+            <span class="stat-badge stat-badge-active pulse-soft">
                 <span class="pulse-dot"></span>
                 {{ stats.active_downloads }} active
             </span>
@@ -83,8 +83,8 @@
 
 <!-- Spotify Synced Data (if any) -->
 {% if stats.spotify_artists > 0 or stats.spotify_albums > 0 or stats.spotify_tracks > 0 %}
-<div class="spotify-sync-banner" style="margin-top: 1.5rem;">
-    <div class="spotify-sync-icon">
+<div class="spotify-sync-banner blur-fade-in" style="margin-top: 1.5rem; --delay: 4;">
+    <div class="spotify-sync-icon pulse-soft">
         <i class="bi bi-spotify"></i>
     </div>
     <div class="spotify-sync-content">
@@ -115,8 +115,8 @@
     <div class="playlists-grid">
         {% if playlists %}
         {% for playlist in playlists[:6] %}
-        <a href="/playlists/{{ playlist.id }}" class="playlist-card playlist-card-animated" style="--delay: {{ loop.index0 }};">
-            <div class="playlist-image">
+        <a href="/playlists/{{ playlist.id }}" class="playlist-card playlist-card-animated blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 }};">
+            <div class="playlist-image shimmer-loading">
                 <img src="{{ playlist.cover_url or 'https://via.placeholder.com/200x200?text=♪' }}"
                     alt="{{ playlist.name }}"
                     loading="lazy">
@@ -161,8 +161,8 @@
     <div class="activity-list">
         {% if recent_activity %}
         {% for activity in recent_activity[:5] %}
-        <div class="activity-item activity-item-animated" style="--delay: {{ loop.index0 }};">
-            <div class="activity-artwork">
+        <div class="activity-item activity-item-animated slide-from-left" style="--delay: {{ loop.index0 }};">
+            <div class="activity-artwork shimmer-loading">
                 <img src="{{ activity.album_art or 'https://via.placeholder.com/48x48?text=♪' }}"
                     alt="{{ activity.title }}">
             </div>
@@ -207,7 +207,7 @@
 
 <!-- Quick Actions -->
 <div class="quick-actions" style="margin-top: 2rem;">
-    <a href="/library" class="quick-action-card">
+    <a href="/library" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 0;">
         <div class="quick-action-icon">
             <i class="bi bi-folder-fill"></i>
         </div>
@@ -217,7 +217,7 @@
         </div>
         <i class="bi bi-chevron-right quick-action-arrow"></i>
     </a>
-    <a href="/downloads" class="quick-action-card">
+    <a href="/downloads" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 1;">
         <div class="quick-action-icon">
             <i class="bi bi-cloud-download-fill"></i>
         </div>
@@ -227,7 +227,7 @@
         </div>
         <i class="bi bi-chevron-right quick-action-arrow"></i>
     </a>
-    <a href="/library" class="quick-action-card">
+    <a href="/library" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 2;">
         <div class="quick-action-icon">
             <i class="bi bi-folder-plus"></i>
         </div>
