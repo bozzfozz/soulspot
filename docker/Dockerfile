@@ -1,35 +1,8 @@
 # Multi-stage build for SoulSpot Bridge
-FROM node:20-slim AS css-builder
+# Hey future me - Tailwind/npm was REMOVED because we use plain CSS in 
+# /static/new-ui/css/ (main.css, components.css, variables.css).
+# The Magic UI animations are in components.css - no build step needed!
 
-# Hey future me – This stage builds the Tailwind CSS files from input.css.
-# We need Node.js and npm to run tailwindcss, so we use a separate builder stage.
-# This ensures the minified CSS is generated and ready for the Python app.
-# If GIT_BRANCH is set, the css-builder will also build CSS from the cloned repo.
-
-ARG GIT_BRANCH=""
-ARG GIT_REPO="https://github.com/bozzfozz/soulspot.git"
-
-WORKDIR /build
-COPY package.json package-lock.json* yarn.lock* ./
-# Use npm install (more flexible) or npm ci if lockfile exists
-# If package-lock.json doesn't exist, npm install will create it
-RUN npm install --prefer-offline --no-audit
-
-# Copy the CSS input file and build it (from local files)
-COPY src/soulspot/static/css/input.css ./src/soulspot/static/css/
-RUN npm run build:css
-
-# If GIT_BRANCH is set, rebuild CSS from cloned repo to ensure it's up-to-date
-RUN if [ -n "${GIT_BRANCH}" ]; then \
-        echo "=== Cloning branch '${GIT_BRANCH}' to rebuild CSS ===" && \
-        git clone --depth 1 --branch "${GIT_BRANCH}" "${GIT_REPO}" /tmp/repo && \
-        cp /tmp/repo/src/soulspot/static/css/input.css ./src/soulspot/static/css/input.css && \
-        npm run build:css && \
-        rm -rf /tmp/repo && \
-        echo "=== CSS rebuilt from cloned branch ==="; \
-    fi
-
-# Main builder stage
 FROM python:3.12-slim AS builder
 
 # Hey future me – GIT_BRANCH allows building from a specific branch by cloning
@@ -84,8 +57,7 @@ RUN if [ -n "${GIT_BRANCH}" ]; then \
         echo "=== Building from local files ==="; \
     fi
 
-# Ensure the built CSS from css-builder is preserved (copy again to be safe)
-COPY --from=css-builder /build/src/soulspot/static/css/style.css ./src/soulspot/static/css/
+# Ensure static CSS files are included
 RUN poetry config virtualenvs.create false && \
     poetry install --without dev --no-interaction --no-ansi --no-root
 

@@ -1,12 +1,5 @@
 {
-  "name": "soulspot",
-  "version": "0.1.0",
-  "description": "SoulSpot - Web UI assets",
-  "scripts": {
-    "build:css": "tailwindcss -i ./src/soulspot/static/css/input.css -o ./src/soulspot/static/css/style.css --minify",
-    "watch:css": "tailwindcss -i ./src/soulspot/static/css/input.css -o ./src/soulspot/static/css/style.css --watch"
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.4.1"
-  }
+  "_comment": "THIS FILE CAN BE DELETED - Tailwind/npm is no longer used",
+  "_reason": "CSS is now plain CSS in /static/new-ui/css/ - no build step needed",
+  "_delete_also": ["tailwind.config.js", "src/soulspot/static/css/input.css", "src/soulspot/static/css/style.css"]
 }

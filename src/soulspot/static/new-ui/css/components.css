@@ -893,6 +893,27 @@
     to { transform: rotate(360deg); }
 }
 
+/* Vinyl Record Animation for Logo and CD
+   Hey future me - this is for the animated vinyl icons in logo (S●ulSp●t) and sidebar CD.
+   4s rotation + 2s green glow pulse. Spotify green = #1DB954 = rgb(29, 185, 84). */
+@keyframes vinyl-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes vinyl-glow-pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(29, 185, 84, 0.4)); }
+    50% { filter: drop-shadow(0 0 12px rgba(29, 185, 84, 0.8)); }
+}
+
+.vinyl-record-icon {
+    display: inline-block;
+    animation: vinyl-spin 4s linear infinite, vinyl-glow-pulse 2s ease-in-out infinite;
+    margin: 0 2px;
+    vertical-align: middle;
+    line-height: 1;
+}
+
 /* Tooltip Container */
 .worker-tooltip {
     position: absolute;
@@ -1076,5 +1097,243 @@
     
     .worker-icon[data-status="active"] i {
         animation: none;
+    }
+}
+
+/* ===== MAGIC UI ANIMATIONS =====
+   Hey future me - these are Magic UI inspired animations for smooth UX!
+   Moved here from input.css because Tailwind @layer doesn't export @keyframes properly.
+   Used on Dashboard, Library, cards, and other pages. All pure CSS, no JS needed. */
+
+/* 1. Blur Fade In - Smooth entrance effect for cards */
+@keyframes blur-fade-in {
+    0% {
+        opacity: 0;
+        filter: blur(10px);
+        transform: translateY(10px);
+    }
+    100% {
+        opacity: 1;
+        filter: blur(0px);
+        transform: translateY(0);
+    }
+}
+
+.blur-fade-in {
+    animation: blur-fade-in 0.5s ease-out forwards;
+}
+
+/* Staggered delay support */
+.blur-fade-in[style*="--delay: 0"] { animation-delay: 0s; }
+.blur-fade-in[style*="--delay: 1"] { animation-delay: 0.1s; }
+.blur-fade-in[style*="--delay: 2"] { animation-delay: 0.2s; }
+.blur-fade-in[style*="--delay: 3"] { animation-delay: 0.3s; }
+.blur-fade-in[style*="--delay: 4"] { animation-delay: 0.4s; }
+.blur-fade-in[style*="--delay: 5"] { animation-delay: 0.5s; }
+
+/* 2. Glow Pulse - Subtle background glow for hover */
+@keyframes glow-pulse {
+    0%, 100% {
+        box-shadow: 
+            0 0 20px rgba(168, 85, 247, 0.2),
+            0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+    50% {
+        box-shadow:
+            0 0 40px rgba(168, 85, 247, 0.4),
+            0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+}
+
+.hover-glow {
+    transition: all 0.3s ease;
+}
+
+.hover-glow:hover {
+    animation: glow-pulse 1.5s ease-in-out infinite;
+}
+
+/* 3. Shimmer - Loading state indicator */
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+
+.shimmer-loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.shimmer-loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+    pointer-events: none;
+}
+
+/* 4. Slide From Left - Directional entrance for lists */
+@keyframes slide-from-left {
+    0% {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.slide-from-left {
+    animation: slide-from-left 0.5s ease-out forwards;
+}
+
+.slide-from-left[style*="--delay: 0"] { animation-delay: 0s; }
+.slide-from-left[style*="--delay: 1"] { animation-delay: 0.1s; }
+.slide-from-left[style*="--delay: 2"] { animation-delay: 0.2s; }
+.slide-from-left[style*="--delay: 3"] { animation-delay: 0.3s; }
+.slide-from-left[style*="--delay: 4"] { animation-delay: 0.4s; }
+
+/* 5. Bounce In - Playful entrance for badges/notifications */
+@keyframes bounce-in {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.9);
+    }
+    60% {
+        opacity: 1;
+        transform: translateY(-5px) scale(1.02);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.bounce-in {
+    animation: bounce-in 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+/* 6. Pulse Soft - For active indicators */
+@keyframes pulse-soft {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+.pulse-soft {
+    animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* 7. Gradient Shift - Animated background gradient */
+@keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+.animated-gradient {
+    background: linear-gradient(-45deg, #a855f7, #7c3aed, #6366f1, #8b5cf6);
+    background-size: 400% 400%;
+    animation: gradient-shift 3s ease infinite;
+}
+
+/* 8. Hover Scale Interactive - For quick action cards */
+.hover-scale-interactive {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.hover-scale-interactive:hover {
+    transform: scale(1.02) translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+}
+
+/* 9. Card with animated border */
+.animated-border {
+    position: relative;
+}
+
+.animated-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(45deg, #a855f7, #7c3aed, #6366f1, #a855f7);
+    background-size: 300% 300%;
+    animation: gradient-shift 4s ease infinite;
+    border-radius: inherit;
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.animated-border:hover::before {
+    opacity: 1;
+}
+
+/* Status Badge Animations */
+.status-downloading {
+    animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* Dark mode adjustments for Magic UI animations */
+@media (prefers-color-scheme: dark) {
+    .hover-glow:hover {
+        box-shadow: 
+            0 0 30px rgba(168, 85, 247, 0.3),
+            0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .shimmer-loading::after {
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.1),
+            transparent
+        );
+    }
+
+    .hover-scale-interactive:hover {
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* Respect reduced motion preference for Magic UI */
+@media (prefers-reduced-motion: reduce) {
+    .blur-fade-in,
+    .slide-from-left,
+    .bounce-in,
+    .pulse-soft,
+    .animated-gradient,
+    .shimmer-loading::after,
+    .vinyl-record-icon {
+        animation: none !important;
+        opacity: 1 !important;
+        filter: none !important;
+        transform: none !important;
+    }
+
+    .hover-glow:hover,
+    .hover-scale-interactive:hover {
+        animation: none !important;
+        transform: none !important;
+    }
+
+    .animated-border::before {
+        animation: none !important;
     }
 }

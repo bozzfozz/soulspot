@@ -93,10 +93,10 @@ soulspot.db
 .env.*.local
 alembic.ini.bak
 
-# Node.js
+# Node.js - NO LONGER USED (Tailwind removed, using plain CSS)
+# These entries kept for safety in case node_modules exists locally
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-# Note: package-lock.json is NOT ignored - it's needed for reproducible builds
-# in Docker and CI/CD pipelines. Commit it with your changes.
+package-lock.json
