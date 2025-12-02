@@ -1,188 +1,1000 @@
-{# Hey future me - Onboarding page for first-time users!
+{# Hey future me - Multi-Step Onboarding Wizard!
    German language UI ("Willkommen bei SoulSpot").
-   HTMX checks Spotify auth status and shows connect button or success state.
-   getConnectSpotifyOnboardingHTML() helper handles unauthenticated state. #}
+   Steps: 1) Spotify OAuth, 2) Soulseek Config, 3) Success
+   Full-Height layout with Side-Progress indicator.
+   Skip-Tracking: Skips werden in DB gespeichert, Dashboard zeigt Banner.
+   Soulseek Test: Credentials werden VOR dem Speichern getestet! #}
 
 {% extends "base.html" %}
 
-{% block title %}Willkommen - SoulSpot{% endblock %}
+{% block title %}Einrichtung - SoulSpot{% endblock %}
 
 {% block content %}
-<div style="min-height: 80vh; display: flex; align-items: center; justify-content: center;">
-    <div style="max-width: 600px; width: 100%; padding: 0 var(--space-4);">
-        <!-- Onboarding Card -->
-        <div class="card" style="text-align: center;">
-            <!-- Logo & Header -->
-            <div style="padding: var(--space-8) var(--space-8) var(--space-6);">
-                <div style="width: 100px; height: 100px; margin: 0 auto var(--space-6); background: linear-gradient(135deg, var(--accent-primary), #a855f7); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-xl);">
-                    <span style="font-size: 3rem;">🎵</span>
+<div class="onboarding-wizard">
+    <!-- Side Progress (Desktop) -->
+    <aside class="onboarding-progress">
+        <div class="progress-header">
+            <div class="progress-logo">
+                <i class="bi bi-disc vinyl-record-icon" style="color: #1DB954;"></i>
+            </div>
+            <h2>SoulSpot Setup</h2>
+        </div>
+        
+        <nav class="progress-steps">
+            <div class="progress-step active" data-step="1">
+                <div class="step-indicator">
+                    <i class="bi bi-spotify"></i>
                 </div>
-                <h1 style="font-size: var(--font-size-4xl); margin-bottom: var(--space-3);">
-                    Willkommen bei SoulSpot
-                </h1>
-                <p style="color: var(--text-muted); font-size: var(--font-size-lg);">
-                    Verbinde Spotify, um Songs und Playlists zu synchronisieren.
+                <div class="step-info">
+                    <span class="step-title">Spotify</span>
+                    <span class="step-desc">Konto verbinden</span>
+                </div>
+            </div>
+            
+            <div class="progress-step" data-step="2">
+                <div class="step-indicator">
+                    <i class="bi bi-cloud-download"></i>
+                </div>
+                <div class="step-info">
+                    <span class="step-title">Soulseek</span>
+                    <span class="step-desc">Download-Server</span>
+                </div>
+            </div>
+            
+            <div class="progress-step" data-step="3">
+                <div class="step-indicator">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="step-info">
+                    <span class="step-title">Fertig</span>
+                    <span class="step-desc">Loslegen!</span>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="progress-footer">
+            <button class="btn btn-ghost btn-sm" onclick="skipOnboarding()">
+                <i class="bi bi-x-lg"></i>
+                Überspringen
+            </button>
+        </div>
+    </aside>
+    
+    <!-- Main Content Area -->
+    <main class="onboarding-content">
+        <!-- Mobile Progress (Top Bar) -->
+        <div class="mobile-progress">
+            <div class="mobile-steps">
+                <span class="mobile-step active" data-step="1">1</span>
+                <span class="mobile-step" data-step="2">2</span>
+                <span class="mobile-step" data-step="3">3</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="skipOnboarding()">
+                Überspringen
+            </button>
+        </div>
+        
+        <!-- Step 1: Spotify -->
+        <section class="wizard-step active blur-fade-in" id="step-1">
+            <div class="step-content">
+                <div class="step-icon" style="background: linear-gradient(135deg, #1DB954, #169c46);">
+                    <i class="bi bi-spotify"></i>
+                </div>
+                
+                <h1>Verbinde dein Spotify-Konto</h1>
+                <p class="step-description">
+                    SoulSpot synchronisiert deine Playlists und Artists von Spotify,
+                    damit du sie offline genießen kannst.
                 </p>
-            </div>
-
-            <!-- Status Area (HTMX Target) -->
-            <div id="onboarding-status" style="padding: var(--space-6); border-top: 1px solid var(--border-primary); border-bottom: 1px solid var(--border-primary);">
-                <!-- Initial loading state -->
-                <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-4);">
-                    <div class="spinner"></div>
-                    <p style="color: var(--text-muted);">Verbindungsstatus wird geprüft...</p>
+                
+                <div id="spotify-status" class="status-area">
+                    <div class="status-loading">
+                        <div class="spinner"></div>
+                        <span>Prüfe Verbindung...</span>
+                    </div>
+                </div>
+                
+                <div class="step-actions">
+                    <a href="/auth" class="btn btn-primary btn-lg" id="spotify-connect-btn" style="background: #1DB954; border-color: #1DB954;">
+                        <i class="bi bi-spotify"></i>
+                        Mit Spotify verbinden
+                    </a>
+                    <button class="btn btn-outline" onclick="goToStep(2)" id="spotify-skip-btn">
+                        Später einrichten
+                    </button>
+                </div>
+                
+                <div class="step-hint">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Du wirst zu Spotify weitergeleitet, um den Zugriff zu bestätigen.</span>
                 </div>
             </div>
-
-            <!-- Action Buttons -->
-            <div id="onboarding-actions" style="padding: var(--space-6); display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-3);">
-                <button 
-                    id="continueBtn"
-                    class="btn btn-primary btn-lg"
-                    hx-get="/api/auth/spotify/status"
-                    hx-target="#onboarding-status"
-                    hx-swap="innerHTML"
-                    hx-trigger="click"
-                    disabled
-                >
-                    <i class="bi bi-arrow-right"></i>
-                    Weiter
-                </button>
-                <button 
-                    id="skipBtn"
-                    class="btn btn-outline btn-lg"
-                    hx-post="/api/auth/onboarding/skip"
-                    hx-swap="none"
-                >
-                    Nicht jetzt
-                </button>
-            </div>
-        </div>
-
-        <!-- Help Text -->
-        <div style="margin-top: var(--space-8);">
-            <div class="card" style="padding: var(--space-4); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2);">
-                <div style="display: flex; align-items: flex-start; gap: var(--space-3);">
-                    <i class="bi bi-info-circle" style="color: #3b82f6; margin-top: 2px;"></i>
-                    <p style="font-size: var(--font-size-sm); color: var(--text-secondary); text-align: left;">
-                        Die Spotify-Verbindung ist erforderlich, um Playlists zu synchronisieren und Songs herunterzuladen.
-                        Du kannst diesen Schritt auch später in den Einstellungen durchführen.
-                    </p>
+        </section>
+        
+        <!-- Step 2: Soulseek -->
+        <section class="wizard-step blur-fade-in" id="step-2" style="display: none;">
+            <div class="step-content">
+                <div class="step-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+                    <i class="bi bi-cloud-download"></i>
+                </div>
+                
+                <h1>Soulseek einrichten</h1>
+                <p class="step-description">
+                    SoulSpot nutzt <strong>slskd</strong> (Soulseek Daemon) zum Herunterladen von Musik.
+                    Du brauchst eine laufende slskd-Instanz.
+                </p>
+                
+                <form id="slskd-form" class="config-form">
+                    <div class="form-group">
+                        <label class="form-label" for="slskd-url">
+                            <i class="bi bi-link-45deg"></i>
+                            slskd URL
+                        </label>
+                        <input 
+                            type="url" 
+                            id="slskd-url" 
+                            class="form-input" 
+                            placeholder="http://localhost:5030"
+                            value="http://localhost:5030"
+                            required
+                        >
+                        <span class="form-hint">Die URL deiner slskd-Instanz</span>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="slskd-username">
+                                <i class="bi bi-person"></i>
+                                Benutzername
+                            </label>
+                            <input 
+                                type="text" 
+                                id="slskd-username" 
+                                class="form-input" 
+                                placeholder="admin"
+                            >
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="slskd-password">
+                                <i class="bi bi-key"></i>
+                                Passwort
+                            </label>
+                            <input 
+                                type="password" 
+                                id="slskd-password" 
+                                class="form-input" 
+                                placeholder="••••••••"
+                            >
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="slskd-apikey">
+                            <i class="bi bi-shield-lock"></i>
+                            API Key <span class="optional">(optional)</span>
+                        </label>
+                        <input 
+                            type="password" 
+                            id="slskd-apikey" 
+                            class="form-input" 
+                            placeholder="Alternativ zum Benutzername/Passwort"
+                        >
+                        <span class="form-hint">Wenn gesetzt, wird der API Key statt Benutzername/Passwort verwendet</span>
+                    </div>
+                    
+                    <div id="slskd-test-result" class="test-result" style="display: none;"></div>
+                </form>
+                
+                <div class="step-actions">
+                    <button class="btn btn-outline" onclick="goToStep(1)">
+                        <i class="bi bi-arrow-left"></i>
+                        Zurück
+                    </button>
+                    <button class="btn btn-secondary" onclick="testSlskdConnection()" id="slskd-test-btn">
+                        <i class="bi bi-plug"></i>
+                        Verbindung testen
+                    </button>
+                    <button class="btn btn-primary" onclick="saveSlskdAndContinue()" id="slskd-save-btn" disabled>
+                        Speichern & Weiter
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+                
+                <div class="step-hint">
+                    <i class="bi bi-lightbulb"></i>
+                    <span>
+                        Noch kein slskd? 
+                        <a href="https://github.com/slskd/slskd" target="_blank" rel="noopener">
+                            Installationsanleitung
+                        </a>
+                    </span>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+        
+        <!-- Step 3: Success -->
+        <section class="wizard-step blur-fade-in" id="step-3" style="display: none;">
+            <div class="step-content">
+                <div class="step-icon success-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                
+                <h1>Alles bereit!</h1>
+                <p class="step-description">
+                    SoulSpot ist eingerichtet und bereit, deine Musik zu synchronisieren.
+                </p>
+                
+                <div class="setup-summary">
+                    <div class="summary-item" id="summary-spotify">
+                        <i class="bi bi-spotify" style="color: #1DB954;"></i>
+                        <span>Spotify</span>
+                        <span class="summary-status pending">Nicht verbunden</span>
+                    </div>
+                    <div class="summary-item" id="summary-slskd">
+                        <i class="bi bi-cloud-download" style="color: #6366f1;"></i>
+                        <span>Soulseek</span>
+                        <span class="summary-status pending">Nicht konfiguriert</span>
+                    </div>
+                </div>
+                
+                <div class="step-actions">
+                    <button class="btn btn-outline" onclick="goToStep(2)">
+                        <i class="bi bi-arrow-left"></i>
+                        Zurück
+                    </button>
+                    <a href="/" class="btn btn-primary btn-lg" onclick="completeOnboarding()">
+                        <i class="bi bi-house"></i>
+                        Zum Dashboard
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <style>
-    .spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid var(--border-secondary);
-        border-top-color: var(--accent-primary);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .status-card {
-        padding: var(--space-5);
-        border-radius: var(--radius-lg);
-        text-align: center;
-    }
-    .status-icon {
-        width: 64px;
-        height: 64px;
-        margin: 0 auto var(--space-4);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.75rem;
-    }
-</style>
-<script>
-function getConnectSpotifyOnboardingHTML() {
-    return `
-        <div class="status-card" style="background: rgba(var(--accent-primary-rgb), 0.1); border: 1px solid rgba(var(--accent-primary-rgb), 0.2);">
-            <div class="status-icon" style="background: #1DB954;">
-                <i class="bi bi-spotify" style="color: white;"></i>
-            </div>
-            <p style="font-weight: var(--font-weight-bold); font-size: var(--font-size-lg); margin-bottom: var(--space-2);">Verbinde dein Spotify-Konto</p>
-            <p style="font-size: var(--font-size-sm); color: var(--text-muted); margin-bottom: var(--space-4);">Klicke auf "Verbinden", um mit der Einrichtung fortzufahren.</p>
-            <a href="/auth" class="btn btn-primary btn-lg" style="background: #1DB954; border-color: #1DB954;">
-                <i class="bi bi-spotify"></i>
-                Mit Spotify verbinden
-            </a>
-        </div>
-    `;
+/* Hey future me - Onboarding Wizard Layout!
+   Desktop: Side-Progress links, Content rechts (Full Height)
+   Mobile: Progress-Bar oben, Content darunter */
+
+.onboarding-wizard {
+    display: flex;
+    min-height: 100vh;
+    background: var(--bg-primary);
 }
 
-document.body.addEventListener('htmx:responseError', function(evt) {
-    if (evt.detail.target.id === 'onboarding-status') {
-        document.getElementById('onboarding-status').innerHTML = getConnectSpotifyOnboardingHTML();
+/* Side Progress (Desktop) */
+.onboarding-progress {
+    width: 280px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-primary);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-6);
+}
+
+.progress-header {
+    text-align: center;
+    padding-bottom: var(--space-6);
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: var(--space-6);
+}
+
+.progress-logo {
+    width: 64px;
+    height: 64px;
+    background: var(--bg-tertiary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-3);
+    font-size: 2rem;
+}
+
+.progress-header h2 {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
+}
+
+.progress-steps {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    transition: all 0.2s ease;
+    opacity: 0.5;
+}
+
+.progress-step.active {
+    background: rgba(var(--accent-primary-rgb), 0.1);
+    opacity: 1;
+}
+
+.progress-step.completed {
+    opacity: 1;
+}
+
+.progress-step.completed .step-indicator {
+    background: #22c55e;
+    color: white;
+}
+
+.step-indicator {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: all 0.2s ease;
+}
+
+.progress-step.active .step-indicator {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.step-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.step-title {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+}
+
+.step-desc {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+}
+
+.progress-footer {
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* Mobile Progress */
+.mobile-progress {
+    display: none;
+    padding: var(--space-4);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mobile-steps {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.mobile-step {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    transition: all 0.2s ease;
+}
+
+.mobile-step.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.mobile-step.completed {
+    background: #22c55e;
+    color: white;
+}
+
+/* Main Content */
+.onboarding-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.wizard-step {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+}
+
+.step-content {
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+}
+
+.step-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-6);
+    font-size: 2rem;
+    color: white;
+    box-shadow: var(--shadow-lg);
+}
+
+.step-content h1 {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-3);
+}
+
+.step-description {
+    color: var(--text-secondary);
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-6);
+    line-height: 1.6;
+}
+
+/* Status Area */
+.status-area {
+    padding: var(--space-6);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-6);
+}
+
+.status-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    color: var(--text-muted);
+}
+
+.status-success {
+    color: #22c55e;
+}
+
+.status-success i {
+    font-size: 2rem;
+    margin-bottom: var(--space-2);
+}
+
+/* Actions */
+.step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    justify-content: center;
+    margin-bottom: var(--space-6);
+}
+
+.step-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+}
+
+.step-hint a {
+    color: var(--accent-primary);
+}
+
+/* Config Form (Step 2) */
+.config-form {
+    text-align: left;
+    margin-bottom: var(--space-6);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+}
+
+.form-group {
+    margin-bottom: var(--space-4);
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: var(--space-2);
+    font-size: var(--font-size-sm);
+}
+
+.form-label .optional {
+    color: var(--text-muted);
+    font-weight: normal;
+}
+
+.form-input {
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(var(--accent-primary-rgb), 0.1);
+}
+
+.form-hint {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    margin-top: var(--space-1);
+}
+
+/* Test Result */
+.test-result {
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.test-result.success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+}
+
+.test-result.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.test-result.loading {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    color: var(--text-muted);
+}
+
+/* Setup Summary (Step 3) */
+.setup-summary {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.summary-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+}
+
+.summary-item + .summary-item {
+    border-top: 1px solid var(--border-primary);
+}
+
+.summary-item i {
+    font-size: 1.25rem;
+}
+
+.summary-item span:nth-child(2) {
+    flex: 1;
+    font-weight: var(--font-weight-medium);
+}
+
+.summary-status {
+    font-size: var(--font-size-sm);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+}
+
+.summary-status.connected {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+}
+
+.summary-status.pending {
+    background: rgba(234, 179, 8, 0.1);
+    color: #eab308;
+}
+
+/* Spinner */
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--border-secondary);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Success Icon Animation */
+.success-icon {
+    animation: bounce-in 0.5s ease;
+}
+
+@keyframes bounce-in {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .onboarding-wizard {
+        flex-direction: column;
     }
+    
+    .onboarding-progress {
+        display: none;
+    }
+    
+    .mobile-progress {
+        display: flex;
+    }
+    
+    .wizard-step {
+        padding: var(--space-4);
+    }
+    
+    .step-content h1 {
+        font-size: var(--font-size-2xl);
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .step-actions {
+        flex-direction: column;
+    }
+    
+    .step-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+// Hey future me - Onboarding Wizard State Management!
+// currentStep tracks which step we're on (1-3)
+// State is persisted to API so user can resume after page reload
+
+let currentStep = 1;
+let spotifyConnected = false;
+let slskdConfigured = false;
+let slskdTested = false;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    await checkOnboardingStatus();
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    const continueBtn = document.getElementById('continueBtn');
-    const statusDiv = document.getElementById('onboarding-status');
-
-    // Auto-check Spotify status on load
-    setTimeout(() => {
-        htmx.trigger('#continueBtn', 'click');
-    }, 500);
-
-    // Enable button after short delay
-    setTimeout(() => {
-        if (continueBtn) {
-            continueBtn.disabled = false;
+// Check current onboarding status from API
+async function checkOnboardingStatus() {
+    try {
+        const response = await fetch('/api/onboarding/status');
+        const status = await response.json();
+        
+        spotifyConnected = status.spotify_connected;
+        slskdConfigured = status.soulseek_configured;
+        
+        // Update UI based on status
+        if (spotifyConnected) {
+            updateSpotifyStatus(true);
+        } else {
+            updateSpotifyStatus(false);
         }
-    }, 1000);
+        
+        // Go to appropriate step
+        if (status.current_step > 1) {
+            goToStep(status.current_step);
+        }
+        
+        updateSummary();
+    } catch (e) {
+        console.error('Failed to check onboarding status:', e);
+        // Still check Spotify status directly
+        checkSpotifyStatus();
+    }
+}
 
-    // Handle successful status check
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-        if (evt.detail.target.id === 'onboarding-status') {
-            try {
-                const response = JSON.parse(evt.detail.xhr.response);
-                
-                const isConnected = response.connected === true || 
-                    (response.has_access_token && !response.token_expired);
-                
-                if (isConnected) {
-                    statusDiv.innerHTML = `
-                        <div class="status-card" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2);">
-                            <div class="status-icon" style="background: #22c55e;">
-                                <i class="bi bi-check" style="color: white;"></i>
-                            </div>
-                            <p style="font-weight: var(--font-weight-bold); font-size: var(--font-size-lg); margin-bottom: var(--space-2);">Spotify Sync ist aktiviert!</p>
-                            <p style="font-size: var(--font-size-sm); color: var(--text-muted);">Deine Daten werden automatisch synchronisiert.</p>
-                        </div>
-                    `;
-                    
-                    continueBtn.innerHTML = '<i class="bi bi-arrow-right"></i> Zum Dashboard';
-                    continueBtn.onclick = () => window.location.href = '/';
-                    continueBtn.removeAttribute('hx-get');
-                } else {
-                    statusDiv.innerHTML = getConnectSpotifyOnboardingHTML();
-                }
-            } catch (e) {
-                statusDiv.innerHTML = getConnectSpotifyOnboardingHTML();
-            }
+// Check Spotify connection status
+async function checkSpotifyStatus() {
+    const statusDiv = document.getElementById('spotify-status');
+    
+    try {
+        const response = await fetch('/api/auth/spotify/status');
+        const data = await response.json();
+        
+        spotifyConnected = data.connected === true;
+        updateSpotifyStatus(spotifyConnected);
+    } catch (e) {
+        updateSpotifyStatus(false);
+    }
+}
+
+// Update Spotify status display
+function updateSpotifyStatus(connected) {
+    const statusDiv = document.getElementById('spotify-status');
+    const connectBtn = document.getElementById('spotify-connect-btn');
+    const skipBtn = document.getElementById('spotify-skip-btn');
+    
+    if (connected) {
+        statusDiv.innerHTML = `
+            <div class="status-success">
+                <i class="bi bi-check-circle-fill"></i>
+                <p style="font-weight: var(--font-weight-semibold); margin: var(--space-2) 0;">
+                    Spotify ist verbunden!
+                </p>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm);">
+                    Deine Playlists werden automatisch synchronisiert.
+                </p>
+            </div>
+        `;
+        
+        connectBtn.innerHTML = '<i class="bi bi-arrow-right"></i> Weiter';
+        connectBtn.href = '#';
+        connectBtn.onclick = (e) => { e.preventDefault(); goToStep(2); };
+        connectBtn.style.background = 'var(--accent-primary)';
+        connectBtn.style.borderColor = 'var(--accent-primary)';
+        
+        skipBtn.style.display = 'none';
+        
+        // Mark step as completed
+        markStepCompleted(1);
+    } else {
+        statusDiv.innerHTML = `
+            <div style="color: var(--text-muted);">
+                <i class="bi bi-spotify" style="font-size: 2rem; color: #1DB954;"></i>
+                <p style="margin-top: var(--space-3);">
+                    Noch nicht verbunden
+                </p>
+            </div>
+        `;
+    }
+}
+
+// Navigate to a step
+function goToStep(step) {
+    // Hide all steps
+    document.querySelectorAll('.wizard-step').forEach(s => {
+        s.style.display = 'none';
+        s.classList.remove('active');
+    });
+    
+    // Show target step
+    const targetStep = document.getElementById(`step-${step}`);
+    if (targetStep) {
+        targetStep.style.display = 'flex';
+        targetStep.classList.add('active');
+    }
+    
+    // Update progress indicators
+    document.querySelectorAll('.progress-step').forEach(s => {
+        const stepNum = parseInt(s.dataset.step);
+        s.classList.remove('active');
+        if (stepNum === step) {
+            s.classList.add('active');
         }
     });
     
-    // Handle skip button
-    document.body.addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.pathInfo?.requestPath === '/api/onboarding/skip') {
-            if (evt.detail.successful) {
-                window.location.href = '/';
-            }
+    document.querySelectorAll('.mobile-step').forEach(s => {
+        const stepNum = parseInt(s.dataset.step);
+        s.classList.remove('active');
+        if (stepNum === step) {
+            s.classList.add('active');
         }
     });
-});
+    
+    currentStep = step;
+    
+    // Update summary on step 3
+    if (step === 3) {
+        updateSummary();
+    }
+}
+
+// Mark a step as completed
+function markStepCompleted(step) {
+    document.querySelectorAll(`.progress-step[data-step="${step}"]`).forEach(s => {
+        s.classList.add('completed');
+    });
+    document.querySelectorAll(`.mobile-step[data-step="${step}"]`).forEach(s => {
+        s.classList.add('completed');
+    });
+}
+
+// Test slskd connection
+async function testSlskdConnection() {
+    const testBtn = document.getElementById('slskd-test-btn');
+    const saveBtn = document.getElementById('slskd-save-btn');
+    const resultDiv = document.getElementById('slskd-test-result');
+    
+    const url = document.getElementById('slskd-url').value;
+    const username = document.getElementById('slskd-username').value;
+    const password = document.getElementById('slskd-password').value;
+    const apiKey = document.getElementById('slskd-apikey').value;
+    
+    if (!url) {
+        resultDiv.style.display = 'flex';
+        resultDiv.className = 'test-result error';
+        resultDiv.innerHTML = '<i class="bi bi-x-circle"></i> Bitte gib die slskd URL ein';
+        return;
+    }
+    
+    // Show loading
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px;"></div> Teste...';
+    resultDiv.style.display = 'flex';
+    resultDiv.className = 'test-result loading';
+    resultDiv.innerHTML = '<div class="spinner"></div> Verbindung wird getestet...';
+    
+    try {
+        const response = await fetch('/api/onboarding/test-slskd', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                username: username,
+                password: password,
+                api_key: apiKey || null
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            resultDiv.className = 'test-result success';
+            resultDiv.innerHTML = `<i class="bi bi-check-circle"></i> ${result.message}`;
+            slskdTested = true;
+            saveBtn.disabled = false;
+        } else {
+            resultDiv.className = 'test-result error';
+            resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> ${result.message}${result.error ? ': ' + result.error : ''}`;
+            slskdTested = false;
+            saveBtn.disabled = true;
+        }
+    } catch (e) {
+        resultDiv.className = 'test-result error';
+        resultDiv.innerHTML = `<i class="bi bi-x-circle"></i> Fehler beim Testen: ${e.message}`;
+        slskdTested = false;
+        saveBtn.disabled = true;
+    }
+    
+    testBtn.disabled = false;
+    testBtn.innerHTML = '<i class="bi bi-plug"></i> Verbindung testen';
+}
+
+// Save slskd config and continue
+async function saveSlskdAndContinue() {
+    if (!slskdTested) {
+        alert('Bitte teste die Verbindung zuerst.');
+        return;
+    }
+    
+    const saveBtn = document.getElementById('slskd-save-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px;"></div> Speichern...';
+    
+    const url = document.getElementById('slskd-url').value;
+    const username = document.getElementById('slskd-username').value;
+    const password = document.getElementById('slskd-password').value;
+    const apiKey = document.getElementById('slskd-apikey').value;
+    
+    try {
+        const response = await fetch('/api/onboarding/save-slskd', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                username: username,
+                password: password,
+                api_key: apiKey || null
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            slskdConfigured = true;
+            markStepCompleted(2);
+            goToStep(3);
+        } else {
+            alert('Fehler beim Speichern: ' + (result.message || 'Unbekannter Fehler'));
+        }
+    } catch (e) {
+        alert('Fehler beim Speichern: ' + e.message);
+    }
+    
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = 'Speichern & Weiter <i class="bi bi-arrow-right"></i>';
+}
+
+// Update summary on step 3
+function updateSummary() {
+    const spotifySummary = document.getElementById('summary-spotify');
+    const slskdSummary = document.getElementById('summary-slskd');
+    
+    if (spotifySummary) {
+        const spotifyStatus = spotifySummary.querySelector('.summary-status');
+        if (spotifyConnected) {
+            spotifyStatus.textContent = 'Verbunden';
+            spotifyStatus.className = 'summary-status connected';
+        } else {
+            spotifyStatus.textContent = 'Nicht verbunden';
+            spotifyStatus.className = 'summary-status pending';
+        }
+    }
+    
+    if (slskdSummary) {
+        const slskdStatus = slskdSummary.querySelector('.summary-status');
+        if (slskdConfigured || slskdTested) {
+            slskdStatus.textContent = 'Konfiguriert';
+            slskdStatus.className = 'summary-status connected';
+        } else {
+            slskdStatus.textContent = 'Nicht konfiguriert';
+            slskdStatus.className = 'summary-status pending';
+        }
+    }
+}
+
+// Skip onboarding
+async function skipOnboarding() {
+    try {
+        await fetch('/api/onboarding/skip', { method: 'POST' });
+    } catch (e) {
+        console.error('Failed to mark onboarding as skipped:', e);
+    }
+    window.location.href = '/';
+}
+
+// Complete onboarding
+async function completeOnboarding() {
+    try {
+        await fetch('/api/onboarding/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                skipped: !spotifyConnected || !slskdConfigured
+            })
+        });
+    } catch (e) {
+        console.error('Failed to complete onboarding:', e);
+    }
+    // Navigation happens via href on the button
+}
 </script>
 {% endblock %}

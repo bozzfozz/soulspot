@@ -285,3 +285,63 @@ class SlskdClient(ISlskdClient):
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Async context manager exit."""
         await self.close()
+
+    # Hey future me - dieser Test-Endpoint prüft ob slskd erreichbar und authentifiziert ist!
+    # Wird vom Onboarding genutzt um Credentials VOR dem Speichern zu validieren.
+    # Returned version string bei Erfolg, None bei Fehler.
+    async def test_connection(self) -> dict[str, Any]:
+        """Test connection to slskd API.
+
+        Attempts to connect and authenticate with slskd.
+        Used by onboarding to validate credentials before saving.
+
+        Returns:
+            Dict with success status, optional version, and error message
+
+        Example:
+            {"success": True, "version": "0.21.0"}
+            {"success": False, "error": "Authentication failed"}
+        """
+        try:
+            client = await self._get_client()
+
+            # Try to hit the application endpoint
+            response = await client.get("/api/v0/application", timeout=10.0)
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "version": data.get("version", "unknown"),
+                }
+            elif response.status_code == 401:
+                return {
+                    "success": False,
+                    "error": "Authentication failed - invalid API key or credentials",
+                }
+            elif response.status_code == 403:
+                return {
+                    "success": False,
+                    "error": "Access denied - insufficient permissions",
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unexpected status code: {response.status_code}",
+                }
+
+        except httpx.ConnectError:
+            return {
+                "success": False,
+                "error": f"Cannot connect to {self.base_url} - is slskd running?",
+            }
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "error": "Connection timeout - server not responding",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+            }

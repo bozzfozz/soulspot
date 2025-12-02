@@ -20,9 +20,11 @@ from soulspot.api.routers import (
     downloads,
     library,
     metadata,
+    onboarding,
     playlists,
     settings,
     sse,
+    stats,
     tracks,
     workers,
 )
@@ -39,6 +41,8 @@ api_router.include_router(playlists.router, prefix="/playlists", tags=["Playlist
 api_router.include_router(tracks.router, prefix="/tracks", tags=["Tracks"])
 api_router.include_router(downloads.router, prefix="/downloads", tags=["Downloads"])
 api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])
+api_router.include_router(stats.router, prefix="/stats", tags=["Stats"])
+api_router.include_router(onboarding.router, prefix="/onboarding", tags=["Onboarding"])
 api_router.include_router(metadata.router, prefix="/metadata", tags=["Metadata"])
 api_router.include_router(library.router, tags=["Library"])
 api_router.include_router(compilations.router, tags=["Compilations"])
@@ -57,9 +61,11 @@ __all__ = [
     "downloads",
     "library",
     "metadata",
+    "onboarding",
     "playlists",
     "settings",
     "sse",
+    "stats",
     "tracks",
     "workers",
 ]
