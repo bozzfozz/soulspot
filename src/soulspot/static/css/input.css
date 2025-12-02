@@ -562,12 +562,15 @@
 }
 
 @layer components {
-  /* Vinyl Record Icon - Animated spinning vinyl in logo */
+  /* Vinyl Record Icon - Animated spinning vinyl in logo
+     Hey future me - 20s was too slow to notice, changed to 4s for visible rotation.
+     The glow uses Spotify green (#1DB954 = rgb(29, 185, 84)). */
   .vinyl-record-icon {
     display: inline-block;
-    animation: vinyl-spin 20s linear infinite, vinyl-glow-pulse 3s ease-in-out infinite;
+    animation: vinyl-spin 4s linear infinite, vinyl-glow-pulse 2s ease-in-out infinite;
     margin: 0 2px;
-    vertical-align: text-bottom;
+    vertical-align: middle;
+    line-height: 1;
   }
 
   /* Blur Fade In - Use for card entrances */
