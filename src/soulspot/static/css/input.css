@@ -451,119 +451,120 @@
 /* ===== Magic UI Animations for Dashboard ===== */
 /* Hey future me - These are Magic UI inspired animations for smooth UX!
    Used on Dashboard, Library, and other pages for entrance effects,
-   hover states, and loading indicators. All pure CSS, no JS needed. */
-
-/* 1. Blur Fade In - Smooth entrance effect */
-@keyframes blur-fade-in {
-  0% {
-    opacity: 0;
-    filter: blur(10px);
-    transform: translateY(10px);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0px);
-    transform: translateY(0);
-  }
-}
-
-/* 2. Glow Pulse - Subtle background glow for hover */
-@keyframes glow-pulse {
-  0%, 100% {
-    box-shadow: 
-      0 0 20px rgba(168, 85, 247, 0.2),
-      0 4px 16px rgba(0, 0, 0, 0.1);
-  }
-  50% {
-    box-shadow:
-      0 0 40px rgba(168, 85, 247, 0.4),
-      0 8px 32px rgba(0, 0, 0, 0.15);
-  }
-}
-
-/* 3. Shimmer - Loading state indicator */
-@keyframes shimmer {
-  0% {
-    background-position: -1000px 0;
-  }
-  100% {
-    background-position: 1000px 0;
-  }
-}
-
-/* 4. Slide From Left - Directional entrance */
-@keyframes slide-from-left {
-  0% {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* 5. Bounce In - Playful entrance */
-@keyframes bounce-in {
-  0% {
-    opacity: 0;
-    transform: translateY(20px) scale(0.9);
-  }
-  60% {
-    opacity: 1;
-    transform: translateY(-5px) scale(1.02);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* 6. Pulse Animation - For active indicators */
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.05);
-  }
-}
-
-/* 7. Gradient Shift - Animated background gradient */
-@keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-/* Vinyl Record Animation - Continuous rotation for logo */
-@keyframes vinyl-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Vinyl glow effect combined with pulse */
-@keyframes vinyl-glow-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 8px rgba(29, 185, 84, 0.4));
-  }
-  50% {
-    filter: drop-shadow(0 0 16px rgba(29, 185, 84, 0.8));
-  }
-}
+   hover states, and loading indicators. All pure CSS, no JS needed.
+   IMPORTANT: @keyframes MUST be inside @layer components! */
 
 @layer components {
+  /* 1. Blur Fade In - Smooth entrance effect */
+  @keyframes blur-fade-in {
+    0% {
+      opacity: 0;
+      filter: blur(10px);
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0px);
+      transform: translateY(0);
+    }
+  }
+
+  /* 2. Glow Pulse - Subtle background glow for hover */
+  @keyframes glow-pulse {
+    0%, 100% {
+      box-shadow: 
+        0 0 20px rgba(168, 85, 247, 0.2),
+        0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+    50% {
+      box-shadow:
+        0 0 40px rgba(168, 85, 247, 0.4),
+        0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+  }
+
+  /* 3. Shimmer - Loading state indicator */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  /* 4. Slide From Left - Directional entrance */
+  @keyframes slide-from-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* 5. Bounce In - Playful entrance */
+  @keyframes bounce-in {
+    0% {
+      opacity: 0;
+      transform: translateY(20px) scale(0.9);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(-5px) scale(1.02);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* 6. Pulse Animation - For active indicators */
+  @keyframes pulse-soft {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.05);
+    }
+  }
+
+  /* 7. Gradient Shift - Animated background gradient */
+  @keyframes gradient-shift {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  /* Vinyl Record Animation - Continuous rotation for logo */
+  @keyframes vinyl-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Vinyl glow effect combined with pulse */
+  @keyframes vinyl-glow-pulse {
+    0%, 100% {
+      filter: drop-shadow(0 0 8px rgba(29, 185, 84, 0.4));
+    }
+    50% {
+      filter: drop-shadow(0 0 16px rgba(29, 185, 84, 0.8));
+    }
+  }
+
   /* Vinyl Record Icon - Animated spinning vinyl in logo
-     Hey future me - 20s was too slow to notice, changed to 4s for visible rotation.
+     Hey future me - 4s rotation + 2s glow pulse. Keyframes MUST be inside @layer!
      The glow uses Spotify green (#1DB954 = rgb(29, 185, 84)). */
   .vinyl-record-icon {
     display: inline-block;
