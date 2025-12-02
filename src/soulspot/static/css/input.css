@@ -541,7 +541,35 @@
   }
 }
 
+/* Vinyl Record Animation - Continuous rotation for logo */
+@keyframes vinyl-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Vinyl glow effect combined with pulse */
+@keyframes vinyl-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(29, 185, 84, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(29, 185, 84, 0.8));
+  }
+}
+
 @layer components {
+  /* Vinyl Record Icon - Animated spinning vinyl in logo */
+  .vinyl-record-icon {
+    display: inline-block;
+    animation: vinyl-spin 20s linear infinite, vinyl-glow-pulse 3s ease-in-out infinite;
+    margin: 0 2px;
+    vertical-align: text-bottom;
+  }
+
   /* Blur Fade In - Use for card entrances */
   .blur-fade-in {
     animation: blur-fade-in 0.5s ease-out forwards;
