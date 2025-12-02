@@ -8,6 +8,7 @@
 """Library scanner service for importing local music files into database."""
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import os
@@ -110,7 +111,7 @@ class LibraryScannerService:
         # Cache for fuzzy matching (avoid repeated DB queries)
         self._artist_cache: dict[str, ArtistId] = {}
         self._album_cache: dict[str, AlbumId] = {}
-        
+
         # Thread pool for CPU-intensive work (metadata extraction, hashing)
         # Hey future me - this runs metadata parsing and SHA256 in parallel threads
         # so the event loop stays responsive. DB work stays async/serial.
@@ -174,7 +175,7 @@ class LibraryScannerService:
             logger.info(f"Music path is absolute: {self.music_path.is_absolute()}")
             logger.info(f"Music path resolved: {self.music_path.resolve()}")
             logger.info(f"Scan mode: {'incremental' if incremental else 'FULL (with cleanup)'}")
-            
+
             # Count subdirectories for debugging
             try:
                 subdirs = [d for d in self.music_path.iterdir() if d.is_dir()]
@@ -199,7 +200,7 @@ class LibraryScannerService:
                 stats["removed_tracks"] = cleanup_stats["removed_tracks"]
                 stats["removed_albums"] = cleanup_stats["removed_albums"]
                 stats["removed_artists"] = cleanup_stats["removed_artists"]
-                
+
                 # Clear caches after cleanup (they may reference deleted entities)
                 self._artist_cache.clear()
                 self._album_cache.clear()
@@ -224,11 +225,11 @@ class LibraryScannerService:
             # Das halten wir synchron pro Batch, um DB-Deadlocks zu vermeiden.
             BATCH_SIZE = 100
             CONCURRENT_PREP = min(12, max(4, os.cpu_count() or 4))
-            
+
             processed = 0
             for batch_start in range(0, len(files_to_scan), CONCURRENT_PREP):
                 batch = files_to_scan[batch_start : batch_start + CONCURRENT_PREP]
-                
+
                 # Prepare metadata/hashes concurrently in thread pool
                 loop = asyncio.get_event_loop()
                 prep_tasks = [
@@ -236,9 +237,9 @@ class LibraryScannerService:
                     for fp in batch
                 ]
                 prep_results = await asyncio.gather(*prep_tasks, return_exceptions=False)
-                
+
                 # Import each file with precomputed metadata
-                for file_path, prep_result in zip(batch, prep_results):
+                for file_path, prep_result in zip(batch, prep_results, strict=True):
                     try:
                         result = await self._import_file(file_path, precomputed=prep_result)
                         stats["scanned"] += 1
@@ -257,7 +258,7 @@ class LibraryScannerService:
                                 stats["new_tracks"] += 1
 
                         processed += 1
-                        
+
                         # Batch commit every BATCH_SIZE files
                         if processed % BATCH_SIZE == 0:
                             await self.session.commit()
@@ -284,13 +285,13 @@ class LibraryScannerService:
 
             # Final commit for remaining files
             await self.session.commit()
-            
+
             # POST-SCAN: Diversity analysis for albums without album_artist tag
             # Hey future me - this is the SPOTIFY/LIDARR logic:
             # If album has >4 unique track artists AND no album_artist set → Compilation!
             diversity_stats = await self._analyze_album_diversity()
             stats["compilations_detected"] = diversity_stats["compilations_detected"]
-            
+
             await self.session.commit()
             stats["completed_at"] = datetime.now(UTC).isoformat()
 
@@ -319,14 +320,14 @@ class LibraryScannerService:
             List of audio file paths
         """
         from collections import Counter
-        
+
         audio_files: list[Path] = []
         skipped_dirs: list[str] = []
         all_extensions: Counter[str] = Counter()
         total_files_seen = 0
-        
+
         # followlinks=True folgt Symlinks zu anderen Ordnern
-        for root, dirs, files in os.walk(directory, followlinks=True):
+        for root, _dirs, files in os.walk(directory, followlinks=True):
             # Log wenn wir Zugriffsprobleme haben
             try:
                 for filename in files:
@@ -338,25 +339,25 @@ class LibraryScannerService:
             except PermissionError as e:
                 skipped_dirs.append(root)
                 logger.warning(f"Permission denied: {root} - {e}")
-        
+
         # Log extension statistics for debugging
         logger.info(f"Total files seen: {total_files_seen}")
         logger.info(f"Audio files matched: {len(audio_files)}")
-        
+
         # Show top 10 extensions found
         top_extensions = all_extensions.most_common(15)
         logger.info(f"Top file extensions found: {top_extensions}")
-        
+
         # Show which audio extensions were found
         audio_ext_counts = {ext: all_extensions[ext] for ext in AUDIO_EXTENSIONS if all_extensions[ext] > 0}
         logger.info(f"Audio extensions found: {audio_ext_counts}")
-        
+
         if skipped_dirs:
             logger.warning(
                 f"Skipped {len(skipped_dirs)} directories due to permissions: "
                 f"{skipped_dirs[:5]}{'...' if len(skipped_dirs) > 5 else ''}"
             )
-        
+
         return audio_files
 
     async def _filter_changed_files(self, files: list[Path]) -> list[Path]:
@@ -432,10 +433,8 @@ class LibraryScannerService:
             file_hash = ""
 
         file_size = 0
-        try:
+        with contextlib.suppress(OSError):
             file_size = file_path.stat().st_size
-        except OSError:
-            pass
 
         return {
             "metadata": metadata,
@@ -478,21 +477,13 @@ class LibraryScannerService:
         # Use precomputed metadata/hash if available, otherwise extract now
         if precomputed:
             metadata = precomputed.get("metadata", {})
-            file_hash = precomputed.get("hash", "")
-            file_size = precomputed.get("size", 0)
+            # Note: file_hash and file_size are used in _add_track_with_file_info
+            # which extracts them from precomputed dict or computes them itself
         else:
             # Fallback: extract metadata synchronously (slower!)
+            # Hash and size will be computed by _add_track_with_file_info
             metadata = self._extract_metadata(file_path)
-            try:
-                file_hash = self._compute_file_hash(file_path)
-            except Exception as e:
-                logger.warning(f"Hash computation failed for {file_path}: {e}")
-                file_hash = ""
-            try:
-                file_size = file_path.stat().st_size
-            except OSError:
-                file_size = 0
-        
+
         if not metadata:
             # Hey future me - fallback to minimal metadata if extraction fails completely!
             # This happens with corrupted files or unknown formats.
@@ -506,11 +497,45 @@ class LibraryScannerService:
                 f"(tag extraction failed, will use filename)"
             )
 
-        artist_name = metadata.get("artist", "Unknown Artist")
-        album_name = metadata.get("album")
+        # Extract metadata from folder structure (Lidarr-style fallback)
+        # Hey future me - this adds artist_from_folder, album_from_folder, etc.
+        # to fill in gaps when ID3 tags are missing or incomplete!
+        folder_metadata = self._extract_metadata_from_path(file_path)
+
+        # Use tag-based metadata with folder-based fallback
+        # Ensure proper types with explicit casting
+        artist_name_raw = metadata.get("artist") or folder_metadata.get(
+            "artist_from_folder"
+        )
+        artist_name: str = str(artist_name_raw) if artist_name_raw else "Unknown Artist"
+
+        album_name_raw = metadata.get("album") or folder_metadata.get("album_from_folder")
+        album_name: str | None = str(album_name_raw) if album_name_raw else None
+
         # Hey future me - if no title in tags, use filename without extension
         # This ensures we can import files without metadata tags at all!
-        track_title = metadata.get("title") or file_path.stem
+        track_title_raw = (
+            metadata.get("title")
+            or folder_metadata.get("title_from_folder")
+            or file_path.stem
+        )
+        track_title: str = str(track_title_raw) if track_title_raw else file_path.stem
+
+        # Use year from tags, fallback to folder parsing
+        release_year_raw = metadata.get("year") or folder_metadata.get("year_from_folder")
+        release_year: int | None = int(release_year_raw) if release_year_raw else None
+
+        # Track number: tags > folder parsing (track_number_from_folder)
+        track_number_raw = metadata.get("track_number") or folder_metadata.get(
+            "track_number_from_folder"
+        )
+        track_number: int | None = int(track_number_raw) if track_number_raw else None
+
+        # Disc number: tags > folder parsing
+        disc_number_raw = metadata.get("disc_number") or folder_metadata.get(
+            "disc_number_from_folder", 1
+        )
+        disc_number: int = int(disc_number_raw) if disc_number_raw else 1
 
         # Hey future me - album_artist (TPE2) is crucial for compilation detection!
         # If TPE2 is "Various Artists" but artist is different, it's a compilation.
@@ -545,7 +570,7 @@ class LibraryScannerService:
             album_id, is_new_album, is_matched_album = await self._find_or_create_album(
                 album_name,
                 artist_id,
-                release_year=metadata.get("year"),
+                release_year=release_year,
                 album_artist=album_artist,
                 is_compilation=is_compilation,
             )
@@ -561,8 +586,8 @@ class LibraryScannerService:
             artist_id=artist_id,
             album_id=album_id,
             duration_ms=metadata.get("duration_ms", 0),
-            track_number=metadata.get("track_number"),
-            disc_number=metadata.get("disc_number", 1),
+            track_number=track_number,
+            disc_number=disc_number,
             file_path=FilePath.from_string(str(file_path.resolve())),
             genres=[metadata["genre"]] if metadata.get("genre") else [],
             created_at=datetime.now(UTC),
@@ -624,7 +649,7 @@ class LibraryScannerService:
 
     async def _get_track_by_file_path(self, file_path: Path) -> TrackModel | None:
         """Get track by file path.
-        
+
         Hey future me - use resolved path for consistent DB lookup!
         """
         stmt = select(TrackModel).where(TrackModel.file_path == str(file_path.resolve()))
@@ -832,7 +857,7 @@ class LibraryScannerService:
 
     def _normalize_artist_name(self, name: str) -> str:
         """Normalize artist name for better matching.
-        
+
         Hey future me - this is CRITICAL for deduplication!
         Fixes common issues:
         - "The Beatles" → "Beatles"
@@ -841,16 +866,16 @@ class LibraryScannerService:
         """
         if not name:
             return ""
-        
+
         # Remove common articles at start (case-insensitive)
         articles = ("the ", "a ", "an ", "les ", "la ", "le ")
         normalized = name.lower().strip()
-        
+
         for article in articles:
             if normalized.startswith(article):
                 normalized = normalized[len(article):].strip()
                 break
-        
+
         return normalized.strip()
 
     async def _find_or_create_artist(self, name: str) -> tuple[ArtistId, bool, bool]:
@@ -1052,12 +1077,72 @@ class LibraryScannerService:
 
         return None
 
+    def _extract_metadata_from_path(
+        self, file_path: Path
+    ) -> dict[str, str | int | None]:
+        """Extract metadata from Lidarr-style folder/file structure.
+
+        Hey future me - this is the FALLBACK when ID3 tags are missing!
+        Uses our new folder parsing module to extract artist, album, track info
+        from the folder structure: /Artist/Album (Year)/NN - Title.ext
+
+        Args:
+            file_path: Path to the audio file
+
+        Returns:
+            Dict with extracted metadata (artist, album, album_year, track_number, title)
+        """
+        from soulspot.domain.value_objects.folder_parsing import (
+            is_disc_folder,
+            parse_album_folder,
+            parse_track_filename,
+        )
+
+        metadata: dict[str, str | int | None] = {}
+
+        # Parse track filename
+        parsed_track = parse_track_filename(file_path.name)
+        if parsed_track.title:
+            metadata["title_from_folder"] = parsed_track.title
+        if parsed_track.track_number > 0:
+            metadata["track_number_from_folder"] = parsed_track.track_number
+        if parsed_track.disc_number > 1:
+            metadata["disc_number_from_folder"] = parsed_track.disc_number
+        if parsed_track.artist:
+            # VA track with artist in filename
+            metadata["track_artist_from_folder"] = parsed_track.artist
+
+        # Navigate up to find album and artist folders
+        # Expected structure: /music/Artist/Album (Year)/[Disc N/]Track.ext
+        current = file_path.parent
+        music_root = self.music_path.resolve()
+
+        # Check if we're in a disc subfolder
+        is_disc, disc_num = is_disc_folder(current.name)
+        if is_disc and disc_num is not None:
+            metadata["disc_number_from_folder"] = disc_num
+            current = current.parent  # Move up past disc folder
+
+        # Current should be album folder
+        if current != music_root and current.name:
+            parsed_album = parse_album_folder(current.name)
+            metadata["album_from_folder"] = parsed_album.title
+            if parsed_album.year:
+                metadata["year_from_folder"] = parsed_album.year
+            current = current.parent
+
+        # Current should be artist folder
+        if current != music_root and current.name:
+            metadata["artist_from_folder"] = current.name
+
+        return metadata
+
     async def _cleanup_missing_files(self, existing_file_paths: set[str]) -> dict[str, int]:
         """Remove tracks from DB whose files no longer exist on disk.
 
         Hey future me - this is the CLEANUP phase of full scan!
         Called ONLY during full scan (incremental=False).
-        
+
         Also removes orphaned albums (no tracks) and artists (no albums/tracks).
 
         Args:
@@ -1074,28 +1159,28 @@ class LibraryScannerService:
 
         # Step 1: Find tracks with file_path that no longer exist
         logger.info("Checking for tracks with missing files...")
-        
+
         stmt = select(TrackModel.id, TrackModel.file_path, TrackModel.title).where(
             TrackModel.file_path.isnot(None)
         )
         result = await self.session.execute(stmt)
         db_tracks = result.all()
-        
+
         tracks_to_remove: list[str] = []
         for track_id, file_path, title in db_tracks:
             if file_path not in existing_file_paths:
                 tracks_to_remove.append(track_id)
                 logger.debug(f"Track file missing: {title} ({file_path})")
-        
+
         if tracks_to_remove:
             logger.info(f"Removing {len(tracks_to_remove)} tracks with missing files...")
-            
+
             # Delete tracks in batches
             for i in range(0, len(tracks_to_remove), 100):
                 batch = tracks_to_remove[i:i + 100]
                 delete_stmt = delete(TrackModel).where(TrackModel.id.in_(batch))
                 await self.session.execute(delete_stmt)
-            
+
             stats["removed_tracks"] = len(tracks_to_remove)
             logger.info(f"Removed {len(tracks_to_remove)} tracks")
         else:
@@ -1103,7 +1188,7 @@ class LibraryScannerService:
 
         # Step 2: Remove orphaned albums (albums with no tracks)
         logger.info("Checking for orphaned albums...")
-        
+
         orphan_albums_stmt = (
             select(AlbumModel.id, AlbumModel.title)
             .outerjoin(TrackModel, AlbumModel.id == TrackModel.album_id)
@@ -1112,14 +1197,14 @@ class LibraryScannerService:
         )
         orphan_albums_result = await self.session.execute(orphan_albums_stmt)
         orphan_albums = orphan_albums_result.all()
-        
+
         if orphan_albums:
             album_ids = [album_id for album_id, _ in orphan_albums]
             logger.info(f"Removing {len(album_ids)} orphaned albums...")
-            
-            for album_id, title in orphan_albums:
+
+            for _album_id, title in orphan_albums:
                 logger.debug(f"Removing orphaned album: {title}")
-            
+
             delete_albums_stmt = delete(AlbumModel).where(AlbumModel.id.in_(album_ids))
             await self.session.execute(delete_albums_stmt)
             stats["removed_albums"] = len(album_ids)
@@ -1129,7 +1214,7 @@ class LibraryScannerService:
 
         # Step 3: Remove orphaned artists (artists with no tracks AND no albums)
         logger.info("Checking for orphaned artists...")
-        
+
         # Artists that have neither tracks nor albums
         orphan_artists_stmt = (
             select(ArtistModel.id, ArtistModel.name)
@@ -1137,20 +1222,20 @@ class LibraryScannerService:
             .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
             .group_by(ArtistModel.id)
             .having(
-                (func.count(TrackModel.id) == 0) & 
+                (func.count(TrackModel.id) == 0) &
                 (func.count(AlbumModel.id) == 0)
             )
         )
         orphan_artists_result = await self.session.execute(orphan_artists_stmt)
         orphan_artists = orphan_artists_result.all()
-        
+
         if orphan_artists:
             artist_ids = [artist_id for artist_id, _ in orphan_artists]
             logger.info(f"Removing {len(artist_ids)} orphaned artists...")
-            
-            for artist_id, name in orphan_artists:
+
+            for _artist_id, name in orphan_artists:
                 logger.debug(f"Removing orphaned artist: {name}")
-            
+
             delete_artists_stmt = delete(ArtistModel).where(ArtistModel.id.in_(artist_ids))
             await self.session.execute(delete_artists_stmt)
             stats["removed_artists"] = len(artist_ids)
@@ -1160,12 +1245,12 @@ class LibraryScannerService:
 
         # Commit cleanup changes
         await self.session.commit()
-        
+
         logger.info(
             f"Cleanup complete: {stats['removed_tracks']} tracks, "
             f"{stats['removed_albums']} albums, {stats['removed_artists']} artists removed"
         )
-        
+
         return stats
 
     async def _analyze_album_diversity(self) -> dict[str, int]:

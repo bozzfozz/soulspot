@@ -402,6 +402,72 @@ class DownloadSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOWNLOAD_")
 
 
+# Hey future me, NamingSettings configures Lidarr-style file and folder naming! This mirrors Lidarr's
+# Media Management > Track Naming settings. The format strings use tokens like {Artist Name}, {Album Title},
+# {track:00} that get replaced with actual metadata. Default formats match Lidarr defaults and work with
+# Plex/Jellyfin/Navidrome. colon_replacement is crucial for Windows compatibility (colons illegal in
+# filenames). multi_disc_style controls whether multi-disc albums use prefixes (01-01 - Track.flac) or
+# subfolders (Disc 1/01 - Track.flac). These settings affect both library scanning and file organization!
+class NamingSettings(BaseSettings):
+    """Lidarr-style file and folder naming configuration."""
+
+    # Artist folder format
+    artist_folder_format: str = Field(
+        default="{Artist Name}",
+        description="Format for artist folder names (e.g., '{Artist Name}')",
+    )
+
+    # Album folder format
+    album_folder_format: str = Field(
+        default="{Album Title} ({Release Year})",
+        description="Format for album folder names (e.g., '{Album Title} ({Release Year})')",
+    )
+
+    # Standard track format (single disc albums)
+    standard_track_format: str = Field(
+        default="{track:00} - {Track Title}",
+        description="Format for track filenames on single-disc albums",
+    )
+
+    # Multi-disc track format
+    multi_disc_track_format: str = Field(
+        default="{medium:00}-{track:00} - {Track Title}",
+        description="Format for track filenames on multi-disc albums",
+    )
+
+    # Various Artists compilation format
+    various_artist_track_format: str = Field(
+        default="{track:00} - {Artist Name} - {Track Title}",
+        description="Format for track filenames on Various Artists compilations",
+    )
+
+    # Multi-disc handling style: "prefix" or "subfolder"
+    multi_disc_style: str = Field(
+        default="prefix",
+        description="How to handle multi-disc albums: 'prefix' (01-01 - Track.flac) or 'subfolder' (Disc 1/01 - Track.flac)",
+    )
+
+    # Disc subfolder format (for subfolder style)
+    multi_disc_folder_format: str = Field(
+        default="Disc {medium}",
+        description="Format for disc subfolders when multi_disc_style is 'subfolder'",
+    )
+
+    # Character replacement
+    replace_illegal_characters: bool = Field(
+        default=True,
+        description="Replace illegal characters in filenames for cross-platform compatibility",
+    )
+
+    # Colon replacement: "" (delete), "-", " -" (default), " - "
+    colon_replacement: str = Field(
+        default=" -",
+        description="What to replace colons with in filenames: '' (delete), '-', ' -' (default), ' - '",
+    )
+
+    model_config = SettingsConfigDict(env_prefix="NAMING_")
+
+
 # Hey, PostProcessingSettings controls what happens AFTER a file is downloaded! enabled=True means
 # run the full pipeline (fetch artwork, embed lyrics, write ID3 tags, rename files). You can disable
 # individual steps (artwork_enabled, lyrics_enabled, etc) while keeping others. artwork_max_size and
@@ -532,6 +598,10 @@ class Settings(BaseSettings):
     postprocessing: PostProcessingSettings = Field(
         default_factory=PostProcessingSettings,
         description="Post-processing pipeline configuration",
+    )
+    naming: NamingSettings = Field(
+        default_factory=NamingSettings,
+        description="Lidarr-style naming configuration for files and folders",
     )
 
     model_config = SettingsConfigDict(
