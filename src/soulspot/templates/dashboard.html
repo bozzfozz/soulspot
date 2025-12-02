@@ -14,7 +14,7 @@
     <div class="header-content">
         <div class="header-icon-wrapper">
             <div class="header-icon">
-                <i class="bi bi-house-heart-fill"></i>
+                <i class="bi bi-house-heart-fill vinyl-record-icon"></i>
             </div>
             <div class="header-icon-glow"></div>
         </div>
@@ -34,7 +34,7 @@
 <!-- Stats Grid with animated counters -->
 <div class="stats-grid" id="summary-stats">
     <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
-        <div class="stat-icon stat-icon-playlists">
+        <div class="stat-icon stat-icon-playlists stat-icon-hover-flip">
             <i class="bi bi-collection-play"></i>
         </div>
         <div class="stat-content">
@@ -44,7 +44,7 @@
         <div class="stat-shine"></div>
     </div>
     <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1;">
-        <div class="stat-icon stat-icon-tracks">
+        <div class="stat-icon stat-icon-tracks stat-icon-hover-flip">
             <i class="bi bi-music-note-list"></i>
         </div>
         <div class="stat-content">
@@ -54,7 +54,7 @@
         <div class="stat-shine"></div>
     </div>
     <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2;">
-        <div class="stat-icon stat-icon-downloaded">
+        <div class="stat-icon stat-icon-downloaded stat-icon-hover-flip">
             <i class="bi bi-download"></i>
         </div>
         <div class="stat-content">
@@ -64,7 +64,7 @@
         <div class="stat-shine"></div>
     </div>
     <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 3;">
-        <div class="stat-icon stat-icon-queue {% if stats.queue_size > 0 %}stat-icon-active{% endif %}">
+        <div class="stat-icon stat-icon-queue stat-icon-hover-flip {% if stats.queue_size > 0 %}stat-icon-active{% endif %}">
             <i class="bi bi-clock-history"></i>
         </div>
         <div class="stat-content">
@@ -104,7 +104,7 @@
 
 <!-- Recent Playlists -->
 <div class="section-card" style="margin-top: 2rem;">
-    <div class="section-header">
+    <div class="section-header section-header-animated" data-delay="0">
         <h2><i class="bi bi-collection-play"></i> Recent Playlists</h2>
         <a href="/playlists" class="btn btn-outline btn-sm">
             View All
@@ -134,7 +134,7 @@
         {% endfor %}
         {% else %}
         <div class="empty-state">
-            <div class="empty-icon">
+            <div class="empty-icon empty-icon-animated">
                 <i class="bi bi-collection-play"></i>
             </div>
             <h3>No Playlists Yet</h3>
@@ -150,7 +150,7 @@
 
 <!-- Recent Activity -->
 <div class="section-card" style="margin-top: 2rem;">
-    <div class="section-header">
+    <div class="section-header section-header-animated" data-delay="1">
         <h2><i class="bi bi-activity"></i> Recent Activity</h2>
         <a href="/downloads" class="btn btn-outline btn-sm">
             View All
@@ -161,7 +161,7 @@
     <div class="activity-list">
         {% if recent_activity %}
         {% for activity in recent_activity[:5] %}
-        <div class="activity-item activity-item-animated slide-from-left" style="--delay: {{ loop.index0 }};">
+        <div class="activity-item scroll-reveal" data-delay="{{ loop.index0 }}">
             <div class="activity-artwork shimmer-loading">
                 <img src="{{ activity.album_art or 'https://via.placeholder.com/48x48?text=♪' }}"
                     alt="{{ activity.title }}">
@@ -198,7 +198,7 @@
         {% endfor %}
         {% else %}
         <div class="empty-state empty-state-small">
-            <i class="bi bi-clock-history"></i>
+            <i class="bi bi-clock-history empty-icon-animated" style="display: inline-block;"></i>
             <p>No recent activity</p>
         </div>
         {% endif %}
@@ -892,6 +892,29 @@
 
 {% block extra_scripts %}
 <script>
+// Scroll-triggered animations using Intersection Observer
+// Hey future me - this makes activity items fade in only when scrolled into view!
+// Uses the scroll-reveal class + revealed class to trigger CSS animation
+function initScrollReveal() {
+    const revealElements = document.querySelectorAll('.scroll-reveal');
+    
+    if (!revealElements.length) return;
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target); // Only animate once
+            }
+        });
+    }, {
+        threshold: 0.2,  // Trigger when 20% visible
+        rootMargin: '0px 0px -50px 0px'  // Slightly before fully in view
+    });
+    
+    revealElements.forEach(el => observer.observe(el));
+}
+
 // Animated counters
 function animateCounters() {
     const counters = document.querySelectorAll('.counter');
@@ -933,6 +956,9 @@ function animateCounters() {
 }
 
 // Run on page load
-document.addEventListener('DOMContentLoaded', animateCounters);
+document.addEventListener('DOMContentLoaded', () => {
+    animateCounters();
+    initScrollReveal();
+});
 </script>
 {% endblock %}
