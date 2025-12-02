@@ -9,13 +9,21 @@
 {% block title %}Downloads - SoulSpot{% endblock %}
 
 {% block content %}
-<!-- Page Header -->
-<div class="flex items-center justify-between mb-8">
-    <div>
-        <h1>Downloads</h1>
-        <p class="text-muted" style="margin-top: 0.5rem;">Manage your download queue and history</p>
+<!-- Page Header with animated icon -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);">
+                <i class="bi bi-cloud-download-fill vinyl-record-icon"></i>
+            </div>
+            <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(59, 130, 246, 0.3) 0%, transparent 70%);"></div>
+        </div>
+        <div>
+            <h1>Downloads</h1>
+            <p class="subtitle">Manage your download queue and history</p>
+        </div>
     </div>
-    <div class="flex gap-3">
+    <div class="header-actions">
         <button class="btn btn-outline" hx-post="/api/downloads/pause-all" hx-swap="none">
             <i class="bi bi-pause"></i>
             Pause All
@@ -27,46 +35,50 @@
     </div>
 </div>
 
-<!-- Stats -->
-<div class="grid grid-cols-4 mb-8">
-    <div class="stat-card">
-        <div class="stat-card-icon">
-            <i class="bi bi-arrow-repeat bi-spin"></i>
+<!-- Stats Grid with animations -->
+<div class="stats-grid" style="margin-bottom: 2rem;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
+        <div class="stat-icon stat-icon-hover-flip pulse-soft" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%); color: var(--color-primary);">
+            <i class="bi bi-arrow-repeat"></i>
         </div>
-        <div class="stat-card-content">
-            <div class="stat-card-label">Active Downloads</div>
-            <div class="stat-card-value">{{ active_count|default(0) }}</div>
+        <div class="stat-content">
+            <span class="stat-value">{{ active_count|default(0) }}</span>
+            <span class="stat-label">Active Downloads</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card-icon">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%); color: var(--color-warning);">
             <i class="bi bi-clock"></i>
         </div>
-        <div class="stat-card-content">
-            <div class="stat-card-label">In Queue</div>
-            <div class="stat-card-value">{{ queue_count|default(0) }}</div>
+        <div class="stat-content">
+            <span class="stat-value">{{ queue_count|default(0) }}</span>
+            <span class="stat-label">In Queue</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card-icon">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%); color: var(--color-success);">
             <i class="bi bi-check-circle"></i>
         </div>
-        <div class="stat-card-content">
-            <div class="stat-card-label">Completed Today</div>
-            <div class="stat-card-value">{{ completed_today|default(0) }}</div>
+        <div class="stat-content">
+            <span class="stat-value">{{ completed_today|default(0) }}</span>
+            <span class="stat-label">Completed Today</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-card-icon">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 3;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%); color: var(--color-error);">
             <i class="bi bi-x-circle"></i>
         </div>
-        <div class="stat-card-content">
-            <div class="stat-card-label">Failed</div>
-            <div class="stat-card-value">{{ failed_count|default(0) }}</div>
+        <div class="stat-content">
+            <span class="stat-value">{{ failed_count|default(0) }}</span>
+            <span class="stat-label">Failed</span>
         </div>
+        <div class="stat-shine"></div>
     </div>
 </div>
 
@@ -83,9 +95,9 @@
 <!-- Queue Tab -->
 <div id="queue-tab" class="tab-content">
     {% if downloads %}
-    <div class="card" style="padding: 0;">
+    <div class="section-card" style="padding: 0;">
         {% for item in downloads %}
-        <div class="queue-item" data-id="{{ item.id }}"
+        <div class="queue-item scroll-reveal" data-id="{{ item.id }}" data-delay="{{ loop.index0 % 10 }}"
             style="display: flex; align-items: center; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border-primary);">
             <!-- Album Art -->
             <div style="width: 56px; height: 56px; flex-shrink: 0;">
@@ -114,8 +126,8 @@
             <!-- Status -->
             <div>
                 {% if item.status == 'downloading' %}
-                <span class="badge badge-info">
-                    <i class="bi bi-arrow-repeat bi-spin"></i>
+                <span class="badge badge-info pulse-soft">
+                    <i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i>
                     Downloading
                 </span>
                 {% elif item.status == 'queued' or item.status == 'pending' %}
@@ -130,7 +142,7 @@
                 </span>
                 {% elif item.status == 'failed' %}
                 <span class="badge badge-error">
-                    <i class="bi bi-x"></i>
+                    <i class="bi bi-x shake"></i>
                     Failed
                 </span>
                 {% elif item.status == 'paused' %}
@@ -165,9 +177,11 @@
     </div>
     {% else %}
     <!-- Empty State -->
-    <div class="card" style="text-align: center; padding: 4rem;">
-        <i class="bi bi-download" style="font-size: 4rem; color: var(--text-muted); margin-bottom: 1.5rem;"></i>
-        <h2>No Downloads in Queue</h2>
+    <div class="section-card" style="text-align: center; padding: 4rem;">
+        <div class="empty-icon empty-icon-animated">
+            <i class="bi bi-cloud-download"></i>
+        </div>
+        <h3>No Downloads in Queue</h3>
         <p class="text-muted" style="margin-top: 0.5rem;">
             Your download queue is empty. Add playlists or tracks to start downloading.
         </p>
@@ -205,13 +219,45 @@
         color: var(--accent-primary);
         border-bottom-color: var(--accent-primary);
     }
+    
+    /* Tab content fade animation */
+    .tab-content {
+        animation: tab-fade-in 0.3s ease-out;
+    }
+    
+    @keyframes tab-fade-in {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 </style>
 <script>
+    // Scroll-triggered animations using Intersection Observer
+    function initScrollReveal() {
+        const revealElements = document.querySelectorAll('.scroll-reveal');
+        if (!revealElements.length) return;
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('revealed');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.2, rootMargin: '0px 0px -50px 0px' });
+        
+        revealElements.forEach(el => observer.observe(el));
+    }
+
     function switchTab(tab, btn) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
         btn.classList.add('active');
-        document.getElementById(tab + '-tab').style.display = 'block';
+        const tabContent = document.getElementById(tab + '-tab');
+        tabContent.style.display = 'block';
+        // Re-trigger animation
+        tabContent.style.animation = 'none';
+        tabContent.offsetHeight; // Trigger reflow
+        tabContent.style.animation = 'tab-fade-in 0.3s ease-out';
     }
 
     // Auto-refresh queue every 5 seconds
@@ -220,5 +266,8 @@
             htmx.ajax('GET', '/downloads', { target: '#queue-tab', swap: 'innerHTML' });
         }
     }, 5000);
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initScrollReveal);
 </script>
 {% endblock %}

@@ -18,14 +18,17 @@
 </nav>
 
 <!-- Page Header -->
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
-    <div style="display: flex; align-items: center; gap: var(--space-4);">
-        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #1DB954, #1ed760); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
-            <i class="bi bi-heart" style="color: white; font-size: 1.25rem;"></i>
+<div class="page-header" style="margin-bottom: var(--space-6);">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
+                <i class="bi bi-spotify vinyl-record-icon"></i>
+            </div>
+            <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(29, 185, 84, 0.3) 0%, transparent 70%);"></div>
         </div>
         <div>
-            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Followed Artists</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">
+            <h1>Followed Artists</h1>
+            <p class="subtitle">
                 {% if total_count > 0 %}
                 {{ total_count }} artist{{ 's' if total_count != 1 else '' }} you follow on Spotify
                 {% else %}
@@ -34,14 +37,14 @@
             </p>
         </div>
     </div>
-    <div style="display: flex; gap: var(--space-3); align-items: center;">
+    <div class="header-actions" style="display: flex; gap: var(--space-3); align-items: center;">
         {% if sync_stats and sync_stats.synced %}
-        <span style="font-size: var(--font-size-sm); color: var(--text-muted);">
-            <i class="bi bi-check" style="color: #1DB954;"></i>
+        <span class="badge badge-success" style="font-size: var(--font-size-sm);">
+            <i class="bi bi-check"></i>
             Synced: +{{ sync_stats.added }} / -{{ sync_stats.removed }}
         </span>
         {% elif sync_stats and sync_stats.skipped_cooldown %}
-        <span style="font-size: var(--font-size-sm); color: var(--text-muted);">
+        <span class="badge" style="font-size: var(--font-size-sm);">
             <i class="bi bi-clock"></i> From cache
         </span>
         {% endif %}
@@ -66,7 +69,7 @@
     {% if artists %}
     <div class="artists-grid">
         {% for artist in artists %}
-        <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card">
+        <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 % 12 }};">
             {% if artist.image_url %}
             <img src="{{ artist.image_url }}" alt="{{ artist.name }}" class="artist-image">
             {% else %}
@@ -94,7 +97,7 @@
     {% else %}
     {# Hey future me - No "Connect Spotify" button here! User requested connect buttons only on dashboard/onboarding #}
     <div class="empty-state">
-        <div class="empty-icon" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
+        <div class="empty-icon empty-icon-animated" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
             <i class="bi bi-spotify" style="color: white;"></i>
         </div>
         <h3>Keine Künstler in der Datenbank</h3>

@@ -25,19 +25,22 @@
             </nav>
             
             <div style="display: flex; align-items: center; gap: var(--space-3);">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #10b981, #059669); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-lg);">
-                    <i class="bi bi-person" style="color: white; font-size: 1.25rem;"></i>
+                <div class="header-icon-wrapper">
+                    <div class="header-icon" style="background: linear-gradient(135deg, #1DB954, #059669);">
+                        <i class="bi bi-person-heart vinyl-record-icon"></i>
+                    </div>
+                    <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, transparent 70%);"></div>
                 </div>
                 <div>
                     <h1 style="font-size: var(--font-size-3xl);">Followed Artists</h1>
-                    <p style="color: var(--text-muted);">Sync your Spotify followed artists and create watchlists</p>
+                    <p class="subtitle">Sync your Spotify followed artists and create watchlists</p>
                 </div>
             </div>
         </div>
         
         <div style="display: flex; flex-wrap: wrap; gap: var(--space-2);">
             <button id="sync-btn" 
-                    class="btn btn-primary"
+                    class="btn btn-primary btn-glow"
                     hx-post="/api/automation/followed-artists/sync"
                     hx-target="#artists-list"
                     hx-swap="innerHTML"
@@ -56,42 +59,42 @@
     </div>
 
     <!-- Sync Progress Indicator -->
-    <div id="sync-spinner" class="htmx-indicator card" style="padding: var(--space-8); text-align: center; margin-bottom: var(--space-6); background: rgba(var(--accent-primary-rgb), 0.1); border: 1px solid rgba(var(--accent-primary-rgb), 0.2);">
-        <div class="spinner" style="margin: 0 auto var(--space-4);"></div>
+    <div id="sync-spinner" class="htmx-indicator section-card" style="padding: var(--space-8); text-align: center; margin-bottom: var(--space-6); background: rgba(var(--accent-primary-rgb), 0.1); border: 1px solid rgba(var(--accent-primary-rgb), 0.2);">
+        <div class="spinner pulse-soft" style="margin: 0 auto var(--space-4);"></div>
         <p style="font-size: var(--font-size-lg); font-weight: var(--font-weight-medium); color: var(--accent-primary);">Syncing followed artists from Spotify...</p>
         <p style="font-size: var(--font-size-sm); color: var(--text-muted); margin-top: var(--space-2);">This may take a few moments if you follow many artists</p>
     </div>
 
     <!-- Stats Banner -->
     <div id="stats-banner" style="display: none; margin-bottom: var(--space-6);">
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4);">
-            <div class="card" style="padding: var(--space-4); text-align: center;">
-                <div style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(var(--accent-primary-rgb), 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+        <div class="stats-grid">
+            <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0; padding: var(--space-4); text-align: center;">
+                <div class="stat-icon stat-icon-hover-flip" style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(var(--accent-primary-rgb), 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-people" style="color: var(--accent-primary);"></i>
                 </div>
-                <p id="stat-total" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold);">0</p>
-                <p style="font-size: var(--font-size-xs); color: var(--text-muted);">Total Fetched</p>
+                <p id="stat-total" class="stat-value" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold);">0</p>
+                <p class="stat-label" style="font-size: var(--font-size-xs); color: var(--text-muted);">Total Fetched</p>
             </div>
-            <div class="card" style="padding: var(--space-4); text-align: center;">
-                <div style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(34, 197, 94, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+            <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1; padding: var(--space-4); text-align: center;">
+                <div class="stat-icon stat-icon-hover-flip" style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(34, 197, 94, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-plus-lg" style="color: #22c55e;"></i>
                 </div>
-                <p id="stat-created" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #22c55e;">0</p>
-                <p style="font-size: var(--font-size-xs); color: var(--text-muted);">Created</p>
+                <p id="stat-created" class="stat-value" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #22c55e;">0</p>
+                <p class="stat-label" style="font-size: var(--font-size-xs); color: var(--text-muted);">Created</p>
             </div>
-            <div class="card" style="padding: var(--space-4); text-align: center;">
-                <div style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(59, 130, 246, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+            <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2; padding: var(--space-4); text-align: center;">
+                <div class="stat-icon stat-icon-hover-flip" style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(59, 130, 246, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-arrow-repeat" style="color: #3b82f6;"></i>
                 </div>
-                <p id="stat-updated" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #3b82f6;">0</p>
-                <p style="font-size: var(--font-size-xs); color: var(--text-muted);">Updated</p>
+                <p id="stat-updated" class="stat-value" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #3b82f6;">0</p>
+                <p class="stat-label" style="font-size: var(--font-size-xs); color: var(--text-muted);">Updated</p>
             </div>
-            <div class="card" style="padding: var(--space-4); text-align: center;">
-                <div style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(168, 85, 247, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+            <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 3; padding: var(--space-4); text-align: center;">
+                <div class="stat-icon stat-icon-hover-flip" style="width: 40px; height: 40px; margin: 0 auto var(--space-2); background: rgba(168, 85, 247, 0.15); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-check" style="color: #a855f7;"></i>
                 </div>
-                <p id="stat-selected" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #a855f7;">0</p>
-                <p style="font-size: var(--font-size-xs); color: var(--text-muted);">Selected</p>
+                <p id="stat-selected" class="stat-value" style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: #a855f7;">0</p>
+                <p class="stat-label" style="font-size: var(--font-size-xs); color: var(--text-muted);">Selected</p>
             </div>
         </div>
     </div>
@@ -99,16 +102,16 @@
     <!-- Artists List -->
     <div id="artists-list">
         <!-- Empty state -->
-        <div class="card" style="padding: var(--space-16); text-align: center;">
+        <div class="section-card" style="padding: var(--space-16); text-align: center;">
             <div style="max-width: 400px; margin: 0 auto;">
-                <div style="width: 96px; height: 96px; margin: 0 auto var(--space-6); background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1)); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                    <i class="bi bi-person" style="font-size: 3rem; color: #10b981;"></i>
+                <div class="empty-icon empty-icon-animated" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));">
+                    <i class="bi bi-person-heart" style="font-size: 3rem; color: #10b981;"></i>
                 </div>
                 <h3 style="font-size: var(--font-size-2xl); margin-bottom: var(--space-3);">No artists synced yet</h3>
                 <p style="color: var(--text-muted); margin-bottom: var(--space-6);">
                     Click "Sync from Spotify" to fetch all artists you follow on Spotify and create watchlists for automatic downloads.
                 </p>
-                <button onclick="document.getElementById('sync-btn').click()" class="btn btn-primary btn-lg">
+                <button onclick="document.getElementById('sync-btn').click()" class="btn btn-primary btn-glow btn-lg">
                     <i class="bi bi-arrow-repeat"></i>
                     Sync from Spotify
                 </button>

@@ -11,17 +11,20 @@
 
 {% block content %}
 <!-- Page Header -->
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
-    <div style="display: flex; align-items: center; gap: var(--space-4);">
-        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
-            <i class="bi bi-files" style="color: white; font-size: 1.25rem;"></i>
+<div class="page-header" style="margin-bottom: var(--space-6);">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                <i class="bi bi-files vinyl-record-icon"></i>
+            </div>
+            <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, transparent 70%);"></div>
         </div>
         <div>
-            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Duplicate Review</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Review and resolve duplicate tracks in your library</p>
+            <h1>Duplicate Review</h1>
+            <p class="subtitle">Review and resolve duplicate tracks in your library</p>
         </div>
     </div>
-    <div style="display: flex; gap: var(--space-3);">
+    <div class="header-actions">
         <button class="btn btn-outline"
                 hx-post="/api/library/duplicates/scan"
                 hx-target="#scan-status"
@@ -29,7 +32,7 @@
             <i class="bi bi-search"></i>
             Scan for Duplicates
         </button>
-        <a href="/library" class="btn btn-ghost">
+        <a href="/library" class="btn btn-outline">
             <i class="bi bi-arrow-left"></i>
             Back to Library
         </a>
@@ -40,18 +43,33 @@
 <div id="scan-status" style="margin-bottom: var(--space-4);"></div>
 
 <!-- Stats Bar -->
-<div id="duplicate-stats" class="stats-bar" hx-get="/api/library/duplicates?limit=1" hx-trigger="load" hx-swap="none" hx-on::after-request="updateStats(event)">
-    <div class="stat-item">
-        <span class="stat-number" id="stat-pending">{{ stats.pending if stats else 0 }}</span>
-        <span class="stat-label">Pending Review</span>
+<div id="duplicate-stats" class="stats-grid" style="margin-bottom: var(--space-6);" hx-get="/api/library/duplicates?limit=1" hx-trigger="load" hx-swap="none" hx-on::after-request="updateStats(event)">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+            <i class="bi bi-clock"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value" id="stat-pending">{{ stats.pending if stats else 0 }}</span>
+            <span class="stat-label">Pending Review</span>
+        </div>
     </div>
-    <div class="stat-item">
-        <span class="stat-number" id="stat-resolved">{{ stats.resolved if stats else 0 }}</span>
-        <span class="stat-label">Resolved</span>
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: rgba(34, 197, 94, 0.15); color: #22c55e;">
+            <i class="bi bi-check-circle"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value" id="stat-resolved">{{ stats.resolved if stats else 0 }}</span>
+            <span class="stat-label">Resolved</span>
+        </div>
     </div>
-    <div class="stat-item">
-        <span class="stat-number" id="stat-dismissed">{{ stats.dismissed if stats else 0 }}</span>
-        <span class="stat-label">Dismissed</span>
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2;">
+        <div class="stat-icon stat-icon-hover-flip" style="background: rgba(107, 114, 128, 0.15); color: #6b7280;">
+            <i class="bi bi-eye-slash"></i>
+        </div>
+        <div class="stat-content">
+            <span class="stat-value" id="stat-dismissed">{{ stats.dismissed if stats else 0 }}</span>
+            <span class="stat-label">Dismissed</span>
+        </div>
     </div>
 </div>
 
@@ -83,7 +101,7 @@
 <!-- Empty State Template (hidden, shown via JS) -->
 <template id="empty-state-template">
     <div class="empty-state">
-        <div class="empty-icon">
+        <div class="empty-icon empty-icon-animated">
             <i class="bi bi-check2-all"></i>
         </div>
         <h3>No duplicates found</h3>
