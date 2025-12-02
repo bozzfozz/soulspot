@@ -100,6 +100,26 @@ This file contains:
 - Component definitions
 - Custom utilities
 
+### npm Install in Docker
+
+**Note:** The Dockerfile uses `npm install` instead of `npm ci` because:
+- `npm ci` requires `package-lock.json` (strict reproducibility)
+- `npm install` works with or without lockfile (flexibility)
+- `npm install` will generate `package-lock.json` if missing
+- For production builds, commit `package-lock.json` for best results
+
+**Command in Dockerfile:**
+```dockerfile
+RUN npm install --prefer-offline --no-audit
+```
+
+**Recommendation:** Generate and commit `package-lock.json` once:
+```bash
+npm install
+git add package-lock.json
+git commit -m "Add package-lock.json for reproducible builds"
+```
+
 ### CSS Output File
 
 **Location:** `src/soulspot/static/css/style.css`
@@ -124,24 +144,32 @@ Defined in `package.json`:
 
 ### Local Development
 
-1. **Edit CSS:**
+1. **First-time setup (one time only):**
+   ```bash
+   # Install dependencies and generate package-lock.json
+   npm install
+   git add package-lock.json
+   git commit -m "Add package-lock.json for reproducible builds"
+   ```
+
+2. **Edit CSS:**
    ```bash
    # Edit src/soulspot/static/css/input.css
    nano src/soulspot/static/css/input.css
    ```
 
-2. **Watch for changes (optional):**
+3. **Watch for changes (optional):**
    ```bash
    npm run watch:css
    ```
    This automatically rebuilds `style.css` as you edit `input.css`
 
-3. **Manual build:**
+4. **Manual build:**
    ```bash
    npm run build:css
    ```
 
-4. **Commit both files:**
+5. **Commit changes:**
    ```bash
    git add src/soulspot/static/css/input.css
    git add src/soulspot/static/css/style.css
@@ -158,7 +186,21 @@ The CSS is automatically built during Docker build, so developers don't need to 
 3. Verify CSS in browser
 4. Commit both `input.css` and `style.css`
 
-## Troubleshooting
+### Setup Notes
+
+**Important:** First-time setup requires `package-lock.json`:
+```bash
+# Generate package-lock.json (one-time setup)
+npm install
+
+# Commit it to git
+git add package-lock.json
+git commit -m "Add package-lock.json for reproducible builds"
+```
+
+This lockfile ensures reproducible builds in Docker and CI/CD. It should be committed to git.
+
+### Troubleshooting
 
 ### CSS Changes Not Appearing in Docker Container
 

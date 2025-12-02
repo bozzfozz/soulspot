@@ -10,8 +10,10 @@ ARG GIT_BRANCH=""
 ARG GIT_REPO="https://github.com/bozzfozz/soulspot.git"
 
 WORKDIR /build
-COPY package.json package-lock.json* ./
-RUN npm ci --prefer-offline --no-audit
+COPY package.json package-lock.json* yarn.lock* ./
+# Use npm install (more flexible) or npm ci if lockfile exists
+# If package-lock.json doesn't exist, npm install will create it
+RUN npm install --prefer-offline --no-audit
 
 # Copy the CSS input file and build it (from local files)
 COPY src/soulspot/static/css/input.css ./src/soulspot/static/css/
