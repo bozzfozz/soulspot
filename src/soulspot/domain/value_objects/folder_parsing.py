@@ -40,6 +40,19 @@ logger = logging.getLogger(__name__)
 # REGEX PATTERNS
 # =============================================================================
 
+# Artist folder pattern: "Artist Name" or "Artist Name (MusicBrainz UUID)"
+# Examples:
+#   "The Beatles" → name="The Beatles", uuid=None
+#   "The Beatles (112944f7-8971-4b2b-b9d6-891e1dc2a7ff)" → name="The Beatles", uuid="112944f7..."
+# Hey future me - Lidarr uses UUID in folder name to disambiguate artists with same name,
+# we extract the name only! UUID is stored separately as musicbrainz_id.
+# Pattern matches standard MusicBrainz UUIDs (8-4-4-4-12 hex chars with hyphens = 36 chars total)
+ARTIST_FOLDER_PATTERN = re.compile(
+    r"^(?P<name>.+?)"  # Artist name (non-greedy)
+    r"(?:\s*\((?P<uuid>[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\))?"
+    r"$"
+)
+
 # Album folder pattern: "Title (Year)" or "Title (Year) (Disambiguation)"
 # Examples:
 #   "Thriller (1982)" → title="Thriller", year=1982
@@ -117,6 +130,29 @@ AUDIO_EXTENSIONS = frozenset({
 # =============================================================================
 # PARSED RESULT DATACLASSES
 # =============================================================================
+
+@dataclass
+class ParsedArtistFolder:
+    """Result of parsing an artist folder name.
+
+    Hey future me - artist names come from folder structure like "The Beatles (4d3nxxxx)".
+    We extract just the name (no UUID). Lidarr uses UUID to disambiguate artists with
+    same name. UUID is stored separately as musicbrainz_id in DB.
+    """
+
+    name: str
+    """Artist name extracted from folder name (without UUID)."""
+
+    uuid: str | None = None
+    """Lidarr artist UUID if found in folder name."""
+
+    raw_name: str = ""
+    """Original folder name before parsing."""
+
+    def __post_init__(self) -> None:
+        if not self.raw_name:
+            self.raw_name = self.name
+
 
 @dataclass
 class ParsedAlbumFolder:
@@ -260,6 +296,41 @@ class LibraryScanResult:
 # =============================================================================
 # PARSING FUNCTIONS
 # =============================================================================
+
+def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
+    """Parse artist folder name to extract metadata.
+
+    Handles Lidarr naming: "Artist Name" or "Artist Name (UUID)".
+    Hey future me - we extract just the name, UUID goes to musicbrainz_id field!
+
+    Args:
+        folder_name: The artist folder name (not full path).
+
+    Returns:
+        ParsedArtistFolder with extracted metadata.
+
+    Examples:
+        >>> parse_artist_folder("The Beatles")
+        ParsedArtistFolder(name="The Beatles", uuid=None, ...)
+
+        >>> parse_artist_folder("The Beatles (112944f7-8971-4b2b-b9d6-891e1dc2a7ff)")
+        ParsedArtistFolder(name="The Beatles", uuid="112944f7-8971-4b2b-b9d6-891e1dc2a7ff", ...)
+    """
+    match = ARTIST_FOLDER_PATTERN.match(folder_name.strip())
+
+    if match:
+        return ParsedArtistFolder(
+            name=match.group("name").strip(),
+            uuid=match.group("uuid"),
+            raw_name=folder_name,
+        )
+
+    # Fallback: use entire folder name as artist name
+    return ParsedArtistFolder(
+        name=folder_name.strip(),
+        raw_name=folder_name,
+    )
+
 
 def parse_album_folder(folder_name: str) -> ParsedAlbumFolder:
     """Parse album folder name to extract metadata.
@@ -493,14 +564,19 @@ class LibraryFolderParser:
     def _scan_artist(self, artist_path: Path) -> ScannedArtist:
         """Scan an artist folder and its albums.
 
+        Hey future me - use parse_artist_folder() to extract clean name
+        from folder (which might be "Artist Name (UUID)").
+
         Args:
             artist_path: Path to the artist folder.
 
         Returns:
             ScannedArtist with discovered albums.
         """
+        parsed = parse_artist_folder(artist_path.name)
+        
         artist = ScannedArtist(
-            name=artist_path.name,
+            name=parsed.name,  # Clean name without UUID!
             path=artist_path,
         )
 

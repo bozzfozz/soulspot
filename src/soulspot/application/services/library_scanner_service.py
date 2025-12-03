@@ -1252,7 +1252,13 @@ class LibraryScannerService:
 
         # Current should be artist folder
         if current != music_root and current.name:
-            metadata["artist_from_folder"] = current.name
+            from soulspot.domain.value_objects.folder_parsing import parse_artist_folder
+            
+            parsed_artist = parse_artist_folder(current.name)
+            metadata["artist_from_folder"] = parsed_artist.name
+            # Hey future me - Lidarr stores UUID in folder name, store it for later enrichment!
+            if parsed_artist.uuid:
+                metadata["musicbrainz_id_from_folder"] = parsed_artist.uuid
 
         return metadata
 

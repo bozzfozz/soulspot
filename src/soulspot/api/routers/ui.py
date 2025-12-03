@@ -781,6 +781,7 @@ async def library_import_jobs_list(
 # of loading all tracks into Python memory. Still no pagination (TODO for big libraries).
 # image_url comes from Spotify sync – falls back to None if artist wasn't synced.
 # IMPORTANT: Only shows artists with at least ONE local file (file_path IS NOT NULL)!
+# Hey future me - this now checks for unenriched artists and passes enrichment_needed flag!
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
@@ -847,8 +848,17 @@ async def library_artists(
     # Sort by name (already ordered in SQL, but ensure consistency)
     artists.sort(key=lambda x: x["name"].lower())
 
+    # Check for unenriched artists (have local files but no image)
+    # Hey future me - count artists that need Spotify enrichment for artwork!
+    artists_without_image = sum(1 for a in artists if not a["image_url"])
+    enrichment_needed = artists_without_image > 0
+
     return templates.TemplateResponse(
-        request, "library_artists.html", context={"artists": artists}
+        request, "library_artists.html", context={
+            "artists": artists,
+            "enrichment_needed": enrichment_needed,
+            "artists_without_image": artists_without_image,
+        }
     )
 
 

@@ -271,6 +271,9 @@ class LocalLibraryEnrichmentService:
         """
         try:
             # Search Spotify for this artist
+            # Hey future me - artist.name is CLEAN (no UUID/MusicBrainz ID from folder parsing)!
+            # LibraryFolderParser strips disambiguation before creating Artist entity.
+            # We send only the artist name to Spotify API, nothing else!
             search_results = await self._spotify_client.search_artist(
                 query=artist.name,
                 access_token=self._access_token,
@@ -288,6 +291,8 @@ class LocalLibraryEnrichmentService:
                 )
 
             # Score candidates
+            # Hey future me - local_name is clean artist name (no UUID)! Candidate scoring
+            # is based on name similarity and Spotify popularity, never on disambiguation.
             candidates = self._score_artist_candidates(artist.name, artists_data)
 
             if not candidates:
@@ -512,6 +517,8 @@ class LocalLibraryEnrichmentService:
             artist_name = artist_model.name if artist_model else "Unknown"
 
             # Search Spotify: "artist album"
+            # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
+            # LibraryFolderParser and DB already handle disambiguation stripping.
             search_query = f"artist:{artist_name} album:{album.title}"
             search_results = await self._spotify_client.search_track(
                 query=search_query,
