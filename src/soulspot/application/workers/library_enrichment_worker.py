@@ -69,8 +69,8 @@ class LibraryEnrichmentWorker:
         from soulspot.application.services.local_library_enrichment_service import (
             LocalLibraryEnrichmentService,
         )
-        from soulspot.application.services.token_manager import DatabaseTokenManager
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
 
         payload = job.payload
         triggered_by = payload.get("triggered_by", "manual")
@@ -79,17 +79,21 @@ class LibraryEnrichmentWorker:
 
         async with self.db.session_scope() as session:
             try:
-                # Get valid Spotify access token
-                # Hey - we need a token to call Spotify API for search!
-                token_manager = DatabaseTokenManager(session)
-                access_token = await token_manager.get_valid_token()
+                # Get valid Spotify access token directly from repository
+                # Hey future me - using SpotifyTokenRepository is simpler than DatabaseTokenManager
+                # for cases where we already have a session. DatabaseTokenManager needs a session_scope
+                # factory which is more complex to set up in a worker context.
+                token_repo = SpotifyTokenRepository(session)
+                token_model = await token_repo.get_active_token()
 
-                if not access_token:
+                if not token_model or not token_model.access_token:
                     logger.warning("No valid Spotify token available for enrichment")
                     return {
                         "success": False,
                         "error": "No valid Spotify token. Please re-authenticate.",
                     }
+
+                access_token = token_model.access_token
 
                 # Create Spotify client and enrichment service
                 spotify_client = SpotifyClient(self.settings)

@@ -1675,13 +1675,13 @@ async def trigger_enrichment(
     3. Apply high-confidence matches automatically
     4. Create candidates for ambiguous matches (user review needed)
     """
-    job = await job_queue.enqueue(
+    job_id = await job_queue.enqueue(
         job_type=JobType.LIBRARY_SPOTIFY_ENRICHMENT,
         payload={"triggered_by": "manual_api"},
     )
 
     return EnrichmentTriggerResponse(
-        job_id=str(job.id),
+        job_id=job_id,
         message="Enrichment job queued successfully",
     )
 
