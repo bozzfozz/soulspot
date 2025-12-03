@@ -144,7 +144,7 @@ async def analyze_all_albums(
     By default analyzes ALL albums (only_undetected=False for HTMX compatibility).
 
     WARNING: Can be slow for large libraries. Consider running as background job.
-    
+
     Args:
         only_undetected: If True, skip albums already marked as compilations
         min_tracks: Minimum track count for diversity analysis (default 2)

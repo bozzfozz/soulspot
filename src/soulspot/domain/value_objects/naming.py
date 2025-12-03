@@ -120,9 +120,7 @@ class NamingConfig:
     replace_illegal_characters: bool = True
     colon_replacement: ColonReplacement = ColonReplacement.SPACE_DASH
 
-    def get_track_format(
-        self, is_multi_disc: bool, is_various_artists: bool
-    ) -> str:
+    def get_track_format(self, is_multi_disc: bool, is_various_artists: bool) -> str:
         """Get the appropriate track format based on album type.
 
         Args:
@@ -187,9 +185,7 @@ class NamingService:
 
         # Add disambiguation if present and format supports it
         if disambiguation and "{Artist Disambiguation}" in format_str:
-            format_str = format_str.replace(
-                "{Artist Disambiguation}", disambiguation
-            )
+            format_str = format_str.replace("{Artist Disambiguation}", disambiguation)
         elif disambiguation:
             # Append disambiguation even if not in format string
             format_str = f"{format_str} ({disambiguation})"
@@ -331,7 +327,9 @@ class NamingService:
         # Handle multi-disc subfolder style
         # When using subfolders, track filename uses standard format (no disc prefix)
         # because the disc info is in the folder name
-        use_multi_disc_format = is_multi_disc and self.config.multi_disc_style == MultiDiscStyle.PREFIX
+        use_multi_disc_format = (
+            is_multi_disc and self.config.multi_disc_style == MultiDiscStyle.PREFIX
+        )
 
         track_filename = self.format_track_filename(
             track_title=track_title,
@@ -344,16 +342,19 @@ class NamingService:
         )
 
         # Handle multi-disc subfolder style
-        if (
-            is_multi_disc
-            and self.config.multi_disc_style == MultiDiscStyle.SUBFOLDER
-        ):
+        if is_multi_disc and self.config.multi_disc_style == MultiDiscStyle.SUBFOLDER:
             disc_folder = self._format_string(
                 self.config.multi_disc_folder_format,
                 medium_number=medium_number,
             )
             disc_folder = self._sanitize_filename(disc_folder)
-            return root_folder / artist_folder / album_folder / disc_folder / track_filename
+            return (
+                root_folder
+                / artist_folder
+                / album_folder
+                / disc_folder
+                / track_filename
+            )
 
         return root_folder / artist_folder / album_folder / track_filename
 
@@ -367,6 +368,7 @@ class NamingService:
         Returns:
             String with tokens replaced by values.
         """
+
         def replace_token(match: re.Match[str]) -> str:
             token_name = match.group(1)
             padding = match.group(2)  # None if no padding specified
@@ -503,8 +505,8 @@ def sort_name(name: str) -> str:
     name_lower = name.lower()
     for article in articles:
         if name_lower.startswith(article):
-            rest = name[len(article):]
-            article_clean = name[:len(article)].strip()
+            rest = name[len(article) :]
+            article_clean = name[: len(article)].strip()
             return f"{rest}, {article_clean}"
 
     return name

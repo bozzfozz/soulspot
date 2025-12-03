@@ -154,8 +154,7 @@ class DiscographyService:
             # Albums not synced yet - can't determine missing albums
             # The Background Sync will eventually sync them
             logger.info(
-                f"Albums not yet synced for {artist.name}, "
-                "waiting for background sync"
+                f"Albums not yet synced for {artist.name}, waiting for background sync"
             )
             return DiscographyInfo(
                 artist_id=str(artist_id.value),

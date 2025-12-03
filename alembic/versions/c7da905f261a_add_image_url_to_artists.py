@@ -28,7 +28,9 @@ def upgrade() -> None:
     Existing artists will have NULL until next Spotify sync populates the data.
     """
     # Add image_url as String column (stores Spotify CDN URL for artist profile picture)
-    op.add_column("artists", sa.Column("image_url", sa.String(length=512), nullable=True))
+    op.add_column(
+        "artists", sa.Column("image_url", sa.String(length=512), nullable=True)
+    )
 
 
 def downgrade() -> None:

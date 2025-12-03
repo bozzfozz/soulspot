@@ -26,9 +26,8 @@ Also adds orphaned_files table for CleanupWorker to track files that exist on di
 but have no corresponding DB entry (or vice versa).
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "kk24007nno55"
@@ -39,7 +38,7 @@ depends_on = None
 
 def upgrade() -> None:
     """Create duplicate_candidates and orphaned_files tables."""
-    
+
     # =========================================================================
     # DUPLICATE CANDIDATES TABLE
     # =========================================================================

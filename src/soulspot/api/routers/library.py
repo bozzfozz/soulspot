@@ -799,32 +799,32 @@ async def clear_local_library(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Clear all local library data (tracks, albums, artists with file_path).
-    
+
     Hey future me - this is the NUCLEAR OPTION! Use when you want to:
     1. Start fresh with a clean library scan
     2. Fix corrupted/fragmented album assignments
     3. Remove all imported local files without touching Spotify data
-    
+
     This ONLY deletes entities that were imported from local files (have file_path).
     Spotify-synced data (playlists, spotify_* tables) is NOT affected!
-    
+
     Returns:
         Statistics about deleted entities
     """
     from soulspot.infrastructure.persistence.models import (
         AlbumModel,
-        ArtistModel, 
+        ArtistModel,
         TrackModel,
     )
-    
+
     stats = {
         "deleted_tracks": 0,
         "deleted_albums": 0,
         "deleted_artists": 0,
     }
-    
+
     logger.info("Starting local library clear operation...")
-    
+
     # Step 1: Delete all tracks that have a file_path (local imports)
     # Tracks without file_path are from Spotify sync and should be kept
     count_stmt = select(func.count(TrackModel.id)).where(
@@ -832,14 +832,12 @@ async def clear_local_library(
     )
     count_result = await session.execute(count_stmt)
     stats["deleted_tracks"] = count_result.scalar() or 0
-    
+
     if stats["deleted_tracks"] > 0:
-        delete_tracks_stmt = delete(TrackModel).where(
-            TrackModel.file_path.isnot(None)
-        )
+        delete_tracks_stmt = delete(TrackModel).where(TrackModel.file_path.isnot(None))
         await session.execute(delete_tracks_stmt)
         logger.info(f"Deleted {stats['deleted_tracks']} local tracks")
-    
+
     # Step 2: Delete orphaned albums (albums with no remaining tracks)
     orphan_albums_stmt = (
         select(AlbumModel.id)
@@ -849,7 +847,7 @@ async def clear_local_library(
     )
     orphan_albums_result = await session.execute(orphan_albums_stmt)
     orphan_album_ids = [row[0] for row in orphan_albums_result.all()]
-    
+
     if orphan_album_ids:
         stats["deleted_albums"] = len(orphan_album_ids)
         delete_albums_stmt = delete(AlbumModel).where(
@@ -857,21 +855,18 @@ async def clear_local_library(
         )
         await session.execute(delete_albums_stmt)
         logger.info(f"Deleted {stats['deleted_albums']} orphaned albums")
-    
+
     # Step 3: Delete orphaned artists (artists with no tracks AND no albums)
     orphan_artists_stmt = (
         select(ArtistModel.id)
         .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
         .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
         .group_by(ArtistModel.id)
-        .having(
-            (func.count(TrackModel.id) == 0) &
-            (func.count(AlbumModel.id) == 0)
-        )
+        .having((func.count(TrackModel.id) == 0) & (func.count(AlbumModel.id) == 0))
     )
     orphan_artists_result = await session.execute(orphan_artists_stmt)
     orphan_artist_ids = [row[0] for row in orphan_artists_result.all()]
-    
+
     if orphan_artist_ids:
         stats["deleted_artists"] = len(orphan_artist_ids)
         delete_artists_stmt = delete(ArtistModel).where(
@@ -879,14 +874,14 @@ async def clear_local_library(
         )
         await session.execute(delete_artists_stmt)
         logger.info(f"Deleted {stats['deleted_artists']} orphaned artists")
-    
+
     await session.commit()
-    
+
     logger.info(
         f"Local library cleared: {stats['deleted_tracks']} tracks, "
         f"{stats['deleted_albums']} albums, {stats['deleted_artists']} artists"
     )
-    
+
     return {
         "success": True,
         "message": "Local library cleared successfully",

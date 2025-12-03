@@ -5,8 +5,7 @@
 # Wird per HTMX vom Dashboard gepollt oder beim Page Load gefetcht.
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -83,7 +82,7 @@ async def get_stats_with_trends(
     )
     from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     week_ago = now - timedelta(days=7)
@@ -303,7 +302,7 @@ async def get_quick_stats(
     """
     from soulspot.infrastructure.persistence.models import DownloadModel
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Completed
     completed_stmt = select(func.count(DownloadModel.id)).where(

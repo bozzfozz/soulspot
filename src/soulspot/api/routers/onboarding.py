@@ -7,7 +7,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,9 @@ class OnboardingStatus(BaseModel):
 
     completed: bool = Field(description="Whether onboarding was fully completed")
     skipped: bool = Field(description="Whether onboarding was skipped")
-    current_step: int = Field(description="Current step (1=Spotify, 2=Soulseek, 3=Done)")
+    current_step: int = Field(
+        description="Current step (1=Spotify, 2=Soulseek, 3=Done)"
+    )
     spotify_connected: bool = Field(description="Spotify OAuth done")
     soulseek_configured: bool = Field(description="Soulseek credentials saved")
     show_banner: bool = Field(

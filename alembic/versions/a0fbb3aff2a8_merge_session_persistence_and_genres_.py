@@ -5,11 +5,12 @@ Revises: 40cac646364c, dd18990ggh48
 Create Date: 2025-11-23 13:37:33.501242
 
 """
+
 from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
-revision: str = 'a0fbb3aff2a8'
-down_revision: str | Sequence[str] | None = ('40cac646364c', 'dd18990ggh48')
+revision: str = "a0fbb3aff2a8"
+down_revision: str | Sequence[str] | None = ("40cac646364c", "dd18990ggh48")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

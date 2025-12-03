@@ -26,8 +26,13 @@ class TestNamingConfig:
         assert config.artist_folder_format == "{Artist Name}"
         assert config.album_folder_format == "{Album Title} ({Release Year})"
         assert config.standard_track_format == "{track:00} - {Track Title}"
-        assert config.multi_disc_track_format == "{medium:00}-{track:00} - {Track Title}"
-        assert config.various_artist_track_format == "{track:00} - {Artist Name} - {Track Title}"
+        assert (
+            config.multi_disc_track_format == "{medium:00}-{track:00} - {Track Title}"
+        )
+        assert (
+            config.various_artist_track_format
+            == "{track:00} - {Artist Name} - {Track Title}"
+        )
         assert config.multi_disc_style == MultiDiscStyle.PREFIX
         assert config.replace_illegal_characters is True
         assert config.colon_replacement == ColonReplacement.SPACE_DASH
@@ -35,19 +40,31 @@ class TestNamingConfig:
     def test_get_track_format_standard(self) -> None:
         """Test getting standard track format."""
         config = NamingConfig()
-        assert config.get_track_format(is_multi_disc=False, is_various_artists=False) == "{track:00} - {Track Title}"
+        assert (
+            config.get_track_format(is_multi_disc=False, is_various_artists=False)
+            == "{track:00} - {Track Title}"
+        )
 
     def test_get_track_format_multi_disc(self) -> None:
         """Test getting multi-disc track format."""
         config = NamingConfig()
-        assert config.get_track_format(is_multi_disc=True, is_various_artists=False) == "{medium:00}-{track:00} - {Track Title}"
+        assert (
+            config.get_track_format(is_multi_disc=True, is_various_artists=False)
+            == "{medium:00}-{track:00} - {Track Title}"
+        )
 
     def test_get_track_format_various_artists(self) -> None:
         """Test getting Various Artists track format."""
         config = NamingConfig()
         # VA format takes precedence over multi-disc
-        assert config.get_track_format(is_multi_disc=False, is_various_artists=True) == "{track:00} - {Artist Name} - {Track Title}"
-        assert config.get_track_format(is_multi_disc=True, is_various_artists=True) == "{track:00} - {Artist Name} - {Track Title}"
+        assert (
+            config.get_track_format(is_multi_disc=False, is_various_artists=True)
+            == "{track:00} - {Artist Name} - {Track Title}"
+        )
+        assert (
+            config.get_track_format(is_multi_disc=True, is_various_artists=True)
+            == "{track:00} - {Artist Name} - {Track Title}"
+        )
 
 
 class TestNamingService:
@@ -88,7 +105,9 @@ class TestNamingService:
     def test_format_album_folder_with_disambiguation(self) -> None:
         """Test album folder with disambiguation."""
         service = NamingService()
-        result = service.format_album_folder("Bad", 1987, disambiguation="Deluxe Edition")
+        result = service.format_album_folder(
+            "Bad", 1987, disambiguation="Deluxe Edition"
+        )
         assert result == "Bad (1987) (Deluxe Edition)"
 
     def test_format_album_folder_sanitizes_illegal_chars(self) -> None:
@@ -164,7 +183,9 @@ class TestNamingService:
             extension=".flac",
             release_year=1982,
         )
-        assert result == Path("/music/Michael Jackson/Thriller (1982)/05 - Billie Jean.flac")
+        assert result == Path(
+            "/music/Michael Jackson/Thriller (1982)/05 - Billie Jean.flac"
+        )
 
     def test_format_full_path_multi_disc_prefix(self) -> None:
         """Test full path with multi-disc prefix style."""
@@ -180,7 +201,9 @@ class TestNamingService:
             medium_number=2,
             is_multi_disc=True,
         )
-        assert result == Path("/music/The Beatles/The White Album (1968)/02-01 - Birthday.flac")
+        assert result == Path(
+            "/music/The Beatles/The White Album (1968)/02-01 - Birthday.flac"
+        )
 
     def test_format_full_path_multi_disc_subfolder(self) -> None:
         """Test full path with multi-disc subfolder style."""
@@ -197,7 +220,9 @@ class TestNamingService:
             medium_number=2,
             is_multi_disc=True,
         )
-        assert result == Path("/music/The Beatles/The White Album (1968)/Disc 2/01 - Birthday.flac")
+        assert result == Path(
+            "/music/The Beatles/The White Album (1968)/Disc 2/01 - Birthday.flac"
+        )
 
     def test_format_full_path_various_artists(self) -> None:
         """Test full path for Various Artists compilation."""

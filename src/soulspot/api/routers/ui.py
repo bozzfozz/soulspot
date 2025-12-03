@@ -141,7 +141,9 @@ async def index(
             "artist": d.artist_name or "Unknown Artist",
             "album_art": d.album_art_url,
             "status": d.status.value,
-            "timestamp": d.completed_at.strftime("%H:%M") if d.completed_at else "--:--",
+            "timestamp": d.completed_at.strftime("%H:%M")
+            if d.completed_at
+            else "--:--",
         }
         for d in recent_downloads
     ]
@@ -858,11 +860,13 @@ async def library_artists(
     enrichment_needed = artists_without_image > 0
 
     return templates.TemplateResponse(
-        request, "library_artists.html", context={
+        request,
+        "library_artists.html",
+        context={
             "artists": artists,
             "enrichment_needed": enrichment_needed,
             "artists_without_image": artists_without_image,
-        }
+        },
     )
 
 

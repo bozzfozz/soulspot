@@ -26,15 +26,12 @@ from soulspot.domain.entities import Album, Artist, Track
 from soulspot.domain.value_objects import AlbumId, ArtistId, FilePath, TrackId
 from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
-    detect_compilation,
     is_various_artists,
 )
 from soulspot.domain.value_objects.folder_parsing import (
     AUDIO_EXTENSIONS,
     LibraryFolderParser,
     LibraryScanResult,
-    ScannedAlbum,
-    ScannedArtist,
     ScannedTrack,
     is_disc_folder,
     parse_album_folder,
@@ -99,7 +96,9 @@ class LibraryScannerService:
         # Hey future me - this runs metadata parsing in parallel threads
         # so the event loop stays responsive. DB work stays async/serial.
         # SHA256 hashing is NOT done here - it runs in a separate nightly DUPLICATE_SCAN job!
-        self._executor = ThreadPoolExecutor(max_workers=min(8, max(2, os.cpu_count() or 4)))
+        self._executor = ThreadPoolExecutor(
+            max_workers=min(8, max(2, os.cpu_count() or 4))
+        )
 
     # =========================================================================
     # MAIN SCAN METHODS
@@ -264,7 +263,9 @@ class LibraryScannerService:
                         try:
                             # Check if file changed (incremental mode)
                             if incremental:
-                                existing = await self._get_track_by_file_path(scanned_track.path)
+                                existing = await self._get_track_by_file_path(
+                                    scanned_track.path
+                                )
                                 if existing:
                                     # Update last_scanned_at
                                     existing.last_scanned_at = datetime.now(UTC)
@@ -356,7 +357,9 @@ class LibraryScannerService:
                 skipped_dirs.append(root)
                 logger.warning(f"Permission denied: {root} - {e}")
 
-        logger.debug(f"Total files seen: {total_files_seen}, audio files: {len(audio_files)}")
+        logger.debug(
+            f"Total files seen: {total_files_seen}, audio files: {len(audio_files)}"
+        )
         return audio_files
 
     # =========================================================================
@@ -364,7 +367,10 @@ class LibraryScannerService:
     # =========================================================================
 
     async def _get_or_create_artist_exact(
-        self, name: str, musicbrainz_id: str | None = None, disambiguation: str | None = None
+        self,
+        name: str,
+        musicbrainz_id: str | None = None,
+        disambiguation: str | None = None,
     ) -> tuple[ArtistId, bool]:
         """Get existing artist by exact name or create new.
 
@@ -398,13 +404,17 @@ class LibraryScannerService:
             # Hey future me - this ensures re-scans populate missing UUIDs!
             if musicbrainz_id and not existing.musicbrainz_id:
                 existing.musicbrainz_id = musicbrainz_id
-                logger.debug(f"Updated artist '{name}' with MusicBrainz ID: {musicbrainz_id}")
+                logger.debug(
+                    f"Updated artist '{name}' with MusicBrainz ID: {musicbrainz_id}"
+                )
 
             # Update disambiguation if we have it now and DB doesn't
             # Hey future me - disambiguation helps display "Genesis (English rock band)" in UI
             if disambiguation and not existing.disambiguation:
                 existing.disambiguation = disambiguation
-                logger.debug(f"Updated artist '{name}' with disambiguation: {disambiguation}")
+                logger.debug(
+                    f"Updated artist '{name}' with disambiguation: {disambiguation}"
+                )
 
             return artist_id, False
 
@@ -425,7 +435,9 @@ class LibraryScannerService:
             result = await self.session.execute(stmt)
             artist_model = result.scalar_one()
             artist_model.musicbrainz_id = musicbrainz_id
-            logger.debug(f"Created artist '{name}' with MusicBrainz ID: {musicbrainz_id}")
+            logger.debug(
+                f"Created artist '{name}' with MusicBrainz ID: {musicbrainz_id}"
+            )
 
         # Add to cache
         self._artist_cache[name_lower] = artist.id
@@ -505,7 +517,9 @@ class LibraryScannerService:
 
         # Add to cache
         self._album_cache[cache_key] = album.id
-        logger.debug(f"Created new album: {title} (year={release_year}, compilation={is_compilation})")
+        logger.debug(
+            f"Created new album: {title} (year={release_year}, compilation={is_compilation})"
+        )
 
         return album.id, True
 
@@ -540,7 +554,9 @@ class LibraryScannerService:
         track_artist_id = artist_id
         if is_va_album and scanned_track.artist:
             # Get or create the actual track artist
-            track_artist_id, _ = await self._get_or_create_artist_exact(scanned_track.artist)
+            track_artist_id, _ = await self._get_or_create_artist_exact(
+                scanned_track.artist
+            )
 
         # Extract audio info and compute hash IN THREAD POOL to avoid blocking event loop
         # Hey future me - this is the BIG PERFORMANCE WIN! Mutagen + SHA256 are CPU-bound,
@@ -580,7 +596,9 @@ class LibraryScannerService:
             file_path=str(track.file_path) if track.file_path else None,
             genre=primary_genre,
             file_size=file_size,
-            file_hash=file_hash if file_hash else None,  # Empty = computed later by nightly job
+            file_hash=file_hash
+            if file_hash
+            else None,  # Empty = computed later by nightly job
             file_hash_algorithm="sha256" if file_hash else None,
             audio_bitrate=audio_info.get("bitrate"),
             audio_format=audio_info.get("format"),
@@ -762,7 +780,9 @@ class LibraryScannerService:
         )
         artist_name: str = str(artist_name_raw) if artist_name_raw else "Unknown Artist"
 
-        album_name_raw = metadata.get("album") or folder_metadata.get("album_from_folder")
+        album_name_raw = metadata.get("album") or folder_metadata.get(
+            "album_from_folder"
+        )
         album_name: str | None = str(album_name_raw) if album_name_raw else None
 
         # Hey future me - if no title in tags, use filename without extension
@@ -775,7 +795,9 @@ class LibraryScannerService:
         track_title: str = str(track_title_raw) if track_title_raw else file_path.stem
 
         # Use year from tags, fallback to folder parsing
-        release_year_raw = metadata.get("year") or folder_metadata.get("year_from_folder")
+        release_year_raw = metadata.get("year") or folder_metadata.get(
+            "year_from_folder"
+        )
         release_year: int | None = int(release_year_raw) if release_year_raw else None
 
         # Track number: tags > folder parsing (track_number_from_folder)
@@ -848,7 +870,9 @@ class LibraryScannerService:
         )
 
         # Add file metadata to track model directly
-        await self._add_track_with_file_info(track, file_path, metadata, precomputed=precomputed)
+        await self._add_track_with_file_info(
+            track, file_path, metadata, precomputed=precomputed
+        )
 
         result["imported"] = True
         result["new_track"] = True
@@ -905,7 +929,9 @@ class LibraryScannerService:
 
         Hey future me - use resolved path for consistent DB lookup!
         """
-        stmt = select(TrackModel).where(TrackModel.file_path == str(file_path.resolve()))
+        stmt = select(TrackModel).where(
+            TrackModel.file_path == str(file_path.resolve())
+        )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -915,7 +941,7 @@ class LibraryScannerService:
     # Hey future me - _extract_metadata() extracts ALL tags including artist/album/title.
     # This is still used by:
     #   - _prep_file_sync() (deprecated)
-    #   - _import_file() (deprecated)  
+    #   - _import_file() (deprecated)
     # The new primary path uses _extract_audio_info() which only extracts technical data:
     #   - duration_ms, bitrate, sample_rate, format, genre
     # Consider removing once all old import methods are removed.
@@ -964,9 +990,13 @@ class LibraryScannerService:
             if hasattr(audio, "tags") and audio.tags:
                 tag_data = self._extract_tags(audio)
                 metadata.update(tag_data)
-                logger.debug(f"Extracted tags for {file_path.name}: {list(tag_data.keys())}")
+                logger.debug(
+                    f"Extracted tags for {file_path.name}: {list(tag_data.keys())}"
+                )
             else:
-                logger.debug(f"No tags found in {file_path.name} (format: {metadata['format']})")
+                logger.debug(
+                    f"No tags found in {file_path.name} (format: {metadata['format']})"
+                )
 
             return metadata
 
@@ -1192,7 +1222,9 @@ class LibraryScannerService:
                 if isinstance(value, list) and value:
                     value = value[0]
                 if hasattr(value, "text"):
-                    value = value.text[0] if isinstance(value.text, list) else value.text
+                    value = (
+                        value.text[0] if isinstance(value.text, list) else value.text
+                    )
                 if value:
                     return str(value)
         return None
@@ -1297,11 +1329,6 @@ class LibraryScannerService:
         Returns:
             Dict with extracted metadata (artist, album, album_year, track_number, title)
         """
-        from soulspot.domain.value_objects.folder_parsing import (
-            is_disc_folder,
-            parse_album_folder,
-            parse_track_filename,
-        )
 
         metadata: dict[str, str | int | None] = {}
 
@@ -1339,7 +1366,7 @@ class LibraryScannerService:
         # Current should be artist folder
         if current != music_root and current.name:
             from soulspot.domain.value_objects.folder_parsing import parse_artist_folder
-            
+
             parsed_artist = parse_artist_folder(current.name)
             metadata["artist_from_folder"] = parsed_artist.name
             # Hey future me - Lidarr stores UUID in folder name, store it for later enrichment!
@@ -1377,7 +1404,9 @@ class LibraryScannerService:
         # This is faster than loading all paths and comparing
         return total_in_db - len(existing_file_paths)
 
-    async def _cleanup_missing_files(self, existing_file_paths: set[str]) -> dict[str, int]:
+    async def _cleanup_missing_files(
+        self, existing_file_paths: set[str]
+    ) -> dict[str, int]:
         """Remove tracks from DB whose files no longer exist on disk.
 
         Hey future me - OPTIMIZED VERSION (Dec 2025)!
@@ -1432,7 +1461,9 @@ class LibraryScannerService:
                 await asyncio.sleep(0)
 
         if tracks_to_remove:
-            logger.info(f"Removing {len(tracks_to_remove)} tracks with missing files...")
+            logger.info(
+                f"Removing {len(tracks_to_remove)} tracks with missing files..."
+            )
 
             # Delete tracks in batches
             for i in range(0, len(tracks_to_remove), 500):
@@ -1453,14 +1484,11 @@ class LibraryScannerService:
         logger.info("Checking for orphaned albums...")
 
         # Count orphaned albums first (for logging)
-        orphan_count_stmt = (
-            select(func.count(AlbumModel.id))
-            .where(
-                ~AlbumModel.id.in_(
-                    select(TrackModel.album_id)
-                    .where(TrackModel.album_id.isnot(None))
-                    .distinct()
-                )
+        orphan_count_stmt = select(func.count(AlbumModel.id)).where(
+            ~AlbumModel.id.in_(
+                select(TrackModel.album_id)
+                .where(TrackModel.album_id.isnot(None))
+                .distinct()
             )
         )
         orphan_count_result = await self.session.execute(orphan_count_stmt)
@@ -1489,11 +1517,7 @@ class LibraryScannerService:
         # Artists that have neither tracks nor albums (using NOT EXISTS)
         orphan_count_stmt = (
             select(func.count(ArtistModel.id))
-            .where(
-                ~ArtistModel.id.in_(
-                    select(TrackModel.artist_id).distinct()
-                )
-            )
+            .where(~ArtistModel.id.in_(select(TrackModel.artist_id).distinct()))
             .where(
                 ~ArtistModel.id.in_(
                     select(AlbumModel.artist_id)
@@ -1509,15 +1533,15 @@ class LibraryScannerService:
             logger.info(f"Removing {orphan_artist_count} orphaned artists...")
 
             # Delete orphaned artists (set-based)
-            delete_artists_stmt = delete(ArtistModel).where(
-                ~ArtistModel.id.in_(
-                    select(TrackModel.artist_id).distinct()
-                )
-            ).where(
-                ~ArtistModel.id.in_(
-                    select(AlbumModel.artist_id)
-                    .where(AlbumModel.artist_id.isnot(None))
-                    .distinct()
+            delete_artists_stmt = (
+                delete(ArtistModel)
+                .where(~ArtistModel.id.in_(select(TrackModel.artist_id).distinct()))
+                .where(
+                    ~ArtistModel.id.in_(
+                        select(AlbumModel.artist_id)
+                        .where(AlbumModel.artist_id.isnot(None))
+                        .distinct()
+                    )
                 )
             )
             await self.session.execute(delete_artists_stmt)
@@ -1562,13 +1586,11 @@ class LibraryScannerService:
         logger.info("Analyzing album diversity for compilation detection...")
 
         # Get all albums with their track artists
-        albums_stmt = (
-            select(
-                AlbumModel.id,
-                AlbumModel.title,
-                AlbumModel.album_artist,
-                AlbumModel.secondary_types,
-            )
+        albums_stmt = select(
+            AlbumModel.id,
+            AlbumModel.title,
+            AlbumModel.album_artist,
+            AlbumModel.secondary_types,
         )
         albums_result = await self.session.execute(albums_stmt)
         albums = albums_result.all()
@@ -1609,9 +1631,7 @@ class LibraryScannerService:
                     current_types.append("compilation")
 
                 # Update the album model
-                update_stmt = (
-                    select(AlbumModel).where(AlbumModel.id == album_id)
-                )
+                update_stmt = select(AlbumModel).where(AlbumModel.id == album_id)
                 update_result = await self.session.execute(update_stmt)
                 album_model = update_result.scalar_one()
                 album_model.secondary_types = current_types

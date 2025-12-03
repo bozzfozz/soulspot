@@ -39,7 +39,9 @@ async def main() -> None:
     protected_client = CircuitBreakerSpotifyClient(base_client, settings)
 
     print("\n=== Circuit Breaker Demo ===\n")
-    print("This example simulates API failures to demonstrate circuit breaker behavior:")
+    print(
+        "This example simulates API failures to demonstrate circuit breaker behavior:"
+    )
     print("1. First 5 calls will 'fail' (simulated)")
     print("2. Circuit opens after 5 failures")
     print("3. Subsequent calls are immediately blocked")
@@ -53,7 +55,7 @@ async def main() -> None:
             # This will fail because we don't have valid credentials
             await protected_client.get_track("invalid-track-id", "invalid-token")
         except Exception as e:
-            print(f"Call {i+1}: Failed with {type(e).__name__}")
+            print(f"Call {i + 1}: Failed with {type(e).__name__}")
 
     # Circuit should now be OPEN
     print("\n--- Phase 2: Circuit is OPEN - calls blocked ---")
