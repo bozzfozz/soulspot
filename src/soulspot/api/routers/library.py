@@ -575,7 +575,7 @@ async def get_import_scan_status_html(
         )
 
     # Build context for template
-    context = {
+    context: dict[str, Any] = {
         "job_id": job.id,
         "status": job.status.value,
         "is_running": job.status == JobStatus.RUNNING,
@@ -1827,14 +1827,14 @@ async def apply_enrichment_candidate(
     image_downloaded = False
 
     if candidate.entity_type == "artist":
-        model_stmt = select(ArtistModel).where(ArtistModel.id == candidate.entity_id)
-        model_result = await db.execute(model_stmt)
-        model = model_result.scalar_one_or_none()
+        artist_stmt = select(ArtistModel).where(ArtistModel.id == candidate.entity_id)
+        artist_result = await db.execute(artist_stmt)
+        artist_model = artist_result.scalar_one_or_none()
 
-        if model:
-            model.spotify_uri = candidate.spotify_uri
-            model.image_url = candidate.spotify_image_url
-            model.updated_at = datetime.now(UTC)
+        if artist_model:
+            artist_model.spotify_uri = candidate.spotify_uri
+            artist_model.image_url = candidate.spotify_image_url
+            artist_model.updated_at = datetime.now(UTC)
 
             # Download image
             if candidate.spotify_image_url:
@@ -1848,14 +1848,14 @@ async def apply_enrichment_candidate(
                     logger.warning(f"Failed to download artist image: {e}")
 
     else:  # album
-        model_stmt = select(AlbumModel).where(AlbumModel.id == candidate.entity_id)
-        model_result = await db.execute(model_stmt)
-        model = model_result.scalar_one_or_none()
+        album_stmt = select(AlbumModel).where(AlbumModel.id == candidate.entity_id)
+        album_result = await db.execute(album_stmt)
+        album_model = album_result.scalar_one_or_none()
 
-        if model:
-            model.spotify_uri = candidate.spotify_uri
-            model.artwork_url = candidate.spotify_image_url
-            model.updated_at = datetime.now(UTC)
+        if album_model:
+            album_model.spotify_uri = candidate.spotify_uri
+            album_model.artwork_url = candidate.spotify_image_url
+            album_model.updated_at = datetime.now(UTC)
 
             # Download image
             if candidate.spotify_image_url:
@@ -1864,7 +1864,7 @@ async def apply_enrichment_candidate(
                     local_path = await image_service.download_album_image(
                         spotify_id, candidate.spotify_image_url
                     )
-                    model.artwork_path = str(local_path)
+                    album_model.artwork_path = str(local_path)
                     image_downloaded = True
                 except Exception as e:
                     logger.warning(f"Failed to download album image: {e}")

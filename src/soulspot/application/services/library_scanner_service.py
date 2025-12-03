@@ -523,6 +523,63 @@ class LibraryScannerService:
 
         return album.id, True
 
+    async def _find_or_create_artist(
+        self, name: str
+    ) -> tuple[ArtistId, bool, bool]:
+        """Find or create artist with fuzzy matching.
+
+        Hey future me - this is a wrapper around _get_or_create_artist_exact
+        that provides the 3-tuple return value expected by callers.
+        The third value (is_matched) indicates if fuzzy matching was used,
+        but we're using exact matching for now.
+
+        Args:
+            name: Artist name
+
+        Returns:
+            Tuple of (artist_id, is_new, is_matched)
+        """
+        artist_id, is_new = await self._get_or_create_artist_exact(name)
+        # is_matched=True means exact match was found (not fuzzy)
+        is_matched = not is_new
+        return artist_id, is_new, is_matched
+
+    async def _find_or_create_album(
+        self,
+        title: str,
+        artist_id: ArtistId,
+        release_year: int | None = None,
+        album_artist: str | None = None,
+        is_compilation: bool = False,
+    ) -> tuple[AlbumId, bool, bool]:
+        """Find or create album with fuzzy matching.
+
+        Hey future me - this is a wrapper around _get_or_create_album_exact
+        that provides the 3-tuple return value expected by callers.
+        The third value (is_matched) indicates if fuzzy matching was used,
+        but we're using exact matching for now.
+
+        Args:
+            title: Album title
+            artist_id: Artist ID
+            release_year: Optional release year
+            album_artist: Album artist name (for compilations)
+            is_compilation: True if compilation album
+
+        Returns:
+            Tuple of (album_id, is_new, is_matched)
+        """
+        album_id, is_new = await self._get_or_create_album_exact(
+            title,
+            artist_id,
+            release_year=release_year,
+            is_compilation=is_compilation,
+            album_artist=album_artist,
+        )
+        # is_matched=True means exact match was found (not fuzzy)
+        is_matched = not is_new
+        return album_id, is_new, is_matched
+
     async def _import_track_from_scan(
         self,
         scanned_track: ScannedTrack,

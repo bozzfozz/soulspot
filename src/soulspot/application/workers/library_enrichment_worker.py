@@ -98,7 +98,7 @@ class LibraryEnrichmentWorker:
                 access_token = token_model.access_token
 
                 # Create Spotify client and enrichment service
-                spotify_client = SpotifyClient(self.settings)
+                spotify_client = SpotifyClient(self.settings.spotify)
                 service = LocalLibraryEnrichmentService(
                     session=session,
                     spotify_client=spotify_client,
