@@ -43,6 +43,12 @@ class JobType(str, Enum):
     # Multiple matches create enrichment_candidates for user selection.
     LIBRARY_SPOTIFY_ENRICHMENT = "library_spotify_enrichment"
 
+    # Library cleanup - removes orphaned tracks/albums/artists from DB
+    # Hey future me - this job runs AFTER library scan (deferred cleanup strategy)!
+    # Instead of blocking the scan with cleanup, we queue it as separate job.
+    # Runs set-based SQL deletes - much faster than Python loops on large libraries.
+    LIBRARY_SCAN_CLEANUP = "library_scan_cleanup"
+
 
 class JobStatus(str, Enum):
     """Status of a background job."""

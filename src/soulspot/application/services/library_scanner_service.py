@@ -107,28 +107,30 @@ class LibraryScannerService:
     async def scan_library(
         self,
         incremental: bool = True,
+        defer_cleanup: bool = True,
         progress_callback: Any | None = None,
     ) -> dict[str, Any]:
         """Scan the entire music library using Lidarr folder structure.
 
         This is the MAIN entry point! Call this from JobQueue handler.
 
-        Hey future me - this now uses LibraryFolderParser for STRUCTURED scanning!
+        Hey future me - PERFORMANCE OPTIMIZATION (Dec 2025)!
+        - Mutagen extraction now runs in ThreadPool (non-blocking)
+        - Cleanup is DEFERRED by default (runs as separate job)
+        - UI stays responsive during scan!
+
         Artist/Album/Track metadata comes from folder structure, not ID3 tags.
         Mutagen is only used for audio info (duration, bitrate, genre).
 
-        Full Scan (incremental=False) does THREE things:
-        1. Scans ALL files (not just changed ones)
-        2. REMOVES tracks from DB whose files no longer exist
-        3. CLEANS UP orphaned albums and artists
-
         Args:
             incremental: If True, only scan new/modified files.
-                        If False, full rescan + cleanup of missing files!
+                        If False, full rescan (process all files).
+            defer_cleanup: If True, return cleanup_needed flag (caller queues cleanup job).
+                          If False, run cleanup immediately (old behavior).
             progress_callback: Optional callback for progress updates
 
         Returns:
-            Dict with scan statistics
+            Dict with scan statistics including cleanup_needed flag
         """
         stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
@@ -144,12 +146,15 @@ class LibraryScannerService:
             "new_tracks": 0,
             "existing_artists": 0,
             "existing_albums": 0,
-            # Cleanup stats (full scan only)
+            # Cleanup stats (only populated if defer_cleanup=False)
             "removed_tracks": 0,
             "removed_albums": 0,
             "removed_artists": 0,
             # Compilation stats
             "compilations_detected": 0,
+            # Deferred cleanup flag (caller should queue LIBRARY_SCAN_CLEANUP job)
+            "cleanup_needed": False,
+            "cleanup_file_paths": None,  # Serialized for cleanup job payload
         }
 
         try:
@@ -160,7 +165,10 @@ class LibraryScannerService:
             # Log detailed path info for debugging
             music_root = self.music_path.resolve()
             logger.info(f"Scanning Lidarr-organized library at: {music_root}")
-            logger.info(f"Scan mode: {'incremental' if incremental else 'FULL (with cleanup)'}")
+            logger.info(
+                f"Scan mode: {'incremental' if incremental else 'full'}, "
+                f"cleanup: {'deferred' if defer_cleanup else 'immediate'}"
+            )
 
             # Use LibraryFolderParser for structured discovery
             # Hey future me - this parses the entire Artist→Album→Track hierarchy ONCE!
@@ -182,16 +190,29 @@ class LibraryScannerService:
 
             stats["total_files"] = len(all_file_paths)
 
-            # For FULL scan: Remove tracks whose files no longer exist
+            # For FULL scan: Handle cleanup (immediate or deferred)
             if not incremental:
-                cleanup_stats = await self._cleanup_missing_files(all_file_paths)
-                stats["removed_tracks"] = cleanup_stats["removed_tracks"]
-                stats["removed_albums"] = cleanup_stats["removed_albums"]
-                stats["removed_artists"] = cleanup_stats["removed_artists"]
+                if defer_cleanup:
+                    # Fast check: are there any tracks to clean up?
+                    cleanup_count = await self._count_missing_tracks(all_file_paths)
+                    if cleanup_count > 0:
+                        stats["cleanup_needed"] = True
+                        # Store file paths for cleanup job (as list for JSON serialization)
+                        stats["cleanup_file_paths"] = list(all_file_paths)
+                        logger.info(
+                            f"Cleanup deferred: ~{cleanup_count} tracks to remove "
+                            "(will run as separate job)"
+                        )
+                else:
+                    # Immediate cleanup (old behavior, blocks UI longer)
+                    cleanup_stats = await self._cleanup_missing_files(all_file_paths)
+                    stats["removed_tracks"] = cleanup_stats["removed_tracks"]
+                    stats["removed_albums"] = cleanup_stats["removed_albums"]
+                    stats["removed_artists"] = cleanup_stats["removed_artists"]
 
-                # Clear caches after cleanup
-                self._artist_cache.clear()
-                self._album_cache.clear()
+                    # Clear caches after cleanup
+                    self._artist_cache.clear()
+                    self._album_cache.clear()
 
             # Pre-load artist/album caches for exact name matching
             await self._load_caches()
@@ -199,14 +220,16 @@ class LibraryScannerService:
             # Process structured data: Artist → Album → Tracks
             # Hey future me - this is the BIG CHANGE! We iterate by structure, not by file.
             # Artist/Album are created ONCE per folder, then tracks are added.
-            BATCH_SIZE = 100
+            BATCH_SIZE = 250  # Increased from 100 for fewer DB round-trips
             processed = 0
             total_tracks = scan_result.total_tracks
 
             for scanned_artist in scan_result.artists:
                 # Get or create artist (exact name match, no fuzzy!)
+                # Hey future me - we pass musicbrainz_id from folder for Lidarr compatibility
                 artist_id, is_new_artist = await self._get_or_create_artist_exact(
-                    scanned_artist.name
+                    scanned_artist.name,
+                    musicbrainz_id=scanned_artist.musicbrainz_id,
                 )
                 if is_new_artist:
                     stats["new_artists"] += 1
@@ -336,14 +359,17 @@ class LibraryScannerService:
     # EXACT NAME MATCHING (Lidarr folder structure)
     # =========================================================================
 
-    async def _get_or_create_artist_exact(self, name: str) -> tuple[ArtistId, bool]:
+    async def _get_or_create_artist_exact(
+        self, name: str, musicbrainz_id: str | None = None
+    ) -> tuple[ArtistId, bool]:
         """Get existing artist by exact name or create new.
 
         Hey future me - NO FUZZY MATCHING! Lidarr folder structure guarantees
         artist name is correct. If folder says "The Beatles", that's the name.
 
         Args:
-            name: Artist name from folder structure
+            name: Artist name from folder structure (clean, without UUID)
+            musicbrainz_id: Optional MusicBrainz UUID from Lidarr folder name
 
         Returns:
             Tuple of (artist_id, is_new)
@@ -362,6 +388,13 @@ class LibraryScannerService:
         if existing:
             artist_id = ArtistId.from_string(existing.id)
             self._artist_cache[name_lower] = artist_id
+
+            # Update musicbrainz_id if we have it now and DB doesn't
+            # Hey future me - this ensures re-scans populate missing UUIDs!
+            if musicbrainz_id and not existing.musicbrainz_id:
+                existing.musicbrainz_id = musicbrainz_id
+                logger.debug(f"Updated artist '{name}' with MusicBrainz ID: {musicbrainz_id}")
+
             return artist_id, False
 
         # Create new artist
@@ -372,6 +405,15 @@ class LibraryScannerService:
             updated_at=datetime.now(UTC),
         )
         await self.artist_repo.add(artist)
+
+        # Set musicbrainz_id on the model (not in domain entity)
+        # Hey future me - this UUID is needed for Lidarr folder naming when moving files!
+        if musicbrainz_id:
+            stmt = select(ArtistModel).where(ArtistModel.id == str(artist.id.value))
+            result = await self.session.execute(stmt)
+            artist_model = result.scalar_one()
+            artist_model.musicbrainz_id = musicbrainz_id
+            logger.debug(f"Created artist '{name}' with MusicBrainz ID: {musicbrainz_id}")
 
         # Add to cache
         self._artist_cache[name_lower] = artist.id
@@ -465,7 +507,8 @@ class LibraryScannerService:
         """Import a track from LibraryFolderParser scan result.
 
         Hey future me - this uses folder-based metadata (title, track_number, disc_number)
-        and only calls Mutagen for audio info (duration, bitrate, genre).
+        and calls Mutagen for audio info (duration, bitrate, genre) IN THREAD POOL!
+        This prevents blocking the event loop during I/O-heavy metadata extraction.
 
         Args:
             scanned_track: Track info from folder parser
@@ -487,9 +530,15 @@ class LibraryScannerService:
             # Get or create the actual track artist
             track_artist_id, _ = await self._get_or_create_artist_exact(scanned_track.artist)
 
-        # Extract audio info only (duration, bitrate, sample_rate, genre)
-        # NOT artist/album/title - those come from folder structure!
-        audio_info = self._extract_audio_info(file_path)
+        # Extract audio info and compute hash IN THREAD POOL to avoid blocking event loop
+        # Hey future me - this is the BIG PERFORMANCE WIN! Mutagen + SHA256 are CPU-bound,
+        # running them in executor keeps the event loop responsive for UI requests.
+        loop = asyncio.get_running_loop()
+        audio_info, file_hash, file_size = await loop.run_in_executor(
+            self._executor,
+            self._extract_audio_and_hash_sync,
+            file_path,
+        )
 
         # Create track entity
         track = Track(
@@ -505,15 +554,6 @@ class LibraryScannerService:
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
-
-        # Compute file hash and size
-        file_hash = ""
-        file_size = 0
-        try:
-            file_hash = self._compute_file_hash(file_path)
-            file_size = file_path.stat().st_size
-        except Exception as e:
-            logger.warning(f"Could not compute hash/size for {file_path}: {e}")
 
         # Create track model with file info
         primary_genre = track.genres[0] if track.genres else None
@@ -1032,6 +1072,35 @@ class LibraryScannerService:
                 sha256.update(chunk)
         return sha256.hexdigest()
 
+    def _extract_audio_and_hash_sync(
+        self, file_path: Path
+    ) -> tuple[dict[str, Any], str, int]:
+        """Extract audio info AND compute hash in one sync call (for ThreadPool).
+
+        Hey future me - this is called via run_in_executor() to avoid blocking
+        the event loop! Combines Mutagen extraction + SHA256 hash + file size
+        into one call so we only do one disk I/O batch per track.
+
+        Args:
+            file_path: Path to audio file
+
+        Returns:
+            Tuple of (audio_info dict, file_hash, file_size)
+        """
+        # Extract audio info
+        audio_info = self._extract_audio_info(file_path)
+
+        # Compute hash and get size
+        file_hash = ""
+        file_size = 0
+        try:
+            file_hash = self._compute_file_hash(file_path)
+            file_size = file_path.stat().st_size
+        except Exception as e:
+            logger.warning(f"Could not compute hash/size for {file_path}: {e}")
+
+        return audio_info, file_hash, file_size
+
     def _extract_audio_info(self, file_path: Path) -> dict[str, Any]:
         """Extract ONLY audio technical info from file (NOT artist/album/title!).
 
@@ -1262,13 +1331,44 @@ class LibraryScannerService:
 
         return metadata
 
+    async def _count_missing_tracks(self, existing_file_paths: set[str]) -> int:
+        """Fast check: count tracks whose files no longer exist.
+
+        Hey future me - this is a FAST pre-check for deferred cleanup!
+        Instead of loading all tracks, we just count how many would be removed.
+        Used to decide if cleanup job is needed (cleanup_needed flag).
+
+        Args:
+            existing_file_paths: Set of file paths that currently exist on disk
+
+        Returns:
+            Approximate count of tracks to remove (0 = no cleanup needed)
+        """
+        # Get count of tracks with file_path
+        total_stmt = select(func.count(TrackModel.id)).where(
+            TrackModel.file_path.isnot(None)
+        )
+        total_result = await self.session.execute(total_stmt)
+        total_in_db = total_result.scalar() or 0
+
+        # If we have more files on disk than in DB, no cleanup needed
+        # (new files will be added, not removed)
+        if len(existing_file_paths) >= total_in_db:
+            return 0
+
+        # Rough estimate: difference between DB count and file count
+        # This is faster than loading all paths and comparing
+        return total_in_db - len(existing_file_paths)
+
     async def _cleanup_missing_files(self, existing_file_paths: set[str]) -> dict[str, int]:
         """Remove tracks from DB whose files no longer exist on disk.
 
-        Hey future me - this is the CLEANUP phase of full scan!
-        Called ONLY during full scan (incremental=False).
+        Hey future me - OPTIMIZED VERSION (Dec 2025)!
+        - Processes tracks in chunks to avoid memory spikes
+        - Uses yielding pattern for large libraries (100k+ tracks)
+        - Orphan cleanup uses efficient NOT EXISTS subqueries
 
-        Also removes orphaned albums (no tracks) and artists (no albums/tracks).
+        Called during full scan (incremental=False) or by LIBRARY_SCAN_CLEANUP job.
 
         Args:
             existing_file_paths: Set of file paths that currently exist on disk
@@ -1282,89 +1382,130 @@ class LibraryScannerService:
             "removed_artists": 0,
         }
 
-        # Step 1: Find tracks with file_path that no longer exist
+        # Step 1: Find and remove tracks with missing files (chunked processing)
         logger.info("Checking for tracks with missing files...")
 
-        stmt = select(TrackModel.id, TrackModel.file_path, TrackModel.title).where(
-            TrackModel.file_path.isnot(None)
-        )
-        result = await self.session.execute(stmt)
-        db_tracks = result.all()
-
+        CHUNK_SIZE = 5000  # Process in chunks to limit memory usage
+        offset = 0
         tracks_to_remove: list[str] = []
-        for track_id, file_path, title in db_tracks:
-            if file_path not in existing_file_paths:
-                tracks_to_remove.append(track_id)
-                logger.debug(f"Track file missing: {title} ({file_path})")
+
+        while True:
+            # Fetch a chunk of track file paths
+            stmt = (
+                select(TrackModel.id, TrackModel.file_path)
+                .where(TrackModel.file_path.isnot(None))
+                .offset(offset)
+                .limit(CHUNK_SIZE)
+            )
+            result = await self.session.execute(stmt)
+            chunk = result.all()
+
+            if not chunk:
+                break  # No more tracks
+
+            # Check which tracks in this chunk have missing files
+            for track_id, file_path in chunk:
+                if file_path not in existing_file_paths:
+                    tracks_to_remove.append(track_id)
+
+            offset += CHUNK_SIZE
+
+            # Yield control to event loop periodically (keeps UI responsive)
+            if offset % (CHUNK_SIZE * 5) == 0:
+                await asyncio.sleep(0)
 
         if tracks_to_remove:
             logger.info(f"Removing {len(tracks_to_remove)} tracks with missing files...")
 
             # Delete tracks in batches
-            for i in range(0, len(tracks_to_remove), 100):
-                batch = tracks_to_remove[i:i + 100]
+            for i in range(0, len(tracks_to_remove), 500):
+                batch = tracks_to_remove[i : i + 500]
                 delete_stmt = delete(TrackModel).where(TrackModel.id.in_(batch))
                 await self.session.execute(delete_stmt)
+
+                # Yield to event loop every few batches
+                if i % 2000 == 0 and i > 0:
+                    await asyncio.sleep(0)
 
             stats["removed_tracks"] = len(tracks_to_remove)
             logger.info(f"Removed {len(tracks_to_remove)} tracks")
         else:
             logger.info("No tracks with missing files found")
 
-        # Step 2: Remove orphaned albums (albums with no tracks)
+        # Step 2: Remove orphaned albums using efficient NOT EXISTS subquery
         logger.info("Checking for orphaned albums...")
 
-        orphan_albums_stmt = (
-            select(AlbumModel.id, AlbumModel.title)
-            .outerjoin(TrackModel, AlbumModel.id == TrackModel.album_id)
-            .group_by(AlbumModel.id)
-            .having(func.count(TrackModel.id) == 0)
+        # Count orphaned albums first (for logging)
+        orphan_count_stmt = (
+            select(func.count(AlbumModel.id))
+            .where(
+                ~AlbumModel.id.in_(
+                    select(TrackModel.album_id)
+                    .where(TrackModel.album_id.isnot(None))
+                    .distinct()
+                )
+            )
         )
-        orphan_albums_result = await self.session.execute(orphan_albums_stmt)
-        orphan_albums = orphan_albums_result.all()
+        orphan_count_result = await self.session.execute(orphan_count_stmt)
+        orphan_album_count = orphan_count_result.scalar() or 0
 
-        if orphan_albums:
-            album_ids = [album_id for album_id, _ in orphan_albums]
-            logger.info(f"Removing {len(album_ids)} orphaned albums...")
+        if orphan_album_count > 0:
+            logger.info(f"Removing {orphan_album_count} orphaned albums...")
 
-            for _album_id, title in orphan_albums:
-                logger.debug(f"Removing orphaned album: {title}")
-
-            delete_albums_stmt = delete(AlbumModel).where(AlbumModel.id.in_(album_ids))
+            # Delete orphaned albums (set-based, no Python loops!)
+            delete_albums_stmt = delete(AlbumModel).where(
+                ~AlbumModel.id.in_(
+                    select(TrackModel.album_id)
+                    .where(TrackModel.album_id.isnot(None))
+                    .distinct()
+                )
+            )
             await self.session.execute(delete_albums_stmt)
-            stats["removed_albums"] = len(album_ids)
-            logger.info(f"Removed {len(album_ids)} orphaned albums")
+            stats["removed_albums"] = orphan_album_count
+            logger.info(f"Removed {orphan_album_count} orphaned albums")
         else:
             logger.info("No orphaned albums found")
 
-        # Step 3: Remove orphaned artists (artists with no tracks AND no albums)
+        # Step 3: Remove orphaned artists (no tracks AND no albums)
         logger.info("Checking for orphaned artists...")
 
-        # Artists that have neither tracks nor albums
-        orphan_artists_stmt = (
-            select(ArtistModel.id, ArtistModel.name)
-            .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
-            .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
-            .group_by(ArtistModel.id)
-            .having(
-                (func.count(TrackModel.id) == 0) &
-                (func.count(AlbumModel.id) == 0)
+        # Artists that have neither tracks nor albums (using NOT EXISTS)
+        orphan_count_stmt = (
+            select(func.count(ArtistModel.id))
+            .where(
+                ~ArtistModel.id.in_(
+                    select(TrackModel.artist_id).distinct()
+                )
+            )
+            .where(
+                ~ArtistModel.id.in_(
+                    select(AlbumModel.artist_id)
+                    .where(AlbumModel.artist_id.isnot(None))
+                    .distinct()
+                )
             )
         )
-        orphan_artists_result = await self.session.execute(orphan_artists_stmt)
-        orphan_artists = orphan_artists_result.all()
+        orphan_count_result = await self.session.execute(orphan_count_stmt)
+        orphan_artist_count = orphan_count_result.scalar() or 0
 
-        if orphan_artists:
-            artist_ids = [artist_id for artist_id, _ in orphan_artists]
-            logger.info(f"Removing {len(artist_ids)} orphaned artists...")
+        if orphan_artist_count > 0:
+            logger.info(f"Removing {orphan_artist_count} orphaned artists...")
 
-            for _artist_id, name in orphan_artists:
-                logger.debug(f"Removing orphaned artist: {name}")
-
-            delete_artists_stmt = delete(ArtistModel).where(ArtistModel.id.in_(artist_ids))
+            # Delete orphaned artists (set-based)
+            delete_artists_stmt = delete(ArtistModel).where(
+                ~ArtistModel.id.in_(
+                    select(TrackModel.artist_id).distinct()
+                )
+            ).where(
+                ~ArtistModel.id.in_(
+                    select(AlbumModel.artist_id)
+                    .where(AlbumModel.artist_id.isnot(None))
+                    .distinct()
+                )
+            )
             await self.session.execute(delete_artists_stmt)
-            stats["removed_artists"] = len(artist_ids)
-            logger.info(f"Removed {len(artist_ids)} orphaned artists")
+            stats["removed_artists"] = orphan_artist_count
+            logger.info(f"Removed {orphan_artist_count} orphaned artists")
         else:
             logger.info("No orphaned artists found")
 

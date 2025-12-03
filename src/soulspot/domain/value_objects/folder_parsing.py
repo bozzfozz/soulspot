@@ -221,10 +221,13 @@ class ScannedArtist:
     """Artist discovered during library scan."""
 
     name: str
-    """Artist name from folder."""
+    """Artist name from folder (clean, without UUID)."""
 
     path: Path
     """Full path to artist folder."""
+
+    musicbrainz_id: str | None = None
+    """MusicBrainz UUID extracted from Lidarr folder name (e.g., from 'Artist (UUID)')."""
 
     albums: list["ScannedAlbum"] = field(default_factory=list)
     """Albums found under this artist."""
@@ -578,6 +581,7 @@ class LibraryFolderParser:
         artist = ScannedArtist(
             name=parsed.name,  # Clean name without UUID!
             path=artist_path,
+            musicbrainz_id=parsed.uuid,  # Preserve UUID for Lidarr compatibility
         )
 
         # Scan album folders (second level)

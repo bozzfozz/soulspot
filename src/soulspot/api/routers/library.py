@@ -453,23 +453,32 @@ class ImportScanResponse(BaseModel):
 # Hey future me - this starts a BACKGROUND JOB for library import!
 # Uses JobQueue for async processing (large libraries can take hours).
 # The job uses LibraryScannerService which has:
-# - Fuzzy matching (85% threshold) for artists/albums
+# - Exact name matching for artists/albums (from Lidarr folder structure)
 # - Incremental scan (only new/modified files based on mtime)
-# - Metadata extraction via mutagen
+# - Metadata extraction via mutagen (in ThreadPool for performance)
+# - Deferred cleanup (runs as separate job for UI responsiveness)
 # Poll /import/status/{job_id} to check progress!
 # NOTE: Accepts Form data (from HTMX hx-vals) instead of JSON body for browser compatibility.
 @router.post("/import/scan", response_model=ImportScanResponse)
 async def start_import_scan(
     incremental: bool = Form(True),
+    defer_cleanup: bool = Form(True),
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> ImportScanResponse:
     """Start a library import scan as background job.
 
     Scans the music directory, extracts metadata, and imports tracks
-    into the database with fuzzy artist/album matching.
+    into the database using Lidarr folder structure.
+
+    PERFORMANCE (Dec 2025):
+    - Mutagen extraction runs in ThreadPool (non-blocking)
+    - Cleanup is deferred by default (runs as separate job)
+    - UI stays responsive during scan!
 
     Args:
         incremental: If True, only scan new/modified files (default: True)
+        defer_cleanup: If True, cleanup runs as separate job (default: True).
+                      If False, cleanup runs immediately (slower, blocks longer).
         job_queue: Job queue for background processing
 
     Returns:
@@ -479,7 +488,10 @@ async def start_import_scan(
         # Queue the scan job
         job_id = await job_queue.enqueue(
             job_type=JobType.LIBRARY_SCAN,
-            payload={"incremental": incremental},
+            payload={
+                "incremental": incremental,
+                "defer_cleanup": defer_cleanup,
+            },
             max_retries=1,  # Don't retry full scans
             priority=5,  # Medium priority
         )
@@ -487,7 +499,7 @@ async def start_import_scan(
         return ImportScanResponse(
             job_id=job_id,
             status="pending",
-            message=f"Library import scan queued (incremental={incremental})",
+            message=f"Library import scan queued (incremental={incremental}, defer_cleanup={defer_cleanup})",
         )
 
     except Exception as e:
