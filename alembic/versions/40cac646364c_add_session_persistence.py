@@ -5,14 +5,15 @@ Revises: 0372f0c937d1
 Create Date: 2025-11-22 20:30:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '40cac646364c'
-down_revision: str | Sequence[str] | None = '0372f0c937d1'
+revision: str = "40cac646364c"
+down_revision: str | Sequence[str] | None = "0372f0c937d1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -27,21 +28,31 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Upgrade schema - Add sessions table for OAuth token persistence."""
     op.create_table(
-        'sessions',
-        sa.Column('session_id', sa.String(length=64), nullable=False),
-        sa.Column('access_token', sa.Text(), nullable=True),
-        sa.Column('refresh_token', sa.Text(), nullable=True),
-        sa.Column('token_expires_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('oauth_state', sa.String(length=64), nullable=True),
-        sa.Column('code_verifier', sa.String(length=128), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column('last_accessed_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint('session_id')
+        "sessions",
+        sa.Column("session_id", sa.String(length=64), nullable=False),
+        sa.Column("access_token", sa.Text(), nullable=True),
+        sa.Column("refresh_token", sa.Text(), nullable=True),
+        sa.Column("token_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("oauth_state", sa.String(length=64), nullable=True),
+        sa.Column("code_verifier", sa.String(length=128), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "last_accessed_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.PrimaryKeyConstraint("session_id"),
     )
 
     # Create indexes for efficient cleanup queries
-    op.create_index('ix_sessions_last_accessed', 'sessions', ['last_accessed_at'])
-    op.create_index('ix_sessions_token_expires', 'sessions', ['token_expires_at'])
+    op.create_index("ix_sessions_last_accessed", "sessions", ["last_accessed_at"])
+    op.create_index("ix_sessions_token_expires", "sessions", ["token_expires_at"])
 
 
 # Yo, rollback deletes the sessions table. This is DESTRUCTIVE - all active sessions
@@ -49,6 +60,6 @@ def upgrade() -> None:
 # downgrade. The "if_exists" check prevents errors if table was already dropped manually.
 def downgrade() -> None:
     """Downgrade schema - Remove sessions table."""
-    op.drop_index('ix_sessions_token_expires', table_name='sessions', if_exists=True)
-    op.drop_index('ix_sessions_last_accessed', table_name='sessions', if_exists=True)
-    op.drop_table('sessions')
+    op.drop_index("ix_sessions_token_expires", table_name="sessions", if_exists=True)
+    op.drop_index("ix_sessions_last_accessed", table_name="sessions", if_exists=True)
+    op.drop_table("sessions")

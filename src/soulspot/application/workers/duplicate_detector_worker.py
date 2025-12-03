@@ -380,9 +380,7 @@ class DuplicateDetectorWorker:
             for row in rows
         ]
 
-    async def _compute_missing_file_hashes(
-        self, session: Any
-    ) -> tuple[int, int]:
+    async def _compute_missing_file_hashes(self, session: Any) -> tuple[int, int]:
         """Compute SHA256 hashes for tracks that don't have them.
 
         Hey future me - this is the KEY performance optimization from Dec 2025!
@@ -465,7 +463,9 @@ class DuplicateDetectorWorker:
 
         return hashes_computed, errors
 
-    def _compute_sha256_sync(self, file_path: str, chunk_size: int = 8192) -> str | None:
+    def _compute_sha256_sync(
+        self, file_path: str, chunk_size: int = 8192
+    ) -> str | None:
         """Compute SHA256 hash of a file (sync, for ThreadPool).
 
         Hey future me - this runs in ThreadPool! It's the same SHA256 computation

@@ -70,7 +70,9 @@ class LibraryEnrichmentWorker:
             LocalLibraryEnrichmentService,
         )
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
-        from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+        from soulspot.infrastructure.persistence.repositories import (
+            SpotifyTokenRepository,
+        )
 
         payload = job.payload
         triggered_by = payload.get("triggered_by", "manual")
@@ -96,7 +98,7 @@ class LibraryEnrichmentWorker:
                 access_token = token_model.access_token
 
                 # Create Spotify client and enrichment service
-                spotify_client = SpotifyClient(self.settings)
+                spotify_client = SpotifyClient(self.settings.spotify)
                 service = LocalLibraryEnrichmentService(
                     session=session,
                     spotify_client=spotify_client,

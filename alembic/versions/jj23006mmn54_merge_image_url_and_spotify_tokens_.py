@@ -5,11 +5,12 @@ Revises: c7da905f261a, ii22005llm53
 Create Date: 2025-11-27 06:30:00.000000
 
 """
+
 from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
-revision: str = 'jj23006mmn54'
-down_revision: str | Sequence[str] | None = ('c7da905f261a', 'ii22005llm53')
+revision: str = "jj23006mmn54"
+down_revision: str | Sequence[str] | None = ("c7da905f261a", "ii22005llm53")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

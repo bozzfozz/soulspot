@@ -920,7 +920,7 @@ async def delete_and_blacklist_playlist(
     from sqlalchemy import select
 
     from soulspot.infrastructure.persistence.models import (
-        AppSettingModel,
+        AppSettingsModel,
         PlaylistModel,
     )
 
@@ -940,8 +940,8 @@ async def delete_and_blacklist_playlist(
         if spotify_uri:
             # Get current blacklist from app_settings
             blacklist_key = "spotify.playlist_blacklist"
-            setting_stmt = select(AppSettingModel).where(
-                AppSettingModel.key == blacklist_key
+            setting_stmt = select(AppSettingsModel).where(
+                AppSettingsModel.key == blacklist_key
             )
             setting_result = await session.execute(setting_stmt)
             setting = setting_result.scalar_one_or_none()
@@ -958,7 +958,7 @@ async def delete_and_blacklist_playlist(
                 # Create new setting
                 import json
 
-                new_setting = AppSettingModel(
+                new_setting = AppSettingsModel(
                     key=blacklist_key,
                     value=json.dumps([spotify_uri]),
                     value_type="json",

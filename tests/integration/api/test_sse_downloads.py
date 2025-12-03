@@ -265,9 +265,9 @@ class TestSSEEventTiming:
                     ]
                     # Allow some variance (1-3 seconds)
                     for interval in intervals:
-                        assert (
-                            1.0 <= interval <= 4.0
-                        ), f"Event interval {interval}s outside expected range (1-4s)"
+                        assert 1.0 <= interval <= 4.0, (
+                            f"Event interval {interval}s outside expected range (1-4s)"
+                        )
 
 
 class TestSSEConnectionManagement:

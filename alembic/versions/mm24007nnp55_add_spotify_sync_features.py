@@ -22,9 +22,8 @@ New columns:
 Also adds app_settings table for dynamic Spotify sync configuration (no app restart needed).
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "mm24007nnp55"
@@ -35,38 +34,38 @@ depends_on = None
 
 def upgrade() -> None:
     """Add image_path columns and sync-related fields."""
-    
+
     # Add image_path to spotify_artists (local path for downloaded image)
     op.add_column(
         "spotify_artists",
         sa.Column("image_path", sa.String(512), nullable=True),
     )
-    
+
     # Add image_path to spotify_albums (local path for downloaded cover)
     op.add_column(
         "spotify_albums",
         sa.Column("image_path", sa.String(512), nullable=True),
     )
-    
+
     # Add is_saved flag to spotify_albums (True if in user's "Saved Albums")
     # This differentiates "saved by user" from "synced because of followed artist"
     op.add_column(
         "spotify_albums",
         sa.Column("is_saved", sa.Boolean(), nullable=False, server_default="0"),
     )
-    
+
     # Add cover_path to playlists (local path for downloaded cover)
     op.add_column(
         "playlists",
         sa.Column("cover_path", sa.String(512), nullable=True),
     )
-    
+
     # Add is_liked_songs flag to playlists (True for special "Liked Songs" playlist)
     op.add_column(
         "playlists",
         sa.Column("is_liked_songs", sa.Boolean(), nullable=False, server_default="0"),
     )
-    
+
     # Create app_settings table for dynamic configuration
     # Hey future me - this is KEY-VALUE storage for runtime settings!
     # Unlike env-based Settings, these can be changed via UI without restart.
@@ -93,7 +92,7 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    
+
     # Index for fast category lookups (get all "spotify" settings)
     op.create_index(
         "ix_app_settings_category",
@@ -101,7 +100,7 @@ def upgrade() -> None:
         ["category"],
         unique=False,
     )
-    
+
     # Insert default Spotify sync settings
     # Hey - these are the DEFAULT values, user can change via Settings UI
     op.execute("""
@@ -121,18 +120,18 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove image_path columns and sync-related fields."""
-    
+
     # Drop app_settings table
     op.drop_index("ix_app_settings_category", table_name="app_settings")
     op.drop_table("app_settings")
-    
+
     # Remove columns from playlists
     op.drop_column("playlists", "is_liked_songs")
     op.drop_column("playlists", "cover_path")
-    
+
     # Remove columns from spotify_albums
     op.drop_column("spotify_albums", "is_saved")
     op.drop_column("spotify_albums", "image_path")
-    
+
     # Remove column from spotify_artists
     op.drop_column("spotify_artists", "image_path")

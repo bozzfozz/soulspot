@@ -1,7 +1,7 @@
 """Discography service for detecting missing albums."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,8 +154,7 @@ class DiscographyService:
             # Albums not synced yet - can't determine missing albums
             # The Background Sync will eventually sync them
             logger.info(
-                f"Albums not yet synced for {artist.name}, "
-                "waiting for background sync"
+                f"Albums not yet synced for {artist.name}, waiting for background sync"
             )
             return DiscographyInfo(
                 artist_id=str(artist_id.value),
@@ -170,7 +169,10 @@ class DiscographyService:
             SpotifyAlbumModel.artist_id == spotify_artist_id
         )
         result = await self.session.execute(stmt_spotify)
-        all_spotify_albums = result.scalars().all()
+        # Cast to help mypy understand the correct type
+        all_spotify_albums = cast(
+            list[SpotifyAlbumModel], list(result.scalars().all())
+        )
 
         # Find missing albums (in spotify_albums but not in soulspot_albums)
         missing_albums = []

@@ -118,25 +118,44 @@ VARIOUS_ARTISTS_TRACK_PATTERN = re.compile(
 DISC_FOLDER_PATTERN = re.compile(
     r"^(?:Disc|CD|Disk)\s*(?P<disc>\d{1,2})"  # Disc indicator and number
     r"(?:\s*[-–—:]\s*(?P<title>.+))?$",  # Optional title
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 # Supported audio file extensions (lowercase)
-AUDIO_EXTENSIONS = frozenset({
-    # Lossy
-    ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wma",
-    # Lossless
-    ".flac", ".wav", ".aiff", ".aif", ".alac", ".ape", ".wv", ".tta",
-    # High-resolution
-    ".dsf", ".dff", ".dsd",
-    # Other
-    ".mpc", ".mp4", ".webm",
-})
+AUDIO_EXTENSIONS = frozenset(
+    {
+        # Lossy
+        ".mp3",
+        ".m4a",
+        ".aac",
+        ".ogg",
+        ".opus",
+        ".wma",
+        # Lossless
+        ".flac",
+        ".wav",
+        ".aiff",
+        ".aif",
+        ".alac",
+        ".ape",
+        ".wv",
+        ".tta",
+        # High-resolution
+        ".dsf",
+        ".dff",
+        ".dsd",
+        # Other
+        ".mpc",
+        ".mp4",
+        ".webm",
+    }
+)
 
 
 # =============================================================================
 # PARSED RESULT DATACLASSES
 # =============================================================================
+
 
 @dataclass
 class ParsedArtistFolder:
@@ -318,6 +337,7 @@ class LibraryScanResult:
 # PARSING FUNCTIONS
 # =============================================================================
 
+
 def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
     """Parse artist folder name to extract metadata.
 
@@ -364,7 +384,6 @@ def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
         )
 
     # Fallback: use entire folder name as artist name
-    return ParsedArtistFolder(
     return ParsedArtistFolder(
         name=folder_name.strip(),
         raw_name=folder_name,
@@ -478,7 +497,7 @@ def parse_track_filename(filename: str) -> ParsedTrackFilename:
     # Remove track number and separators from title
     title = stem
     if track_match:
-        title = stem[len(track_match.group(0)):].lstrip(" -–—.")
+        title = stem[len(track_match.group(0)) :].lstrip(" -–—.")
 
     return ParsedTrackFilename(
         title=title if title else stem,
@@ -527,6 +546,7 @@ def is_audio_file(filename: str) -> bool:
 # =============================================================================
 # LIBRARY FOLDER PARSER
 # =============================================================================
+
 
 class LibraryFolderParser:
     """Parser for scanning Lidarr-organized music libraries.
@@ -614,7 +634,7 @@ class LibraryFolderParser:
             ScannedArtist with discovered albums.
         """
         parsed = parse_artist_folder(artist_path.name)
-        
+
         artist = ScannedArtist(
             name=parsed.name,  # Clean name without UUID/disambiguation for Spotify search!
             path=artist_path,

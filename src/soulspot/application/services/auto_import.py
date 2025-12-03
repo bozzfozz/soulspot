@@ -344,7 +344,7 @@ class AutoImportService:
         """
         try:
             # Lazy import mutagen to avoid startup delay
-            from mutagen import File as MutagenFile
+            from mutagen import File as MutagenFile  # type: ignore[attr-defined]
             from mutagen.easyid3 import EasyID3
             from mutagen.id3 import ID3
 
@@ -361,7 +361,7 @@ class AutoImportService:
             # For MP3 files, try to read ISRC from TSRC frame (not in EasyID3)
             if file_path.suffix.lower() == ".mp3":
                 try:
-                    id3 = ID3(file_path)
+                    id3 = ID3(file_path)  # type: ignore[no-untyped-call]
                     if "TSRC" in id3:
                         isrc = str(id3["TSRC"].text[0])
                         logger.debug("Found ISRC in ID3: %s", isrc)

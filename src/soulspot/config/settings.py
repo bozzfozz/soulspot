@@ -366,6 +366,7 @@ class ObservabilitySettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="OBSERVABILITY_")
 
+
 # Yo future me, DownloadSettings configures the job queue and download workers! max_concurrent_downloads
 # limits parallel downloads (Soulseek servers often throttle/ban if you download too many at once).
 # 1-3 is recommended range - higher = faster but more likely to get banned. default_max_retries is

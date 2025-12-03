@@ -135,16 +135,43 @@ async def index(
 
     # Get recent activity (completed downloads)
     recent_downloads = await download_repository.list_recent(limit=5)
-    recent_activity = [
-        {
-            "title": d.track_title or "Unknown Track",
-            "artist": d.artist_name or "Unknown Artist",
-            "album_art": d.album_art_url,
-            "status": d.status.value,
-            "timestamp": d.completed_at.strftime("%H:%M") if d.completed_at else "--:--",
-        }
-        for d in recent_downloads
-    ]
+    recent_activity = []
+    for d in recent_downloads:
+        # Fetch track info for this download with artist and album relationships
+        from sqlalchemy.orm import selectinload
+
+        track_stmt = (
+            select(TrackModel)
+            .options(
+                selectinload(TrackModel.artist),
+                selectinload(TrackModel.album),
+            )
+            .where(TrackModel.id == str(d.track_id.value))
+        )
+        track_result = await session.execute(track_stmt)
+        track_model = track_result.scalar_one_or_none()
+
+        # Extract artist name and album art
+        artist_name = "Unknown Artist"
+        album_art_url = None
+
+        if track_model:
+            if track_model.artist:
+                artist_name = track_model.artist.name
+            if track_model.album and track_model.album.artwork_url:
+                album_art_url = track_model.album.artwork_url
+
+        recent_activity.append(
+            {
+                "title": track_model.title if track_model else "Unknown Track",
+                "artist": artist_name,
+                "album_art": album_art_url,
+                "status": d.status.value,
+                "timestamp": d.completed_at.strftime("%H:%M")
+                if d.completed_at
+                else "--:--",
+            }
+        )
 
     stats = {
         "playlists": playlist_count,
@@ -858,11 +885,13 @@ async def library_artists(
     enrichment_needed = artists_without_image > 0
 
     return templates.TemplateResponse(
-        request, "library_artists.html", context={
+        request,
+        "library_artists.html",
+        context={
             "artists": artists,
             "enrichment_needed": enrichment_needed,
             "artists_without_image": artists_without_image,
-        }
+        },
     )
 
 

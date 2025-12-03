@@ -961,7 +961,7 @@ class AppSettingsService:
         """
         return await self.get_bool("library.auto_enrichment_enabled", default=True)
 
-    async def is_duplicate_detection_enabled(self) -> bool:
+    async def is_library_hash_computation_enabled(self) -> bool:
         """Check if SHA256 hash computation for duplicate detection is enabled.
 
         Default: False - hash computation reads the entire file and is ~55% of

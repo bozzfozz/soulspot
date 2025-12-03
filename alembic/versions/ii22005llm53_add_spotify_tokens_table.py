@@ -19,14 +19,15 @@ to re-authenticate. Workers check this flag and skip work if False (no crash/ret
 The token_refresh_worker runs every 5 min and proactively refreshes tokens expiring in <10 min.
 This prevents 401 errors during long-running background jobs mid-operation.
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'ii22005llm53'
-down_revision: str | Sequence[str] | None = 'hh21004kkl52'
+revision: str = "ii22005llm53"
+down_revision: str | Sequence[str] | None = "hh21004kkl52"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -34,35 +35,50 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Create spotify_tokens table for background worker OAuth token storage."""
     op.create_table(
-        'spotify_tokens',
+        "spotify_tokens",
         # Single-user: just use 'default' as id, or could be spotify_user_id for future multi-user
-        sa.Column('id', sa.String(length=64), nullable=False),
+        sa.Column("id", sa.String(length=64), nullable=False),
         # OAuth tokens (NOT encrypted - per user request for simplicity)
-        sa.Column('access_token', sa.Text(), nullable=False),
-        sa.Column('refresh_token', sa.Text(), nullable=False),
-        sa.Column('token_expires_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column("access_token", sa.Text(), nullable=False),
+        sa.Column("refresh_token", sa.Text(), nullable=False),
+        sa.Column("token_expires_at", sa.DateTime(timezone=True), nullable=False),
         # Scopes the token was granted (for validation)
-        sa.Column('scopes', sa.Text(), nullable=True),  # Space-separated: "user-follow-read playlist-read-private"
+        sa.Column(
+            "scopes", sa.Text(), nullable=True
+        ),  # Space-separated: "user-follow-read playlist-read-private"
         # Validity flag - False when refresh fails (user revoked access)
-        sa.Column('is_valid', sa.Boolean(), nullable=False, server_default=sa.text('1')),
+        sa.Column(
+            "is_valid", sa.Boolean(), nullable=False, server_default=sa.text("1")
+        ),
         # Error tracking for UI display
-        sa.Column('last_error', sa.Text(), nullable=True),
-        sa.Column('last_error_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("last_error_at", sa.DateTime(timezone=True), nullable=True),
         # Metadata
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
-        sa.Column('last_refreshed_at', sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint('id')
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column("last_refreshed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
     )
-    
+
     # Index for finding tokens expiring soon (background refresh worker)
-    op.create_index('ix_spotify_tokens_expires', 'spotify_tokens', ['token_expires_at'])
+    op.create_index("ix_spotify_tokens_expires", "spotify_tokens", ["token_expires_at"])
     # Index for finding valid tokens (background workers)
-    op.create_index('ix_spotify_tokens_valid', 'spotify_tokens', ['is_valid'])
+    op.create_index("ix_spotify_tokens_valid", "spotify_tokens", ["is_valid"])
 
 
 def downgrade() -> None:
     """Drop spotify_tokens table."""
-    op.drop_index('ix_spotify_tokens_valid', table_name='spotify_tokens')
-    op.drop_index('ix_spotify_tokens_expires', table_name='spotify_tokens')
-    op.drop_table('spotify_tokens')
+    op.drop_index("ix_spotify_tokens_valid", table_name="spotify_tokens")
+    op.drop_index("ix_spotify_tokens_expires", table_name="spotify_tokens")
+    op.drop_table("spotify_tokens")
