@@ -40,17 +40,24 @@ logger = logging.getLogger(__name__)
 # REGEX PATTERNS
 # =============================================================================
 
-# Artist folder pattern: "Artist Name" or "Artist Name (MusicBrainz UUID)"
+# Artist folder pattern: "Artist Name" or "Artist Name (MusicBrainz UUID)" or "Artist Name (Disambiguation)"
 # Examples:
-#   "The Beatles" → name="The Beatles", uuid=None
-#   "The Beatles (112944f7-8971-4b2b-b9d6-891e1dc2a7ff)" → name="The Beatles", uuid="112944f7..."
-# Hey future me - Lidarr uses UUID in folder name to disambiguate artists with same name,
-# we extract the name only! UUID is stored separately as musicbrainz_id.
-# Pattern matches standard MusicBrainz UUIDs (8-4-4-4-12 hex chars with hyphens = 36 chars total)
+#   "The Beatles" → name="The Beatles", uuid=None, disambiguation=None
+#   "The Beatles (112944f7-8971-4b2b-b9d6-891e1dc2a7ff)" → name="The Beatles", uuid="112944f7...", disambiguation=None
+#   "Genesis (English rock band)" → name="Genesis", uuid=None, disambiguation="English rock band"
+#   "Genesis (b9df73c3-...)" → name="Genesis", uuid="b9df73c3-...", disambiguation=None
+# Hey future me - Lidarr uses UUID OR text disambiguation in folder name to disambiguate artists.
+# UUID is 36 chars (8-4-4-4-12 hex with hyphens). Anything else in parentheses is disambiguation.
+# We extract the CLEAN name for display/search, and store UUID/disambiguation separately!
 ARTIST_FOLDER_PATTERN = re.compile(
     r"^(?P<name>.+?)"  # Artist name (non-greedy)
-    r"(?:\s*\((?P<uuid>[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\))?"
+    r"(?:\s*\((?P<paren_content>[^)]+)\))?"  # Optional content in parentheses
     r"$"
+)
+
+# UUID pattern to distinguish UUID from text disambiguation
+UUID_PATTERN = re.compile(
+    r"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
 )
 
 # Album folder pattern: "Title (Year)" or "Title (Year) (Disambiguation)"
@@ -135,16 +142,24 @@ AUDIO_EXTENSIONS = frozenset({
 class ParsedArtistFolder:
     """Result of parsing an artist folder name.
 
-    Hey future me - artist names come from folder structure like "The Beatles (4d3nxxxx)".
-    We extract just the name (no UUID). Lidarr uses UUID to disambiguate artists with
-    same name. UUID is stored separately as musicbrainz_id in DB.
+    Hey future me - artist names come from folder structure like "The Beatles (4d3nxxxx)"
+    or "Genesis (English rock band)". We extract:
+    - name: Clean artist name without UUID/disambiguation (for display and Spotify search!)
+    - uuid: MusicBrainz UUID if present (36-char hex with hyphens)
+    - disambiguation: Text disambiguation if present (e.g., "English rock band")
+    - raw_name: Original folder name for debugging
+
+    CRITICAL (Dec 2025): Use `name` for Spotify API searches, NOT raw_name!
     """
 
     name: str
-    """Artist name extracted from folder name (without UUID)."""
+    """Artist name extracted from folder name (without UUID or disambiguation)."""
 
     uuid: str | None = None
-    """Lidarr artist UUID if found in folder name."""
+    """Lidarr artist UUID if found in folder name (36-char MusicBrainz format)."""
+
+    disambiguation: str | None = None
+    """Text disambiguation if found (e.g., 'English rock band', 'UK band', 'rapper')."""
 
     raw_name: str = ""
     """Original folder name before parsing."""
@@ -221,13 +236,16 @@ class ScannedArtist:
     """Artist discovered during library scan."""
 
     name: str
-    """Artist name from folder (clean, without UUID)."""
+    """Artist name from folder (clean, without UUID or disambiguation text)."""
 
     path: Path
     """Full path to artist folder."""
 
     musicbrainz_id: str | None = None
     """MusicBrainz UUID extracted from Lidarr folder name (e.g., from 'Artist (UUID)')."""
+
+    disambiguation: str | None = None
+    """Text disambiguation from folder name (e.g., 'English rock band' from 'Genesis (English rock band)')."""
 
     albums: list["ScannedAlbum"] = field(default_factory=list)
     """Albums found under this artist."""
@@ -303,8 +321,8 @@ class LibraryScanResult:
 def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
     """Parse artist folder name to extract metadata.
 
-    Handles Lidarr naming: "Artist Name" or "Artist Name (UUID)".
-    Hey future me - we extract just the name, UUID goes to musicbrainz_id field!
+    Handles Lidarr naming: "Artist Name", "Artist Name (UUID)", or "Artist Name (Disambiguation)".
+    Hey future me - we extract CLEAN name for Spotify search! UUID/disambiguation stored separately.
 
     Args:
         folder_name: The artist folder name (not full path).
@@ -314,21 +332,39 @@ def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
 
     Examples:
         >>> parse_artist_folder("The Beatles")
-        ParsedArtistFolder(name="The Beatles", uuid=None, ...)
+        ParsedArtistFolder(name="The Beatles", uuid=None, disambiguation=None, ...)
 
         >>> parse_artist_folder("The Beatles (112944f7-8971-4b2b-b9d6-891e1dc2a7ff)")
-        ParsedArtistFolder(name="The Beatles", uuid="112944f7-8971-4b2b-b9d6-891e1dc2a7ff", ...)
+        ParsedArtistFolder(name="The Beatles", uuid="112944f7...", disambiguation=None, ...)
+
+        >>> parse_artist_folder("Genesis (English rock band)")
+        ParsedArtistFolder(name="Genesis", uuid=None, disambiguation="English rock band", ...)
     """
     match = ARTIST_FOLDER_PATTERN.match(folder_name.strip())
 
     if match:
+        name = match.group("name").strip()
+        paren_content = match.group("paren_content")
+
+        # Determine if parentheses content is UUID or text disambiguation
+        uuid = None
+        disambiguation = None
+
+        if paren_content:
+            if UUID_PATTERN.match(paren_content):
+                uuid = paren_content
+            else:
+                disambiguation = paren_content
+
         return ParsedArtistFolder(
-            name=match.group("name").strip(),
-            uuid=match.group("uuid"),
+            name=name,
+            uuid=uuid,
+            disambiguation=disambiguation,
             raw_name=folder_name,
         )
 
     # Fallback: use entire folder name as artist name
+    return ParsedArtistFolder(
     return ParsedArtistFolder(
         name=folder_name.strip(),
         raw_name=folder_name,
@@ -568,7 +604,8 @@ class LibraryFolderParser:
         """Scan an artist folder and its albums.
 
         Hey future me - use parse_artist_folder() to extract clean name
-        from folder (which might be "Artist Name (UUID)").
+        from folder (which might be "Artist Name (UUID)" or "Artist Name (Disambiguation)").
+        Clean name is used for Spotify search, disambiguation is stored for display!
 
         Args:
             artist_path: Path to the artist folder.
@@ -579,9 +616,10 @@ class LibraryFolderParser:
         parsed = parse_artist_folder(artist_path.name)
         
         artist = ScannedArtist(
-            name=parsed.name,  # Clean name without UUID!
+            name=parsed.name,  # Clean name without UUID/disambiguation for Spotify search!
             path=artist_path,
             musicbrainz_id=parsed.uuid,  # Preserve UUID for Lidarr compatibility
+            disambiguation=parsed.disambiguation,  # Text disambiguation for display
         )
 
         # Scan album folders (second level)

@@ -961,6 +961,18 @@ class AppSettingsService:
         """
         return await self.get_bool("library.auto_enrichment_enabled", default=True)
 
+    async def is_duplicate_detection_enabled(self) -> bool:
+        """Check if SHA256 hash computation for duplicate detection is enabled.
+
+        Default: False - hash computation reads the entire file and is ~55% of
+        scan time! When disabled, scans are ~2x faster but /api/library/duplicates
+        won't detect NEW duplicates. Old hashes in DB remain valid.
+
+        Enable only if you actually need duplicate detection. For most users
+        with clean Lidarr-managed libraries, duplicates are rare.
+        """
+        return await self.get_bool("library.duplicate_detection_enabled", default=False)
+
     async def should_download_enrichment_artwork(self) -> bool:
         """Check if artwork should be downloaded during enrichment.
 

@@ -1566,6 +1566,10 @@ class LibraryEnrichmentSettings(BaseModel):
         default=True,
         description="Auto-enrich local library with Spotify metadata after scans",
     )
+    duplicate_detection_enabled: bool = Field(
+        default=False,
+        description="Enable SHA256 hash computation for duplicate file detection (slower scans)",
+    )
 
 
 @router.get("/library/enrichment")
@@ -1577,12 +1581,16 @@ async def get_library_enrichment_settings(
     Returns current enrichment configuration from database.
 
     Returns:
-        Current enrichment settings (just the auto toggle)
+        Current enrichment settings
     """
     settings_service = AppSettingsService(db)
-    enabled = await settings_service.is_library_auto_enrichment_enabled()
+    enrichment_enabled = await settings_service.is_library_auto_enrichment_enabled()
+    duplicate_enabled = await settings_service.is_duplicate_detection_enabled()
 
-    return LibraryEnrichmentSettings(auto_enrichment_enabled=enabled)
+    return LibraryEnrichmentSettings(
+        auto_enrichment_enabled=enrichment_enabled,
+        duplicate_detection_enabled=duplicate_enabled,
+    )
 
 
 @router.put("/library/enrichment")
@@ -1595,7 +1603,7 @@ async def update_library_enrichment_settings(
     Toggle takes effect immediately - no restart required.
 
     Args:
-        settings_update: New settings (just auto_enrichment_enabled)
+        settings_update: New settings
 
     Returns:
         Updated settings
@@ -1605,6 +1613,12 @@ async def update_library_enrichment_settings(
     await settings_service.set(
         "library.auto_enrichment_enabled",
         settings_update.auto_enrichment_enabled,
+        value_type="boolean",
+        category="library",
+    )
+    await settings_service.set(
+        "library.duplicate_detection_enabled",
+        settings_update.duplicate_detection_enabled,
         value_type="boolean",
         category="library",
     )

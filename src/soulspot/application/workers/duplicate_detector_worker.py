@@ -4,30 +4,49 @@
 # oder leicht unterschiedliche Versionen (Remaster, Radio Edit, etc).
 # Das frisst Disk-Space und macht Playlists chaotisch.
 #
-# Ansatz: METADATA-HASH (Phase 1)
+# ZWEI-STUFEN-ANSATZ (Dec 2025):
+#
+# STUFE 1: SHA256 FILE-HASH Berechnung
+# - Läuft NICHT beim Library-Scan (zu langsam, ~55% der Scan-Zeit!)
+# - Stattdessen hier im Nightly Job
+# - Berechnet nur für Tracks ohne file_hash (inkrementell)
+# - ThreadPool für CPU-intensive I/O
+#
+# STUFE 2: METADATA-HASH für Duplicate Detection
 # - Hash aus: artist_name + track_title (normalized)
 # - Optional: + duration_ms (within tolerance)
 # - Optional: + album_name
 #
-# NICHT implementiert (Phase 2): Audio-Fingerprinting
+# NICHT implementiert (Phase 3): Audio-Fingerprinting
 # - Chromaprint/AcoustID wäre genauer
 # - Aber braucht externe Lib und ist CPU-intensiv
-# - Für V1 reicht Metadata-Matching
+# - Für V1 reicht Metadata + FileHash
 #
 # Stolperfallen:
 # - "feat." vs "ft." vs "(feat. " - alles normalisieren!
 # - "The Beatles" vs "Beatles, The"
 # - Remaster-Suffixe: "(2023 Remaster)" usw.
 # - Live-Versionen sind eigentlich KEINE Duplikate!
-"""Duplicate detector worker for finding duplicate tracks in library."""
+"""Duplicate detector worker for finding duplicate tracks in library.
+
+This worker performs TWO functions:
+1. Computes SHA256 file hashes for tracks without them (nightly, incremental)
+2. Detects duplicates using both metadata matching and file hash matching
+
+The hash computation is separated from library scan for performance!
+Library scan stays fast (~1s/file), hashing runs in nightly batch.
+"""
 
 import asyncio
 import contextlib
 import hashlib
 import logging
+import os
 import re
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -62,11 +81,21 @@ FEAT_PATTERNS = [
 class DuplicateDetectorWorker:
     """Background worker for detecting duplicate tracks in library.
 
-    Uses metadata-based hashing to find potential duplicates:
-    1. Normalizes artist + title (lowercase, strip special chars)
-    2. Creates hash from normalized metadata
-    3. Groups tracks by hash
-    4. Reports groups with >1 track as duplicate candidates
+    This worker performs TWO functions (Dec 2025 update):
+
+    1. SHA256 FILE HASH COMPUTATION (runs first):
+       - Finds tracks without file_hash (empty or NULL)
+       - Computes SHA256 in ThreadPool (non-blocking)
+       - Updates tracks with computed hashes
+       - Incremental: only processes tracks without hashes
+
+    2. DUPLICATE DETECTION (runs after hashing):
+       - Metadata-based: normalizes artist + title, groups by hash
+       - File-based: groups tracks with identical file_hash
+       - Creates duplicate candidates for user review
+
+    The hash computation is separated from library scan for performance!
+    Library scan stays fast (~1s/file), hashing runs in nightly batch.
 
     Results are stored in duplicate_candidates table for user review.
     The worker does NOT auto-delete - humans decide what's a real duplicate.
@@ -110,11 +139,20 @@ class DuplicateDetectorWorker:
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
+        # ThreadPool for CPU-intensive SHA256 hash computation
+        # Hey future me - this is the KEY performance optimization! SHA256 reads entire files,
+        # which blocks I/O. Running in ThreadPool keeps the event loop responsive.
+        self._executor = ThreadPoolExecutor(
+            max_workers=min(4, max(2, os.cpu_count() or 2))
+        )
+
         # Stats - values can be int, str, or None
         self._stats: dict[str, int | str | None] = {
             "scans_completed": 0,
             "duplicates_found": 0,
             "tracks_scanned": 0,
+            "hashes_computed": 0,  # NEW: tracks with newly computed SHA256 hashes
+            "hash_errors": 0,  # NEW: files that couldn't be hashed (missing, permission)
             "last_scan_at": None,
             "last_error": None,
         }
@@ -145,7 +183,7 @@ class DuplicateDetectorWorker:
             "name": "Duplicate Detector",
             "running": self._running,
             "status": "active" if self._running else "stopped",
-            "detection_method": "metadata-hash",
+            "detection_method": "metadata-hash + file-hash",
             "stats": self._stats.copy(),
         }
 
@@ -155,6 +193,9 @@ class DuplicateDetectorWorker:
         Hey future me - dieser Loop läuft selten! Default: 1x pro Woche.
         Duplicate Detection ist nicht zeitkritisch, aber CPU-intensiv
         wenn du viele Tracks hast. Deswegen nicht zu oft laufen lassen.
+
+        UPDATE (Dec 2025): Now also computes SHA256 hashes for tracks that
+        don't have them yet! This was moved OUT of library scan for performance.
         """
         # Long initial delay - let other services stabilize
         await asyncio.sleep(60)
@@ -191,17 +232,30 @@ class DuplicateDetectorWorker:
     async def _run_scan(self) -> None:
         """Execute one duplicate detection scan.
 
-        Hey future me - das ist der Hauptalgorithmus:
-        1. Lade alle Tracks aus DB
-        2. Berechne Hash für jeden Track
-        3. Gruppiere nach Hash
-        4. Speichere Gruppen mit >1 Track als Candidates
+        Hey future me - das ist der Hauptalgorithmus (Dec 2025 update):
+        1. PHASE 1: Compute SHA256 hashes for tracks without them
+        2. PHASE 2: Load all tracks for duplicate detection
+        3. PHASE 3: Group by metadata hash (artist+title)
+        4. PHASE 4: Group by file hash (exact duplicates)
+        5. PHASE 5: Store candidates for user review
         """
-        logger.info("Starting duplicate detection scan")
+        logger.info("Starting duplicate detection scan (with hash computation)")
 
         # Hey future me - using session_scope context manager ensures proper connection cleanup!
         async with self._session_scope() as session:
-            # Load all tracks (simplified - in production use batching)
+            # PHASE 1: Compute SHA256 hashes for tracks without them
+            # This is the expensive I/O operation - runs in ThreadPool
+            hashes_computed, hash_errors = await self._compute_missing_file_hashes(
+                session
+            )
+            self._stats["hashes_computed"] = hashes_computed
+            self._stats["hash_errors"] = hash_errors
+            logger.info(
+                f"Phase 1 complete: computed {hashes_computed} hashes, "
+                f"{hash_errors} errors"
+            )
+
+            # PHASE 2: Load all tracks for duplicate detection
             tracks = await self._load_tracks(session)
             self._stats["tracks_scanned"] = len(tracks)
 
@@ -209,36 +263,53 @@ class DuplicateDetectorWorker:
                 logger.info("No tracks to scan for duplicates")
                 return
 
-            # Group tracks by metadata hash
-            hash_groups: dict[str, list[dict[str, Any]]] = {}
+            # PHASE 3: Group tracks by metadata hash (artist+title normalized)
+            metadata_groups: dict[str, list[dict[str, Any]]] = {}
             for track in tracks:
                 track_hash = self._compute_track_hash(track)
-                if track_hash not in hash_groups:
-                    hash_groups[track_hash] = []
-                hash_groups[track_hash].append(track)
+                if track_hash not in metadata_groups:
+                    metadata_groups[track_hash] = []
+                metadata_groups[track_hash].append(track)
 
-            # Find groups with duplicates
-            duplicate_groups = {
-                h: group for h, group in hash_groups.items() if len(group) > 1
+            # Find groups with duplicates (metadata-based)
+            metadata_duplicate_groups = {
+                h: group for h, group in metadata_groups.items() if len(group) > 1
             }
 
             logger.info(
-                f"Found {len(duplicate_groups)} potential duplicate groups "
-                f"from {len(tracks)} tracks"
+                f"Phase 3: Found {len(metadata_duplicate_groups)} metadata-based "
+                f"duplicate groups from {len(tracks)} tracks"
             )
 
-            # Store duplicate candidates
+            # PHASE 4: Group by file hash (exact file duplicates)
+            # Only for tracks that have file_hash computed
+            file_hash_groups: dict[str, list[dict[str, Any]]] = {}
+            for track in tracks:
+                file_hash = track.get("file_hash")
+                if file_hash:  # Only tracks with computed hash
+                    if file_hash not in file_hash_groups:
+                        file_hash_groups[file_hash] = []
+                    file_hash_groups[file_hash].append(track)
+
+            # Find exact file duplicates
+            file_duplicate_groups = {
+                h: group for h, group in file_hash_groups.items() if len(group) > 1
+            }
+
+            logger.info(
+                f"Phase 4: Found {len(file_duplicate_groups)} exact file duplicate groups"
+            )
+
+            # PHASE 5: Store duplicate candidates
             candidates_added = 0
-            for _hash_key, group in duplicate_groups.items():
-                # Create pairwise candidates
+
+            # Store metadata-based duplicates
+            for _hash_key, group in metadata_duplicate_groups.items():
                 for i in range(len(group)):
                     for j in range(i + 1, len(group)):
                         track_1 = group[i]
                         track_2 = group[j]
-
-                        # Calculate similarity score
                         score = self._calculate_similarity(track_1, track_2)
-
                         await self._store_candidate(
                             session,
                             track_1["id"],
@@ -248,22 +319,37 @@ class DuplicateDetectorWorker:
                         )
                         candidates_added += 1
 
+            # Store file-hash based duplicates (exact matches = 100% similarity)
+            for _hash_key, group in file_duplicate_groups.items():
+                for i in range(len(group)):
+                    for j in range(i + 1, len(group)):
+                        track_1 = group[i]
+                        track_2 = group[j]
+                        await self._store_candidate(
+                            session,
+                            track_1["id"],
+                            track_2["id"],
+                            1.0,  # Exact file match = 100% similarity
+                            "file-hash",
+                        )
+                        candidates_added += 1
+
             await session.commit()
             dups = self._stats.get("duplicates_found")
             self._stats["duplicates_found"] = (
                 int(dups) if dups else 0
             ) + candidates_added
 
-            logger.info(f"Stored {candidates_added} duplicate candidates")
+            logger.info(f"Phase 5: Stored {candidates_added} duplicate candidates")
 
     async def _load_tracks(self, session: Any) -> list[dict[str, Any]]:
-        """Load all tracks from database.
+        """Load all tracks from database for duplicate detection.
 
         Args:
             session: DB session
 
         Returns:
-            List of track dicts with id, title, artist_name, duration_ms
+            List of track dicts with id, title, artist_name, duration_ms, file_hash
         """
         # Import here to avoid circular deps
         from sqlalchemy import select
@@ -276,6 +362,7 @@ class DuplicateDetectorWorker:
                 TrackModel.title,
                 TrackModel.artist_id,
                 TrackModel.duration_ms,
+                TrackModel.file_hash,  # NEW: for file-based duplicate detection
             )
         )
         rows = result.all()
@@ -288,9 +375,128 @@ class DuplicateDetectorWorker:
                 # we use artist_id as a proxy since actual name requires a join
                 "artist_name": str(row.artist_id) if row.artist_id else "",
                 "duration_ms": row.duration_ms or 0,
+                "file_hash": row.file_hash or "",  # NEW: for file-based duplicates
             }
             for row in rows
         ]
+
+    async def _compute_missing_file_hashes(
+        self, session: Any
+    ) -> tuple[int, int]:
+        """Compute SHA256 hashes for tracks that don't have them.
+
+        Hey future me - this is the KEY performance optimization from Dec 2025!
+        SHA256 hashing was removed from library scan (took ~55% of scan time).
+        Instead, we compute hashes here in the nightly job, incrementally.
+
+        Process:
+        1. Query tracks WHERE file_hash IS NULL AND file_path IS NOT NULL
+        2. Compute SHA256 in ThreadPool (non-blocking I/O)
+        3. Batch update tracks with computed hashes
+        4. Return (hashes_computed, errors_count)
+
+        Args:
+            session: DB session
+
+        Returns:
+            Tuple of (hashes_computed, errors_count)
+        """
+        from sqlalchemy import or_, select, update
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        # Find tracks without file_hash but with valid file_path
+        result = await session.execute(
+            select(TrackModel.id, TrackModel.file_path).where(
+                or_(
+                    TrackModel.file_hash.is_(None),
+                    TrackModel.file_hash == "",
+                ),
+                TrackModel.file_path.isnot(None),
+                TrackModel.file_path != "",
+            )
+        )
+        tracks_to_hash = result.all()
+
+        if not tracks_to_hash:
+            logger.info("No tracks need hash computation")
+            return 0, 0
+
+        logger.info(f"Computing SHA256 hashes for {len(tracks_to_hash)} tracks")
+
+        hashes_computed = 0
+        errors = 0
+        batch_size = 100  # Commit every N tracks to avoid huge transactions
+
+        loop = asyncio.get_running_loop()
+
+        for i, (track_id, file_path) in enumerate(tracks_to_hash):
+            try:
+                # Compute hash in ThreadPool (non-blocking)
+                file_hash = await loop.run_in_executor(
+                    self._executor, self._compute_sha256_sync, file_path
+                )
+
+                if file_hash:
+                    # Update track with computed hash
+                    await session.execute(
+                        update(TrackModel)
+                        .where(TrackModel.id == track_id)
+                        .values(file_hash=file_hash, file_hash_algorithm="sha256")
+                    )
+                    hashes_computed += 1
+                else:
+                    errors += 1
+
+            except Exception as e:
+                logger.warning(f"Error computing hash for track {track_id}: {e}")
+                errors += 1
+
+            # Batch commit for memory efficiency
+            if (i + 1) % batch_size == 0:
+                await session.commit()
+                logger.info(
+                    f"Hash progress: {i + 1}/{len(tracks_to_hash)} "
+                    f"(computed: {hashes_computed}, errors: {errors})"
+                )
+
+        # Final commit
+        await session.commit()
+
+        return hashes_computed, errors
+
+    def _compute_sha256_sync(self, file_path: str, chunk_size: int = 8192) -> str | None:
+        """Compute SHA256 hash of a file (sync, for ThreadPool).
+
+        Hey future me - this runs in ThreadPool! It's the same SHA256 computation
+        that was removed from library scanner. Full file read is expensive (~55%
+        of old scan time), but running in parallel threads keeps things responsive.
+
+        Args:
+            file_path: Path to the audio file
+            chunk_size: Read chunk size (default 8KB)
+
+        Returns:
+            SHA256 hex digest, or None if file is inaccessible
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                logger.debug(f"File not found for hashing: {file_path}")
+                return None
+
+            sha256 = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(chunk_size), b""):
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+
+        except PermissionError:
+            logger.warning(f"Permission denied for hashing: {file_path}")
+            return None
+        except Exception as e:
+            logger.warning(f"Error computing SHA256 for {file_path}: {e}")
+            return None
 
     def _compute_track_hash(self, track: dict[str, Any]) -> str:
         """Compute metadata hash for a track.

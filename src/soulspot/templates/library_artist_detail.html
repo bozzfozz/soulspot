@@ -31,6 +31,9 @@
     </div>
     <div>
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ artist.name }}</h1>
+        {% if artist.disambiguation %}
+        <div style="font-size: var(--font-size-sm); color: var(--text-muted); opacity: 0.7; margin-bottom: var(--space-2);">{{ artist.disambiguation }}</div>
+        {% endif %}
         <div style="display: flex; gap: var(--space-4); color: var(--text-muted); font-size: var(--font-size-sm);">
             <span><i class="bi bi-disc" style="margin-right: var(--space-2);"></i>{{ artist.albums|length }} album{{ 's' if artist.albums|length != 1 else '' }}</span>
             <span><i class="bi bi-music-note" style="margin-right: var(--space-2);"></i>{{ artist.track_count }} track{{ 's' if artist.track_count != 1 else '' }}</span>

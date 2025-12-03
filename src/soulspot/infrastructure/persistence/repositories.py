@@ -76,6 +76,7 @@ class ArtistRepository(IArtistRepository):
     # IntegrityError on commit - this method doesn't check! Use get_by_id first if you care.
     # Hey - genres/tags are serialized as JSON strings for SQLite compatibility!
     # Hey - image_url is stored directly as string (Spotify CDN URL)!
+    # Hey - disambiguation is text disambiguation from folder (e.g., "English rock band")!
     async def add(self, artist: Artist) -> None:
         """Add a new artist."""
         model = ArtistModel(
@@ -84,6 +85,7 @@ class ArtistRepository(IArtistRepository):
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
             image_url=artist.image_url,
+            disambiguation=artist.disambiguation,
             genres=json.dumps(artist.genres) if artist.genres else None,
             tags=json.dumps(artist.tags) if artist.tags else None,
             created_at=artist.created_at,
@@ -104,6 +106,7 @@ class ArtistRepository(IArtistRepository):
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
         model.image_url = artist.image_url
+        model.disambiguation = artist.disambiguation
         model.genres = json.dumps(artist.genres) if artist.genres else None
         model.tags = json.dumps(artist.tags) if artist.tags else None
         model.updated_at = artist.updated_at
@@ -122,6 +125,7 @@ class ArtistRepository(IArtistRepository):
     # spotify_uri handles nullable field - can't call SpotifyUri.from_string(None)!
     # Hey - genres/tags are deserialized from JSON strings!
     # Hey - image_url is stored directly as string (no conversion needed)!
+    # Hey - disambiguation is text from folder (e.g., "English rock band")!
     async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
         stmt = select(ArtistModel).where(ArtistModel.id == str(artist_id.value))
@@ -139,6 +143,7 @@ class ArtistRepository(IArtistRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             image_url=model.image_url,
+            disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
             created_at=model.created_at,
@@ -162,6 +167,7 @@ class ArtistRepository(IArtistRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             image_url=model.image_url,
+            disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
             created_at=model.created_at,
@@ -185,6 +191,7 @@ class ArtistRepository(IArtistRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             image_url=model.image_url,
+            disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
             created_at=model.created_at,
@@ -219,6 +226,7 @@ class ArtistRepository(IArtistRepository):
             else None,
             musicbrainz_id=model.musicbrainz_id,
             image_url=model.image_url,
+            disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
             created_at=model.created_at,
@@ -242,6 +250,7 @@ class ArtistRepository(IArtistRepository):
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
                 image_url=model.image_url,
+                disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
                 created_at=model.created_at,

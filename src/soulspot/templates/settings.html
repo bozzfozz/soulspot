@@ -799,6 +799,54 @@
                 </div>
             </div>
 
+            <!-- Duplicate Detection Section -->
+            <!-- Hey future me - Duplicate detection runs as a nightly background job (Dec 2025).
+                 It computes SHA256 hashes for files without them AND finds duplicates via
+                 metadata matching. Moved here from Automation because it's library-specific! -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="fa-solid fa-clone" style="color: #06b6d4;"></i>
+                    Duplicate Detection
+                </h3>
+                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                    Scan your library for potential duplicate tracks based on metadata and file content
+                </p>
+                
+                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Enable Duplicate Scanning</div>
+                            <div class="sync-option-desc">Find tracks that might be duplicates (runs nightly)</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="library-duplicate-enabled" onchange="toggleEnrichmentSetting('duplicate_detection_enabled')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div id="library-duplicate-options" style="opacity: 0.5; pointer-events: none;">
+                    <div class="form-group" style="margin-top: var(--space-4);">
+                        <label class="form-label" for="duplicate-interval">Scan Interval</label>
+                        <div class="input-with-suffix">
+                            <input type="number" id="duplicate-interval" class="form-input" value="168" min="24" max="720">
+                            <span class="input-suffix">hours</span>
+                        </div>
+                        <p class="form-helper">How often to scan for duplicates (24-720 hours, default: weekly)</p>
+                    </div>
+
+                    <div style="margin-top: var(--space-4);">
+                        <a href="/library/duplicates" class="btn btn-outline">
+                            <i class="fa-solid fa-list"></i>
+                            View Duplicate Candidates
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <!-- Save Button -->
             <div style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-primary" onclick="saveNamingSettings()">
@@ -819,7 +867,7 @@
                         <i class="fa-solid fa-robot" style="color: var(--accent-primary); margin-right: var(--space-2);"></i>
                         Automation & Background Workers
                     </h2>
-                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Configure automatic tasks like watchlists, cleanup, and duplicate detection</p>
+                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Configure automatic tasks like watchlists, cleanup, and quality upgrades</p>
                 </div>
             </div>
 
@@ -977,51 +1025,6 @@
                             <span class="input-suffix">days</span>
                         </div>
                         <p class="form-helper">Files older than this will be considered for cleanup</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Duplicate Detection Section -->
-            <div style="padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
-                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
-                    <i class="fa-solid fa-clone" style="color: #06b6d4;"></i>
-                    Duplicate Detection
-                </h3>
-                <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
-                    Scan your library for potential duplicate tracks based on metadata
-                </p>
-                
-                <div class="sync-option-card" style="margin-bottom: var(--space-3);">
-                    <div class="sync-option-info">
-                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                        </div>
-                        <div>
-                            <div class="sync-option-title">Enable Duplicate Scanning</div>
-                            <div class="sync-option-desc">Find tracks that might be duplicates</div>
-                        </div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="automation-duplicate-enabled" onchange="toggleAutomationSetting('duplicate_detection_enabled')">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <div id="duplicate-options" style="opacity: 0.5; pointer-events: none;">
-                    <div class="form-group" style="margin-top: var(--space-4);">
-                        <label class="form-label" for="duplicate-interval">Scan Interval</label>
-                        <div class="input-with-suffix">
-                            <input type="number" id="duplicate-interval" class="form-input" value="168" min="24" max="720">
-                            <span class="input-suffix">hours</span>
-                        </div>
-                        <p class="form-helper">How often to scan for duplicates (24-720 hours, default: weekly)</p>
-                    </div>
-
-                    <div style="margin-top: var(--space-4);">
-                        <a href="/library/duplicates" class="btn btn-outline">
-                            <i class="fa-solid fa-list"></i>
-                            View Duplicate Candidates
-                        </a>
                     </div>
                 </div>
             </div>
@@ -1892,14 +1895,7 @@
             const cleanupRetention = document.getElementById('cleanup-retention');
             if (cleanupRetention) cleanupRetention.value = settings.cleanup_retention_days ?? 7;
             
-            // Duplicate Detection
-            const duplicateToggle = document.getElementById('automation-duplicate-enabled');
-            if (duplicateToggle) {
-                duplicateToggle.checked = settings.duplicate_detection_enabled ?? false;
-                updateAutomationOptionsState('duplicate', settings.duplicate_detection_enabled ?? false);
-            }
-            const duplicateInterval = document.getElementById('duplicate-interval');
-            if (duplicateInterval) duplicateInterval.value = settings.duplicate_scan_interval_hours ?? 168;
+            // Note: duplicate_detection_enabled moved to Library Settings (Dec 2025)
             
         } catch (error) {
             console.error('Failed to load automation settings:', error);
@@ -1937,6 +1933,7 @@
     
     // Hey future me – Updated den UI State der Options-Sektion für einen Worker.
     // Wenn disabled, werden die Optionen ausgegraut aber behalten ihren Wert.
+    // Note: duplicate moved to Library Settings (Dec 2025).
     function updateAutomationOptionsState(workerKey, enabled) {
         // Map worker key to options container ID
         const containerMap = {
@@ -1944,8 +1941,6 @@
             'discography': 'discography-options', 
             'quality': 'quality-options',
             'cleanup': 'cleanup-options',
-            'duplicate': 'duplicate-options',
-            'duplicate-detection': 'duplicate-options',
             'quality-upgrade': 'quality-options',
         };
         
@@ -1959,6 +1954,7 @@
     
     // Hey future me – Speichert alle Automation Settings auf einmal.
     // Wird beim Klick auf "Save Automation Settings" aufgerufen.
+    // Note: duplicate_detection_enabled moved to Library Settings (Dec 2025).
     async function saveAutomationSettings() {
         const settings = {
             watchlist_enabled: document.getElementById('automation-watchlist-enabled')?.checked ?? false,
@@ -1969,8 +1965,7 @@
             quality_profile: document.getElementById('quality-profile')?.value || 'high',
             cleanup_enabled: document.getElementById('automation-cleanup-enabled')?.checked ?? false,
             cleanup_retention_days: parseInt(document.getElementById('cleanup-retention')?.value) || 7,
-            duplicate_detection_enabled: document.getElementById('automation-duplicate-enabled')?.checked ?? false,
-            duplicate_scan_interval_hours: parseInt(document.getElementById('duplicate-interval')?.value) || 168,
+            // duplicate_detection settings now saved via Library Settings endpoint
         };
         
         try {
@@ -2058,6 +2053,7 @@
     
     // Hey future me – Lädt das Enrichment-Setting (nur ein Boolean Toggle).
     // Separate Funktion damit es auch beim Tab-Wechsel aufgerufen werden kann.
+    // UPDATE Dec 2025: Now also loads duplicate_detection_enabled (moved from Automation).
     async function loadEnrichmentSettings() {
         try {
             const response = await fetch('/api/settings/library/enrichment');
@@ -2065,12 +2061,31 @@
             
             const settings = await response.json();
             
+            // Auto-enrichment toggle
             const enrichmentToggle = document.getElementById('enrichment-auto-enabled');
             if (enrichmentToggle) {
                 enrichmentToggle.checked = settings.auto_enrichment_enabled ?? true;
             }
+            
+            // Duplicate detection toggle (moved from Automation tab Dec 2025)
+            const duplicateToggle = document.getElementById('library-duplicate-enabled');
+            if (duplicateToggle) {
+                duplicateToggle.checked = settings.duplicate_detection_enabled ?? false;
+                updateLibraryOptionsState('duplicate', settings.duplicate_detection_enabled ?? false);
+            }
         } catch (error) {
             console.error('Failed to load enrichment settings:', error);
+        }
+    }
+    
+    // Hey future me – Updates the UI state for library options sections.
+    // When disabled, options are greyed out but keep their values.
+    function updateLibraryOptionsState(optionKey, enabled) {
+        const containerId = `library-${optionKey}-options`;
+        const container = document.getElementById(containerId);
+        if (container) {
+            container.style.opacity = enabled ? '1' : '0.5';
+            container.style.pointerEvents = enabled ? 'auto' : 'none';
         }
     }
     
@@ -2384,13 +2399,31 @@
     
     // =========================================================================
     // ENRICHMENT FUNCTION
-    // Hey future me - Simplified! Just one toggle for auto-enrichment.
+    // Hey future me - Simplified! Just toggles for auto-enrichment and duplicate detection.
     // No manual buttons needed - enrichment runs automatically after library scan.
+    // Duplicate detection runs as nightly job (Dec 2025).
     // =========================================================================
     
     async function toggleEnrichmentSetting(setting) {
-        // Get current value from checkbox
-        const checkbox = document.getElementById('enrichment-auto-enabled');
+        // Determine which checkbox based on setting name
+        let checkbox;
+        let displayName;
+        
+        if (setting === 'auto_enrichment_enabled') {
+            checkbox = document.getElementById('enrichment-auto-enabled');
+            displayName = 'Auto-enrichment';
+        } else if (setting === 'duplicate_detection_enabled') {
+            checkbox = document.getElementById('library-duplicate-enabled');
+            displayName = 'Duplicate detection';
+            // Update options state
+            if (checkbox) {
+                updateLibraryOptionsState('duplicate', checkbox.checked);
+            }
+        } else {
+            console.error('Unknown enrichment setting:', setting);
+            return;
+        }
+        
         if (!checkbox) return;
         
         const value = checkbox.checked;
@@ -2399,13 +2432,13 @@
             const response = await fetch('/api/settings/library/enrichment', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ auto_enrichment_enabled: value })
+                body: JSON.stringify({ [setting]: value })
             });
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             
             const status = value ? 'enabled' : 'disabled';
-            SoulSpot.showNotification(`Auto-enrichment ${status}`, 'success');
+            SoulSpot.showNotification(`${displayName} ${status}`, 'success');
         } catch (error) {
             console.error('Failed to update enrichment setting:', error);
             SoulSpot.showNotification('Failed to update setting', 'error');

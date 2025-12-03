@@ -835,9 +835,13 @@ async def library_artists(
     rows = result.all()
 
     # Convert to template-friendly format with image_url
+    # Hey future me - name is CLEAN (no disambiguation), disambiguation is stored separately!
+    # After Dec 2025 folder parsing fixes, new scans store clean names. Old entries might
+    # still have disambiguation in name - re-scan library to fix.
     artists = [
         {
             "name": artist.name,
+            "disambiguation": artist.disambiguation,  # Text like "English rock band"
             "track_count": track_count or 0,
             "album_count": album_count or 0,
             "image_url": artist.image_url,  # Spotify CDN URL or None
@@ -1136,8 +1140,20 @@ async def library_artist_detail(
         else None
     )
 
+    # Hey future me – disambiguation is for showing "(English rock band)" etc. next to artist name.
+    # Parsed from Lidarr folder structure like "Genesis (English rock band)/". Clean name stays in
+    # artist_name, disambiguation is shown separately in UI to avoid Spotify search issues.
+    disambiguation = (
+        track_models[0].artist.disambiguation
+        if track_models
+        and track_models[0].artist
+        and hasattr(track_models[0].artist, "disambiguation")
+        else None
+    )
+
     artist_data = {
         "name": artist_name,
+        "disambiguation": disambiguation,
         "albums": albums,
         "tracks": tracks_data,
         "track_count": len(tracks_data),
