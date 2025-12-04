@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soulspot.application.services.postprocessing.artwork_service import ArtworkService
 from soulspot.application.services.postprocessing.id3_tagging_service import (
@@ -68,6 +68,7 @@ class PostProcessingPipeline:
         lyrics_service: LyricsService | None = None,
         id3_tagging_service: ID3TaggingService | None = None,
         renaming_service: RenamingService | None = None,
+        spotify_client: Any | None = None,
         app_settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize post-processing pipeline.
@@ -80,15 +81,19 @@ class PostProcessingPipeline:
             lyrics_service: Optional lyrics service (created if not provided)
             id3_tagging_service: Optional ID3 tagging service (created if not provided)
             renaming_service: Optional renaming service (created if not provided)
+            spotify_client: Optional Spotify client for artwork downloads
             app_settings_service: Optional app settings service for dynamic naming templates
         """
         self._settings = settings
         self._artist_repository = artist_repository
         self._album_repository = album_repository
         self._app_settings_service = app_settings_service
+        self._spotify_client = spotify_client
 
         # Initialize services
-        self._artwork_service = artwork_service or ArtworkService(settings)
+        self._artwork_service = artwork_service or ArtworkService(
+            settings, spotify_client=spotify_client
+        )
         self._lyrics_service = lyrics_service or LyricsService(settings)
         self._id3_tagging_service = id3_tagging_service or ID3TaggingService(settings)
         self._renaming_service = renaming_service or RenamingService(settings)

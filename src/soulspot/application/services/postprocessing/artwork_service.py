@@ -33,21 +33,35 @@ class ArtworkService:
         self,
         settings: Settings,
         spotify_client: Any | None = None,
+        access_token: str | None = None,
     ) -> None:
         """Initialize artwork service.
 
         Args:
             settings: Application settings
             spotify_client: Optional Spotify client for artwork fallback
+            access_token: Optional Spotify access token for API calls
         """
         self._settings = settings
         self._spotify_client = spotify_client
+        self._access_token = access_token
         self._artwork_path = settings.storage.artwork_path
         self._max_size = settings.postprocessing.artwork_max_size
         self._quality = settings.postprocessing.artwork_quality
 
         # Ensure artwork directory exists
         self._artwork_path.mkdir(parents=True, exist_ok=True)
+
+    def set_access_token(self, token: str) -> None:
+        """Update the Spotify access token.
+
+        Hey future me - this allows setting the token after construction,
+        useful when the token is obtained asynchronously after service init.
+
+        Args:
+            token: Valid Spotify OAuth access token
+        """
+        self._access_token = token
 
     # Hey future me: Artwork downloading - the album art pipeline
     # WHY multiple sources? CoverArtArchive is free and high-quality, Spotify as fallback (needs auth token)
@@ -61,8 +75,9 @@ class ArtworkService:
         """Download artwork for a track/album.
 
         Tries multiple sources in order:
-        1. CoverArtArchive (via MusicBrainz release ID)
-        2. Spotify (via album/track Spotify URI)
+        1. Cached artwork_url from DB (fastest - no API calls needed)
+        2. CoverArtArchive (via MusicBrainz release ID)
+        3. Spotify (via album/track Spotify URI)
 
         Args:
             track: Track entity
@@ -71,7 +86,24 @@ class ArtworkService:
         Returns:
             Processed artwork data or None if not found
         """
-        # Try CoverArtArchive first if we have a MusicBrainz ID
+        # Try cached artwork_url first (saves API calls!)
+        # Hey future me - this is the fast path: if we already have the URL from a previous
+        # Spotify sync, just download directly without hitting any API
+        if album and album.artwork_url:
+            logger.info(
+                "Using cached artwork URL for album: %s (%s)",
+                album.title,
+                album.artwork_url[:50] + "..." if len(album.artwork_url) > 50 else album.artwork_url,
+            )
+            artwork_data = await self._download_from_url(album.artwork_url)
+            if artwork_data:
+                return artwork_data
+            logger.warning(
+                "Cached artwork URL failed for album %s, trying other sources",
+                album.title,
+            )
+
+        # Try CoverArtArchive if we have a MusicBrainz ID
         if album and album.musicbrainz_id:
             logger.info(
                 "Attempting to download artwork from CoverArtArchive for album: %s",
@@ -103,6 +135,32 @@ class ArtworkService:
         logger.warning("No artwork found for track: %s", track.title)
         return None
 
+    # Hey future me: Direct URL downloader - fastest path when we have cached URL from DB
+    # This skips all API calls and just downloads from the CDN directly
+    # Used when album.artwork_url is populated from previous Spotify sync
+    async def _download_from_url(self, url: str) -> bytes | None:
+        """Download artwork directly from a URL.
+
+        Args:
+            url: Direct URL to artwork image (e.g., Spotify CDN URL)
+
+        Returns:
+            Processed artwork data or None
+        """
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+                image_data = response.content
+                logger.debug("Downloaded %d bytes from cached URL", len(image_data))
+                return await self._process_image(image_data)
+        except httpx.HTTPStatusError as e:
+            logger.warning("HTTP error downloading from cached URL: %s - %s", url, e)
+            return None
+        except Exception as e:
+            logger.warning("Error downloading from cached URL: %s - %s", url, e)
+            return None
+
     # Hey future me: CoverArtArchive downloader - free high-quality album art source
     # WHY /front endpoint? Gets front cover specifically (not back, booklet, etc)
     # follow_redirects=True because CAA returns 307 redirect to actual image URL
@@ -133,64 +191,163 @@ class ArtworkService:
             logger.exception("Error downloading artwork from CoverArtArchive: %s", e)
             return None
 
-    # Yo Spotify album artwork stub - NOT IMPLEMENTED yet
-    # WHY stub? Needs access_token which we don't have in this context
-    # TODO: Pass access_token through service constructor or method param
-    # Spotify images array has multiple sizes - we want largest (index 0)
+    # Yo Spotify album artwork - IMPLEMENTED!
+    # WHY Spotify? Almost 100% coverage for albums - way better than CoverArtArchive
+    # Spotify images array is sorted largest first (usually 640x640)
+    # We extract album_id from the URI/URL, then fetch via Spotify API
     async def _download_from_spotify(self, album_uri: Any) -> bytes | None:
         """Download artwork from Spotify album.
 
         Args:
-            album_uri: Spotify album URI
+            album_uri: Spotify album URI (spotify:album:XXX) or ID
 
         Returns:
             Processed artwork data or None
         """
-        if not self._spotify_client:
+        if not self._spotify_client or not self._access_token:
+            logger.debug(
+                "Spotify client or access token not available for artwork download"
+            )
             return None
 
         try:
-            # Extract album ID from URI format: spotify:album:XXXXX or https://open.spotify.com/album/XXXXX
-            # album_id = str(album_uri).split(":")[-1]
+            # Extract album ID from various URI formats
+            album_id = self._extract_spotify_id(str(album_uri))
+            if not album_id:
+                logger.warning("Could not extract album ID from: %s", album_uri)
+                return None
 
-            # This would require access token - stub for now
-            # In production, this would:
-            # 1. Call spotify_client.get_album(album_id, access_token)
-            # 2. Extract image URLs from response['images'] (largest available)
-            # 3. Download and process the image
-            logger.debug(
-                "Spotify artwork download not yet implemented for: %s", album_uri
+            # Fetch album data from Spotify
+            album_data = await self._spotify_client.get_album(
+                album_id, self._access_token
             )
-            return None
+            if not album_data:
+                logger.debug("Album not found on Spotify: %s", album_id)
+                return None
+
+            # Extract image URL (largest first)
+            images = album_data.get("images", [])
+            if not images:
+                logger.debug("No images found for album: %s", album_id)
+                return None
+
+            # Get largest image (first in array)
+            image_url = images[0].get("url")
+            if not image_url:
+                return None
+
+            # Download the image
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(image_url, follow_redirects=True)
+                response.raise_for_status()
+                image_data = response.content
+                logger.info(
+                    "Downloaded artwork from Spotify for album: %s (%d bytes)",
+                    album_data.get("name", album_id),
+                    len(image_data),
+                )
+                return await self._process_image(image_data)
+
         except Exception as e:
-            logger.exception("Error downloading artwork from Spotify: %s", e)
+            logger.warning("Error downloading artwork from Spotify: %s", e)
             return None
 
-    # Listen, Spotify track artwork fallback - another stub
-    # Used when album doesn't have artwork but track does (rare case)
+    # Listen, Spotify track artwork - tracks inherit album artwork
+    # When album artwork fails, try getting it via the track's album reference
     async def _download_from_spotify_track(self, track_uri: Any) -> bytes | None:
-        """Download artwork from Spotify track.
+        """Download artwork from Spotify track (via its album).
+
+        Hey future me - tracks don't have their own artwork, they inherit from album.
+        So we fetch the track, get its album, then download album artwork.
 
         Args:
-            track_uri: Spotify track URI
+            track_uri: Spotify track URI (spotify:track:XXX) or ID
 
         Returns:
             Processed artwork data or None
         """
-        if not self._spotify_client:
+        if not self._spotify_client or not self._access_token:
             return None
 
         try:
-            # Extract track ID from URI
-            # track_id = str(track_uri).split(":")[-1]
+            # Extract track ID
+            track_id = self._extract_spotify_id(str(track_uri))
+            if not track_id:
+                logger.warning("Could not extract track ID from: %s", track_uri)
+                return None
 
-            # Stub for Spotify track artwork
-            logger.debug(
-                "Spotify track artwork download not yet implemented for: %s", track_uri
+            # Fetch track data to get album
+            track_data = await self._spotify_client.get_track(
+                track_id, self._access_token
             )
-            return None
+            if not track_data:
+                return None
+
+            # Get album from track
+            album_data = track_data.get("album", {})
+            images = album_data.get("images", [])
+            if not images:
+                return None
+
+            # Download largest image
+            image_url = images[0].get("url")
+            if not image_url:
+                return None
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(image_url, follow_redirects=True)
+                response.raise_for_status()
+                image_data = response.content
+                logger.info(
+                    "Downloaded artwork from Spotify track: %s (%d bytes)",
+                    track_data.get("name", track_id),
+                    len(image_data),
+                )
+                return await self._process_image(image_data)
+
         except Exception as e:
-            logger.exception("Error downloading track artwork from Spotify: %s", e)
+            logger.warning("Error downloading track artwork from Spotify: %s", e)
+            return None
+
+    def _extract_spotify_id(self, uri_or_id: str) -> str | None:
+        """Extract Spotify ID from various URI/URL formats.
+
+        Hey future me - Spotify IDs come in many flavors:
+        - spotify:album:1DFixLWuPkv3KT3TnV35m3
+        - https://open.spotify.com/album/1DFixLWuPkv3KT3TnV35m3
+        - 1DFixLWuPkv3KT3TnV35m3 (just the ID)
+
+        Args:
+            uri_or_id: Spotify URI, URL, or plain ID
+
+        Returns:
+            Spotify ID or None if parsing failed
+        """
+        if not uri_or_id:
+            return None
+
+        uri_or_id = uri_or_id.strip()
+
+        # Plain ID (22 char base62)
+        if len(uri_or_id) == 22 and uri_or_id.isalnum():
+            return uri_or_id
+
+        # URI format: spotify:type:id
+        if uri_or_id.startswith("spotify:"):
+            parts = uri_or_id.split(":")
+            if len(parts) >= 3:
+                return parts[-1]
+
+        # URL format: https://open.spotify.com/type/id
+        if "open.spotify.com" in uri_or_id:
+            parts = uri_or_id.rstrip("/").split("/")
+            if parts:
+                # Handle query params (?si=...)
+                spotify_id = parts[-1].split("?")[0]
+                return spotify_id
+
+        # Fallback: assume it's the ID itself
+        return uri_or_id if len(uri_or_id) >= 10 else None
             return None
 
     # Hey future me: Image processing - resize and optimize to keep file sizes sane

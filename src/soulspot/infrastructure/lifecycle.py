@@ -408,6 +408,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
+                spotify_client=spotify_client,  # For Spotify artwork downloads
                 app_settings_service=app_settings_service,  # For dynamic naming templates
             )
             app.state.auto_import = auto_import_service

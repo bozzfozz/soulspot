@@ -5,7 +5,7 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soulspot.application.services.postprocessing.pipeline import (
     PostProcessingPipeline,
@@ -29,6 +29,9 @@ class AutoImportService:
     DB templates instead of static env var templates. This enables
     runtime-configurable naming via the Settings UI.
 
+    Also supports spotify_client for artwork downloads from Spotify API
+    (gets high-quality artwork directly from Spotify when available).
+
     This service monitors the downloads directory and moves completed music files
     to the music library directory, organizing them appropriately.
     """
@@ -41,6 +44,7 @@ class AutoImportService:
         album_repository: IAlbumRepository,
         poll_interval: int = 60,
         post_processing_pipeline: PostProcessingPipeline | None = None,
+        spotify_client: Any | None = None,
         app_settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize auto-import service.
@@ -52,6 +56,7 @@ class AutoImportService:
             album_repository: Repository for album data
             poll_interval: Seconds between directory scans (default: 60)
             post_processing_pipeline: Optional post-processing pipeline
+            spotify_client: Optional Spotify client for artwork downloads
             app_settings_service: Optional app settings service for dynamic naming templates
         """
         self._settings = settings
@@ -71,6 +76,7 @@ class AutoImportService:
                 settings=settings,
                 artist_repository=artist_repository,
                 album_repository=album_repository,
+                spotify_client=spotify_client,  # Pass for Spotify artwork
                 app_settings_service=app_settings_service,  # Pass for dynamic templates
             )
 
