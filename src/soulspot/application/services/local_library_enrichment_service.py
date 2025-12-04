@@ -15,10 +15,13 @@ Key features:
 - Respects rate limits (50ms between Spotify API calls)
 - Creates enrichment_candidates for ambiguous matches (user picks correct one)
 - Downloads artwork locally + stores Spotify image URLs
+- FALLBACK SEARCH: If "DJ Paul Elstak" finds nothing, tries "Paul Elstak"
 
 Matching strategy:
 - Artists: Search Spotify by name, match by fuzzy name similarity + popularity
 - Albums: Search Spotify by "artist + album title", match by track count + name similarity
+- Fallback: If original name yields no/poor results, search with normalized name
+  (strips DJ, The, MC, Dr, Lil prefixes)
 
 When matches are ambiguous (multiple high-confidence results), we store them as
 enrichment_candidates for user review instead of auto-applying wrong match.
@@ -546,6 +549,25 @@ class LocalLibraryEnrichmentService:
             )
 
             artists_data = search_results.get("artists", {}).get("items", [])
+
+            # Hey future me - FALLBACK SEARCH with normalized name!
+            # If original name (e.g., "DJ Paul Elstak") returns no results or only
+            # low-quality matches, try searching with normalized name ("Paul Elstak").
+            # This handles cases where Spotify uses a different name variant.
+            normalized_name = normalize_artist_name(artist.name)
+            if normalized_name != artist.name.lower().strip():
+                # Only do fallback if normalization actually changed something
+                if not artists_data:
+                    logger.debug(
+                        f"No results for '{artist.name}', trying normalized: '{normalized_name}'"
+                    )
+                    fallback_results = await self._spotify_client.search_artist(
+                        query=normalized_name,
+                        access_token=self._access_token,
+                        limit=search_limit,
+                    )
+                    artists_data = fallback_results.get("artists", {}).get("items", [])
+
             if not artists_data:
                 return EnrichmentResult(
                     entity_type="artist",
@@ -561,6 +583,26 @@ class LocalLibraryEnrichmentService:
             candidates = self._score_artist_candidates(
                 artist.name, artists_data, name_weight=name_weight
             )
+
+            # Hey future me - FALLBACK for no/low candidates!
+            # If original name search (e.g., "DJ Paul Elstak") gave poor matches,
+            # try with normalized name ("Paul Elstak"). The true artist might only
+            # appear in search results when using their Spotify-listed name.
+            if normalized_name != artist.name.lower().strip():
+                if not candidates:
+                    logger.debug(
+                        f"No candidates for '{artist.name}', searching with normalized: '{normalized_name}'"
+                    )
+                    fallback_results = await self._spotify_client.search_artist(
+                        query=normalized_name,
+                        access_token=self._access_token,
+                        limit=search_limit,
+                    )
+                    fallback_data = fallback_results.get("artists", {}).get("items", [])
+                    if fallback_data:
+                        candidates = self._score_artist_candidates(
+                            artist.name, fallback_data, name_weight=name_weight
+                        )
 
             if not candidates:
                 return EnrichmentResult(
