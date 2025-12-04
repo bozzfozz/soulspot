@@ -797,6 +797,81 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+
+                <!-- Hey future me - Advanced Enrichment Settings (Dec 2025)!
+                     These settings help match niche/underground artists that have low popularity on Spotify.
+                     Default settings were too strict, causing artists like "Hellsystem" to not be found. -->
+                <div id="enrichment-advanced-options" style="margin-top: var(--space-4); padding: var(--space-4); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                    <h4 style="font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="bi bi-sliders" style="color: var(--accent-primary);"></i>
+                        Advanced Matching Settings
+                    </h4>
+                    <p style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-4);">
+                        Fine-tune how local library artists are matched to Spotify. Higher values work better for niche/underground artists.
+                    </p>
+
+                    <!-- Use Followed Artists Hint -->
+                    <div class="sync-option-card" style="margin-bottom: var(--space-3);">
+                        <div class="sync-option-info">
+                            <div class="sync-option-icon" style="background: linear-gradient(135deg, #1DB954, #169c46);">
+                                <i class="bi bi-people"></i>
+                            </div>
+                            <div>
+                                <div class="sync-option-title">Use Followed Artists as Hint</div>
+                                <div class="sync-option-desc">If artist exists in Followed Artists, use their Spotify data directly (recommended)</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="enrichment-use-followed-hint" checked onchange="toggleEnrichmentSetting('use_followed_artists_hint')">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    <!-- Search Limit Slider -->
+                    <div class="form-group" style="margin-bottom: var(--space-4);">
+                        <label class="form-label" for="enrichment-search-limit">
+                            Search Limit
+                            <span style="color: var(--text-muted); font-weight: normal;">
+                                (<span id="enrichment-search-limit-value">20</span> results)
+                            </span>
+                        </label>
+                        <input type="range" id="enrichment-search-limit" class="form-range" 
+                               min="5" max="50" value="20" step="5"
+                               oninput="document.getElementById('enrichment-search-limit-value').textContent = this.value"
+                               onchange="saveEnrichmentSliders()">
+                        <p class="form-helper">How many Spotify search results to scan. Higher = better for niche artists (5-50)</p>
+                    </div>
+
+                    <!-- Confidence Threshold Slider -->
+                    <div class="form-group" style="margin-bottom: var(--space-4);">
+                        <label class="form-label" for="enrichment-confidence-threshold">
+                            Auto-Apply Threshold
+                            <span style="color: var(--text-muted); font-weight: normal;">
+                                (<span id="enrichment-confidence-threshold-value">75</span>%)
+                            </span>
+                        </label>
+                        <input type="range" id="enrichment-confidence-threshold" class="form-range"
+                               min="50" max="100" value="75" step="5"
+                               oninput="document.getElementById('enrichment-confidence-threshold-value').textContent = this.value"
+                               onchange="saveEnrichmentSliders()">
+                        <p class="form-helper">Minimum match confidence to auto-apply. Lower = more matches, higher = more manual review (50-100%)</p>
+                    </div>
+
+                    <!-- Name Weight Slider -->
+                    <div class="form-group" style="margin-bottom: var(--space-4);">
+                        <label class="form-label" for="enrichment-name-weight">
+                            Name Similarity Weight
+                            <span style="color: var(--text-muted); font-weight: normal;">
+                                (<span id="enrichment-name-weight-value">85</span>% name, <span id="enrichment-popularity-weight-value">15</span>% popularity)
+                            </span>
+                        </label>
+                        <input type="range" id="enrichment-name-weight" class="form-range"
+                               min="50" max="100" value="85" step="5"
+                               oninput="updateNameWeightDisplay(this.value)"
+                               onchange="saveEnrichmentSliders()">
+                        <p class="form-helper">How much name similarity matters vs Spotify popularity. Higher = better for low-popularity artists (50-100%)</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Duplicate Detection Section -->
@@ -2053,7 +2128,7 @@
     
     // Hey future me – Lädt das Enrichment-Setting (nur ein Boolean Toggle).
     // Separate Funktion damit es auch beim Tab-Wechsel aufgerufen werden kann.
-    // UPDATE Dec 2025: Now also loads duplicate_detection_enabled (moved from Automation).
+    // UPDATE Dec 2025: Now also loads duplicate_detection_enabled and advanced enrichment settings.
     async function loadEnrichmentSettings() {
         try {
             const response = await fetch('/api/settings/library/enrichment');
@@ -2073,9 +2148,49 @@
                 duplicateToggle.checked = settings.duplicate_detection_enabled ?? false;
                 updateLibraryOptionsState('duplicate', settings.duplicate_detection_enabled ?? false);
             }
+
+            // Hey future me - Advanced Enrichment Settings (Dec 2025)!
+            // These make enrichment work for niche/underground artists.
+
+            // Use Followed Artists Hint toggle
+            const followedHintToggle = document.getElementById('enrichment-use-followed-hint');
+            if (followedHintToggle) {
+                followedHintToggle.checked = settings.use_followed_artists_hint ?? true;
+            }
+
+            // Search Limit slider
+            const searchLimitSlider = document.getElementById('enrichment-search-limit');
+            const searchLimitValue = document.getElementById('enrichment-search-limit-value');
+            if (searchLimitSlider) {
+                searchLimitSlider.value = settings.search_limit ?? 20;
+                if (searchLimitValue) searchLimitValue.textContent = searchLimitSlider.value;
+            }
+
+            // Confidence Threshold slider
+            const confidenceSlider = document.getElementById('enrichment-confidence-threshold');
+            const confidenceValue = document.getElementById('enrichment-confidence-threshold-value');
+            if (confidenceSlider) {
+                confidenceSlider.value = settings.confidence_threshold ?? 75;
+                if (confidenceValue) confidenceValue.textContent = confidenceSlider.value;
+            }
+
+            // Name Weight slider
+            const nameWeightSlider = document.getElementById('enrichment-name-weight');
+            if (nameWeightSlider) {
+                nameWeightSlider.value = settings.name_weight ?? 85;
+                updateNameWeightDisplay(nameWeightSlider.value);
+            }
         } catch (error) {
             console.error('Failed to load enrichment settings:', error);
         }
+    }
+
+    // Hey future me - Helper function to update the name/popularity weight display
+    function updateNameWeightDisplay(nameWeight) {
+        const nameWeightValue = document.getElementById('enrichment-name-weight-value');
+        const popularityWeightValue = document.getElementById('enrichment-popularity-weight-value');
+        if (nameWeightValue) nameWeightValue.textContent = nameWeight;
+        if (popularityWeightValue) popularityWeightValue.textContent = 100 - parseInt(nameWeight);
     }
     
     // Hey future me – Updates the UI state for library options sections.
@@ -2402,37 +2517,48 @@
     // Hey future me - Simplified! Just toggles for auto-enrichment and duplicate detection.
     // No manual buttons needed - enrichment runs automatically after library scan.
     // Duplicate detection runs as nightly job (Dec 2025).
+    // UPDATE Dec 2025: Now includes advanced enrichment settings (sliders).
     // =========================================================================
     
     async function toggleEnrichmentSetting(setting) {
-        // Determine which checkbox based on setting name
-        let checkbox;
+        // Hey future me - this function handles BOTH toggles AND saves all settings together.
+        // The API expects all settings in one PUT request, so we gather everything.
+
+        // Gather all enrichment settings from the UI
+        const allSettings = {
+            auto_enrichment_enabled: document.getElementById('enrichment-auto-enabled')?.checked ?? true,
+            duplicate_detection_enabled: document.getElementById('library-duplicate-enabled')?.checked ?? false,
+            use_followed_artists_hint: document.getElementById('enrichment-use-followed-hint')?.checked ?? true,
+            search_limit: parseInt(document.getElementById('enrichment-search-limit')?.value ?? 20),
+            confidence_threshold: parseInt(document.getElementById('enrichment-confidence-threshold')?.value ?? 75),
+            name_weight: parseInt(document.getElementById('enrichment-name-weight')?.value ?? 85),
+        };
+
+        // Determine display name for notification
         let displayName;
+        let value;
         
         if (setting === 'auto_enrichment_enabled') {
-            checkbox = document.getElementById('enrichment-auto-enabled');
             displayName = 'Auto-enrichment';
+            value = allSettings.auto_enrichment_enabled;
         } else if (setting === 'duplicate_detection_enabled') {
-            checkbox = document.getElementById('library-duplicate-enabled');
             displayName = 'Duplicate detection';
+            value = allSettings.duplicate_detection_enabled;
             // Update options state
-            if (checkbox) {
-                updateLibraryOptionsState('duplicate', checkbox.checked);
-            }
+            updateLibraryOptionsState('duplicate', value);
+        } else if (setting === 'use_followed_artists_hint') {
+            displayName = 'Followed Artists hint';
+            value = allSettings.use_followed_artists_hint;
         } else {
             console.error('Unknown enrichment setting:', setting);
             return;
         }
         
-        if (!checkbox) return;
-        
-        const value = checkbox.checked;
-        
         try {
             const response = await fetch('/api/settings/library/enrichment', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [setting]: value })
+                body: JSON.stringify(allSettings)
             });
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -2442,8 +2568,36 @@
         } catch (error) {
             console.error('Failed to update enrichment setting:', error);
             SoulSpot.showNotification('Failed to update setting', 'error');
-            // Revert checkbox on error
-            checkbox.checked = !value;
+            // Reload settings to revert UI
+            await loadEnrichmentSettings();
+        }
+    }
+
+    // Hey future me - Save advanced enrichment slider settings.
+    // Called when user moves a slider and releases (onchange).
+    async function saveEnrichmentSliders() {
+        const allSettings = {
+            auto_enrichment_enabled: document.getElementById('enrichment-auto-enabled')?.checked ?? true,
+            duplicate_detection_enabled: document.getElementById('library-duplicate-enabled')?.checked ?? false,
+            use_followed_artists_hint: document.getElementById('enrichment-use-followed-hint')?.checked ?? true,
+            search_limit: parseInt(document.getElementById('enrichment-search-limit')?.value ?? 20),
+            confidence_threshold: parseInt(document.getElementById('enrichment-confidence-threshold')?.value ?? 75),
+            name_weight: parseInt(document.getElementById('enrichment-name-weight')?.value ?? 85),
+        };
+        
+        try {
+            const response = await fetch('/api/settings/library/enrichment', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(allSettings)
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            SoulSpot.showNotification('Enrichment settings saved', 'success');
+        } catch (error) {
+            console.error('Failed to save enrichment settings:', error);
+            SoulSpot.showNotification('Failed to save enrichment settings', 'error');
         }
     }
 </script>

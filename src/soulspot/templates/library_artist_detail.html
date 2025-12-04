@@ -71,66 +71,9 @@
     {% endif %}
 </div>
 
-<!-- All Tracks Section -->
-<div class="card" style="padding: 0; overflow: hidden;">
-    <div style="padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--border-primary);">
-        <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold);">All Tracks</h2>
-    </div>
-    {% if artist.tracks %}
-    <div style="overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Album</th>
-                    <th>Duration</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for track in artist.tracks %}
-                <tr>
-                    <td><span style="font-weight: var(--font-weight-medium);">{{ track.title }}</span></td>
-                    <td style="color: var(--text-muted);">{{ track.album or "Unknown Album" }}</td>
-                    <td style="color: var(--text-muted);">
-                        {% if track.duration_ms %}
-                            {% set minutes = (track.duration_ms / 60000) | int %}
-                            {% set seconds = ((track.duration_ms % 60000) / 1000) | int %}
-                            {{ "%d:%02d" | format(minutes, seconds) }}
-                        {% else %}
-                            -
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if track.is_broken %}
-                            <span class="badge badge-error">Broken</span>
-                        {% elif track.file_path %}
-                            <span class="badge badge-success">Downloaded</span>
-                        {% else %}
-                            <span class="badge badge-warning">Missing</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-ghost"
-                                hx-get="/tracks/{{ track.id }}/metadata-editor"
-                                hx-target="#metadata-modal"
-                                hx-swap="innerHTML">
-                            Edit
-                        </button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    <div class="empty-state-small" style="padding: var(--space-8);">
-        <i class="bi bi-music-note"></i>
-        <p>No tracks found for this artist.</p>
-    </div>
-    {% endif %}
-</div>
+<!-- Hey future me - All Tracks section removed Dec 2025!
+     Tracks are already shown inside albums, so this was redundant.
+     Users can click on an album to see all tracks in that album. -->
 
 <!-- Metadata Modal Container -->
 <div id="metadata-modal"></div>

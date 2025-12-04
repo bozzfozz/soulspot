@@ -96,10 +96,9 @@ class LocalLibraryEnrichmentService:
     """
 
     # Hey future me - these thresholds determine auto-match vs candidate creation
-    # CONFIDENCE_THRESHOLD: Auto-apply match if score >= this
     # CANDIDATE_THRESHOLD: Create candidate if score >= this (but < confidence)
     # Below candidate threshold = no match found
-    CONFIDENCE_THRESHOLD = 0.80  # 80% confidence for auto-apply
+    # NOTE: CONFIDENCE_THRESHOLD is now loaded from settings (Dec 2025)
     CANDIDATE_THRESHOLD = 0.50  # 50% to be considered a candidate
 
     def __init__(
@@ -154,6 +153,7 @@ class LocalLibraryEnrichmentService:
             "albums_candidates": 0,
             "albums_failed": 0,
             "images_downloaded": 0,
+            "followed_artists_matched": 0,
             "errors": [],
         }
 
@@ -168,12 +168,34 @@ class LocalLibraryEnrichmentService:
         )
         match_threshold = await self._settings_service.get_enrichment_match_threshold()
 
-        # Override confidence threshold from settings
-        confidence_threshold = match_threshold / 100.0  # Convert 0-100 to 0.0-1.0
+        # Hey future me - these are the new advanced settings (Dec 2025)!
+        # They make enrichment work much better for niche/underground artists.
+        search_limit = await self._settings_service.get_enrichment_search_limit()
+        confidence_threshold_pct = (
+            await self._settings_service.get_enrichment_confidence_threshold()
+        )
+        name_weight = await self._settings_service.get_enrichment_name_weight()
+        use_followed_hint = (
+            await self._settings_service.should_use_followed_artists_hint()
+        )
+
+        # Override confidence threshold from settings (use new setting, fallback to old)
+        confidence_threshold = confidence_threshold_pct / 100.0  # Convert 0-100 to 0.0-1.0
+
+        # Hey future me - preload Followed Artists lookup table for fast matching!
+        # This is the killer feature: if artist exists in Followed Artists, we use
+        # their Spotify URI directly instead of searching. 100% match rate guaranteed!
+        followed_artists_lookup: dict[str, tuple[str, str | None]] = {}
+        if use_followed_hint:
+            followed_artists_lookup = await self._build_followed_artists_lookup()
+            logger.info(
+                f"Loaded {len(followed_artists_lookup)} followed artists for hint matching"
+            )
 
         logger.info(
             f"Starting enrichment batch: batch_size={batch_size}, "
-            f"rate_limit={rate_limit_ms}ms, threshold={confidence_threshold}"
+            f"rate_limit={rate_limit_ms}ms, threshold={confidence_threshold}, "
+            f"search_limit={search_limit}, name_weight={name_weight}%"
         )
 
         # Enrich artists first (albums need artist matches)
@@ -183,6 +205,9 @@ class LocalLibraryEnrichmentService:
                 artist,
                 confidence_threshold=confidence_threshold,
                 download_artwork=download_artwork,
+                search_limit=search_limit,
+                name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
+                followed_artists_lookup=followed_artists_lookup,
             )
             stats["artists_processed"] += 1
 
@@ -190,6 +215,9 @@ class LocalLibraryEnrichmentService:
                 stats["artists_enriched"] += 1
                 if result.image_downloaded:
                     stats["images_downloaded"] += 1
+                # Hey future me - track how many were matched via followed artists hint!
+                if result.error == "matched_via_followed_artists":
+                    stats["followed_artists_matched"] += 1
             elif result.candidates_created > 0:
                 stats["artists_candidates"] += result.candidates_created
             else:
@@ -244,10 +272,44 @@ class LocalLibraryEnrichmentService:
 
         logger.info(
             f"Enrichment complete: {stats['artists_enriched']} artists, "
-            f"{stats['albums_enriched']} albums enriched"
+            f"{stats['albums_enriched']} albums enriched, "
+            f"{stats['followed_artists_matched']} via followed artists hint"
         )
 
         return stats
+
+    # =========================================================================
+    # FOLLOWED ARTISTS HINT (Dec 2025)
+    # Hey future me - this is the killer feature for guaranteed matches!
+    # If artist exists in Followed Artists with Spotify URI, we copy it directly.
+    # No search needed = 100% match rate for followed artists.
+    # =========================================================================
+
+    async def _build_followed_artists_lookup(
+        self,
+    ) -> dict[str, tuple[str, str | None]]:
+        """Build a lookup table of followed artists by name.
+
+        Returns:
+            Dict mapping lowercase artist name to (spotify_uri, image_url) tuple
+        """
+        from soulspot.infrastructure.persistence.models import SpotifyArtistModel
+
+        stmt = select(SpotifyArtistModel).where(
+            SpotifyArtistModel.spotify_uri.isnot(None)
+        )
+        result = await self._session.execute(stmt)
+        models = result.scalars().all()
+
+        # Hey future me - normalize names to lowercase for case-insensitive matching!
+        # "Pink Floyd" and "pink floyd" should both match the same followed artist.
+        lookup: dict[str, tuple[str, str | None]] = {}
+        for model in models:
+            if model.spotify_uri:
+                name_lower = model.name.lower().strip()
+                lookup[name_lower] = (model.spotify_uri, model.image_url)
+
+        return lookup
 
     # =========================================================================
     # ARTIST ENRICHMENT
@@ -258,6 +320,9 @@ class LocalLibraryEnrichmentService:
         artist: Artist,
         confidence_threshold: float,
         download_artwork: bool,
+        search_limit: int = 20,
+        name_weight: float = 0.85,
+        followed_artists_lookup: dict[str, tuple[str, str | None]] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single artist with Spotify data.
 
@@ -265,11 +330,40 @@ class LocalLibraryEnrichmentService:
             artist: Artist entity to enrich
             confidence_threshold: Minimum confidence for auto-apply
             download_artwork: Whether to download artwork
+            search_limit: Number of Spotify search results to scan
+            name_weight: Weight of name similarity vs popularity (0.0-1.0)
+            followed_artists_lookup: Optional lookup table for followed artists hint
 
         Returns:
             EnrichmentResult with success/failure info
         """
         try:
+            # Hey future me - FOLLOWED ARTISTS HINT! Check if artist exists in Followed Artists.
+            # If yes, copy Spotify URI directly without searching. 100% match rate!
+            if followed_artists_lookup:
+                name_lower = artist.name.lower().strip()
+                if name_lower in followed_artists_lookup:
+                    spotify_uri, image_url = followed_artists_lookup[name_lower]
+                    logger.debug(
+                        f"Artist '{artist.name}' matched via followed artists hint"
+                    )
+
+                    # Create a synthetic candidate from followed artist data
+                    candidate = EnrichmentCandidate(
+                        spotify_uri=spotify_uri,
+                        spotify_name=artist.name,  # Use local name
+                        spotify_image_url=image_url,
+                        confidence_score=1.0,  # 100% confidence for followed artists
+                        extra_info={"matched_via": "followed_artists_hint"},
+                    )
+
+                    result = await self._apply_artist_enrichment(
+                        artist, candidate, download_artwork
+                    )
+                    # Hey future me - mark this as matched via followed artists for stats!
+                    result.error = "matched_via_followed_artists"
+                    return result
+
             # Search Spotify for this artist
             # Hey future me - artist.name is CLEAN (no UUID/MusicBrainz ID from folder parsing)!
             # LibraryFolderParser strips disambiguation before creating Artist entity.
@@ -277,7 +371,7 @@ class LocalLibraryEnrichmentService:
             search_results = await self._spotify_client.search_artist(
                 query=artist.name,
                 access_token=self._access_token,
-                limit=5,  # Get top 5 candidates
+                limit=search_limit,  # Configurable via settings (default 20)
             )
 
             artists_data = search_results.get("artists", {}).get("items", [])
@@ -290,10 +384,12 @@ class LocalLibraryEnrichmentService:
                     error="No Spotify results found",
                 )
 
-            # Score candidates
+            # Score candidates with configurable name weight
             # Hey future me - local_name is clean artist name (no UUID)! Candidate scoring
             # is based on name similarity and Spotify popularity, never on disambiguation.
-            candidates = self._score_artist_candidates(artist.name, artists_data)
+            candidates = self._score_artist_candidates(
+                artist.name, artists_data, name_weight=name_weight
+            )
 
             if not candidates:
                 return EnrichmentResult(
@@ -337,21 +433,25 @@ class LocalLibraryEnrichmentService:
         self,
         local_name: str,
         spotify_artists: list[dict[str, Any]],
+        name_weight: float = 0.85,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify artist candidates against local artist name.
 
         Scoring factors:
-        - Name similarity (fuzzy match) - 70% weight
-        - Popularity (more popular = more likely correct) - 30% weight
+        - Name similarity (fuzzy match) - configurable weight (default 85%)
+        - Popularity (more popular = more likely correct) - remaining weight
 
         Args:
             local_name: Local artist name
             spotify_artists: List of Spotify artist dicts
+            name_weight: Weight of name similarity (0.0-1.0, default 0.85)
 
         Returns:
             Sorted list of EnrichmentCandidate (highest score first)
         """
         candidates = []
+        # Hey future me - popularity_weight is the remainder after name_weight
+        popularity_weight = 1.0 - name_weight
 
         for sp_artist in spotify_artists:
             sp_name = sp_artist.get("name", "")
@@ -367,10 +467,10 @@ class LocalLibraryEnrichmentService:
             # Calculate name similarity (0-100, normalize to 0-1)
             name_score = fuzz.ratio(local_name.lower(), sp_name.lower()) / 100.0
 
-            # Combined score: 70% name, 30% popularity
-            # Hey future me - popularity matters because "Pink Floyd" the tribute band
-            # vs "Pink Floyd" the actual band should prefer the popular one!
-            confidence = (name_score * 0.7) + (sp_popularity * 0.3)
+            # Combined score: configurable name_weight + popularity_weight
+            # Hey future me - higher name_weight = better for niche artists!
+            # Default 85% name + 15% popularity works well for underground artists.
+            confidence = (name_score * name_weight) + (sp_popularity * popularity_weight)
 
             if confidence >= self.CANDIDATE_THRESHOLD:
                 candidates.append(

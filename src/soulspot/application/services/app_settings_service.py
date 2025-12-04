@@ -1035,3 +1035,46 @@ class AppSettingsService:
             "enrich_compilations": await self.should_enrich_compilation_albums(),
             "match_threshold": await self.get_enrichment_match_threshold(),
         }
+
+    # =========================================================================
+    # ENRICHMENT ADVANCED SETTINGS (Dec 2025)
+    # Hey future me - these settings control how aggressively we match local
+    # artists to Spotify. Tuned for niche/underground artists who don't have
+    # high popularity scores on Spotify but still deserve proper artwork!
+    # =========================================================================
+
+    async def get_enrichment_search_limit(self) -> int:
+        """Get number of Spotify search results to scan for matches.
+
+        Default: 20 - increased from 5 to better find niche artists.
+        Higher = more likely to find exact match, but more API calls.
+        Range: 5-50 recommended.
+        """
+        return await self.get_int("library.enrichment_search_limit", default=20)
+
+    async def get_enrichment_confidence_threshold(self) -> int:
+        """Get minimum confidence score (0-100) for auto-applying matches.
+
+        Default: 75 - lowered from 80 to handle niche artists better.
+        Score = (name_similarity * name_weight) + (popularity * (1 - name_weight))
+        Below this threshold = stored as candidate for manual review.
+        """
+        return await self.get_int("library.enrichment_confidence_threshold", default=75)
+
+    async def get_enrichment_name_weight(self) -> int:
+        """Get weight of name similarity vs popularity in matching (0-100).
+
+        Default: 85 - increased from 70 so name matters more than popularity.
+        85 means: 85% name similarity + 15% popularity.
+        Higher = better for niche artists with low Spotify popularity.
+        """
+        return await self.get_int("library.enrichment_name_weight", default=85)
+
+    async def should_use_followed_artists_hint(self) -> bool:
+        """Check if Followed Artists should be used as hint for Local Library enrichment.
+
+        Default: True - if artist exists in Followed Artists with Spotify URI,
+        copy it directly to Local Library artist instead of searching.
+        This gives 100% match rate for followed artists!
+        """
+        return await self.get_bool("library.use_followed_artists_hint", default=True)

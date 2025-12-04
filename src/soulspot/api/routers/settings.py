@@ -1558,8 +1558,12 @@ async def get_naming_variables() -> dict[str, list[dict[str, str]]]:
 class LibraryEnrichmentSettings(BaseModel):
     """Library enrichment configuration.
 
-    Just a simple toggle - enrichment runs automatically after library scans.
-    Advanced settings (batch size, rate limit, etc.) use sensible defaults.
+    Hey future me - these settings control how local library enrichment matches Spotify artists!
+    The defaults are tuned for mainstream artists, but niche/underground artists may need:
+    - Higher search_limit (more results to scan)
+    - Lower confidence_threshold (less strict matching)
+    - Higher name_weight (name similarity matters more than popularity)
+    - use_followed_artists_hint (skip search if artist already in Followed Artists)
     """
 
     auto_enrichment_enabled: bool = Field(
@@ -1569,6 +1573,40 @@ class LibraryEnrichmentSettings(BaseModel):
     duplicate_detection_enabled: bool = Field(
         default=False,
         description="Enable SHA256 hash computation for duplicate file detection (slower scans)",
+    )
+    # Hey future me - search_limit controls how many Spotify results to scan!
+    # Default 5 was too low for niche artists (they're often outside top 5).
+    # 20 is better - covers most cases without excessive API calls.
+    search_limit: int = Field(
+        default=20,
+        ge=5,
+        le=50,
+        description="Number of Spotify search results to scan (5-50, higher finds niche artists)",
+    )
+    # Hey future me - confidence_threshold determines auto-apply vs manual review!
+    # Score = (name_similarity * name_weight) + (popularity * (1 - name_weight))
+    # Below this threshold = stored as candidate for user review.
+    confidence_threshold: int = Field(
+        default=75,
+        ge=50,
+        le=100,
+        description="Minimum confidence score (50-100%) for auto-applying matches",
+    )
+    # Hey future me - name_weight controls how much name similarity matters vs popularity!
+    # 85% name weight = 85% name similarity + 15% popularity.
+    # Higher = better for niche artists (low popularity shouldn't hurt them).
+    name_weight: int = Field(
+        default=85,
+        ge=50,
+        le=100,
+        description="Weight of name similarity vs popularity (50-100%, higher = name matters more)",
+    )
+    # Hey future me - this is the killer feature for guaranteed matches!
+    # If artist exists in Followed Artists with Spotify URI, copy it directly.
+    # No search needed = 100% match rate for followed artists.
+    use_followed_artists_hint: bool = Field(
+        default=True,
+        description="Use Followed Artists Spotify URIs to enrich Local Library (recommended)",
     )
 
 
@@ -1586,10 +1624,18 @@ async def get_library_enrichment_settings(
     settings_service = AppSettingsService(db)
     enrichment_enabled = await settings_service.is_library_auto_enrichment_enabled()
     duplicate_enabled = await settings_service.is_duplicate_detection_enabled()
+    search_limit = await settings_service.get_enrichment_search_limit()
+    confidence_threshold = await settings_service.get_enrichment_confidence_threshold()
+    name_weight = await settings_service.get_enrichment_name_weight()
+    use_followed_hint = await settings_service.should_use_followed_artists_hint()
 
     return LibraryEnrichmentSettings(
         auto_enrichment_enabled=enrichment_enabled,
         duplicate_detection_enabled=duplicate_enabled,
+        search_limit=search_limit,
+        confidence_threshold=confidence_threshold,
+        name_weight=name_weight,
+        use_followed_artists_hint=use_followed_hint,
     )
 
 
@@ -1619,6 +1665,32 @@ async def update_library_enrichment_settings(
     await settings_service.set(
         "library.duplicate_detection_enabled",
         settings_update.duplicate_detection_enabled,
+        value_type="boolean",
+        category="library",
+    )
+    # Hey future me - these are the new advanced enrichment settings (Dec 2025)!
+    # They control how aggressively we match local artists to Spotify.
+    await settings_service.set(
+        "library.enrichment_search_limit",
+        settings_update.search_limit,
+        value_type="integer",
+        category="library",
+    )
+    await settings_service.set(
+        "library.enrichment_confidence_threshold",
+        settings_update.confidence_threshold,
+        value_type="integer",
+        category="library",
+    )
+    await settings_service.set(
+        "library.enrichment_name_weight",
+        settings_update.name_weight,
+        value_type="integer",
+        category="library",
+    )
+    await settings_service.set(
+        "library.use_followed_artists_hint",
+        settings_update.use_followed_artists_hint,
         value_type="boolean",
         category="library",
     )
