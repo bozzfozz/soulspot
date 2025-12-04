@@ -337,7 +337,6 @@ class LocalLibraryEnrichmentService:
                 confidence_threshold=confidence_threshold,
                 download_artwork=download_artwork,
                 search_limit=search_limit,
-                name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
                 followed_albums_lookup=followed_albums_lookup,
             )
             stats["albums_processed"] += 1
@@ -832,7 +831,6 @@ class LocalLibraryEnrichmentService:
         confidence_threshold: float,
         download_artwork: bool,
         search_limit: int = 20,
-        name_weight: float = 0.85,
         followed_albums_lookup: dict[str, tuple[str, str | None]] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single album with Spotify data.
@@ -842,7 +840,6 @@ class LocalLibraryEnrichmentService:
             confidence_threshold: Minimum confidence for auto-apply
             download_artwork: Whether to download artwork
             search_limit: Number of Spotify search results to scan
-            name_weight: Weight of name similarity vs popularity (0.0-1.0)
             followed_albums_lookup: Optional lookup table for followed albums hint
 
         Returns:
