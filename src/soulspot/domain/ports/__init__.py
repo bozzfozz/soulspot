@@ -625,6 +625,65 @@ class ISpotifyClient(ABC):
         """Search for artists on Spotify."""
         pass
 
+    # =========================================================================
+    # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
+    # =========================================================================
+    # Hey future me - these endpoints let users manage their followed artists!
+    # - follow_artist: Add artist(s) to user's followed artists (PUT /me/following)
+    # - unfollow_artist: Remove artist(s) from followed (DELETE /me/following)
+    # - check_if_following: Check if user follows specific artists (GET /me/following/contains)
+    # IMPORTANT: Requires "user-follow-modify" scope for PUT/DELETE!
+    # =========================================================================
+
+    @abstractmethod
+    async def follow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Follow one or more artists on Spotify.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to follow (max 50)
+            access_token: OAuth access token with user-follow-modify scope
+
+        Raises:
+            httpx.HTTPError: If the request fails (403 if missing scope)
+        """
+        pass
+
+    @abstractmethod
+    async def unfollow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Unfollow one or more artists on Spotify.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to unfollow (max 50)
+            access_token: OAuth access token with user-follow-modify scope
+
+        Raises:
+            httpx.HTTPError: If the request fails (403 if missing scope)
+        """
+        pass
+
+    @abstractmethod
+    async def check_if_following_artists(
+        self, artist_ids: list[str], access_token: str
+    ) -> list[bool]:
+        """Check if user follows one or more artists.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to check (max 50)
+            access_token: OAuth access token with user-follow-read scope
+
+        Returns:
+            List of booleans in same order as artist_ids
+            (True if following, False if not)
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        pass
+
 
 # Hey future me, IMusicBrainzClient is the PORT for MusicBrainz metadata API! MusicBrainz is our
 # primary metadata source (free, open, high quality). ISRC (International Standard Recording Code)

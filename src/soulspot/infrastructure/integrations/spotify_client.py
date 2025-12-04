@@ -779,6 +779,105 @@ class SpotifyClient(ISpotifyClient):
         return cast(dict[str, Any], response.json())
 
     # =========================================================================
+    # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
+    # =========================================================================
+    # Hey future me - these endpoints let users manage their followed artists!
+    # - follow_artist: Add artist(s) to user's followed artists (PUT /me/following)
+    # - unfollow_artist: Remove artist(s) from followed (DELETE /me/following)
+    # - check_if_following_artists: Check if user follows specific artists
+    # IMPORTANT: Requires "user-follow-modify" scope for PUT/DELETE!
+    # Max 50 artist IDs per request - Spotify's limit.
+    # =========================================================================
+
+    async def follow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Follow one or more artists on Spotify.
+
+        This adds artists to the user's "Following" list. Great for the search page
+        "Add to Followed Artists" button! After following, the artist will appear
+        in get_followed_artists() results.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to follow (max 50)
+            access_token: OAuth access token with user-follow-modify scope
+
+        Raises:
+            httpx.HTTPError: If the request fails (403 if missing scope)
+        """
+        client = await self._get_client()
+
+        # Spotify accepts max 50 IDs per request
+        artist_ids = artist_ids[:50]
+
+        response = await client.put(
+            f"{self.API_BASE_URL}/me/following",
+            params={"type": "artist", "ids": ",".join(artist_ids)},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+
+    async def unfollow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Unfollow one or more artists on Spotify.
+
+        This removes artists from the user's "Following" list. Use this when
+        user clicks "Unfollow" in the UI. After unfollowing, the artist will
+        no longer appear in get_followed_artists() results.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to unfollow (max 50)
+            access_token: OAuth access token with user-follow-modify scope
+
+        Raises:
+            httpx.HTTPError: If the request fails (403 if missing scope)
+        """
+        client = await self._get_client()
+
+        # Spotify accepts max 50 IDs per request
+        artist_ids = artist_ids[:50]
+
+        response = await client.delete(
+            f"{self.API_BASE_URL}/me/following",
+            params={"type": "artist", "ids": ",".join(artist_ids)},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+
+    async def check_if_following_artists(
+        self, artist_ids: list[str], access_token: str
+    ) -> list[bool]:
+        """Check if user follows one or more artists.
+
+        Use this to display "Following" vs "Follow" button states in the UI.
+        Returns a list of booleans matching the order of input artist_ids.
+
+        Args:
+            artist_ids: List of Spotify artist IDs to check (max 50)
+            access_token: OAuth access token with user-follow-read scope
+
+        Returns:
+            List of booleans in same order as artist_ids
+            (True if following, False if not)
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+
+        # Spotify accepts max 50 IDs per request
+        artist_ids = artist_ids[:50]
+
+        response = await client.get(
+            f"{self.API_BASE_URL}/me/following/contains",
+            params={"type": "artist", "ids": ",".join(artist_ids)},
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(list[bool], response.json())
+
+    # =========================================================================
     # USER LIBRARY: LIKED SONGS & SAVED ALBUMS
     # =========================================================================
     # Hey future me - these endpoints access the user's PERSONAL library!

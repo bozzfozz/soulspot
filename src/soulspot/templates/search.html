@@ -1,7 +1,8 @@
-{# Hey future me - Search page with filters sidebar!
+{# Hey future me - Search page with Spotify + Soulseek tabs!
+   Tab 1: Spotify Search (artists, albums, tracks) with Follow button
+   Tab 2: Soulseek Search (downloadable files)
    The filter sections are collapsible using pure CSS transitions.
-   SearchManager JS handles the actual search logic via HTMX/fetch.
-   Watch out: the autocomplete dropdown z-index can conflict with modal overlays! #}
+   SearchManager JS handles the actual search logic via fetch. #}
 
 {% extends "base.html" %}
 
@@ -22,8 +23,60 @@
             </div>
             
             <div style="padding: var(--space-4); max-height: calc(100vh - 200px); overflow-y: auto;">
-                <!-- Quality Filter -->
+                <!-- Search Source Filter -->
                 <div class="filter-group" style="margin-bottom: var(--space-5);">
+                    <button class="filter-header" onclick="toggleFilter('source')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
+                        <span style="display: flex; align-items: center; gap: var(--space-2);">
+                            <i class="bi bi-search" style="color: var(--accent-primary);"></i>
+                            Search Source
+                        </span>
+                        <i class="bi bi-chevron-down filter-icon" id="source-icon" style="transition: transform 0.2s;"></i>
+                    </button>
+                    <div id="source-filter" class="filter-content" style="padding-left: var(--space-6); margin-top: var(--space-2);">
+                        <label class="filter-option">
+                            <input type="radio" name="searchSource" value="spotify" checked style="accent-color: var(--accent-primary);" onchange="SearchManager.setSearchSource('spotify')">
+                            <span style="display: flex; align-items: center; gap: var(--space-2);">
+                                <i class="bi bi-spotify" style="color: #1DB954;"></i>
+                                Spotify
+                            </span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="searchSource" value="soulseek" style="accent-color: var(--accent-primary);" onchange="SearchManager.setSearchSource('soulseek')">
+                            <span style="display: flex; align-items: center; gap: var(--space-2);">
+                                <i class="bi bi-cloud-download" style="color: #3b82f6;"></i>
+                                Soulseek
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Spotify Type Filter (only for Spotify search) -->
+                <div id="spotify-type-filter-group" class="filter-group" style="margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
+                    <button class="filter-header" onclick="toggleFilter('spotifyType')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
+                        <span style="display: flex; align-items: center; gap: var(--space-2);">
+                            <i class="bi bi-filter" style="color: #1DB954;"></i>
+                            Spotify Type
+                        </span>
+                        <i class="bi bi-chevron-down filter-icon" id="spotifyType-icon" style="transition: transform 0.2s;"></i>
+                    </button>
+                    <div id="spotifyType-filter" class="filter-content" style="padding-left: var(--space-6); margin-top: var(--space-2);">
+                        <label class="filter-option">
+                            <input type="radio" name="spotifyType" value="artists" checked style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('artists')">
+                            <span><i class="bi bi-person"></i> Artists</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="spotifyType" value="albums" style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('albums')">
+                            <span><i class="bi bi-disc"></i> Albums</span>
+                        </label>
+                        <label class="filter-option">
+                            <input type="radio" name="spotifyType" value="tracks" style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('tracks')">
+                            <span><i class="bi bi-music-note"></i> Tracks</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Quality Filter (only for Soulseek search) -->
+                <div id="quality-filter-group" class="filter-group" style="display: none; margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
                     <button class="filter-header" onclick="toggleFilter('quality')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
                         <span style="display: flex; align-items: center; gap: var(--space-2);">
                             <i class="bi bi-check-circle" style="color: #22c55e;"></i>
@@ -50,61 +103,6 @@
                         </label>
                     </div>
                 </div>
-
-                <!-- Artist Filter -->
-                <div class="filter-group" style="margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
-                    <button class="filter-header" onclick="toggleFilter('artist')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-person" style="color: var(--accent-secondary);"></i>
-                            Artist
-                        </span>
-                        <i class="bi bi-chevron-down filter-icon" id="artist-icon" style="transition: transform 0.2s; transform: rotate(-90deg);"></i>
-                    </button>
-                    <div id="artist-filter" class="filter-content collapsed" style="padding-left: var(--space-6); margin-top: var(--space-2);">
-                        <input type="text" id="artist-filter-input" placeholder="Filter by artist..." 
-                               class="form-input" style="width: 100%;" oninput="SearchManager.updateFilters()">
-                    </div>
-                </div>
-
-                <!-- Album Filter -->
-                <div class="filter-group" style="margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
-                    <button class="filter-header" onclick="toggleFilter('album')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-disc" style="color: #3b82f6;"></i>
-                            Album
-                        </span>
-                        <i class="bi bi-chevron-down filter-icon" id="album-icon" style="transition: transform 0.2s; transform: rotate(-90deg);"></i>
-                    </button>
-                    <div id="album-filter" class="filter-content collapsed" style="padding-left: var(--space-6); margin-top: var(--space-2);">
-                        <input type="text" id="album-filter-input" placeholder="Filter by album..." 
-                               class="form-input" style="width: 100%;" oninput="SearchManager.updateFilters()">
-                    </div>
-                </div>
-
-                <!-- Duration Filter -->
-                <div class="filter-group" style="padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
-                    <button class="filter-header" onclick="toggleFilter('duration')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-clock" style="color: #eab308;"></i>
-                            Duration
-                        </span>
-                        <i class="bi bi-chevron-down filter-icon" id="duration-icon" style="transition: transform 0.2s; transform: rotate(-90deg);"></i>
-                    </button>
-                    <div id="duration-filter" class="filter-content collapsed" style="padding-left: var(--space-6); margin-top: var(--space-2);">
-                        <label class="filter-option">
-                            <input type="checkbox" name="duration" value="short" style="accent-color: var(--accent-primary);">
-                            <span>Short (&lt; 3 min)</span>
-                        </label>
-                        <label class="filter-option">
-                            <input type="checkbox" name="duration" value="medium" style="accent-color: var(--accent-primary);">
-                            <span>Medium (3-5 min)</span>
-                        </label>
-                        <label class="filter-option">
-                            <input type="checkbox" name="duration" value="long" style="accent-color: var(--accent-primary);">
-                            <span>Long (&gt; 5 min)</span>
-                        </label>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -128,12 +126,14 @@
         <!-- Page Header -->
         <div style="margin-bottom: var(--space-6);">
             <div style="display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-2);">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #1DB954, #191414); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
                     <i class="bi bi-search" style="color: white; font-size: 1.25rem;"></i>
                 </div>
                 <div>
                     <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Search Music</h1>
-                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Find and download your favorite tracks from Soulseek</p>
+                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">
+                        Search <span id="search-source-label" style="color: #1DB954; font-weight: 600;">Spotify</span> for artists, albums, and tracks
+                    </p>
                 </div>
             </div>
         </div>
@@ -165,28 +165,6 @@
             </form>
         </div>
 
-        <!-- Bulk Actions Bar (hidden by default) -->
-        <div id="bulk-actions-bar" class="card" style="display: none; margin-bottom: var(--space-4); background: rgba(var(--accent-primary-rgb), 0.1); border-color: var(--accent-primary);">
-            <div style="padding: var(--space-4); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3);">
-                <div style="display: flex; align-items: center; gap: var(--space-4);">
-                    <span id="selected-count" style="font-weight: var(--font-weight-medium);">0 selected</span>
-                    <label style="display: flex; align-items: center; gap: var(--space-2); cursor: pointer;">
-                        <input type="checkbox" id="select-all-checkbox" onchange="SearchManager.toggleSelectAll(this.checked)" style="accent-color: var(--accent-primary);">
-                        <span style="font-size: var(--font-size-sm);">Select All</span>
-                    </label>
-                </div>
-                <div class="flex gap-2">
-                    <button class="btn btn-primary" onclick="SearchManager.bulkDownload()">
-                        <i class="bi bi-download"></i>
-                        Download Selected
-                    </button>
-                    <button class="btn btn-outline" onclick="SearchManager.clearSelection()">
-                        Clear Selection
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- Search Results -->
         <div id="search-results">
             <!-- Empty State -->
@@ -194,7 +172,7 @@
                 <i class="bi bi-search" style="font-size: 5rem; color: var(--text-muted); margin-bottom: var(--space-6); display: block;"></i>
                 <h3 style="font-size: var(--font-size-xl); margin-bottom: var(--space-2);">Start Your Search</h3>
                 <p style="color: var(--text-muted); max-width: 400px; margin: 0 auto;">
-                    Search for your favorite artists, albums, or tracks to find high-quality downloads from Soulseek
+                    Search Spotify for artists to follow, or find downloadable tracks on Soulseek
                 </p>
             </div>
         </div>
@@ -250,6 +228,69 @@
         background: var(--bg-tertiary);
     }
     
+    /* Artist/Album/Track result cards */
+    .spotify-result-card {
+        display: flex;
+        align-items: center;
+        gap: var(--space-4);
+        padding: var(--space-4);
+        border-bottom: 1px solid var(--border-primary);
+        transition: background-color var(--transition-fast);
+    }
+    .spotify-result-card:hover {
+        background: var(--bg-tertiary);
+    }
+    .spotify-result-card:last-child {
+        border-bottom: none;
+    }
+    .spotify-result-image {
+        width: 64px;
+        height: 64px;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        background: var(--bg-tertiary);
+        flex-shrink: 0;
+    }
+    .spotify-result-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .spotify-result-name {
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        margin-bottom: var(--space-1);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .spotify-result-meta {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+    }
+    .spotify-result-actions {
+        display: flex;
+        gap: var(--space-2);
+        flex-shrink: 0;
+    }
+    
+    /* Follow button states */
+    .btn-follow {
+        background: #1DB954;
+        color: white;
+        border: none;
+    }
+    .btn-follow:hover {
+        background: #1ed760;
+    }
+    .btn-following {
+        background: transparent;
+        color: #1DB954;
+        border: 1px solid #1DB954;
+    }
+    .btn-following:hover {
+        background: rgba(29, 185, 84, 0.1);
+    }
+    
     @media (max-width: 1024px) {
         aside {
             width: 100% !important;
@@ -259,12 +300,14 @@
 </style>
 <script src="/static/js/search.js"></script>
 <script>
-    // Hey future me - filter toggle logic.
-    // Each filter section can be collapsed independently.
-    // The icon rotates to indicate state.
+    // Hey future me - Search page initialization and filter toggle logic.
+    // SearchManager handles the main search logic, this script adds UI helpers.
+    
     function toggleFilter(sectionId) {
         const content = document.getElementById(`${sectionId}-filter`);
         const icon = document.getElementById(`${sectionId}-icon`);
+        
+        if (!content || !icon) return;
         
         content.classList.toggle('collapsed');
         
@@ -274,5 +317,12 @@
             icon.style.transform = 'rotate(0deg)';
         }
     }
+    
+    // Initialize SearchManager with Spotify mode
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof SearchManager !== 'undefined') {
+            SearchManager.init();
+        }
+    });
 </script>
 {% endblock %}

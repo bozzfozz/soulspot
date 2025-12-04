@@ -661,6 +661,150 @@ class TestSpotifyClientArtistAPI:
         assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
 
 
+class TestSpotifyClientFollowArtist:
+    """Test Spotify client follow/unfollow artist operations.
+
+    Hey future me - these tests verify the new follow_artist, unfollow_artist,
+    and check_if_following_artists methods. These are used by the Search Page
+    "Add to Followed Artists" feature!
+    """
+
+    async def test_follow_artist_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test successfully following an artist on Spotify."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.put.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        # Should not raise any exception
+        await spotify_client.follow_artist(["artist-123"], "test-token")
+
+        mock_client.put.assert_called_once()
+        call_args = mock_client.put.call_args
+        assert "me/following" in call_args[0][0]
+        assert call_args[1]["params"]["type"] == "artist"
+        assert call_args[1]["params"]["ids"] == "artist-123"
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_follow_multiple_artists(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test following multiple artists in one request."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.put.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        await spotify_client.follow_artist(
+            ["artist-1", "artist-2", "artist-3"], "test-token"
+        )
+
+        mock_client.put.assert_called_once()
+        call_args = mock_client.put.call_args
+        assert call_args[1]["params"]["ids"] == "artist-1,artist-2,artist-3"
+
+    async def test_follow_artist_truncates_to_50(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test that artist IDs list is truncated to 50 (Spotify limit)."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.put.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        # Create list with 60 IDs
+        artist_ids = [f"artist-{i}" for i in range(60)]
+
+        await spotify_client.follow_artist(artist_ids, "test-token")
+
+        mock_client.put.assert_called_once()
+        call_args = mock_client.put.call_args
+        # Should only contain first 50
+        ids_sent = call_args[1]["params"]["ids"].split(",")
+        assert len(ids_sent) == 50
+
+    async def test_unfollow_artist_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test successfully unfollowing an artist on Spotify."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.delete.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        await spotify_client.unfollow_artist(["artist-456"], "test-token")
+
+        mock_client.delete.assert_called_once()
+        call_args = mock_client.delete.call_args
+        assert "me/following" in call_args[0][0]
+        assert call_args[1]["params"]["type"] == "artist"
+        assert call_args[1]["params"]["ids"] == "artist-456"
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_check_if_following_artists_success(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test checking if user follows specific artists."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = [True, False, True]
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.check_if_following_artists(
+            ["artist-1", "artist-2", "artist-3"], "test-token"
+        )
+
+        assert result == [True, False, True]
+
+        mock_client.get.assert_called_once()
+        call_args = mock_client.get.call_args
+        assert "me/following/contains" in call_args[0][0]
+        assert call_args[1]["params"]["type"] == "artist"
+        assert call_args[1]["params"]["ids"] == "artist-1,artist-2,artist-3"
+        assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
+
+    async def test_check_if_following_empty_list(
+        self, spotify_client: SpotifyClient, mocker: MagicMock
+    ) -> None:
+        """Test checking with empty artist list."""
+        mock_client = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client.get.return_value = mock_response
+
+        mocker.patch.object(spotify_client, "_get_client", return_value=mock_client)
+
+        result = await spotify_client.check_if_following_artists([], "test-token")
+
+        assert result == []
+
+
 class TestSpotifyClientTokenRefreshErrors:
     """Test Spotify client token refresh error handling.
 

@@ -1,5 +1,6 @@
 // Advanced Search Manager
-// Handles search functionality, autocomplete, filters, bulk actions, and history
+// Handles search functionality for Spotify + Soulseek, autocomplete, filters, and history
+// Hey future me - this was extended to support Spotify artist search with Follow button!
 
 const SearchManager = {
     // State management
@@ -7,6 +8,9 @@ const SearchManager = {
         currentQuery: '',
         results: [],
         selectedTracks: new Set(),
+        searchSource: 'spotify',  // 'spotify' or 'soulseek'
+        spotifyType: 'artists',   // 'artists', 'albums', or 'tracks'
+        followingStatus: {},      // Map of artistId -> isFollowing
         filters: {
             quality: 'any',
             artist: '',
@@ -23,7 +27,49 @@ const SearchManager = {
     init() {
         this.loadSearchHistory();
         this.setupEventListeners();
-        console.log('SearchManager initialized');
+        this.updateUIForSearchSource();
+        console.log('SearchManager initialized with Spotify+Soulseek support');
+    },
+
+    // Set search source (spotify or soulseek)
+    setSearchSource(source) {
+        this.state.searchSource = source;
+        this.updateUIForSearchSource();
+        console.log(`Search source set to: ${source}`);
+    },
+
+    // Set Spotify search type (artists, albums, tracks)
+    setSpotifyType(type) {
+        this.state.spotifyType = type;
+        console.log(`Spotify type set to: ${type}`);
+    },
+
+    // Update UI based on search source
+    updateUIForSearchSource() {
+        const isSpotify = this.state.searchSource === 'spotify';
+        const sourceLabel = document.getElementById('search-source-label');
+        const spotifyTypeGroup = document.getElementById('spotify-type-filter-group');
+        const qualityGroup = document.getElementById('quality-filter-group');
+        const searchInput = document.getElementById('search-input');
+
+        if (sourceLabel) {
+            sourceLabel.textContent = isSpotify ? 'Spotify' : 'Soulseek';
+            sourceLabel.style.color = isSpotify ? '#1DB954' : '#3b82f6';
+        }
+
+        if (spotifyTypeGroup) {
+            spotifyTypeGroup.style.display = isSpotify ? 'block' : 'none';
+        }
+
+        if (qualityGroup) {
+            qualityGroup.style.display = isSpotify ? 'none' : 'block';
+        }
+
+        if (searchInput) {
+            searchInput.placeholder = isSpotify 
+                ? 'Search for artists, albums, or tracks on Spotify...'
+                : 'Search for downloadable files on Soulseek...';
+        }
     },
 
     // Setup event listeners
@@ -138,7 +184,10 @@ const SearchManager = {
     // Hide autocomplete
     hideAutocomplete() {
         const autocompleteEl = document.getElementById('autocomplete-results');
-        autocompleteEl.classList.add('hidden');
+        if (autocompleteEl) {
+            autocompleteEl.classList.add('hidden');
+            autocompleteEl.style.display = 'none';
+        }
     },
 
     // Select a suggestion
@@ -149,8 +198,505 @@ const SearchManager = {
         this.performSearch(null, query);
     },
 
-    // Perform search
+    // Perform search - routes to Spotify or Soulseek based on state
     async performSearch(event, overrideQuery = null) {
+        if (event) {
+            event.preventDefault();
+        }
+
+        const query = overrideQuery || document.getElementById('search-input').value.trim();
+        
+        if (!query) {
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.warning('Please enter a search query');
+            }
+            return;
+        }
+
+        this.state.currentQuery = query;
+        this.addToSearchHistory(query);
+        this.hideAutocomplete();
+
+        // Route to appropriate search method
+        if (this.state.searchSource === 'spotify') {
+            await this.performSpotifySearch(query);
+        } else {
+            await this.performSoulseekSearch(query);
+        }
+    },
+
+    // Perform Spotify search
+    async performSpotifySearch(query) {
+        // Show loading state
+        document.getElementById('search-results').innerHTML = `
+            <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
+                <div style="display: flex; align-items: center; justify-content: center; gap: var(--space-3);">
+                    <div class="spinner" style="border-color: #1DB954; border-top-color: transparent;"></div>
+                    <span style="color: var(--text-muted);">Searching Spotify...</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            const type = this.state.spotifyType;
+            const response = await fetch(`/api/search/spotify/${type}?query=${encodeURIComponent(query)}&limit=30`);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Search failed');
+            }
+
+            const data = await response.json();
+            
+            // Store results and check following status for artists
+            if (type === 'artists' && data.artists && data.artists.length > 0) {
+                this.state.results = data.artists;
+                await this.checkFollowingStatus(data.artists.map(a => a.id));
+                this.displaySpotifyArtists(data.artists);
+            } else if (type === 'albums' && data.albums) {
+                this.state.results = data.albums;
+                this.displaySpotifyAlbums(data.albums);
+            } else if (type === 'tracks' && data.tracks) {
+                this.state.results = data.tracks;
+                this.displaySpotifyTracks(data.tracks);
+            } else {
+                this.displayNoResults();
+            }
+
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success(`Found ${this.state.results.length} results`);
+            }
+        } catch (error) {
+            console.error('Spotify search error:', error);
+            this.displaySearchError(error.message);
+        }
+    },
+
+    // Perform Soulseek search (original behavior)
+    async performSoulseekSearch(query) {
+        // Show loading state
+        document.getElementById('search-results').innerHTML = `
+            <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
+                <div style="display: flex; align-items: center; justify-content: center; gap: var(--space-3);">
+                    <div class="spinner" style="border-color: #3b82f6; border-top-color: transparent;"></div>
+                    <span style="color: var(--text-muted);">Searching Soulseek network...</span>
+                </div>
+            </div>
+        `;
+
+        try {
+            const response = await fetch(`/api/search/soulseek?query=${encodeURIComponent(query)}&timeout=30`, {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Search failed');
+            }
+
+            const data = await response.json();
+            this.state.results = data.files || [];
+            this.displaySoulseekResults(data.files || []);
+
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success(`Found ${this.state.results.length} files`);
+            }
+        } catch (error) {
+            console.error('Soulseek search error:', error);
+            this.displaySearchError(error.message);
+        }
+    },
+
+    // Check following status for artists
+    async checkFollowingStatus(artistIds) {
+        if (!artistIds || artistIds.length === 0) return;
+        
+        try {
+            const response = await fetch('/api/artists/spotify/following-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ artist_ids: artistIds })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.state.followingStatus = data.statuses || {};
+            }
+        } catch (error) {
+            console.warn('Could not check following status:', error);
+        }
+    },
+
+    // Display Spotify artist results
+    displaySpotifyArtists(artists) {
+        const resultsEl = document.getElementById('search-results');
+        
+        if (!artists || artists.length === 0) {
+            this.displayNoResults();
+            return;
+        }
+
+        const html = `
+            <div class="card">
+                <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                    <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="bi bi-spotify" style="color: #1DB954;"></i>
+                        Artists (${artists.length})
+                    </h3>
+                </div>
+                <div>
+                    ${artists.map(artist => this.renderArtistCard(artist)).join('')}
+                </div>
+            </div>
+        `;
+
+        resultsEl.innerHTML = html;
+    },
+
+    // Render single artist card
+    renderArtistCard(artist) {
+        const isFollowing = this.state.followingStatus[artist.id] || false;
+        const imageUrl = artist.image_url || '/static/images/artist-placeholder.svg';
+        const genres = (artist.genres || []).slice(0, 3).join(', ') || 'No genres';
+        const followers = this.formatNumber(artist.followers || 0);
+
+        return `
+            <div class="spotify-result-card" data-artist-id="${artist.id}">
+                <img src="${imageUrl}" alt="${this.escapeHtml(artist.name)}" class="spotify-result-image"
+                     onerror="this.src='/static/images/artist-placeholder.svg'">
+                <div class="spotify-result-info">
+                    <div class="spotify-result-name">${this.escapeHtml(artist.name)}</div>
+                    <div class="spotify-result-meta">
+                        <span>${genres}</span>
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${followers} followers</span>
+                    </div>
+                </div>
+                <div class="spotify-result-actions">
+                    <button class="btn btn-sm ${isFollowing ? 'btn-following' : 'btn-follow'}"
+                            onclick="SearchManager.toggleFollow('${artist.id}', ${isFollowing})"
+                            id="follow-btn-${artist.id}">
+                        <i class="bi ${isFollowing ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
+                        ${isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                    <a href="${artist.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm"
+                       title="Open in Spotify">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        `;
+    },
+
+    // Toggle follow/unfollow artist
+    async toggleFollow(artistId, isCurrentlyFollowing) {
+        const button = document.getElementById(`follow-btn-${artistId}`);
+        if (!button) return;
+
+        // Optimistic UI update
+        button.disabled = true;
+        button.innerHTML = '<div class="spinner spinner-sm"></div>';
+
+        try {
+            const method = isCurrentlyFollowing ? 'DELETE' : 'POST';
+            const response = await fetch(`/api/artists/spotify/${artistId}/follow`, { method });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Operation failed');
+            }
+
+            // Update state and UI
+            const newStatus = !isCurrentlyFollowing;
+            this.state.followingStatus[artistId] = newStatus;
+
+            button.className = `btn btn-sm ${newStatus ? 'btn-following' : 'btn-follow'}`;
+            button.innerHTML = `
+                <i class="bi ${newStatus ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
+                ${newStatus ? 'Following' : 'Follow'}
+            `;
+            button.onclick = () => this.toggleFollow(artistId, newStatus);
+
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success(newStatus ? 'Artist followed!' : 'Artist unfollowed');
+            }
+        } catch (error) {
+            console.error('Follow/unfollow error:', error);
+            // Revert button state
+            button.className = `btn btn-sm ${isCurrentlyFollowing ? 'btn-following' : 'btn-follow'}`;
+            button.innerHTML = `
+                <i class="bi ${isCurrentlyFollowing ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
+                ${isCurrentlyFollowing ? 'Following' : 'Follow'}
+            `;
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.error(error.message || 'Failed to update follow status');
+            }
+        } finally {
+            button.disabled = false;
+        }
+    },
+
+    // Display Spotify album results
+    displaySpotifyAlbums(albums) {
+        const resultsEl = document.getElementById('search-results');
+        
+        if (!albums || albums.length === 0) {
+            this.displayNoResults();
+            return;
+        }
+
+        const html = `
+            <div class="card">
+                <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                    <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="bi bi-disc" style="color: #1DB954;"></i>
+                        Albums (${albums.length})
+                    </h3>
+                </div>
+                <div>
+                    ${albums.map(album => this.renderAlbumCard(album)).join('')}
+                </div>
+            </div>
+        `;
+
+        resultsEl.innerHTML = html;
+    },
+
+    // Render single album card
+    renderAlbumCard(album) {
+        const imageUrl = album.image_url || '/static/images/album-placeholder.svg';
+        const releaseYear = album.release_date ? album.release_date.substring(0, 4) : '';
+        const albumType = album.album_type ? album.album_type.charAt(0).toUpperCase() + album.album_type.slice(1) : '';
+
+        return `
+            <div class="spotify-result-card" data-album-id="${album.id}">
+                <img src="${imageUrl}" alt="${this.escapeHtml(album.name)}" class="spotify-result-image"
+                     onerror="this.src='/static/images/album-placeholder.svg'">
+                <div class="spotify-result-info">
+                    <div class="spotify-result-name">${this.escapeHtml(album.name)}</div>
+                    <div class="spotify-result-meta">
+                        <span>${this.escapeHtml(album.artist_name)}</span>
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${releaseYear}</span>
+                        ${albumType ? `<span style="margin: 0 var(--space-2);">•</span><span>${albumType}</span>` : ''}
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${album.total_tracks} tracks</span>
+                    </div>
+                </div>
+                <div class="spotify-result-actions">
+                    <button class="btn btn-primary btn-sm" onclick="SearchManager.searchAlbumOnSoulseek('${this.escapeHtml(album.name)}', '${this.escapeHtml(album.artist_name)}')">
+                        <i class="bi bi-download"></i>
+                        Find Downloads
+                    </button>
+                    <a href="${album.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm" title="Open in Spotify">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        `;
+    },
+
+    // Display Spotify track results
+    displaySpotifyTracks(tracks) {
+        const resultsEl = document.getElementById('search-results');
+        
+        if (!tracks || tracks.length === 0) {
+            this.displayNoResults();
+            return;
+        }
+
+        const html = `
+            <div class="card">
+                <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                    <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="bi bi-music-note" style="color: #1DB954;"></i>
+                        Tracks (${tracks.length})
+                    </h3>
+                </div>
+                <div>
+                    ${tracks.map(track => this.renderTrackSearchCard(track)).join('')}
+                </div>
+            </div>
+        `;
+
+        resultsEl.innerHTML = html;
+    },
+
+    // Render single track card for Spotify search
+    renderTrackSearchCard(track) {
+        const duration = this.formatDuration(track.duration_ms);
+
+        return `
+            <div class="spotify-result-card" data-track-id="${track.id}">
+                <div style="width: 40px; height: 40px; background: var(--bg-tertiary); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="bi bi-music-note" style="color: var(--text-muted);"></i>
+                </div>
+                <div class="spotify-result-info">
+                    <div class="spotify-result-name">${this.escapeHtml(track.name)}</div>
+                    <div class="spotify-result-meta">
+                        <span>${this.escapeHtml(track.artist_name)}</span>
+                        ${track.album_name ? `<span style="margin: 0 var(--space-2);">•</span><span>${this.escapeHtml(track.album_name)}</span>` : ''}
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${duration}</span>
+                    </div>
+                </div>
+                <div class="spotify-result-actions">
+                    <button class="btn btn-primary btn-sm" onclick="SearchManager.searchTrackOnSoulseek('${this.escapeHtml(track.name)}', '${this.escapeHtml(track.artist_name)}')">
+                        <i class="bi bi-download"></i>
+                        Find Downloads
+                    </button>
+                    <a href="${track.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm" title="Open in Spotify">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                </div>
+            </div>
+        `;
+    },
+
+    // Display Soulseek results
+    displaySoulseekResults(files) {
+        const resultsEl = document.getElementById('search-results');
+        
+        if (!files || files.length === 0) {
+            this.displayNoResults();
+            return;
+        }
+
+        const html = `
+            <div class="card">
+                <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
+                    <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
+                        <i class="bi bi-cloud-download" style="color: #3b82f6;"></i>
+                        Soulseek Files (${files.length})
+                    </h3>
+                </div>
+                <div>
+                    ${files.map(file => this.renderSoulseekFileCard(file)).join('')}
+                </div>
+            </div>
+        `;
+
+        resultsEl.innerHTML = html;
+    },
+
+    // Render single Soulseek file card
+    renderSoulseekFileCard(file) {
+        const filename = file.filename.split(/[/\\]/).pop() || file.filename;
+        const size = this.formatFileSize(file.size);
+        const bitrate = file.bitrate ? `${file.bitrate}kbps` : 'Unknown';
+
+        return `
+            <div class="spotify-result-card">
+                <div style="width: 40px; height: 40px; background: var(--bg-tertiary); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="bi bi-file-earmark-music" style="color: #3b82f6;"></i>
+                </div>
+                <div class="spotify-result-info">
+                    <div class="spotify-result-name" title="${this.escapeHtml(file.filename)}">${this.escapeHtml(filename)}</div>
+                    <div class="spotify-result-meta">
+                        <span>@${this.escapeHtml(file.username)}</span>
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${bitrate}</span>
+                        <span style="margin: 0 var(--space-2);">•</span>
+                        <span>${size}</span>
+                    </div>
+                </div>
+                <div class="spotify-result-actions">
+                    <button class="btn btn-primary btn-sm" onclick="SearchManager.downloadFile('${this.escapeHtml(file.username)}', '${this.escapeHtml(file.filename)}')">
+                        <i class="bi bi-download"></i>
+                        Download
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    // Search album on Soulseek
+    searchAlbumOnSoulseek(albumName, artistName) {
+        this.setSearchSource('soulseek');
+        document.querySelector('input[name="searchSource"][value="soulseek"]').checked = true;
+        this.updateUIForSearchSource();
+        const query = `${artistName} ${albumName}`;
+        document.getElementById('search-input').value = query;
+        this.performSearch(null, query);
+    },
+
+    // Search track on Soulseek
+    searchTrackOnSoulseek(trackName, artistName) {
+        this.setSearchSource('soulseek');
+        document.querySelector('input[name="searchSource"][value="soulseek"]').checked = true;
+        this.updateUIForSearchSource();
+        const query = `${artistName} ${trackName}`;
+        document.getElementById('search-input').value = query;
+        this.performSearch(null, query);
+    },
+
+    // Download file from Soulseek
+    async downloadFile(username, filename) {
+        try {
+            const response = await fetch('/api/downloads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, filename })
+            });
+
+            if (!response.ok) {
+                throw new Error('Download request failed');
+            }
+
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success('Download started!');
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.error('Failed to start download');
+            }
+        }
+    },
+
+    // Display no results message
+    displayNoResults() {
+        document.getElementById('search-results').innerHTML = `
+            <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
+                <i class="bi bi-search" style="font-size: 4rem; color: var(--text-muted); margin-bottom: var(--space-4); display: block;"></i>
+                <h3 style="font-size: var(--font-size-lg); margin-bottom: var(--space-2);">No Results Found</h3>
+                <p style="color: var(--text-muted);">Try a different search query</p>
+            </div>
+        `;
+    },
+
+    // Display search error
+    displaySearchError(message) {
+        document.getElementById('search-results').innerHTML = `
+            <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
+                <i class="bi bi-exclamation-triangle" style="font-size: 4rem; color: #ef4444; margin-bottom: var(--space-4); display: block;"></i>
+                <h3 style="font-size: var(--font-size-lg); margin-bottom: var(--space-2);">Search Failed</h3>
+                <p style="color: var(--text-muted);">${this.escapeHtml(message)}</p>
+            </div>
+        `;
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(message || 'Search failed');
+        }
+    },
+
+    // Format number with K/M suffix
+    formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    },
+
+    // Format file size
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    // Legacy performSearch for backward compatibility - now routes to new methods
+    async performLegacySearch(event, overrideQuery = null) {
         if (event) {
             event.preventDefault();
         }

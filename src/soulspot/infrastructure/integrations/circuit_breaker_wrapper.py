@@ -353,6 +353,41 @@ class CircuitBreakerSpotifyClient(ISpotifyClient):
         )
         return cast(dict[str, Any], result)
 
+    # =========================================================================
+    # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
+    # =========================================================================
+
+    async def follow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Follow one or more artists on Spotify."""
+        await self._circuit_breaker.call(
+            self._client.follow_artist,
+            artist_ids=artist_ids,
+            access_token=access_token,
+        )
+
+    async def unfollow_artist(
+        self, artist_ids: list[str], access_token: str
+    ) -> None:
+        """Unfollow one or more artists on Spotify."""
+        await self._circuit_breaker.call(
+            self._client.unfollow_artist,
+            artist_ids=artist_ids,
+            access_token=access_token,
+        )
+
+    async def check_if_following_artists(
+        self, artist_ids: list[str], access_token: str
+    ) -> list[bool]:
+        """Check if user follows one or more artists."""
+        result = await self._circuit_breaker.call(
+            self._client.check_if_following_artists,
+            artist_ids=artist_ids,
+            access_token=access_token,
+        )
+        return cast(list[bool], result)
+
     async def close(self) -> None:
         """Close the underlying client."""
         if hasattr(self._client, "close"):

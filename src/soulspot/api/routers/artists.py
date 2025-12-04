@@ -276,3 +276,176 @@ async def delete_artist(
     await session.commit()
 
     logger.info(f"Deleted artist: {artist.name} (id: {artist_id})")
+
+
+# =========================================================================
+# SPOTIFY FOLLOW/UNFOLLOW ENDPOINTS
+# =========================================================================
+# Hey future me - these endpoints let users follow/unfollow artists on Spotify directly!
+# This is for the Search Page "Add to Followed Artists" feature.
+# - POST /artists/spotify/{spotify_id}/follow → Follow artist on Spotify
+# - DELETE /artists/spotify/{spotify_id}/follow → Unfollow artist on Spotify
+# - GET /artists/spotify/following-status → Check if following multiple artists
+# All use the shared token since we have single-user architecture.
+# =========================================================================
+
+
+class FollowArtistResponse(BaseModel):
+    """Response model for follow/unfollow operations."""
+
+    success: bool = Field(..., description="Whether the operation succeeded")
+    spotify_id: str = Field(..., description="Spotify artist ID")
+    message: str = Field(..., description="Status message")
+
+
+class FollowingStatusRequest(BaseModel):
+    """Request model for checking following status."""
+
+    artist_ids: list[str] = Field(
+        ..., description="List of Spotify artist IDs to check", max_length=50
+    )
+
+
+class FollowingStatusResponse(BaseModel):
+    """Response model for following status check."""
+
+    statuses: dict[str, bool] = Field(
+        ..., description="Map of artist_id → is_following"
+    )
+
+
+@router.post(
+    "/spotify/{spotify_id}/follow",
+    response_model=FollowArtistResponse,
+    summary="Follow an artist on Spotify",
+)
+async def follow_artist_on_spotify(
+    spotify_id: str,
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    access_token: str = Depends(get_spotify_token_shared),
+) -> FollowArtistResponse:
+    """Follow an artist on Spotify.
+
+    Adds the artist to the user's followed artists on Spotify. After following,
+    the artist will appear in the user's Spotify library and in sync_followed_artists().
+
+    Args:
+        spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
+        spotify_client: Spotify client instance
+        access_token: Valid Spotify access token with user-follow-modify scope
+
+    Returns:
+        Success status and message
+
+    Raises:
+        HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
+    """
+    try:
+        await spotify_client.follow_artist([spotify_id], access_token)
+
+        logger.info(f"Followed artist on Spotify: {spotify_id}")
+
+        return FollowArtistResponse(
+            success=True,
+            spotify_id=spotify_id,
+            message="Successfully followed artist on Spotify",
+        )
+    except Exception as e:
+        logger.error(f"Failed to follow artist {spotify_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to follow artist: {str(e)}",
+        ) from e
+
+
+@router.delete(
+    "/spotify/{spotify_id}/follow",
+    response_model=FollowArtistResponse,
+    summary="Unfollow an artist on Spotify",
+)
+async def unfollow_artist_on_spotify(
+    spotify_id: str,
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    access_token: str = Depends(get_spotify_token_shared),
+) -> FollowArtistResponse:
+    """Unfollow an artist on Spotify.
+
+    Removes the artist from the user's followed artists on Spotify. After unfollowing,
+    the artist will no longer appear in sync_followed_artists().
+
+    Args:
+        spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
+        spotify_client: Spotify client instance
+        access_token: Valid Spotify access token with user-follow-modify scope
+
+    Returns:
+        Success status and message
+
+    Raises:
+        HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
+    """
+    try:
+        await spotify_client.unfollow_artist([spotify_id], access_token)
+
+        logger.info(f"Unfollowed artist on Spotify: {spotify_id}")
+
+        return FollowArtistResponse(
+            success=True,
+            spotify_id=spotify_id,
+            message="Successfully unfollowed artist on Spotify",
+        )
+    except Exception as e:
+        logger.error(f"Failed to unfollow artist {spotify_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to unfollow artist: {str(e)}",
+        ) from e
+
+
+@router.post(
+    "/spotify/following-status",
+    response_model=FollowingStatusResponse,
+    summary="Check if user follows multiple artists",
+)
+async def check_following_status(
+    request: FollowingStatusRequest,
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    access_token: str = Depends(get_spotify_token_shared),
+) -> FollowingStatusResponse:
+    """Check if user follows one or more artists on Spotify.
+
+    Use this to display "Following" vs "Follow" button states in the search results.
+    Returns a map of artist_id → is_following for efficient batch checking.
+
+    Args:
+        request: List of Spotify artist IDs to check (max 50)
+        spotify_client: Spotify client instance
+        access_token: Valid Spotify access token with user-follow-read scope
+
+    Returns:
+        Map of artist_id → is_following status
+
+    Raises:
+        HTTPException: 400 if too many IDs, 500 if Spotify API fails
+    """
+    if len(request.artist_ids) > 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 50 artist IDs per request",
+        )
+
+    try:
+        results = await spotify_client.check_if_following_artists(
+            request.artist_ids, access_token
+        )
+
+        # Build map of artist_id → is_following
+        statuses = dict(zip(request.artist_ids, results))
+
+        return FollowingStatusResponse(statuses=statuses)
+    except Exception as e:
+        logger.error(f"Failed to check following status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check following status: {str(e)}",
+        ) from e
