@@ -11,12 +11,10 @@ Tests fokussieren sich auf:
 4. Response model validation
 """
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 from soulspot.api.routers.search import (
     SoulseekFileResult,
@@ -25,10 +23,9 @@ from soulspot.api.routers.search import (
     SpotifyArtistResult,
     SpotifySearchResponse,
     SpotifyTrackResult,
-    router,
+    search_soulseek,
     search_spotify_artists,
     search_spotify_tracks,
-    search_soulseek,
 )
 
 

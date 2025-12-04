@@ -440,7 +440,7 @@ async def check_following_status(
         )
 
         # Build map of artist_id → is_following
-        statuses = dict(zip(request.artist_ids, results))
+        statuses = dict(zip(request.artist_ids, results, strict=True))
 
         return FollowingStatusResponse(statuses=statuses)
     except Exception as e:
@@ -526,7 +526,9 @@ async def get_related_artists(
             )
 
         # Batch check following status for all related artists
-        related_ids = [a.get("id") for a in related if a.get("id")]
+        related_ids: list[str] = [
+            str(a.get("id")) for a in related if a.get("id") is not None
+        ]
         following_statuses: list[bool] = []
         if related_ids:
             following_statuses = await spotify_client.check_if_following_artists(

@@ -1699,7 +1699,9 @@ async def spotify_artist_detail_page(
             )
 
             # Batch check following status
-            related_ids = [a.get("id") for a in related_raw if a.get("id")]
+            related_ids: list[str] = [
+                str(a.get("id")) for a in related_raw if a.get("id") is not None
+            ]
             following_statuses: list[bool] = []
             if related_ids:
                 following_statuses = await spotify_client.check_if_following_artists(
