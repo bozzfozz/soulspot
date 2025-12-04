@@ -1560,6 +1560,8 @@ class EnrichmentStatusResponse(BaseModel):
     albums_unenriched: int
     pending_candidates: int
     is_enrichment_needed: bool
+    is_running: bool = False  # True if enrichment job is currently running
+    last_job_completed: bool | None = None  # True if last job succeeded, False if failed
 
 
 class EnrichmentTriggerResponse(BaseModel):
@@ -1603,6 +1605,7 @@ class ApplyCandidateRequest(BaseModel):
 )
 async def get_enrichment_status(
     db: AsyncSession = Depends(get_db_session),
+    job_queue: JobQueue = Depends(get_job_queue),
 ) -> EnrichmentStatusResponse:
     """Get current status of library enrichment.
 
@@ -1610,6 +1613,8 @@ async def get_enrichment_status(
     - Unenriched artists (have local files but no Spotify URI)
     - Unenriched albums (have local files but no Spotify URI)
     - Pending candidates (ambiguous matches waiting for user review)
+    - is_running: True if enrichment job is currently running
+    - last_job_completed: True if last job succeeded, False if failed, None if no jobs
     """
     from sqlalchemy import func, select
 
@@ -1619,6 +1624,7 @@ async def get_enrichment_status(
         EnrichmentCandidateModel,
         TrackModel,
     )
+    from soulspot.application.workers.job_queue import JobStatus, JobType
 
     # Count unenriched artists (with local tracks)
     has_local_artist_tracks = (
@@ -1658,11 +1664,33 @@ async def get_enrichment_status(
     candidates_result = await db.execute(candidates_stmt)
     pending_candidates = candidates_result.scalar() or 0
 
+    # Hey future me - check if an enrichment job is currently running!
+    # This prevents the UI from showing "Complete!" while job is still in progress
+    # AND stops polling when job fails (not just when unenriched=0)
+    is_running = False
+    last_job_completed: bool | None = None
+    
+    enrichment_jobs = await job_queue.list_jobs(
+        job_type=JobType.LIBRARY_SPOTIFY_ENRICHMENT,
+        limit=1,
+    )
+    
+    if enrichment_jobs:
+        latest_job = enrichment_jobs[0]
+        if latest_job.status in (JobStatus.PENDING, JobStatus.RUNNING):
+            is_running = True
+        elif latest_job.status == JobStatus.COMPLETED:
+            last_job_completed = True
+        elif latest_job.status == JobStatus.FAILED:
+            last_job_completed = False
+
     return EnrichmentStatusResponse(
         artists_unenriched=artists_unenriched,
         albums_unenriched=albums_unenriched,
         pending_candidates=pending_candidates,
         is_enrichment_needed=(artists_unenriched + albums_unenriched) > 0,
+        is_running=is_running,
+        last_job_completed=last_job_completed,
     )
 
 

@@ -123,13 +123,32 @@ class SpotifyClient(ISpotifyClient):
             "state": state,
             "code_challenge_method": "S256",
             "code_challenge": code_challenge,
+            # Hey future me - we request ALL potentially useful scopes upfront!
+            # This avoids re-auth later when new features need additional permissions.
+            # User sees permission list once on initial auth, not repeatedly.
+            #
+            # SCOPES EXPLAINED:
+            # - playlist-*: Read/write playlists (sync, create, modify)
+            # - user-library-*: Read/write saved albums/tracks ("Your Library")
+            # - user-follow-*: Read/write followed artists/users
+            # - user-top-read: Top artists/tracks (for recommendations)
+            # - user-read-recently-played: Recently played (for "Continue listening")
             "scope": " ".join(
                 [
+                    # Playlists
                     "playlist-read-private",
                     "playlist-read-collaborative",
+                    "playlist-modify-private",
+                    "playlist-modify-public",
+                    # Library (Saved Albums/Tracks)
                     "user-library-read",
-                    "user-read-private",
+                    "user-library-modify",
+                    # Follow (Artists/Users)
                     "user-follow-read",
+                    "user-follow-modify",
+                    # Listening History (for future features)
+                    "user-top-read",
+                    "user-read-recently-played",
                 ]
             ),
         }

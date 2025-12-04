@@ -334,13 +334,26 @@ function startEnrichmentPolling() {
             const progressText = progress.querySelector('.enrichment-progress-text');
             const progressFill = progress.querySelector('.enrichment-progress-fill');
             
-            if (data.artists_unenriched === 0) {
-                // Complete!
+            // Hey future me - check is_running, not just unenriched count!
+            // Job might complete with some artists still unenriched (not found on Spotify)
+            if (!data.is_running) {
+                // Job finished (either completed or failed)
                 clearInterval(enrichmentPollInterval);
-                banner.classList.remove('is-enriching');
-                banner.classList.add('is-complete');
-                progressFill.style.width = '100%';
-                progressText.textContent = 'Complete! Refreshing...';
+                
+                if (data.last_job_completed === true) {
+                    // Success!
+                    banner.classList.remove('is-enriching');
+                    banner.classList.add('is-complete');
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Complete! Refreshing...';
+                } else if (data.last_job_completed === false) {
+                    // Failed
+                    banner.classList.remove('is-enriching');
+                    banner.classList.add('is-error');
+                    progressFill.style.width = '100%';
+                    progressFill.style.backgroundColor = 'var(--color-error, #ef4444)';
+                    progressText.textContent = 'Enrichment failed. Refreshing...';
+                }
                 
                 // Reload page after short delay
                 setTimeout(() => {
