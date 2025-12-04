@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
+from enum import Enum
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -56,6 +58,62 @@ IMAGE_SIZES: dict[str, int] = {
 
 # WebP quality - 85 is sweet spot for visual quality vs file size
 WEBP_QUALITY = 85
+
+
+# =============================================================================
+# ERROR TRACKING (Jan 2025)
+# Hey future me - structured error tracking for better debugging!
+# Each error has a code and human-readable message.
+# =============================================================================
+
+
+class ImageDownloadErrorCode(Enum):
+    """Error codes for image download failures."""
+
+    NO_URL = "NO_URL"
+    HTTP_404 = "HTTP_404"  # Image not found on Spotify CDN
+    HTTP_403 = "HTTP_403"  # Access forbidden (rate limit or auth issue)
+    HTTP_500 = "HTTP_500"  # Spotify server error
+    HTTP_OTHER = "HTTP_OTHER"  # Other HTTP status codes
+    NETWORK_TIMEOUT = "NETWORK_TIMEOUT"
+    NETWORK_CONNECTION = "NETWORK_CONNECTION"
+    NETWORK_OTHER = "NETWORK_OTHER"
+    INVALID_IMAGE = "INVALID_IMAGE"  # Can't parse as image
+    PROCESSING_ERROR = "PROCESSING_ERROR"  # PIL/resize error
+    DISK_WRITE_ERROR = "DISK_WRITE_ERROR"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass
+class ImageDownloadResult:
+    """Result of an image download operation.
+
+    Hey future me - use this to track success/failure with detailed error info!
+    success=True means image was saved, success=False includes error details.
+    """
+
+    success: bool
+    path: str | None = None  # Relative path if successful
+    error_code: ImageDownloadErrorCode | None = None
+    error_message: str | None = None
+    url: str | None = None  # Original URL attempted
+
+    @classmethod
+    def ok(cls, path: str) -> "ImageDownloadResult":
+        """Create successful result."""
+        return cls(success=True, path=path)
+
+    @classmethod
+    def error(
+        cls, code: ImageDownloadErrorCode, message: str, url: str | None = None
+    ) -> "ImageDownloadResult":
+        """Create error result with details."""
+        return cls(
+            success=False,
+            error_code=code,
+            error_message=message,
+            url=url,
+        )
 
 
 ImageType = Literal["artists", "albums", "playlists"]
@@ -169,6 +227,105 @@ class SpotifyImageService:
         except Exception as e:
             logger.exception(f"Unexpected error processing image from {url}: {e}")
             return None
+
+    async def _download_and_process_image_with_result(
+        self,
+        url: str | None,
+        target_size: int,
+    ) -> tuple[bytes | None, ImageDownloadResult]:
+        """Download and process image with detailed error tracking.
+
+        Hey future me - this is the NEW version that returns structured errors!
+        Use this for enrichment batch jobs where you want to track why things failed.
+
+        Args:
+            url: Spotify CDN URL (can be None).
+            target_size: Target size in pixels (square).
+
+        Returns:
+            Tuple of (image_bytes or None, ImageDownloadResult with error details)
+        """
+        if not url:
+            return None, ImageDownloadResult.error(
+                ImageDownloadErrorCode.NO_URL,
+                "No image URL provided",
+                url,
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, follow_redirects=True)
+                response.raise_for_status()
+
+                # Process with Pillow
+                try:
+                    image_data = await asyncio.to_thread(
+                        self._process_image_sync, response.content, target_size
+                    )
+                    # Return success placeholder - actual path will be set by caller
+                    return image_data, ImageDownloadResult(success=True, url=url)
+                except Exception as e:
+                    return None, ImageDownloadResult.error(
+                        ImageDownloadErrorCode.PROCESSING_ERROR,
+                        f"Image processing failed: {str(e)}",
+                        url,
+                    )
+
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status == 404:
+                return None, ImageDownloadResult.error(
+                    ImageDownloadErrorCode.HTTP_404,
+                    f"Image not found (404) - Spotify may have removed or changed the image",
+                    url,
+                )
+            elif status == 403:
+                return None, ImageDownloadResult.error(
+                    ImageDownloadErrorCode.HTTP_403,
+                    f"Access forbidden (403) - Rate limit or authentication issue",
+                    url,
+                )
+            elif status >= 500:
+                return None, ImageDownloadResult.error(
+                    ImageDownloadErrorCode.HTTP_500,
+                    f"Spotify server error ({status}) - Try again later",
+                    url,
+                )
+            else:
+                return None, ImageDownloadResult.error(
+                    ImageDownloadErrorCode.HTTP_OTHER,
+                    f"HTTP error {status} downloading image",
+                    url,
+                )
+
+        except httpx.TimeoutException:
+            return None, ImageDownloadResult.error(
+                ImageDownloadErrorCode.NETWORK_TIMEOUT,
+                "Download timed out - Spotify CDN may be slow or unreachable",
+                url,
+            )
+
+        except httpx.ConnectError:
+            return None, ImageDownloadResult.error(
+                ImageDownloadErrorCode.NETWORK_CONNECTION,
+                "Connection failed - Check network connectivity",
+                url,
+            )
+
+        except httpx.RequestError as e:
+            return None, ImageDownloadResult.error(
+                ImageDownloadErrorCode.NETWORK_OTHER,
+                f"Network error: {str(e)}",
+                url,
+            )
+
+        except Exception as e:
+            logger.exception(f"Unexpected error downloading image from {url}: {e}")
+            return None, ImageDownloadResult.error(
+                ImageDownloadErrorCode.UNKNOWN,
+                f"Unexpected error: {str(e)}",
+                url,
+            )
 
     def _process_image_sync(self, image_bytes: bytes, target_size: int) -> bytes:
         """Process image synchronously (runs in thread pool).
@@ -294,6 +451,95 @@ class SpotifyImageService:
         relative_path = self._get_relative_path("playlists", safe_id)
         logger.debug(f"Saved playlist image: {relative_path} ({len(image_data)} bytes)")
         return relative_path
+
+    # =========================================================================
+    # DETAILED ERROR TRACKING METHODS (Jan 2025)
+    # Hey future me - use these for batch enrichment where you need to know
+    # WHY something failed! Returns ImageDownloadResult with error details.
+    # =========================================================================
+
+    async def download_artist_image_with_result(
+        self,
+        spotify_id: str,
+        image_url: str | None,
+    ) -> ImageDownloadResult:
+        """Download artist image with detailed error tracking.
+
+        Hey future me - use this instead of download_artist_image() when you need
+        to know WHY an image download failed (for error reporting in batch jobs)!
+
+        Args:
+            spotify_id: Spotify artist ID.
+            image_url: Spotify CDN URL for the image.
+
+        Returns:
+            ImageDownloadResult with success/failure details.
+        """
+        target_size = IMAGE_SIZES["artists"]
+        image_data, result = await self._download_and_process_image_with_result(
+            image_url, target_size
+        )
+
+        if not result.success or not image_data:
+            return result
+
+        # Save to disk
+        try:
+            file_path = self._get_image_path("artists", spotify_id)
+            await asyncio.to_thread(file_path.write_bytes, image_data)
+
+            relative_path = self._get_relative_path("artists", spotify_id)
+            logger.debug(
+                f"Saved artist image: {relative_path} ({len(image_data)} bytes)"
+            )
+            return ImageDownloadResult.ok(relative_path)
+
+        except OSError as e:
+            return ImageDownloadResult.error(
+                ImageDownloadErrorCode.DISK_WRITE_ERROR,
+                f"Failed to save image to disk: {str(e)}",
+                image_url,
+            )
+
+    async def download_album_image_with_result(
+        self,
+        spotify_id: str,
+        image_url: str | None,
+    ) -> ImageDownloadResult:
+        """Download album image with detailed error tracking.
+
+        Args:
+            spotify_id: Spotify album ID.
+            image_url: Spotify CDN URL for the cover.
+
+        Returns:
+            ImageDownloadResult with success/failure details.
+        """
+        target_size = IMAGE_SIZES["albums"]
+        image_data, result = await self._download_and_process_image_with_result(
+            image_url, target_size
+        )
+
+        if not result.success or not image_data:
+            return result
+
+        # Save to disk
+        try:
+            file_path = self._get_image_path("albums", spotify_id)
+            await asyncio.to_thread(file_path.write_bytes, image_data)
+
+            relative_path = self._get_relative_path("albums", spotify_id)
+            logger.debug(
+                f"Saved album image: {relative_path} ({len(image_data)} bytes)"
+            )
+            return ImageDownloadResult.ok(relative_path)
+
+        except OSError as e:
+            return ImageDownloadResult.error(
+                ImageDownloadErrorCode.DISK_WRITE_ERROR,
+                f"Failed to save image to disk: {str(e)}",
+                image_url,
+            )
 
     def delete_image(self, relative_path: str | None) -> bool:
         """Delete an image file from disk.

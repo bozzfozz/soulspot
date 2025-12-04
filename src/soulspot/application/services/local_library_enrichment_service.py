@@ -749,18 +749,28 @@ class LocalLibraryEnrichmentService:
 
         model.updated_at = datetime.now(UTC)
 
-        # Download artwork if enabled
+        # Download artwork if enabled - with detailed error tracking!
         image_downloaded = False
+        image_error: str | None = None
         if download_artwork and candidate.spotify_image_url:
-            try:
-                # Extract Spotify ID from URI (spotify:artist:XXXXX)
-                spotify_id = candidate.spotify_uri.split(":")[-1]
-                await self._image_service.download_artist_image(
-                    spotify_id, candidate.spotify_image_url
-                )
+            # Extract Spotify ID from URI (spotify:artist:XXXXX)
+            spotify_id = candidate.spotify_uri.split(":")[-1]
+
+            # Hey future me - use the new _with_result method for detailed errors!
+            download_result = await self._image_service.download_artist_image_with_result(
+                spotify_id, candidate.spotify_image_url
+            )
+
+            if download_result.success:
                 image_downloaded = True
-            except Exception as e:
-                logger.warning(f"Failed to download artist image: {e}")
+            else:
+                # Log detailed error for debugging
+                image_error = download_result.error_message
+                logger.warning(
+                    f"Failed to download artwork for artist '{artist.name}': "
+                    f"[{download_result.error_code.value if download_result.error_code else 'UNKNOWN'}] "
+                    f"{download_result.error_message}"
+                )
 
         logger.debug(
             f"Enriched artist '{artist.name}' with Spotify URI {candidate.spotify_uri}"
@@ -773,6 +783,7 @@ class LocalLibraryEnrichmentService:
             success=True,
             spotify_uri=candidate.spotify_uri,
             image_downloaded=image_downloaded,
+            error=image_error if not image_downloaded and download_artwork else None,
         )
 
     async def _store_artist_candidates(
@@ -1054,18 +1065,28 @@ class LocalLibraryEnrichmentService:
         model.artwork_url = candidate.spotify_image_url
         model.updated_at = datetime.now(UTC)
 
-        # Download artwork if enabled
+        # Download artwork if enabled - with detailed error tracking!
         image_downloaded = False
+        image_error: str | None = None
         if download_artwork and candidate.spotify_image_url:
-            try:
-                spotify_id = candidate.spotify_uri.split(":")[-1]
-                local_path = await self._image_service.download_album_image(
-                    spotify_id, candidate.spotify_image_url
-                )
-                model.artwork_path = str(local_path)
+            spotify_id = candidate.spotify_uri.split(":")[-1]
+
+            # Hey future me - use the new _with_result method for detailed errors!
+            download_result = await self._image_service.download_album_image_with_result(
+                spotify_id, candidate.spotify_image_url
+            )
+
+            if download_result.success:
+                model.artwork_path = download_result.path
                 image_downloaded = True
-            except Exception as e:
-                logger.warning(f"Failed to download album image: {e}")
+            else:
+                # Log detailed error for debugging
+                image_error = download_result.error_message
+                logger.warning(
+                    f"Failed to download artwork for album '{album.title}': "
+                    f"[{download_result.error_code.value if download_result.error_code else 'UNKNOWN'}] "
+                    f"{download_result.error_message}"
+                )
 
         logger.debug(
             f"Enriched album '{album.title}' with Spotify URI {candidate.spotify_uri}"
@@ -1078,6 +1099,7 @@ class LocalLibraryEnrichmentService:
             success=True,
             spotify_uri=candidate.spotify_uri,
             image_downloaded=image_downloaded,
+            error=image_error if not image_downloaded and download_artwork else None,
         )
 
     async def _store_album_candidates(

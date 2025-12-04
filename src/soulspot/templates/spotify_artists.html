@@ -69,29 +69,37 @@
     {% if artists %}
     <div class="artists-grid">
         {% for artist in artists %}
-        <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 % 12 }};">
-            {% if artist.image_url %}
-            <img src="{{ artist.image_url }}" alt="{{ artist.name }}" class="artist-image">
-            {% else %}
-            <div class="artist-avatar">
-                {{ artist.name[0]|upper }}
-            </div>
-            {% endif %}
-            <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
-            <div class="artist-genres">
-                {% for genre in artist.genres %}
-                <span class="genre-tag">{{ genre }}</span>
-                {% endfor %}
-                {% if artist.genres_count > 3 %}
-                <span class="genre-tag genre-more">+{{ artist.genres_count - 3 }}</span>
+        <div class="artist-card blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 % 12 }};" data-artist-id="{{ artist.spotify_id }}">
+            <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card-link">
+                {% if artist.image_url %}
+                <img src="{{ artist.image_url }}" alt="{{ artist.name }}" class="artist-image">
+                {% else %}
+                <div class="artist-avatar">
+                    {{ artist.name[0]|upper }}
+                </div>
                 {% endif %}
-            </div>
-            {% if artist.popularity %}
-            <div class="artist-popularity">
-                <div class="popularity-bar" style="width: {{ artist.popularity }}%;"></div>
-            </div>
-            {% endif %}
-        </a>
+                <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
+                <div class="artist-genres">
+                    {% for genre in artist.genres %}
+                    <span class="genre-tag">{{ genre }}</span>
+                    {% endfor %}
+                    {% if artist.genres_count > 3 %}
+                    <span class="genre-tag genre-more">+{{ artist.genres_count - 3 }}</span>
+                    {% endif %}
+                </div>
+                {% if artist.popularity %}
+                <div class="artist-popularity">
+                    <div class="popularity-bar" style="width: {{ artist.popularity }}%;"></div>
+                </div>
+                {% endif %}
+            </a>
+            <!-- Unfollow button (appears on hover) -->
+            <button class="unfollow-btn" 
+                    onclick="event.stopPropagation(); unfollowArtist('{{ artist.spotify_id }}', this)"
+                    title="Unfollow artist">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
         {% endfor %}
     </div>
     {% else %}
@@ -240,6 +248,40 @@
         border: 1px solid rgba(239, 68, 68, 0.3);
         color: #ef4444;
     }
+    
+    /* Hey future me - Unfollow button that appears on hover! */
+    .artist-card {
+        position: relative;
+    }
+    .artist-card-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+    }
+    .unfollow-btn {
+        position: absolute;
+        top: var(--space-2);
+        right: var(--space-2);
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity var(--transition-fast), background-color var(--transition-fast);
+        z-index: 10;
+    }
+    .artist-card:hover .unfollow-btn {
+        opacity: 1;
+    }
+    .unfollow-btn:hover {
+        background: #ef4444;
+    }
 </style>
 <script>
 // Client-side search filter
@@ -265,5 +307,64 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// Hey future me - Unfollow artist directly from the grid!
+// Uses the Follow API endpoint from Phase 1. Removes card with animation on success.
+async function unfollowArtist(artistId, button) {
+    // Confirm before unfollowing
+    if (!confirm('Do you want to unfollow this artist?')) {
+        return;
+    }
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<div class="spinner spinner-sm" style="width: 16px; height: 16px; border-color: white; border-top-color: transparent;"></div>';
+    
+    try {
+        const response = await fetch(`/api/artists/spotify/${artistId}/follow`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Unfollow failed');
+        }
+        
+        // Animate card removal
+        const card = button.closest('.artist-card');
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0';
+        card.style.transform = 'scale(0.9)';
+        
+        setTimeout(() => {
+            card.remove();
+            // Update counter in header
+            const subtitle = document.querySelector('.subtitle');
+            if (subtitle) {
+                const match = subtitle.textContent.match(/(\d+)/);
+                if (match) {
+                    const newCount = parseInt(match[1]) - 1;
+                    subtitle.textContent = subtitle.textContent.replace(/\d+/, newCount);
+                }
+            }
+        }, 300);
+        
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.success('Artist unfollowed');
+        }
+        
+    } catch (error) {
+        console.error('Unfollow error:', error);
+        // Revert button state
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-x-lg"></i>';
+        
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(error.message || 'Failed to unfollow artist');
+        } else {
+            alert('Failed to unfollow artist: ' + error.message);
+        }
+    }
+}
 </script>
 {% endblock %}
