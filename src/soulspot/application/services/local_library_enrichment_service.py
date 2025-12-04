@@ -166,7 +166,6 @@ class LocalLibraryEnrichmentService:
         download_artwork = (
             await self._settings_service.should_download_enrichment_artwork()
         )
-        match_threshold = await self._settings_service.get_enrichment_match_threshold()
 
         # Hey future me - these are the new advanced settings (Dec 2025)!
         # They make enrichment work much better for niche/underground artists.
@@ -295,8 +294,11 @@ class LocalLibraryEnrichmentService:
         """
         from soulspot.infrastructure.persistence.models import SpotifyArtistModel
 
+        # Hey future me - SpotifyArtistModel uses spotify_id (just the ID like "0OdUWJ0sBjDrqHygGUXeCF")
+        # not spotify_uri (full URI like "spotify:artist:0OdUWJ0sBjDrqHygGUXeCF")!
+        # We need to construct the URI from the ID.
         stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_uri.isnot(None)
+            SpotifyArtistModel.spotify_id.isnot(None)
         )
         result = await self._session.execute(stmt)
         models = result.scalars().all()
@@ -305,9 +307,11 @@ class LocalLibraryEnrichmentService:
         # "Pink Floyd" and "pink floyd" should both match the same followed artist.
         lookup: dict[str, tuple[str, str | None]] = {}
         for model in models:
-            if model.spotify_uri:
+            if model.spotify_id:
                 name_lower = model.name.lower().strip()
-                lookup[name_lower] = (model.spotify_uri, model.image_url)
+                # Construct full Spotify URI from ID
+                spotify_uri = f"spotify:artist:{model.spotify_id}"
+                lookup[name_lower] = (spotify_uri, model.image_url)
 
         return lookup
 

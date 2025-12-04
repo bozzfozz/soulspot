@@ -199,7 +199,10 @@ Navigiere zu **Settings** → **Library** Tab:
 |---------|---------|--------------|
 | `library.enrichment_batch_size` | 50 | Items pro Batch |
 | `library.enrichment_rate_limit_ms` | 50 | Pause zwischen API-Calls (ms) |
-| `library.enrichment_match_threshold` | 80 | Min. Confidence für Auto-Match (%) |
+| `library.enrichment_confidence_threshold` | 75 | Min. Confidence für Auto-Match (%) |
+| `library.enrichment_search_limit` | 20 | Anzahl Spotify-Suchergebnisse |
+| `library.enrichment_name_weight` | 85 | Gewichtung Name vs Popularity (%) |
+| `library.use_followed_artists_hint` | true | Followed Artists als Hint nutzen |
 | `library.enrichment_download_artwork` | true | Artwork auch lokal speichern |
 | `library.enrich_compilations` | true | Compilations auch enrichen |
 

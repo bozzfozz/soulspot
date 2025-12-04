@@ -1012,16 +1012,6 @@ class AppSettingsService:
         """
         return await self.get_bool("library.enrich_compilations", default=True)
 
-    async def get_enrichment_match_threshold(self) -> int:
-        """Get minimum confidence score (0-100) for automatic matching.
-
-        Default: 80 - matches with score >= 80 are auto-applied.
-        Lower scores create enrichment candidates for manual review.
-
-        Score factors: exact artist match, album name similarity, track count.
-        """
-        return await self.get_int("library.enrichment_match_threshold", default=80)
-
     async def get_library_enrichment_settings_summary(self) -> dict[str, Any]:
         """Get summary of all library enrichment settings for UI display.
 
@@ -1033,7 +1023,6 @@ class AppSettingsService:
             "rate_limit_ms": await self.get_enrichment_rate_limit_ms(),
             "batch_size": await self.get_enrichment_batch_size(),
             "enrich_compilations": await self.should_enrich_compilation_albums(),
-            "match_threshold": await self.get_enrichment_match_threshold(),
         }
 
     # =========================================================================
