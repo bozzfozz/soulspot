@@ -52,6 +52,92 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# ARTIST NAME NORMALIZATION (Dec 2025)
+# Hey future me - this handles cases like "DJ Paul Elstak" vs "Paul Elstak"!
+# Local files often have prefixes that Spotify doesn't use (or vice versa).
+# We strip these before comparing to get better fuzzy match scores.
+# =============================================================================
+
+# Common prefixes to strip (case-insensitive, with optional trailing space/dot)
+ARTIST_PREFIXES = (
+    "dj ",
+    "dj. ",
+    "the ",
+    "mc ",
+    "mc. ",
+    "dr ",
+    "dr. ",
+    "lil ",
+    "lil' ",
+    "big ",
+    "young ",
+    "old ",
+    "king ",
+    "queen ",
+    "sir ",
+    "lady ",
+    "miss ",
+    "mister ",
+    "mr ",
+    "mr. ",
+    "mrs ",
+    "mrs. ",
+    "ms ",
+    "ms. ",
+)
+
+# Common suffixes to strip (case-insensitive)
+ARTIST_SUFFIXES = (
+    " dj",
+    " mc",
+    " band",
+    " group",
+    " orchestra",
+    " ensemble",
+    " trio",
+    " quartet",
+    " quintet",
+)
+
+
+def normalize_artist_name(name: str) -> str:
+    """Normalize artist name for better matching.
+
+    Hey future me - this is crucial for matching "DJ Paul Elstak" to "Paul Elstak"!
+    Strips common prefixes (DJ, The, MC, Dr, Lil) and suffixes (Band, Orchestra).
+    Also normalizes whitespace and case.
+
+    Args:
+        name: Original artist name
+
+    Returns:
+        Normalized name for comparison
+
+    Examples:
+        "DJ Paul Elstak" -> "paul elstak"
+        "The Prodigy" -> "prodigy"
+        "Dr. Dre" -> "dre"
+        "Lil Wayne" -> "wayne"
+        "Paul Elstak" -> "paul elstak" (unchanged except case)
+    """
+    # Lowercase and strip whitespace
+    normalized = name.lower().strip()
+
+    # Strip prefixes (check each, strip first match)
+    for prefix in ARTIST_PREFIXES:
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+            break  # Only strip one prefix
+
+    # Strip suffixes (check each, strip first match)
+    for suffix in ARTIST_SUFFIXES:
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)].strip()
+            break  # Only strip one suffix
+
+    return normalized
+
 
 @dataclass
 class EnrichmentResult:
@@ -154,6 +240,7 @@ class LocalLibraryEnrichmentService:
             "albums_failed": 0,
             "images_downloaded": 0,
             "followed_artists_matched": 0,
+            "followed_albums_matched": 0,
             "errors": [],
         }
 
@@ -185,10 +272,13 @@ class LocalLibraryEnrichmentService:
         # This is the killer feature: if artist exists in Followed Artists, we use
         # their Spotify URI directly instead of searching. 100% match rate guaranteed!
         followed_artists_lookup: dict[str, tuple[str, str | None]] = {}
+        followed_albums_lookup: dict[str, tuple[str, str | None]] = {}
         if use_followed_hint:
             followed_artists_lookup = await self._build_followed_artists_lookup()
+            followed_albums_lookup = await self._build_followed_albums_lookup()
             logger.info(
-                f"Loaded {len(followed_artists_lookup)} followed artists for hint matching"
+                f"Loaded {len(followed_artists_lookup)} followed artists, "
+                f"{len(followed_albums_lookup)} followed albums for hint matching"
             )
 
         logger.info(
@@ -243,6 +333,9 @@ class LocalLibraryEnrichmentService:
                 album,
                 confidence_threshold=confidence_threshold,
                 download_artwork=download_artwork,
+                search_limit=search_limit,
+                name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
+                followed_albums_lookup=followed_albums_lookup,
             )
             stats["albums_processed"] += 1
 
@@ -250,11 +343,14 @@ class LocalLibraryEnrichmentService:
                 stats["albums_enriched"] += 1
                 if result.image_downloaded:
                     stats["images_downloaded"] += 1
+                # Hey future me - track how many were matched via followed albums hint!
+                if result.error == "matched_via_followed_albums":
+                    stats["followed_albums_matched"] += 1
             elif result.candidates_created > 0:
                 stats["albums_candidates"] += result.candidates_created
             else:
                 stats["albums_failed"] += 1
-                if result.error:
+                if result.error and result.error != "matched_via_followed_albums":
                     stats["errors"].append(
                         {
                             "type": "album",
@@ -272,7 +368,8 @@ class LocalLibraryEnrichmentService:
         logger.info(
             f"Enrichment complete: {stats['artists_enriched']} artists, "
             f"{stats['albums_enriched']} albums enriched, "
-            f"{stats['followed_artists_matched']} via followed artists hint"
+            f"{stats['followed_artists_matched']} artists + "
+            f"{stats['followed_albums_matched']} albums via followed hint"
         )
 
         return stats
@@ -305,13 +402,70 @@ class LocalLibraryEnrichmentService:
 
         # Hey future me - normalize names to lowercase for case-insensitive matching!
         # "Pink Floyd" and "pink floyd" should both match the same followed artist.
+        # ALSO store normalized version (without DJ/The/MC) for prefix-variant matching!
         lookup: dict[str, tuple[str, str | None]] = {}
         for model in models:
             if model.spotify_id:
                 name_lower = model.name.lower().strip()
                 # Construct full Spotify URI from ID
                 spotify_uri = f"spotify:artist:{model.spotify_id}"
+                # Store under original lowercase name
                 lookup[name_lower] = (spotify_uri, model.image_url)
+                # Also store under normalized name (without DJ/The/MC prefixes)
+                # This allows "DJ Paul Elstak" (local) to match "Paul Elstak" (Spotify)
+                name_normalized = normalize_artist_name(model.name)
+                if name_normalized != name_lower:
+                    lookup[name_normalized] = (spotify_uri, model.image_url)
+
+        return lookup
+
+    async def _build_followed_albums_lookup(
+        self,
+    ) -> dict[str, tuple[str, str | None]]:
+        """Build a lookup table of followed albums by "artist|album" key.
+
+        Hey future me - this allows 100% match rate for albums from followed artists!
+        Key format: "artist_name|album_title" (both normalized and lowercase)
+
+        Returns:
+            Dict mapping "artist|album" to (spotify_uri, image_url) tuple
+        """
+        from soulspot.infrastructure.persistence.models import (
+            SpotifyAlbumModel,
+            SpotifyArtistModel,
+        )
+
+        # Join albums with artists to get artist name
+        stmt = (
+            select(SpotifyAlbumModel, SpotifyArtistModel.name)
+            .join(
+                SpotifyArtistModel,
+                SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id,
+            )
+            .where(SpotifyAlbumModel.spotify_id.isnot(None))
+        )
+        result = await self._session.execute(stmt)
+        rows = result.all()
+
+        lookup: dict[str, tuple[str, str | None]] = {}
+        for album_model, artist_name in rows:
+            # Build key: "artist|album" (lowercase)
+            artist_lower = artist_name.lower().strip()
+            album_lower = album_model.name.lower().strip()
+            key_original = f"{artist_lower}|{album_lower}"
+
+            # Construct full Spotify URI
+            spotify_uri = f"spotify:album:{album_model.spotify_id}"
+
+            # Store under original key
+            lookup[key_original] = (spotify_uri, album_model.image_url)
+
+            # Also store under normalized artist name
+            # "DJ Paul Elstak|Party Animals" should match "Paul Elstak|Party Animals"
+            artist_normalized = normalize_artist_name(artist_name)
+            if artist_normalized != artist_lower:
+                key_normalized = f"{artist_normalized}|{album_lower}"
+                lookup[key_normalized] = (spotify_uri, album_model.image_url)
 
         return lookup
 
@@ -346,8 +500,21 @@ class LocalLibraryEnrichmentService:
             # If yes, copy Spotify URI directly without searching. 100% match rate!
             if followed_artists_lookup:
                 name_lower = artist.name.lower().strip()
+                name_normalized = normalize_artist_name(artist.name)
+
+                # Try exact match first, then normalized match
+                # This handles "DJ Paul Elstak" (local) matching "Paul Elstak" (Spotify)
+                matched_key = None
                 if name_lower in followed_artists_lookup:
-                    spotify_uri, image_url = followed_artists_lookup[name_lower]
+                    matched_key = name_lower
+                elif name_normalized in followed_artists_lookup:
+                    matched_key = name_normalized
+                    logger.debug(
+                        f"Artist '{artist.name}' matched via normalized name '{name_normalized}'"
+                    )
+
+                if matched_key:
+                    spotify_uri, image_url = followed_artists_lookup[matched_key]
                     logger.debug(
                         f"Artist '{artist.name}' matched via followed artists hint"
                     )
@@ -457,6 +624,9 @@ class LocalLibraryEnrichmentService:
         # Hey future me - popularity_weight is the remainder after name_weight
         popularity_weight = 1.0 - name_weight
 
+        # Normalize local name for comparison (strips DJ, The, MC, etc.)
+        local_normalized = normalize_artist_name(local_name)
+
         for sp_artist in spotify_artists:
             sp_name = sp_artist.get("name", "")
             sp_uri = sp_artist.get("uri", "")
@@ -468,8 +638,16 @@ class LocalLibraryEnrichmentService:
             images = sp_artist.get("images", [])
             sp_image_url = images[0]["url"] if images else None
 
-            # Calculate name similarity (0-100, normalize to 0-1)
-            name_score = fuzz.ratio(local_name.lower(), sp_name.lower()) / 100.0
+            # Normalize Spotify name for comparison
+            sp_normalized = normalize_artist_name(sp_name)
+
+            # Calculate name similarity using BOTH normalized and original names
+            # Hey future me - we take the MAX of both comparisons!
+            # This handles "DJ Paul Elstak" vs "Paul Elstak" (normalized = 100%)
+            # but also "Tiësto" vs "Tiesto" (original = high match)
+            normalized_score = fuzz.ratio(local_normalized, sp_normalized) / 100.0
+            original_score = fuzz.ratio(local_name.lower(), sp_name.lower()) / 100.0
+            name_score = max(normalized_score, original_score)
 
             # Combined score: configurable name_weight + popularity_weight
             # Hey future me - higher name_weight = better for niche artists!
@@ -602,6 +780,9 @@ class LocalLibraryEnrichmentService:
         album: Album,
         confidence_threshold: float,
         download_artwork: bool,
+        search_limit: int = 20,
+        name_weight: float = 0.85,
+        followed_albums_lookup: dict[str, tuple[str, str | None]] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single album with Spotify data.
 
@@ -609,6 +790,9 @@ class LocalLibraryEnrichmentService:
             album: Album entity to enrich
             confidence_threshold: Minimum confidence for auto-apply
             download_artwork: Whether to download artwork
+            search_limit: Number of Spotify search results to scan
+            name_weight: Weight of name similarity vs popularity (0.0-1.0)
+            followed_albums_lookup: Optional lookup table for followed albums hint
 
         Returns:
             EnrichmentResult with success/failure info
@@ -620,6 +804,47 @@ class LocalLibraryEnrichmentService:
             )
             artist_name = artist_model.name if artist_model else "Unknown"
 
+            # Hey future me - FOLLOWED ALBUMS HINT! Check if album exists in Followed Albums.
+            # Key format: "artist|album" (both lowercase)
+            if followed_albums_lookup:
+                artist_lower = artist_name.lower().strip()
+                album_lower = album.title.lower().strip()
+                key_original = f"{artist_lower}|{album_lower}"
+                artist_normalized = normalize_artist_name(artist_name)
+                key_normalized = f"{artist_normalized}|{album_lower}"
+
+                # Try exact match first, then normalized match
+                matched_key = None
+                if key_original in followed_albums_lookup:
+                    matched_key = key_original
+                elif key_normalized in followed_albums_lookup:
+                    matched_key = key_normalized
+                    logger.debug(
+                        f"Album '{album.title}' matched via normalized artist '{artist_normalized}'"
+                    )
+
+                if matched_key:
+                    spotify_uri, image_url = followed_albums_lookup[matched_key]
+                    logger.debug(
+                        f"Album '{album.title}' by '{artist_name}' matched via followed albums hint"
+                    )
+
+                    # Create a synthetic candidate from followed album data
+                    candidate = EnrichmentCandidate(
+                        spotify_uri=spotify_uri,
+                        spotify_name=album.title,  # Use local name
+                        spotify_image_url=image_url,
+                        confidence_score=1.0,  # 100% confidence for followed albums
+                        extra_info={"matched_via": "followed_albums_hint"},
+                    )
+
+                    result = await self._apply_album_enrichment(
+                        album, candidate, download_artwork
+                    )
+                    # Hey future me - mark this as matched via followed albums for stats!
+                    result.error = "matched_via_followed_albums"
+                    return result
+
             # Search Spotify: "artist album"
             # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
             # LibraryFolderParser and DB already handle disambiguation stripping.
@@ -627,7 +852,7 @@ class LocalLibraryEnrichmentService:
             search_results = await self._spotify_client.search_track(
                 query=search_query,
                 access_token=self._access_token,
-                limit=10,
+                limit=search_limit,  # Configurable via settings (default 20)
             )
 
             # Extract unique albums from track search results
@@ -650,9 +875,9 @@ class LocalLibraryEnrichmentService:
                     error="No Spotify albums found",
                 )
 
-            # Score candidates
+            # Score candidates with name normalization
             candidates = self._score_album_candidates(
-                album.title, artist_name, list(albums_seen.values())
+                album.title, artist_name, list(albums_seen.values()), name_weight
             )
 
             if not candidates:
@@ -696,23 +921,31 @@ class LocalLibraryEnrichmentService:
         local_title: str,
         local_artist: str,
         spotify_albums: list[dict[str, Any]],
+        name_weight: float = 0.85,
     ) -> list[EnrichmentCandidate]:
-        """Score Spotify album candidates.
+        """Score Spotify album candidates with name normalization.
 
-        Scoring factors:
-        - Title similarity - 50% weight
-        - Artist name match - 40% weight
-        - Track count similarity - 10% weight (if available)
+        Hey future me - this now uses normalize_artist_name() for better matching!
+        "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
+
+        Scoring formula (configurable via name_weight):
+        - Title similarity - (name_weight / 2)
+        - Artist name match - (name_weight / 2)
+        - Combined: Higher name_weight = more emphasis on exact name match
 
         Args:
             local_title: Local album title
             local_artist: Local artist name
             spotify_albums: List of Spotify album dicts
+            name_weight: Weight of name similarity (0.0-1.0, default 0.85)
 
         Returns:
             Sorted list of EnrichmentCandidate (highest score first)
         """
         candidates = []
+
+        # Normalize local artist name for comparison
+        local_artist_normalized = normalize_artist_name(local_artist)
 
         for sp_album in spotify_albums:
             sp_title = sp_album.get("name", "")
@@ -726,13 +959,24 @@ class LocalLibraryEnrichmentService:
             images = sp_album.get("images", [])
             sp_image_url = images[0]["url"] if images else None
 
-            # Calculate scores
+            # Normalize Spotify artist name
+            sp_artist_normalized = normalize_artist_name(sp_artist_name)
+
+            # Calculate title score (straight fuzzy match)
             title_score = fuzz.ratio(local_title.lower(), sp_title.lower()) / 100.0
-            artist_score = (
+
+            # Calculate artist score using BOTH normalized and original names
+            # Hey future me - we take the MAX of both comparisons!
+            # This handles "DJ Paul Elstak" vs "Paul Elstak" (normalized = 100%)
+            artist_original_score = (
                 fuzz.ratio(local_artist.lower(), sp_artist_name.lower()) / 100.0
             )
+            artist_normalized_score = (
+                fuzz.ratio(local_artist_normalized, sp_artist_normalized) / 100.0
+            )
+            artist_score = max(artist_original_score, artist_normalized_score)
 
-            # Combined score
+            # Combined score: 50% title + 50% artist (both equally important for albums)
             confidence = (title_score * 0.5) + (artist_score * 0.5)
 
             if confidence >= self.CANDIDATE_THRESHOLD:

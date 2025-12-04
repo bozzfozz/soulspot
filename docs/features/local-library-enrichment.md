@@ -30,19 +30,37 @@ Das Local Library Enrichment Feature reichert lokale Musikdateien mit Spotify-Me
 ### Matching-Algorithmus
 
 **Für Artists:**
-- Fuzzy Name Matching (70% Gewichtung)
-- Spotify Popularity (30% Gewichtung)
+- **Name Normalisierung**: Entfernt typische Präfixe (DJ, The, MC, Dr, Lil) und Suffixe (Band, Orchestra) vor dem Vergleich
+  - Beispiel: "DJ Paul Elstak" → "paul elstak" = 100% Match mit "Paul Elstak"
+- **Fuzzy Name Matching** (85% Gewichtung, konfigurierbar)
+- **Spotify Popularity** (15% Gewichtung, konfigurierbar)
 - Filtert "Various Artists" automatisch aus
+- **Followed Artists Hint**: Falls Artist in Followed Artists existiert, direkter 100% Match
 
 **Für Alben:**
+- **Name Normalisierung**: Wie bei Artists werden DJ/The/MC etc. aus dem Artist-Namen entfernt
+  - Beispiel: "DJ Paul Elstak - Party Animals" = "Paul Elstak - Party Animals"
 - Album-Titel Matching (50% Gewichtung)
-- Artist-Name Matching (50% Gewichtung)
-- Sucht über Spotify Track Search API
+- Artist-Name Matching mit Normalisierung (50% Gewichtung)
+- Sucht über Spotify Track Search API (limit konfigurierbar, default 20)
+- **Followed Albums Hint**: Falls Album von einem Followed Artist existiert, direkter 100% Match
+
+### Name Normalisierung
+
+Folgende Präfixe werden beim Matching automatisch ignoriert:
+- **DJ**: "DJ Paul Elstak" = "Paul Elstak"
+- **The**: "The Prodigy" = "Prodigy"
+- **MC**: "MC Hammer" = "Hammer"
+- **Dr/Dr.**: "Dr. Dre" = "Dre"
+- **Lil/Lil'**: "Lil Wayne" = "Wayne"
+- **Weitere**: Big, Young, Old, King, Queen, Sir, Lady, Miss, Mr, Mrs, Ms
+
+Suffixe wie "Band", "Orchestra", "Trio" werden ebenfalls entfernt.
 
 ### Confidence Scoring
 
-- **≥80%**: Automatische Anwendung des Matches
-- **50-79%**: Kandidat wird für manuelle Überprüfung gespeichert
+- **≥75%**: Automatische Anwendung des Matches (konfigurierbar)
+- **50-74%**: Kandidat wird für manuelle Überprüfung gespeichert
 - **<50%**: Kein Match gefunden
 
 ### Dual Album Type System (Lidarr-kompatibel)
