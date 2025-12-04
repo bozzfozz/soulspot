@@ -17,12 +17,14 @@ from soulspot.api.dependencies import (
     get_library_scanner_service,
     get_playlist_repository,
     get_spotify_browse_repository,
+    get_spotify_client,
     get_spotify_sync_service,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     PlaylistRepository,
@@ -1590,6 +1592,7 @@ async def spotify_artist_detail_page(
     request: Request,
     artist_id: str,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> Any:
     """Spotify artist detail page with albums.
 
@@ -1677,6 +1680,53 @@ async def spotify_artist_detail_page(
     except Exception as e:
         error = str(e)
 
+    # Hey future me - fetch related artists for "Fans Also Like" section!
+    # This runs AFTER main artist/albums load to not block the page.
+    # We only fetch if we have a valid access_token.
+    related_artists: list[dict[str, Any]] = []
+    try:
+        access_token = None
+        if hasattr(request.app.state, "db_token_manager"):
+            db_token_manager_ra: DatabaseTokenManager = (
+                request.app.state.db_token_manager
+            )
+            access_token = await db_token_manager_ra.get_token_for_background()
+
+        if access_token:
+            # Fetch related artists from Spotify
+            related_raw = await spotify_client.get_related_artists(
+                artist_id, access_token
+            )
+
+            # Batch check following status
+            related_ids = [a.get("id") for a in related_raw if a.get("id")]
+            following_statuses: list[bool] = []
+            if related_ids:
+                following_statuses = await spotify_client.check_if_following_artists(
+                    related_ids, access_token
+                )
+
+            # Build simplified list for template
+            for idx, ra in enumerate(related_raw[:12]):  # Limit to 12 for UI
+                images = ra.get("images", [])
+                image_url = images[0]["url"] if images else None
+
+                related_artists.append(
+                    {
+                        "spotify_id": ra.get("id", ""),
+                        "name": ra.get("name", "Unknown"),
+                        "image_url": image_url,
+                        "genres": ra.get("genres", [])[:2],  # Limit genres
+                        "popularity": ra.get("popularity", 0),
+                        "is_following": following_statuses[idx]
+                        if idx < len(following_statuses)
+                        else False,
+                    }
+                )
+    except Exception as e:
+        # Don't fail the whole page if related artists fail
+        logger.warning(f"Failed to fetch related artists for {artist_id}: {e}")
+
     return templates.TemplateResponse(
         request,
         "spotify_artist_detail.html",
@@ -1686,6 +1736,7 @@ async def spotify_artist_detail_page(
             "sync_stats": sync_stats,
             "error": error,
             "album_count": len(albums),
+            "related_artists": related_artists,
         },
     )
 

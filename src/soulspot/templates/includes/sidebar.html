@@ -45,17 +45,13 @@
                 <i class="bi bi-plug sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Connect</span>
             </a>
-            <a href="/playlists" class="sidebar-item {% if '/playlists' in request.url.path and '/import' not in request.url.path %}active{% endif %}">
+            <a href="/playlists" class="sidebar-item {% if '/playlists' in request.url.path %}active{% endif %}">
                 <i class="bi bi-list-ul sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Playlists</span>
             </a>
             <a href="/spotify/artists" class="sidebar-item {% if '/spotify/artists' in request.url.path %}active{% endif %}">
                 <i class="bi bi-heart sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Followed Artists</span>
-            </a>
-            <a href="/playlists/import" class="sidebar-item {% if '/playlists/import' in request.url.path %}active{% endif %}">
-                <i class="bi bi-cloud-arrow-down sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Import</span>
             </a>
         </div>
 

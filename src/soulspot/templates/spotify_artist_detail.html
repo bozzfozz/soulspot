@@ -132,6 +132,58 @@
     </div>
     {% endif %}
 </div>
+
+<!-- Fans Also Like Section -->
+{% if related_artists %}
+{% set unfollowed_artists = related_artists | selectattr('is_following', 'equalto', false) | list %}
+<div style="margin-top: var(--space-8);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
+        <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold);">
+            <i class="bi bi-heart" style="color: #1DB954;"></i> Fans Also Like
+        </h2>
+        <div style="display: flex; gap: var(--space-2); align-items: center;">
+            {% if unfollowed_artists %}
+            <button id="show-unfollowed-btn" class="btn btn-ghost btn-sm" onclick="toggleUnfollowedFilter()">
+                <i class="bi bi-funnel"></i> Show Unfollowed ({{ unfollowed_artists | length }})
+            </button>
+            <button id="follow-all-btn" class="btn btn-spotify btn-sm" onclick="followAllUnfollowed()">
+                <i class="bi bi-plus-lg"></i> Follow All ({{ unfollowed_artists | length }})
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="related-artists-scroll" id="related-artists-container">
+        {% for ra in related_artists %}
+        <a href="/spotify/artists/{{ ra.spotify_id }}" 
+           class="related-artist-card" 
+           data-artist-id="{{ ra.spotify_id }}"
+           data-is-following="{{ 'true' if ra.is_following else 'false' }}">
+            {% if ra.image_url %}
+            <img src="{{ ra.image_url }}" alt="{{ ra.name }}" class="related-artist-image">
+            {% else %}
+            <div class="related-artist-avatar">{{ ra.name[0]|upper }}</div>
+            {% endif %}
+            <div class="related-artist-name" title="{{ ra.name }}">{{ ra.name }}</div>
+            <div class="related-artist-genres">
+                {% for genre in ra.genres %}
+                <span class="mini-genre">{{ genre }}</span>
+                {% endfor %}
+            </div>
+            {% if ra.is_following %}
+            <span class="following-badge"><i class="bi bi-check"></i> Following</span>
+            {% else %}
+            <button class="follow-btn-small" 
+                    onclick="event.preventDefault(); event.stopPropagation(); followArtist('{{ ra.spotify_id }}', this)">
+                <i class="bi bi-plus-lg"></i> Follow
+            </button>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {% else %}
 <div class="empty-state">
     <div class="empty-icon">
@@ -359,6 +411,118 @@
         border: 1px solid rgba(239, 68, 68, 0.3);
         color: #ef4444;
     }
+
+    /* Related Artists / Fans Also Like */
+    .related-artists-scroll {
+        display: flex;
+        gap: var(--space-4);
+        overflow-x: auto;
+        padding-bottom: var(--space-3);
+        scroll-snap-type: x mandatory;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-primary) transparent;
+    }
+    .related-artists-scroll::-webkit-scrollbar {
+        height: 6px;
+    }
+    .related-artists-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .related-artists-scroll::-webkit-scrollbar-thumb {
+        background: var(--border-primary);
+        border-radius: 3px;
+    }
+    .related-artist-card {
+        flex: 0 0 150px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-lg);
+        padding: var(--space-4);
+        text-align: center;
+        text-decoration: none;
+        color: var(--text-primary);
+        scroll-snap-align: start;
+        transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+    }
+    .related-artist-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-xl);
+        border-color: #1DB954;
+    }
+    .related-artist-image {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-bottom: var(--space-3);
+    }
+    .related-artist-avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        font-weight: var(--font-weight-bold);
+        color: white;
+        margin: 0 auto var(--space-3);
+    }
+    .related-artist-name {
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-bold);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: var(--space-2);
+    }
+    .related-artist-card:hover .related-artist-name {
+        color: #1DB954;
+    }
+    .related-artist-genres {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+        margin-bottom: var(--space-2);
+        min-height: 20px;
+    }
+    .mini-genre {
+        font-size: 9px;
+        padding: 1px 6px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-full);
+        color: var(--text-muted);
+    }
+    .following-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        padding: 4px 10px;
+        background: rgba(29, 185, 84, 0.2);
+        color: #1DB954;
+        border-radius: var(--radius-full);
+    }
+    .follow-btn-small {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        padding: 4px 10px;
+        background: transparent;
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-full);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+    .follow-btn-small:hover {
+        background: #1DB954;
+        border-color: #1DB954;
+        color: white;
+    }
     
     @media (max-width: 640px) {
         .artist-header {
@@ -449,6 +613,188 @@ async function unfollowArtist(artistId) {
             ToastManager.error(error.message || 'Failed to unfollow artist');
         } else {
             alert('Failed to unfollow artist: ' + error.message);
+        }
+    }
+}
+
+// Hey future me - Follow artist function for Related Artists section!
+// On success, updates the button to "Following" state.
+async function followArtist(artistId, button) {
+    if (!button) return;
+    
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<div class="spinner spinner-sm" style="width: 12px; height: 12px; border-width: 2px;"></div>';
+    
+    try {
+        const response = await fetch(`/api/artists/spotify/${artistId}/follow`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Follow failed');
+        }
+        
+        // Update button to "Following" state
+        const badge = document.createElement('span');
+        badge.className = 'following-badge';
+        badge.innerHTML = '<i class="bi bi-check"></i> Following';
+        button.replaceWith(badge);
+        
+        // Update card's data attribute
+        const card = badge.closest('.related-artist-card');
+        if (card) {
+            card.dataset.isFollowing = 'true';
+        }
+        
+        // Update counters in buttons
+        updateFollowAllCounts();
+        
+        // Show success toast
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.success('Artist followed successfully');
+        }
+        
+    } catch (error) {
+        console.error('Follow error:', error);
+        // Revert button state
+        button.disabled = false;
+        button.innerHTML = '<i class="bi bi-plus-lg"></i> Follow';
+        
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(error.message || 'Failed to follow artist');
+        } else {
+            alert('Failed to follow artist: ' + error.message);
+        }
+    }
+}
+
+// Hey future me - Toggle filter to show only unfollowed artists!
+let showingUnfollowedOnly = false;
+function toggleUnfollowedFilter() {
+    showingUnfollowedOnly = !showingUnfollowedOnly;
+    const container = document.getElementById('related-artists-container');
+    const btn = document.getElementById('show-unfollowed-btn');
+    const cards = container.querySelectorAll('.related-artist-card');
+    
+    cards.forEach(card => {
+        if (showingUnfollowedOnly && card.dataset.isFollowing === 'true') {
+            card.style.display = 'none';
+        } else {
+            card.style.display = '';
+        }
+    });
+    
+    if (showingUnfollowedOnly) {
+        btn.innerHTML = '<i class="bi bi-funnel-fill"></i> Show All';
+        btn.classList.add('active');
+    } else {
+        const unfollowedCount = container.querySelectorAll('.related-artist-card[data-is-following="false"]').length;
+        btn.innerHTML = `<i class="bi bi-funnel"></i> Show Unfollowed (${unfollowedCount})`;
+        btn.classList.remove('active');
+    }
+}
+
+// Hey future me - Follow ALL unfollowed similar artists at once!
+// Uses batch processing with sequential API calls to avoid rate limits.
+async function followAllUnfollowed() {
+    const container = document.getElementById('related-artists-container');
+    const followAllBtn = document.getElementById('follow-all-btn');
+    const unfollowedCards = container.querySelectorAll('.related-artist-card[data-is-following="false"]');
+    
+    if (unfollowedCards.length === 0) {
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.info('All artists are already followed!');
+        }
+        return;
+    }
+    
+    if (!confirm(`Follow ${unfollowedCards.length} artists?`)) {
+        return;
+    }
+    
+    // Disable button and show progress
+    followAllBtn.disabled = true;
+    const originalText = followAllBtn.innerHTML;
+    
+    let followed = 0;
+    let failed = 0;
+    
+    for (const card of unfollowedCards) {
+        const artistId = card.dataset.artistId;
+        const button = card.querySelector('.follow-btn-small');
+        
+        // Update button text to show progress
+        followAllBtn.innerHTML = `<div class="spinner spinner-sm" style="width: 14px; height: 14px;"></div> ${followed + 1}/${unfollowedCards.length}`;
+        
+        try {
+            const response = await fetch(`/api/artists/spotify/${artistId}/follow`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                followed++;
+                // Update UI
+                if (button) {
+                    const badge = document.createElement('span');
+                    badge.className = 'following-badge';
+                    badge.innerHTML = '<i class="bi bi-check"></i> Following';
+                    button.replaceWith(badge);
+                }
+                card.dataset.isFollowing = 'true';
+            } else {
+                failed++;
+            }
+        } catch (e) {
+            failed++;
+            console.error(`Failed to follow ${artistId}:`, e);
+        }
+        
+        // Small delay between requests to be nice to Spotify API
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Update counters and button
+    updateFollowAllCounts();
+    followAllBtn.disabled = false;
+    
+    // Show result
+    if (typeof ToastManager !== 'undefined') {
+        if (failed === 0) {
+            ToastManager.success(`Successfully followed ${followed} artists!`);
+        } else {
+            ToastManager.warning(`Followed ${followed} artists, ${failed} failed`);
+        }
+    }
+    
+    // If filtering was active, update view
+    if (showingUnfollowedOnly) {
+        toggleUnfollowedFilter();
+        toggleUnfollowedFilter();
+    }
+}
+
+// Update the counts in Follow All and Filter buttons
+function updateFollowAllCounts() {
+    const container = document.getElementById('related-artists-container');
+    if (!container) return;
+    
+    const unfollowedCount = container.querySelectorAll('.related-artist-card[data-is-following="false"]').length;
+    
+    const followAllBtn = document.getElementById('follow-all-btn');
+    const showUnfollowedBtn = document.getElementById('show-unfollowed-btn');
+    
+    if (unfollowedCount === 0) {
+        // Hide both buttons if all followed
+        if (followAllBtn) followAllBtn.style.display = 'none';
+        if (showUnfollowedBtn) showUnfollowedBtn.style.display = 'none';
+    } else {
+        if (followAllBtn) {
+            followAllBtn.innerHTML = `<i class="bi bi-plus-lg"></i> Follow All (${unfollowedCount})`;
+        }
+        if (showUnfollowedBtn && !showingUnfollowedOnly) {
+            showUnfollowedBtn.innerHTML = `<i class="bi bi-funnel"></i> Show Unfollowed (${unfollowedCount})`;
         }
     }
 }

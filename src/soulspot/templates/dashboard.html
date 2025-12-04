@@ -23,12 +23,6 @@
             <p class="subtitle">Your music at a glance</p>
         </div>
     </div>
-    <div class="header-actions">
-        <a href="/playlists/import" class="btn btn-primary btn-glow">
-            <i class="bi bi-plus-lg"></i>
-            Import Playlist
-        </a>
-    </div>
 </div>
 
 <!-- Stats Grid with animated counters -->
@@ -138,10 +132,10 @@
                 <i class="bi bi-collection-play"></i>
             </div>
             <h3>No Playlists Yet</h3>
-            <p>Import your first playlist from Spotify to get started.</p>
-            <a href="/playlists/import" class="btn btn-primary">
-                <i class="bi bi-plus-lg"></i>
-                Import Playlist
+            <p>Go to Playlists to import from Spotify.</p>
+            <a href="/playlists" class="btn btn-primary">
+                <i class="bi bi-collection-play"></i>
+                Go to Playlists
             </a>
         </div>
         {% endif %}
@@ -227,7 +221,17 @@
         </div>
         <i class="bi bi-chevron-right quick-action-arrow"></i>
     </a>
-    <a href="/library" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 2;">
+    <a href="/spotify/artists" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 2;">
+        <div class="quick-action-icon" style="background: linear-gradient(135deg, rgba(29, 185, 84, 0.2), rgba(30, 215, 96, 0.1)); color: #1DB954;">
+            <i class="bi bi-heart-pulse-fill"></i>
+        </div>
+        <div class="quick-action-content">
+            <span class="quick-action-title">Discover Artists</span>
+            <span class="quick-action-desc">Explore similar artists to your favorites</span>
+        </div>
+        <i class="bi bi-chevron-right quick-action-arrow"></i>
+    </a>
+    <a href="/library" class="quick-action-card hover-scale-interactive blur-fade-in" style="--delay: 3;">
         <div class="quick-action-icon">
             <i class="bi bi-folder-plus"></i>
         </div>

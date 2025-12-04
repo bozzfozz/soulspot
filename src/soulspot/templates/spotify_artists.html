@@ -43,10 +43,6 @@
             <i class="bi bi-check"></i>
             Synced: +{{ sync_stats.added }} / -{{ sync_stats.removed }}
         </span>
-        {% elif sync_stats and sync_stats.skipped_cooldown %}
-        <span class="badge" style="font-size: var(--font-size-sm);">
-            <i class="bi bi-clock"></i> From cache
-        </span>
         {% endif %}
         <input type="text" 
                id="artist-search"
@@ -70,6 +66,11 @@
     <div class="artists-grid">
         {% for artist in artists %}
         <div class="artist-card blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 % 12 }};" data-artist-id="{{ artist.spotify_id }}">
+            {% if artist.popularity %}
+            <div class="popularity-badge" title="Spotify Popularity: {{ artist.popularity }}/100">
+                {{ artist.popularity }}
+            </div>
+            {% endif %}
             <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card-link">
                 {% if artist.image_url %}
                 <img src="{{ artist.image_url }}" alt="{{ artist.name }}" class="artist-image">
@@ -87,11 +88,6 @@
                     <span class="genre-tag genre-more">+{{ artist.genres_count - 3 }}</span>
                     {% endif %}
                 </div>
-                {% if artist.popularity %}
-                <div class="artist-popularity">
-                    <div class="popularity-bar" style="width: {{ artist.popularity }}%;"></div>
-                </div>
-                {% endif %}
             </a>
             <!-- Unfollow button (appears on hover) -->
             <button class="unfollow-btn" 
@@ -127,6 +123,7 @@
         gap: var(--space-4);
     }
     .artist-card {
+        position: relative;
         background: var(--bg-secondary);
         border: 1px solid var(--border-primary);
         border-radius: var(--radius-xl);
@@ -199,16 +196,24 @@
         background: #1DB954;
         color: white;
     }
-    .artist-popularity {
-        height: 4px;
-        background: var(--bg-tertiary);
-        border-radius: var(--radius-full);
-        overflow: hidden;
-    }
-    .popularity-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #1DB954, #1ed760);
-        border-radius: var(--radius-full);
+    /* Popularity badge - top left corner of artist card */
+    .popularity-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(135deg, #1DB954, #1ed760);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: white;
+        z-index: 10;
+        box-shadow: 0 2px 8px rgba(29, 185, 84, 0.4);
+        cursor: default;
     }
     .empty-state {
         background: var(--bg-secondary);

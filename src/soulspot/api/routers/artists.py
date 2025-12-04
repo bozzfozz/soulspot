@@ -449,3 +449,119 @@ async def check_following_status(
             status_code=500,
             detail=f"Failed to check following status: {str(e)}",
         ) from e
+
+
+# =============================================================================
+# RELATED ARTISTS (Similar Artists / Fans Also Like)
+# Hey future me - this fetches artists that Spotify thinks are SIMILAR to a given artist!
+# Uses Spotify's recommendation engine based on listener overlap, genres, etc. Returns up
+# to 20 artists. Perfect for "Fans Also Like" sections in artist detail pages. The response
+# includes following status for each artist so UI can show correct button states.
+# =============================================================================
+
+
+class RelatedArtistResponse(BaseModel):
+    """Response model for a related/similar artist."""
+
+    spotify_id: str = Field(..., description="Spotify artist ID")
+    name: str = Field(..., description="Artist name")
+    image_url: str | None = Field(None, description="Artist profile image URL")
+    genres: list[str] = Field(default_factory=list, description="Artist genres")
+    popularity: int = Field(..., description="Spotify popularity score 0-100")
+    is_following: bool = Field(..., description="Whether user follows this artist")
+
+
+class RelatedArtistsResponse(BaseModel):
+    """Response model for related artists list."""
+
+    artist_id: str = Field(..., description="Source artist Spotify ID")
+    artist_name: str = Field(..., description="Source artist name")
+    related_artists: list[RelatedArtistResponse] = Field(
+        ..., description="List of similar artists"
+    )
+    total: int = Field(..., description="Number of related artists returned")
+
+
+@router.get(
+    "/spotify/{spotify_id}/related",
+    response_model=RelatedArtistsResponse,
+    summary="Get artists similar to a given artist",
+)
+async def get_related_artists(
+    spotify_id: str,
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    access_token: str = Depends(get_spotify_token_shared),
+) -> RelatedArtistsResponse:
+    """Get up to 20 artists similar to the given artist.
+
+    Spotify's recommendation engine determines similarity based on listener overlap,
+    genre tags, and other factors. Perfect for "Fans Also Like" sections.
+
+    Also checks if user follows each related artist to display correct button states.
+
+    Args:
+        spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
+        spotify_client: Spotify client instance
+        access_token: Valid Spotify access token
+
+    Returns:
+        List of similar artists with following status
+
+    Raises:
+        HTTPException: 404 if artist not found, 500 if Spotify API fails
+    """
+    try:
+        # Get the source artist details first (for name in response)
+        source_artist = await spotify_client.get_artist(spotify_id, access_token)
+
+        # Get related artists
+        related = await spotify_client.get_related_artists(spotify_id, access_token)
+
+        if not related:
+            return RelatedArtistsResponse(
+                artist_id=spotify_id,
+                artist_name=source_artist.get("name", "Unknown"),
+                related_artists=[],
+                total=0,
+            )
+
+        # Batch check following status for all related artists
+        related_ids = [a.get("id") for a in related if a.get("id")]
+        following_statuses: list[bool] = []
+        if related_ids:
+            following_statuses = await spotify_client.check_if_following_artists(
+                related_ids, access_token
+            )
+
+        # Build response with following status
+        related_artists: list[RelatedArtistResponse] = []
+        for idx, artist in enumerate(related):
+            images = artist.get("images", [])
+            image_url = images[0]["url"] if images else None
+
+            related_artists.append(
+                RelatedArtistResponse(
+                    spotify_id=artist.get("id", ""),
+                    name=artist.get("name", "Unknown"),
+                    image_url=image_url,
+                    genres=artist.get("genres", [])[:3],  # Limit to 3 genres
+                    popularity=artist.get("popularity", 0),
+                    is_following=following_statuses[idx]
+                    if idx < len(following_statuses)
+                    else False,
+                )
+            )
+
+        return RelatedArtistsResponse(
+            artist_id=spotify_id,
+            artist_name=source_artist.get("name", "Unknown"),
+            related_artists=related_artists,
+            total=len(related_artists),
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get related artists for {spotify_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get related artists: {str(e)}",
+        ) from e
