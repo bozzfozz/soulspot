@@ -188,6 +188,25 @@ async def index(
         "spotify_tracks": spotify_tracks,
     }
 
+    # Get latest releases from followed artists for the dashboard card
+    # Hey future me - this is the "New Releases" feature! We fetch latest albums/singles
+    # from spotify_albums table (pre-synced data), sorted by release_date descending.
+    # Limit to 12 for a nice 4x3 or 6x2 grid display.
+    latest_releases_raw = await spotify_repository.get_latest_releases(limit=12)
+    latest_releases = [
+        {
+            "spotify_id": album.spotify_id,
+            "name": album.name,
+            "artist_name": artist_name,
+            "artist_id": album.artist_id,
+            "image_url": album.image_url,
+            "release_date": album.release_date,
+            "album_type": album.album_type,
+            "total_tracks": album.total_tracks,
+        }
+        for album, artist_name in latest_releases_raw
+    ]
+
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -195,6 +214,7 @@ async def index(
             "stats": stats,
             "playlists": recent_playlists,
             "recent_activity": recent_activity,
+            "latest_releases": latest_releases,
         },
     )
 
@@ -458,15 +478,51 @@ async def playlist_detail(
 # Yo, downloads page fetches ALL active downloads! list_active() might return thousands of downloads
 # if your download history is long (needs DB index on status + created_at). The isoformat() calls
 # can fail if started_at is None - we handle with ternary. progress_percent and error_message can
-# also be None. This renders ALL downloads at once - no pagination! Could freeze browser with 1000s
-# of rows. Should use virtual scrolling or pagination. Template gets full list in memory.
+# Hey future me - Downloads page now has DB-LEVEL pagination! Default 100 per page, max 500.
+# We pass pagination metadata to template for rendering page navigation. Stats (active, queue,
+# completed, failed) are fetched separately for the stats cards at the top of the page.
 @router.get("/downloads", response_class=HTMLResponse)
 async def downloads(
     request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(100, ge=1, le=500, description="Items per page"),
     download_repository: DownloadRepository = Depends(get_download_repository),
 ) -> Any:
-    """Downloads page with real data."""
-    downloads_list = await download_repository.list_active()
+    """Downloads page with pagination.
+
+    Args:
+        request: FastAPI request
+        page: Page number (1-indexed)
+        limit: Items per page (default 100, max 500)
+        download_repository: Download repository
+    """
+    # Calculate offset
+    offset = (page - 1) * limit
+
+    # Fetch paginated downloads from DB
+    downloads_list = await download_repository.list_active(limit=limit, offset=offset)
+    total_count = await download_repository.count_active()
+
+    # Calculate pagination metadata
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+    has_next = page < total_pages
+    has_previous = page > 1
+
+    # Fetch stats for the cards at the top
+    from soulspot.domain.entities import DownloadStatus
+
+    active_count = await download_repository.count_by_status(
+        DownloadStatus.DOWNLOADING.value
+    )
+    queue_count = (
+        await download_repository.count_by_status(DownloadStatus.QUEUED.value)
+        + await download_repository.count_by_status(DownloadStatus.PENDING.value)
+        + await download_repository.count_by_status(DownloadStatus.WAITING.value)
+    )
+    failed_count = await download_repository.count_by_status(DownloadStatus.FAILED.value)
+    completed_count = await download_repository.count_by_status(
+        DownloadStatus.COMPLETED.value
+    )
 
     # Convert to template-friendly format
     downloads_data = [
@@ -486,7 +542,23 @@ async def downloads(
     ]
 
     return templates.TemplateResponse(
-        request, "downloads.html", context={"downloads": downloads_data}
+        request,
+        "downloads.html",
+        context={
+            "downloads": downloads_data,
+            # Pagination
+            "page": page,
+            "limit": limit,
+            "total": total_count,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_previous": has_previous,
+            # Stats for cards
+            "active_count": active_count,
+            "queue_count": queue_count,
+            "failed_count": failed_count,
+            "completed_today": completed_count,  # TODO: Filter by today
+        },
     )
 
 
@@ -1020,6 +1092,7 @@ async def library_albums(
     # Convert to template-friendly format with artwork_url
     # Hey future me - album_artist overrides artist.name for compilations/Various Artists!
     # artwork_path is local file, artwork_url is Spotify CDN - template prefers local
+    # primary_type is album/ep/single, secondary_types includes compilation/live/etc.
     albums = [
         {
             "title": album.title,
@@ -1030,6 +1103,8 @@ async def library_albums(
             "artwork_url": album.artwork_url,  # Spotify CDN URL or None
             "artwork_path": album.artwork_path,  # Local file path or None
             "is_compilation": "compilation" in (album.secondary_types or []),
+            "primary_type": album.primary_type or "album",
+            "secondary_types": album.secondary_types or [],
         }
         for album, track_count in rows
     ]

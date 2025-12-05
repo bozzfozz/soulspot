@@ -300,11 +300,16 @@ class Playlist:
 # Download). The Download.start(), .complete(), .fail() methods enforce valid state transitions. If
 # you try invalid transition, they raise ValueError. Don't bypass domain methods and set status
 # directly - you'll create invalid states (like COMPLETED without completed_at timestamp)!
+#
+# Hey future me - WAITING status is for downloads queued while download manager (slskd) is unavailable!
+# The flow is: WAITING → PENDING → QUEUED → DOWNLOADING → COMPLETED
+# When slskd becomes available, QueueDispatcherWorker moves WAITING → PENDING one by one.
 class DownloadStatus(str, Enum):
     """Status of a download."""
 
-    PENDING = "pending"
-    QUEUED = "queued"
+    WAITING = "waiting"  # Waiting for download manager to become available
+    PENDING = "pending"  # Ready to be sent to download manager
+    QUEUED = "queued"  # Sent to download manager, waiting in its queue
     DOWNLOADING = "downloading"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -341,10 +346,26 @@ class Download:
 
     def start(self) -> None:
         """Mark download as started."""
-        if self.status not in (DownloadStatus.PENDING, DownloadStatus.QUEUED):
+        if self.status not in (
+            DownloadStatus.PENDING,
+            DownloadStatus.QUEUED,
+            DownloadStatus.WAITING,
+        ):
             raise ValueError(f"Cannot start download in status {self.status}")
         self.status = DownloadStatus.DOWNLOADING
         self.started_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
+
+    def dispatch(self) -> None:
+        """Move from WAITING to PENDING - ready to send to download manager.
+
+        Hey future me - this is called by QueueDispatcherWorker when slskd becomes available!
+        Only WAITING downloads can be dispatched. After dispatch, the download is ready to
+        be picked up by the normal download processing flow.
+        """
+        if self.status != DownloadStatus.WAITING:
+            raise ValueError(f"Cannot dispatch download in status {self.status}")
+        self.status = DownloadStatus.PENDING
         self.updated_at = datetime.now(UTC)
 
     def update_progress(self, percent: float) -> None:

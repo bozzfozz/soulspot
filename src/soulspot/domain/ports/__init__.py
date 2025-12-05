@@ -349,6 +349,15 @@ class IDownloadRepository(ABC):
         pass
 
     @abstractmethod
+    async def list_waiting(self, limit: int = 10) -> list[Download]:
+        """List downloads waiting for download manager to become available.
+
+        Returns downloads in WAITING status, ordered by priority (highest first)
+        then by created_at (oldest first within same priority).
+        """
+        pass
+
+    @abstractmethod
     async def list_recent(self, limit: int = 5) -> list[Download]:
         """List recently completed or active downloads."""
         pass

@@ -1,18 +1,20 @@
 """Download management endpoints."""
 
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from soulspot.api.dependencies import (
+    check_slskd_available,
     get_download_repository,
     get_download_worker,
     get_job_queue,
 )
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
-from soulspot.domain.entities import DownloadStatus
+from soulspot.domain.entities import Download, DownloadStatus
 from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
@@ -78,37 +80,46 @@ class BatchActionRequest(BaseModel):
     priority: int | None = None
 
 
-# Hey future me, this lists downloads with optional status filter and pagination. If status is provided,
-# we filter to just that status (queued, downloading, completed, failed). If not, we get all "active" downloads
-# (probably means not completed/cancelled - check the repo method!). The pagination here is in-memory slicing
-# [skip:skip+limit] which is INEFFICIENT - we fetch ALL downloads then slice! Should push limit/offset to DB
-# query. Total is len(downloads) BEFORE slicing, so pagination math is correct. Don't cache this - download
-# status changes constantly!
+# Hey future me, this lists downloads with optional status filter and PROPER DB-LEVEL pagination!
+# Previously we loaded ALL downloads and sliced in Python - that's O(N) memory! Now we push limit/offset
+# to DB which is O(limit) memory. For large queues (1000+ downloads), this makes a HUGE difference.
+# Default limit is 100 (user requested), max is 500 to prevent abuse. Total count is fetched separately
+# for pagination UI. Status filter can be: waiting, pending, queued, downloading, completed, failed, cancelled.
 @router.get("/")
 async def list_downloads(
     status: str | None = Query(None, description="Filter by status"),
-    skip: int = Query(0, ge=0, description="Number of downloads to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Number of downloads to return"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(100, ge=1, le=500, description="Number of downloads per page"),
     download_repository: DownloadRepository = Depends(get_download_repository),
 ) -> dict[str, Any]:
-    """List all downloads.
+    """List all downloads with pagination.
 
     Args:
-        status: Filter by status (queued, downloading, completed, failed)
-        skip: Number of downloads to skip
-        limit: Number of downloads to return
+        status: Filter by status (waiting, queued, downloading, completed, failed)
+        page: Page number (1-indexed, default 1)
+        limit: Number of downloads per page (default 100, max 500)
         download_repository: Download repository
 
     Returns:
-        List of downloads
+        Paginated list of downloads with total count and page info
     """
-    if status:
-        downloads = await download_repository.list_by_status(status)
-    else:
-        downloads = await download_repository.list_active()
+    # Calculate offset from page number
+    offset = (page - 1) * limit
 
-    # Apply pagination
-    paginated_downloads = downloads[skip : skip + limit]
+    # Get paginated downloads from DB (efficient - only loads requested page)
+    if status:
+        downloads = await download_repository.list_by_status(
+            status=status, limit=limit, offset=offset
+        )
+        total = await download_repository.count_by_status(status)
+    else:
+        downloads = await download_repository.list_active(limit=limit, offset=offset)
+        total = await download_repository.count_active()
+
+    # Calculate pagination metadata
+    total_pages = (total + limit - 1) // limit  # Ceiling division
+    has_next = page < total_pages
+    has_previous = page > 1
 
     return {
         "downloads": [
@@ -132,12 +143,16 @@ async def list_downloads(
                 "created_at": download.created_at.isoformat(),
                 "updated_at": download.updated_at.isoformat(),
             }
-            for download in paginated_downloads
+            for download in downloads
         ],
-        "total": len(downloads),
-        "status": status,
-        "skip": skip,
+        # Pagination metadata
+        "total": total,
+        "page": page,
         "limit": limit,
+        "total_pages": total_pages,
+        "has_next": has_next,
+        "has_previous": has_previous,
+        "status": status,
     }
 
 
@@ -196,29 +211,38 @@ async def resume_downloads(
 # internal counters - active, queued, completed, failed. The paused flag tells you if queue is processing.
 # max_concurrent_downloads is from config - how many jobs run in parallel. If active_downloads is stuck
 # at max for a long time, your downloads are slow or stuck! If queued_downloads is huge and growing, you're
-# queueing faster than downloading (increase concurrency or downloads are failing). Poll this every few seconds
-# for live dashboard.
+# queueing faster than downloading (increase concurrency or downloads are failing). NOW INCLUDES waiting_downloads
+# which are downloads waiting for slskd to become available! Poll this every few seconds for live dashboard.
 @router.get("/status")
 async def get_queue_status(
     job_queue: JobQueue = Depends(get_job_queue),
+    download_repository: DownloadRepository = Depends(get_download_repository),
 ) -> dict[str, Any]:
     """Get download queue status.
 
     Returns information about the current state of the download queue,
-    including pause status and concurrent download settings.
+    including pause status, concurrent download settings, and waiting downloads.
 
     Args:
         job_queue: Job queue dependency
+        download_repository: Download repository for counting waiting downloads
 
     Returns:
-        Queue status information
+        Queue status information including waiting downloads count
     """
     stats = job_queue.get_stats()
+
+    # Count downloads waiting for slskd to become available
+    waiting_count = await download_repository.count_by_status(
+        DownloadStatus.WAITING.value
+    )
+
     return {
         "paused": job_queue.is_paused(),
         "max_concurrent_downloads": job_queue.get_max_concurrent_jobs(),
         "active_downloads": stats.get("running", 0),
         "queued_downloads": stats.get("pending", 0),
+        "waiting_downloads": waiting_count,  # Downloads waiting for slskd
         "total_jobs": stats.get("total_jobs", 0),
         "completed": stats.get("completed", 0),
         "failed": stats.get("failed", 0),
@@ -227,27 +251,32 @@ async def get_queue_status(
 
 
 # Yo, batch download is for "download this whole playlist" or "download my favorites" - multiple tracks at
-# once! We loop and call enqueue_download for each track_id. ALL tracks get same priority (no per-track
-# priority in batch). If ANY track_id is invalid, we fail IMMEDIATELY with 400 - this is all-or-nothing!
-# Consider changing to "enqueue what we can, return errors for bad IDs" for better UX. The job_ids list
-# lets caller track each download separately. For huge batches (1000+ tracks), this could timeout - consider
-# async job for batch operations.
+# once! Now with WAITING status support: if slskd is unavailable, downloads go to WAITING status instead
+# of failing. QueueDispatcherWorker will pick them up when slskd becomes available. ALL tracks get same
+# priority (no per-track priority in batch). If ANY track_id is invalid, we fail IMMEDIATELY with 400 -
+# this is all-or-nothing! The job_ids list lets caller track each download separately (when enqueued
+# directly) or download_ids (when put in WAITING status).
 @router.post("/batch")
 async def batch_download(
     request: BatchDownloadRequest,
     download_worker: DownloadWorker = Depends(get_download_worker),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+    slskd_available: bool = Depends(check_slskd_available),
 ) -> BatchDownloadResponse:
     """Batch download multiple tracks.
 
     Enqueues multiple tracks for download with the specified priority.
-    All tracks in the batch will have the same priority level.
+    If slskd is unavailable, downloads are created with WAITING status
+    and will be dispatched when slskd becomes available.
 
     Args:
         request: Batch download request with track IDs and priority
         download_worker: Download worker dependency
+        download_repository: Download repository for WAITING status
+        slskd_available: Whether slskd is currently available
 
     Returns:
-        Batch download response with job IDs
+        Batch download response with job IDs or download IDs
     """
     from soulspot.domain.exceptions import ValidationException
 
@@ -257,22 +286,48 @@ async def batch_download(
         )
 
     job_ids = []
+    waiting_count = 0
+
     for track_id_str in request.track_ids:
         try:
             track_id = TrackId.from_string(track_id_str)
-            job_id = await download_worker.enqueue_download(
-                track_id=track_id,
-                priority=request.priority,
-            )
-            job_ids.append(job_id)
+
+            if slskd_available:
+                # slskd is available - enqueue job directly
+                job_id = await download_worker.enqueue_download(
+                    track_id=track_id,
+                    priority=request.priority,
+                )
+                job_ids.append(job_id)
+            else:
+                # slskd unavailable - create Download with WAITING status
+                # QueueDispatcherWorker will dispatch when slskd comes online
+                download = Download(
+                    id=DownloadId.from_string(str(uuid.uuid4())),
+                    track_id=track_id,
+                    status=DownloadStatus.WAITING,
+                    priority=request.priority,
+                )
+                await download_repository.add(download)
+                job_ids.append(str(download.id.value))
+                waiting_count += 1
+
         except (ValueError, ValidationException) as e:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid track ID '{track_id_str}': {str(e)}",
             ) from e
 
+    if waiting_count > 0:
+        message = (
+            f"Downloads queued for {len(request.track_ids)} tracks "
+            f"({waiting_count} waiting for download manager)"
+        )
+    else:
+        message = f"Batch download initiated for {len(request.track_ids)} tracks"
+
     return BatchDownloadResponse(
-        message=f"Batch download initiated for {len(request.track_ids)} tracks",
+        message=message,
         job_ids=job_ids,
         total_tracks=len(request.track_ids),
     )

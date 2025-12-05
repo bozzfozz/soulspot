@@ -15,6 +15,10 @@ from soulspot.application.workers.duplicate_detector_worker import (
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.application.workers.metadata_worker import MetadataWorker
 from soulspot.application.workers.playlist_sync_worker import PlaylistSyncWorker
+from soulspot.application.workers.queue_dispatcher_worker import (
+    QueueDispatcherWorker,
+    create_queue_dispatcher_worker,
+)
 from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
 
@@ -30,6 +34,8 @@ __all__ = [
     "PlaylistSyncWorker",
     "SpotifySyncWorker",
     "TokenRefreshWorker",
+    "QueueDispatcherWorker",
+    "create_queue_dispatcher_worker",
     # Automation Workers
     "AutomationWorkerManager",
     "WatchlistWorker",

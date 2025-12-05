@@ -1592,6 +1592,9 @@ class DownloadRepository(IDownloadRepository):
             for model in models
         ]
 
+    # Hey future me - list_active now includes WAITING and PENDING! This means the download queue UI
+    # will show ALL downloads that aren't finished (including those waiting for slskd). The order is
+    # by priority DESC (higher priority first) then created_at DESC (oldest first within same priority).
     async def list_active(self, limit: int = 100, offset: int = 0) -> list[Download]:
         """List all active downloads (not finished), with pagination and eager loading."""
         stmt = (
@@ -1600,14 +1603,61 @@ class DownloadRepository(IDownloadRepository):
             .where(
                 DownloadModel.status.in_(
                     [
+                        DownloadStatus.WAITING.value,
+                        DownloadStatus.PENDING.value,
                         DownloadStatus.QUEUED.value,
                         DownloadStatus.DOWNLOADING.value,
                     ]
                 )
             )
-            .order_by(DownloadModel.created_at.desc())
+            .order_by(
+                DownloadModel.priority.desc(),
+                DownloadModel.created_at.desc(),
+            )
             .limit(limit)
             .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Download(
+                id=DownloadId.from_string(model.id),
+                track_id=TrackId.from_string(model.track_id),
+                status=DownloadStatus(model.status),
+                priority=model.priority,
+                target_path=FilePath.from_string(model.target_path)
+                if model.target_path
+                else None,
+                source_url=model.source_url,
+                progress_percent=model.progress_percent,
+                error_message=model.error_message,
+                started_at=model.started_at,
+                completed_at=model.completed_at,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    # Hey future me - this gets downloads waiting for slskd to become available!
+    # Ordered by priority DESC then created_at ASC (oldest first) so we process in FIFO within priority.
+    # Used by QueueDispatcherWorker to find downloads to dispatch when slskd comes online.
+    async def list_waiting(self, limit: int = 10) -> list[Download]:
+        """List downloads waiting for download manager to become available.
+
+        Returns downloads in WAITING status, ordered by priority (highest first)
+        then by created_at (oldest first within same priority).
+        """
+        stmt = (
+            select(DownloadModel)
+            .options(selectinload(DownloadModel.track))
+            .where(DownloadModel.status == DownloadStatus.WAITING.value)
+            .order_by(
+                DownloadModel.priority.desc(),
+                DownloadModel.created_at.asc(),
+            )
+            .limit(limit)
         )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
@@ -1641,10 +1691,12 @@ class DownloadRepository(IDownloadRepository):
         return result.scalar() or 0
 
     async def count_active(self) -> int:
-        """Count active downloads."""
+        """Count active downloads (including waiting)."""
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status.in_(
                 [
+                    DownloadStatus.WAITING.value,
+                    DownloadStatus.PENDING.value,
                     DownloadStatus.QUEUED.value,
                     DownloadStatus.DOWNLOADING.value,
                 ]
@@ -3006,6 +3058,53 @@ class SpotifyBrowseRepository:
         stmt = select(func.count(SpotifyAlbumModel.spotify_id))
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def get_latest_releases(
+        self,
+        limit: int = 20,
+        album_types: list[str] | None = None,
+    ) -> list[Any]:
+        """Get the latest releases from followed artists sorted by release_date.
+
+        Hey future me - this is for the Dashboard "New Releases" feature!
+        Returns albums/singles sorted by release_date (newest first), mixed together.
+        The join with SpotifyArtistModel gives us artist names without N+1 queries.
+
+        release_date format can be:
+        - "2024" (year only, release_date_precision="year")
+        - "2024-05" (month, release_date_precision="month")
+        - "2024-05-15" (full date, release_date_precision="day")
+
+        SQLite sorts these strings correctly because ISO format is lexicographically
+        sortable! "2024-05-15" > "2024-01-01" works as expected.
+
+        Args:
+            limit: Maximum number of releases to return (default 20)
+            album_types: Filter by album type (default None = all types)
+                         Options: "album", "single", "compilation"
+
+        Returns:
+            List of tuples: (SpotifyAlbumModel, artist_name: str)
+        """
+        from .models import SpotifyAlbumModel, SpotifyArtistModel
+
+        stmt = (
+            select(SpotifyAlbumModel, SpotifyArtistModel.name)
+            .join(
+                SpotifyArtistModel,
+                SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id,
+            )
+            .where(SpotifyAlbumModel.release_date.isnot(None))
+            .order_by(SpotifyAlbumModel.release_date.desc())
+            .limit(limit)
+        )
+
+        # Optionally filter by album type
+        if album_types:
+            stmt = stmt.where(SpotifyAlbumModel.album_type.in_(album_types))
+
+        result = await self.session.execute(stmt)
+        return list(result.all())
 
     async def count_albums_by_artist(self, artist_id: str) -> int:
         """Count albums for an artist."""

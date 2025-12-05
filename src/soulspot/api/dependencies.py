@@ -320,6 +320,25 @@ def get_slskd_client(settings: Settings = Depends(get_settings)) -> SlskdClient:
     return SlskdClient(settings.slskd)
 
 
+# Hey future me - this checks if slskd is currently available for downloads!
+# Returns True if slskd is running and accepting connections, False otherwise.
+# Used by download endpoints to decide whether to put downloads in WAITING or PENDING status.
+# This is a QUICK check (10s timeout) - don't use for heavy operations!
+async def check_slskd_available(
+    slskd_client: SlskdClient = Depends(get_slskd_client),
+) -> bool:
+    """Check if slskd download manager is available.
+
+    Returns:
+        True if slskd is healthy and accepting downloads, False otherwise
+    """
+    try:
+        result = await slskd_client.test_connection()
+        return result.get("success", False)
+    except Exception:
+        return False
+
+
 # Hey, MusicBrainz is the metadata enrichment source - gets artist/album/track info from their public
 # database. Not cached, new client per request. MusicBrainz has RATE LIMITS (1 req/sec for anonymous,
 # higher if you set contact info in settings.musicbrainz.contact). If you hammer it too fast, you'll

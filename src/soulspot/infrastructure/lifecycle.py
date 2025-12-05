@@ -330,6 +330,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Download monitor worker started (polls every 10s)")
 
             # =================================================================
+            # Start Queue Dispatcher Worker (dispatches WAITING downloads)
+            # =================================================================
+            # Hey future me - dieser Worker löst das "slskd offline" Problem!
+            # Wenn slskd nicht läuft, gehen Downloads in WAITING status statt zu failen.
+            # Dieser Worker checkt alle 30s ob slskd wieder da ist und dispatcht dann
+            # wartende Downloads nach und nach zur Job Queue.
+            from soulspot.application.workers.queue_dispatcher_worker import (
+                QueueDispatcherWorker,
+            )
+
+            queue_dispatcher_worker = QueueDispatcherWorker(
+                session_factory=db.get_session_factory(),
+                slskd_client=slskd_client,
+                job_queue=job_queue,
+                check_interval=30,  # Check slskd every 30 seconds
+                dispatch_delay=2.0,  # 2s between dispatches
+                max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
+            )
+            # Start in background task (non-blocking)
+            queue_dispatcher_task = asyncio.create_task(queue_dispatcher_worker.start())
+            app.state.queue_dispatcher_worker = queue_dispatcher_worker
+            app.state.queue_dispatcher_task = queue_dispatcher_task
+            logger.info("Queue dispatcher worker started (checks slskd every 30s)")
+
+            # =================================================================
             # Start Automation Workers (optional, controlled by settings)
             # =================================================================
             # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
@@ -460,6 +485,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Download monitor worker stopped")
             except Exception as e:
                 logger.exception("Error stopping download monitor worker: %s", e)
+
+        # Stop queue dispatcher worker
+        if hasattr(app.state, "queue_dispatcher_worker"):
+            try:
+                logger.info("Stopping queue dispatcher worker...")
+                app.state.queue_dispatcher_worker.stop()
+                # Wait for task to complete gracefully with timeout
+                if hasattr(app.state, "queue_dispatcher_task"):
+                    try:
+                        await asyncio.wait_for(
+                            app.state.queue_dispatcher_task,
+                            timeout=5.0,
+                        )
+                    except TimeoutError:
+                        app.state.queue_dispatcher_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await app.state.queue_dispatcher_task
+                logger.info("Queue dispatcher worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping queue dispatcher worker: %s", e)
 
         # Stop Spotify sync worker first (depends on token manager)
         if hasattr(app.state, "spotify_sync_worker"):

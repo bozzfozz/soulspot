@@ -85,7 +85,7 @@
 <!-- Tabs -->
 <div class="flex gap-2 mb-6" style="border-bottom: 1px solid var(--border-primary);">
     <button class="tab-btn active" onclick="switchTab('queue', this)">
-        Queue ({{ downloads|length if downloads else 0 }})
+        Queue ({{ total|default(downloads|length if downloads else 0) }})
     </button>
     <button class="tab-btn" onclick="switchTab('history', this)">
         History
@@ -130,6 +130,11 @@
                     <i class="bi bi-arrow-repeat" style="animation: spin 1s linear infinite;"></i>
                     Downloading
                 </span>
+                {% elif item.status == 'waiting' %}
+                <span class="badge badge-warning">
+                    <i class="bi bi-hourglass-split"></i>
+                    Waiting
+                </span>
                 {% elif item.status == 'queued' or item.status == 'pending' %}
                 <span class="badge">
                     <i class="bi bi-clock"></i>
@@ -155,7 +160,7 @@
 
             <!-- Actions -->
             <div class="flex gap-2">
-                {% if item.status == 'downloading' or item.status == 'queued' or item.status == 'pending' %}
+                {% if item.status == 'downloading' or item.status == 'queued' or item.status == 'pending' or item.status == 'waiting' %}
                 <button class="btn-icon" hx-post="/api/downloads/{{ item.id }}/pause" hx-swap="none" title="Pause">
                     <i class="bi bi-pause"></i>
                 </button>
@@ -175,6 +180,43 @@
         </div>
         {% endfor %}
     </div>
+
+    {# Pagination - only show if more than 1 page #}
+    {% if total_pages > 1 %}
+    <div class="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 2rem;">
+        {# Previous button #}
+        {% if has_previous %}
+        <a href="/downloads?page={{ page - 1 }}&limit={{ limit }}" class="btn btn-outline btn-sm">
+            <i class="bi bi-chevron-left"></i>
+            Previous
+        </a>
+        {% else %}
+        <button class="btn btn-outline btn-sm" disabled>
+            <i class="bi bi-chevron-left"></i>
+            Previous
+        </button>
+        {% endif %}
+
+        {# Page info #}
+        <span style="color: var(--text-muted); font-size: var(--font-size-sm);">
+            Page {{ page }} of {{ total_pages }} ({{ total }} total downloads)
+        </span>
+
+        {# Next button #}
+        {% if has_next %}
+        <a href="/downloads?page={{ page + 1 }}&limit={{ limit }}" class="btn btn-outline btn-sm">
+            Next
+            <i class="bi bi-chevron-right"></i>
+        </a>
+        {% else %}
+        <button class="btn btn-outline btn-sm" disabled>
+            Next
+            <i class="bi bi-chevron-right"></i>
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% else %}
     <!-- Empty State -->
     <div class="section-card" style="text-align: center; padding: 4rem;">

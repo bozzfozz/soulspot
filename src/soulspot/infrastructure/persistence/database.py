@@ -165,7 +165,7 @@ class Database:
                 await session.rollback()
                 raise
 
-    # Yo, dispose() closes ALL connections in the pool and shuts down the engine. CRITICAL on
+    # Yo future me, dispose() closes ALL connections in the pool and shuts down the engine. CRITICAL on
     # shutdown or you'll leave dangling connections! Postgres might complain about "too many
     # connections" if you keep creating Database instances without closing them. Always call
     # this in shutdown hooks or finally blocks. For SQLite it's less critical but still good
@@ -173,6 +173,21 @@ class Database:
     async def close(self) -> None:
         """Close database connection."""
         await self._engine.dispose()
+
+    # Hey future me - this exposes the session factory for workers that need their own sessions!
+    # Use this when you need to create sessions in a loop (like QueueDispatcherWorker) where
+    # each iteration should have its own short-lived session. DON'T use this for request-scoped
+    # sessions in FastAPI routes - use get_session() or session_scope() instead.
+    def get_session_factory(self) -> async_sessionmaker[AsyncSession]:
+        """Get the session factory for creating independent sessions.
+
+        Returns:
+            The async sessionmaker instance for creating new sessions.
+
+        Use this for background workers that need to manage their own session lifecycle.
+        For request-scoped sessions, use session_scope() or get_session() instead.
+        """
+        return self._session_factory
 
     # Hey future me, this is ONLY for testing! Don't use in production - use Alembic migrations
     # instead. This creates tables synchronously using run_sync which blocks the async engine.

@@ -115,7 +115,18 @@
                 <h3 class="album-name" title="{{ album.name }}">{{ album.name }}</h3>
                 <div class="album-meta">
                     <span class="album-year">{{ album.release_date[:4] if album.release_date else 'Unknown' }}</span>
-                    <span class="album-type-badge album-type-{{ album.album_type }}">{{ album.album_type|capitalize }}</span>
+                    <span class="album-type-badge album-type-{{ album.album_type }}">
+                        {% if album.album_type == 'single' %}
+                        <i class="bi bi-music-note"></i>
+                        {% elif album.album_type == 'album' %}
+                        <i class="bi bi-disc"></i>
+                        {% elif album.album_type == 'compilation' %}
+                        <i class="bi bi-collection"></i>
+                        {% else %}
+                        <i class="bi bi-vinyl"></i>
+                        {% endif %}
+                        {{ album.album_type|capitalize }}
+                    </span>
                 </div>
                 <span class="album-tracks">{{ album.total_tracks }} track{{ 's' if album.total_tracks != 1 else '' }}</span>
             </div>
@@ -349,23 +360,7 @@
         font-size: var(--font-size-xs);
         color: var(--text-muted);
     }
-    .album-type-badge {
-        font-size: var(--font-size-xs);
-        padding: 1px 6px;
-        border-radius: var(--radius-sm);
-    }
-    .album-type-album {
-        background: rgba(29, 185, 84, 0.2);
-        color: #1DB954;
-    }
-    .album-type-single {
-        background: rgba(168, 85, 247, 0.2);
-        color: #a855f7;
-    }
-    .album-type-compilation {
-        background: rgba(251, 146, 60, 0.2);
-        color: #fb923c;
-    }
+    /* Album type badges now use global styles from ui-components.css */
     .album-tracks {
         font-size: var(--font-size-xs);
         color: var(--text-muted);

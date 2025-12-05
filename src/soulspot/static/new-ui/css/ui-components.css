@@ -404,3 +404,81 @@
 .progress-bar.lg {
     height: 8px;
 }
+
+/* Album Type Badges - Global styles for album/single/compilation indicators
+   Hey future me - these badges are used across all album displays (dashboard, artist pages, etc.)
+   Colors match the Spotify convention but with our accent colors. Icons are Bootstrap Icons. */
+
+.album-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+}
+
+/* Album badge - Purple (primary identifier for full-length albums) */
+.album-type-album {
+    background: rgba(99, 102, 241, 0.2);
+    color: #818cf8;
+}
+
+/* Single badge - Green (fresh/new vibes, like Spotify's green) */
+.album-type-single {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+/* Compilation badge - Orange (curated/collection feel) */
+.album-type-compilation {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+/* EP badge - Teal (between single and album) */
+.album-type-ep {
+    background: rgba(6, 182, 212, 0.2);
+    color: #22d3ee;
+}
+
+/* Release type badge with icon overlay (used in dashboard cards) */
+.release-type-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    backdrop-filter: blur(4px);
+}
+
+.release-type-album {
+    background: rgba(99, 102, 241, 0.85);
+    color: white;
+}
+
+.release-type-single {
+    background: rgba(16, 185, 129, 0.85);
+    color: white;
+}
+
+.release-type-compilation {
+    background: rgba(245, 158, 11, 0.85);
+    color: white;
+}
+
+.release-type-ep {
+    background: rgba(6, 182, 212, 0.85);
+    color: white;
+}
+

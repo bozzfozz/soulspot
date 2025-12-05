@@ -65,8 +65,19 @@
                 {% else %}
                 <i class="bi bi-disc"></i>
                 {% endif %}
+                {# Type badge with icon - compilation, ep, or single #}
                 {% if album.is_compilation %}
-                <span class="compilation-badge" title="Compilation"><i class="bi bi-collection"></i></span>
+                <span class="album-type-badge album-type-compilation" title="Compilation">
+                    <i class="bi bi-collection"></i> Compilation
+                </span>
+                {% elif album.primary_type == 'ep' %}
+                <span class="album-type-badge album-type-ep" title="EP">
+                    <i class="bi bi-vinyl"></i> EP
+                </span>
+                {% elif album.primary_type == 'single' %}
+                <span class="album-type-badge album-type-single" title="Single">
+                    <i class="bi bi-music-note"></i> Single
+                </span>
                 {% endif %}
             </div>
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
@@ -134,15 +145,12 @@
         overflow: hidden;
         position: relative;
     }
-    .compilation-badge {
+    /* Album type badge - positioned on album cover, uses global styles */
+    .album-cover .album-type-badge {
         position: absolute;
         top: 8px;
-        right: 8px;
-        background: rgba(139, 92, 246, 0.9);
-        color: white;
-        padding: 4px 6px;
-        border-radius: var(--radius-sm);
-        font-size: var(--font-size-xs);
+        left: 8px;
+        backdrop-filter: blur(4px);
     }
     .album-cover img {
         width: 100%;
