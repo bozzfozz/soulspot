@@ -92,6 +92,24 @@ class IArtistRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_missing_artwork(self, limit: int = 50) -> list[Artist]:
+        """Get artists that have Spotify URI but missing artwork.
+
+        Hey future me - this is for RE-ENRICHING artists whose artwork download failed!
+
+        Returns artists where:
+        - spotify_uri is NOT NULL (already enriched)
+        - image_url is NULL (artwork missing)
+
+        Args:
+            limit: Maximum number of artists to return
+
+        Returns:
+            List of Artist entities with missing artwork
+        """
+        pass
+
 
 class IAlbumRepository(ABC):
     """Repository interface for Album entities."""

@@ -372,6 +372,49 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def get_missing_artwork(self, limit: int = 50) -> list[Artist]:
+        """Get artists that have Spotify URI but missing artwork.
+
+        Hey future me - this is for RE-ENRICHING artists whose artwork download failed!
+        Sometimes the initial enrichment links to Spotify but artwork download fails
+        (network issues, rate limits, etc.). This method finds those artists so we
+        can try downloading their artwork again.
+
+        Returns artists where:
+        - spotify_uri is NOT NULL (already enriched)
+        - image_url is NULL (artwork missing)
+
+        Args:
+            limit: Maximum number of artists to return
+
+        Returns:
+            List of Artist entities with missing artwork
+        """
+        stmt = (
+            select(ArtistModel)
+            .where(ArtistModel.spotify_uri.isnot(None))  # Has Spotify link
+            .where(ArtistModel.image_url.is_(None))  # But no artwork
+            .order_by(ArtistModel.name)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Artist(
+                id=ArtistId.from_string(model.id),
+                name=model.name,
+                spotify_uri=SpotifyUri(model.spotify_uri) if model.spotify_uri else None,
+                musicbrainz_id=model.musicbrainz_id,
+                image_url=model.image_url,
+                genres=json.loads(model.genres) if model.genres else [],
+                tags=json.loads(model.tags) if model.tags else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
 
 class AlbumRepository(IAlbumRepository):
     """SQLAlchemy implementation of Album repository."""

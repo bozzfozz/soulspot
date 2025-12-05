@@ -392,6 +392,84 @@ class LocalLibraryEnrichmentService:
 
         return stats
 
+    async def repair_missing_artwork(self, limit: int = 50) -> dict[str, Any]:
+        """Re-download artwork for artists that have Spotify URI but missing artwork.
+
+        Hey future me - this is for fixing artists whose initial enrichment succeeded
+        (got Spotify URI) but artwork download failed (network issues, rate limits).
+        We fetch artist info from Spotify API and download their artwork.
+
+        Args:
+            limit: Maximum number of artists to process
+
+        Returns:
+            Stats dict with repaired count and errors
+        """
+        stats = {
+            "processed": 0,
+            "repaired": 0,
+            "errors": [],
+        }
+
+        artists = await self._artist_repo.get_missing_artwork(limit=limit)
+        logger.info(f"Found {len(artists)} artists with missing artwork")
+
+        for artist in artists:
+            if not artist.spotify_uri:
+                continue
+
+            stats["processed"] += 1
+
+            try:
+                # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
+                spotify_id = artist.spotify_uri.value.split(":")[-1]
+
+                # Fetch artist info from Spotify to get image URL
+                artist_info = await self._spotify_client.get_artist(
+                    artist_id=spotify_id,
+                    access_token=self._access_token,
+                )
+
+                images = artist_info.get("images", [])
+                if not images:
+                    logger.debug(f"No images available for artist {artist.name}")
+                    continue
+
+                image_url = images[0]["url"]
+
+                # Download artwork
+                local_path = await self._image_service.download_artist_image(
+                    image_url=image_url,
+                    artist_name=artist.name,
+                )
+
+                # Update artist in database
+                stmt = (
+                    select(ArtistModel)
+                    .where(ArtistModel.id == str(artist.id.value))
+                )
+                result = await self._session.execute(stmt)
+                model = result.scalar_one_or_none()
+
+                if model:
+                    model.image_url = image_url
+                    model.image_path = str(local_path) if local_path else None
+                    model.updated_at = datetime.now(UTC)
+                    stats["repaired"] += 1
+                    logger.info(f"Repaired artwork for artist: {artist.name}")
+
+                # Rate limiting
+                await asyncio.sleep(0.05)  # 50ms between API calls
+
+            except Exception as e:
+                logger.warning(f"Failed to repair artwork for {artist.name}: {e}")
+                stats["errors"].append({"name": artist.name, "error": str(e)})
+
+        await self._session.commit()
+        logger.info(f"Artwork repair complete: {stats['repaired']} artists repaired")
+
+        return stats
+
     # =========================================================================
     # FOLLOWED ARTISTS HINT (Dec 2025)
     # Hey future me - this is the killer feature for guaranteed matches!

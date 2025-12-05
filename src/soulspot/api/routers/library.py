@@ -1721,6 +1721,38 @@ async def trigger_enrichment(
     )
 
 
+@router.post(
+    "/enrichment/repair-artwork",
+    summary="Repair missing artwork for enriched artists",
+)
+async def repair_missing_artwork(
+    db: AsyncSession = Depends(get_db_session),
+    spotify_client: Any = Depends(get_spotify_client),
+    settings: Any = Depends(get_settings),
+    token: str = Depends(get_spotify_token),
+) -> dict[str, Any]:
+    """Re-download artwork for artists that have Spotify URI but missing artwork.
+
+    Hey future me - this fixes artists whose initial enrichment succeeded (got Spotify URI)
+    but artwork download failed (network issues, rate limits, etc.).
+
+    Use case: "DJ Paul Elstak" was enriched to "Paul Elstak" but has no image.
+    """
+    from soulspot.application.services.local_library_enrichment_service import (
+        LocalLibraryEnrichmentService,
+    )
+
+    service = LocalLibraryEnrichmentService(
+        session=db,
+        spotify_client=spotify_client,
+        settings=settings,
+        access_token=token,
+    )
+
+    result = await service.repair_missing_artwork(limit=100)
+    return result
+
+
 @router.get(
     "/enrichment/candidates",
     response_model=EnrichmentCandidatesListResponse,
