@@ -158,6 +158,31 @@
             </button>
         </div>
         <div id="compilation-status" style="margin-top: 1rem;"></div>
+        
+        {# Hey future me - MusicBrainz Enrichment Section!
+           Adds disambiguation data from MusicBrainz for Lidarr-style naming templates.
+           Separate from Spotify enrichment which runs automatically. #}
+        <div style="margin-top: var(--space-5); padding-top: var(--space-5); border-top: 1px solid var(--border-primary);">
+            <h4 style="font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2);">
+                <span style="color: #e69d3c;"><i class="bi bi-box-arrow-up-right"></i></span>
+                MusicBrainz Enrichment
+            </h4>
+            <div class="action-grid">
+                <button class="btn btn-outline musicbrainz-btn" id="enrich-disambiguation-btn"
+                        hx-post="/library/enrich-disambiguation"
+                        hx-target="#musicbrainz-status"
+                        hx-indicator="#musicbrainz-spinner"
+                        hx-vals='{"limit": 50}'>
+                    <i class="bi bi-tag"></i>
+                    <span id="musicbrainz-spinner" class="htmx-indicator spinner-small"></span>
+                    Enrich Disambiguation
+                </button>
+            </div>
+            <p style="font-size: var(--font-size-xs); color: var(--text-muted); margin-top: var(--space-2);">
+                Adds disambiguation info (e.g., "US rock band") for Lidarr-style naming templates. Rate limited to 1 req/sec.
+            </p>
+            <div id="musicbrainz-status" style="margin-top: var(--space-3);"></div>
+        </div>
     </div>
 </div>
 
@@ -277,6 +302,11 @@
 .compilation-result { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; }
 .compilation-result.success { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #22c55e; }
 .compilation-result.info { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; }
+/* Hey future me - MusicBrainz button styling (orange/amber theme) */
+.musicbrainz-btn { border-color: rgba(186, 83, 45, 0.4); color: #e69d3c; }
+.musicbrainz-btn:hover { background: rgba(186, 83, 45, 0.15); border-color: rgba(186, 83, 45, 0.6); }
+.musicbrainz-result { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; }
+.musicbrainz-result.success { background: rgba(186, 83, 45, 0.1); border: 1px solid rgba(186, 83, 45, 0.2); color: #e69d3c; }
 .danger-zone-card { border: 1px solid rgba(239, 68, 68, 0.3); background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), transparent); }
 .danger-zone-header { background: rgba(239, 68, 68, 0.1); border-bottom: 1px solid rgba(239, 68, 68, 0.2); }
 .danger-zone-header h3 { color: #ef4444; }

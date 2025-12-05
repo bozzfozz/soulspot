@@ -283,3 +283,167 @@ class TestMusicBrainzClientContext:
 
         mock_http_client.aclose.assert_called_once()
         assert musicbrainz_client._client is None
+
+
+class TestMusicBrainzClientDisambiguation:
+    """Test MusicBrainz disambiguation operations.
+    
+    Hey future me - these are the CRITICAL methods for Lidarr-style naming templates!
+    Disambiguation helps differentiate same-name artists/albums.
+    """
+
+    async def test_search_artist_with_disambiguation_found(
+        self, musicbrainz_client: MusicBrainzClient, mocker: MagicMock
+    ) -> None:
+        """Test artist search returns disambiguation when available."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "artists": [
+                {
+                    "id": "artist-123",
+                    "name": "Nirvana",
+                    "disambiguation": "US rock band",
+                    "score": 100,
+                },
+                {
+                    "id": "artist-456",
+                    "name": "Nirvana",
+                    "disambiguation": "UK 1960s band",
+                    "score": 95,
+                },
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mocker.patch.object(
+            musicbrainz_client,
+            "_rate_limited_request",
+            return_value=mock_response,
+        )
+
+        results = await musicbrainz_client.search_artist_with_disambiguation("Nirvana")
+
+        assert len(results) == 2
+        assert results[0]["disambiguation"] == "US rock band"
+        assert results[1]["disambiguation"] == "UK 1960s band"
+
+    async def test_search_artist_with_disambiguation_none(
+        self, musicbrainz_client: MusicBrainzClient, mocker: MagicMock
+    ) -> None:
+        """Test artist search when no disambiguation available."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "artists": [
+                {
+                    "id": "artist-789",
+                    "name": "Unique Artist Name",
+                    "score": 100,
+                    # No disambiguation field - only one artist with this name
+                },
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mocker.patch.object(
+            musicbrainz_client,
+            "_rate_limited_request",
+            return_value=mock_response,
+        )
+
+        results = await musicbrainz_client.search_artist_with_disambiguation(
+            "Unique Artist Name"
+        )
+
+        assert len(results) == 1
+        assert results[0].get("disambiguation") is None
+
+    async def test_search_album_with_disambiguation_found(
+        self, musicbrainz_client: MusicBrainzClient, mocker: MagicMock
+    ) -> None:
+        """Test album search returns disambiguation when available."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "releases": [
+                {
+                    "id": "release-123",
+                    "title": "Greatest Hits",
+                    "disambiguation": "1998 compilation",
+                    "score": 100,
+                },
+                {
+                    "id": "release-456",
+                    "title": "Greatest Hits",
+                    "disambiguation": "2005 remaster",
+                    "score": 95,
+                },
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mocker.patch.object(
+            musicbrainz_client,
+            "_rate_limited_request",
+            return_value=mock_response,
+        )
+
+        results = await musicbrainz_client.search_album_with_disambiguation(
+            "Greatest Hits", "Test Artist"
+        )
+
+        assert len(results) == 2
+        assert results[0]["disambiguation"] == "1998 compilation"
+
+    async def test_get_artist_disambiguation_high_score(
+        self, musicbrainz_client: MusicBrainzClient, mocker: MagicMock
+    ) -> None:
+        """Test get_artist_disambiguation returns value for high score match."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "artists": [
+                {
+                    "id": "artist-123",
+                    "name": "Nirvana",
+                    "disambiguation": "US rock band",
+                    "score": 95,
+                },
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mocker.patch.object(
+            musicbrainz_client,
+            "_rate_limited_request",
+            return_value=mock_response,
+        )
+
+        result = await musicbrainz_client.get_artist_disambiguation("Nirvana")
+
+        assert result == "US rock band"
+
+    async def test_get_artist_disambiguation_low_score(
+        self, musicbrainz_client: MusicBrainzClient, mocker: MagicMock
+    ) -> None:
+        """Test get_artist_disambiguation returns None for low score match."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "artists": [
+                {
+                    "id": "artist-123",
+                    "name": "Nirvana Band",  # Different name
+                    "disambiguation": "US rock band",
+                    "score": 70,  # Low score
+                },
+            ],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mocker.patch.object(
+            musicbrainz_client,
+            "_rate_limited_request",
+            return_value=mock_response,
+        )
+
+        result = await musicbrainz_client.get_artist_disambiguation("Nirvana")
+
+        # Should return None because score < 90
+        assert result is None

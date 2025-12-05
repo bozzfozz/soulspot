@@ -34,9 +34,31 @@
         {% if artist.disambiguation %}
         <div style="font-size: var(--font-size-sm); color: var(--text-muted); opacity: 0.7; margin-bottom: var(--space-2);">{{ artist.disambiguation }}</div>
         {% endif %}
-        <div style="display: flex; gap: var(--space-4); color: var(--text-muted); font-size: var(--font-size-sm);">
+        <div style="display: flex; gap: var(--space-4); color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-3);">
             <span><i class="bi bi-disc" style="margin-right: var(--space-2);"></i>{{ artist.albums|length }} album{{ 's' if artist.albums|length != 1 else '' }}</span>
             <span><i class="bi bi-music-note" style="margin-right: var(--space-2);"></i>{{ artist.track_count }} track{{ 's' if artist.track_count != 1 else '' }}</span>
+        </div>
+        {# Hey future me - External service links! MusicBrainz and Spotify. 
+           These open in new tabs so users can explore metadata sources. #}
+        <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
+            {% if artist.musicbrainz_id %}
+            <a href="https://musicbrainz.org/artist/{{ artist.musicbrainz_id }}" 
+               target="_blank" 
+               rel="noopener noreferrer"
+               class="external-link-badge musicbrainz"
+               title="View on MusicBrainz">
+                <i class="bi bi-box-arrow-up-right"></i> MusicBrainz
+            </a>
+            {% endif %}
+            {% if artist.spotify_uri %}
+            <a href="https://open.spotify.com/artist/{{ artist.spotify_uri.replace('spotify:artist:', '') }}" 
+               target="_blank" 
+               rel="noopener noreferrer"
+               class="external-link-badge spotify"
+               title="Open in Spotify">
+                <i class="bi bi-spotify"></i> Spotify
+            </a>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -177,6 +199,38 @@
         margin-bottom: var(--space-3);
         display: block;
         opacity: 0.5;
+    }
+    /* Hey future me - External service link badges!
+       MusicBrainz = yellow/orange (their brand color)
+       Spotify = green (their brand color) */
+    .external-link-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-full);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-medium);
+        text-decoration: none;
+        transition: all var(--transition-fast);
+    }
+    .external-link-badge.musicbrainz {
+        background: rgba(186, 83, 45, 0.15);
+        color: #e69d3c;
+        border: 1px solid rgba(186, 83, 45, 0.3);
+    }
+    .external-link-badge.musicbrainz:hover {
+        background: rgba(186, 83, 45, 0.25);
+        transform: translateY(-1px);
+    }
+    .external-link-badge.spotify {
+        background: rgba(30, 215, 96, 0.15);
+        color: #1ed760;
+        border: 1px solid rgba(30, 215, 96, 0.3);
+    }
+    .external-link-badge.spotify:hover {
+        background: rgba(30, 215, 96, 0.25);
+        transform: translateY(-1px);
     }
 </style>
 {% endblock %}
