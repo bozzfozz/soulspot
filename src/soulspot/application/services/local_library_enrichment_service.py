@@ -237,7 +237,8 @@ class LocalLibraryEnrichmentService:
         # This is critical for Lidarr-style naming templates where same-name artists
         # need disambiguation (e.g. "Nirvana (US)" vs "Nirvana (UK band)").
         # Also provides high-quality metadata and links to CoverArtArchive.
-        self._musicbrainz_client = MusicBrainzClient()
+        # Pass the musicbrainz settings from the main config!
+        self._musicbrainz_client = MusicBrainzClient(settings.musicbrainz)
 
 
     # =========================================================================

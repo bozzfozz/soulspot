@@ -2046,20 +2046,12 @@ async def find_duplicate_artists(
         ArtistRepository,
     )
 
-    # Create service instance (need repos + image service, but spotify not needed for detection)
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    image_service = SpotifyImageService(settings)
-
     # Minimal service for detection (no spotify client needed)
     service = LocalLibraryEnrichmentService(
         session=db,
         spotify_client=None,  # type: ignore
         access_token="",
         settings=settings,
-        image_service=image_service,
-        artist_repo=artist_repo,
-        album_repo=album_repo,
     )
 
     duplicate_groups = await service.find_duplicate_artists()
@@ -2093,24 +2085,12 @@ async def merge_duplicate_artists(
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
     )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
-
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    image_service = SpotifyImageService(settings)
 
     service = LocalLibraryEnrichmentService(
         session=db,
         spotify_client=None,  # type: ignore
         access_token="",
         settings=settings,
-        image_service=image_service,
-        artist_repo=artist_repo,
-        album_repo=album_repo,
     )
 
     try:
@@ -2139,24 +2119,12 @@ async def find_duplicate_albums(
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
     )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
-
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    image_service = SpotifyImageService(settings)
 
     service = LocalLibraryEnrichmentService(
         session=db,
         spotify_client=None,  # type: ignore
         access_token="",
         settings=settings,
-        image_service=image_service,
-        artist_repo=artist_repo,
-        album_repo=album_repo,
     )
 
     duplicate_groups = await service.find_duplicate_albums()
@@ -2192,18 +2160,11 @@ async def merge_duplicate_albums(
         ArtistRepository,
     )
 
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    image_service = SpotifyImageService(settings)
-
     service = LocalLibraryEnrichmentService(
         session=db,
         spotify_client=None,  # type: ignore
         access_token="",
         settings=settings,
-        image_service=image_service,
-        artist_repo=artist_repo,
-        album_repo=album_repo,
     )
 
     try:
@@ -2249,24 +2210,12 @@ async def enrich_disambiguation(
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
     )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
-
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    image_service = SpotifyImageService(settings)
 
     service = LocalLibraryEnrichmentService(
         session=db,
         spotify_client=None,  # type: ignore  
         access_token="",
         settings=settings,
-        image_service=image_service,
-        artist_repo=artist_repo,
-        album_repo=album_repo,
     )
 
     try:
