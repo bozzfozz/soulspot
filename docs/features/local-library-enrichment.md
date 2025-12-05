@@ -40,10 +40,21 @@ Das Local Library Enrichment Feature reichert lokale Musikdateien mit Spotify-Me
 **Für Alben:**
 - **Name Normalisierung**: Wie bei Artists werden DJ/The/MC etc. aus dem Artist-Namen entfernt
   - Beispiel: "DJ Paul Elstak - Party Animals" = "Paul Elstak - Party Animals"
-- Album-Titel Matching (50% Gewichtung)
-- Artist-Name Matching mit Normalisierung (50% Gewichtung)
+- Album-Titel Matching (45% Gewichtung)
+- Artist-Name Matching mit Normalisierung (45% Gewichtung)
+- Year-Bonus (10% Gewichtung) - Exaktes Jahr +10%, ±1 Jahr +5%
 - Sucht über Spotify Track Search API (limit konfigurierbar, default 20)
 - **Followed Albums Hint**: Falls Album von einem Followed Artist existiert, direkter 100% Match
+
+**Für Various Artists / Compilations:**
+- **Automatische Erkennung**: "Various Artists", "VA", "V.A.", "Verschiedene Künstler", etc.
+- **Title-Only Search**: Sucht nur nach Album-Titel (ignoriert Artist)
+  - Beispiel: `album:"Bravo Hits 100"` statt `artist:Various Artists album:Bravo Hits`
+- **Angepasstes Scoring**: 
+  - Album-Titel Matching (80% Gewichtung) - Hauptidentifikator!
+  - Year-Bonus (20% Gewichtung) - Unterscheidet z.B. "Bravo Hits 99" von "Bravo Hits 100"
+  - Artist-Name wird **komplett ignoriert**
+- **Unterstützte Patterns**: Various Artists, VA, V.A., V/A, Diverse, Verschiedene, Soundtrack, OST, Sampler, Compilation
 
 ### Name Normalisierung
 

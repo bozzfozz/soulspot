@@ -477,12 +477,14 @@ class SpotifyClient(ISpotifyClient):
         artists = result.get("artists", [])
         return [artist for artist in artists if artist is not None]
 
-    # Listen future me, this gets an artist's albums AND singles (hence include_groups).
+    # Listen future me, this gets an artist's albums, singles, AND compilations!
     # Default limit is 50 but artists like Bob Dylan have 500+ releases (compilations, live,
-    # etc.). You'll need pagination for prolific artists. Also, Spotify groups "appears_on"
-    # separately - we DON'T include those here because that's features/compilations and would
-    # flood the results. If you need those, add "appears_on" to include_groups. You've been
-    # warned: it's a LOT of data for some artists!
+    # etc.). You'll need pagination for prolific artists. Spotify groups releases as:
+    # - album: Studio albums (also includes EPs that are longer)
+    # - single: Singles AND EPs (Spotify doesn't separate these)
+    # - compilation: Greatest hits, box sets, etc.
+    # - appears_on: Compilations/albums where artist is just featured (NOT included here)
+    # We INCLUDE compilations now because they're often official releases (Greatest Hits etc.)
     async def get_artist_albums(
         self, artist_id: str, access_token: str, limit: int = 50
     ) -> list[dict[str, Any]]:
@@ -503,7 +505,7 @@ class SpotifyClient(ISpotifyClient):
         client = await self._get_client()
 
         params: dict[str, str | int] = {
-            "include_groups": "album,single",
+            "include_groups": "album,single,compilation",
             "limit": limit,
         }
 

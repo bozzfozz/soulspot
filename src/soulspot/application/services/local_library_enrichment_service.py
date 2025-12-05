@@ -1127,11 +1127,27 @@ class LocalLibraryEnrichmentService:
                     result.error = "matched_via_followed_albums"
                     return result
 
+            # Hey future me - VARIOUS ARTISTS / COMPILATION DETECTION!
+            # If artist is "Various Artists", "VA", etc., searching with artist name is useless.
+            # Instead, search ONLY by album title (optionally with year).
+            # Spotify has a "tag:compilation" filter but it's not always reliable.
+            is_various_artists = self._is_various_artists_name(artist_name)
+
             # Search Spotify: "artist album [year]" (Lidarr-style matching!)
             # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
             # LibraryFolderParser and DB already handle disambiguation stripping.
             # Adding year to search narrows results to correct release edition!
-            if album.release_year:
+            if is_various_artists:
+                # For Various Artists: search by album title only!
+                # Adding "tag:compilation" helps but isn't always accurate.
+                logger.debug(
+                    f"Album '{album.title}' has Various Artists - using title-only search"
+                )
+                if album.release_year:
+                    search_query = f'album:"{album.title}" year:{album.release_year}'
+                else:
+                    search_query = f'album:"{album.title}"'
+            elif album.release_year:
                 search_query = (
                     f"artist:{artist_name} album:{album.title} year:{album.release_year}"
                 )
@@ -1179,11 +1195,13 @@ class LocalLibraryEnrichmentService:
                 )
 
             # Score candidates with name normalization + year matching (Lidarr-style!)
+            # Hey future me - pass is_various_artists so scoring uses title-only for compilations!
             candidates = self._score_album_candidates(
                 album.title,
                 artist_name,
                 list(albums_seen.values()),
                 local_year=album.release_year,  # Pass year for Lidarr-style matching
+                is_various_artists=is_various_artists,  # Skip artist match for compilations
             )
 
             if not candidates:
@@ -1242,22 +1260,29 @@ class LocalLibraryEnrichmentService:
         local_artist: str,
         spotify_albums: list[dict[str, Any]],
         local_year: int | None = None,
+        is_various_artists: bool = False,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify album candidates with name normalization + year matching.
 
         Hey future me - this now uses normalize_artist_name() for better matching!
         "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
 
-        Lidarr-style scoring formula:
+        Lidarr-style scoring formula (normal albums):
         - Title similarity - 45%
         - Artist name match - 45%
         - Year match bonus - 10% (exact match = 10%, ±1 year = 5%, else 0%)
+
+        Various Artists / Compilation scoring:
+        - Title similarity - 80% (album title is the main identifier!)
+        - Year match bonus - 20% (year helps distinguish "Bravo Hits 100" from "Bravo Hits 99")
+        - Artist match - IGNORED (Various Artists means nothing)
 
         Args:
             local_title: Local album title
             local_artist: Local artist name
             spotify_albums: List of Spotify album dicts
             local_year: Local album release year (optional, from folder name)
+            is_various_artists: If True, use title-only scoring for compilations
 
         Returns:
             Sorted list of EnrichmentCandidate (highest score first)
@@ -1314,10 +1339,16 @@ class LocalLibraryEnrichmentService:
                     year_score = 0.5  # ±1 year = half bonus (releases can differ by region)
                 # else: year_score stays 0.0
 
-            # Combined score: 45% title + 45% artist + 10% year (Lidarr-style!)
+            # Combined score calculation - different formula for Various Artists!
             # Hey future me - year is a BONUS, not a penalty! Albums without year
             # still compete fairly, but year-matched ones get a boost.
-            confidence = (title_score * 0.45) + (artist_score * 0.45) + (year_score * 0.10)
+            if is_various_artists:
+                # Various Artists: 80% title + 20% year (ignore artist entirely!)
+                # For compilations like "Bravo Hits 100", title match is everything.
+                confidence = (title_score * 0.80) + (year_score * 0.20)
+            else:
+                # Normal albums: 45% title + 45% artist + 10% year (Lidarr-style!)
+                confidence = (title_score * 0.45) + (artist_score * 0.45) + (year_score * 0.10)
 
             if confidence >= self.CANDIDATE_THRESHOLD:
                 candidates.append(
@@ -1336,6 +1367,63 @@ class LocalLibraryEnrichmentService:
 
         candidates.sort(key=lambda c: c.confidence_score, reverse=True)
         return candidates
+
+    def _is_various_artists_name(self, name: str) -> bool:
+        """Check if artist name indicates Various Artists / Compilation.
+
+        Hey future me - this detects "Various Artists", "VA", "Verschiedene Künstler" etc.
+        When true, we search Spotify by album title only (not artist+album).
+        The patterns here match the VARIOUS_ARTISTS_PATTERNS in docs/features/local-library-enrichment.md
+
+        Args:
+            name: Artist name to check
+
+        Returns:
+            True if name indicates Various Artists / Compilation
+        """
+        name_lower = name.lower().strip()
+
+        # Exact matches (case-insensitive)
+        various_artists_names = {
+            "various artists",
+            "various",
+            "va",
+            "v.a.",
+            "v/a",
+            "v.a",
+            "diverse",
+            "verschiedene",
+            "verschiedene künstler",
+            "verschiedene interpreten",
+            "varios artistas",
+            "artistes divers",
+            "artisti vari",
+            "sampler",
+            "compilation",
+            "soundtrack",
+            "ost",
+            "unknown artist",
+            "[unknown]",
+            "unknown",
+            "",  # Empty artist also treated as Various Artists
+        }
+
+        if name_lower in various_artists_names:
+            return True
+
+        # Partial matches (name contains these patterns)
+        partial_patterns = [
+            "various artist",  # "Various Artists", "Various Artist"
+            "v.a. ",  # "V.A. - Album Name" (some naming conventions)
+            " ost",  # "Movie OST", "Game OST"
+            "soundtrack",
+        ]
+
+        for pattern in partial_patterns:
+            if pattern in name_lower:
+                return True
+
+        return False
 
     async def _apply_album_enrichment(
         self,
