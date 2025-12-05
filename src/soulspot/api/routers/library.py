@@ -15,6 +15,8 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
     get_library_scanner_service,
+    get_spotify_client,
+    get_spotify_token_shared,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.use_cases.check_album_completeness import (
@@ -1735,7 +1737,7 @@ async def repair_missing_artwork(
     db: AsyncSession = Depends(get_db_session),
     spotify_client: Any = Depends(get_spotify_client),
     settings: Any = Depends(get_settings),
-    token: str = Depends(get_spotify_token),
+    token: str = Depends(get_spotify_token_shared),
 ) -> dict[str, Any]:
     """Re-download artwork for artists that have Spotify URI but missing artwork.
 
