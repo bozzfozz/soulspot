@@ -19,6 +19,7 @@ from soulspot.api.dependencies import (
     get_spotify_browse_repository,
     get_spotify_client,
     get_spotify_sync_service,
+    get_spotify_token_shared,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
@@ -28,12 +29,12 @@ from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     PlaylistRepository,
+    SpotifyBrowseRepository,
     TrackRepository,
 )
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
-    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ async def index(
     request: Request,
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     download_repository: DownloadRepository = Depends(get_download_repository),
-    spotify_repository: "SpotifyBrowseRepository" = Depends(
+    spotify_repository: SpotifyBrowseRepository = Depends(
         get_spotify_browse_repository
     ),
     session: AsyncSession = Depends(get_db_session),
