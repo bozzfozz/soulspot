@@ -187,10 +187,6 @@ class Album:
 
         # Otherwise combine: "Live Album", "Remix EP", etc.
         return f"{' '.join(secondary)} {primary}"
-        if self.release_year is not None and (
-            self.release_year < 1900 or self.release_year > 2100
-        ):
-            raise ValueError("Invalid release year")
 
     # Hey, update_artwork is a domain method! Sets artwork_path AND bumps updated_at. Called after
     # post-processing downloads artwork from CoverArtArchive. The FilePath type ensures path is
