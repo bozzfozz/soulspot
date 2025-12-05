@@ -97,23 +97,17 @@
             <code>{{ stats.music_path | default('/music') }}</code>
         </div>
         <div class="scan-options">
-            <button class="btn btn-scan btn-scan-primary" id="btn-incremental-scan"
-                    hx-post="/api/library/import/scan" hx-vals='{"incremental": true}'
+            {# Hey future me - SINGLE SMART SCAN BUTTON! Auto-detects mode:
+               - Empty DB → Full scan
+               - Has tracks → Incremental (only new/modified)
+               No more confusion for users! #}
+            <button class="btn btn-scan btn-scan-primary" id="btn-scan"
+                    hx-post="/api/library/import/scan"
                     hx-target="#scan-status" hx-swap="innerHTML">
-                <div class="btn-scan-icon"><i class="bi bi-lightning-charge-fill"></i></div>
+                <div class="btn-scan-icon"><i class="bi bi-search"></i></div>
                 <div class="btn-scan-content">
-                    <span class="btn-scan-title">Incremental Scan</span>
-                    <span class="btn-scan-desc">Only new or modified files</span>
-                </div>
-                <div class="btn-scan-arrow"><i class="bi bi-chevron-right"></i></div>
-            </button>
-            <button class="btn btn-scan btn-scan-secondary" id="btn-full-scan"
-                    hx-post="/api/library/import/scan" hx-vals='{"incremental": false}'
-                    hx-target="#scan-status" hx-swap="innerHTML">
-                <div class="btn-scan-icon"><i class="bi bi-arrow-repeat"></i></div>
-                <div class="btn-scan-content">
-                    <span class="btn-scan-title">Full Scan</span>
-                    <span class="btn-scan-desc">Re-scan all files, update metadata</span>
+                    <span class="btn-scan-title">Scan Library</span>
+                    <span class="btn-scan-desc">Auto-detects new and modified files</span>
                 </div>
                 <div class="btn-scan-arrow"><i class="bi bi-chevron-right"></i></div>
             </button>

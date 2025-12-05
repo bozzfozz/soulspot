@@ -461,7 +461,7 @@ class ImportScanResponse(BaseModel):
 # NOTE: Accepts Form data (from HTMX hx-vals) instead of JSON body for browser compatibility.
 @router.post("/import/scan", response_model=ImportScanResponse)
 async def start_import_scan(
-    incremental: bool = Form(True),
+    incremental: bool | None = Form(None),  # None = auto-detect!
     defer_cleanup: bool = Form(True),
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> ImportScanResponse:
@@ -470,15 +470,15 @@ async def start_import_scan(
     Scans the music directory, extracts metadata, and imports tracks
     into the database using Lidarr folder structure.
 
-    PERFORMANCE (Dec 2025):
-    - Mutagen extraction runs in ThreadPool (non-blocking)
-    - Cleanup is deferred by default (runs as separate job)
-    - UI stays responsive during scan!
+    SMART AUTO-DETECT MODE (Dec 2025):
+    - If incremental=None (default): Auto-detects based on existing data
+      - Empty DB → Full scan (process all files)
+      - Has tracks → Incremental (only new/modified files)
+    - Explicit True/False still works for manual override
 
     Args:
-        incremental: If True, only scan new/modified files (default: True)
+        incremental: Scan mode (None=auto, True=incremental, False=full)
         defer_cleanup: If True, cleanup runs as separate job (default: True).
-                      If False, cleanup runs immediately (slower, blocks longer).
         job_queue: Job queue for background processing
 
     Returns:
@@ -489,18 +489,24 @@ async def start_import_scan(
         job_id = await job_queue.enqueue(
             job_type=JobType.LIBRARY_SCAN,
             payload={
-                "incremental": incremental,
+                "incremental": incremental,  # None = auto-detect in worker
                 "defer_cleanup": defer_cleanup,
             },
             max_retries=1,  # Don't retry full scans
             priority=5,  # Medium priority
         )
 
+        mode_str = "auto-detect" if incremental is None else f"incremental={incremental}"
         return ImportScanResponse(
             job_id=job_id,
             status="pending",
-            message=f"Library import scan queued (incremental={incremental}, defer_cleanup={defer_cleanup})",
+            message=f"Library import scan queued ({mode_str}, defer_cleanup={defer_cleanup})",
         )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start import scan: {str(e)}"
+        ) from e
 
     except Exception as e:
         raise HTTPException(

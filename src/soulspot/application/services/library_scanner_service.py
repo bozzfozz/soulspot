@@ -106,7 +106,7 @@ class LibraryScannerService:
 
     async def scan_library(
         self,
-        incremental: bool = True,
+        incremental: bool | None = None,  # None = auto-detect!
         defer_cleanup: bool = True,
         progress_callback: Any | None = None,
     ) -> dict[str, Any]:
@@ -114,17 +114,17 @@ class LibraryScannerService:
 
         This is the MAIN entry point! Call this from JobQueue handler.
 
-        Hey future me - PERFORMANCE OPTIMIZATION (Dec 2025)!
-        - Mutagen extraction now runs in ThreadPool (non-blocking)
-        - Cleanup is DEFERRED by default (runs as separate job)
-        - UI stays responsive during scan!
-
-        Artist/Album/Track metadata comes from folder structure, not ID3 tags.
-        Mutagen is only used for audio info (duration, bitrate, genre).
+        Hey future me - SMART AUTO-DETECT MODE (Dec 2025)!
+        - If incremental=None (default): Auto-detect based on existing data
+          - Empty DB → Full scan (process all files)
+          - Has tracks → Incremental (only new/modified files)
+        - Explicit True/False still works for manual override
 
         Args:
-            incremental: If True, only scan new/modified files.
-                        If False, full rescan (process all files).
+            incremental: Scan mode:
+                        - None (default): Auto-detect (recommended!)
+                        - True: Only scan new/modified files
+                        - False: Full rescan (process all files)
             defer_cleanup: If True, return cleanup_needed flag (caller queues cleanup job).
                           If False, run cleanup immediately (old behavior).
             progress_callback: Optional callback for progress updates
@@ -132,6 +132,15 @@ class LibraryScannerService:
         Returns:
             Dict with scan statistics including cleanup_needed flag
         """
+        # Auto-detect scan mode if not specified
+        if incremental is None:
+            track_count = await self._count_tracks()
+            incremental = track_count > 0  # Incremental if we have existing tracks
+            logger.info(
+                f"Auto-detected scan mode: {'incremental' if incremental else 'full'} "
+                f"(existing tracks: {track_count})"
+            )
+
         stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
             "completed_at": None,
@@ -606,6 +615,16 @@ class LibraryScannerService:
 
         file_path = scanned_track.path
 
+        # Hey future me - ALWAYS check if track exists FIRST to prevent duplicates!
+        # This is critical for full scan (incremental=False) which doesn't pre-filter.
+        # Without this check, full scan creates duplicate tracks in albums.
+        existing = await self._get_track_by_file_path(file_path)
+        if existing:
+            # Update last_scanned_at and return early (no duplicate!)
+            existing.last_scanned_at = datetime.now(UTC)
+            result["imported"] = True
+            return result
+
         # For VA tracks, the actual track artist may be in the filename
         # (e.g., "01 - Michael Jackson - Billie Jean.flac")
         track_artist_id = artist_id
@@ -980,6 +999,16 @@ class LibraryScannerService:
             updated_at=track.updated_at,
         )
         self.session.add(model)
+
+    async def _count_tracks(self) -> int:
+        """Count total tracks in database.
+
+        Hey future me - used for auto-detect scan mode!
+        If we have tracks, use incremental. If empty, use full scan.
+        """
+        stmt = select(func.count(TrackModel.id))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     async def _get_track_by_file_path(self, file_path: Path) -> TrackModel | None:
         """Get track by file path.
