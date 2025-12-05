@@ -696,6 +696,88 @@ async def library(
 # =============================================================================
 
 
+@router.get("/library/stats-partial", response_class=HTMLResponse)
+async def library_stats_partial(
+    _request: Request,  # noqa: ARG001
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """HTMX partial: Returns updated stats HTML for library overview.
+
+    Hey future me - this endpoint returns the stats cards HTML for refresh!
+    Used by HTMX to update stats without full page reload after scans.
+    """
+    from sqlalchemy import func, select
+
+    from soulspot.infrastructure.persistence.models import TrackModel
+
+    # Same queries as library() but just returns the stats section
+    total_tracks_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None)
+    )
+    total_tracks = (await session.execute(total_tracks_stmt)).scalar() or 0
+
+    artists_stmt = select(func.count(func.distinct(TrackModel.artist_id))).where(
+        TrackModel.file_path.isnot(None)
+    )
+    total_artists = (await session.execute(artists_stmt)).scalar() or 0
+
+    albums_stmt = select(func.count(func.distinct(TrackModel.album_id))).where(
+        TrackModel.file_path.isnot(None),
+        TrackModel.album_id.isnot(None),
+    )
+    total_albums = (await session.execute(albums_stmt)).scalar() or 0
+
+    broken_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None),
+        TrackModel.is_broken == True,  # noqa: E712
+    )
+    broken_tracks = (await session.execute(broken_stmt)).scalar() or 0
+
+    # Return stats HTML with updated values
+    return HTMLResponse(f"""
+    <div class="stat-card stat-card-animated" style="--delay: 0;">
+        <div class="stat-icon stat-icon-artists"><i class="bi bi-person"></i></div>
+        <div class="stat-content">
+            <span class="stat-value">{total_artists:,}</span>
+            <span class="stat-label">Artists</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 1;">
+        <div class="stat-icon stat-icon-albums"><i class="bi bi-disc"></i></div>
+        <div class="stat-content">
+            <span class="stat-value">{total_albums:,}</span>
+            <span class="stat-label">Albums</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 2;">
+        <div class="stat-icon stat-icon-tracks"><i class="bi bi-music-note"></i></div>
+        <div class="stat-content">
+            <span class="stat-value">{total_tracks:,}</span>
+            <span class="stat-label">Tracks</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 3;">
+        <div class="stat-icon stat-icon-files"><i class="bi bi-file-earmark-music"></i></div>
+        <div class="stat-content">
+            <span class="stat-value">{total_tracks:,}</span>
+            <span class="stat-label">Local Files</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    <div class="stat-card stat-card-animated" style="--delay: 4;">
+        <div class="stat-icon stat-icon-broken"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="stat-content">
+            <span class="stat-value">{broken_tracks:,}</span>
+            <span class="stat-label">Broken</span>
+        </div>
+        <div class="stat-shine"></div>
+    </div>
+    """)
+
+
 @router.get("/library/import", response_class=HTMLResponse)
 async def library_import_page(request: Request) -> Any:  # noqa: ARG001
     """Redirect to unified library page (merged with import)."""
@@ -1588,6 +1670,93 @@ async def spotify_artists_page(
             "sync_stats": sync_stats,
             "error": error,
             "total_count": len(artists),
+        },
+    )
+
+
+@router.get("/spotify/discover", response_class=HTMLResponse)
+async def spotify_discover_page(
+    request: Request,
+    sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    access_token: str = Depends(get_spotify_token_shared),
+) -> Any:
+    """Discover Similar Artists page.
+
+    Hey future me - this is the REAL discovery page! Shows artists similar to your favorites.
+    Fetches related artists from Spotify API for your followed artists and aggregates
+    the suggestions, filtering out ones you already follow.
+    """
+    import random
+
+    # Get all followed artists
+    artists = await sync_service.get_all_followed_artists()
+
+    if not artists:
+        return templates.TemplateResponse(
+            request,
+            "spotify_discover.html",
+            context={
+                "discoveries": [],
+                "based_on_count": 0,
+                "total_discoveries": 0,
+                "error": "No followed artists found. Follow some artists on Spotify first!",
+            },
+        )
+
+    # Pick random artists to base discovery on (max 5 to avoid rate limits)
+    sample_size = min(5, len(artists))
+    sample_artists = random.sample(artists, sample_size)
+
+    # Get followed artist IDs for filtering
+    followed_ids = {a.spotify_id for a in artists}
+
+    # Aggregate similar artists from sampled followed artists
+    discoveries: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    error: str | None = None
+
+    for artist in sample_artists:
+        if not artist.spotify_id:
+            continue
+        try:
+            related = await spotify_client.get_related_artists(
+                artist.spotify_id, access_token
+            )
+            for r in related:
+                rid = r.get("id")
+                # Skip if already following or already in discoveries
+                if rid and rid not in followed_ids and rid not in seen_ids:
+                    seen_ids.add(rid)
+                    images = r.get("images", [])
+                    discoveries.append(
+                        {
+                            "spotify_id": rid,
+                            "name": r.get("name", "Unknown"),
+                            "image_url": images[0]["url"] if images else None,
+                            "genres": r.get("genres", [])[:3],
+                            "popularity": r.get("popularity", 0),
+                            "based_on": artist.name,
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Failed to get related artists for {artist.name}: {e}")
+            continue
+
+    # Sort by popularity (most popular first)
+    discoveries.sort(key=lambda x: x["popularity"], reverse=True)
+
+    # Limit to top 50
+    discoveries = discoveries[:50]
+
+    return templates.TemplateResponse(
+        request,
+        "spotify_discover.html",
+        context={
+            "discoveries": discoveries,
+            "based_on_count": sample_size,
+            "total_discoveries": len(discoveries),
+            "error": error,
         },
     )
 

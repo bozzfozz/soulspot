@@ -885,18 +885,42 @@ class LocalLibraryEnrichmentService:
             existing_with_uri = existing_uri_check.scalar_one_or_none()
 
             if existing_with_uri:
-                logger.warning(
-                    f"Skipping enrichment for '{artist.name}' - spotify_uri "
-                    f"'{candidate.spotify_uri}' already assigned to artist "
-                    f"'{existing_with_uri.name}' (id: {existing_with_uri.id}). "
-                    f"Consider merging these duplicate artists."
+                # Hey future me - URI already assigned to another artist (likely "Paul Elstak")
+                # Instead of just skipping, COPY the artwork from the existing artist!
+                # This handles "DJ Paul Elstak" (local) → "Paul Elstak" (Spotify) case.
+                logger.info(
+                    f"'{artist.name}' matches existing artist '{existing_with_uri.name}' "
+                    f"(same Spotify URI). Copying artwork instead of re-downloading."
                 )
+
+                # Update current artist model with existing artist's data
+                stmt = select(ArtistModel).where(ArtistModel.id == str(artist.id.value))
+                result = await self._session.execute(stmt)
+                model = result.scalar_one()
+
+                # Copy image_url and image_path from existing artist
+                if existing_with_uri.image_url and not model.image_url:
+                    model.image_url = existing_with_uri.image_url
+                if (
+                    hasattr(existing_with_uri, "image_path")
+                    and existing_with_uri.image_path
+                    and not getattr(model, "image_path", None)
+                ):
+                    model.image_path = existing_with_uri.image_path
+                model.updated_at = datetime.now(UTC)
+
+                # Don't set spotify_uri - it would cause UNIQUE constraint error
+                # Instead, mark this as a duplicate that should be merged
+                await self._session.flush()
+
                 return EnrichmentResult(
                     entity_type="artist",
                     entity_id=str(artist.id.value),
                     entity_name=artist.name,
-                    success=False,
-                    error=f"Duplicate: spotify_uri already assigned to '{existing_with_uri.name}'",
+                    success=True,
+                    matched_name=existing_with_uri.name,
+                    matched_uri=candidate.spotify_uri,
+                    error=f"Artwork copied from '{existing_with_uri.name}'. Consider merging these artists.",
                 )
 
             # Update artist model directly

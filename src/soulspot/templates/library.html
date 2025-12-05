@@ -24,7 +24,11 @@
 </div>
 
 <!-- Summary Stats with animated counters -->
-<div class="stats-grid" id="summary-stats">
+<!-- Hey future me - HTMX auto-refreshes stats every 30s and after scan completion! -->
+<div class="stats-grid" id="summary-stats"
+     hx-get="/library/stats-partial"
+     hx-trigger="statsRefresh from:body, every 60s"
+     hx-swap="innerHTML">
     <div class="stat-card stat-card-animated" style="--delay: 0;">
         <div class="stat-icon stat-icon-artists"><i class="bi bi-person"></i></div>
         <div class="stat-content">
@@ -91,11 +95,6 @@
 <div class="card scan-card">
     <div class="card-header"><h3><i class="bi bi-hdd-stack"></i> Library Scanner</h3></div>
     <div class="card-body">
-        <div class="music-path-display">
-            <i class="bi bi-folder-fill"></i>
-            <span>Music Path:</span>
-            <code>{{ stats.music_path | default('/music') }}</code>
-        </div>
         <div class="scan-options">
             {# Hey future me - SINGLE SMART SCAN BUTTON! Auto-detects mode:
                - Empty DB → Full scan
@@ -422,9 +421,13 @@ function showScanCompleted(data) {
     // Refresh recent scans list
     htmx.trigger(document.querySelector('.recent-scans-container'), 'refresh');
 
-    // Auto-reload if items imported (to update stats)
-    if (stats.imported > 0) {
-        setTimeout(() => window.location.reload(), 3000);
+    // Trigger stats refresh via HTMX custom event
+    htmx.trigger(document.body, 'statsRefresh');
+
+    // Also update the browse card artist count
+    const browseCards = document.querySelectorAll('.browse-card-featured p span');
+    if (browseCards.length > 0) {
+        browseCards[0].textContent = formatNumber(stats.artists || 0);
     }
 }
 

@@ -1,0 +1,280 @@
+{# Hey future me - Discover Similar Artists page!
+   Shows artists similar to your followed artists. Based on Spotify's "Fans Also Like" data.
+   Users can follow artists directly from here to grow their collection. #}
+
+{% extends "base.html" %}
+
+{% block title %}Discover Artists - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #1DB954, #1ed760);">
+                <i class="bi bi-heart-pulse-fill"></i>
+            </div>
+            <div class="header-icon-glow" style="background: linear-gradient(135deg, #1DB954, #1ed760);"></div>
+        </div>
+        <div>
+            <h1>Discover Artists</h1>
+            <p class="subtitle">Artists similar to your favorites • Based on {{ based_on_count }} of your followed artists</p>
+        </div>
+    </div>
+    <div class="header-actions">
+        <a href="/spotify/artists" class="btn btn-outline">
+            <i class="bi bi-people"></i> My Artists
+        </a>
+        <button class="btn btn-primary" onclick="window.location.reload()">
+            <i class="bi bi-shuffle"></i> Shuffle
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-warning" style="margin-bottom: 2rem;">
+    <i class="bi bi-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+
+{% if discoveries %}
+<div class="discover-stats" style="margin-bottom: 2rem; color: var(--text-muted); font-size: 0.9rem;">
+    <i class="bi bi-lightbulb"></i> Found <strong>{{ total_discoveries }}</strong> artists you might like
+</div>
+
+<div class="artist-grid">
+    {% for artist in discoveries %}
+    <div class="artist-card discover-card" data-spotify-id="{{ artist.spotify_id }}">
+        <a href="/spotify/artists/{{ artist.spotify_id }}" class="artist-card-link">
+            <div class="artist-avatar">
+                {% if artist.image_url %}
+                <img src="{{ artist.image_url }}" alt="{{ artist.name }}" loading="lazy">
+                {% else %}
+                <span class="artist-initial">{{ artist.name[0]|upper }}</span>
+                {% endif %}
+            </div>
+            <div class="artist-info">
+                <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
+                <div class="artist-meta">
+                    {% if artist.genres %}
+                    <span class="artist-genres">{{ artist.genres | join(', ') }}</span>
+                    {% endif %}
+                </div>
+                <div class="discover-based-on">
+                    <i class="bi bi-diagram-2"></i> Similar to {{ artist.based_on }}
+                </div>
+            </div>
+        </a>
+        <div class="artist-actions">
+            <button class="btn btn-follow btn-sm"
+                    onclick="followArtist('{{ artist.spotify_id }}', this)"
+                    title="Follow on Spotify">
+                <i class="bi bi-person-plus"></i> Follow
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="bi bi-heart-pulse" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5;"></i>
+    <h3>No discoveries yet</h3>
+    <p>Follow some artists on Spotify to get personalized recommendations!</p>
+    <a href="/spotify/artists" class="btn btn-primary">
+        <i class="bi bi-people"></i> Browse Artists
+    </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+.header-icon-wrapper { position: relative; }
+.header-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: white;
+}
+.header-icon-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    filter: blur(20px);
+    opacity: 0.4;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); }
+}
+.header-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.artist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.discover-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.discover-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+}
+
+.artist-card-link {
+    display: flex;
+    padding: 1.25rem;
+    gap: 1rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.artist-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1DB954, #1ed760);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.artist-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.artist-initial {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+}
+
+.artist-info {
+    flex: 1;
+    min-width: 0;
+}
+.artist-name {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.artist-genres {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.discover-based-on {
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    margin-top: 0.5rem;
+    opacity: 0.8;
+}
+
+.artist-actions {
+    padding: 0 1.25rem 1.25rem;
+}
+.btn-follow {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--accent-primary);
+    color: var(--accent-primary);
+    transition: all 0.2s;
+}
+.btn-follow:hover {
+    background: var(--accent-primary);
+    color: white;
+}
+.btn-follow.following {
+    background: var(--accent-primary);
+    color: white;
+    pointer-events: none;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+.empty-state h3 {
+    margin: 1rem 0 0.5rem;
+}
+.empty-state p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+    }
+    .header-actions {
+        width: 100%;
+    }
+    .header-actions .btn {
+        flex: 1;
+    }
+}
+</style>
+
+<script>
+async function followArtist(spotifyId, button) {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<span class="spinner-small"></span>';
+    button.disabled = true;
+
+    try {
+        const response = await fetch(`/api/artists/spotify/${spotifyId}/follow`, {
+            method: 'POST',
+        });
+
+        if (response.ok) {
+            button.innerHTML = '<i class="bi bi-check"></i> Following';
+            button.classList.add('following');
+        } else {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to follow');
+        }
+    } catch (error) {
+        console.error('Follow error:', error);
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+        // Show toast error if you have a toast system
+        alert('Failed to follow artist: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
