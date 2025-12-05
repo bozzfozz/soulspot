@@ -114,6 +114,21 @@ MULTI_DISC_TRACK_PATTERN = re.compile(
     r"\.(?P<ext>\w+)$"  # File extension
 )
 
+# Concatenated disc-track pattern: "DDTT - Title.ext" (4 digits, no separator)
+# Hey future me - some Hardcore/Gabber libraries use "0102" format (disc 01, track 02)!
+# IMPORTANT: Disc must be >= 01 (not 00), so "0001" = track 1, not disc 0 track 1!
+# Examples:
+#   "0102 - Creepy Terror Show.flac" → disc=1, track=2, title="Creepy Terror Show"
+#   "0215 - Some Track.mp3" → disc=2, track=15, title="Some Track"
+#   "0001 - First Track.flac" → NO MATCH (disc 00 invalid, use standard pattern)
+CONCAT_DISC_TRACK_PATTERN = re.compile(
+    r"^(?P<disc>0[1-9]|[1-9]\d)"  # Disc number (01-99, not 00!)
+    r"(?P<track>\d{2})"  # Track number (exactly 2 digits)
+    r"\s*[-–—]\s*"  # Separator before title
+    r"(?P<title>.+)"  # Track title
+    r"\.(?P<ext>\w+)$"  # File extension
+)
+
 # Various Artists track pattern: "NN - Artist - Title.ext"
 # Examples:
 #   "01 - Michael Jackson - Billie Jean.flac" → track=1, artist="Michael Jackson", title="Billie Jean"
@@ -469,7 +484,7 @@ def parse_album_folder(folder_name: str) -> ParsedAlbumFolder:
 def parse_track_filename(filename: str) -> ParsedTrackFilename:
     """Parse track filename to extract metadata.
 
-    Tries patterns in order: multi-disc → VA → standard → fallback.
+    Tries patterns in order: multi-disc → concat disc-track → VA → standard → fallback.
 
     Args:
         filename: The track filename (with extension, without path).
@@ -484,13 +499,28 @@ def parse_track_filename(filename: str) -> ParsedTrackFilename:
         >>> parse_track_filename("01-05 - Track.mp3")
         ParsedTrackFilename(title="Track", track_number=5, disc_number=1, ...)
 
+        >>> parse_track_filename("0102 - Track.flac")
+        ParsedTrackFilename(title="Track", track_number=2, disc_number=1, ...)
+
         >>> parse_track_filename("01 - Artist - Title.flac")
         ParsedTrackFilename(title="Title", artist="Artist", track_number=1, ...)
     """
     filename = filename.strip()
 
-    # Try multi-disc pattern first (most specific)
+    # Try multi-disc pattern first (with separator: "01-05 - Title")
     match = MULTI_DISC_TRACK_PATTERN.match(filename)
+    if match:
+        return ParsedTrackFilename(
+            title=match.group("title").strip(),
+            track_number=int(match.group("track")),
+            disc_number=int(match.group("disc")),
+            extension=f".{match.group('ext').lower()}",
+            raw_name=filename,
+        )
+
+    # Try concatenated disc-track pattern (no separator: "0102 - Title")
+    # Hey future me - Hardcore/Gabber libraries often use this format!
+    match = CONCAT_DISC_TRACK_PATTERN.match(filename)
     if match:
         return ParsedTrackFilename(
             title=match.group("title").strip(),

@@ -1395,7 +1395,9 @@ class LibraryScannerService:
             metadata["title_from_folder"] = parsed_track.title
         if parsed_track.track_number > 0:
             metadata["track_number_from_folder"] = parsed_track.track_number
-        if parsed_track.disc_number > 1:
+        # Hey future me - disc_number > 0 (not > 1!) because 0102 format has disc=1!
+        # Disc 1 is valid and should be stored from DDTT format like "0102 - Track.flac"
+        if parsed_track.disc_number > 0:
             metadata["disc_number_from_folder"] = parsed_track.disc_number
         if parsed_track.artist:
             # VA track with artist in filename
