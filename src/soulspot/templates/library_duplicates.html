@@ -1,0 +1,522 @@
+{# Hey future me - Duplicate Detection & Merge page for Library!
+   Shows potential duplicate artists/albums and lets users merge them.
+   Detection uses normalized name matching, merge transfers all tracks. #}
+
+{% extends "base.html" %}
+
+{% block title %}Duplicates - Library - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav style="margin-bottom: var(--space-4);">
+    <ol style="display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-size-sm);">
+        <li><a href="/library" style="color: var(--color-primary);"><i class="bi bi-folder2"></i> Library</a></li>
+        <li style="color: var(--text-muted);"><i class="bi bi-chevron-right" style="font-size: 0.6rem; margin: 0 var(--space-2);"></i></li>
+        <li style="color: var(--text-muted);">Duplicates</li>
+    </ol>
+</nav>
+
+<!-- Page Header -->
+<div class="page-header" style="margin-bottom: var(--space-6);">
+    <div>
+        <h1 style="font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); margin-bottom: var(--space-2);">
+            <i class="bi bi-copy" style="color: var(--color-warning);"></i>
+            Duplicate Detection
+        </h1>
+        <p style="color: var(--text-muted);">
+            Find and merge duplicate artists and albums in your library
+        </p>
+    </div>
+    <div class="header-actions" style="display: flex; gap: var(--space-3);">
+        <button id="refresh-btn" class="btn btn-secondary" onclick="loadDuplicates()">
+            <i class="bi bi-arrow-clockwise"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" style="margin-bottom: var(--space-6);">
+    <button class="tab-btn active" data-tab="artists" onclick="switchTab('artists')">
+        <i class="bi bi-person"></i> Artists
+        <span id="artist-count-badge" class="badge badge-warning" style="margin-left: var(--space-2);">0</span>
+    </button>
+    <button class="tab-btn" data-tab="albums" onclick="switchTab('albums')">
+        <i class="bi bi-disc"></i> Albums
+        <span id="album-count-badge" class="badge badge-warning" style="margin-left: var(--space-2);">0</span>
+    </button>
+</div>
+
+<!-- Artists Tab -->
+<div id="artists-tab" class="tab-content">
+    <div id="artists-loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Scanning for duplicate artists...</p>
+    </div>
+    <div id="artists-empty" class="empty-state" style="display: none;">
+        <div class="empty-icon" style="background: linear-gradient(135deg, var(--color-success), #10b981);">
+            <i class="bi bi-check-lg" style="color: white;"></i>
+        </div>
+        <h3>No Duplicate Artists Found</h3>
+        <p>Your library is clean! No duplicate artists detected.</p>
+    </div>
+    <div id="artists-list" class="duplicate-list" style="display: none;"></div>
+</div>
+
+<!-- Albums Tab -->
+<div id="albums-tab" class="tab-content" style="display: none;">
+    <div id="albums-loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Scanning for duplicate albums...</p>
+    </div>
+    <div id="albums-empty" class="empty-state" style="display: none;">
+        <div class="empty-icon" style="background: linear-gradient(135deg, var(--color-success), #10b981);">
+            <i class="bi bi-check-lg" style="color: white;"></i>
+        </div>
+        <h3>No Duplicate Albums Found</h3>
+        <p>Your library is clean! No duplicate albums detected.</p>
+    </div>
+    <div id="albums-list" class="duplicate-list" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+    .tabs {
+        display: flex;
+        gap: var(--space-2);
+        border-bottom: 1px solid var(--border-primary);
+        padding-bottom: var(--space-2);
+    }
+    .tab-btn {
+        padding: var(--space-2) var(--space-4);
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: var(--font-size-base);
+        cursor: pointer;
+        border-radius: var(--radius-md);
+        transition: all var(--transition-fast);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+    .tab-btn:hover {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+    .tab-btn.active {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-weight: var(--font-weight-medium);
+    }
+    .tab-content {
+        min-height: 200px;
+    }
+    .loading-state, .empty-state {
+        text-align: center;
+        padding: var(--space-12);
+    }
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto var(--space-4);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--font-size-3xl);
+    }
+    .duplicate-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+    }
+    .duplicate-group {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-primary);
+        border-radius: var(--radius-xl);
+        padding: var(--space-4);
+    }
+    .duplicate-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-4);
+        padding-bottom: var(--space-3);
+        border-bottom: 1px solid var(--border-primary);
+    }
+    .duplicate-group-title {
+        font-weight: var(--font-weight-bold);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+    }
+    .duplicate-items {
+        display: grid;
+        gap: var(--space-3);
+    }
+    .duplicate-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-3);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-lg);
+        border: 2px solid transparent;
+        transition: border-color var(--transition-fast);
+    }
+    .duplicate-item.primary {
+        border-color: var(--color-success);
+    }
+    .duplicate-item.selected {
+        border-color: var(--color-primary);
+    }
+    .duplicate-item-image {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-md);
+        object-fit: cover;
+        background: var(--bg-secondary);
+    }
+    .duplicate-item-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--font-size-lg);
+        font-weight: var(--font-weight-bold);
+        color: white;
+    }
+    .duplicate-item-info {
+        flex: 1;
+    }
+    .duplicate-item-name {
+        font-weight: var(--font-weight-medium);
+        margin-bottom: 2px;
+    }
+    .duplicate-item-meta {
+        font-size: var(--font-size-sm);
+        color: var(--text-muted);
+        display: flex;
+        gap: var(--space-3);
+    }
+    .duplicate-item-actions {
+        display: flex;
+        gap: var(--space-2);
+    }
+    .keep-badge {
+        font-size: var(--font-size-xs);
+        padding: 2px 8px;
+        background: rgba(34, 197, 94, 0.2);
+        color: var(--color-success);
+        border-radius: var(--radius-full);
+    }
+    .spotify-badge {
+        font-size: var(--font-size-xs);
+        padding: 2px 8px;
+        background: rgba(29, 185, 84, 0.2);
+        color: #1DB954;
+        border-radius: var(--radius-full);
+    }
+    .merge-btn {
+        background: var(--color-warning);
+        color: white;
+    }
+    .merge-btn:hover {
+        background: #d97706;
+    }
+</style>
+
+<script>
+let artistDuplicates = [];
+let albumDuplicates = [];
+
+// Load duplicates on page load
+document.addEventListener('DOMContentLoaded', loadDuplicates);
+
+function switchTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    document.getElementById(`${tab}-tab`).style.display = 'block';
+}
+
+async function loadDuplicates() {
+    // Load artists
+    document.getElementById('artists-loading').style.display = 'block';
+    document.getElementById('artists-empty').style.display = 'none';
+    document.getElementById('artists-list').style.display = 'none';
+    
+    try {
+        const artistResponse = await fetch('/api/library/duplicates/artists');
+        const artistData = await artistResponse.json();
+        artistDuplicates = artistData.duplicate_groups || [];
+        
+        document.getElementById('artist-count-badge').textContent = artistData.total_duplicates || 0;
+        
+        if (artistDuplicates.length === 0) {
+            document.getElementById('artists-empty').style.display = 'block';
+        } else {
+            renderArtistDuplicates();
+            document.getElementById('artists-list').style.display = 'flex';
+        }
+    } catch (error) {
+        console.error('Failed to load artist duplicates:', error);
+    }
+    document.getElementById('artists-loading').style.display = 'none';
+    
+    // Load albums
+    document.getElementById('albums-loading').style.display = 'block';
+    document.getElementById('albums-empty').style.display = 'none';
+    document.getElementById('albums-list').style.display = 'none';
+    
+    try {
+        const albumResponse = await fetch('/api/library/duplicates/albums');
+        const albumData = await albumResponse.json();
+        albumDuplicates = albumData.duplicate_groups || [];
+        
+        document.getElementById('album-count-badge').textContent = albumData.total_duplicates || 0;
+        
+        if (albumDuplicates.length === 0) {
+            document.getElementById('albums-empty').style.display = 'block';
+        } else {
+            renderAlbumDuplicates();
+            document.getElementById('albums-list').style.display = 'flex';
+        }
+    } catch (error) {
+        console.error('Failed to load album duplicates:', error);
+    }
+    document.getElementById('albums-loading').style.display = 'none';
+}
+
+function renderArtistDuplicates() {
+    const container = document.getElementById('artists-list');
+    container.innerHTML = '';
+    
+    artistDuplicates.forEach((group, groupIndex) => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'duplicate-group';
+        groupEl.innerHTML = `
+            <div class="duplicate-group-header">
+                <div class="duplicate-group-title">
+                    <i class="bi bi-copy" style="color: var(--color-warning);"></i>
+                    <span>"${escapeHtml(group.normalized_name)}"</span>
+                    <span style="color: var(--text-muted); font-weight: normal;">
+                        (${group.artists.length} duplicates, ${group.total_tracks} tracks)
+                    </span>
+                </div>
+                <button class="btn btn-sm merge-btn" onclick="mergeArtistGroup(${groupIndex})">
+                    <i class="bi bi-arrow-down-up"></i> Merge All
+                </button>
+            </div>
+            <div class="duplicate-items">
+                ${group.artists.map((artist, artistIndex) => `
+                    <div class="duplicate-item ${artist.id === group.suggested_primary_id ? 'primary' : ''}" 
+                         data-group="${groupIndex}" data-artist="${artistIndex}">
+                        ${artist.image_url 
+                            ? `<img src="${artist.image_url}" class="duplicate-item-image" alt="${escapeHtml(artist.name)}">`
+                            : `<div class="duplicate-item-avatar">${escapeHtml(artist.name[0].toUpperCase())}</div>`
+                        }
+                        <div class="duplicate-item-info">
+                            <div class="duplicate-item-name">${escapeHtml(artist.name)}</div>
+                            <div class="duplicate-item-meta">
+                                <span><i class="bi bi-music-note-list"></i> ${artist.track_count} tracks</span>
+                                ${artist.has_spotify ? '<span class="spotify-badge"><i class="bi bi-spotify"></i> Spotify</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="duplicate-item-actions">
+                            ${artist.id === group.suggested_primary_id 
+                                ? '<span class="keep-badge"><i class="bi bi-check"></i> Keep</span>'
+                                : `<button class="btn btn-ghost btn-sm" onclick="setArtistPrimary(${groupIndex}, ${artistIndex})">
+                                    <i class="bi bi-star"></i> Set as Primary
+                                   </button>`
+                            }
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        container.appendChild(groupEl);
+    });
+}
+
+function renderAlbumDuplicates() {
+    const container = document.getElementById('albums-list');
+    container.innerHTML = '';
+    
+    albumDuplicates.forEach((group, groupIndex) => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'duplicate-group';
+        groupEl.innerHTML = `
+            <div class="duplicate-group-header">
+                <div class="duplicate-group-title">
+                    <i class="bi bi-copy" style="color: var(--color-warning);"></i>
+                    <span>"${escapeHtml(group.normalized_key.replace('::', ' - '))}"</span>
+                    <span style="color: var(--text-muted); font-weight: normal;">
+                        (${group.albums.length} duplicates, ${group.total_tracks} tracks)
+                    </span>
+                </div>
+                <button class="btn btn-sm merge-btn" onclick="mergeAlbumGroup(${groupIndex})">
+                    <i class="bi bi-arrow-down-up"></i> Merge All
+                </button>
+            </div>
+            <div class="duplicate-items">
+                ${group.albums.map((album, albumIndex) => `
+                    <div class="duplicate-item ${album.id === group.suggested_primary_id ? 'primary' : ''}"
+                         data-group="${groupIndex}" data-album="${albumIndex}">
+                        ${album.artwork_url 
+                            ? `<img src="${album.artwork_url}" class="duplicate-item-image" alt="${escapeHtml(album.name)}">`
+                            : `<div class="duplicate-item-avatar"><i class="bi bi-disc"></i></div>`
+                        }
+                        <div class="duplicate-item-info">
+                            <div class="duplicate-item-name">${escapeHtml(album.name)}</div>
+                            <div class="duplicate-item-meta">
+                                <span><i class="bi bi-person"></i> ${escapeHtml(album.artist_name)}</span>
+                                <span><i class="bi bi-music-note-list"></i> ${album.track_count} tracks</span>
+                                ${album.has_spotify ? '<span class="spotify-badge"><i class="bi bi-spotify"></i> Spotify</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="duplicate-item-actions">
+                            ${album.id === group.suggested_primary_id 
+                                ? '<span class="keep-badge"><i class="bi bi-check"></i> Keep</span>'
+                                : `<button class="btn btn-ghost btn-sm" onclick="setAlbumPrimary(${groupIndex}, ${albumIndex})">
+                                    <i class="bi bi-star"></i> Set as Primary
+                                   </button>`
+                            }
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        container.appendChild(groupEl);
+    });
+}
+
+function setArtistPrimary(groupIndex, artistIndex) {
+    const group = artistDuplicates[groupIndex];
+    group.suggested_primary_id = group.artists[artistIndex].id;
+    renderArtistDuplicates();
+}
+
+function setAlbumPrimary(groupIndex, albumIndex) {
+    const group = albumDuplicates[groupIndex];
+    group.suggested_primary_id = group.albums[albumIndex].id;
+    renderAlbumDuplicates();
+}
+
+async function mergeArtistGroup(groupIndex) {
+    const group = artistDuplicates[groupIndex];
+    const keepId = group.suggested_primary_id;
+    const mergeIds = group.artists
+        .filter(a => a.id !== keepId)
+        .map(a => a.id);
+    
+    const keepArtist = group.artists.find(a => a.id === keepId);
+    const mergeCount = mergeIds.length;
+    
+    if (!confirm(`Merge ${mergeCount} artist(s) into "${keepArtist.name}"?\n\nAll tracks and albums will be transferred.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/library/duplicates/artists/merge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keep_id: keepId, merge_ids: mergeIds})
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success(`Merged ${result.artists_deleted} artists, moved ${result.tracks_moved} tracks`);
+            }
+            // Remove this group and refresh
+            artistDuplicates.splice(groupIndex, 1);
+            if (artistDuplicates.length === 0) {
+                document.getElementById('artists-list').style.display = 'none';
+                document.getElementById('artists-empty').style.display = 'block';
+            } else {
+                renderArtistDuplicates();
+            }
+            document.getElementById('artist-count-badge').textContent = 
+                artistDuplicates.reduce((sum, g) => sum + g.artists.length - 1, 0);
+        } else {
+            throw new Error(result.detail || 'Merge failed');
+        }
+    } catch (error) {
+        console.error('Merge failed:', error);
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(error.message || 'Failed to merge artists');
+        } else {
+            alert('Failed to merge: ' + error.message);
+        }
+    }
+}
+
+async function mergeAlbumGroup(groupIndex) {
+    const group = albumDuplicates[groupIndex];
+    const keepId = group.suggested_primary_id;
+    const mergeIds = group.albums
+        .filter(a => a.id !== keepId)
+        .map(a => a.id);
+    
+    const keepAlbum = group.albums.find(a => a.id === keepId);
+    const mergeCount = mergeIds.length;
+    
+    if (!confirm(`Merge ${mergeCount} album(s) into "${keepAlbum.name}"?\n\nAll tracks will be transferred.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/library/duplicates/albums/merge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({keep_id: keepId, merge_ids: mergeIds})
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.success(`Merged ${result.albums_deleted} albums, moved ${result.tracks_moved} tracks`);
+            }
+            albumDuplicates.splice(groupIndex, 1);
+            if (albumDuplicates.length === 0) {
+                document.getElementById('albums-list').style.display = 'none';
+                document.getElementById('albums-empty').style.display = 'block';
+            } else {
+                renderAlbumDuplicates();
+            }
+            document.getElementById('album-count-badge').textContent = 
+                albumDuplicates.reduce((sum, g) => sum + g.albums.length - 1, 0);
+        } else {
+            throw new Error(result.detail || 'Merge failed');
+        }
+    } catch (error) {
+        console.error('Merge failed:', error);
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.error(error.message || 'Failed to merge albums');
+        } else {
+            alert('Failed to merge: ' + error.message);
+        }
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

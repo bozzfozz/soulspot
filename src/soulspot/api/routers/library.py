@@ -1960,3 +1960,217 @@ async def reject_enrichment_candidate(
         "success": True,
         "message": "Candidate rejected",
     }
+
+
+# =============================================================================
+# DUPLICATE DETECTION & MERGE (Dec 2025)
+# Hey future me - these endpoints let users find and merge duplicate artists/albums!
+# Detection groups entities by normalized name, merge transfers all tracks/albums
+# to the "keep" entity and deletes the duplicates.
+# =============================================================================
+
+
+class MergeRequest(BaseModel):
+    """Request to merge duplicate entities."""
+
+    keep_id: str
+    merge_ids: list[str]
+
+
+@router.get(
+    "/duplicates/artists",
+    summary="Find duplicate artists",
+    tags=["duplicates"],
+)
+async def find_duplicate_artists(
+    db: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Find potential duplicate artists by normalized name matching.
+
+    Returns groups of artists that might be duplicates (same normalized name).
+    Each group includes a suggested primary (the one with Spotify URI or most tracks).
+
+    Use POST /duplicates/artists/merge to combine duplicates.
+    """
+    from soulspot.api.dependencies import (
+        get_spotify_client,
+        get_spotify_token_shared,
+    )
+    from soulspot.application.services.local_library_enrichment_service import (
+        LocalLibraryEnrichmentService,
+    )
+    from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+    )
+
+    # Create service instance (need repos + image service, but spotify not needed for detection)
+    artist_repo = ArtistRepository(db)
+    album_repo = AlbumRepository(db)
+    image_service = SpotifyImageService(settings)
+
+    # Minimal service for detection (no spotify client needed)
+    service = LocalLibraryEnrichmentService(
+        session=db,
+        spotify_client=None,  # type: ignore
+        access_token="",
+        settings=settings,
+        image_service=image_service,
+        artist_repo=artist_repo,
+        album_repo=album_repo,
+    )
+
+    duplicate_groups = await service.find_duplicate_artists()
+
+    return {
+        "duplicate_groups": duplicate_groups,
+        "total_groups": len(duplicate_groups),
+        "total_duplicates": sum(len(g["artists"]) - 1 for g in duplicate_groups),
+    }
+
+
+@router.post(
+    "/duplicates/artists/merge",
+    summary="Merge duplicate artists",
+    tags=["duplicates"],
+)
+async def merge_duplicate_artists(
+    request: MergeRequest,
+    db: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Merge multiple artists into one.
+
+    All tracks and albums from merge_ids artists will be transferred to keep_id artist.
+    The merge_ids artists will be deleted after transfer.
+
+    Args:
+        keep_id: ID of artist to keep
+        merge_ids: List of artist IDs to merge into keep artist
+    """
+    from soulspot.application.services.local_library_enrichment_service import (
+        LocalLibraryEnrichmentService,
+    )
+    from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+    )
+
+    artist_repo = ArtistRepository(db)
+    album_repo = AlbumRepository(db)
+    image_service = SpotifyImageService(settings)
+
+    service = LocalLibraryEnrichmentService(
+        session=db,
+        spotify_client=None,  # type: ignore
+        access_token="",
+        settings=settings,
+        image_service=image_service,
+        artist_repo=artist_repo,
+        album_repo=album_repo,
+    )
+
+    try:
+        result = await service.merge_artists(request.keep_id, request.merge_ids)
+        return {
+            "success": True,
+            **result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get(
+    "/duplicates/albums",
+    summary="Find duplicate albums",
+    tags=["duplicates"],
+)
+async def find_duplicate_albums(
+    db: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Find potential duplicate albums by normalized name + artist matching.
+
+    Returns groups of albums that might be duplicates.
+    """
+    from soulspot.application.services.local_library_enrichment_service import (
+        LocalLibraryEnrichmentService,
+    )
+    from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+    )
+
+    artist_repo = ArtistRepository(db)
+    album_repo = AlbumRepository(db)
+    image_service = SpotifyImageService(settings)
+
+    service = LocalLibraryEnrichmentService(
+        session=db,
+        spotify_client=None,  # type: ignore
+        access_token="",
+        settings=settings,
+        image_service=image_service,
+        artist_repo=artist_repo,
+        album_repo=album_repo,
+    )
+
+    duplicate_groups = await service.find_duplicate_albums()
+
+    return {
+        "duplicate_groups": duplicate_groups,
+        "total_groups": len(duplicate_groups),
+        "total_duplicates": sum(len(g["albums"]) - 1 for g in duplicate_groups),
+    }
+
+
+@router.post(
+    "/duplicates/albums/merge",
+    summary="Merge duplicate albums",
+    tags=["duplicates"],
+)
+async def merge_duplicate_albums(
+    request: MergeRequest,
+    db: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Merge multiple albums into one.
+
+    All tracks from merge_ids albums will be transferred to keep_id album.
+    The merge_ids albums will be deleted after transfer.
+    """
+    from soulspot.application.services.local_library_enrichment_service import (
+        LocalLibraryEnrichmentService,
+    )
+    from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+    )
+
+    artist_repo = ArtistRepository(db)
+    album_repo = AlbumRepository(db)
+    image_service = SpotifyImageService(settings)
+
+    service = LocalLibraryEnrichmentService(
+        session=db,
+        spotify_client=None,  # type: ignore
+        access_token="",
+        settings=settings,
+        image_service=image_service,
+        artist_repo=artist_repo,
+        album_repo=album_repo,
+    )
+
+    try:
+        result = await service.merge_albums(request.keep_id, request.merge_ids)
+        return {
+            "success": True,
+            **result,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

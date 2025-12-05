@@ -1411,13 +1411,13 @@ async def track_metadata_editor(
 
 @router.get("/library/duplicates", response_class=HTMLResponse)
 async def library_duplicates_page(request: Request) -> Any:
-    """Duplicate review page for resolving duplicate tracks.
+    """Duplicate review page for resolving duplicate artists/albums.
 
-    Shows all detected duplicate candidates from the duplicate_candidates table.
-    Users can review side-by-side comparisons and choose which to keep.
+    Shows detected duplicate artists and albums (same name, different DB entries).
+    Users can merge duplicates or dismiss false positives.
 
-    The actual duplicate detection runs via DuplicateDetectorWorker (background).
-    Users can also trigger manual scans from this page.
+    Detection groups entities by normalized name - if multiple DB entries share
+    the same normalized name, they're shown as potential duplicates.
 
     Args:
         request: FastAPI request object
@@ -1425,10 +1425,10 @@ async def library_duplicates_page(request: Request) -> Any:
     Returns:
         HTML page with duplicate review UI
     """
-    # Initial stats will be loaded via HTMX from /api/library/duplicates
+    # Initial stats will be loaded via HTMX from /api/library/duplicates/artists
     return templates.TemplateResponse(
         request,
-        "duplicates.html",
+        "library_duplicates.html",
         context={
             "stats": None,  # Loaded via HTMX
         },

@@ -274,8 +274,9 @@ class LocalLibraryEnrichmentService:
         # Hey future me - preload Followed Artists lookup table for fast matching!
         # This is the killer feature: if artist exists in Followed Artists, we use
         # their Spotify URI directly instead of searching. 100% match rate guaranteed!
-        followed_artists_lookup: dict[str, tuple[str, str | None]] = {}
-        followed_albums_lookup: dict[str, tuple[str, str | None]] = {}
+        # BONUS: We also get image_path to REUSE already-downloaded artwork!
+        followed_artists_lookup: dict[str, tuple[str, str | None, str | None]] = {}
+        followed_albums_lookup: dict[str, tuple[str, str | None, str | None]] = {}
         if use_followed_hint:
             followed_artists_lookup = await self._build_followed_artists_lookup()
             followed_albums_lookup = await self._build_followed_albums_lookup()
@@ -290,6 +291,13 @@ class LocalLibraryEnrichmentService:
             f"search_limit={search_limit}, name_weight={name_weight}%"
         )
 
+        # Hey future me - CRITICAL: Track URIs assigned in THIS batch to prevent
+        # duplicates within the same batch! The DB check only sees committed data,
+        # but if two artists in the same batch get the same URI, we get UNIQUE
+        # constraint error on commit. This set tracks URIs we've assigned.
+        assigned_artist_uris: set[str] = set()
+        assigned_album_uris: set[str] = set()
+
         # Enrich artists first (albums need artist matches)
         artists = await self._artist_repo.get_unenriched(limit=batch_size)
         for artist in artists:
@@ -300,11 +308,15 @@ class LocalLibraryEnrichmentService:
                 search_limit=search_limit,
                 name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
                 followed_artists_lookup=followed_artists_lookup,
+                assigned_uris=assigned_artist_uris,  # Pass in-memory tracker
             )
             stats["artists_processed"] += 1
 
             if result.success:
                 stats["artists_enriched"] += 1
+                # Track the URI we just assigned to prevent duplicates in this batch
+                if result.spotify_uri:
+                    assigned_artist_uris.add(result.spotify_uri)
                 if result.image_downloaded:
                     stats["images_downloaded"] += 1
                 # Hey future me - track how many were matched via followed artists hint!
@@ -338,11 +350,15 @@ class LocalLibraryEnrichmentService:
                 download_artwork=download_artwork,
                 search_limit=search_limit,
                 followed_albums_lookup=followed_albums_lookup,
+                assigned_uris=assigned_album_uris,  # Pass in-memory tracker
             )
             stats["albums_processed"] += 1
 
             if result.success:
                 stats["albums_enriched"] += 1
+                # Track the URI we just assigned to prevent duplicates in this batch
+                if result.spotify_uri:
+                    assigned_album_uris.add(result.spotify_uri)
                 if result.image_downloaded:
                     stats["images_downloaded"] += 1
                 # Hey future me - track how many were matched via followed albums hint!
@@ -389,7 +405,7 @@ class LocalLibraryEnrichmentService:
         """Build a lookup table of followed artists by name.
 
         Returns:
-            Dict mapping lowercase artist name to (spotify_uri, image_url) tuple
+            Dict mapping lowercase artist name to (spotify_uri, image_url, image_path) tuple
         """
         from soulspot.infrastructure.persistence.models import SpotifyArtistModel
 
@@ -405,19 +421,20 @@ class LocalLibraryEnrichmentService:
         # Hey future me - normalize names to lowercase for case-insensitive matching!
         # "Pink Floyd" and "pink floyd" should both match the same followed artist.
         # ALSO store normalized version (without DJ/The/MC) for prefix-variant matching!
-        lookup: dict[str, tuple[str, str | None]] = {}
+        # ALSO include image_path so we can REUSE already-downloaded artwork!
+        lookup: dict[str, tuple[str, str | None, str | None]] = {}
         for model in models:
             if model.spotify_id:
                 name_lower = model.name.lower().strip()
                 # Construct full Spotify URI from ID
                 spotify_uri = f"spotify:artist:{model.spotify_id}"
-                # Store under original lowercase name
-                lookup[name_lower] = (spotify_uri, model.image_url)
+                # Store under original lowercase name - now with image_path!
+                lookup[name_lower] = (spotify_uri, model.image_url, model.image_path)
                 # Also store under normalized name (without DJ/The/MC prefixes)
                 # This allows "DJ Paul Elstak" (local) to match "Paul Elstak" (Spotify)
                 name_normalized = normalize_artist_name(model.name)
                 if name_normalized != name_lower:
-                    lookup[name_normalized] = (spotify_uri, model.image_url)
+                    lookup[name_normalized] = (spotify_uri, model.image_url, model.image_path)
 
         return lookup
 
@@ -449,7 +466,8 @@ class LocalLibraryEnrichmentService:
         result = await self._session.execute(stmt)
         rows = result.all()
 
-        lookup: dict[str, tuple[str, str | None]] = {}
+        # Hey future me - now includes image_path for artwork reuse!
+        lookup: dict[str, tuple[str, str | None, str | None]] = {}
         for album_model, artist_name in rows:
             # Build key: "artist|album" (lowercase)
             artist_lower = artist_name.lower().strip()
@@ -459,15 +477,15 @@ class LocalLibraryEnrichmentService:
             # Construct full Spotify URI
             spotify_uri = f"spotify:album:{album_model.spotify_id}"
 
-            # Store under original key
-            lookup[key_original] = (spotify_uri, album_model.image_url)
+            # Store under original key - now with image_path!
+            lookup[key_original] = (spotify_uri, album_model.image_url, album_model.image_path)
 
             # Also store under normalized artist name
             # "DJ Paul Elstak|Party Animals" should match "Paul Elstak|Party Animals"
             artist_normalized = normalize_artist_name(artist_name)
             if artist_normalized != artist_lower:
                 key_normalized = f"{artist_normalized}|{album_lower}"
-                lookup[key_normalized] = (spotify_uri, album_model.image_url)
+                lookup[key_normalized] = (spotify_uri, album_model.image_url, album_model.image_path)
 
         return lookup
 
@@ -482,7 +500,8 @@ class LocalLibraryEnrichmentService:
         download_artwork: bool,
         search_limit: int = 20,
         name_weight: float = 0.85,
-        followed_artists_lookup: dict[str, tuple[str, str | None]] | None = None,
+        followed_artists_lookup: dict[str, tuple[str, str | None, str | None]] | None = None,
+        assigned_uris: set[str] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single artist with Spotify data.
 
@@ -493,6 +512,7 @@ class LocalLibraryEnrichmentService:
             search_limit: Number of Spotify search results to scan
             name_weight: Weight of name similarity vs popularity (0.0-1.0)
             followed_artists_lookup: Optional lookup table for followed artists hint
+            assigned_uris: Set of URIs already assigned in this batch (prevents duplicates)
 
         Returns:
             EnrichmentResult with success/failure info
@@ -516,22 +536,42 @@ class LocalLibraryEnrichmentService:
                     )
 
                 if matched_key:
-                    spotify_uri, image_url = followed_artists_lookup[matched_key]
+                    spotify_uri, image_url, image_path = followed_artists_lookup[matched_key]
+                    
+                    # Hey future me - CHECK if URI was already assigned in this batch!
+                    # Prevents UNIQUE constraint error for duplicate artists.
+                    if assigned_uris and spotify_uri in assigned_uris:
+                        logger.warning(
+                            f"Skipping artist '{artist.name}' - spotify_uri "
+                            f"'{spotify_uri}' already assigned to another artist in this batch"
+                        )
+                        return EnrichmentResult(
+                            entity_type="artist",
+                            entity_id=str(artist.id.value),
+                            entity_name=artist.name,
+                            success=False,
+                            error="Duplicate: URI already assigned in this batch",
+                        )
+                    
                     logger.debug(
                         f"Artist '{artist.name}' matched via followed artists hint"
                     )
 
                     # Create a synthetic candidate from followed artist data
+                    # Hey future me - include image_path so we can REUSE existing artwork!
                     candidate = EnrichmentCandidate(
                         spotify_uri=spotify_uri,
                         spotify_name=artist.name,  # Use local name
                         spotify_image_url=image_url,
                         confidence_score=1.0,  # 100% confidence for followed artists
-                        extra_info={"matched_via": "followed_artists_hint"},
+                        extra_info={
+                            "matched_via": "followed_artists_hint",
+                            "existing_image_path": image_path,  # REUSE this if available!
+                        },
                     )
 
                     result = await self._apply_artist_enrichment(
-                        artist, candidate, download_artwork
+                        artist, candidate, download_artwork, assigned_uris
                     )
                     # Hey future me - mark this as matched via followed artists for stats!
                     result.error = "matched_via_followed_artists"
@@ -612,11 +652,26 @@ class LocalLibraryEnrichmentService:
 
             # Check if top candidate is confident enough for auto-apply
             top_candidate = candidates[0]
+            
+            # Hey future me - CHECK if URI was already assigned in this batch!
+            # Prevents UNIQUE constraint error for duplicate artists via search.
+            if assigned_uris and top_candidate.spotify_uri in assigned_uris:
+                logger.warning(
+                    f"Skipping artist '{artist.name}' - best candidate's spotify_uri "
+                    f"'{top_candidate.spotify_uri}' already assigned in this batch"
+                )
+                return EnrichmentResult(
+                    entity_type="artist",
+                    entity_id=str(artist.id.value),
+                    entity_name=artist.name,
+                    success=False,
+                    error="Duplicate: Best candidate URI already assigned in this batch",
+                )
 
             if top_candidate.confidence_score >= confidence_threshold:
                 # Auto-apply the match
                 return await self._apply_artist_enrichment(
-                    artist, top_candidate, download_artwork
+                    artist, top_candidate, download_artwork, assigned_uris
                 )
             else:
                 # Store as candidates for user review
@@ -717,39 +772,95 @@ class LocalLibraryEnrichmentService:
         artist: Artist,
         candidate: EnrichmentCandidate,
         download_artwork: bool,
+        assigned_uris: set[str] | None = None,
     ) -> EnrichmentResult:
         """Apply enrichment from a candidate to an artist.
 
         Updates artist model with Spotify URI, image, genres.
+        Uses no_autoflush block to prevent premature flushes during duplicate check.
 
         Args:
             artist: Artist entity to update
             candidate: Selected EnrichmentCandidate
             download_artwork: Whether to download artwork
+            assigned_uris: Set of URIs already assigned in this batch (for tracking)
 
         Returns:
             EnrichmentResult with success info
         """
-        # Update artist model directly
-        stmt = select(ArtistModel).where(ArtistModel.id == str(artist.id.value))
-        result = await self._session.execute(stmt)
-        model = result.scalar_one()
+        # Hey future me - CRITICAL: Use no_autoflush block to prevent the
+        # "Query-invoked autoflush" error! The duplicate check SELECT was
+        # triggering autoflush of pending changes from previous artists,
+        # causing UNIQUE constraint errors BEFORE our check could run.
+        # NOTE: no_autoflush is a SYNC context manager, not async!
+        with self._session.no_autoflush:
+            # Hey future me - CHECK FOR DUPLICATE SPOTIFY URI FIRST!
+            # Another artist might already have this spotify_uri (duplicate local artists
+            # for same Spotify artist, or folder parsing created multiple entries).
+            # We skip enrichment if URI is already claimed to avoid UNIQUE constraint errors.
+            existing_uri_check = await self._session.execute(
+                select(ArtistModel).where(
+                    ArtistModel.spotify_uri == candidate.spotify_uri,
+                    ArtistModel.id != str(artist.id.value),  # Exclude current artist
+                )
+            )
+            existing_with_uri = existing_uri_check.scalar_one_or_none()
 
-        model.spotify_uri = candidate.spotify_uri
-        model.image_url = candidate.spotify_image_url
+            if existing_with_uri:
+                logger.warning(
+                    f"Skipping enrichment for '{artist.name}' - spotify_uri "
+                    f"'{candidate.spotify_uri}' already assigned to artist "
+                    f"'{existing_with_uri.name}' (id: {existing_with_uri.id}). "
+                    f"Consider merging these duplicate artists."
+                )
+                return EnrichmentResult(
+                    entity_type="artist",
+                    entity_id=str(artist.id.value),
+                    entity_name=artist.name,
+                    success=False,
+                    error=f"Duplicate: spotify_uri already assigned to '{existing_with_uri.name}'",
+                )
 
-        # Update genres if we have them and artist doesn't
-        if candidate.extra_info.get("genres") and not model.genres:
-            import json
+            # Update artist model directly
+            stmt = select(ArtistModel).where(ArtistModel.id == str(artist.id.value))
+            result = await self._session.execute(stmt)
+            model = result.scalar_one()
 
-            model.genres = json.dumps(candidate.extra_info["genres"])
+            model.spotify_uri = candidate.spotify_uri
+            model.image_url = candidate.spotify_image_url
 
-        model.updated_at = datetime.now(UTC)
+            # Update genres if we have them and artist doesn't
+            if candidate.extra_info.get("genres") and not model.genres:
+                import json
+
+                model.genres = json.dumps(candidate.extra_info["genres"])
+
+            model.updated_at = datetime.now(UTC)
+
+        # Hey future me - FLUSH after each artist enrichment to ensure the UNIQUE
+        # constraint is checked immediately! This prevents batch-accumulated
+        # duplicates where two artists in the same batch get the same URI.
+        # The no_autoflush block above prevents autoflush during our check,
+        # but we flush explicitly here to catch issues early.
+        await self._session.flush()
 
         # Download artwork if enabled - with detailed error tracking!
+        # BUT first check if we can REUSE existing artwork from Followed Artists!
         image_downloaded = False
         image_error: str | None = None
-        if download_artwork and candidate.spotify_image_url:
+        
+        # Hey future me - REUSE ARTWORK from Followed Artists if available!
+        # This is the key optimization: if the local artist matched a Followed Artist,
+        # we already have the artwork downloaded. No need to download again!
+        existing_image_path = candidate.extra_info.get("existing_image_path")
+        if existing_image_path:
+            # Followed Artist has this image already - no download needed!
+            logger.debug(
+                f"Reusing existing artwork for artist '{artist.name}' from Followed Artists: {existing_image_path}"
+            )
+            # The image_url is already set on the model, pointing to same file
+            image_downloaded = True  # Mark as "downloaded" even though we reused
+        elif download_artwork and candidate.spotify_image_url:
             # Extract Spotify ID from URI (spotify:artist:XXXXX)
             spotify_id = candidate.spotify_uri.split(":")[-1]
 
@@ -831,7 +942,8 @@ class LocalLibraryEnrichmentService:
         confidence_threshold: float,
         download_artwork: bool,
         search_limit: int = 20,
-        followed_albums_lookup: dict[str, tuple[str, str | None]] | None = None,
+        followed_albums_lookup: dict[str, tuple[str, str | None, str | None]] | None = None,
+        assigned_uris: set[str] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single album with Spotify data.
 
@@ -841,6 +953,7 @@ class LocalLibraryEnrichmentService:
             download_artwork: Whether to download artwork
             search_limit: Number of Spotify search results to scan
             followed_albums_lookup: Optional lookup table for followed albums hint
+            assigned_uris: Set of URIs already assigned in this batch (prevents duplicates)
 
         Returns:
             EnrichmentResult with success/failure info
@@ -872,22 +985,41 @@ class LocalLibraryEnrichmentService:
                     )
 
                 if matched_key:
-                    spotify_uri, image_url = followed_albums_lookup[matched_key]
+                    spotify_uri, image_url, image_path = followed_albums_lookup[matched_key]
+                    
+                    # Hey future me - CHECK if URI was already assigned in this batch!
+                    if assigned_uris and spotify_uri in assigned_uris:
+                        logger.warning(
+                            f"Skipping album '{album.title}' - spotify_uri "
+                            f"'{spotify_uri}' already assigned in this batch"
+                        )
+                        return EnrichmentResult(
+                            entity_type="album",
+                            entity_id=str(album.id.value),
+                            entity_name=album.title,
+                            success=False,
+                            error="Duplicate: URI already assigned in this batch",
+                        )
+                    
                     logger.debug(
                         f"Album '{album.title}' by '{artist_name}' matched via followed albums hint"
                     )
 
                     # Create a synthetic candidate from followed album data
+                    # Hey future me - include image_path so we can REUSE existing artwork!
                     candidate = EnrichmentCandidate(
                         spotify_uri=spotify_uri,
                         spotify_name=album.title,  # Use local name
                         spotify_image_url=image_url,
                         confidence_score=1.0,  # 100% confidence for followed albums
-                        extra_info={"matched_via": "followed_albums_hint"},
+                        extra_info={
+                            "matched_via": "followed_albums_hint",
+                            "existing_image_path": image_path,  # REUSE this if available!
+                        },
                     )
 
                     result = await self._apply_album_enrichment(
-                        album, candidate, download_artwork
+                        album, candidate, download_artwork, assigned_uris
                     )
                     # Hey future me - mark this as matched via followed albums for stats!
                     result.error = "matched_via_followed_albums"
@@ -939,10 +1071,24 @@ class LocalLibraryEnrichmentService:
 
             # Check if top candidate is confident enough
             top_candidate = candidates[0]
+            
+            # Hey future me - CHECK if URI was already assigned in this batch!
+            if assigned_uris and top_candidate.spotify_uri in assigned_uris:
+                logger.warning(
+                    f"Skipping album '{album.title}' - best candidate's spotify_uri "
+                    f"'{top_candidate.spotify_uri}' already assigned in this batch"
+                )
+                return EnrichmentResult(
+                    entity_type="album",
+                    entity_id=str(album.id.value),
+                    entity_name=album.title,
+                    success=False,
+                    error="Duplicate: Best candidate URI already assigned in this batch",
+                )
 
             if top_candidate.confidence_score >= confidence_threshold:
                 return await self._apply_album_enrichment(
-                    album, top_candidate, download_artwork
+                    album, top_candidate, download_artwork, assigned_uris
                 )
             else:
                 stored = await self._store_album_candidates(album, candidates)
@@ -1047,20 +1193,77 @@ class LocalLibraryEnrichmentService:
         album: Album,
         candidate: EnrichmentCandidate,
         download_artwork: bool,
+        assigned_uris: set[str] | None = None,
     ) -> EnrichmentResult:
-        """Apply enrichment from a candidate to an album."""
-        stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))
-        result = await self._session.execute(stmt)
-        model = result.scalar_one()
+        """Apply enrichment from a candidate to an album.
 
-        model.spotify_uri = candidate.spotify_uri
-        model.artwork_url = candidate.spotify_image_url
-        model.updated_at = datetime.now(UTC)
+        Uses no_autoflush block to prevent premature flushes during duplicate check.
+        
+        Args:
+            album: Album entity to update
+            candidate: Selected EnrichmentCandidate
+            download_artwork: Whether to download artwork
+            assigned_uris: Set of URIs already assigned in this batch (for tracking)
+        """
+        # Hey future me - CRITICAL: Use no_autoflush block to prevent the
+        # "Query-invoked autoflush" error! Same issue as with artists.
+        # NOTE: no_autoflush is a SYNC context manager, not async!
+        with self._session.no_autoflush:
+            # Hey future me - CHECK FOR DUPLICATE SPOTIFY URI FIRST!
+            # Another album might already have this spotify_uri (duplicate local albums
+            # for same Spotify album, or folder parsing created multiple entries).
+            # We skip enrichment if URI is already claimed to avoid UNIQUE constraint errors.
+            existing_uri_check = await self._session.execute(
+                select(AlbumModel).where(
+                    AlbumModel.spotify_uri == candidate.spotify_uri,
+                    AlbumModel.id != str(album.id.value),  # Exclude current album
+                )
+            )
+            existing_with_uri = existing_uri_check.scalar_one_or_none()
+
+            if existing_with_uri:
+                logger.warning(
+                    f"Skipping enrichment for album '{album.title}' - spotify_uri "
+                    f"'{candidate.spotify_uri}' already assigned to album "
+                    f"'{existing_with_uri.name}' (id: {existing_with_uri.id}). "
+                    f"Consider merging these duplicate albums."
+                )
+                return EnrichmentResult(
+                    entity_type="album",
+                    entity_id=str(album.id.value),
+                    entity_name=album.title,
+                    success=False,
+                    error=f"Duplicate: spotify_uri already assigned to '{existing_with_uri.name}'",
+                )
+
+            stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))
+            result = await self._session.execute(stmt)
+            model = result.scalar_one()
+
+            model.spotify_uri = candidate.spotify_uri
+            model.artwork_url = candidate.spotify_image_url
+            model.updated_at = datetime.now(UTC)
+
+        # Hey future me - FLUSH after each album enrichment to ensure the UNIQUE
+        # constraint is checked immediately! Same as with artists.
+        await self._session.flush()
 
         # Download artwork if enabled - with detailed error tracking!
+        # BUT first check if we can REUSE existing artwork from Followed Albums!
         image_downloaded = False
         image_error: str | None = None
-        if download_artwork and candidate.spotify_image_url:
+        
+        # Hey future me - REUSE ARTWORK from Followed Albums if available!
+        # Same optimization as for artists.
+        existing_image_path = candidate.extra_info.get("existing_image_path")
+        if existing_image_path:
+            # Followed Album has this image already - no download needed!
+            logger.debug(
+                f"Reusing existing artwork for album '{album.title}' from Followed Albums: {existing_image_path}"
+            )
+            model.artwork_path = existing_image_path  # Use the existing path!
+            image_downloaded = True  # Mark as "downloaded" even though we reused
+        elif download_artwork and candidate.spotify_image_url:
             spotify_id = candidate.spotify_uri.split(":")[-1]
 
             # Hey future me - use the new _with_result method for detailed errors!
@@ -1155,3 +1358,372 @@ class LocalLibraryEnrichmentService:
             "pending_candidates": pending_candidates,
             "is_enrichment_needed": (artists_unenriched + albums_unenriched) > 0,
         }
+
+    # =========================================================================
+    # DUPLICATE ARTIST DETECTION & MERGE (Dec 2025)
+    # Hey future me - this finds artists that are likely the same person/band!
+    # Common causes: "Angerfist" vs "ANGERFIST", "The Beatles" vs "Beatles, The"
+    # After detection, user can merge them (keeps one, transfers tracks/albums).
+    # =========================================================================
+
+    async def find_duplicate_artists(self) -> list[dict[str, Any]]:
+        """Find potential duplicate artists by normalized name matching.
+
+        Groups artists with identical normalized names (lowercase, stripped prefixes).
+        Returns groups where >1 artist has the same normalized name.
+
+        Returns:
+            List of duplicate groups, each containing:
+            - normalized_name: The matching key
+            - artists: List of artist dicts in this group
+            - suggested_primary_id: ID of suggested "keep" artist (most tracks/has spotify_uri)
+        """
+        from collections import defaultdict
+        from sqlalchemy import func
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        # Get all artists
+        stmt = select(ArtistModel)
+        result = await self._session.execute(stmt)
+        all_artists = result.scalars().all()
+
+        # Group by normalized name
+        groups: dict[str, list[ArtistModel]] = defaultdict(list)
+        for artist in all_artists:
+            normalized = normalize_artist_name(artist.name)
+            groups[normalized].append(artist)
+
+        # Filter to groups with duplicates (>1 artist)
+        duplicate_groups: list[dict[str, Any]] = []
+
+        for normalized_name, artists in groups.items():
+            if len(artists) <= 1:
+                continue
+
+            # Get track counts for each artist to suggest primary
+            artist_ids = [a.id for a in artists]
+            track_counts_stmt = (
+                select(TrackModel.artist_id, func.count(TrackModel.id))
+                .where(TrackModel.artist_id.in_(artist_ids))
+                .group_by(TrackModel.artist_id)
+            )
+            track_counts_result = await self._session.execute(track_counts_stmt)
+            track_counts = dict(track_counts_result.all())
+
+            # Build artist info list
+            artist_infos = []
+            for a in artists:
+                artist_infos.append({
+                    "id": a.id,
+                    "name": a.name,
+                    "spotify_uri": a.spotify_uri,
+                    "image_url": a.image_url,
+                    "track_count": track_counts.get(a.id, 0),
+                    "has_spotify": a.spotify_uri is not None,
+                })
+
+            # Suggest primary: prefer one with spotify_uri, then most tracks
+            sorted_artists = sorted(
+                artist_infos,
+                key=lambda x: (x["has_spotify"], x["track_count"]),
+                reverse=True,
+            )
+            suggested_primary_id = sorted_artists[0]["id"]
+
+            duplicate_groups.append({
+                "normalized_name": normalized_name,
+                "artists": artist_infos,
+                "suggested_primary_id": suggested_primary_id,
+                "total_tracks": sum(a["track_count"] for a in artist_infos),
+            })
+
+        # Sort by total tracks (most impactful duplicates first)
+        duplicate_groups.sort(key=lambda g: g["total_tracks"], reverse=True)
+
+        logger.info(f"Found {len(duplicate_groups)} potential duplicate artist groups")
+        return duplicate_groups
+
+    async def merge_artists(
+        self, keep_id: str, merge_ids: list[str]
+    ) -> dict[str, Any]:
+        """Merge multiple artists into one, transferring all tracks and albums.
+
+        The 'keep' artist absorbs all data from 'merge' artists:
+        - All tracks are reassigned to keep_id
+        - All albums are reassigned to keep_id
+        - image_url is copied if keep artist doesn't have one
+        - Merged artists are deleted
+
+        Args:
+            keep_id: ID of the artist to keep
+            merge_ids: IDs of artists to merge into keep artist
+
+        Returns:
+            Dict with merge stats (tracks_moved, albums_moved, artists_deleted)
+
+        Raises:
+            ValueError: If keep_id is in merge_ids or artists don't exist
+        """
+        from sqlalchemy import update
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        if keep_id in merge_ids:
+            raise ValueError("keep_id cannot be in merge_ids")
+
+        if not merge_ids:
+            raise ValueError("merge_ids cannot be empty")
+
+        # Verify all artists exist
+        keep_stmt = select(ArtistModel).where(ArtistModel.id == keep_id)
+        keep_result = await self._session.execute(keep_stmt)
+        keep_artist = keep_result.scalar_one_or_none()
+
+        if not keep_artist:
+            raise ValueError(f"Keep artist {keep_id} not found")
+
+        merge_stmt = select(ArtistModel).where(ArtistModel.id.in_(merge_ids))
+        merge_result = await self._session.execute(merge_stmt)
+        merge_artists = list(merge_result.scalars().all())
+
+        if len(merge_artists) != len(merge_ids):
+            found_ids = {a.id for a in merge_artists}
+            missing = set(merge_ids) - found_ids
+            raise ValueError(f"Merge artists not found: {missing}")
+
+        stats = {
+            "tracks_moved": 0,
+            "albums_moved": 0,
+            "artists_deleted": 0,
+            "keep_artist": keep_artist.name,
+            "merged_artists": [a.name for a in merge_artists],
+        }
+
+        # Transfer image_url if keep artist doesn't have one
+        if not keep_artist.image_url:
+            for ma in merge_artists:
+                if ma.image_url:
+                    keep_artist.image_url = ma.image_url
+                    logger.debug(
+                        f"Transferred image_url from '{ma.name}' to '{keep_artist.name}'"
+                    )
+                    break
+
+        # Transfer spotify_uri if keep artist doesn't have one
+        if not keep_artist.spotify_uri:
+            for ma in merge_artists:
+                if ma.spotify_uri:
+                    keep_artist.spotify_uri = ma.spotify_uri
+                    logger.debug(
+                        f"Transferred spotify_uri from '{ma.name}' to '{keep_artist.name}'"
+                    )
+                    break
+
+        # Move all tracks from merge artists to keep artist
+        track_update = (
+            update(TrackModel)
+            .where(TrackModel.artist_id.in_(merge_ids))
+            .values(artist_id=keep_id, updated_at=datetime.now(UTC))
+        )
+        track_result = await self._session.execute(track_update)
+        stats["tracks_moved"] = track_result.rowcount
+
+        # Move all albums from merge artists to keep artist
+        album_update = (
+            update(AlbumModel)
+            .where(AlbumModel.artist_id.in_(merge_ids))
+            .values(artist_id=keep_id, updated_at=datetime.now(UTC))
+        )
+        album_result = await self._session.execute(album_update)
+        stats["albums_moved"] = album_result.rowcount
+
+        # Delete merged artists
+        for ma in merge_artists:
+            await self._session.delete(ma)
+            stats["artists_deleted"] += 1
+
+        keep_artist.updated_at = datetime.now(UTC)
+
+        await self._session.commit()
+
+        logger.info(
+            f"Merged {stats['artists_deleted']} artists into '{keep_artist.name}': "
+            f"{stats['tracks_moved']} tracks, {stats['albums_moved']} albums moved"
+        )
+
+        return stats
+
+    async def find_duplicate_albums(self) -> list[dict[str, Any]]:
+        """Find potential duplicate albums by normalized name + artist matching.
+
+        Groups albums with identical normalized titles from the same artist.
+
+        Returns:
+            List of duplicate groups, each containing:
+            - normalized_name: The matching key (artist + album title)
+            - albums: List of album dicts in this group
+            - suggested_primary_id: ID of suggested "keep" album
+        """
+        from collections import defaultdict
+        from sqlalchemy import func
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        # Get all albums with artist info
+        stmt = select(AlbumModel, ArtistModel.name.label("artist_name")).join(
+            ArtistModel, AlbumModel.artist_id == ArtistModel.id
+        )
+        result = await self._session.execute(stmt)
+        all_albums = result.all()
+
+        # Group by normalized artist + album title
+        groups: dict[str, list[tuple[AlbumModel, str]]] = defaultdict(list)
+        for album, artist_name in all_albums:
+            normalized_artist = normalize_artist_name(artist_name or "Unknown")
+            normalized_album = normalize_artist_name(album.name or "Unknown")
+            key = f"{normalized_artist}::{normalized_album}"
+            groups[key].append((album, artist_name))
+
+        # Filter to groups with duplicates
+        duplicate_groups: list[dict[str, Any]] = []
+
+        for normalized_key, albums_with_artist in groups.items():
+            if len(albums_with_artist) <= 1:
+                continue
+
+            # Get track counts for each album
+            album_ids = [a.id for a, _ in albums_with_artist]
+            track_counts_stmt = (
+                select(TrackModel.album_id, func.count(TrackModel.id))
+                .where(TrackModel.album_id.in_(album_ids))
+                .group_by(TrackModel.album_id)
+            )
+            track_counts_result = await self._session.execute(track_counts_stmt)
+            track_counts = dict(track_counts_result.all())
+
+            # Build album info list
+            album_infos = []
+            for album, artist_name in albums_with_artist:
+                album_infos.append({
+                    "id": album.id,
+                    "name": album.name,
+                    "artist_name": artist_name,
+                    "spotify_uri": album.spotify_uri,
+                    "artwork_url": album.artwork_url,
+                    "track_count": track_counts.get(album.id, 0),
+                    "has_spotify": album.spotify_uri is not None,
+                })
+
+            # Suggest primary: prefer one with spotify_uri, then most tracks
+            sorted_albums = sorted(
+                album_infos,
+                key=lambda x: (x["has_spotify"], x["track_count"]),
+                reverse=True,
+            )
+            suggested_primary_id = sorted_albums[0]["id"]
+
+            duplicate_groups.append({
+                "normalized_key": normalized_key,
+                "albums": album_infos,
+                "suggested_primary_id": suggested_primary_id,
+                "total_tracks": sum(a["track_count"] for a in album_infos),
+            })
+
+        # Sort by total tracks
+        duplicate_groups.sort(key=lambda g: g["total_tracks"], reverse=True)
+
+        logger.info(f"Found {len(duplicate_groups)} potential duplicate album groups")
+        return duplicate_groups
+
+    async def merge_albums(
+        self, keep_id: str, merge_ids: list[str]
+    ) -> dict[str, Any]:
+        """Merge multiple albums into one, transferring all tracks.
+
+        Args:
+            keep_id: ID of the album to keep
+            merge_ids: IDs of albums to merge into keep album
+
+        Returns:
+            Dict with merge stats
+        """
+        from sqlalchemy import update
+
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        if keep_id in merge_ids:
+            raise ValueError("keep_id cannot be in merge_ids")
+
+        if not merge_ids:
+            raise ValueError("merge_ids cannot be empty")
+
+        # Verify albums exist
+        keep_stmt = select(AlbumModel).where(AlbumModel.id == keep_id)
+        keep_result = await self._session.execute(keep_stmt)
+        keep_album = keep_result.scalar_one_or_none()
+
+        if not keep_album:
+            raise ValueError(f"Keep album {keep_id} not found")
+
+        merge_stmt = select(AlbumModel).where(AlbumModel.id.in_(merge_ids))
+        merge_result = await self._session.execute(merge_stmt)
+        merge_albums = list(merge_result.scalars().all())
+
+        if len(merge_albums) != len(merge_ids):
+            found_ids = {a.id for a in merge_albums}
+            missing = set(merge_ids) - found_ids
+            raise ValueError(f"Merge albums not found: {missing}")
+
+        stats = {
+            "tracks_moved": 0,
+            "albums_deleted": 0,
+            "keep_album": keep_album.name,
+            "merged_albums": [a.name for a in merge_albums],
+        }
+
+        # Transfer artwork if keep album doesn't have one
+        if not keep_album.artwork_url:
+            for ma in merge_albums:
+                if ma.artwork_url:
+                    keep_album.artwork_url = ma.artwork_url
+                    keep_album.artwork_path = ma.artwork_path
+                    logger.debug(
+                        f"Transferred artwork from '{ma.name}' to '{keep_album.name}'"
+                    )
+                    break
+
+        # Transfer spotify_uri if keep album doesn't have one
+        if not keep_album.spotify_uri:
+            for ma in merge_albums:
+                if ma.spotify_uri:
+                    keep_album.spotify_uri = ma.spotify_uri
+                    logger.debug(
+                        f"Transferred spotify_uri from '{ma.name}' to '{keep_album.name}'"
+                    )
+                    break
+
+        # Move all tracks from merge albums to keep album
+        track_update = (
+            update(TrackModel)
+            .where(TrackModel.album_id.in_(merge_ids))
+            .values(album_id=keep_id, updated_at=datetime.now(UTC))
+        )
+        track_result = await self._session.execute(track_update)
+        stats["tracks_moved"] = track_result.rowcount
+
+        # Delete merged albums
+        for ma in merge_albums:
+            await self._session.delete(ma)
+            stats["albums_deleted"] += 1
+
+        keep_album.updated_at = datetime.now(UTC)
+
+        await self._session.commit()
+
+        logger.info(
+            f"Merged {stats['albums_deleted']} albums into '{keep_album.name}': "
+            f"{stats['tracks_moved']} tracks moved"
+        )
+
+        return stats
