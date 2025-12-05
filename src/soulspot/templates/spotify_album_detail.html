@@ -102,7 +102,22 @@
         <span class="track-col-status">Status</span>
         <span class="track-col-actions"></span>
     </div>
+    {# Hey future me - Multi-disc handling! For compilations and box sets,
+       we need to show disc separators when disc_number changes. We track
+       the current disc and insert a header row when it changes. The numbering
+       shows absolute track number (loop.index) for multi-disc, or just track_number
+       for single-disc albums to keep it clean. #}
+    {% set current_disc = namespace(value=0) %}
+    {% set is_multi_disc = tracks|map(attribute='disc_number')|unique|list|length > 1 %}
     {% for track in tracks %}
+    {# Insert disc separator when disc changes (only for multi-disc albums) #}
+    {% if is_multi_disc and track.disc_number != current_disc.value %}
+    {% set current_disc.value = track.disc_number %}
+    <div class="disc-separator">
+        <i class="bi bi-disc"></i>
+        <span>Disc {{ track.disc_number }}</span>
+    </div>
+    {% endif %}
     <div class="track-row {% if track.is_downloaded %}track-downloaded{% endif %}" data-spotify-id="{{ track.spotify_id }}">
         <span class="track-col-number">{{ track.track_number }}</span>
         <div class="track-col-title">
@@ -280,6 +295,21 @@
     }
     .track-row.track-downloaded {
         background: rgba(29, 185, 84, 0.05);
+    }
+    /* Disc separator for multi-disc albums */
+    .disc-separator {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-primary);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        color: #1DB954;
+    }
+    .disc-separator i {
+        font-size: 1.1em;
     }
     .track-col-number {
         color: var(--text-muted);
