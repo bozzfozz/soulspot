@@ -1143,7 +1143,12 @@ async def library_artist_detail(
                 }
             albums_dict[album_key]["track_count"] += 1
 
-    albums = sorted(albums_dict.values(), key=lambda x: x["title"].lower())
+    # Hey future me - sort albums by year (desc, newest first), then by title!
+    # None years go last. This is Lidarr-style chronological ordering.
+    albums = sorted(
+        albums_dict.values(),
+        key=lambda x: (x["year"] is None, -(x["year"] or 0), x["title"].lower()),
+    )
 
     # Convert tracks to template format
     tracks_data = [

@@ -1025,15 +1025,36 @@ class LocalLibraryEnrichmentService:
                     result.error = "matched_via_followed_albums"
                     return result
 
-            # Search Spotify: "artist album"
+            # Search Spotify: "artist album [year]" (Lidarr-style matching!)
             # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
             # LibraryFolderParser and DB already handle disambiguation stripping.
-            search_query = f"artist:{artist_name} album:{album.title}"
+            # Adding year to search narrows results to correct release edition!
+            if album.release_year:
+                search_query = (
+                    f"artist:{artist_name} album:{album.title} year:{album.release_year}"
+                )
+            else:
+                search_query = f"artist:{artist_name} album:{album.title}"
+
             search_results = await self._spotify_client.search_track(
                 query=search_query,
                 access_token=self._access_token,
                 limit=search_limit,  # Configurable via settings (default 20)
             )
+
+            # Hey future me - if year search yields nothing, retry WITHOUT year!
+            # Some albums have different years across regions or releases.
+            tracks_data = search_results.get("tracks", {}).get("items", [])
+            if not tracks_data and album.release_year:
+                logger.debug(
+                    f"No results with year {album.release_year}, retrying without year"
+                )
+                search_query_no_year = f"artist:{artist_name} album:{album.title}"
+                search_results = await self._spotify_client.search_track(
+                    query=search_query_no_year,
+                    access_token=self._access_token,
+                    limit=search_limit,
+                )
 
             # Extract unique albums from track search results
             # Hey - Spotify search_track returns tracks, we extract albums from them
@@ -1055,9 +1076,12 @@ class LocalLibraryEnrichmentService:
                     error="No Spotify albums found",
                 )
 
-            # Score candidates with name normalization
+            # Score candidates with name normalization + year matching (Lidarr-style!)
             candidates = self._score_album_candidates(
-                album.title, artist_name, list(albums_seen.values())
+                album.title,
+                artist_name,
+                list(albums_seen.values()),
+                local_year=album.release_year,  # Pass year for Lidarr-style matching
             )
 
             if not candidates:
@@ -1115,20 +1139,23 @@ class LocalLibraryEnrichmentService:
         local_title: str,
         local_artist: str,
         spotify_albums: list[dict[str, Any]],
+        local_year: int | None = None,
     ) -> list[EnrichmentCandidate]:
-        """Score Spotify album candidates with name normalization.
+        """Score Spotify album candidates with name normalization + year matching.
 
         Hey future me - this now uses normalize_artist_name() for better matching!
         "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
 
-        Scoring formula:
-        - Title similarity - 50%
-        - Artist name match - 50%
+        Lidarr-style scoring formula:
+        - Title similarity - 45%
+        - Artist name match - 45%
+        - Year match bonus - 10% (exact match = 10%, ±1 year = 5%, else 0%)
 
         Args:
             local_title: Local album title
             local_artist: Local artist name
             spotify_albums: List of Spotify album dicts
+            local_year: Local album release year (optional, from folder name)
 
         Returns:
             Sorted list of EnrichmentCandidate (highest score first)
@@ -1167,8 +1194,28 @@ class LocalLibraryEnrichmentService:
             )
             artist_score = max(artist_original_score, artist_normalized_score)
 
-            # Combined score: 50% title + 50% artist (both equally important for albums)
-            confidence = (title_score * 0.5) + (artist_score * 0.5)
+            # Calculate year score (Lidarr-style year matching!)
+            # Hey future me - release_date can be "YYYY-MM-DD" or just "YYYY"
+            year_score = 0.0
+            sp_year: int | None = None
+            if sp_release_date:
+                try:
+                    sp_year = int(sp_release_date[:4])  # Extract year from "YYYY-MM-DD"
+                except (ValueError, IndexError):
+                    sp_year = None
+
+            if local_year and sp_year:
+                year_diff = abs(local_year - sp_year)
+                if year_diff == 0:
+                    year_score = 1.0  # Exact match = full bonus
+                elif year_diff == 1:
+                    year_score = 0.5  # ±1 year = half bonus (releases can differ by region)
+                # else: year_score stays 0.0
+
+            # Combined score: 45% title + 45% artist + 10% year (Lidarr-style!)
+            # Hey future me - year is a BONUS, not a penalty! Albums without year
+            # still compete fairly, but year-matched ones get a boost.
+            confidence = (title_score * 0.45) + (artist_score * 0.45) + (year_score * 0.10)
 
             if confidence >= self.CANDIDATE_THRESHOLD:
                 candidates.append(

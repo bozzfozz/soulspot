@@ -73,6 +73,23 @@ ALBUM_FOLDER_PATTERN = re.compile(
     r"$"
 )
 
+# Alternative album folder pattern: "Artist - Album - Year - Title" (Hardcore/Gabber scene style)
+# Hey future me - some users have "Angerfist - Album - 2006 - Pissin Razorbladez" format!
+# We extract ONLY the album title (last part) and year from this.
+# Examples:
+#   "Angerfist - Album - 2006 - Pissin Razorbladez" → title="Pissin Razorbladez", year=2006
+#   "Neophyte - 2003 - Rockin Insane" → title="Rockin Insane", year=2003
+#   "Korsakoff - Album - 2019 - Break Away" → title="Break Away", year=2019
+ALBUM_ARTIST_YEAR_TITLE_PATTERN = re.compile(
+    r"^.+?"  # Artist name (non-greedy, ignored)
+    r"\s*-\s*"  # Separator
+    r"(?:Album\s*-\s*)?"  # Optional "Album -" prefix
+    r"(?P<year>\d{4})"  # Year (required in this format)
+    r"\s*-\s*"  # Separator
+    r"(?P<title>.+)"  # Album title (rest of string)
+    r"$"
+)
+
 # Standard track filename pattern: "NN - Title.ext"
 # Examples:
 #   "05 - Billie Jean.flac" → track=5, title="Billie Jean"
@@ -393,7 +410,9 @@ def parse_artist_folder(folder_name: str) -> ParsedArtistFolder:
 def parse_album_folder(folder_name: str) -> ParsedAlbumFolder:
     """Parse album folder name to extract metadata.
 
-    Handles standard Lidarr naming: "Title (Year)" with optional disambiguation.
+    Handles multiple naming conventions:
+    1. Standard Lidarr: "Title (Year)" with optional disambiguation
+    2. Hardcore/Gabber style: "Artist - Album - Year - Title" (extracts only title + year)
 
     Args:
         folder_name: The album folder name (not full path).
@@ -408,10 +427,27 @@ def parse_album_folder(folder_name: str) -> ParsedAlbumFolder:
         >>> parse_album_folder("Bad (1987) (Deluxe Edition)")
         ParsedAlbumFolder(title="Bad", year=1987, disambiguation="Deluxe Edition", ...)
 
+        >>> parse_album_folder("Angerfist - Album - 2006 - Pissin Razorbladez")
+        ParsedAlbumFolder(title="Pissin Razorbladez", year=2006, ...)
+
         >>> parse_album_folder("Some Album [FLAC]")
         ParsedAlbumFolder(title="Some Album", quality="FLAC", ...)
     """
-    match = ALBUM_FOLDER_PATTERN.match(folder_name.strip())
+    folder_name = folder_name.strip()
+
+    # Hey future me - try the "Artist - [Album -] Year - Title" pattern FIRST!
+    # This handles "Angerfist - Album - 2006 - Pissin Razorbladez" style naming.
+    # We detect this by checking for "- YYYY -" anywhere in the string.
+    alt_match = ALBUM_ARTIST_YEAR_TITLE_PATTERN.match(folder_name)
+    if alt_match:
+        return ParsedAlbumFolder(
+            title=alt_match.group("title").strip(),
+            year=int(alt_match.group("year")),
+            raw_name=folder_name,
+        )
+
+    # Try standard Lidarr pattern: "Title (Year)"
+    match = ALBUM_FOLDER_PATTERN.match(folder_name)
 
     if match:
         year_str = match.group("year")
