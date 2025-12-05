@@ -74,6 +74,41 @@ Suffixe wie "Band", "Orchestra", "Trio" werden ebenfalls entfernt.
 - **50-74%**: Kandidat wird für manuelle Überprüfung gespeichert
 - **<50%**: Kein Match gefunden
 
+### Deezer Fallback (neu ab Dezember 2025)
+
+Wenn Spotify keinen Match findet, wird automatisch Deezer als Fallback genutzt:
+
+**Fallback-Kette:**
+```
+1. Spotify (primäre Quelle)
+   ↓ kein Match oder unter Confidence-Threshold
+2. Deezer (Fallback, kein Auth benötigt!)
+   ↓ kein Match
+3. Kein Enrichment möglich
+```
+
+**Vorteile von Deezer als Fallback:**
+- **Kein OAuth erforderlich** - Funktioniert sofort ohne Setup
+- **Guter Katalog** - Teilweise andere Alben als Spotify
+- **Hochauflösende Artwork** - 1000x1000px Cover
+
+**Wann wird Deezer genutzt?**
+- Spotify findet keine Alben (keine Tracks mit diesem Artist+Album)
+- Spotify findet Kandidaten, aber keiner erreicht die Confidence-Threshold
+
+**Statistik-Tracking:**
+Die Enrichment-Stats zeigen separat an, wie viele Matches über Deezer kamen:
+```json
+{
+  "albums_enriched": 50,
+  "deezer_albums_enriched": 8,
+  "deezer_artists_enriched": 0,
+  ...
+}
+```
+
+Mehr Details: [Deezer Integration](deezer-integration.md)
+
 ### Dual Album Type System (Lidarr-kompatibel)
 
 Das System verwendet zwei Typ-Dimensionen wie Lidarr/MusicBrainz:

@@ -1185,6 +1185,57 @@ class TrackRepository(ITrackRepository):
             for model in models
         ]
 
+    async def get_unenriched_with_isrc(self, limit: int = 50) -> list[Track]:
+        """Get tracks that have ISRC but no Spotify URI (unenriched).
+
+        Hey future me - this is the GOLD MINE for enrichment! Tracks with ISRC
+        can be matched 100% reliably via Deezer/Spotify ISRC lookup.
+        Much better than fuzzy title/artist matching!
+
+        Args:
+            limit: Maximum number of tracks to return
+
+        Returns:
+            List of Track entities with ISRC but no spotify_uri
+        """
+        stmt = (
+            select(TrackModel)
+            .where(
+                TrackModel.isrc.isnot(None),  # Has ISRC
+                TrackModel.isrc != "",  # ISRC is not empty string
+                TrackModel.spotify_uri.is_(None),  # But no Spotify URI yet
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Track(
+                id=TrackId.from_string(model.id),
+                title=model.title,
+                artist_id=ArtistId.from_string(model.artist_id),
+                album_id=AlbumId.from_string(model.album_id)
+                if model.album_id
+                else None,
+                duration_ms=model.duration_ms,
+                track_number=model.track_number,
+                disc_number=model.disc_number,
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                isrc=model.isrc,
+                file_path=FilePath.from_string(model.file_path)
+                if model.file_path
+                else None,
+                genres=[model.genre] if model.genre else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
 
 class PlaylistRepository(IPlaylistRepository):
     """SQLAlchemy implementation of Playlist repository."""

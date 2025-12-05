@@ -365,8 +365,89 @@
     <!-- Integration Settings Tab -->
     <div id="tab-integration" class="tab-content" style="display: none;">
         <div class="card" style="padding: var(--space-6);">
-            <!-- Spotify -->
+            <!-- Hey future me - PROVIDER MODE TOGGLES! 3-tier slider: Off → Basic → Pro
+                 This is the main control for enabling/disabling services.
+                 OFF = completely disabled (red)
+                 BASIC = free features only (yellow)
+                 PRO = full features (green) -->
             <div style="margin-bottom: var(--space-8);">
+                <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="bi bi-toggles" style="color: var(--accent-primary);"></i>
+                    Provider Control
+                </h2>
+                <p style="color: var(--text-muted); margin-bottom: var(--space-4);">
+                    Control which external services SoulSpot uses for metadata enrichment, syncing, and downloads.
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+                    <!-- Spotify Provider -->
+                    <div class="provider-toggle" style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                        <div style="display: flex; align-items: center; gap: var(--space-2); min-width: 140px;">
+                            <i class="bi bi-spotify" style="color: #1DB954; font-size: 1.25rem;"></i>
+                            <span style="font-weight: var(--font-weight-medium);">Spotify</span>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: var(--space-3);">
+                            <span class="provider-label-off" id="spotify-label-off" style="color: var(--danger-primary); font-size: var(--font-size-xs); opacity: 0.5;">OFF</span>
+                            <input type="range" id="provider-spotify-mode" name="provider.spotify_mode" min="0" max="2" value="2" 
+                                class="provider-slider" oninput="updateProviderLabel('spotify', this.value)"
+                                style="flex: 1; accent-color: var(--accent-primary);">
+                            <span class="provider-label-pro" id="spotify-label-pro" style="color: var(--success-primary); font-size: var(--font-size-xs);">PRO</span>
+                        </div>
+                        <span id="spotify-mode-desc" class="provider-mode-desc" style="min-width: 160px; color: var(--text-muted); font-size: var(--font-size-sm);">Full features (OAuth)</span>
+                    </div>
+
+                    <!-- Deezer Provider -->
+                    <div class="provider-toggle" style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                        <div style="display: flex; align-items: center; gap: var(--space-2); min-width: 140px;">
+                            <i class="bi bi-disc" style="color: #A238FF; font-size: 1.25rem;"></i>
+                            <span style="font-weight: var(--font-weight-medium);">Deezer</span>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: var(--space-3);">
+                            <span class="provider-label-off" id="deezer-label-off" style="color: var(--danger-primary); font-size: var(--font-size-xs); opacity: 0.5;">OFF</span>
+                            <input type="range" id="provider-deezer-mode" name="provider.deezer_mode" min="0" max="2" value="1" 
+                                class="provider-slider" oninput="updateProviderLabel('deezer', this.value)"
+                                style="flex: 1; accent-color: var(--accent-primary);">
+                            <span class="provider-label-pro" id="deezer-label-pro" style="color: var(--success-primary); font-size: var(--font-size-xs); opacity: 0.5;">PRO</span>
+                        </div>
+                        <span id="deezer-mode-desc" class="provider-mode-desc" style="min-width: 160px; color: var(--text-muted); font-size: var(--font-size-sm);">Metadata + Charts (free)</span>
+                    </div>
+
+                    <!-- MusicBrainz Provider -->
+                    <div class="provider-toggle" style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                        <div style="display: flex; align-items: center; gap: var(--space-2); min-width: 140px;">
+                            <i class="bi bi-music-note" style="color: #ba478f; font-size: 1.25rem;"></i>
+                            <span style="font-weight: var(--font-weight-medium);">MusicBrainz</span>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: var(--space-3);">
+                            <span class="provider-label-off" id="musicbrainz-label-off" style="color: var(--danger-primary); font-size: var(--font-size-xs); opacity: 0.5;">OFF</span>
+                            <input type="range" id="provider-musicbrainz-mode" name="provider.musicbrainz_mode" min="0" max="2" value="1" 
+                                class="provider-slider" oninput="updateProviderLabel('musicbrainz', this.value)"
+                                style="flex: 1; accent-color: var(--accent-primary);">
+                            <span class="provider-label-pro" id="musicbrainz-label-pro" style="color: var(--success-primary); font-size: var(--font-size-xs); opacity: 0.5;">PRO</span>
+                        </div>
+                        <span id="musicbrainz-mode-desc" class="provider-mode-desc" style="min-width: 160px; color: var(--text-muted); font-size: var(--font-size-sm);">Metadata + Artwork (free)</span>
+                    </div>
+
+                    <!-- slskd Provider -->
+                    <div class="provider-toggle" style="display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                        <div style="display: flex; align-items: center; gap: var(--space-2); min-width: 140px;">
+                            <i class="bi bi-server" style="color: #3b82f6; font-size: 1.25rem;"></i>
+                            <span style="font-weight: var(--font-weight-medium);">slskd</span>
+                        </div>
+                        <div style="flex: 1; display: flex; align-items: center; gap: var(--space-3);">
+                            <span class="provider-label-off" id="slskd-label-off" style="color: var(--danger-primary); font-size: var(--font-size-xs); opacity: 0.5;">OFF</span>
+                            <input type="range" id="provider-slskd-mode" name="provider.slskd_mode" min="0" max="2" value="2" 
+                                class="provider-slider" oninput="updateProviderLabel('slskd', this.value)"
+                                style="flex: 1; accent-color: var(--accent-primary);">
+                            <span class="provider-label-pro" id="slskd-label-pro" style="color: var(--success-primary); font-size: var(--font-size-xs);">PRO</span>
+                        </div>
+                        <span id="slskd-mode-desc" class="provider-mode-desc" style="min-width: 160px; color: var(--text-muted); font-size: var(--font-size-sm);">Downloads enabled</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spotify -->
+            <div style="margin-bottom: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
                 <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
                     <i class="bi bi-spotify" style="color: #1DB954;"></i>
                     Spotify Configuration
@@ -1430,11 +1511,121 @@
         background: rgba(239, 68, 68, 0.1);
         border-radius: var(--radius-sm);
     }
+    
+    /* Hey future me - Provider slider styles! Make the 3-tier slider look good. */
+    .provider-slider {
+        -webkit-appearance: none;
+        height: 6px;
+        border-radius: 3px;
+        background: linear-gradient(to right, 
+            var(--danger-primary) 0%, 
+            var(--danger-primary) 16.5%,
+            var(--warning-primary) 16.5%,
+            var(--warning-primary) 50%,
+            var(--success-primary) 50%,
+            var(--success-primary) 83.5%,
+            var(--success-primary) 100%
+        );
+        outline: none;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+    
+    .provider-slider:hover {
+        opacity: 1;
+    }
+    
+    .provider-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--bg-primary);
+        border: 3px solid var(--accent-primary);
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .provider-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--bg-primary);
+        border: 3px solid var(--accent-primary);
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
 </style>
 <script>
     // Hey future me - All the settings page logic is here!
     // Tab switching, password toggles, theme application, form save/load.
     // The API endpoints are /api/settings/ for GET/POST.
+    
+    // Hey future me - PROVIDER MODE DESCRIPTIONS for each tier!
+    // Maps provider → mode value → description text for UI
+    const PROVIDER_MODE_DESCRIPTIONS = {
+        spotify: {
+            0: "Completely disabled",
+            1: "N/A (requires OAuth)",
+            2: "Full features (OAuth)"
+        },
+        deezer: {
+            0: "Completely disabled",
+            1: "Metadata + Charts (free)",
+            2: "Metadata + Charts (free)"  // Same as basic, Deezer is all free!
+        },
+        musicbrainz: {
+            0: "Completely disabled",
+            1: "Metadata + Artwork (free)",
+            2: "Metadata + Artwork (free)"  // Same as basic, MB is all free!
+        },
+        lastfm: {
+            0: "Completely disabled",
+            1: "Basic scrobbling",
+            2: "Pro features"
+        },
+        slskd: {
+            0: "Completely disabled",
+            1: "N/A (requires setup)",
+            2: "Downloads enabled"
+        }
+    };
+    
+    // Hey future me - Updates the visual feedback when slider moves!
+    // Highlights active label (OFF/BASIC/PRO) and updates description text.
+    function updateProviderLabel(provider, value) {
+        const val = parseInt(value);
+        const labelOff = document.getElementById(`${provider}-label-off`);
+        const labelPro = document.getElementById(`${provider}-label-pro`);
+        const descEl = document.getElementById(`${provider}-mode-desc`);
+        
+        // Reset all label opacities
+        if (labelOff) labelOff.style.opacity = val === 0 ? '1' : '0.5';
+        if (labelPro) labelPro.style.opacity = val === 2 ? '1' : '0.5';
+        
+        // Update description
+        if (descEl && PROVIDER_MODE_DESCRIPTIONS[provider]) {
+            descEl.textContent = PROVIDER_MODE_DESCRIPTIONS[provider][val] || "";
+            // Color the description based on mode
+            if (val === 0) {
+                descEl.style.color = 'var(--danger-primary)';
+            } else if (val === 1) {
+                descEl.style.color = 'var(--warning-primary)';
+            } else {
+                descEl.style.color = 'var(--success-primary)';
+            }
+        }
+    }
+    
+    // Initialize provider labels on page load
+    function initProviderLabels() {
+        ['spotify', 'deezer', 'musicbrainz', 'slskd'].forEach(provider => {
+            const slider = document.getElementById(`provider-${provider}-mode`);
+            if (slider) {
+                updateProviderLabel(provider, slider.value);
+            }
+        });
+    }
 
     // Tab Switching
     function switchTab(tabName) {
@@ -1544,8 +1735,62 @@
                 document.getElementById('circuit-breaker-timeout').value = settings.advanced.circuit_breaker_timeout || 60;
             }
             
+            // Hey future me - load provider modes from API!
+            await loadProviderSettings();
+            
         } catch (error) {
             console.error('Failed to load settings:', error);
+        }
+    }
+    
+    // Hey future me - PROVIDER MODE SETTINGS load/save functions!
+    // These talk to /api/settings/providers endpoints.
+    async function loadProviderSettings() {
+        try {
+            const response = await fetch('/api/settings/providers');
+            if (!response.ok) throw new Error('Failed to load provider settings');
+            
+            const providers = await response.json();
+            
+            // Set slider values and update labels
+            ['spotify', 'deezer', 'musicbrainz', 'slskd'].forEach(provider => {
+                const slider = document.getElementById(`provider-${provider}-mode`);
+                if (slider && providers[provider] !== undefined) {
+                    slider.value = providers[provider];
+                    updateProviderLabel(provider, providers[provider]);
+                }
+            });
+            
+        } catch (error) {
+            console.error('Failed to load provider settings:', error);
+        }
+    }
+    
+    async function saveProviderSettings() {
+        try {
+            const providers = {};
+            ['spotify', 'deezer', 'musicbrainz', 'slskd', 'lastfm'].forEach(provider => {
+                const slider = document.getElementById(`provider-${provider}-mode`);
+                if (slider) {
+                    providers[provider] = parseInt(slider.value);
+                } else {
+                    // Default values for missing sliders
+                    providers[provider] = provider === 'spotify' || provider === 'slskd' ? 2 : 1;
+                }
+            });
+            
+            const response = await fetch('/api/settings/providers', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(providers),
+            });
+            
+            if (!response.ok) throw new Error('Failed to save provider settings');
+            
+            return true;
+        } catch (error) {
+            console.error('Failed to save provider settings:', error);
+            return false;
         }
     }
 
@@ -1598,6 +1843,9 @@
             });
             
             if (!response.ok) throw new Error('Failed to save settings');
+            
+            // Hey future me - also save provider settings when saving main settings!
+            await saveProviderSettings();
             
             SoulSpot.showNotification('Settings saved successfully', 'success');
         } catch (error) {
@@ -2062,6 +2310,7 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
         initThemeSelection();
+        initProviderLabels();  // Hey future me - init the 3-tier slider labels!
         loadSettings();
         loadSpotifySyncSettings();
         loadAutomationSettings();

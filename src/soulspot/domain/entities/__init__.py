@@ -32,6 +32,30 @@ class MetadataSource(str, Enum):
     LASTFM = "lastfm"
 
 
+# Hey future me - ProviderMode is the 3-way toggle for each external service provider!
+# This controls whether a provider is used and at what level.
+#
+# Slider positions in UI:
+#   🔴 OFF (left)   → Provider completely disabled, no API calls, not even fallback
+#   🟡 BASIC (mid)  → Free features only (public API, no OAuth/account needed)
+#   🟢 PRO (right)  → Full features including OAuth/Premium/paid features
+#
+# Provider capabilities per mode:
+# | Provider    | OFF  | BASIC                              | PRO                         |
+# |-------------|------|------------------------------------|-----------------------------|
+# | Spotify     | -    | ❌ (requires OAuth always)         | Playlists, Browse, Follow   |
+# | Deezer      | -    | Metadata, Artwork, Charts, Genres  | (same - Deezer is free!)    |
+# | MusicBrainz | -    | Metadata, CoverArtArchive          | (same - MusicBrainz free!)  |
+# | Last.fm     | -    | Basic scrobbling                   | Pro features                |
+# | slskd       | -    | ❌ (requires setup)                | Downloads                   |
+class ProviderMode(str, Enum):
+    """Mode for external service providers (3-way slider)."""
+
+    OFF = "off"  # Provider completely disabled - no API calls, no fallback
+    BASIC = "basic"  # Free/public API features only (no OAuth/account needed)
+    PRO = "pro"  # Full features including OAuth/Premium/paid features
+
+
 # Yo, Artist is the DOMAIN ENTITY (not DB model)! It represents the business concept of an artist.
 # Uses dataclass instead of Pydantic for simplicity (domain layer doesn't depend on Pydantic). The
 # metadata_sources dict tracks which fields came from which APIs (e.g., {"name": "spotify", "genres":
@@ -796,4 +820,5 @@ __all__ = [
     "FilterTarget",
     "AutomationTrigger",
     "AutomationAction",
+    "ProviderMode",
 ]

@@ -1698,3 +1698,115 @@ async def update_library_enrichment_settings(
     await db.commit()
 
     return settings_update
+
+
+# =============================================================================
+# PROVIDER MODE SETTINGS
+# =============================================================================
+# Hey future me - these are the 3-tier provider toggle settings!
+# Each provider (Spotify, Deezer, MusicBrainz, slskd, Last.fm) can be:
+#   OFF (0)   = completely disabled, no API calls at all
+#   BASIC (1) = free tier only (public API, no OAuth)
+#   PRO (2)   = full features including OAuth/Premium
+# =============================================================================
+
+
+class ProviderModeSettings(BaseModel):
+    """Provider mode settings for all external services.
+    
+    Values: 0=off, 1=basic (free tier), 2=pro (full features)
+    """
+    
+    spotify: int = Field(
+        default=2,
+        ge=0,
+        le=2,
+        description="Spotify mode: 0=off, 1=N/A (requires OAuth), 2=full features",
+    )
+    deezer: int = Field(
+        default=1,
+        ge=0,
+        le=2,
+        description="Deezer mode: 0=off, 1=metadata+charts (free), 2=same (all free)",
+    )
+    musicbrainz: int = Field(
+        default=1,
+        ge=0,
+        le=2,
+        description="MusicBrainz mode: 0=off, 1=metadata+artwork (free), 2=same (all free)",
+    )
+    lastfm: int = Field(
+        default=1,
+        ge=0,
+        le=2,
+        description="Last.fm mode: 0=off, 1=basic scrobbling, 2=pro features",
+    )
+    slskd: int = Field(
+        default=2,
+        ge=0,
+        le=2,
+        description="slskd mode: 0=off, 1=N/A (requires setup), 2=downloads enabled",
+    )
+
+
+# Hey future me - map int values to mode names for storage
+_MODE_INT_TO_NAME = {0: "off", 1: "basic", 2: "pro"}
+_MODE_NAME_TO_INT = {"off": 0, "basic": 1, "pro": 2}
+
+
+@router.get("/providers")
+async def get_provider_settings(
+    db: AsyncSession = Depends(get_db_session),
+) -> ProviderModeSettings:
+    """Get provider mode settings for all external services.
+
+    Returns current provider modes from database.
+
+    Returns:
+        Dict with provider names as keys, mode values (0-2) as values.
+    """
+    settings_service = AppSettingsService(db)
+    modes = await settings_service.get_all_provider_modes()
+    
+    # Convert mode names to integers for API response
+    return ProviderModeSettings(
+        spotify=_MODE_NAME_TO_INT.get(modes.get("spotify", "pro"), 2),
+        deezer=_MODE_NAME_TO_INT.get(modes.get("deezer", "basic"), 1),
+        musicbrainz=_MODE_NAME_TO_INT.get(modes.get("musicbrainz", "basic"), 1),
+        lastfm=_MODE_NAME_TO_INT.get(modes.get("lastfm", "basic"), 1),
+        slskd=_MODE_NAME_TO_INT.get(modes.get("slskd", "pro"), 2),
+    )
+
+
+@router.put("/providers")
+async def update_provider_settings(
+    settings_update: ProviderModeSettings,
+    db: AsyncSession = Depends(get_db_session),
+) -> ProviderModeSettings:
+    """Update provider mode settings.
+
+    Toggle takes effect immediately - no restart required.
+
+    Args:
+        settings_update: New provider mode settings (0=off, 1=basic, 2=pro)
+
+    Returns:
+        Updated settings
+    """
+    settings_service = AppSettingsService(db)
+
+    # Convert integer values to mode names and save
+    modes_to_save = {
+        "spotify": _MODE_INT_TO_NAME.get(settings_update.spotify, "pro"),
+        "deezer": _MODE_INT_TO_NAME.get(settings_update.deezer, "basic"),
+        "musicbrainz": _MODE_INT_TO_NAME.get(settings_update.musicbrainz, "basic"),
+        "lastfm": _MODE_INT_TO_NAME.get(settings_update.lastfm, "basic"),
+        "slskd": _MODE_INT_TO_NAME.get(settings_update.slskd, "pro"),
+    }
+    
+    await settings_service.set_all_provider_modes(modes_to_save)
+    await db.commit()
+    
+    logger.info(f"Updated provider modes: {modes_to_save}")
+
+    return settings_update

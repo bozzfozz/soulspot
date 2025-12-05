@@ -1067,3 +1067,123 @@ class AppSettingsService:
         This gives 100% match rate for followed artists!
         """
         return await self.get_bool("library.use_followed_artists_hint", default=True)
+
+    async def get_enrichment_primary_source(self) -> str:
+        """Get primary enrichment source: 'spotify' or 'deezer'.
+
+        Default: 'spotify' - Spotify is primary, Deezer is fallback.
+        Set to 'deezer' for users without Spotify account - Deezer doesn't need OAuth!
+
+        Values:
+        - 'spotify': Spotify first, Deezer fallback (default, best quality)
+        - 'deezer': Deezer only (no Spotify account needed, still good!)
+        """
+        source = await self.get_string("library.enrichment_primary_source", default="spotify")
+        if source not in ("spotify", "deezer"):
+            return "spotify"
+        return source
+
+    # =========================================================================
+    # PROVIDER MODE SETTINGS (3-Tier Toggle System)
+    # =========================================================================
+    # Hey future me - this is the provider toggle system you wanted!
+    # Each provider has a 3-way slider: OFF → BASIC → PRO
+    # Stored as integers 0/1/2 in the DB for easy slider binding in UI.
+    #
+    # Provider-specific meanings:
+    # - Spotify: OFF=disabled, BASIC=N/A (needs OAuth), PRO=full features
+    # - Deezer: OFF=disabled, BASIC=metadata/charts, PRO=same (all free!)
+    # - MusicBrainz: OFF=disabled, BASIC=metadata, PRO=same (all free!)
+    # - Last.fm: OFF=disabled, BASIC=scrobbling, PRO=pro features
+    # - slskd: OFF=disabled, BASIC=N/A (needs setup), PRO=downloads
+    # =========================================================================
+
+    # Hey future me - can't import from entities here due to circular import!
+    # So we define the mode values as constants and map them.
+    _PROVIDER_MODE_VALUES = {"off": 0, "basic": 1, "pro": 2}
+    _PROVIDER_MODE_NAMES = {0: "off", 1: "basic", 2: "pro"}
+
+    async def get_provider_mode(self, provider: str) -> str:
+        """Get the mode for a provider (off/basic/pro).
+
+        Args:
+            provider: Provider name ('spotify', 'deezer', 'musicbrainz', 'lastfm', 'slskd').
+
+        Returns:
+            Mode string: 'off', 'basic', or 'pro'.
+            Default: 'pro' for Spotify/slskd (need OAuth/setup anyway),
+                     'basic' for others (free services default to enabled).
+        """
+        # Default depends on provider - OAuth-requiring providers default to PRO,
+        # free services default to BASIC (enabled but conservative)
+        default = 2 if provider.lower() in ("spotify", "slskd") else 1
+        mode_int = await self.get_int(f"provider.{provider.lower()}_mode", default=default)
+        # Clamp to valid range 0-2
+        mode_int = max(0, min(2, mode_int))
+        return self._PROVIDER_MODE_NAMES.get(mode_int, "pro")
+
+    async def set_provider_mode(self, provider: str, mode: str) -> None:
+        """Set the mode for a provider.
+
+        Args:
+            provider: Provider name ('spotify', 'deezer', 'musicbrainz', 'lastfm', 'slskd').
+            mode: Mode string ('off', 'basic', 'pro').
+        """
+        mode_int = self._PROVIDER_MODE_VALUES.get(mode.lower(), 2)
+        await self.set(
+            key=f"provider.{provider.lower()}_mode",
+            value=mode_int,
+            value_type="integer",
+            category="providers",
+            description=f"{provider.title()} provider mode (0=off, 1=basic, 2=pro)",
+        )
+
+    async def is_provider_enabled(self, provider: str) -> bool:
+        """Quick check if provider is enabled (not OFF).
+
+        Args:
+            provider: Provider name.
+
+        Returns:
+            True if provider mode is BASIC or PRO, False if OFF.
+        """
+        mode = await self.get_provider_mode(provider)
+        return mode != "off"
+
+    async def is_provider_pro(self, provider: str) -> bool:
+        """Check if provider is in PRO mode (full features).
+
+        Args:
+            provider: Provider name.
+
+        Returns:
+            True if provider mode is PRO.
+        """
+        mode = await self.get_provider_mode(provider)
+        return mode == "pro"
+
+    async def get_all_provider_modes(self) -> dict[str, str]:
+        """Get modes for all providers at once.
+
+        Useful for Settings UI to populate all toggles in one call.
+
+        Returns:
+            Dict mapping provider name to mode string.
+        """
+        providers = ["spotify", "deezer", "musicbrainz", "lastfm", "slskd"]
+        modes = {}
+        for provider in providers:
+            modes[provider] = await self.get_provider_mode(provider)
+        return modes
+
+    async def set_all_provider_modes(self, modes: dict[str, str]) -> None:
+        """Set modes for multiple providers at once.
+
+        Useful for Settings UI to save all toggles in one call.
+
+        Args:
+            modes: Dict mapping provider name to mode string.
+        """
+        for provider, mode in modes.items():
+            await self.set_provider_mode(provider, mode)
+

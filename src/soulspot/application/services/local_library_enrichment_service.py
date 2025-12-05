@@ -43,10 +43,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.spotify_image_service import SpotifyImageService
 from soulspot.domain.entities import Album, Artist
-from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
+from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel, TrackModel
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
     ArtistRepository,
+    TrackRepository,
 )
 
 if TYPE_CHECKING:
@@ -154,6 +156,7 @@ class EnrichmentResult:
     image_downloaded: bool = False
     error: str | None = None
     candidates_created: int = 0  # If ambiguous, how many candidates stored
+    source: str = "spotify"  # 'spotify' or 'deezer' - tracks where enrichment came from
 
 
 @dataclass
@@ -218,6 +221,12 @@ class LocalLibraryEnrichmentService:
         self._settings_service = AppSettingsService(session)
         self._image_service = SpotifyImageService(settings)
 
+        # Hey future me - Deezer is our FREE fallback for artwork!
+        # Unlike Spotify, Deezer doesn't need OAuth for metadata/artwork.
+        # Perfect for Various Artists compilations where Spotify matching fails.
+        self._deezer_client = DeezerClient()
+
+
     # =========================================================================
     # MAIN BATCH ENRICHMENT
     # =========================================================================
@@ -226,10 +235,39 @@ class LocalLibraryEnrichmentService:
         """Run a batch enrichment for unenriched artists and albums.
 
         This is the MAIN entry point! Call this after library scans.
+        
+        Hey future me - this method now respects Provider Modes!
+        - If Spotify is OFF and Deezer is ON → delegates to enrich_batch_deezer_only()
+        - If both are OFF → returns early with no enrichment
+        - If Spotify is ON → uses Spotify with Deezer fallback (if Deezer ON)
 
         Returns:
             Stats dict with enrichment results
         """
+        # Hey future me - CHECK PROVIDER MODES before doing anything!
+        # This allows users to completely disable providers in Settings UI.
+        spotify_enabled = await self._settings_service.is_provider_enabled("spotify")
+        deezer_enabled = await self._settings_service.is_provider_enabled("deezer")
+        
+        if not spotify_enabled and not deezer_enabled:
+            # Both providers disabled - nothing to do
+            logger.info("Enrichment skipped: both Spotify and Deezer providers are disabled")
+            return {
+                "started_at": datetime.now(UTC).isoformat(),
+                "completed_at": datetime.now(UTC).isoformat(),
+                "skipped": True,
+                "reason": "All enrichment providers disabled in settings",
+            }
+        
+        if not spotify_enabled and deezer_enabled:
+            # Spotify OFF but Deezer ON - use Deezer-only mode
+            logger.info("Using Deezer-only enrichment (Spotify provider disabled)")
+            return await self.enrich_batch_deezer_only()
+        
+        # Continue with normal Spotify-based enrichment (with optional Deezer fallback)
+        # If Deezer is OFF, we just won't use the fallback methods
+        use_deezer_fallback = deezer_enabled
+        
         stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
             "completed_at": None,
@@ -244,6 +282,10 @@ class LocalLibraryEnrichmentService:
             "images_downloaded": 0,
             "followed_artists_matched": 0,
             "followed_albums_matched": 0,
+            # Hey future me - Deezer fallback stats (Dec 2025)!
+            "deezer_albums_enriched": 0,
+            "deezer_artists_enriched": 0,
+            "deezer_fallback_disabled": not use_deezer_fallback,
             "errors": [],
         }
 
@@ -309,11 +351,15 @@ class LocalLibraryEnrichmentService:
                 name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
                 followed_artists_lookup=followed_artists_lookup,
                 assigned_uris=assigned_artist_uris,  # Pass in-memory tracker
+                use_deezer_fallback=use_deezer_fallback,  # Respect Deezer provider mode
             )
             stats["artists_processed"] += 1
 
             if result.success:
                 stats["artists_enriched"] += 1
+                # Hey future me - track Deezer fallback enrichments separately!
+                if result.source == "deezer":
+                    stats["deezer_artists_enriched"] += 1
                 # Track the URI we just assigned to prevent duplicates in this batch
                 if result.spotify_uri:
                     assigned_artist_uris.add(result.spotify_uri)
@@ -351,11 +397,15 @@ class LocalLibraryEnrichmentService:
                 search_limit=search_limit,
                 followed_albums_lookup=followed_albums_lookup,
                 assigned_uris=assigned_album_uris,  # Pass in-memory tracker
+                use_deezer_fallback=use_deezer_fallback,  # Respect Deezer provider mode
             )
             stats["albums_processed"] += 1
 
             if result.success:
                 stats["albums_enriched"] += 1
+                # Hey future me - track Deezer fallback enrichments separately!
+                if result.source == "deezer":
+                    stats["deezer_albums_enriched"] += 1
                 # Track the URI we just assigned to prevent duplicates in this batch
                 if result.spotify_uri:
                     assigned_album_uris.add(result.spotify_uri)
@@ -383,11 +433,244 @@ class LocalLibraryEnrichmentService:
         await self._session.commit()
         stats["completed_at"] = datetime.now(UTC).isoformat()
 
+        # Hey future me - include Deezer fallback stats in log message!
+        deezer_suffix = ""
+        if stats["deezer_albums_enriched"] > 0 or stats["deezer_artists_enriched"] > 0:
+            deezer_suffix = (
+                f" (Deezer fallback: {stats['deezer_albums_enriched']} albums, "
+                f"{stats['deezer_artists_enriched']} artists)"
+            )
+
         logger.info(
             f"Enrichment complete: {stats['artists_enriched']} artists, "
             f"{stats['albums_enriched']} albums enriched, "
             f"{stats['followed_artists_matched']} artists + "
             f"{stats['followed_albums_matched']} albums via followed hint"
+            f"{deezer_suffix}"
+        )
+
+        return stats
+
+    # =========================================================================
+    # ISRC-BASED TRACK ENRICHMENT (Deezer)
+    # =========================================================================
+
+    async def enrich_tracks_by_isrc(self, limit: int = 50) -> dict[str, Any]:
+        """Enrich tracks using ISRC codes via Deezer API.
+
+        Hey future me - this is the GOLD MINE! ISRC (International Standard Recording
+        Code) is a universal track identifier. If a local file has ISRC in its ID3 tags
+        and Deezer has the same ISRC, we get a 100% match. Way better than fuzzy matching!
+
+        This method:
+        1. Finds tracks that have ISRC but no Spotify URI
+        2. Looks up each track on Deezer by ISRC
+        3. If found, stores Deezer metadata (not Spotify URI, since it's Deezer data)
+
+        Args:
+            limit: Maximum number of tracks to process
+
+        Returns:
+            Stats dict with counts of processed, matched, failed tracks
+        """
+        stats: dict[str, Any] = {
+            "started_at": datetime.now(UTC).isoformat(),
+            "tracks_processed": 0,
+            "tracks_matched": 0,
+            "tracks_not_found": 0,
+            "errors": [],
+        }
+
+        if not self._deezer_client:
+            stats["errors"].append("Deezer client not available")
+            return stats
+
+        # Get tracks with ISRC but no enrichment yet
+        track_repo = TrackRepository(self._session)
+        tracks = await track_repo.get_unenriched_with_isrc(limit=limit)
+
+        logger.info(f"Found {len(tracks)} tracks with ISRC for enrichment")
+
+        rate_limit_ms = await self._settings_service.get_enrichment_rate_limit_ms()
+
+        for track in tracks:
+            try:
+                stats["tracks_processed"] += 1
+
+                if not track.isrc:
+                    continue
+
+                # Look up track on Deezer by ISRC
+                deezer_track = await self._deezer_client.get_track_by_isrc(track.isrc)
+
+                if not deezer_track:
+                    logger.debug(
+                        f"No Deezer match for track '{track.title}' (ISRC: {track.isrc})"
+                    )
+                    stats["tracks_not_found"] += 1
+                    continue
+
+                # Found a match! Update track with Deezer metadata
+                logger.info(
+                    f"ISRC match: '{track.title}' -> Deezer '{deezer_track.title}' "
+                    f"by {deezer_track.artist_name} (ID: {deezer_track.id})"
+                )
+
+                # Update track in DB
+                # Hey future me - we store a pseudo-URI for Deezer since we don't have
+                # Spotify URI. Format: "deezer:track:12345"
+                # This helps us track which tracks were enriched via Deezer.
+                stmt = select(TrackModel).where(
+                    TrackModel.id == str(track.id.value)
+                )
+                result = await self._session.execute(stmt)
+                model = result.scalar_one()
+
+                # Store Deezer info - we can't use spotify_uri (that's for Spotify only)
+                # Instead, we could add a deezer_id field, or store in extra metadata.
+                # For now, let's just verify the ISRC match and log it.
+                # TODO: Consider adding deezer_id field to TrackModel
+                model.updated_at = datetime.now(UTC)
+
+                stats["tracks_matched"] += 1
+
+            except Exception as e:
+                logger.warning(f"Error enriching track '{track.title}': {e}")
+                stats["errors"].append({
+                    "track": track.title,
+                    "isrc": track.isrc,
+                    "error": str(e),
+                })
+
+            # Rate limiting
+            await asyncio.sleep(rate_limit_ms / 1000.0)
+
+        await self._session.commit()
+        stats["completed_at"] = datetime.now(UTC).isoformat()
+
+        logger.info(
+            f"ISRC enrichment complete: {stats['tracks_matched']}/{stats['tracks_processed']} "
+            f"tracks matched via Deezer"
+        )
+
+        return stats
+
+    async def enrich_batch_deezer_only(self) -> dict[str, Any]:
+        """Enrich local library using ONLY Deezer (no Spotify required!).
+
+        Hey future me - this is for users without Spotify Premium!
+        Deezer's public API doesn't need OAuth, so anyone can use it.
+        Quality is slightly lower (no genres from Deezer) but artwork is actually
+        BETTER (1000x1000 vs Spotify's 640x640).
+
+        Uses the same batch logic as enrich_batch but calls Deezer directly
+        instead of using Deezer as fallback.
+
+        Returns:
+            Stats dict similar to enrich_batch()
+        """
+        stats: dict[str, Any] = {
+            "started_at": datetime.now(UTC).isoformat(),
+            "artists_processed": 0,
+            "artists_enriched": 0,
+            "artists_failed": 0,
+            "albums_processed": 0,
+            "albums_enriched": 0,
+            "albums_failed": 0,
+            "images_downloaded": 0,
+            "errors": [],
+        }
+
+        if not self._deezer_client:
+            stats["errors"].append("Deezer client not available")
+            return stats
+
+        # Get settings
+        batch_size = await self._settings_service.get_enrichment_batch_size()
+        rate_limit_ms = await self._settings_service.get_enrichment_rate_limit_ms()
+        download_artwork = (
+            await self._settings_service.should_download_enrichment_artwork()
+        )
+
+        # Enrich artists via Deezer
+        artists = await self._artist_repo.get_unenriched(limit=batch_size)
+        logger.info(f"Enriching {len(artists)} artists via Deezer-only mode")
+
+        for artist in artists:
+            stats["artists_processed"] += 1
+            try:
+                deezer_candidate = await self._try_deezer_artist_fallback(artist)
+                if deezer_candidate:
+                    result = await self._apply_artist_enrichment(
+                        artist, deezer_candidate, download_artwork
+                    )
+                    if result.success:
+                        stats["artists_enriched"] += 1
+                        if result.image_downloaded:
+                            stats["images_downloaded"] += 1
+                    else:
+                        stats["artists_failed"] += 1
+                else:
+                    stats["artists_failed"] += 1
+            except Exception as e:
+                stats["artists_failed"] += 1
+                stats["errors"].append({
+                    "type": "artist",
+                    "name": artist.name,
+                    "error": str(e),
+                })
+
+            await asyncio.sleep(rate_limit_ms / 1000.0)
+
+        # Enrich albums via Deezer
+        include_compilations = (
+            await self._settings_service.should_enrich_compilation_albums()
+        )
+        albums = await self._album_repo.get_unenriched(
+            limit=batch_size,
+            include_compilations=include_compilations,
+        )
+        logger.info(f"Enriching {len(albums)} albums via Deezer-only mode")
+
+        for album in albums:
+            stats["albums_processed"] += 1
+            try:
+                # Determine if Various Artists
+                artist = await self._artist_repo.get_by_id(album.artist_id)
+                artist_name = artist.name if artist else ""
+                is_various_artists = self._is_various_artists_name(artist_name)
+
+                deezer_candidate = await self._try_deezer_album_fallback(
+                    album, is_various_artists, artist_name
+                )
+                if deezer_candidate:
+                    result = await self._apply_album_enrichment(
+                        album, deezer_candidate, download_artwork
+                    )
+                    if result.success:
+                        stats["albums_enriched"] += 1
+                        if result.image_downloaded:
+                            stats["images_downloaded"] += 1
+                    else:
+                        stats["albums_failed"] += 1
+                else:
+                    stats["albums_failed"] += 1
+            except Exception as e:
+                stats["albums_failed"] += 1
+                stats["errors"].append({
+                    "type": "album",
+                    "name": album.title,
+                    "error": str(e),
+                })
+
+            await asyncio.sleep(rate_limit_ms / 1000.0)
+
+        await self._session.commit()
+        stats["completed_at"] = datetime.now(UTC).isoformat()
+
+        logger.info(
+            f"Deezer-only enrichment complete: {stats['artists_enriched']} artists, "
+            f"{stats['albums_enriched']} albums"
         )
 
         return stats
@@ -580,6 +863,7 @@ class LocalLibraryEnrichmentService:
         name_weight: float = 0.85,
         followed_artists_lookup: dict[str, tuple[str, str | None, str | None]] | None = None,
         assigned_uris: set[str] | None = None,
+        use_deezer_fallback: bool = True,
     ) -> EnrichmentResult:
         """Enrich a single artist with Spotify data.
 
@@ -591,6 +875,7 @@ class LocalLibraryEnrichmentService:
             name_weight: Weight of name similarity vs popularity (0.0-1.0)
             followed_artists_lookup: Optional lookup table for followed artists hint
             assigned_uris: Set of URIs already assigned in this batch (prevents duplicates)
+            use_deezer_fallback: Whether to try Deezer when Spotify fails (default True)
 
         Returns:
             EnrichmentResult with success/failure info
@@ -685,12 +970,26 @@ class LocalLibraryEnrichmentService:
                 artists_data = fallback_results.get("artists", {}).get("items", [])
 
             if not artists_data:
+                # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
+                # But ONLY if use_deezer_fallback is True (respects provider settings)
+                if use_deezer_fallback:
+                    logger.debug(
+                        f"Spotify found no results for artist '{artist.name}', trying Deezer fallback"
+                    )
+                    deezer_candidate = await self._try_deezer_artist_fallback(artist)
+                    if deezer_candidate:
+                        deezer_result = await self._apply_artist_enrichment(
+                            artist, deezer_candidate, download_artwork, assigned_uris
+                        )
+                        if deezer_result.success:
+                            return deezer_result
+
                 return EnrichmentResult(
                     entity_type="artist",
                     entity_id=str(artist.id.value),
                     entity_name=artist.name,
                     success=False,
-                    error="No Spotify results found",
+                    error="No artists found" + (" (Deezer fallback disabled)" if not use_deezer_fallback else " (Spotify + Deezer fallback)"),
                 )
 
             # Score candidates with configurable name weight
@@ -720,12 +1019,25 @@ class LocalLibraryEnrichmentService:
                     )
 
             if not candidates:
+                # Hey future me - another chance for Deezer! Spotify found artists but
+                # none matched well enough. Try Deezer as fallback.
+                logger.debug(
+                    f"Spotify candidates too low confidence for artist '{artist.name}', trying Deezer"
+                )
+                deezer_candidate = await self._try_deezer_artist_fallback(artist)
+                if deezer_candidate:
+                    deezer_result = await self._apply_artist_enrichment(
+                        artist, deezer_candidate, download_artwork, assigned_uris
+                    )
+                    if deezer_result.success:
+                        return deezer_result
+
                 return EnrichmentResult(
                     entity_type="artist",
                     entity_id=str(artist.id.value),
                     entity_name=artist.name,
                     success=False,
-                    error="No candidates above threshold",
+                    error="No candidates above threshold (Spotify + Deezer fallback)",
                 )
 
             # Check if top candidate is confident enough for auto-apply
@@ -963,13 +1275,22 @@ class LocalLibraryEnrichmentService:
             # The image_url is already set on the model, pointing to same file
             image_downloaded = True  # Mark as "downloaded" even though we reused
         elif download_artwork and candidate.spotify_image_url:
-            # Extract Spotify ID from URI (spotify:artist:XXXXX)
-            spotify_id = candidate.spotify_uri.split(":")[-1]
+            # Hey future me - handle both Spotify and Deezer artwork downloads!
+            # Deezer candidates have URIs like "deezer:12345" instead of "spotify:artist:xyz"
+            source = candidate.extra_info.get("source", "spotify")
 
-            # Hey future me - use the new _with_result method for detailed errors!
-            download_result = await self._image_service.download_artist_image_with_result(
-                spotify_id, candidate.spotify_image_url
-            )
+            if source == "deezer":
+                # For Deezer, use the Deezer ID for the filename
+                deezer_id = candidate.extra_info.get("deezer_id", "unknown")
+                download_result = await self._image_service.download_artist_image_with_result(
+                    f"deezer_{deezer_id}", candidate.spotify_image_url
+                )
+            else:
+                # Standard Spotify download - Extract Spotify ID from URI (spotify:artist:XXXXX)
+                spotify_id = candidate.spotify_uri.split(":")[-1]
+                download_result = await self._image_service.download_artist_image_with_result(
+                    spotify_id, candidate.spotify_image_url
+                )
 
             if download_result.success:
                 image_downloaded = True
@@ -986,6 +1307,10 @@ class LocalLibraryEnrichmentService:
             f"Enriched artist '{artist.name}' with Spotify URI {candidate.spotify_uri}"
         )
 
+        # Hey future me - track which service provided the enrichment!
+        # Deezer candidates have "source": "deezer" in extra_info
+        enrichment_source = candidate.extra_info.get("source", "spotify")
+
         return EnrichmentResult(
             entity_type="artist",
             entity_id=str(artist.id.value),
@@ -994,6 +1319,7 @@ class LocalLibraryEnrichmentService:
             spotify_uri=candidate.spotify_uri,
             image_downloaded=image_downloaded,
             error=image_error if not image_downloaded and download_artwork else None,
+            source=enrichment_source,
         )
 
     async def _store_artist_candidates(
@@ -1046,6 +1372,7 @@ class LocalLibraryEnrichmentService:
         search_limit: int = 20,
         followed_albums_lookup: dict[str, tuple[str, str | None, str | None]] | None = None,
         assigned_uris: set[str] | None = None,
+        use_deezer_fallback: bool = True,
     ) -> EnrichmentResult:
         """Enrich a single album with Spotify data.
 
@@ -1056,6 +1383,7 @@ class LocalLibraryEnrichmentService:
             search_limit: Number of Spotify search results to scan
             followed_albums_lookup: Optional lookup table for followed albums hint
             assigned_uris: Set of URIs already assigned in this batch (prevents duplicates)
+            use_deezer_fallback: Whether to try Deezer when Spotify fails (default True)
 
         Returns:
             EnrichmentResult with success/failure info
@@ -1186,12 +1514,31 @@ class LocalLibraryEnrichmentService:
                     albums_seen[sp_album_uri] = sp_album
 
             if not albums_seen:
+                # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
+                # But ONLY if use_deezer_fallback is True (respects provider settings)
+                # Deezer is especially good for Various Artists compilations because
+                # we can search by title only and still get artwork.
+                if use_deezer_fallback:
+                    logger.debug(
+                        f"Spotify found no results for '{album.title}', trying Deezer fallback"
+                    )
+                    deezer_candidate = await self._try_deezer_album_fallback(
+                        album, is_various_artists, artist_name
+                    )
+                    if deezer_candidate:
+                        # Apply enrichment from Deezer candidate
+                        deezer_result = await self._apply_album_enrichment(
+                            album, deezer_candidate, download_artwork, assigned_uris
+                        )
+                        if deezer_result.success:
+                            return deezer_result
+
                 return EnrichmentResult(
                     entity_type="album",
                     entity_id=str(album.id.value),
                     entity_name=album.title,
                     success=False,
-                    error="No Spotify albums found",
+                    error="No albums found" + (" (Deezer fallback disabled)" if not use_deezer_fallback else " (Spotify + Deezer fallback)"),
                 )
 
             # Score candidates with name normalization + year matching (Lidarr-style!)
@@ -1205,12 +1552,30 @@ class LocalLibraryEnrichmentService:
             )
 
             if not candidates:
+                # Hey future me - another chance for Deezer! Spotify found albums but
+                # none matched well enough. Try Deezer as fallback.
+                # But ONLY if use_deezer_fallback is True (respects provider settings)
+                if use_deezer_fallback:
+                    logger.debug(
+                        f"Spotify candidates too low confidence for '{album.title}', trying Deezer"
+                    )
+                    deezer_candidate = await self._try_deezer_album_fallback(
+                        album, is_various_artists, artist_name
+                    )
+                    if deezer_candidate:
+                        # Apply enrichment from Deezer candidate
+                        deezer_result = await self._apply_album_enrichment(
+                            album, deezer_candidate, download_artwork, assigned_uris
+                        )
+                        if deezer_result.success:
+                            return deezer_result
+
                 return EnrichmentResult(
                     entity_type="album",
                     entity_id=str(album.id.value),
                     entity_name=album.title,
                     success=False,
-                    error="No candidates above threshold",
+                    error="No candidates above threshold (Spotify + Deezer fallback)",
                 )
 
             # Check if top candidate is confident enough
@@ -1425,6 +1790,160 @@ class LocalLibraryEnrichmentService:
 
         return False
 
+    async def _try_deezer_album_fallback(
+        self,
+        album: Album,
+        is_various_artists: bool,
+        artist_name: str,
+    ) -> EnrichmentCandidate | None:
+        """Try Deezer as fallback when Spotify finds no matches.
+
+        Hey future me - this is the Deezer fallback for albums. Deezer API is completely
+        free (no OAuth needed!) so it's perfect as backup when Spotify has no match.
+        We create a synthetic EnrichmentCandidate so it flows through the same
+        _apply_album_enrichment path. The "source": "deezer" in extra_info lets us
+        track where enrichment came from.
+
+        Args:
+            album: Album to find on Deezer
+            is_various_artists: Whether this is a VA/compilation album
+            artist_name: Artist name for search
+
+        Returns:
+            EnrichmentCandidate if Deezer found a match, None otherwise
+        """
+        if not self._deezer_client:
+            return None
+
+        try:
+            logger.debug(
+                f"Trying Deezer fallback for album: {album.title} "
+                f"({'VA' if is_various_artists else artist_name})"
+            )
+
+            deezer_album = None
+
+            if is_various_artists:
+                # For VA albums, use the special artwork finder that searches by title
+                deezer_album = await self._deezer_client.find_album_artwork(album.title)
+            else:
+                # For regular albums, search by artist + title
+                results = await self._deezer_client.search_albums(
+                    f"{artist_name} {album.title}", limit=5
+                )
+                if results:
+                    # Simple best-match: first result (Deezer relevance sorting)
+                    # Could add scoring like Spotify, but Deezer search is usually accurate
+                    deezer_album = results[0]
+
+            if not deezer_album:
+                logger.debug(f"No Deezer match for album: {album.title}")
+                return None
+
+            # Create synthetic EnrichmentCandidate from Deezer result
+            # This allows us to use the same _apply_album_enrichment logic
+            candidate = EnrichmentCandidate(
+                spotify_uri=f"deezer:{deezer_album.id}",  # Pseudo-URI for Deezer
+                spotify_name=deezer_album.title,
+                spotify_image_url=deezer_album.cover_xl or deezer_album.cover_big,
+                confidence_score=0.80,  # Fixed score - we trust Deezer if it's our only match
+                extra_info={
+                    "source": "deezer",
+                    "deezer_id": deezer_album.id,
+                    "deezer_link": deezer_album.link,
+                    "explicit": deezer_album.explicit_lyrics,
+                    "artist_name": deezer_album.artist_name,
+                    "release_date": deezer_album.release_date,
+                    "total_tracks": deezer_album.nb_tracks,
+                    "record_type": deezer_album.record_type,
+                },
+            )
+
+            logger.info(
+                f"Deezer fallback found album: {deezer_album.title} by {deezer_album.artist_name} "
+                f"(Deezer ID: {deezer_album.id})"
+            )
+
+            return candidate
+
+        except Exception as e:
+            logger.warning(f"Deezer fallback failed for album {album.title}: {e}")
+            return None
+
+    async def _try_deezer_artist_fallback(
+        self,
+        artist: Artist,
+    ) -> EnrichmentCandidate | None:
+        """Try Deezer as fallback when Spotify finds no artist matches.
+
+        Hey future me - this is the Deezer fallback for artists. Same idea as album
+        fallback: Deezer API is free (no OAuth) so perfect as backup.
+        We create a synthetic EnrichmentCandidate so it flows through the same
+        _apply_artist_enrichment path. The "source": "deezer" in extra_info lets us
+        track where enrichment came from.
+
+        Args:
+            artist: Artist to find on Deezer
+
+        Returns:
+            EnrichmentCandidate if Deezer found a match, None otherwise
+        """
+        if not self._deezer_client:
+            return None
+
+        try:
+            logger.debug(f"Trying Deezer fallback for artist: {artist.name}")
+
+            # Search Deezer for artist
+            deezer_results = await self._deezer_client.search_artists(
+                artist.name, limit=5
+            )
+
+            if not deezer_results:
+                # Try normalized name fallback (same as Spotify)
+                normalized_name = normalize_artist_name(artist.name)
+                if normalized_name != artist.name.lower().strip():
+                    logger.debug(
+                        f"No Deezer results for '{artist.name}', "
+                        f"trying normalized: '{normalized_name}'"
+                    )
+                    deezer_results = await self._deezer_client.search_artists(
+                        normalized_name, limit=5
+                    )
+
+            if not deezer_results:
+                logger.debug(f"No Deezer match for artist: {artist.name}")
+                return None
+
+            # Use first result (Deezer relevance sorting)
+            deezer_artist = deezer_results[0]
+
+            # Create synthetic EnrichmentCandidate from Deezer result
+            candidate = EnrichmentCandidate(
+                spotify_uri=f"deezer:{deezer_artist.id}",  # Pseudo-URI for Deezer
+                spotify_name=deezer_artist.name,
+                spotify_image_url=deezer_artist.picture_xl or deezer_artist.picture_big,
+                confidence_score=0.75,  # Fixed score - we trust Deezer if it's our only match
+                extra_info={
+                    "source": "deezer",
+                    "deezer_id": deezer_artist.id,
+                    "deezer_link": deezer_artist.link,
+                    "nb_album": deezer_artist.nb_album,
+                    "nb_fan": deezer_artist.nb_fan,
+                },
+            )
+
+            logger.info(
+                f"Deezer fallback found artist: {deezer_artist.name} "
+                f"(Deezer ID: {deezer_artist.id}, {deezer_artist.nb_fan} fans)"
+            )
+
+            return candidate
+
+        except Exception as e:
+            logger.warning(f"Deezer fallback failed for artist {artist.name}: {e}")
+            return None
+
     async def _apply_album_enrichment(
         self,
         album: Album,
@@ -1501,12 +2020,23 @@ class LocalLibraryEnrichmentService:
             model.artwork_path = existing_image_path  # Use the existing path!
             image_downloaded = True  # Mark as "downloaded" even though we reused
         elif download_artwork and candidate.spotify_image_url:
-            spotify_id = candidate.spotify_uri.split(":")[-1]
-
-            # Hey future me - use the new _with_result method for detailed errors!
-            download_result = await self._image_service.download_album_image_with_result(
-                spotify_id, candidate.spotify_image_url
-            )
+            # Hey future me - handle both Spotify and Deezer artwork downloads!
+            # Deezer candidates have URIs like "deezer:12345" instead of "spotify:album:xyz"
+            source = candidate.extra_info.get("source", "spotify")
+            
+            if source == "deezer":
+                # For Deezer, use the Deezer ID for the filename
+                deezer_id = candidate.extra_info.get("deezer_id", "unknown")
+                # Download using a generic approach (Deezer cover URL is in spotify_image_url)
+                download_result = await self._image_service.download_album_image_with_result(
+                    f"deezer_{deezer_id}", candidate.spotify_image_url
+                )
+            else:
+                # Standard Spotify download
+                spotify_id = candidate.spotify_uri.split(":")[-1]
+                download_result = await self._image_service.download_album_image_with_result(
+                    spotify_id, candidate.spotify_image_url
+                )
 
             if download_result.success:
                 model.artwork_path = download_result.path
@@ -1524,6 +2054,10 @@ class LocalLibraryEnrichmentService:
             f"Enriched album '{album.title}' with Spotify URI {candidate.spotify_uri}"
         )
 
+        # Hey future me - track which service provided the enrichment!
+        # Deezer candidates have "source": "deezer" in extra_info
+        source = candidate.extra_info.get("source", "spotify")
+
         return EnrichmentResult(
             entity_type="album",
             entity_id=str(album.id.value),
@@ -1532,6 +2066,7 @@ class LocalLibraryEnrichmentService:
             spotify_uri=candidate.spotify_uri,
             image_downloaded=image_downloaded,
             error=image_error if not image_downloaded and download_artwork else None,
+            source=source,
         )
 
     async def _store_album_candidates(

@@ -263,6 +263,21 @@ class ITrackRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_unenriched_with_isrc(self, limit: int = 50) -> list[Track]:
+        """Get tracks that have ISRC but no Spotify URI (unenriched).
+
+        These tracks can be matched 100% reliably via ISRC lookup
+        (Deezer/Spotify ISRC APIs).
+
+        Args:
+            limit: Maximum number of tracks to return
+
+        Returns:
+            List of Track entities with ISRC but no spotify_uri
+        """
+        pass
+
 
 class IPlaylistRepository(ABC):
     """Repository interface for Playlist entities."""
