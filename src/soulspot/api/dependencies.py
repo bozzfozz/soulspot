@@ -14,7 +14,6 @@ from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
-    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,
@@ -38,6 +37,7 @@ from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
     DownloadRepository,
     PlaylistRepository,
+    SpotifyBrowseRepository,
     TrackRepository,
 )
 
@@ -409,10 +409,8 @@ def get_download_repository(
 # This is SEPARATE from the local library! Use this for dashboard stats that show Spotify data.
 def get_spotify_browse_repository(
     session: AsyncSession = Depends(get_db_session),
-) -> "SpotifyBrowseRepository":
+) -> SpotifyBrowseRepository:
     """Get Spotify browse repository instance for Spotify synced data."""
-    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
-
     return SpotifyBrowseRepository(session)
 
 
