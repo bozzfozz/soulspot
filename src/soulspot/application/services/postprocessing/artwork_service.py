@@ -348,7 +348,6 @@ class ArtworkService:
 
         # Fallback: assume it's the ID itself
         return uri_or_id if len(uri_or_id) >= 10 else None
-            return None
 
     # Hey future me: Image processing - resize and optimize to keep file sizes sane
     # WHY asyncio.to_thread? PIL is SYNCHRONOUS and blocking - would freeze the event loop

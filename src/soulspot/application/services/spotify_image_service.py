@@ -99,14 +99,14 @@ class ImageDownloadResult:
     url: str | None = None  # Original URL attempted
 
     @classmethod
-    def ok(cls, path: str) -> "ImageDownloadResult":
+    def ok(cls, path: str) -> ImageDownloadResult:
         """Create successful result."""
         return cls(success=True, path=path)
 
     @classmethod
     def error(
         cls, code: ImageDownloadErrorCode, message: str, url: str | None = None
-    ) -> "ImageDownloadResult":
+    ) -> ImageDownloadResult:
         """Create error result with details."""
         return cls(
             success=False,
@@ -276,13 +276,13 @@ class SpotifyImageService:
             if status == 404:
                 return None, ImageDownloadResult.error(
                     ImageDownloadErrorCode.HTTP_404,
-                    f"Image not found (404) - Spotify may have removed or changed the image",
+                    "Image not found (404) - Spotify may have removed or changed the image",
                     url,
                 )
             elif status == 403:
                 return None, ImageDownloadResult.error(
                     ImageDownloadErrorCode.HTTP_403,
-                    f"Access forbidden (403) - Rate limit or authentication issue",
+                    "Access forbidden (403) - Rate limit or authentication issue",
                     url,
                 )
             elif status >= 500:

@@ -337,7 +337,6 @@ class LocalLibraryEnrichmentService:
                 confidence_threshold=confidence_threshold,
                 download_artwork=download_artwork,
                 search_limit=search_limit,
-                name_weight=name_weight / 100.0,  # Convert 0-100 to 0.0-1.0
                 followed_albums_lookup=followed_albums_lookup,
             )
             stats["albums_processed"] += 1
@@ -555,18 +554,17 @@ class LocalLibraryEnrichmentService:
             # low-quality matches, try searching with normalized name ("Paul Elstak").
             # This handles cases where Spotify uses a different name variant.
             normalized_name = normalize_artist_name(artist.name)
-            if normalized_name != artist.name.lower().strip():
+            if normalized_name != artist.name.lower().strip() and not artists_data:
                 # Only do fallback if normalization actually changed something
-                if not artists_data:
-                    logger.debug(
-                        f"No results for '{artist.name}', trying normalized: '{normalized_name}'"
-                    )
-                    fallback_results = await self._spotify_client.search_artist(
-                        query=normalized_name,
-                        access_token=self._access_token,
-                        limit=search_limit,
-                    )
-                    artists_data = fallback_results.get("artists", {}).get("items", [])
+                logger.debug(
+                    f"No results for '{artist.name}', trying normalized: '{normalized_name}'"
+                )
+                fallback_results = await self._spotify_client.search_artist(
+                    query=normalized_name,
+                    access_token=self._access_token,
+                    limit=search_limit,
+                )
+                artists_data = fallback_results.get("artists", {}).get("items", [])
 
             if not artists_data:
                 return EnrichmentResult(
@@ -588,21 +586,20 @@ class LocalLibraryEnrichmentService:
             # If original name search (e.g., "DJ Paul Elstak") gave poor matches,
             # try with normalized name ("Paul Elstak"). The true artist might only
             # appear in search results when using their Spotify-listed name.
-            if normalized_name != artist.name.lower().strip():
-                if not candidates:
-                    logger.debug(
-                        f"No candidates for '{artist.name}', searching with normalized: '{normalized_name}'"
+            if normalized_name != artist.name.lower().strip() and not candidates:
+                logger.debug(
+                    f"No candidates for '{artist.name}', searching with normalized: '{normalized_name}'"
+                )
+                fallback_results = await self._spotify_client.search_artist(
+                    query=normalized_name,
+                    access_token=self._access_token,
+                    limit=search_limit,
+                )
+                fallback_data = fallback_results.get("artists", {}).get("items", [])
+                if fallback_data:
+                    candidates = self._score_artist_candidates(
+                        artist.name, fallback_data, name_weight=name_weight
                     )
-                    fallback_results = await self._spotify_client.search_artist(
-                        query=normalized_name,
-                        access_token=self._access_token,
-                        limit=search_limit,
-                    )
-                    fallback_data = fallback_results.get("artists", {}).get("items", [])
-                    if fallback_data:
-                        candidates = self._score_artist_candidates(
-                            artist.name, fallback_data, name_weight=name_weight
-                        )
 
             if not candidates:
                 return EnrichmentResult(
@@ -834,7 +831,6 @@ class LocalLibraryEnrichmentService:
         confidence_threshold: float,
         download_artwork: bool,
         search_limit: int = 20,
-        name_weight: float = 0.85,
         followed_albums_lookup: dict[str, tuple[str, str | None]] | None = None,
     ) -> EnrichmentResult:
         """Enrich a single album with Spotify data.
@@ -844,7 +840,6 @@ class LocalLibraryEnrichmentService:
             confidence_threshold: Minimum confidence for auto-apply
             download_artwork: Whether to download artwork
             search_limit: Number of Spotify search results to scan
-            name_weight: Weight of name similarity vs popularity (0.0-1.0)
             followed_albums_lookup: Optional lookup table for followed albums hint
 
         Returns:
@@ -930,7 +925,7 @@ class LocalLibraryEnrichmentService:
 
             # Score candidates with name normalization
             candidates = self._score_album_candidates(
-                album.title, artist_name, list(albums_seen.values()), name_weight
+                album.title, artist_name, list(albums_seen.values())
             )
 
             if not candidates:
@@ -974,23 +969,20 @@ class LocalLibraryEnrichmentService:
         local_title: str,
         local_artist: str,
         spotify_albums: list[dict[str, Any]],
-        name_weight: float = 0.85,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify album candidates with name normalization.
 
         Hey future me - this now uses normalize_artist_name() for better matching!
         "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
 
-        Scoring formula (configurable via name_weight):
-        - Title similarity - (name_weight / 2)
-        - Artist name match - (name_weight / 2)
-        - Combined: Higher name_weight = more emphasis on exact name match
+        Scoring formula:
+        - Title similarity - 50%
+        - Artist name match - 50%
 
         Args:
             local_title: Local album title
             local_artist: Local artist name
             spotify_albums: List of Spotify album dicts
-            name_weight: Weight of name similarity (0.0-1.0, default 0.85)
 
         Returns:
             Sorted list of EnrichmentCandidate (highest score first)

@@ -1618,13 +1618,13 @@ async def get_enrichment_status(
     """
     from sqlalchemy import func, select
 
+    from soulspot.application.workers.job_queue import JobStatus, JobType
     from soulspot.infrastructure.persistence.models import (
         AlbumModel,
         ArtistModel,
         EnrichmentCandidateModel,
         TrackModel,
     )
-    from soulspot.application.workers.job_queue import JobStatus, JobType
 
     # Count unenriched artists (with local tracks)
     has_local_artist_tracks = (
@@ -1669,12 +1669,12 @@ async def get_enrichment_status(
     # AND stops polling when job fails (not just when unenriched=0)
     is_running = False
     last_job_completed: bool | None = None
-    
+
     enrichment_jobs = await job_queue.list_jobs(
         job_type=JobType.LIBRARY_SPOTIFY_ENRICHMENT,
         limit=1,
     )
-    
+
     if enrichment_jobs:
         latest_job = enrichment_jobs[0]
         if latest_job.status in (JobStatus.PENDING, JobStatus.RUNNING):
