@@ -1765,8 +1765,8 @@ async def spotify_discover_page(
     """
     import random
 
-    # Get all followed artists
-    artists = await sync_service.get_all_followed_artists()
+    # Get all followed artists (limit to 1000 for performance)
+    artists = await sync_service.get_artists(limit=1000)
 
     if not artists:
         return templates.TemplateResponse(
