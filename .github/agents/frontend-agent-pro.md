@@ -1,7 +1,6 @@
 ---
 name: frontend-agent
 description: Use this agent for HTMX-basierte Interaktionen (Forms, Partials, Navigation) und TailwindCSS-gestylte, responsive, zugängliche UIs auf Basis von FastAPI mit server-gerenderten HTML-Templates.
-model: Google Gemini 3 Pro
 tools: ['read', 'edit', 'search']
 color: blue
 ---

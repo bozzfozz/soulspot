@@ -1,11 +1,8 @@
 ---
 name: architecture-guardian-agent
-model: Claude 3.5 Sonnet
 color: purple
 description: Use this agent to enforce architectural principles, prevent architectural drift, and ensure code follows SoulSpot Bridge design patterns for Database Module, Settings Service, Structured Errors, and Module Boundaries
 ---
-
-# AI-Model: Claude 3.5 Sonnet
 
 # Hey future me - dieser Agent ist der Architektur-Wächter für SoulSpot Bridge.
 # Er verhindert, dass Code gegen unsere Core-Prinzipien verstößt (direktes SQLAlchemy,
