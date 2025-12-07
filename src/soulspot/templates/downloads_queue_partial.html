@@ -1,0 +1,176 @@
+{# Hey future me - Download queue PARTIAL template - PREMIUM EDITION!
+   This renders ONLY the queue list without page header/stats/tabs.
+   Used by HTMX auto-refresh to avoid duplicating the whole page.
+   
+   Das war der Bug: /downloads gab die ganze Seite zurück, und innerHTML swap
+   steckte die ganze Seite IN das Tab-Element = Duplikations-Horror!
+   
+   CSS classes müssen mit downloads.html syncen! #}
+
+{% if downloads %}
+<div class="download-list">
+    {% for item in downloads %}
+    <div class="download-item {% if item.status == 'downloading' %}downloading{% elif item.status == 'completed' %}completed{% elif item.status == 'failed' %}failed{% endif %}" 
+         data-id="{{ item.id }}" 
+         style="animation-delay: {{ loop.index0 * 50 }}ms;">
+        
+        <!-- Album Art with Status Overlay -->
+        <div class="download-artwork">
+            <img src="{{ item.album_art|default('https://via.placeholder.com/64x64/1a1a2e/6366f1?text=♪') }}" 
+                 alt="{{ item.title|default('Track') }}"
+                 loading="lazy">
+            <div class="artwork-overlay">
+                {% if item.status == 'downloading' %}
+                <div class="download-spinner"></div>
+                {% elif item.status == 'completed' %}
+                <i class="bi bi-check-lg"></i>
+                {% elif item.status == 'failed' %}
+                <i class="bi bi-exclamation-lg"></i>
+                {% elif item.status == 'waiting' %}
+                <i class="bi bi-hourglass"></i>
+                {% elif item.status == 'paused' %}
+                <i class="bi bi-pause-fill"></i>
+                {% else %}
+                <i class="bi bi-clock"></i>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Track Info -->
+        <div class="download-info">
+            <div class="download-title">{{ item.title|default('Track ' + item.track_id[:8]) }}</div>
+            <div class="download-meta">
+                <span class="download-artist">{{ item.artist|default('Unknown Artist') }}</span>
+                {% if item.album %}
+                <span class="meta-separator">•</span>
+                <span class="download-album">{{ item.album }}</span>
+                {% endif %}
+            </div>
+            
+            <!-- Progress Bar (only for downloading) -->
+            {% if item.status == 'downloading' %}
+            <div class="download-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ item.progress_percent|default(0) }}%;"></div>
+                    <div class="progress-glow" style="left: {{ item.progress_percent|default(0) }}%;"></div>
+                </div>
+                <div class="progress-stats">
+                    <span class="progress-percent">{{ item.progress_percent|default(0)|round(1) }}%</span>
+                    {% if item.speed %}
+                    <span class="progress-speed">{{ item.speed }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Error Message (only for failed) -->
+            {% if item.status == 'failed' and item.error_message %}
+            <div class="download-error">
+                <i class="bi bi-exclamation-triangle"></i>
+                {{ item.error_message|truncate(50) }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Status Badge -->
+        <div class="download-status">
+            {% if item.status == 'downloading' %}
+            <span class="status-badge status-downloading">
+                <span class="status-dot pulse"></span>
+                Downloading
+            </span>
+            {% elif item.status == 'waiting' %}
+            <span class="status-badge status-waiting">
+                <i class="bi bi-hourglass-split"></i>
+                Waiting
+            </span>
+            {% elif item.status == 'queued' or item.status == 'pending' %}
+            <span class="status-badge status-queued">
+                <i class="bi bi-clock"></i>
+                Queued
+            </span>
+            {% elif item.status == 'completed' %}
+            <span class="status-badge status-completed">
+                <i class="bi bi-check-circle-fill"></i>
+                Done
+            </span>
+            {% elif item.status == 'failed' %}
+            <span class="status-badge status-failed">
+                <i class="bi bi-x-circle-fill"></i>
+                Failed
+            </span>
+            {% elif item.status == 'paused' %}
+            <span class="status-badge status-paused">
+                <i class="bi bi-pause-circle-fill"></i>
+                Paused
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Actions -->
+        <div class="download-actions">
+            {% if item.status == 'downloading' or item.status == 'queued' or item.status == 'pending' or item.status == 'waiting' %}
+            <button class="action-btn" hx-post="/api/downloads/{{ item.id }}/pause" hx-swap="none" title="Pause">
+                <i class="bi bi-pause-fill"></i>
+            </button>
+            {% elif item.status == 'paused' %}
+            <button class="action-btn action-primary" hx-post="/api/downloads/{{ item.id }}/resume" hx-swap="none" title="Resume">
+                <i class="bi bi-play-fill"></i>
+            </button>
+            {% elif item.status == 'failed' %}
+            <button class="action-btn action-primary" hx-post="/api/downloads/{{ item.id }}/retry" hx-swap="none" title="Retry">
+                <i class="bi bi-arrow-repeat"></i>
+            </button>
+            {% endif %}
+            <button class="action-btn action-danger" hx-delete="/api/downloads/{{ item.id }}" hx-swap="none" title="Remove">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if has_previous %}
+    <a href="/downloads?page={{ page - 1 }}&limit={{ limit }}" class="pagination-btn">
+        <i class="bi bi-chevron-left"></i>
+    </a>
+    {% else %}
+    <button class="pagination-btn" disabled>
+        <i class="bi bi-chevron-left"></i>
+    </button>
+    {% endif %}
+
+    <span class="pagination-info">
+        Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+    </span>
+
+    {% if has_next %}
+    <a href="/downloads?page={{ page + 1 }}&limit={{ limit }}" class="pagination-btn">
+        <i class="bi bi-chevron-right"></i>
+    </a>
+    {% else %}
+    <button class="pagination-btn" disabled>
+        <i class="bi bi-chevron-right"></i>
+    </button>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<!-- Empty State -->
+<div class="empty-state">
+    <div class="empty-icon">
+        <i class="bi bi-cloud-download"></i>
+        <div class="empty-icon-ring"></div>
+    </div>
+    <h3>No Downloads Yet</h3>
+    <p>Your download queue is empty. Browse music to start downloading.</p>
+    <a href="/spotify" class="btn btn-primary">
+        <i class="bi bi-spotify"></i>
+        Browse Spotify
+    </a>
+</div>
+{% endif %}

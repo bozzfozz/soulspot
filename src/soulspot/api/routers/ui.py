@@ -483,22 +483,22 @@ async def playlist_detail(
 # We pass pagination metadata to template for rendering page navigation. Stats (active, queue,
 # completed, failed) are fetched separately for the stats cards at the top of the page.
 # Track info (title, artist, album_art) is loaded via joinedload for display in queue items.
-@router.get("/downloads", response_class=HTMLResponse)
-async def downloads(
-    request: Request,
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(100, ge=1, le=500, description="Items per page"),
-    download_repository: DownloadRepository = Depends(get_download_repository),
-    session: AsyncSession = Depends(get_db_session),
-) -> Any:
-    """Downloads page with pagination.
 
-    Args:
-        request: FastAPI request
-        page: Page number (1-indexed)
-        limit: Items per page (default 100, max 500)
-        download_repository: Download repository
-        session: DB session for direct queries
+
+async def _get_downloads_data(
+    download_repository: DownloadRepository,
+    session: AsyncSession,
+    page: int = 1,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Shared helper to fetch downloads data for both full page and partial.
+
+    Hey future me - das ist extrahiert weil wir 2 Endpoints brauchen:
+    1. /downloads - Volle Seite mit Header, Stats, Tabs
+    2. /downloads/queue-partial - Nur die Queue-Liste für HTMX auto-refresh
+
+    Returns dict with: downloads, page, limit, total, total_pages, has_next, has_previous,
+    active_count, queue_count, failed_count, completed_today
     """
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
@@ -509,7 +509,6 @@ async def downloads(
     offset = (page - 1) * limit
 
     # Fetch downloads with track info directly (bypassing repository for richer data)
-    # Hey future me - we need joinedload for track AND its artist/album to show title/artist/cover
     stmt = (
         select(DownloadModel)
         .options(
@@ -579,24 +578,67 @@ async def downloads(
             "album_art": track.album.artwork_url if track and track.album and hasattr(track.album, "artwork_url") else None,
         })
 
+    return {
+        "downloads": downloads_data,
+        "page": page,
+        "limit": limit,
+        "total": total_count,
+        "total_pages": total_pages,
+        "has_next": has_next,
+        "has_previous": has_previous,
+        "active_count": active_count,
+        "queue_count": queue_count,
+        "failed_count": failed_count,
+        "completed_today": completed_count,
+    }
+
+
+@router.get("/downloads", response_class=HTMLResponse)
+async def downloads(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(100, ge=1, le=500, description="Items per page"),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Downloads page with pagination - full page with header, stats, tabs.
+
+    Args:
+        request: FastAPI request
+        page: Page number (1-indexed)
+        limit: Items per page (default 100, max 500)
+        download_repository: Download repository
+        session: DB session for direct queries
+    """
+    data = await _get_downloads_data(download_repository, session, page, limit)
+
     return templates.TemplateResponse(
         request,
         "downloads.html",
-        context={
-            "downloads": downloads_data,
-            # Pagination
-            "page": page,
-            "limit": limit,
-            "total": total_count,
-            "total_pages": total_pages,
-            "has_next": has_next,
-            "has_previous": has_previous,
-            # Stats for cards
-            "active_count": active_count,
-            "queue_count": queue_count,
-            "failed_count": failed_count,
-            "completed_today": completed_count,  # TODO: Filter by today
-        },
+        context=data,
+    )
+
+
+@router.get("/downloads/queue-partial", response_class=HTMLResponse)
+async def downloads_queue_partial(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(100, ge=1, le=500, description="Items per page"),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Downloads queue partial - ONLY the queue list for HTMX auto-refresh.
+
+    Hey future me - dieser Endpoint gibt NUR die Queue-Liste zurück, nicht die ganze Seite!
+    Das Template downloads_queue_partial.html rendert nur die Items ohne Header/Stats/Tabs.
+    Das löst das Duplikations-Problem beim Auto-Refresh.
+    """
+    data = await _get_downloads_data(download_repository, session, page, limit)
+
+    return templates.TemplateResponse(
+        request,
+        "downloads_queue_partial.html",
+        context=data,
     )
 
 
