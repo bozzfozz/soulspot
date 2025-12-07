@@ -1781,6 +1781,8 @@ async def spotify_discover_page(
     # Get all followed artists (limit to 1000 for performance)
     artists = await sync_service.get_artists(limit=1000)
 
+    logger.info(f"Discover page: Found {len(artists) if artists else 0} artists in DB")
+
     if not artists:
         return templates.TemplateResponse(
             request,
@@ -1789,13 +1791,18 @@ async def spotify_discover_page(
                 "discoveries": [],
                 "based_on_count": 0,
                 "total_discoveries": 0,
-                "error": "No followed artists found. Follow some artists on Spotify first!",
+                "error": "No followed artists found. Sync your Spotify artists first in Settings!",
             },
         )
 
     # Pick random artists to base discovery on (max 5 to avoid rate limits)
     sample_size = min(5, len(artists))
     sample_artists = random.sample(artists, sample_size)
+
+    logger.info(
+        f"Discover page: Sampling {sample_size} artists for related lookup: "
+        f"{[a.name for a in sample_artists]}"
+    )
 
     # Get followed artist IDs for filtering
     followed_ids = {a.spotify_id for a in artists}
@@ -1804,14 +1811,17 @@ async def spotify_discover_page(
     discoveries: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     error: str | None = None
+    api_errors: int = 0
 
     for artist in sample_artists:
         if not artist.spotify_id:
+            logger.warning(f"Artist {artist.name} has no spotify_id, skipping")
             continue
         try:
             related = await spotify_client.get_related_artists(
                 artist.spotify_id, access_token
             )
+            logger.debug(f"Got {len(related)} related artists for {artist.name}")
             for r in related:
                 rid = r.get("id")
                 # Skip if already following or already in discoveries
@@ -1829,8 +1839,18 @@ async def spotify_discover_page(
                         }
                     )
         except Exception as e:
+            api_errors += 1
             logger.warning(f"Failed to get related artists for {artist.name}: {e}")
             continue
+
+    logger.info(
+        f"Discover page: Found {len(discoveries)} unique discoveries, "
+        f"{api_errors} API errors"
+    )
+
+    # If all API calls failed, show error
+    if api_errors == sample_size and not discoveries:
+        error = "Could not fetch recommendations. Please check your Spotify connection."
 
     # Sort by popularity (most popular first)
     discoveries.sort(key=lambda x: x["popularity"], reverse=True)

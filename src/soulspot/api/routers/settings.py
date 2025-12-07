@@ -414,6 +414,17 @@ class SpotifySyncSettings(BaseModel):
     remove_unfollowed_playlists: bool = Field(
         default=False, description="Remove playlists when deleted on Spotify"
     )
+    # New Releases / Album Resync settings
+    auto_resync_artist_albums: bool = Field(
+        default=True,
+        description="Periodically resync artist albums to catch new releases",
+    )
+    artist_albums_resync_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="How many hours before resyncing artist albums (default 24 = daily)",
+    )
 
 
 class SpotifyImageStats(BaseModel):
@@ -565,6 +576,19 @@ async def update_spotify_sync_settings(
         value_type="boolean",
         category="spotify",
     )
+    # New Releases / Album Resync settings
+    await settings_service.set(
+        "spotify.auto_resync_artist_albums",
+        settings_update.auto_resync_artist_albums,
+        value_type="boolean",
+        category="spotify",
+    )
+    await settings_service.set(
+        "spotify.artist_albums_resync_hours",
+        settings_update.artist_albums_resync_hours,
+        value_type="integer",
+        category="spotify",
+    )
 
     await db.commit()
 
@@ -596,6 +620,7 @@ async def toggle_spotify_sync_setting(
         "download_images": "spotify.download_images",
         "remove_unfollowed_artists": "spotify.remove_unfollowed_artists",
         "remove_unfollowed_playlists": "spotify.remove_unfollowed_playlists",
+        "auto_resync_artist_albums": "spotify.auto_resync_artist_albums",
     }
 
     setting_key = key_mapping.get(setting_name)

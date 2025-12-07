@@ -387,6 +387,27 @@ class AppSettingsService:
         """Check if deleted playlists should be removed from DB."""
         return await self.get_bool("spotify.remove_unfollowed_playlists", default=False)
 
+    async def is_artist_albums_resync_enabled(self) -> bool:
+        """Check if periodic resync of artist albums is enabled.
+
+        Hey future me - this is the NEW feature! When enabled, the worker
+        will not only sync NEW artists but also RESYNC existing artists
+        whose albums haven't been updated in a while. This ensures
+        New Releases on the dashboard stay fresh without manual page visits.
+        """
+        return await self.get_bool("spotify.auto_resync_artist_albums", default=True)
+
+    async def get_artist_albums_resync_hours(self) -> int:
+        """Get how many hours before artist albums need resync.
+
+        Default is 24 hours - once a day we refresh album data for each artist.
+        Lower values = more API calls but fresher data.
+        Higher values = fewer API calls but potentially stale New Releases.
+        """
+        return await self.get_int(
+            "spotify.artist_albums_resync_hours", default=24
+        )
+
     async def get_spotify_settings_summary(self) -> dict[str, Any]:
         """Get summary of all Spotify sync settings for UI display.
 
@@ -422,6 +443,12 @@ class AppSettingsService:
             ),
             "remove_unfollowed_playlists": await self.get_bool(
                 "spotify.remove_unfollowed_playlists", default=False
+            ),
+            "auto_resync_artist_albums": await self.get_bool(
+                "spotify.auto_resync_artist_albums", default=True
+            ),
+            "artist_albums_resync_hours": await self.get_int(
+                "spotify.artist_albums_resync_hours", default=24
             ),
         }
 

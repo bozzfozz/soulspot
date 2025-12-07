@@ -3010,6 +3010,65 @@ class SpotifyBrowseRepository:
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def get_artists_due_for_resync(
+        self, max_age_hours: int = 24, limit: int = 5
+    ) -> list[Any]:
+        """Get artists whose albums haven't been synced in a while.
+
+        Hey future me - this is for the periodic resync feature!
+        We find artists where albums_synced_at is NOT NULL but older than
+        max_age_hours. This ensures we periodically refresh album data
+        to catch new releases without requiring users to visit artist pages.
+
+        Priority: Oldest synced first (so we cycle through all artists evenly).
+
+        Args:
+            max_age_hours: How many hours before resync is needed (default 24)
+            limit: Maximum number of artists to return (default 5)
+
+        Returns:
+            List of SpotifyArtistModel objects needing album resync
+        """
+        from datetime import timedelta
+
+        from .models import SpotifyArtistModel
+
+        cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
+
+        stmt = (
+            select(SpotifyArtistModel)
+            .where(
+                SpotifyArtistModel.albums_synced_at.isnot(None),
+                SpotifyArtistModel.albums_synced_at < cutoff_time,
+            )
+            .order_by(SpotifyArtistModel.albums_synced_at.asc())  # Oldest first
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_artists_due_for_resync(self, max_age_hours: int = 24) -> int:
+        """Count artists whose albums are due for resync.
+
+        Args:
+            max_age_hours: How many hours before resync is needed
+
+        Returns:
+            Number of artists needing album resync
+        """
+        from datetime import timedelta
+
+        from .models import SpotifyArtistModel
+
+        cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
+
+        stmt = select(func.count(SpotifyArtistModel.spotify_id)).where(
+            SpotifyArtistModel.albums_synced_at.isnot(None),
+            SpotifyArtistModel.albums_synced_at < cutoff_time,
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def upsert_artist(
         self,
         spotify_id: str,
