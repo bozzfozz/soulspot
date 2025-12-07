@@ -239,7 +239,24 @@
                 </tr>
             </thead>
             <tbody id="tracks-tbody">
+                {# Hey future me - Multi-disc handling! For compilations and box sets,
+                   we show disc separators when disc_number changes. Same logic as
+                   spotify_album_detail.html. Tracks are already sorted by disc/track. #}
+                {% set current_disc = namespace(value=0) %}
+                {% set is_multi_disc = album.tracks|map(attribute='disc_number')|unique|list|length > 1 %}
                 {% for track in album.tracks %}
+                {# Insert disc separator row when disc changes (only for multi-disc albums) #}
+                {% if is_multi_disc and track.disc_number != current_disc.value %}
+                {% set current_disc.value = track.disc_number %}
+                <tr class="disc-separator-row">
+                    <td colspan="6">
+                        <div class="disc-separator">
+                            <i class="bi bi-disc"></i>
+                            <span>CD {{ track.disc_number }}</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
                 <tr class="track-row" 
                     data-track-id="{{ track.id }}"
                     data-title="{{ track.title|lower }}">
@@ -310,6 +327,26 @@
 
 {% block extra_scripts %}
 <style>
+    /* Disc separator for multi-disc albums (CD 1, CD 2, etc.) */
+    .disc-separator-row td {
+        padding: 0 !important;
+        border-bottom: none !important;
+    }
+    .disc-separator {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-3) var(--space-4);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-primary);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        color: #22c55e;
+    }
+    .disc-separator i {
+        font-size: 1.1em;
+    }
+    
     .album-cover-large {
         width: 180px;
         height: 180px;

@@ -1443,6 +1443,7 @@ async def library_album_detail(
             "artist": track.artist.name if track.artist else "Unknown Artist",
             "album": track.album.title if track.album else "Unknown Album",
             "track_number": track.track_number,
+            "disc_number": track.disc_number if hasattr(track, "disc_number") else 1,
             "duration_ms": track.duration_ms,
             "file_path": track.file_path,
             "is_broken": track.is_broken,
@@ -1450,8 +1451,8 @@ async def library_album_detail(
         for track in track_models
     ]
 
-    # Sort by track number, then title
-    tracks_data.sort(key=lambda x: (x["track_number"] or 999, x["title"].lower()))  # type: ignore[union-attr]
+    # Sort by disc number, then track number, then title
+    tracks_data.sort(key=lambda x: (x["disc_number"], x["track_number"] or 999, x["title"].lower()))  # type: ignore[union-attr]
 
     # Calculate total duration
     total_duration_ms = sum(t["duration_ms"] or 0 for t in tracks_data)  # type: ignore[misc]
