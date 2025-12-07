@@ -1,6 +1,5 @@
 ---
 name: backend-agent
-color: red
 description: Use this agent when working on server-side Python FastAPI/Flask application logic, API endpoints, database operations, service layer implementations, or backend architecture decisions
 ---
 

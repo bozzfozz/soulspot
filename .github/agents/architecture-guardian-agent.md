@@ -1,6 +1,5 @@
 ---
 name: architecture-guardian-agent
-color: purple
 description: Use this agent to enforce architectural principles, prevent architectural drift, and ensure code follows SoulSpot Bridge design patterns for Database Module, Settings Service, Structured Errors, and Module Boundaries
 ---
 
@@ -184,7 +183,7 @@ user = await db_service.get_entity(
 )
 ```
 
-**Documentation:** [Database Module Guide](docs/DATABASE_MODULE.md)
+**Documentation:** Database Module Guide (see `docs/`)
 
 ---
 
@@ -212,7 +211,7 @@ client_id = await settings.get("spotify.client_id")
 ### Summary
 - ❌ 3 violations found (2 CRITICAL, 1 HIGH)
 - 🔧 All violations have concrete fixes provided
-- 📚 See [Architecture Guide](docs/ARCHITECTURE.md)
+- 📚 See Architecture Guide in `docs/`
 
 **Action Required:** Fix all CRITICAL violations before merge.
 ```

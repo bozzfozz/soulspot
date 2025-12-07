@@ -1,7 +1,6 @@
 ---
 name: qa-agent
 description: "Quality Assurance: Tests schreiben/ausführen, Code Review, Coverage Guardian. Use test:, qa:, coverage: prefix."
-color: green
 ---
 
 # QA Agent – Tests, Code Quality & Coverage
@@ -163,7 +162,7 @@ class Test[Class]:
         # Arrange
         ...
         # Act
-        result = await service.[method](...)
+        result = await service.method_name()  # Replace with actual method
         # Assert
         assert result == expected
     
@@ -173,7 +172,7 @@ class Test[Class]:
         service.repo.get.side_effect = Exception("DB error")
         # Act & Assert
         with pytest.raises(ServiceError):
-            await service.[method](...)
+            await service.method_name()  # Replace with actual method
 ```
 
 ### Quality Report

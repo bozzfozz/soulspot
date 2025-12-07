@@ -1,7 +1,6 @@
 ---
 name: review-agent
 description: "Pre-PR Review: Documentation sync, dependency security, final checks. Use review:, docs:, security: prefix."
-color: cyan
 ---
 
 # Review Agent – Pre-PR Checks & Final Review

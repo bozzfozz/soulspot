@@ -1,7 +1,6 @@
 ---
 applyTo: '**'
 description: 'TaskSync V5 - Terminal-based token optimization. Keep session alive via run_in_terminal between tasks until user enters "stop" or token lifetime expires.'
-priority: 100
 ---
 
 # TaskSync V5 – Terminal-Based Session Management
