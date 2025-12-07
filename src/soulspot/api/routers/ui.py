@@ -593,8 +593,7 @@ async def search(request: Request) -> Any:
 async def quick_search(
     request: Request,
     q: str = "",
-    track_repository: TrackRepository = Depends(get_track_repository),
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Quick search partial for header search bar.
 
@@ -604,53 +603,67 @@ async def quick_search(
     Args:
         request: FastAPI request
         q: Search query string
-        track_repository: Track repository
-        playlist_repository: Playlist repository
+        session: Database session
 
     Returns:
         HTML partial with search results dropdown
     """
+    from sqlalchemy import select, or_
+    from sqlalchemy.orm import joinedload
+    from soulspot.infrastructure.persistence.models import TrackModel, PlaylistModel, ArtistModel
+
     results: list[dict[str, Any]] = []
     query = q.strip()
 
     if len(query) >= 2:
-        # Search tracks by name or artist
-        # Note: track.artist is ORM relationship attribute not on domain entity
-        all_tracks = await track_repository.list_all()
-        query_lower = query.lower()
-
-        for track in all_tracks:
-            track_artist = track.artist  # type: ignore[attr-defined]
-            if query_lower in track.title.lower() or (
-                track_artist and query_lower in track_artist.lower()
-            ):
-                results.append(
-                    {
-                        "type": "track",
-                        "name": track.title,
-                        "subtitle": track_artist or "Unknown Artist",
-                        "url": f"/library/tracks/{track.id.value}",
-                    }
+        search_term = f"%{query}%"
+        
+        # Search tracks (title or artist name)
+        stmt = (
+            select(TrackModel)
+            .join(TrackModel.artist)
+            .options(joinedload(TrackModel.artist))
+            .where(
+                or_(
+                    TrackModel.title.ilike(search_term),
+                    ArtistModel.name.ilike(search_term)
                 )
+            )
+            .limit(5)
+        )
+        result = await session.execute(stmt)
+        tracks = result.scalars().all()
+
+        for track in tracks:
+            results.append({
+                "type": "track",
+                "name": track.title,
+                "subtitle": track.artist.name if track.artist else "Unknown Artist",
+                "url": f"/library/tracks/{track.id}",
+            })
 
         # Search playlists by name
-        all_playlists = await playlist_repository.list_all()
-        for playlist in all_playlists:
-            if query_lower in playlist.name.lower():
-                results.append(
-                    {
-                        "type": "playlist",
-                        "name": playlist.name,
-                        "subtitle": f"{len(playlist.track_ids)} tracks",
-                        "url": f"/playlists/{playlist.id.value}",
-                    }
-                )
+        stmt = (
+            select(PlaylistModel)
+            .where(PlaylistModel.name.ilike(search_term))
+            .limit(5)
+        )
+        result = await session.execute(stmt)
+        playlists = result.scalars().all()
+
+        for playlist in playlists:
+            results.append({
+                "type": "playlist",
+                "name": playlist.name,
+                "subtitle": "Playlist",
+                "url": f"/playlists/{playlist.id}",
+            })
 
         # Sort: exact matches first, then by type (playlist > track)
         type_order = {"playlist": 0, "artist": 1, "album": 2, "track": 3}
         results.sort(
             key=lambda x: (
-                0 if x["name"].lower() == query_lower else 1,
+                0 if x["name"].lower() == query.lower() else 1,
                 type_order.get(x["type"], 99),
             )
         )
