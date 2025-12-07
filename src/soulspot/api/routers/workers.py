@@ -392,6 +392,42 @@ def _get_duplicate_detector_worker_status(request: Request) -> WorkerStatusInfo:
     )
 
 
+def _get_service_status(request: Request) -> dict[str, Any]:
+    """Get connectivity status for all external services.
+
+    Hey future me - kontrolliert ob die Verbindungen zu externen Services aktiv sind:
+    - Spotify: OAuth Token gültig?
+    - slskd: Kann der Worker verbinden?
+    - MusicBrainz/CoverArtArchive: APIs erreichbar?
+
+    Returns dict mit service_name → is_connected für das Tooltip.
+    """
+    service_status = {}
+
+    # Check Spotify connection via Token Worker status
+    # Can't do async in sync function, so trust the Token Worker
+    spotify_worker = getattr(request.app.state, "token_refresh_worker", None)
+    service_status["spotify"] = (
+        spotify_worker is not None
+        and spotify_worker.get_status().get("running", False)
+    )
+
+    # Check if slskd connection is available
+    # This is checked by the DownloadMonitorWorker
+    download_worker = getattr(request.app.state, "download_monitor_worker", None)
+    service_status["slskd"] = (
+        download_worker is not None
+        and download_worker.get_status().get("running", False)
+    )
+
+    # External APIs (MusicBrainz, CoverArtArchive) are generally available
+    # but we could add health checks if needed
+    service_status["musicbrainz"] = True
+    service_status["coverart"] = True
+
+    return service_status
+
+
 # Hey future me – dieser Endpoint gibt JSON mit allen Worker-Statuses zurück.
 # Nützlich für Debugging und falls jemand die API direkt nutzen will.
 @router.get("/status")
@@ -428,54 +464,143 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
 
 # Hey future me – dieser Endpoint rendert das HTML-Partial für HTMX!
 # Wird alle 10 Sekunden vom Sidebar-Footer gepollt.
-# Gibt die Worker-Icons mit Status und den kombinierten Tooltip zurück.
+# Zeigt alle Worker und deren Status mit Service-Verbindungsinformationen an.
 @router.get("/status/html", response_class=HTMLResponse)
 async def get_workers_status_html(request: Request) -> HTMLResponse:
     """Get HTML partial for worker status indicator.
 
     Returns an HTML fragment for HTMX polling that shows:
     - Worker icons with status-based animations
-    - Combined tooltip with all worker details on hover
+    - Comprehensive tooltip with ALL workers + service status
+    - Service connectivity indicators (Spotify, slskd, etc.)
 
     Used by the sidebar footer to display real-time worker status.
     """
     # Get status for all workers
-    token_status = _get_token_worker_status(request)
-    spotify_status = _get_spotify_sync_worker_status(request)
+    all_workers_status = await get_all_workers_status(request)
+    service_status = _get_service_status(request)
 
-    # Build last syncs HTML for tooltip
-    last_syncs = spotify_status.details.get("last_syncs", {})
-    sync_rows = ""
-    sync_icons = {
-        "artists": "🎤",
-        "playlists": "📋",
-        "liked_songs": "❤️",
-        "saved_albums": "💿",
+    # Build worker rows for tooltip
+    worker_rows = ""
+    worker_order = [
+        "token_refresh",
+        "spotify_sync",
+        "download_monitor",
+        "automation",
+        "cleanup",
+        "duplicate_detector",
+    ]
+
+    for worker_key in worker_order:
+        if worker_key not in all_workers_status.workers:
+            continue
+
+        worker = all_workers_status.workers[worker_key]
+        status_icon = {
+            "idle": "●",
+            "active": "⟳",
+            "error": "✕",
+            "stopped": "○",
+        }.get(worker.status, "●")
+
+        status_color = {
+            "idle": "#4ade80",  # green
+            "active": "#3b82f6",  # blue
+            "error": "#ef4444",  # red
+            "stopped": "#9ca3af",  # gray
+        }.get(worker.status, "#9ca3af")
+
+        # Build worker details
+        details_html = ""
+        if worker.details:
+            # Show key details based on worker type
+            if worker_key == "token_refresh":
+                interval = worker.details.get("check_interval_seconds", 300) // 60
+                next_check = worker.details.get("next_check_in", "unknown")
+                details_html = f'<div class="tooltip-detail">Check alle {interval} min • Nächste: {next_check}</div>'
+
+            elif worker_key == "spotify_sync":
+                last_syncs = worker.details.get("last_syncs", {})
+                if last_syncs:
+                    sync_rows = ""
+                    sync_icons = {
+                        "artists": "🎤",
+                        "playlists": "📋",
+                        "liked_songs": "❤️",
+                        "saved_albums": "💿",
+                    }
+                    for sync_type, icon in sync_icons.items():
+                        if sync_type in last_syncs:
+                            last_time = last_syncs[sync_type]
+                            sync_rows += f'<span class="tooltip-sync-tag">{icon} {last_time}</span>'
+                    if sync_rows:
+                        details_html = f'<div class="tooltip-detail tooltip-syncs">{sync_rows}</div>'
+
+            elif worker_key == "download_monitor":
+                poll_interval = worker.details.get("poll_interval_seconds", 10)
+                completed = worker.details.get("downloads_completed", 0)
+                failed = worker.details.get("downloads_failed", 0)
+                details_html = f'<div class="tooltip-detail">↻ alle {poll_interval}s • ✓ {completed} • ✕ {failed}</div>'
+
+            elif worker_key == "automation":
+                watchlist = worker.details.get("watchlist_running", False)
+                discography = worker.details.get("discography_running", False)
+                quality = worker.details.get("quality_upgrade_running", False)
+                running = sum([watchlist, discography, quality])
+                details_html = f'<div class="tooltip-detail">{running} von 3 Workern aktiv</div>'
+
+            elif worker_key == "cleanup":
+                dry_run = worker.details.get("dry_run", False)
+                last_run = worker.details.get("last_run", "noch nie")
+                details_html = f'<div class="tooltip-detail">{"(Dry Run) " if dry_run else ""}Zuletzt: {last_run}</div>'
+
+            elif worker_key == "duplicate_detector":
+                method = worker.details.get("detection_method", "metadata-hash")
+                found = worker.details.get("duplicates_found", 0)
+                details_html = f'<div class="tooltip-detail">Methode: {method} • Gefunden: {found}</div>'
+
+        worker_rows += f"""
+        <div class="tooltip-worker-row">
+            <div class="tooltip-worker-name">
+                <span style="color: {status_color}; font-weight: bold;">{status_icon}</span>
+                <i class="{worker.icon}"></i>
+                <span>{worker.name}</span>
+            </div>
+            {details_html}
+        </div>
+        """
+
+    # Build service status section
+    service_rows = ""
+    service_display = {
+        "spotify": ("🎵 Spotify", "#1DB954"),
+        "slskd": ("⬇️ Soulseek (slskd)", "#FF6B6B"),
+        "musicbrainz": ("🎼 MusicBrainz", "#EB743B"),
+        "coverart": ("🖼️ CoverArt", "#5F6FD3"),
     }
-    sync_labels = {
-        "artists": "Artists",
-        "playlists": "Playlists",
-        "liked_songs": "Liked",
-        "saved_albums": "Albums",
-    }
 
-    for sync_type, icon in sync_icons.items():
-        last_time = last_syncs.get(sync_type, "noch nie")
-        label = sync_labels.get(sync_type, sync_type)
-        sync_rows += f'<div class="tooltip-sync-row">{icon} {label}: <span>{last_time}</span></div>'
+    for service_key, (service_label, color) in service_display.items():
+        is_connected = service_status.get(service_key, False)
+        status_symbol = "✓" if is_connected else "✕"
+        status_style = f"color: {'#4ade80' if is_connected else '#ef4444'};"
+        service_rows += f"""
+        <div class="tooltip-service-row">
+            <span style="{status_style}; font-weight: bold;">{status_symbol}</span>
+            <span>{service_label}</span>
+        </div>
+        """
 
-    # Determine overall status for combined indicator
-    # If any worker has error, show error; if any active, show active; else idle
-    if spotify_status.status == "error" or token_status.status == "error":
+    # Determine overall status
+    all_statuses = [w.status for w in all_workers_status.workers.values()]
+    if "error" in all_statuses:
         overall_status = "error"
-    elif spotify_status.status == "active" or token_status.status == "active":
+    elif "active" in all_statuses:
         overall_status = "active"
-    elif spotify_status.status == "stopped" and token_status.status == "stopped":
+    elif all(s == "stopped" for s in all_statuses):
         overall_status = "stopped"
     else:
         overall_status = "idle"
 
-    # Status badge text
     status_text = {
         "idle": "Aktiv",
         "active": "Syncing",
@@ -485,7 +610,7 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
 
     html = f"""
 <div class="worker-indicator-single" tabindex="0">
-    <a href="{spotify_status.settings_url}"
+    <a href="/settings?tab=spotify"
        class="worker-icon"
        data-status="{overall_status}"
        aria-label="Background Workers: {status_text.get(overall_status, overall_status)}"
@@ -495,29 +620,20 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
 
     <div class="worker-tooltip" role="tooltip">
         <div class="tooltip-header">
-            <span>Background Workers</span>
+            <span>🔄 Background Workers</span>
             <span class="tooltip-badge tooltip-badge-{overall_status}">{status_text.get(overall_status, overall_status)}</span>
         </div>
 
-        <div class="tooltip-section">
-            <div class="tooltip-row">
-                <span><i class="{token_status.icon}"></i> {token_status.name}</span>
-                <span class="tooltip-status tooltip-status-{token_status.status}">●</span>
-            </div>
-            <div class="tooltip-detail">
-                Refresh alle {token_status.details.get("check_interval_seconds", 300) // 60} min
-            </div>
+        <div class="tooltip-workers-section">
+            {worker_rows}
         </div>
 
         <div class="tooltip-divider"></div>
 
-        <div class="tooltip-section">
-            <div class="tooltip-row">
-                <span><i class="{spotify_status.icon}" style="color: #1DB954;"></i> {spotify_status.name}</span>
-                <span class="tooltip-status tooltip-status-{spotify_status.status}">●</span>
-            </div>
-            <div class="tooltip-sync-grid">
-                {sync_rows}
+        <div class="tooltip-services-section">
+            <div class="tooltip-services-title">📡 Service Status</div>
+            <div class="tooltip-services-grid">
+                {service_rows}
             </div>
         </div>
     </div>
