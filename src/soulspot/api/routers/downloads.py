@@ -99,7 +99,10 @@ class SingleDownloadRequest(BaseModel):
 # When slskd comes back online, QueueDispatcherWorker picks up WAITING downloads.
 # This endpoint is called by HTMX from track cards, album pages, etc.
 # Accepts either track_id (local DB) or spotify_id (Spotify tracks).
-@router.post("/")
+#
+# WICHTIG: Pfad ist "" statt "/" um 307 redirects zu vermeiden!
+# FastAPI macht sonst /api/downloads -> /api/downloads/ redirect.
+@router.post("")
 async def create_download(
     request: SingleDownloadRequest,
     download_repository: DownloadRepository = Depends(get_download_repository),
@@ -191,7 +194,9 @@ async def create_download(
 # to DB which is O(limit) memory. For large queues (1000+ downloads), this makes a HUGE difference.
 # Default limit is 100 (user requested), max is 500 to prevent abuse. Total count is fetched separately
 # for pagination UI. Status filter can be: waiting, pending, queued, downloading, completed, failed, cancelled.
-@router.get("/")
+#
+# WICHTIG: Pfad ist "" statt "/" um 307 redirects zu vermeiden!
+@router.get("")
 async def list_downloads(
     status: str | None = Query(None, description="Filter by status"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
