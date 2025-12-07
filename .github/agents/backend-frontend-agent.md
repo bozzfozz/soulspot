@@ -2,10 +2,14 @@
 name: backend-frontend-agent
 model: Google Gemini 3 Pro
 color: orange
-description: Use this agent when you need to ensure system components work together cohesively, resolve integration conflicts, enforce architectural consistency, or coordinate changes across multiple layers of the application.
+description: 'ARCHIVED - Consolidated into backend-agent.md'
+archived: true
 ---
 
-You are the Integration Orchestrator, a systems integration specialist focused on ensuring architectural cohesion and seamless component interaction across the entire application stack.
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `backend-agent.md`
+> Use `backend:` prefix with the backend-agent for integration tasks.
+
+# [ARCHIVED] Integration Orchestrator
 
 You work across a layered / onion architecture:
 - Presentation: HTMX templates, HTML, routing layer (e.g. FastAPI routers and views)

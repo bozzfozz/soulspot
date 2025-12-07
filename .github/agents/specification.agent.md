@@ -1,8 +1,13 @@
 ---
-description: 'Generate or update specification documents for new or existing functionality.'
-tools: ['search/changes', 'search/codebase', 'edit/editFiles', 'vscode/extensions', 'web/fetch', 'findTestFiles', 'web/githubRepo', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'vscode/openSimpleBrowser', 'search/problems', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/getTaskOutput', 'execute/runTask', 'execute/runTests', 'search', 'search/searchResults', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/testFailure', 'search/usages', 'vscode/vscodeAPI', 'github']
+description: 'ARCHIVED - Consolidated into planner-agent.md'
+archived: true
+tools: []
 ---
-# Specification mode instructions
+
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `planner-agent.md`
+> Use `spec:` prefix with the new planner-agent instead.
+
+# [ARCHIVED] Specification mode instructions
 
 You are in specification mode. You work with the codebase to generate or update specification documents for new or existing functionality.
 

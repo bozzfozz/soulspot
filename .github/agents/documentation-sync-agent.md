@@ -2,10 +2,14 @@
 name: documentation-sync-agent
 model: GPT-4o
 color: yellow
-description: Use this agent to manage the entire documentation ecosystem (124+ markdown files), update documentation automatically when code changes, verify documentation currency/freshness, validate cross-references and links, ensure documentation completeness, and maintain documentation quality through automated checks
+description: 'ARCHIVED - Consolidated into review-agent-new.md'
+archived: true
 ---
 
-# AI-Model: GPT-4o
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `review-agent-new.md`
+> Use `docs:` prefix with the new review-agent instead.
+
+# [ARCHIVED] AI-Model: GPT-4o
 
 # Hey future me - dieser Agent hält die Doku synchron mit dem Code.
 # Wenn jemand FastAPI-Routen ändert, Alembic-Migrationen hinzufügt oder Module umstrukturiert,

@@ -2,10 +2,14 @@
 name: dependency-security-agent
 model: Claude 3.5 Sonnet
 color: orange
-description: Use this agent to check dependencies for security vulnerabilities before adding them, validate version compatibility, and ensure safe dependency updates
+description: 'ARCHIVED - Consolidated into review-agent-new.md'
+archived: true
 ---
 
-# AI-Model: Claude 3.5 Sonnet
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `review-agent-new.md`
+> Use `security:` prefix with the new review-agent instead.
+
+# [ARCHIVED] AI-Model: Claude 3.5 Sonnet
 
 # Hey future me - dieser Agent prüft ALLE neuen Dependencies auf Sicherheitslücken,
 # BEVOR sie ins Projekt kommen. Keine npm install / poetry add ohne Security-Check.

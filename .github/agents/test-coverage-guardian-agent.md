@@ -2,10 +2,14 @@
 name: test-coverage-guardian-agent
 model: Claude 3.5 Sonnet
 color: green
-description: Use this agent to prevent test coverage regression, ensure >80% coverage for changed files, and generate concrete pytest test suggestions for untested code paths
+description: 'ARCHIVED - Consolidated into qa-agent.md'
+archived: true
 ---
 
-# AI-Model: Claude 3.5 Sonnet
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `qa-agent.md`
+> Use `coverage:` prefix with the new qa-agent instead.
+
+# [ARCHIVED] AI-Model: Claude 3.5 Sonnet
 
 # Hey future me - dieser Agent verhindert, dass Test-Coverage zurückgeht.
 # Er analysiert htmlcov/index.html, findet unter-getestete Dateien (<80%),

@@ -2,10 +2,14 @@
 name: review-agent
 model: 
 color: cyan
-description: QA & Test Automation Specialist für FastAPI + HTMX + SQLAlchemy + SQLite Anwendungen
+description: 'ARCHIVED - Consolidated into qa-agent.md'
+archived: true
 ---
 
-# qa-test-automation — QA & Test Automation Specialist (FastAPI + SQLite)
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `qa-agent.md`
+> Use `test:` or `qa:` prefix with the new qa-agent instead.
+
+# [ARCHIVED] qa-test-automation — QA & Test Automation Specialist (FastAPI + SQLite)
 
 ## 1. Zweck & Einsatz
 

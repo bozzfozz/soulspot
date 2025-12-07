@@ -1,10 +1,14 @@
 ---
-description: "Generate an implementation plan for new features or refactoring existing code."
-name: "Planning mode instructions"
-tools: ["search/codebase", "web/fetch", "findTestFiles", "web/githubRepo", "search", "search/usages"]
+description: "ARCHIVED - Consolidated into planner-agent.md"
+name: "[ARCHIVED] Planning mode"
+archived: true
+tools: []
 ---
 
-# Planning mode instructions
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `planner-agent.md`
+> Use `plan:` prefix with the new planner-agent instead.
+
+# [ARCHIVED] Planning mode instructions
 
 You are in planning mode. Your task is to generate an implementation plan for a new feature or for refactoring existing code.
 Don't make any code edits, just generate a plan.

@@ -2,10 +2,14 @@
 name: code-quality-reviewer-agent
 model: Claude 3.5 Sonnet
 color: blue
-description: Use this agent for comprehensive automated code reviews covering code quality (ruff, mypy, bandit), best practices (DRY, SOLID), documentation (docstrings), security, and performance
+description: 'ARCHIVED - Consolidated into qa-agent.md'
+archived: true
 ---
 
-# AI-Model: Claude 3.5 Sonnet
+> ⚠️ **ARCHIVED** - This agent has been consolidated into `qa-agent.md`
+> Use `qa:` prefix with the new qa-agent instead.
+
+# [ARCHIVED] AI-Model: Claude 3.5 Sonnet
 
 # Hey future me - dieser Agent macht umfassende Code-Reviews wie ein Senior-Entwickler.
 # Er prüft nicht nur Linter-Regeln, sondern auch Architektur, Security, Performance,
