@@ -1,7 +1,6 @@
 ---
 name: planner-agent
 description: "Strategic planning, specifications, and implementation strategies. Use plan: or spec: prefix. Think first, code later."
-tools: ["search/codebase", "web/fetch", "findTestFiles", "web/githubRepo", "search", "search/usages", "vscode/vscodeAPI"]
 ---
 
 # Planner Agent – Strategic Planning & Specifications
