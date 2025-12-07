@@ -25,6 +25,7 @@ from soulspot.api.dependencies import (
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.domain.entities import DownloadStatus
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
@@ -481,12 +482,14 @@ async def playlist_detail(
 # Hey future me - Downloads page now has DB-LEVEL pagination! Default 100 per page, max 500.
 # We pass pagination metadata to template for rendering page navigation. Stats (active, queue,
 # completed, failed) are fetched separately for the stats cards at the top of the page.
+# Track info (title, artist, album_art) is loaded via joinedload for display in queue items.
 @router.get("/downloads", response_class=HTMLResponse)
 async def downloads(
     request: Request,
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(100, ge=1, le=500, description="Items per page"),
     download_repository: DownloadRepository = Depends(get_download_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Downloads page with pagination.
 
@@ -495,12 +498,46 @@ async def downloads(
         page: Page number (1-indexed)
         limit: Items per page (default 100, max 500)
         download_repository: Download repository
+        session: DB session for direct queries
     """
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
+
     # Calculate offset
     offset = (page - 1) * limit
 
-    # Fetch paginated downloads from DB
-    downloads_list = await download_repository.list_active(limit=limit, offset=offset)
+    # Fetch downloads with track info directly (bypassing repository for richer data)
+    # Hey future me - we need joinedload for track AND its artist/album to show title/artist/cover
+    stmt = (
+        select(DownloadModel)
+        .options(
+            joinedload(DownloadModel.track).joinedload(TrackModel.artist),
+            joinedload(DownloadModel.track).joinedload(TrackModel.album),
+        )
+        .where(
+            DownloadModel.status.in_(
+                [
+                    DownloadStatus.WAITING.value,
+                    DownloadStatus.PENDING.value,
+                    DownloadStatus.QUEUED.value,
+                    DownloadStatus.DOWNLOADING.value,
+                    DownloadStatus.COMPLETED.value,
+                    DownloadStatus.FAILED.value,
+                ]
+            )
+        )
+        .order_by(
+            DownloadModel.priority.desc(),
+            DownloadModel.created_at.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(stmt)
+    download_models = result.unique().scalars().all()
+
     total_count = await download_repository.count_active()
 
     # Calculate pagination metadata
@@ -509,8 +546,6 @@ async def downloads(
     has_previous = page > 1
 
     # Fetch stats for the cards at the top
-    from soulspot.domain.entities import DownloadStatus
-
     active_count = await download_repository.count_by_status(
         DownloadStatus.DOWNLOADING.value
     )
@@ -524,22 +559,25 @@ async def downloads(
         DownloadStatus.COMPLETED.value
     )
 
-    # Convert to template-friendly format
-    downloads_data = [
-        {
-            "id": str(download.id.value),
-            "track_id": str(download.track_id.value),
-            "status": download.status.value,
-            "priority": download.priority,
-            "progress_percent": download.progress_percent,
-            "error_message": download.error_message,
-            "started_at": download.started_at.isoformat()
-            if download.started_at
-            else None,
-            "created_at": download.created_at.isoformat(),
-        }
-        for download in downloads_list
-    ]
+    # Convert to template-friendly format with track info
+    downloads_data = []
+    for dl in download_models:
+        track = dl.track
+        downloads_data.append({
+            "id": dl.id,
+            "track_id": dl.track_id,
+            "status": dl.status,
+            "priority": dl.priority,
+            "progress_percent": dl.progress_percent or 0,
+            "error_message": dl.error_message,
+            "started_at": dl.started_at.isoformat() if dl.started_at else None,
+            "created_at": dl.created_at.isoformat() if dl.created_at else None,
+            # Track info for display
+            "title": track.title if track else f"Track {dl.track_id[:8]}",
+            "artist": track.artist.name if track and track.artist else "Unknown Artist",
+            "album": track.album.title if track and track.album else "Unknown Album",
+            "album_art": track.album.artwork_url if track and track.album and hasattr(track.album, "artwork_url") else None,
+        })
 
     return templates.TemplateResponse(
         request,
