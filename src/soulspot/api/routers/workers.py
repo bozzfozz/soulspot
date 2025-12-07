@@ -15,7 +15,7 @@
 # einfach direkt die Worker vom app.state holen.
 """Background worker status API endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -51,13 +51,19 @@ def _format_time_ago(dt: datetime | None) -> str:
 
     Hey future me - diese Funktion macht aus einem Timestamp einen lesbaren String.
     Wird für "Letzter Sync: vor 3 min" im Tooltip verwendet.
+    WICHTIG: Handles both naive und aware datetimes (von unterschiedlichen Workern)!
     """
     if dt is None:
         return "noch nie"
 
-    now = datetime.utcnow()
+    # Get current time in UTC (aware)
+    now = datetime.now(timezone.utc)
+    
+    # If dt is naive (no timezone), assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    
     diff = now - dt
-
     seconds = int(diff.total_seconds())
 
     if seconds < 60:
