@@ -2,10 +2,11 @@
 
 Konsolidierte AI-Agenten für effiziente Entwicklung.
 
-## Agent-Struktur (6 Agents)
+## Agent-Struktur (7 Agents)
 
 ```
 .github/agents/
+├── idea-generator-agent.md       # Brainstorming, App Ideas, Fun Ideation
 ├── planner-agent.md              # Planning, Specs, Strategy
 ├── backend-agent.md              # Python, FastAPI, Backend
 ├── frontend-agent-pro.md         # HTMX, Templates, UI
@@ -17,11 +18,12 @@ Konsolidierte AI-Agenten für effiziente Entwicklung.
 ## Workflow
 
 ```
-plan: → backend:/frontend: → test: → arch: → review: → PR
+idea: → plan:/spec: → backend:/frontend: → test: → arch: → review: → PR
 ```
 
 | Schritt | Agent | Präfix |
 |---------|-------|--------|
+| 0. Ideation | idea-generator-agent | `idea:`, `brainstorm:` |
 | 1. Planung | planner-agent | `plan:`, `spec:` |
 | 2. Backend | backend-agent | `backend:`, `api:` |
 | 3. Frontend | frontend-agent-pro | `frontend:`, `ui:` |
@@ -30,6 +32,14 @@ plan: → backend:/frontend: → test: → arch: → review: → PR
 | 6. Review | review-agent | `review:`, `docs:`, `security:` |
 
 ## Agent-Beschreibungen
+
+### 0. Idea Generator Agent (`idea:`, `brainstorm:`)
+**Zweck:** App-Ideen durch interaktive Fragen entwickeln
+
+- Brainstorming-Sessions moderieren
+- Nutzer-Anforderungen spielerisch sammeln
+- Scope & Komplexität bewerten
+- Übergang zu Specification vorbereiten
 
 ### 1. Planner Agent (`plan:`, `spec:`)
 **Zweck:** Strategische Planung vor Implementation
@@ -82,6 +92,10 @@ plan: → backend:/frontend: → test: → arch: → review: → PR
 ## Beispiel-Workflow
 
 ```bash
+# 0. Ideation (New App Ideas)
+idea: Brainstorm a productivity app
+brainstorm: What should this app do?
+
 # 1. Planung
 plan: Implement new download queue feature
 
@@ -109,6 +123,44 @@ docs: Update API docs for download endpoints
 parallel: backend: Add API | frontend: Add UI | test: Write tests
 ```
 
+## Idea-to-Implementation Workflow Example 🚀
+
+Complete flow from brainstorming to implementation:
+
+```bash
+# Step 1: Brainstorm App Idea
+idea: I want to build something for managing tasks
+
+# [Interactive Q&A with idea-generator-agent]
+# Agent asks fun questions to explore:
+# - What kind of tasks?
+# - Who would use it?
+# - What makes it special?
+# - Platform preferences?
+
+# Step 2: Transition to Specification
+# Agent declares: "OK! We've got enough to build a specification!"
+# Agent summarizes the idea and suggests:
+
+spec: TaskMaster - Smart Task Management App
+- Gamified task completion
+- Social accountability features
+- Mobile-first design
+- Offline capability
+
+# Step 3: Implementation Planning
+plan: Implement TaskMaster MVP Phase 1
+# Planner creates detailed implementation plan
+
+# Step 4-7: Execute (Backend → Frontend → Test → Review)
+backend: Create task CRUD endpoints
+frontend: Build task list UI with HTMX
+test: Write tests for task management
+review: Final pre-PR check
+```
+
+This shows the complete journey from "I have an idea!" to production-ready code! ✨
+
 ## Archivierte Agents (Konsolidiert)
 
 | Alt (12 Agents) | Neu (6 Agents) |
@@ -127,7 +179,9 @@ parallel: backend: Add API | frontend: Add UI | test: Write tests
 
 | Scenario | Agent | Präfix |
 |----------|-------|--------|
+| App-Idee brainstormen | idea-generator-agent | `idea:`, `brainstorm:` |
 | Neue Feature planen | planner-agent | `plan:` |
+| Specification erstellen | planner-agent | `spec:` |
 | API Endpoints schreiben | backend-agent | `backend:` |
 | HTMX UI bauen | frontend-agent | `frontend:` |
 | Tests schreiben | qa-agent | `test:` |
@@ -214,6 +268,6 @@ Agents are successful when they:
 
 ---
 
-**Last Updated:** 2024-11-24
-**Total Agents:** 9 (4 existing + 5 new)
-**Total Lines:** ~2,920 lines of agent instructions
+**Last Updated:** 2024-12-08
+**Total Agents:** 7 (idea-generator + 6 core agents)
+**Total Lines:** ~12,000+ lines of agent instructions
