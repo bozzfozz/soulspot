@@ -169,7 +169,7 @@ Diese Analyse vergleicht **fertiggestellte Features** mit **ursprünglich geplan
 
 | Gap | Beschreibung | Empfohlene Aktion |
 |-----|--------------|-------------------|
-| **CSRF Protection** | Fehlt komplett | Implementieren (Plan vorhanden: [docs/development/CSRF_IMPLEMENTATION_PLAN.md](../development/CSRF_IMPLEMENTATION_PLAN.md)) |
+| **CSRF Protection** | Fehlt komplett | Implementieren (OAuth CSRF bereits implementiert, siehe auth.py) |
 | **Rate Limiting** | API ohne Schutz | Implementieren vor Production |
 
 ### 3.2 Wichtige Lücken (P1)
@@ -354,7 +354,7 @@ Background Check: Pause Queue außerhalb, Resume innerhalb
 
 ## 7. Nächste Schritte
 
-1. **Sofort:** [CSRF Implementation Plan](../development/CSRF_IMPLEMENTATION_PLAN.md) reviewen und umsetzen
+1. **Sofort:** CSRF protection review (OAuth CSRF bereits implementiert in auth.py)
 2. **Diese Woche:** Download Statistics Widget als Quick Win
 3. **Nächste Sprint:** One-Click Library Health Check
 4. **Langfristig:** Smart Re-Download Feature planen

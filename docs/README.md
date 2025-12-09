@@ -62,7 +62,7 @@ Complete documentation for all implemented features:
 - **[Automation & Watchlists](features/automation-watchlists.md)** - Artist watchlists and automation rules
 - **[Followed Artists](features/followed-artists.md)** - Spotify followed artists sync
 - **[Library Management](features/library-management.md)** - Scans, duplicates, broken files
-- **[Authentication](features/authentication.md)** - Spotify OAuth and session management
+- **[Authentication](api/auth-api.md)** - Spotify OAuth and session management
 - **[Track Management](features/track-management.md)** - Track search, download, metadata editing
 - **[Settings](features/settings.md)** - Application configuration
 
@@ -130,15 +130,12 @@ Development planning and guidelines:
 - **[Performance Optimization](development/performance-optimization.md)** - Performance best practices
 - **[SQLite Operations](development/sqlite-operations.md)** - SQLite configuration and usage
 - **[SQLite Best Practices](development/SQLITE_BEST_PRACTICES.md)** - SQLite development guidelines
-- **[CSRF Implementation](development/CSRF_IMPLEMENTATION_PLAN.md)** - CSRF protection plan
 - **[Testing Documentation](development/testing/)** - Test guides and reports
 
 ### Implementation Documentation (`implementation/`)
 Detailed implementation guides:
 - **[Dashboard Implementation](implementation/dashboard-implementation.md)** - Dashboard system details
-- **[Onboarding UI Implementation](implementation/onboarding-ui-implementation.md)** - Onboarding flow
-- **[Onboarding UI Overview](implementation/onboarding-ui-overview.md)** - Onboarding design
-- **[Onboarding Visual Guide](implementation/onboarding-ui-visual-guide.md)** - Onboarding visuals
+- **[Onboarding UI Overview](implementation/onboarding-ui-overview.md)** - Comprehensive onboarding guide
 
 **Feature Implementations** (`implementation/features/`)
 - **[Circuit Breaker](implementation/features/circuit-breaker.md)** - Circuit breaker pattern

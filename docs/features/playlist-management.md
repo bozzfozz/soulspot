@@ -228,4 +228,4 @@ graph TD
 
 - [Download Management](./download-management.md) - Für das Herunterladen der Tracks
 - [Track Management](./track-management.md) - Für die Verwaltung einzelner Tracks
-- [Authentication](./authentication.md) - Für die Spotify-Verbindung
+- [Authentication](../api/auth-api.md) - Für die Spotify-Verbindung

@@ -13,16 +13,6 @@ This directory contains API documentation for SoulSpot version 1.0.
 
 ## Available APIs
 
-### [Spotify Sync API](spotify-sync-api.md) ⭐ NEU
-Control Spotify auto-sync settings and trigger manual synchronization.
-
-**Key Features:**
-- Runtime-configurable sync settings (stored in DB)
-- Toggle individual sync types (Artists, Playlists, Liked Songs, Albums)
-- Manual sync triggers
-- Disk usage statistics for cached images
-- Cleanup behavior configuration
-
 ### [Advanced Search API](advanced-search-api.md)
 Advanced search capabilities for tracks, albums, and artists with filtering, sorting, and pagination.
 
@@ -53,36 +43,6 @@ Control and monitor download operations from the Soulseek network.
 - Retry logic
 - Bandwidth controls
 
-### [Spotify Album API](spotify-album-api.md)
-Documentation for Spotify Album API integration including endpoints, data models, and sync strategies.
-
-**Key Features:**
-- Album metadata fetching (single and batch)
-- DB schema design for album storage
-- UPC-based deduplication strategy
-- Release date precision handling
-- Rate limiting and error handling
-
-### [Spotify Songs Roadmap](spotify-songs-roadmap.md)
-Comprehensive roadmap for Spotify API Songs/Tracks integration status.
-
-**Key Features:**
-- Implementation status matrix
-- Currently available capabilities
-- Missing features with priorities
-- Phased implementation roadmap
-- Technical implementation details
-
-### [Spotify Metadata Reference](spotify-metadata-reference.md)
-Comprehensive reference for Spotify API metadata fields used in Soulspot.
-
-**Key Features:**
-- Field reference by entity type (Artist, Album, Track, Playlist)
-- Priority levels (Minimal vs. Optional)
-- Index recommendations
-- Storage type guidance
-- Cross-source matching strategies (ISRC, UPC, MusicBrainz)
-- Rate limits and authentication practicalities
 ### [Spotify Tracks API](spotify-tracks.md)
 Integration with Spotify Web API for track/song data management.
 

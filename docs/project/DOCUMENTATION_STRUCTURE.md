@@ -72,9 +72,7 @@ docs/
 │   └── performance-optimization.md
 ├── implementation/             # Implementation details
 │   ├── dashboard-implementation.md  # Consolidated dashboard guide
-│   ├── onboarding-ui-implementation.md
-│   ├── onboarding-ui-overview.md
-│   ├── onboarding-ui-visual-guide.md
+│   ├── onboarding-ui-overview.md    # Comprehensive onboarding guide
 │   └── features/
 │       ├── circuit-breaker.md
 │       └── soulspot-ideas.md

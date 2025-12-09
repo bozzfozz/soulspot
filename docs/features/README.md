@@ -21,10 +21,7 @@ Diese Dokumentation beschreibt alle implementierten Features von SoulSpot. Jedes
 | [Metadata Enrichment](./metadata-enrichment.md) | Multi-Source Metadaten-Anreicherung (Spotify, MusicBrainz, Last.fm) | ✅ Implementiert |
 | [Automation & Watchlists](./automation-watchlists.md) | Artist-Watchlists, automatische Downloads, Filter-Regeln | ✅ Implementiert |
 | [Followed Artists](./followed-artists.md) | Sync und Verwaltung gefolgter Spotify-Künstler | ✅ Implementiert |
-| [Artists Roadmap](./artists-roadmap.md) | Spotify Artist API: Was nutzen wir? Was ist möglich? | 📋 Roadmap |
-| [Spotify Albums Roadmap](./spotify-albums-roadmap.md) | Spotify Album API: Implementiert vs. Fehlend | 📋 Roadmap |
 | [Library Management](./library-management.md) | Bibliotheks-Scan, Duplikaterkennung, defekte Dateien | ✅ Implementiert |
-| [Authentication](./authentication.md) | Spotify OAuth, Session-Management, Multi-Device Support | ✅ Implementiert |
 | [Track Management](./track-management.md) | Track-Suche, Download, Metadaten-Bearbeitung | ✅ Implementiert |
 | [Settings](./settings.md) | Anwendungseinstellungen und Konfiguration | ✅ Implementiert |
 

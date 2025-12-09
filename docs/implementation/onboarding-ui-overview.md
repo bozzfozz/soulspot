@@ -10,8 +10,6 @@ This document provides a complete overview of the onboarding UI implementation f
 
 ## Quick Links
 
-- **Technical Documentation:** [onboarding-ui-implementation.md](./onboarding-ui-implementation.md)
-- **Visual Guide & Mockups:** [onboarding-ui-visual-guide.md](./onboarding-ui-visual-guide.md)
 - **UI 1.0 Design System:** [ui/README_UI_1_0.md](./ui/README_UI_1_0.md)
 - **Frontend Roadmap:** [development/frontend-roadmap.md](./development/frontend-roadmap.md)
 
@@ -197,9 +195,7 @@ curl http://localhost:8000/api/auth/authorize
 ```
 soulspot/
 ├── docs/
-│   ├── onboarding-ui-implementation.md    ← Technical docs
-│   ├── onboarding-ui-visual-guide.md      ← Visual mockups
-│   └── onboarding-ui-overview.md          ← This file
+│   └── onboarding-ui-overview.md          ← This file (comprehensive guide)
 ├── src/soulspot/
 │   ├── api/routers/
 │   │   ├── ui.py                          ← +1 route: /onboarding
@@ -576,9 +572,8 @@ Check logs for:
 - `src/soulspot/static/css/ui-theme.css`
 - `src/soulspot/static/css/ui-components.css`
 - `src/soulspot/static/css/ui-layout.css`
-- `docs/onboarding-ui-implementation.md`
-- `docs/onboarding-ui-visual-guide.md`
-- `docs/onboarding-ui-overview.md`
+**Files Created:**
+- `docs/onboarding-ui-overview.md` (this comprehensive guide)
 
 **Files Modified:**
 - `src/soulspot/templates/base.html`
@@ -595,8 +590,6 @@ Check logs for:
 ## References
 
 ### Internal Documentation
-- [Technical Implementation](./onboarding-ui-implementation.md)
-- [Visual Guide](./onboarding-ui-visual-guide.md)
 - [UI 1.0 Design System](./ui/README_UI_1_0.md)
 - [Frontend Roadmap](./development/frontend-roadmap.md)
 
