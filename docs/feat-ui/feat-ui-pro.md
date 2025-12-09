@@ -2,8 +2,7 @@
 
 **Version**: 1.0  
 **Status**: 🎯 Ready for Implementation  
-**Date**: December 7, 2025  
-**Related**: [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md), [COMPONENT_LIBRARY.md](./COMPONENT_LIBRARY.md)
+**Date**: December 7, 2025
 
 ---
 
@@ -1520,11 +1519,11 @@ python scripts/validate-css.py src/soulspot/static/new-ui/css/
 
 | Doc | Location | Purpose |
 |-----|----------|---------|
-| **Design System** | `docs/feat-ui/DESIGN_SYSTEM.md` | Colors, typography, spacing |
-| **Component Library** | `docs/feat-ui/COMPONENT_LIBRARY.md` | Component reference + examples |
-| **Developer Guide** | `docs/feat-ui/DEVELOPER_GUIDE.md` | How to build new components |
+| **Master Plan** | `docs/feat-ui/feat-ui-pro.md` | Complete implementation guide |
+| **Accessibility Guide** | `docs/feat-ui/ACCESSIBILITY_GUIDE.md` | A11Y patterns & testing |
+| **Service Agnostic Strategy** | `docs/feat-ui/SERVICE_AGNOSTIC_STRATEGY.md` | Multi-service architecture |
+| **Quality Gates** | `docs/feat-ui/QUALITY_GATES_A11Y.md` | Testing & quality enforcement |
 | **Changelog** | `CHANGELOG.md` | Version history |
-| **Migration Guide** | `docs/feat-ui/MIGRATION.md` | Old → New component mapping |
 
 ---
 
