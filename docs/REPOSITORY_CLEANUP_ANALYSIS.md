@@ -83,8 +83,8 @@
 
 **Root Level:**
 - ✅ `README.md` (main project documentation)
-- ✅ `NPM_SETUP.md` (active npm setup reference)
-- ✅ `SPOTIFY_SETUP.md` (active onboarding guide)
+- ❌ `NPM_SETUP.md` (previously deleted - was active npm setup reference)
+- ❌ `SPOTIFY_SETUP.md` (previously deleted - was active onboarding guide)
 - ✅ `test_spotify_integration.py` (manual OAuth verification, no proper integration test exists)
 
 **Scripts:**
