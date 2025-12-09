@@ -1,5 +1,14 @@
 # Justfile for SoulSpot Bridge
 # Alternative to Makefile using Just (https://github.com/casey/just)
+#
+# ⚠️ DEPRECATED - DUPLICATE: This Justfile is a complete duplicate of Makefile with no unique
+# commands. Use Makefile instead:
+#   make install
+#   make test
+#   make lint
+#   make format
+#
+# Historical Just command runner. All commands available in Makefile.
 
 # Show available recipes
 default:

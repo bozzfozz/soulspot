@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Script to capture UI screenshots for documentation."""
+"""Script to capture UI screenshots for documentation.
+
+⚠️ DEPRECATED - ONE-TIME TASK: This script was used to capture initial UI screenshots for
+documentation (stored in docs/ui-screenshots/). Screenshots already captured.
+
+Historical screenshot capture script. For new screenshots, update manually or adapt this script.
+"""
 
 import asyncio
 import time

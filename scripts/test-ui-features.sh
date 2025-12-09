@@ -1,6 +1,11 @@
 #!/bin/bash
 # Quick Testing Script for SoulSpot UI Enhancements
 # Run this after deploying Phase 1 & 2 features
+#
+# ⚠️ DEPRECATED - ONE-TIME CHECKLIST: This script was used for manual UI testing after
+# Phase 1 & 2 deployment (Nov 2025). All features tested and deployed.
+#
+# Historical manual testing checklist. For current testing, use pytest (tests/integration/).
 
 set -e
 

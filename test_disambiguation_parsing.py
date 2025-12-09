@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Test script for artist folder parsing with disambiguation handling."""
+"""Test script for artist folder parsing with disambiguation handling.
+
+⚠️ DEPRECATED - SUPERSEDED: This manual test script is superseded by proper unit tests in:
+- tests/unit/domain/test_folder_parsing.py
+
+Historical ad-hoc testing script only. Use pytest for testing:
+    pytest tests/unit/domain/test_folder_parsing.py -v
+"""
 
 import sys
 from pathlib import Path
