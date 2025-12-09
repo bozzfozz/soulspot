@@ -1,7 +1,14 @@
 # Version 3.0 Adoption Recommendations
 
+> **⚠️ DEPRECATED - UNREALIZED VERSION:** Version 3.0 was **never implemented**, so these adoption recommendations are obsolete. Current production is **v0.1.0 with Hexagonal Architecture**.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 1.0.0  
-**Status:** Empfehlung  
+**Status:** ~~Empfehlung~~ UNREALIZED PROPOSAL  
 **Erstellt:** 2025-11-25  
 **Autor:** Integration Orchestrator Agent
 

@@ -1,6 +1,13 @@
 # Authentication & Settings Architecture
 
-**Document Status**: Architecture Specification  
+> **⚠️ DEPRECATED - UNREALIZED ARCHITECTURE:** This v3.0 auth design was **never implemented**. Current authentication uses OAuth PKCE flow (`src/soulspot/api/routers/auth.py`). See `docs/api/auth-api.md` and `docs/api/settings-api.md` for actual implementation.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
+**Document Status**: ~~Architecture Specification~~ UNREALIZED PROPOSAL  
 **Last Updated**: 2025-11-22  
 **Target Audience**: Developers implementing authentication and settings persistence
 

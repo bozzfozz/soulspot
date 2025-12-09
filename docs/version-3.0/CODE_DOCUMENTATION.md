@@ -1,7 +1,14 @@
 # Code Documentation Standards (Version 3.0)
 
+> **⚠️ DEPRECATED - UNREALIZED STANDARDS:** These documentation standards were for v3.0 that was **never implemented**. Current code follows mypy strict mode + Google docstring style. See `.github/instructions/python.instructions.md` for actual standards.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED PROPOSAL  
 **Last Updated:** 2025-11-22
 
 ---

@@ -1,7 +1,14 @@
 # SoulSpot - Module Specification Template (Version 3.0)
 
+> **⚠️ DEPRECATED - UNREALIZED SPECIFICATION:** This module system was **never implemented**. Current production (v0.1.0) uses Hexagonal Architecture without module boundaries. See `docs/project/architecture.md` for actual structure.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED PROPOSAL  
 **Last Updated:** 2025-11-21
 
 ---

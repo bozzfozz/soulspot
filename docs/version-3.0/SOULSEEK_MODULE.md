@@ -1,8 +1,15 @@
 # Soulseek Module - Complete Design Specification
 
+> **⚠️ DEPRECATED - UNREALIZED MODULE:** This modular Soulseek design was **never implemented**. Current slskd integration uses Hexagonal Architecture (`src/soulspot/infrastructure/integrations/slskd_client.py`). See `docs/api/download-management.md` for actual implementation.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Module:** Soulseek Download Management  
 **Version:** 1.0.0  
-**Status:** Design Phase  
+**Status:** ~~Design Phase~~ UNREALIZED MODULE  
 **Last Updated:** 2025-11-21
 
 ---

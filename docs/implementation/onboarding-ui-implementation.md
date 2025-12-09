@@ -1,5 +1,12 @@
 # Onboarding UI Implementation Documentation
 
+> **⚠️ DEPRECATED:** This file is superseded by **onboarding-ui-overview.md** (comprehensive guide).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Overview
 
 This document describes the implementation of the onboarding UI for SoulSpot, following the problem statement requirements and using the UI 1.0 Design System.
@@ -450,6 +457,8 @@ While the UI 1.0 Design System provides comprehensive tokens, the following coul
 - **Frontend Roadmap:** `/docs/development/frontend-roadmap.md`
 - **HTMX Documentation:** https://htmx.org/docs/
 - **WCAG 2.1 Guidelines:** https://www.w3.org/WAI/WCAG21/quickref/
+
+</details>
 
 ---
 

@@ -1,7 +1,15 @@
 # Authentication
 
+> **⚠️ DEPRECATED:** This feature guide is superseded by **docs/api/auth-api.md** (comprehensive API reference with 9 endpoints, OAuth flow, session management).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-25
+> **Last Updated:** 2025-11-25  
+> **Status:** ~~Active~~ SUPERSEDED by auth-api.md
 
 ---
 

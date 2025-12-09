@@ -1,8 +1,17 @@
 # SoulSpot – Development Roadmap (Index)
 
+> **⚠️ DEPRECATED:** This roadmap index is outdated (2025-11-12). Active roadmaps are:
+> - **Backend:** `docs/development/backend-roadmap.md`
+> - **Frontend:** `docs/development/frontend-roadmap.md`
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Last Updated:** 2025-11-12  
 > **Version:** 0.1.0 (Alpha)  
-> **Status:** Roadmap Split Complete - Now Organized by Domain
+> **Status:** ~~Roadmap Split Complete - Now Organized by Domain~~ OUTDATED INDEX
 
 ---
 

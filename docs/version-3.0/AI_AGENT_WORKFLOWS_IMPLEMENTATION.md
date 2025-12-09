@@ -1,5 +1,12 @@
 # AI Agent Workflows - Praktische Implementierung für SoulSpot
 
+> **⚠️ DEPRECATED - UNREALIZED WORKFLOWS:** These AI agent workflows for v3.0 were **never implemented**. This document is from planning phase only.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Inhaltsverzeichnis
 
 1. [Quick Start](#quick-start)

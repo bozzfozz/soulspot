@@ -1,8 +1,15 @@
 # Nice-to-Have Features for Version 3.0
 
+> **⚠️ DEPRECATED - UNREALIZED FEATURES:** These nice-to-have features were for v3.0 that was **never implemented**. This document is from planning phase only.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 This document lists **optional** features identified from the Version 2.x codebase and additional enhancements that could be implemented in Version 3.0 but are **not part of the core roadmap**. These are valuable features that enhance the system but can be implemented after the core modular architecture is stable.
 
-> **Status**: Optional - Not blocking for v3.0 release
+> **Status**: ~~Optional - Not blocking for v3.0 release~~ UNREALIZED PROPOSAL
 > 
 > **Implementation Priority**: Post-MVP (Minimum Viable Product)
 > 

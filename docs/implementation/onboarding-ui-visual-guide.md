@@ -1,5 +1,12 @@
 # Onboarding UI Visual Guide
 
+> **⚠️ DEPRECATED:** This file is superseded by **onboarding-ui-overview.md** (comprehensive guide).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Screenshots & Visual Mockups
 
 Since we cannot take actual screenshots in this environment, here's a detailed visual description of the onboarding UI states:
@@ -351,6 +358,8 @@ From UI 1.0 Design System (`theme.css`):
 - Option to skip for later
 - Smooth transition to dashboard
 - Professional first impression
+
+</details>
 
 ---
 

@@ -1,5 +1,12 @@
 # AI Agent Workflows für SoulSpot v3.0
 
+> **⚠️ DEPRECATED - UNREALIZED WORKFLOWS:** These v3.0 AI agent workflows were **never implemented**. This document is from planning phase only.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Inhaltsverzeichnis
 
 1. [Übersicht](#übersicht)

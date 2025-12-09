@@ -1,7 +1,14 @@
 # Architektur-Reflexion: Was ich beim modularen System anders gemacht hätte
 
+> **⚠️ DEPRECATED - UNREALIZED LESSONS:** These lessons learned are from v3.0 modular architecture planning that was **never implemented**. Current production (v0.1.0) uses Hexagonal Architecture.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Lessons Learned  
+**Status:** ~~Lessons Learned~~ UNREALIZED PROPOSAL  
 **Erstellt:** 2025-11-24  
 **Autor:** Integration Orchestrator Agent  
 **Sprache:** Deutsch (mit englischen Fachbegriffen und Code-Kommentaren)

@@ -1,7 +1,14 @@
 # Error Messaging Standards (Version 3.0)
 
+> **⚠️ DEPRECATED - UNREALIZED STANDARDS:** These error messaging standards were for v3.0 that was **never implemented**. Current error handling uses FastAPI HTTPException. See actual implementation in `src/soulspot/api/routers/`.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED PROPOSAL  
 **Last Updated:** 2025-11-22
 
 ---

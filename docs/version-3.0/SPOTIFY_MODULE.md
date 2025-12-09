@@ -1,8 +1,15 @@
 # Spotify Module - Complete Specification (Version 3.0)
 
+> **⚠️ DEPRECATED - UNREALIZED MODULE:** This modular Spotify design was **never implemented**. Current Spotify integration uses Hexagonal Architecture (`src/soulspot/infrastructure/integrations/spotify_client.py`). See `docs/api/spotify-*.md` for actual API documentation.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Module Name:** `spotify`  
 **Version:** 1.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED MODULE  
 **Last Updated:** 2025-11-22
 
 ---

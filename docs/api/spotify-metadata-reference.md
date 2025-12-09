@@ -1,7 +1,15 @@
 # Spotify API Metadata Reference
 
+> **⚠️ DEPRECATED:** This metadata reference is superseded by **docs/api/metadata-api.md** (comprehensive API reference with 6 endpoints, multi-source enrichment, authority hierarchy).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-25
+> **Last Updated:** 2025-11-25  
+> **Status:** ~~Active~~ SUPERSEDED by metadata-api.md
 
 ---
 

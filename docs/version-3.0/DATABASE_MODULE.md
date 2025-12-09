@@ -1,5 +1,12 @@
 # Database Module - Version 3.0
 
+> **⚠️ DEPRECATED - UNREALIZED MODULE:** This Database Module design was **never implemented**. Current database layer uses SQLAlchemy async repositories (`src/soulspot/infrastructure/persistence/repositories.py`). See `docs/project/architecture.md` for actual persistence layer.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Overview
 
 The **Database Module** is a core infrastructure module that manages all database read/write operations for the entire SoulSpot system. All other modules access the database exclusively through the Database Module, which provides caching, transaction management, and query optimization.

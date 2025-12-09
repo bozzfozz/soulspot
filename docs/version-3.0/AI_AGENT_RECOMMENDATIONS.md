@@ -1,5 +1,12 @@
 # AI Agent Recommendations for SoulSpot v3.0
 
+> **⚠️ DEPRECATED - UNREALIZED VERSION:** These AI agent recommendations were for v3.0 implementation that **never happened**. This document is from planning phase only.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Executive Summary
 
 This document provides research-backed recommendations for AI models and agents specialized in backend and frontend implementation to ensure 100% complete, error-free code generation for SoulSpot Version 3.0.

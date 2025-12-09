@@ -1,5 +1,12 @@
 # Onboarding Flow - Version 3.0
 
+> **⚠️ DEPRECATED - UNREALIZED FEATURE:** This .env-less onboarding was **never implemented**. Current onboarding uses wizard UI with manual .env setup (`src/soulspot/api/routers/onboarding.py`). See `docs/api/onboarding-api.md` for actual implementation.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Overview
 
 Version 3.0 **completely removes .env configuration** and replaces it with a **guided, interactive onboarding flow**. All critical credentials (Spotify, Soulseek, etc.) are collected through the UI with **real-time connection testing** to ensure everything works before proceeding.

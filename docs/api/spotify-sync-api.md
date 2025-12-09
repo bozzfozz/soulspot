@@ -1,8 +1,16 @@
 # Spotify Sync API
 
+> **⚠️ DEPRECATED:** This API doc is superseded by **docs/api/settings-api.md** (Spotify Sync section covers all 8 sync endpoints). For architecture/worker details, see **docs/features/spotify-sync.md**.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.1  
 > **Last Updated:** 2025-01-15  
-> **Base Path:** `/api/settings`
+> **Base Path:** `/api/settings`  
+> **Status:** ~~Active~~ SUPERSEDED by settings-api.md
 
 ---
 

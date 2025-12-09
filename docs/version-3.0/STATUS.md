@@ -1,9 +1,16 @@
 # Version 3.0 Modular Architecture - Implementation Status
 
-**Document Status:** 📋 **PLANNING & SPECIFICATION ONLY**  
+> **⚠️ DEPRECATED - UNREALIZED VISION:** Version 3.0 modular architecture was **never implemented**. Current production is **v0.1.0 with Hexagonal Architecture**. See `docs/development/backend-roadmap.md` for actual roadmap.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
+**Document Status:** 📋 ~~PLANNING & SPECIFICATION ONLY~~ UNREALIZED PROPOSAL  
 **Active Codebase Version:** 0.1.0 (Monolithic, production-ready since 2025-11-08)  
 **Phase 1-2 UI Enhancements:** ✅ Live (2025-11-26)  
-**v3.0 Implementation Start:** Q1 2026 (Planned)  
+**v3.0 Implementation Start:** ~~Q1 2026 (Planned)~~ NEVER STARTED  
 **Last Updated:** 2025-11-26
 
 ---

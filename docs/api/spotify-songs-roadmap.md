@@ -1,3 +1,19 @@
+# ⚠️ DEPRECATED - Spotify API Songs Roadmap
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [artist-songs-api.md](./artist-songs-api.md) (to be created) or [tracks-api.md](../features/track-management.md)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Roadmap is outdated. `artist_songs.py` router exists with 5 endpoints implementing artist discography management. Tracks are managed via `tracks.py` (5 endpoints). This document is now historical.
+
+**DO NOT USE THIS FILE. For current artist song management, see implemented features in:**
+- **API Reference:** Create new `docs/api/artist-songs-api.md` based on `src/soulspot/api/routers/artist_songs.py`
+- **Feature Docs:** [track-management.md](../features/track-management.md)
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
+
 # Spotify API Songs Roadmap
 
 > **Version:** 1.0  
@@ -48,6 +64,8 @@ Diese Dokumentation bietet einen umfassenden Überblick über die Spotify API So
 |------|--------|-------------|------------|
 | `spotify_id` (via URI) | ✅ | `spotify_uri` | Identifikation |
 | `name`/`title` | ✅ | `title` | Anzeige, Suche |
+
+</details>
 | `duration_ms` | ✅ | `duration_ms` | Anzeige, Matching |
 | `track_number` | ✅ | `track_number` | Album-Zuordnung |
 | `disc_number` | ✅ | `disc_number` | Multi-Disc Alben |

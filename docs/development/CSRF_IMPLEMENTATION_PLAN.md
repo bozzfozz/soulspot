@@ -1,5 +1,12 @@
 # CSRF Protection Implementation Plan
 
+> **⚠️ DEPRECATED - PARTIALLY IMPLEMENTED:** OAuth CSRF protection is complete (2025, see `auth.py` lines 134-137). General form CSRF protection (X-CSRF-Token headers) remains as future enhancement.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Overview
 Cross-Site Request Forgery (CSRF) protection is needed for state-changing operations (POST, PUT, DELETE, PATCH).
 

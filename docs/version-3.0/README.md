@@ -1,7 +1,14 @@
 # SoulSpot - Version 3.0 Architecture Documentation
 
+> **⚠️ DEPRECATED - UNREALIZED VISION:** This folder contains architectural proposals for v3.0 modular rewrite that was **never implemented**. Current production (v0.1.0) uses **Hexagonal Architecture** (see `docs/project/architecture.md`).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED PROPOSAL  
 **Created:** 2025-11-21  
 **Purpose:** Modular Architecture Design and Specification
 

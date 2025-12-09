@@ -1,8 +1,15 @@
 # Spotify Albums API Roadmap
 
+> **⚠️ DEPRECATED:** This roadmap is outdated. Albums are managed via artists/playlists (no dedicated albums.py router). See **docs/api/library-management-api.md** for album operations.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.2  
 > **Last Updated:** 2025-11-26  
-> **Status:** Phase 1 abgeschlossen (Core Album API + Frontend implementiert)
+> **Status:** ~~Phase 1 abgeschlossen~~ ROADMAP FORMAT OUTDATED
 
 ---
 

@@ -1,8 +1,15 @@
 # Spotify API Playlist Roadmap
 
+> **⚠️ DEPRECATED:** This roadmap is outdated. Playlist management is fully implemented and documented in **docs/features/playlist-management.md** and **docs/api/playlists-api.md** (if exists).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-25  
-> **Status:** Active Development
+> **Status:** ~~Active Development~~ SUPERSEDED
 
 ---
 
@@ -347,3 +354,5 @@ async def should_sync_playlist(playlist_id: str) -> bool:
 ---
 
 *Diese Roadmap wird kontinuierlich aktualisiert, wenn neue Features implementiert werden.*
+
+</details>

@@ -1,7 +1,17 @@
 # Deezer Integration
 
+> **⚠️ PLANNED (NOT DEPRECATED):** Deezer integration is planned but not yet implemented. This is design documentation for future implementation.  
+> **Status:** Design/Specification Phase  
+> **Implementation:** NOT STARTED
+
+<details>
+<summary><strong>📁 Design Documentation (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.0  
-> **Last Updated:** 2025-12-05
+> **Last Updated:** 2025-12-05  
+> **Status:** PLANNED (Design Phase)
 
 ---
 
@@ -257,4 +267,6 @@ service = LocalLibraryEnrichmentService(...)
 stats = await service.enrich_batch_deezer_only()
 # Nutzt nur Deezer API - kein Spotify OAuth nötig!
 ```
+
+</details>
 

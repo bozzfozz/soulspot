@@ -1,7 +1,14 @@
 # Module Communication Patterns (Version 3.0)
 
+> **⚠️ DEPRECATED - UNREALIZED PATTERNS:** These module communication patterns were **never implemented**. Current architecture uses Hexagonal dependency inversion (ports/adapters) instead of inter-module messaging. See `docs/project/architecture.md` for actual patterns.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 **Version:** 3.0.0  
-**Status:** Planning Phase  
+**Status:** ~~Planning Phase~~ UNREALIZED PROPOSAL  
 **Last Updated:** 2025-11-21
 
 ---

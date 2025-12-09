@@ -1,7 +1,15 @@
 # Spotify Artist API Roadmap
 
+> **⚠️ DEPRECATED:** This roadmap is outdated. Artist API is fully implemented. See **docs/api/spotify-artist-api.md** for complete API reference (9 endpoints).
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 > **Version:** 1.0  
-> **Last Updated:** 2025-11-25
+> **Last Updated:** 2025-11-25  
+> **Status:** ~~Active~~ ROADMAP FORMAT OUTDATED
 
 ---
 

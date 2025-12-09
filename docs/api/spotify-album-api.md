@@ -1,3 +1,17 @@
+# ⚠️ DEPRECATED - Spotify Album API Integration
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [library-management-api.md](./library-management-api.md)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** No dedicated `albums.py` router exists. Album functionality is implemented in `library.py` (35 endpoints) and managed via library management features.
+
+**DO NOT USE THIS FILE. See [library-management-api.md](./library-management-api.md) for current album management API.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
+
 # Spotify Album API Integration
 
 > **Version:** 1.0  
@@ -48,6 +62,8 @@ Diese Dokumentation beschreibt die Spotify Album API und wie sie in SoulSpot int
 | `external_ids` | `JSONB` | `{upc: "..."}` - kritisch für Dedup! |
 | `label` | `TEXT` | Plattenlabel |
 | `last_synced_at` | `TIMESTAMPTZ` | Zeitpunkt der letzten Synchronisation |
+
+</details>
 | `raw_json` | `JSONB` | Komplettes API-Response für spätere Nutzung |
 
 ### Optionale Felder

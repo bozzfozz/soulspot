@@ -1,5 +1,12 @@
 # UI Design System - Version 3.0
 
+> **⚠️ DEPRECATED - UNREALIZED DESIGN:** This v3.0 card-based UI was **never implemented**. Current UI uses HTMX + Pure CSS (`src/soulspot/templates/`). See `docs/feat-ui/README.md` and `docs/development/design-guidelines.md` for actual UI system.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
 ## Overview
 
 Version 3.0 replaces the current widget-based UI with a **clean, card-based design system**. This document defines the UI card catalog, design patterns, and component specifications to ensure consistency and prevent "UI garbage".

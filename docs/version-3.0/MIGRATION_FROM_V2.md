@@ -1,6 +1,13 @@
 # Migration from Version 2.x to Version 3.0
 
-**Document Status**: Architecture Specification  
+> **⚠️ DEPRECATED - UNREALIZED MIGRATION:** Version 3.0 was **never implemented**, so no migration occurred. Current production is **v0.1.0 with Hexagonal Architecture**. This document is from planning phase only.
+
+<details>
+<summary><strong>📁 Archived Content (Click to Expand)</strong></summary>
+
+---
+
+**Document Status**: ~~Architecture Specification~~ UNREALIZED PROPOSAL  
 **Last Updated**: 2025-11-22  
 **Target Audience**: Developers implementing Version 3.0
 
