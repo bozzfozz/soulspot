@@ -240,5 +240,5 @@ alembic upgrade head
 ## Verwandte Features
 
 - [Automation & Watchlists](./automation-watchlists.md) - Watchlist-Details und Filter
-- [Authentication](./authentication.md) - Spotify OAuth
+- [Authentication](../api/auth-api.md) - Spotify OAuth
 - [Download Management](./download-management.md) - Download-Queue
