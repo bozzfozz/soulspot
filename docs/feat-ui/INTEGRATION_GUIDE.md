@@ -1,4 +1,16 @@
-# SoulSpot UI Integration Guide
+# ⚠️ DEPRECATED - SoulSpot UI Integration Guide
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) Phase 2-4 (incremental component migration) + [SERVICE_AGNOSTIC_STRATEGY.md](./SERVICE_AGNOSTIC_STRATEGY.md) (component naming)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Generic integration steps. New docs provide specific migration path with service-agnostic naming and backwards compatibility strategy.
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) for current integration strategy.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 This guide details the process of integrating the new UI prototype (located in `docs/feat-ui/prototype/`) into the main SoulSpot application (`src/soulspot/`).
 

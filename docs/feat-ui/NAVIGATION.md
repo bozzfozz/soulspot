@@ -1,4 +1,16 @@
-# SoulSpot UI - Seitenstruktur & Navigation
+# ⚠️ DEPRECATED - SoulSpot UI - Seitenstruktur & Navigation
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** Actual routes in `src/soulspot/api/routers/` + [feat-ui-pro.md](./feat-ui-pro.md) Phase 3 (Command Palette navigation)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Theoretical navigation structure. Actual routes exist in API routers (auth.py, library.py, downloads.py, playlists.py, etc.). Command Palette design in feat-ui-pro.md Phase 3.
+
+**DO NOT USE THIS FILE. See `src/soulspot/api/routers/` for actual routes.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ## 📍 Navigationsstruktur
 

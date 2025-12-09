@@ -1,4 +1,16 @@
-# SoulSpot UI Redesign - Roadmap
+# ⚠️ DEPRECATED - SoulSpot UI Redesign - Roadmap
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) Phase 1-4 (actionable 4-phase plan with specific deliverables)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Generic roadmap without specific implementation details. feat-ui-pro.md provides concrete Phase 1-4 plan with CSS tokens, component specs, A11Y requirements, and quality gates.
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) for current roadmap.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ## Executive Summary
 

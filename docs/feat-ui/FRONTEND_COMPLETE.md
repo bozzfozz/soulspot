@@ -1,4 +1,16 @@
-# SoulSpot - Kompletter Frontend Umbau
+# ⚠️ DEPRECATED - SoulSpot - Kompletter Frontend Umbau
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) v2.0 Master Plan  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** `docs/feat-ui/prototype/` was never integrated into main codebase. Actual UI exists in `src/soulspot/templates/` and `src/soulspot/static/`. Red accent (#fe4155) abandoned in favor of violet (#8b5cf6).
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) for current implementation plan.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ## Übersicht
 

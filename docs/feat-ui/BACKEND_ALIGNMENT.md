@@ -1,7 +1,17 @@
-# Backend Alignment & Integration Strategy
+# ⚠️ DEPRECATED - Backend Alignment & Integration Strategy
 
-> **Status:** Draft
-> **Purpose:** Bridge the gap between the new UI Prototype (`docs/feat-ui/prototype/`) and the existing Backend Architecture (`docs/implementation/`).
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** [SERVICE_AGNOSTIC_STRATEGY.md](./SERVICE_AGNOSTIC_STRATEGY.md) (database schema, API routes, client architecture) + `.github/copilot-instructions.md` Section 4 (Layered Architecture)  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Backend architecture now documented in SERVICE_AGNOSTIC_STRATEGY.md with ISRC-based cross-service matching and domain/infrastructure separation.  
+> **Purpose:** ~~Bridge the gap between the new UI Prototype (`docs/feat-ui/prototype/`) and the existing Backend Architecture (`docs/implementation/`).~~ OUTDATED
+
+**DO NOT USE THIS FILE. See [SERVICE_AGNOSTIC_STRATEGY.md](./SERVICE_AGNOSTIC_STRATEGY.md) for current backend architecture.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 

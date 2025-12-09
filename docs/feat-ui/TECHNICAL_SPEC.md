@@ -1,10 +1,20 @@
-# SoulSpot UI Redesign - Technical Specification
+# ⚠️ DEPRECATED - SoulSpot UI Redesign - Technical Specification
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.0 (DEPRECATED)
 - **Last Updated**: 2025-11-26
-- **Status**: Draft
-- **Related**: [ROADMAP.md](./ROADMAP.md)
+- **Status**: ❌ DEPRECATED
+- **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) Section 6 (Technical Architecture) + [ACCESSIBILITY_GUIDE.md](./ACCESSIBILITY_GUIDE.md) + [QUALITY_GATES_A11Y.md](./QUALITY_GATES_A11Y.md)
+- **Date Deprecated:** 9. Dezember 2025
+- **Reason:** Generic technical specs. New docs provide specific technical architecture with HTMX integration, focus trap implementation, A11Y patterns, and quality enforcement.
+- **Related**: [ROADMAP.md](./ROADMAP.md) ❌ DEPRECATED
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) for current technical architecture.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 

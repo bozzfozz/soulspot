@@ -1,10 +1,20 @@
-# SoulSpot UI - Component Library
+# ⚠️ DEPRECATED - SoulSpot UI - Component Library
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.0 (DEPRECATED)
 - **Last Updated**: 2025-11-26
-- **Status**: Draft
-- **Related**: [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md), [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md)
+- **Status**: ❌ DEPRECATED
+- **Replaced By:** Actual implementations in `src/soulspot/templates/includes/_components.html`, `_design_system.html`, `_skeleton.html` + [feat-ui-pro.md](./feat-ui-pro.md) Phase 2
+- **Date Deprecated:** 9. Dezember 2025
+- **Reason:** Theoretical component specs. Real components now exist in templates/includes/ with Jinja2 macros following Hexagonal Architecture.
+- **Related**: [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) ❌ DEPRECATED, [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md) ❌ DEPRECATED
+
+**DO NOT USE THIS FILE. See `templates/includes/_components.html` for actual component implementations.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 

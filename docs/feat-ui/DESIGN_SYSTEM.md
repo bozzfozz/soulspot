@@ -1,10 +1,20 @@
-# SoulSpot UI - Design System
+# ⚠️ DEPRECATED - SoulSpot UI - Design System
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.0 (DEPRECATED)
 - **Last Updated**: 2025-11-26
-- **Status**: Draft
-- **Related**: [ROADMAP.md](./ROADMAP.md), [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md)
+- **Status**: ❌ DEPRECATED
+- **Replaced By:** `src/soulspot/static/css/variables.css` (actual implementation) + [feat-ui-pro.md](./feat-ui-pro.md) Phase 1
+- **Date Deprecated:** 9. Dezember 2025
+- **Reason:** Color palette (#fe4155 red) conflicts with current implementation (#8b5cf6 violet). Design tokens now maintained in `variables.css` as single source of truth.
+- **Related**: [ROADMAP.md](./ROADMAP.md) ❌ DEPRECATED, [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md) ❌ DEPRECATED
+
+**DO NOT USE THIS FILE. See `src/soulspot/static/css/variables.css` for current design tokens.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 

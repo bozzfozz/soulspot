@@ -1,11 +1,19 @@
-# SoulSpot UI Redesign - Visual Overview
+# ⚠️ DEPRECATED - SoulSpot UI Redesign - Visual Overview
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.0 (DEPRECATED)
 - **Last Updated**: 2025-11-26
-- **Status**: Draft
+- **Status**: ❌ DEPRECATED
+- **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) + actual implementations in `src/soulspot/static/css/` and `src/soulspot/templates/`
+- **Date Deprecated:** 9. Dezember 2025
+- **Reason:** Visual specs outdated. Actual CSS exists in `static/css/variables.css` (violet #8b5cf6, not red #fe4155). Templates exist in `templates/` with HTMX integration.
+
+**DO NOT USE THIS FILE. See `src/soulspot/static/css/variables.css` for current visual design.**
 
 ---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ## Project Timeline
 

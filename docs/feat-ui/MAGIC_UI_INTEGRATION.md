@@ -1,8 +1,18 @@
-# Magic UI Integration Guide
+# ⚠️ DEPRECATED - Magic UI Integration Guide
 
 **Last Updated:** 2. Dezember 2025  
-**Status:** 🟢 Implementierbar — Tailwind Setup vorhanden & getestet  
-**Complexity:** ⭐ Gering — Nur CSS hinzufügen, kein Build-Umbau nötig
+**Status:** ❌ DEPRECATED  
+**Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) Phase 1 (Pure CSS animations via @keyframes)  
+**Date Deprecated:** 9. Dezember 2025  
+**Complexity:** N/A  
+**Reason:** **SoulSpot does NOT use Tailwind CSS or npm build tools.** This document assumes Tailwind exists (`node_modules/tailwindcss`, `tailwind.config.js`) but project uses pure CSS custom properties in `static/css/variables.css`. Magic UI animations now ported as pure CSS @keyframes (see feat-ui-pro.md Phase 1).
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) Phase 1 for build-less CSS animation strategy.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 

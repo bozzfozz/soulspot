@@ -1,9 +1,20 @@
-# Dashboard Magic UI Animation Plan
+# ⚠️ DEPRECATED - Dashboard Magic UI Animation Plan
 
 **Date:** 2. Dezember 2025  
-**Goal:** Enhance Dashboard with Magic UI Animations  
-**Scope:** Stats Cards, Recent Playlists, Activity Feed  
-**Estimated Effort:** 2-3 hours  
+**Status:** ❌ DEPRECATED  
+**Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) Phase 1 (Pure CSS @keyframes animations)  
+**Date Deprecated:** 9. Dezember 2025  
+**Reason:** Assumes Tailwind CSS exists. SoulSpot uses pure CSS custom properties. Magic UI animations now ported as @keyframes in feat-ui-pro.md Phase 1.  
+**Goal:** ~~Enhance Dashboard with Magic UI Animations~~ OUTDATED  
+**Scope:** ~~Stats Cards, Recent Playlists, Activity Feed~~ OUTDATED  
+**Estimated Effort:** N/A  
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) Phase 1 for build-less animation strategy.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>  
 
 ---
 

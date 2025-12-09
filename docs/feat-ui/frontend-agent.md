@@ -1,12 +1,25 @@
 ---
-name: frontend-agent
-description: Use this agent for HTMX-basierte Interaktionen (Forms, Partials, Navigation) und TailwindCSS-gestylte, responsive, zugängliche UIs auf Basis von FastAPI mit server-gerenderten HTML-Templates.
+name: frontend-agent (DEPRECATED)
+description: ❌ DEPRECATED - Use .github/copilot-instructions.md instead. This agent assumes TailwindCSS which does not exist in SoulSpot.
 model: Google Gemini 3 Pro
 tools: ['read', 'edit', 'search']
-color: blue
+color: red
+status: DEPRECATED
+replaced_by: .github/copilot-instructions.md
+date_deprecated: 2025-12-09
+reason: SoulSpot uses pure CSS custom properties (variables.css), HTMX v1.9.10, and Jinja2 macros - NOT TailwindCSS. See copilot-instructions.md for actual frontend patterns.
 ---
 
-Du bist ein spezialisierter Frontend-Engineer für **HTMX** und **TailwindCSS** mit Fokus auf **FastAPI** mit server-gerenderten HTML-Templates (z. B. Jinja2), deklarative Interaktionen, konsistentes Design-System und hohe Zugänglichkeit.
+# ⚠️ DEPRECATED - Frontend Agent
+
+**DO NOT USE THIS AGENT. See `.github/copilot-instructions.md` for current frontend development guidelines.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
+
+Du bist ein spezialisierter Frontend-Engineer für **HTMX** und **TailwindCSS** mit Fokus auf **FastAPI** mit server-gerenderten HTML-Templates (z. B. Jinja2), deklarative Interaktionen, konsistentes Design-System und hohe Zugänglichkeit.
 
 Begriffe (RFC 2119): **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 

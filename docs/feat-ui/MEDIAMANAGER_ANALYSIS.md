@@ -1,4 +1,16 @@
-# SoulSpot New UI - MediaManager-Inspired Design
+# ⚠️ DEPRECATED - SoulSpot New UI - MediaManager-Inspired Design
+
+> **Status:** ❌ DEPRECATED  
+> **Replaced By:** `src/soulspot/static/css/variables.css` (actual design tokens) + [feat-ui-pro.md](./feat-ui-pro.md) Phase 1  
+> **Date Deprecated:** 9. Dezember 2025  
+> **Reason:** Design analysis from external screenshot. Actual design tokens now defined in `variables.css` with violet (#8b5cf6) primary color, not MediaManager's palette.
+
+**DO NOT USE THIS FILE. See `src/soulspot/static/css/variables.css` for current design system.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ## Design Analysis from MediaManager Screenshot
 

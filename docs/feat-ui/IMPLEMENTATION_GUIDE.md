@@ -1,10 +1,20 @@
-# SoulSpot UI - Implementation Guide
+# ⚠️ DEPRECATED - SoulSpot UI - Implementation Guide
 
 ## Document Information
-- **Version**: 1.0
+- **Version**: 1.0 (DEPRECATED)
 - **Last Updated**: 2025-11-26
-- **Status**: Draft
-- **Related**: [ROADMAP.md](./ROADMAP.md), [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md)
+- **Status**: ❌ DEPRECATED
+- **Replaced By:** [feat-ui-pro.md](./feat-ui-pro.md) (specific 4-phase plan) + [ACCESSIBILITY_GUIDE.md](./ACCESSIBILITY_GUIDE.md) (implementation patterns) + [QUALITY_GATES_A11Y.md](./QUALITY_GATES_A11Y.md) (testing procedures)
+- **Date Deprecated:** 9. Dezember 2025
+- **Reason:** Too generic. New docs provide specific implementation steps with A11Y compliance, HTMX integration, and quality gates.
+- **Related**: [ROADMAP.md](./ROADMAP.md) ❌ DEPRECATED, [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md) ❌ DEPRECATED
+
+**DO NOT USE THIS FILE. See [feat-ui-pro.md](./feat-ui-pro.md) for actionable implementation plan.**
+
+---
+
+<details>
+<summary>Original Content (Archived)</summary>
 
 ---
 
