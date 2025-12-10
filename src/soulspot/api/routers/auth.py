@@ -400,9 +400,9 @@ async def skip_onboarding(
     if session_id:
         session = await session_store.get_session(session_id)
         if session:
-            # We could add a flag here if needed in the future
-            # For now, just acknowledge the skip
-            pass
+            # Currently no additional metadata needed for skip tracking
+            # Session existence already indicates active user
+            logger.info(f"User skipped onboarding (session: {session_id[:8]}...)")
 
     return {
         "ok": True,

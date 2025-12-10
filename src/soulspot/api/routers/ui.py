@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1628,8 +1628,8 @@ async def track_metadata_editor(
             "title": track_model.title,
             "artist": track_model.artist.name if track_model.artist else None,
             "album": track_model.album.title if track_model.album else None,
-            "album_artist": None,  # TODO: Add album_artist field
-            "genre": None,  # TODO: Add genre field
+            "album_artist": track_model.album.album_artist if track_model.album else None,
+            "genre": track_model.genre,
             "year": track_model.album.year
             if track_model.album and hasattr(track_model.album, "year")
             else None,
@@ -2225,27 +2225,26 @@ async def spotify_album_detail_page(
     )
 
 
-# Hey future me, this renders the followed artists sync page! It's a simple GET that loads the template
-# with empty state. The actual sync happens client-side via HTMX POST to /api/automation/followed-artists/sync
-# which returns JSON that gets rendered by JavaScript in the template. No DB queries on initial page load -
-# keeps it fast. Users see empty state with "Sync from Spotify" button. After sync, artists list populates
-# and users can select which artists to add to watchlists. The bulk create uses POST to /api/automation/
-# followed-artists/watchlists/bulk. This page requires Spotify OAuth token in session or sync will fail!
-# DEPRECATED: Use /spotify/artists instead for auto-sync experience!
-@router.get("/automation/followed-artists", response_class=HTMLResponse)
-async def followed_artists_page(request: Request) -> Any:
-    """Followed artists sync and watchlist creation page.
+# Hey future me, DEPRECATED route! Users should use /spotify/artists instead for auto-sync.
+# Returns HTTP 410 Gone (permanently removed) with helpful redirect message.
+# This prevents 404 confusion and guides users to the new location.
+@router.get("/automation/followed-artists", response_class=JSONResponse, status_code=410)
+async def followed_artists_page_deprecated(request: Request) -> Any:
+    """Followed artists sync page - DEPRECATED.
 
-    DEPRECATED: Use /spotify/artists for auto-sync experience.
-
-    Args:
-        request: FastAPI request object
+    This endpoint has been permanently moved to /spotify/artists for a better
+    auto-sync experience. Please update your bookmarks.
 
     Returns:
-        HTML page for managing followed artists
+        HTTP 410 Gone with redirect information
     """
-    return templates.TemplateResponse(
-        request,
-        "followed_artists.html",
-        context={},
+    return JSONResponse(
+        status_code=410,
+        content={
+            "error": "Endpoint Deprecated",
+            "message": "This endpoint has been permanently removed. Please use the new location.",
+            "redirect_to": "/spotify/artists",
+            "reason": "Moved to auto-sync experience",
+        },
+        headers={"Location": "/spotify/artists"},
     )

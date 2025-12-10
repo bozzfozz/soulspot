@@ -1,5 +1,6 @@
 """Download management endpoints."""
 
+import logging
 import uuid
 from typing import Any
 
@@ -19,6 +20,7 @@ from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # Hey future me, these are DTOs for the download API! Simple Pydantic schemas for request/response validation
@@ -166,9 +168,11 @@ async def create_download(
                     "id": job_id,
                     "status": "queued",
                 }
-            except Exception:
-                # Fall through to WAITING status
-                pass
+            except Exception as e:
+                # Log the error for debugging but fall through to WAITING status
+                logger.warning(
+                    f"Failed to queue download immediately: {e}. Will create WAITING download."
+                )
         
         # slskd unavailable or error - create Download with WAITING status
         download = Download(
