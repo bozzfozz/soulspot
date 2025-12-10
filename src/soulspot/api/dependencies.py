@@ -335,7 +335,8 @@ async def check_slskd_available(
     try:
         result = await slskd_client.test_connection()
         return result.get("success", False)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"slskd connection check failed: {e}")
         return False
 
 

@@ -1,44 +1,48 @@
-"""Library scanner service for scanning and analyzing music library.
+"""File discovery service for scanning and analyzing music files.
 
-⚠️  DEPRECATED - RENAMED TO file_discovery_service.py ⚠️
+RENAMED FROM: library_scanner.py (Dec 2025)
+REASON: Clarity - this is LOW-LEVEL file discovery, not full library import
 
-This file will be removed in next major version.
+PURPOSE:
+- Discover audio files in directories
+- Calculate file hashes (SHA256/MD5)
+- Validate audio file integrity
+- Extract basic metadata
+- Detect duplicates by hash
 
-**Migration:**
+NOT IN SCOPE:
+- Database operations (use library_import_service.py instead)
+- Lidarr folder parsing (use library_import_service.py instead)
+- Full library import pipeline
+
+USAGE:
 ```python
-# Old import (deprecated):
-from soulspot.application.services.library_scanner import LibraryScannerService
-
-# New import:
 from soulspot.application.services.file_discovery_service import FileDiscoveryService
+
+service = FileDiscoveryService()
+files = service.discover_audio_files(Path("/music"))
+for file in files:
+    info = service.scan_file(file)
+    print(f"{info.title} - {info.artist}")
 ```
-
-**Backwards Compatibility:**
-Temporary alias provided below. Update your imports!
-
-**Reason for Rename:**
-- Clarity: This is LOW-LEVEL file discovery, not full library import
-- library_scanner_service.py does full DB import (HIGH-LEVEL)
-- Names were confusing - now crystal clear!
 """
 
-# Backwards compatibility - import from renamed file
-from soulspot.application.services.file_discovery_service import (
-    AUDIO_EXTENSIONS,
-    FileDiscoveryService,
-    FileInfo,
-)
+import hashlib
+import logging
+from pathlib import Path
+from typing import Any
 
-# Deprecated alias
-LibraryScannerService = FileDiscoveryService
+from mutagen import File as MutagenFile  # type: ignore[attr-defined]
 
-__all__ = [
-    "LibraryScannerService",  # Deprecated
-    "FileDiscoveryService",  # New name
-    "FileInfo",
-    "AUDIO_EXTENSIONS",
-]
+from soulspot.infrastructure.security import PathValidator
 
+logger = logging.getLogger(__name__)
+
+# Supported audio file extensions
+AUDIO_EXTENSIONS = {".mp3", ".flac", ".m4a", ".ogg", ".opus", ".wav", ".aac"}
+
+
+class FileInfo:
     """Information about a scanned file."""
 
     def __init__(
@@ -73,11 +77,14 @@ __all__ = [
         self.album = album
 
 
-class LibraryScannerService:
-    """Service for scanning and analyzing music library."""
+class FileDiscoveryService:
+    """Service for discovering and analyzing audio files (LOW-LEVEL).
+
+    For full library import with DB operations, use LibraryImportService instead.
+    """
 
     def __init__(self, hash_algorithm: str = "sha256") -> None:
-        """Initialize library scanner service.
+        """Initialize file discovery service.
 
         Args:
             hash_algorithm: Hash algorithm to use (md5, sha1, sha256)
@@ -360,3 +367,7 @@ class LibraryScannerService:
             List of broken files
         """
         return [file_info for file_info in file_infos if not file_info.is_valid]
+
+
+# Backwards compatibility alias (deprecated)
+LibraryScannerService = FileDiscoveryService

@@ -26,6 +26,25 @@
 
 ---
 
+### 3. LibraryScannerService (renamed)
+**File:** `src/soulspot/application/services/library_scanner.py`  
+**Deprecated:** December 2025  
+**Reason:** Name confusion with library_scanner_service.py  
+**Migration:** Update imports  
+**Replacement:** Use `FileDiscoveryService` from `file_discovery_service.py`  
+**Action:** Backwards compat alias exists - update imports then delete
+
+**Migration:**
+```python
+# Old:
+from soulspot.application.services.library_scanner import LibraryScannerService
+
+# New:
+from soulspot.application.services.file_discovery_service import FileDiscoveryService
+```
+
+---
+
 ## ✅ Recently Removed
 
 ### SpotifyBatchProcessor

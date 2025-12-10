@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -75,7 +75,7 @@ class AppSettingsService:
         """
         if key in self._cache:
             value, cached_at = self._cache[key]
-            if datetime.utcnow() - cached_at < timedelta(seconds=CACHE_TTL_SECONDS):
+            if datetime.now(UTC) - cached_at < timedelta(seconds=CACHE_TTL_SECONDS):
                 return value, True
             # Expired, remove from cache
             del self._cache[key]
@@ -88,7 +88,7 @@ class AppSettingsService:
             key: Setting key.
             value: Parsed value to cache.
         """
-        self._cache[key] = (value, datetime.utcnow())
+        self._cache[key] = (value, datetime.now(UTC))
 
     def invalidate_cache(self, key: str | None = None) -> None:
         """Invalidate cache for specific key or all keys.

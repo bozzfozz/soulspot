@@ -26,7 +26,7 @@
 import asyncio
 import contextlib
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -213,7 +213,7 @@ class SpotifySyncWorker:
                 )
 
                 # Check which syncs are enabled and due
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
 
                 # Artists sync
                 if await settings_service.get_bool(
@@ -698,7 +698,7 @@ class SpotifySyncWorker:
                 if not access_token:
                     return {"error": "No valid Spotify token available"}
 
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
 
                 if sync_type is None or sync_type == "artists":
                     try:
