@@ -178,7 +178,7 @@ class ReDownloadBrokenFilesUseCase:
         Returns:
             Summary of broken files
         """
-        from sqlalchemy import and_, case, func
+        from sqlalchemy import case, func
 
         # Single query with LEFT JOIN to get all broken tracks + their download status
         # COUNT with CASE filters active downloads in SQL instead of Python loop

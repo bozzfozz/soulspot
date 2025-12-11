@@ -30,7 +30,6 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.workers.job_queue import JobQueue, JobType
 from soulspot.domain.entities import DownloadStatus

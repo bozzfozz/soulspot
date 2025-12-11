@@ -25,7 +25,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -596,39 +595,6 @@ class DeezerClient:
             or best_artist.picture_medium
             or best_artist.picture_small
         )
-
-    async def get_album_tracks(self, album_id: int) -> list[DeezerTrack]:
-        """Get all tracks from an album.
-
-        Hey future me - this is for tracklist verification! Compare local album
-        tracks with Deezer tracklist to find missing or extra tracks.
-
-        Args:
-            album_id: Deezer album ID
-
-        Returns:
-            List of DeezerTrack objects
-        """
-        try:
-            await self._rate_limit()
-
-            async with self._client as client:
-                response = await client.get(f"/album/{album_id}/tracks")
-                response.raise_for_status()
-                data = response.json()
-
-            tracks = []
-            for track_data in data.get("data", []):
-                track = self._parse_track(track_data)
-                if track:
-                    tracks.append(track)
-
-            logger.debug(f"Fetched {len(tracks)} tracks for Deezer album {album_id}")
-            return tracks
-
-        except Exception as e:
-            logger.error(f"Deezer get_album_tracks failed: {e}")
-            return []
 
     # =========================================================================
     # TRACKLIST VERIFICATION

@@ -1,5 +1,6 @@
 """Authentication and OAuth endpoints."""
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response
@@ -15,6 +16,8 @@ from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

@@ -688,16 +688,21 @@ async def quick_search(
     Returns:
         HTML partial with search results dropdown
     """
-    from sqlalchemy import select, or_
+    from sqlalchemy import or_, select
     from sqlalchemy.orm import joinedload
-    from soulspot.infrastructure.persistence.models import TrackModel, PlaylistModel, ArtistModel
+
+    from soulspot.infrastructure.persistence.models import (
+        ArtistModel,
+        PlaylistModel,
+        TrackModel,
+    )
 
     results: list[dict[str, Any]] = []
     query = q.strip()
 
     if len(query) >= 2:
         search_term = f"%{query}%"
-        
+
         # Search tracks (title or artist name)
         stmt = (
             select(TrackModel)
@@ -1067,16 +1072,16 @@ async def library_artists(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Unified artists browser page - shows LOCAL + SPOTIFY + HYBRID artists.
-    
+
     Hey future me - This is now the UNIFIED Music Manager artist view!
     It shows ALL artists regardless of source (local file scan OR Spotify followed).
-    
+
     Filter by source param:
     - ?source=local → Only artists from local file scans (with or without Spotify)
     - ?source=spotify → Only artists followed on Spotify (with or without local files)
     - ?source=hybrid → Only artists that exist in BOTH local + Spotify
     - ?source=all OR no param → Show ALL artists (default unified view)
-    
+
     Each artist card shows badges:
     🎵 Local (has local files)
     🎧 Spotify (followed on Spotify)
@@ -1124,7 +1129,7 @@ async def library_artists(
         .outerjoin(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
         .outerjoin(album_count_subq, ArtistModel.id == album_count_subq.c.artist_id)
     )
-    
+
     # Apply source filter if requested
     if source == "local":
         # Only artists with local files (source='local' OR 'hybrid')
@@ -1136,7 +1141,7 @@ async def library_artists(
         # Only artists in BOTH sources
         stmt = stmt.where(ArtistModel.source == "hybrid")
     # else: source == "all" or None → Show ALL artists (no filter)
-    
+
     stmt = stmt.order_by(ArtistModel.name)
     result = await session.execute(stmt)
     rows = result.all()
@@ -1166,7 +1171,7 @@ async def library_artists(
     # Hey future me - count artists that need Spotify enrichment for artwork!
     artists_without_image = sum(1 for a in artists if not a["image_url"])
     enrichment_needed = artists_without_image > 0
-    
+
     # Count artists by source for filter badges
     source_counts = {
         "all": len(artists),
@@ -1185,7 +1190,6 @@ async def library_artists(
             "current_source": source or "all",  # Active filter
             "source_counts": source_counts,  # For filter badge counts
         },
-    )
     )
 
 

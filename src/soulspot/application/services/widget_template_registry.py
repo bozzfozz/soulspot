@@ -23,7 +23,7 @@ git commit -m "Remove deprecated widget_template_registry.py"
 **Replacement:**
 For live updates, use SSE (Server-Sent Events) instead:
 - `/api/sse/downloads` - Real-time download updates
-- `/api/sse/jobs` - Job queue updates  
+- `/api/sse/jobs` - Job queue updates
 - `/api/sse/notifications` - System notifications
 
 **References:**

@@ -202,7 +202,7 @@ class FollowedArtistsService:
         if existing_artist:
             # Update existing artist (name, genres, image_url, source, spotify_uri might have changed)
             needs_update = False
-            
+
             # Always set spotify_uri if it's missing (local artist matched by name)
             if not existing_artist.spotify_uri:
                 existing_artist.spotify_uri = spotify_uri
@@ -210,7 +210,7 @@ class FollowedArtistsService:
                 logger.info(
                     f"Added spotify_uri to local artist '{name}' (matched by name)"
                 )
-            
+
             if existing_artist.name != name:
                 existing_artist.update_name(name)
                 needs_update = True
