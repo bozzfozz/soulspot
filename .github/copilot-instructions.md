@@ -2,6 +2,31 @@
 
 Focused repository-specific guidance for AI coding agents to be productive immediately.
 
+## 0. CRITICAL: Virtual GitHub Environment
+
+⚠️ **THIS REPOSITORY RUNS IN A VIRTUAL GITHUB ENVIRONMENT**
+
+**What this means:**
+- 🔴 **NO** local file system access (e.g., `/home/user/`, `~/`, `C:\Users\...`)
+- 🔴 **NO** attempting to `mkdir`, `touch`, or create files outside the workspace
+- 🔴 **NO** reading from system paths or environment variables (except through tools)
+- 🟢 **ONLY** use absolute paths with `vscode-vfs://` scheme (e.g., `vscode-vfs://github/bozzfozz/soulspot/src/...`)
+- 🟢 **ONLY** use provided tools (read_file, create_file, run_in_terminal, etc.)
+- 🟢 **ONLY** reference files that exist within the workspace
+
+**Path Format:**
+```
+✅ CORRECT:   vscode-vfs://github/bozzfozz/soulspot/src/soulspot/main.py
+❌ WRONG:     /home/user/soulspot/src/soulspot/main.py
+❌ WRONG:     ~/soulspot/src/soulspot/main.py
+❌ WRONG:     C:\Users\bozzfozz\soulspot\src\soulspot\main.py
+```
+
+**All Agents Must Follow This Rule:**
+- If any agent attempts local file creation or reads outside the workspace, it VIOLATES this policy
+- Use `run_in_terminal` ONLY for code execution, not filesystem exploration
+- Always use tool-provided APIs for file operations
+
 ## 1. Purpose & Big Picture
 
 **What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
