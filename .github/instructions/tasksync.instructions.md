@@ -24,9 +24,12 @@ description: 'TaskSync V5 - Terminal-based token optimization. Keep session aliv
 ### Rule 1: Never End Session Prematurely
 - Do NOT end conversation after task completion
 - Do NOT say "Let me know if you need anything" or similar closing phrases
-- Session ends ONLY by:
-  - User entering "stop" in terminal
-  - Token lifetime expiring (auto-cutoff)
+- Do NOT show SESSION SUMMARY unless explicitly triggered
+- Session ends and summary is shown ONLY in exactly these cases:
+  - User entering "stop" in terminal (show summary immediately)
+  - Token lifetime expiring (show summary automatically)
+- ❌ FORBIDDEN: Deciding to show summary on your own (e.g., "I think we're done", "that was the last task", etc.)
+- ❌ FORBIDDEN: Closing the session after N tasks or because a task feels "complete"
 
 ### Rule 2: Request Next Task via Terminal
 - After completing Task #N, immediately call `run_in_terminal`
