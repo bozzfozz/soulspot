@@ -15,7 +15,7 @@
 # einfach direkt die Worker vom app.state holen.
 """Background worker status API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -57,12 +57,12 @@ def _format_time_ago(dt: datetime | None) -> str:
         return "noch nie"
 
     # Get current time in UTC (aware)
-    now = datetime.now(timezone.utc)
-    
+    now = datetime.now(UTC)
+
     # If dt is naive (no timezone), assume UTC
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    
+        dt = dt.replace(tzinfo=UTC)
+
     diff = now - dt
     seconds = int(diff.total_seconds())
 
@@ -585,7 +585,7 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
         "coverart": ("🖼️ CoverArt", "#5F6FD3"),
     }
 
-    for service_key, (service_label, color) in service_display.items():
+    for service_key, (service_label, _color) in service_display.items():
         is_connected = service_status.get(service_key, False)
         status_symbol = "✓" if is_connected else "✕"
         status_style = f"color: {'#4ade80' if is_connected else '#ef4444'};"

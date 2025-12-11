@@ -170,11 +170,11 @@ class DownloadMonitorWorker:
                 self._stats["polls_completed"] = (int(polls) if polls else 0) + 1
                 self._stats["last_poll_at"] = datetime.now(UTC).isoformat()
                 self._stats["last_error"] = None
-                
+
                 # Check for stale downloads periodically (not every poll for efficiency)
                 if self._poll_count % STALE_CHECK_INTERVAL_POLLS == 0:
                     await self._check_stale_downloads()
-                    
+
             except Exception as e:
                 # Don't crash the loop on errors
                 logger.error(f"Error in download monitor loop: {e}", exc_info=True)

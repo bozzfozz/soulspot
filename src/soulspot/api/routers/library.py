@@ -2033,17 +2033,8 @@ async def find_duplicate_artists(
 
     Use POST /duplicates/artists/merge to combine duplicates.
     """
-    from soulspot.api.dependencies import (
-        get_spotify_client,
-        get_spotify_token_shared,
-    )
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
-    )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
     )
 
     # Minimal service for detection (no spotify client needed)
@@ -2154,11 +2145,6 @@ async def merge_duplicate_albums(
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
     )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
 
     service = LocalLibraryEnrichmentService(
         session=db,
@@ -2194,16 +2180,16 @@ async def enrich_disambiguation(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Enrich artists and albums with MusicBrainz disambiguation data.
-    
+
     Hey future me - this is for Lidarr-style naming templates that use {ArtistDisambiguation}!
     MusicBrainz provides disambiguation strings like "(US rock band)" to differentiate
     artists with the same name (e.g., multiple artists named "Nirvana").
-    
+
     This endpoint:
     1. Finds artists/albums without disambiguation
     2. Searches MusicBrainz for matches
     3. Stores disambiguation strings from MB results
-    
+
     Note: Respects MusicBrainz 1 req/sec rate limit, so large batches take time.
     Returns HTML for HTMX integration on the library page.
     """
@@ -2213,28 +2199,28 @@ async def enrich_disambiguation(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore  
+        spotify_client=None,  # type: ignore
         access_token="",
         settings=settings,
     )
 
     try:
         result = await service.enrich_disambiguation_batch(limit=request.limit)
-        
+
         # Hey future me - return HTML for HTMX integration!
         # This shows directly in the library page status area.
         artists_enriched = result.get("artists_enriched", 0)
         albums_enriched = result.get("albums_enriched", 0)
-        
+
         if result.get("skipped"):
             # Provider disabled
             return HTMLResponse(
-                f'''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+                '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                     <i class="bi bi-info-circle"></i>
                     <span>MusicBrainz provider is disabled in Settings.</span>
                 </div>'''
             )
-        
+
         if artists_enriched == 0 and albums_enriched == 0:
             return HTMLResponse(
                 '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
@@ -2242,14 +2228,14 @@ async def enrich_disambiguation(
                     <span>All items already have disambiguation data or no matches found.</span>
                 </div>'''
             )
-        
+
         return HTMLResponse(
             f'''<div class="musicbrainz-result" style="background: rgba(186, 83, 45, 0.1); border: 1px solid rgba(186, 83, 45, 0.2); color: #e69d3c; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-check-circle-fill"></i>
                 <span>Enriched <strong>{artists_enriched}</strong> artists and <strong>{albums_enriched}</strong> albums with disambiguation data.</span>
             </div>'''
         )
-        
+
     except Exception as e:
         logger.error(f"Disambiguation enrichment failed: {e}")
         return HTMLResponse(

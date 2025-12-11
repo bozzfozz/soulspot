@@ -319,19 +319,19 @@ class MusicBrainzClient(IMusicBrainzClient):
         self, artist_name: str, limit: int = 5
     ) -> list[dict[str, Any]]:
         """Search for artists and return with disambiguation info.
-        
+
         Hey future me - this is specifically for populating disambiguation fields!
         MusicBrainz returns disambiguation when there are multiple artists with same name.
-        
+
         Args:
             artist_name: Artist name to search
             limit: Max results
-        
+
         Returns:
             List of artists with 'disambiguation' field if available
         """
         query = f'artist:"{artist_name}"'
-        
+
         response = await self._rate_limited_request(
             "GET",
             "/artist",
@@ -343,42 +343,42 @@ class MusicBrainzClient(IMusicBrainzClient):
         )
         response.raise_for_status()
         data = response.json()
-        
+
         return cast(list[dict[str, Any]], data.get("artists", []))
 
     async def get_artist_disambiguation(
         self, artist_name: str
     ) -> str | None:
         """Get disambiguation string for an artist by name.
-        
+
         Hey future me - this is a convenience method! Searches MB and returns
         the disambiguation string from the best match. Returns None if no
         disambiguation is needed (only one artist with that name exists).
-        
+
         Args:
             artist_name: Artist name to look up
-        
+
         Returns:
             Disambiguation string (e.g., "English rock band") or None
         """
         try:
             results = await self.search_artist_with_disambiguation(artist_name, limit=3)
-            
+
             if not results:
                 return None
-            
+
             # Get best match (first result)
             best_match = results[0]
-            
+
             # Only return disambiguation if score is high enough and it exists
             score = best_match.get("score", 0)
             disambiguation = best_match.get("disambiguation")
-            
+
             if score >= 90 and disambiguation:
                 return disambiguation
-            
+
             return None
-            
+
         except Exception:
             return None
 
@@ -386,24 +386,24 @@ class MusicBrainzClient(IMusicBrainzClient):
         self, album_title: str, artist_name: str | None = None, limit: int = 5
     ) -> list[dict[str, Any]]:
         """Search for releases and return with disambiguation info.
-        
+
         Hey future me - releases (specific pressings) have disambiguation like:
         "Deluxe Edition", "Japanese pressing", "2023 Remaster", etc.
-        
+
         Args:
             album_title: Album title to search
             artist_name: Optional artist for better matching
             limit: Max results
-        
+
         Returns:
             List of releases with 'disambiguation' field if available
         """
         query_parts = [f'release:"{album_title}"']
         if artist_name:
             query_parts.append(f'artist:"{artist_name}"')
-        
+
         query = " AND ".join(query_parts)
-        
+
         response = await self._rate_limited_request(
             "GET",
             "/release",
@@ -416,24 +416,24 @@ class MusicBrainzClient(IMusicBrainzClient):
         )
         response.raise_for_status()
         data = response.json()
-        
+
         return cast(list[dict[str, Any]], data.get("releases", []))
 
     async def search_album_with_disambiguation(
         self, title: str, artist: str | None = None, limit: int = 5
     ) -> list[dict[str, Any]]:
         """Search for albums and return with disambiguation info.
-        
+
         Hey future me - this is an alias for search_release_with_disambiguation!
         Named this way so the enrichment service can use a consistent naming pattern:
         - search_artist_with_disambiguation
         - search_album_with_disambiguation
-        
+
         Args:
             title: Album title to search
             artist: Optional artist for better matching
             limit: Max results
-        
+
         Returns:
             List of releases with 'disambiguation' and 'title' fields
         """
@@ -443,14 +443,14 @@ class MusicBrainzClient(IMusicBrainzClient):
         self, album_title: str, artist_name: str | None = None
     ) -> str | None:
         """Get disambiguation string for an album by title.
-        
+
         Hey future me - convenience method! Searches MB releases and returns
         disambiguation from best match. Useful for differentiating editions.
-        
+
         Args:
             album_title: Album title
             artist_name: Optional artist for better matching
-        
+
         Returns:
             Disambiguation string (e.g., "Deluxe Edition") or None
         """
@@ -458,21 +458,21 @@ class MusicBrainzClient(IMusicBrainzClient):
             results = await self.search_release_with_disambiguation(
                 album_title, artist_name, limit=3
             )
-            
+
             if not results:
                 return None
-            
+
             # Get best match
             best_match = results[0]
-            
+
             score = best_match.get("score", 0)
             disambiguation = best_match.get("disambiguation")
-            
+
             if score >= 90 and disambiguation:
                 return disambiguation
-            
+
             return None
-            
+
         except Exception:
             return None
 

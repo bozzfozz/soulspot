@@ -1,5 +1,6 @@
 """Dependency injection for API endpoints."""
 
+import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, cast
 
@@ -40,6 +41,8 @@ from soulspot.infrastructure.persistence.repositories import (
     SpotifyBrowseRepository,
     TrackRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Hey future me, NOW WE GET SESSION STORE FROM APP STATE! The DatabaseSessionStore is initialized

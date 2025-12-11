@@ -1738,10 +1738,10 @@ async def update_library_enrichment_settings(
 
 class ProviderModeSettings(BaseModel):
     """Provider mode settings for all external services.
-    
+
     Values: 0=off, 1=basic (free tier), 2=pro (full features)
     """
-    
+
     spotify: int = Field(
         default=2,
         ge=0,
@@ -1792,7 +1792,7 @@ async def get_provider_settings(
     """
     settings_service = AppSettingsService(db)
     modes = await settings_service.get_all_provider_modes()
-    
+
     # Convert mode names to integers for API response
     return ProviderModeSettings(
         spotify=_MODE_NAME_TO_INT.get(modes.get("spotify", "pro"), 2),
@@ -1828,10 +1828,10 @@ async def update_provider_settings(
         "lastfm": _MODE_INT_TO_NAME.get(settings_update.lastfm, "basic"),
         "slskd": _MODE_INT_TO_NAME.get(settings_update.slskd, "pro"),
     }
-    
+
     await settings_service.set_all_provider_modes(modes_to_save)
     await db.commit()
-    
+
     logger.info(f"Updated provider modes: {modes_to_save}")
 
     return settings_update

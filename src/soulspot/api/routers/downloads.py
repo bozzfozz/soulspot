@@ -112,38 +112,38 @@ async def create_download(
     slskd_available: bool = Depends(check_slskd_available),
 ) -> dict[str, Any]:
     """Create a single download for a track.
-    
+
     Works whether slskd is online or offline. If offline, download is queued
     with WAITING status and will be processed when slskd becomes available.
-    
+
     Accepts either track_id (local DB ID) or spotify_id (Spotify track ID).
-    
+
     Args:
         request: Download request with track_id/spotify_id and optional metadata
         download_repository: Download repository
         download_worker: Download worker for queueing
         slskd_available: Whether slskd is currently available
-    
+
     Returns:
         Created download info including ID and status
     """
     # Must provide either track_id or spotify_id
     if not request.track_id and not request.spotify_id:
         raise HTTPException(status_code=400, detail="Either track_id or spotify_id required")
-    
+
     try:
         # Determine track_id to use
         track_id_str = request.track_id
-        
+
         # If only spotify_id provided, use it as the track reference
         # (In a full implementation, we'd look up or create the track in our DB first)
         if not track_id_str and request.spotify_id:
             # For now, use spotify_id directly as track reference
             # TODO: Look up track by spotify_id or create placeholder
             track_id_str = request.spotify_id
-        
+
         track_id = TrackId.from_string(track_id_str)
-        
+
         # Check if download already exists for this track
         existing = await download_repository.get_by_track(track_id)
         if existing and existing.status not in [DownloadStatus.COMPLETED, DownloadStatus.CANCELLED, DownloadStatus.FAILED]:
@@ -152,10 +152,10 @@ async def create_download(
                 "id": str(existing.id.value),
                 "status": existing.status.value,
             }
-        
+
         # Create new download with appropriate status
         download_id = DownloadId.generate()
-        
+
         # If slskd is available, try to queue immediately
         if slskd_available:
             try:
@@ -173,7 +173,7 @@ async def create_download(
                 logger.warning(
                     f"Failed to queue download immediately: {e}. Will create WAITING download."
                 )
-        
+
         # slskd unavailable or error - create Download with WAITING status
         download = Download(
             id=download_id,
@@ -182,13 +182,13 @@ async def create_download(
             priority=request.priority,
         )
         await download_repository.add(download)
-        
+
         return {
             "message": "Download added to waitlist (downloader offline)",
             "id": str(download.id.value),
             "status": "waiting",
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create download: {str(e)}")
 
@@ -388,38 +388,38 @@ async def bulk_download(
     slskd_available: bool = Depends(check_slskd_available),
 ) -> dict[str, Any]:
     """Bulk download tracks by Spotify ID.
-    
+
     For album "Download All" buttons - accepts spotify_ids directly.
     Creates downloads with WAITING status if slskd is offline.
-    
+
     Args:
         request: Bulk download request with spotify_ids
         download_repository: Download repository
         download_worker: Download worker for queueing
         slskd_available: Whether slskd is currently available
-    
+
     Returns:
         Summary of queued downloads
     """
     if not request.tracks:
         raise HTTPException(status_code=400, detail="No tracks provided")
-    
+
     queued = 0
     waiting = 0
     skipped = 0
     errors = []
-    
+
     for spotify_id in request.tracks:
         try:
             # Use spotify_id as track reference (in production, look up local track)
             track_id = TrackId.from_string(spotify_id)
-            
+
             # Check if already in queue
             existing = await download_repository.get_by_track(track_id)
             if existing and existing.status not in [DownloadStatus.COMPLETED, DownloadStatus.CANCELLED, DownloadStatus.FAILED]:
                 skipped += 1
                 continue
-            
+
             if slskd_available:
                 try:
                     await download_worker.enqueue_download(
@@ -447,10 +447,10 @@ async def bulk_download(
                 )
                 await download_repository.add(download)
                 waiting += 1
-                
+
         except Exception as e:
             errors.append(f"{spotify_id}: {str(e)}")
-    
+
     total = queued + waiting
     message_parts = []
     if queued > 0:
@@ -459,7 +459,7 @@ async def bulk_download(
         message_parts.append(f"{waiting} in waitlist")
     if skipped > 0:
         message_parts.append(f"{skipped} skipped (already in queue)")
-    
+
     return {
         "message": f"Downloads: {', '.join(message_parts)}" if message_parts else "No tracks to download",
         "total": total,
