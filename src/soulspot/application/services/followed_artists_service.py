@@ -259,6 +259,96 @@ class FollowedArtistsService:
 
         return new_artist, True  # Was created
 
+    async def sync_artist_albums(
+        self, artist_id: str, access_token: str
+    ) -> dict[str, int]:
+        """Sync albums for a Spotify artist into unified albums table.
+        
+        Hey future me - This syncs Spotify albums into soulspot_albums table (unified)!
+        Unlike SpotifySyncService which uses separate spotify_albums table, this method
+        puts albums directly into the unified music library so they appear alongside
+        local albums. This is key for the Music Manager concept!
+        
+        Args:
+            artist_id: Our internal artist ID (not Spotify ID)
+            access_token: Spotify OAuth token
+            
+        Returns:
+            Dict with sync stats (total, added, skipped)
+        """
+        from soulspot.domain.value_objects import AlbumId
+        from soulspot.domain.entities import Album
+        from soulspot.infrastructure.persistence.repositories import AlbumRepository
+        
+        stats = {"total": 0, "added": 0, "skipped": 0}
+        
+        # Get artist by ID
+        artist = await self.artist_repo.get(artist_id)
+        if not artist or not artist.spotify_uri:
+            logger.warning(f"Artist {artist_id} not found or has no spotify_uri")
+            return stats
+        
+        # Extract Spotify ID from spotify_uri (format: spotify:artist:xxx)
+        spotify_artist_id = artist.spotify_uri.split(":")[-1]
+        
+        # Fetch albums from Spotify API
+        try:
+            albums_data = await self.spotify_client.get_artist_albums(
+                artist_id=spotify_artist_id,
+                access_token=access_token,
+                limit=50,  # Fetch up to 50 albums
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch albums for artist {artist.name}: {e}")
+            return stats
+        
+        album_repo = AlbumRepository(self.session)
+        
+        # Process each album
+        for album_data in albums_data:
+            stats["total"] += 1
+            
+            spotify_uri_str = album_data.get("uri", f"spotify:album:{album_data['id']}")
+            spotify_uri = SpotifyUri.from_string(spotify_uri_str)
+            
+            # Check if album already exists
+            existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
+            if existing_album:
+                stats["skipped"] += 1
+                continue
+            
+            # Create new album in unified table
+            album_title = album_data.get("name", "Unknown Album")
+            release_date = album_data.get("release_date")
+            release_year = None
+            if release_date:
+                try:
+                    release_year = int(release_date.split("-")[0])
+                except (ValueError, IndexError):
+                    pass
+            
+            images = album_data.get("images", [])
+            artwork_url = images[0].get("url") if images else None
+            
+            new_album = Album(
+                id=AlbumId.generate(),
+                title=album_title,
+                artist_id=artist.id,
+                release_year=release_year,
+                spotify_uri=spotify_uri,
+                artwork_url=artwork_url,
+            )
+            
+            await album_repo.add(new_album)
+            stats["added"] += 1
+            logger.debug(f"Added Spotify album: {album_title} ({release_year})")
+        
+        logger.info(
+            f"Synced {stats['added']} new albums for {artist.name} "
+            f"({stats['skipped']} already existed)"
+        )
+        return stats
+
     # Hey future me, this is a simple utility to get a preview of followed artists WITHOUT
     # syncing to DB! Useful for "show me who I follow on Spotify" without persisting data.
     # Just fetches first page (50 artists max). Returns raw Spotify data for quick display.

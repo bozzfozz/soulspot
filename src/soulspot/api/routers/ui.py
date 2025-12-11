@@ -1392,27 +1392,37 @@ async def library_artist_detail(
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Artist detail page with albums and tracks."""
+    """Artist detail page with albums and tracks.
+    
+    Hey future me - UNIFIED Music Manager view!
+    Shows ALL albums for this artist (LOCAL + SPOTIFY):
+    - Albums with local files → Show tracks
+    - Spotify albums (no local files yet) → Show album card with download button
+    
+    This works for all source types:
+    - LOCAL artists → Show albums from file scans
+    - SPOTIFY artists → Show albums from Spotify API sync
+    - HYBRID artists → Show ALL albums (merged)
+    """
     from urllib.parse import unquote
 
-    from sqlalchemy import select
+    from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.infrastructure.persistence.models import TrackModel
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        TrackModel,
+    )
 
     artist_name = unquote(artist_name)
 
-    # Query tracks with joined loads for artist and album
-    stmt = (
-        select(TrackModel)
-        .join(TrackModel.artist)
-        .where(TrackModel.artist.has(name=artist_name))
-        .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
-    )
-    result = await session.execute(stmt)
-    track_models = result.unique().scalars().all()
+    # Step 1: Get artist by name (case-insensitive)
+    artist_stmt = select(ArtistModel).where(func.lower(ArtistModel.name) == artist_name.lower())
+    artist_result = await session.execute(artist_stmt)
+    artist_model = artist_result.scalar_one_or_none()
 
-    if not track_models:
+    if not artist_model:
         return templates.TemplateResponse(
             request,
             "error.html",
@@ -1423,38 +1433,84 @@ async def library_artist_detail(
             status_code=404,
         )
 
-    # Group tracks by album, including artwork_url from album
+    # Step 2: Get ALL albums for this artist (including Spotify albums without local files)
+    albums_stmt = (
+        select(AlbumModel)
+        .where(AlbumModel.artist_id == artist_model.id)
+        .order_by(AlbumModel.release_year.desc().nullslast(), AlbumModel.title)
+    )
+    albums_result = await session.execute(albums_stmt)
+    album_models = albums_result.scalars().all()
+    
+    # Hey future me - AUTO-SYNC Spotify albums if artist has none yet!
+    # If artist is from Spotify (source='spotify' or 'hybrid') and has NO albums in DB,
+    # fetch albums from Spotify API on-demand. This ensures Spotify followed artists
+    # show their discography immediately without manual sync button.
+    if not album_models and artist_model.source in ["spotify", "hybrid"] and artist_model.spotify_uri:
+        try:
+            # Get Spotify client and token
+            from soulspot.application.services.followed_artists_service import FollowedArtistsService
+            from soulspot.infrastructure.persistence.database import DatabaseTokenManager
+            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+            
+            if hasattr(request.app.state, "db_token_manager"):
+                db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+                access_token = await db_token_manager.get_token_for_background()
+                
+                if access_token:
+                    # Use FollowedArtistsService to sync albums into unified table
+                    spotify_client = SpotifyClient()
+                    followed_service = FollowedArtistsService(session, spotify_client)
+                    
+                    # Sync albums for this artist (albums, singles, EPs, compilations)
+                    await followed_service.sync_artist_albums(artist_model.id, access_token)
+                    await session.commit()  # Commit new albums
+                    
+                    # Re-query albums after sync
+                    albums_result = await session.execute(albums_stmt)
+                    album_models = albums_result.scalars().all()
+        except Exception as e:
+            logger.warning(f"Failed to auto-sync Spotify albums for {artist_model.name}: {e}")
+            # Continue anyway - show empty albums list
+
+    # Step 3: Get tracks for these albums (for LOCAL/HYBRID artists)
+    tracks_stmt = (
+        select(TrackModel)
+        .where(TrackModel.artist_id == artist_model.id)
+        .options(joinedload(TrackModel.album))
+    )
+    tracks_result = await session.execute(tracks_stmt)
+    track_models = tracks_result.unique().scalars().all()
+
+    # Build albums list with track counts
     albums_dict: dict[str, dict[str, Any]] = {}
+    for album in album_models:
+        album_key = album.title
+        albums_dict[album_key] = {
+            "id": f"{artist_name}::{album.title}",
+            "title": album.title,
+            "track_count": 0,  # Will be updated from tracks
+            "year": album.release_year,
+            "artwork_url": album.artwork_url if hasattr(album, "artwork_url") else None,
+            "spotify_id": album.spotify_id if hasattr(album, "spotify_id") else None,
+        }
+
+    # Count tracks per album
     for track in track_models:
         if track.album:
             album_key = track.album.title
-            if album_key not in albums_dict:
-                albums_dict[album_key] = {
-                    "id": f"{artist_name}::{track.album.title}",
-                    "title": track.album.title,
-                    "track_count": 0,
-                    "year": track.album.release_year
-                    if hasattr(track.album, "release_year")
-                    else None,
-                    "artwork_url": track.album.artwork_url
-                    if hasattr(track.album, "artwork_url")
-                    else None,
-                }
-            albums_dict[album_key]["track_count"] += 1
+            if album_key in albums_dict:
+                albums_dict[album_key]["track_count"] += 1
 
-    # Hey future me - sort albums by year (desc, newest first), then by title!
-    # None years go last. This is Lidarr-style chronological ordering.
-    albums = sorted(
-        albums_dict.values(),
-        key=lambda x: (x["year"] is None, -(x["year"] or 0), x["title"].lower()),
-    )
+    # Convert to list (already sorted by SQL query)
+    albums = list(albums_dict.values())
 
     # Convert tracks to template format
     tracks_data = [
         {
             "id": track.id,
             "title": track.title,
-            "artist": track.artist.name if track.artist else "Unknown Artist",
+            "artist": artist_model.name,
             "album": track.album.title if track.album else "Unknown Album",
             "duration_ms": track.duration_ms,
             "file_path": track.file_path,
@@ -1466,33 +1522,16 @@ async def library_artist_detail(
     # Sort tracks by album, then track number/title
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
 
-    # Hey future me – get image_url from the artist model for Spotify CDN profile pic
-    image_url = (
-        track_models[0].artist.image_url
-        if track_models
-        and track_models[0].artist
-        and hasattr(track_models[0].artist, "image_url")
-        else None
-    )
-
-    # Hey future me – disambiguation is for showing "(English rock band)" etc. next to artist name.
-    # Parsed from Lidarr folder structure like "Genesis (English rock band)/". Clean name stays in
-    # artist_name, disambiguation is shown separately in UI to avoid Spotify search issues.
-    disambiguation = (
-        track_models[0].artist.disambiguation
-        if track_models
-        and track_models[0].artist
-        and hasattr(track_models[0].artist, "disambiguation")
-        else None
-    )
-
     artist_data = {
-        "name": artist_name,
-        "disambiguation": disambiguation,
+        "name": artist_model.name,
+        "source": artist_model.source,  # NEW: Show source badge
+        "disambiguation": artist_model.disambiguation,
         "albums": albums,
         "tracks": tracks_data,
         "track_count": len(tracks_data),
-        "image_url": image_url,  # Spotify CDN URL or None
+        "album_count": len(albums),
+        "image_url": artist_model.image_url,  # Spotify CDN URL or None
+        "genres": artist_model.genres,  # Spotify genres
     }
 
     return templates.TemplateResponse(
