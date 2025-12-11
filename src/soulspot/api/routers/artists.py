@@ -34,11 +34,14 @@ router = APIRouter(prefix="/artists", tags=["Artists"])
 # Hey future me - these are the response DTOs for the artists API. ArtistResponse maps
 # the domain Artist entity to what the frontend needs. Keep it flat (no nested objects)
 # for easy JSON serialization. genres is list[str] from the DB JSON field.
+# Hey - source field shows where artist comes from! 'local' = file scan, 'spotify' = followed,
+# 'hybrid' = both. UI uses this for badges (🎵 Local | 🎧 Spotify | 🌟 Both).
 class ArtistResponse(BaseModel):
     """Response model for an artist."""
 
     id: str = Field(..., description="Artist UUID")
     name: str = Field(..., description="Artist name")
+    source: str = Field(..., description="Artist source: local, spotify, or hybrid")
     spotify_uri: str | None = Field(
         None, description="Spotify URI (e.g., spotify:artist:xxxx)"
     )
@@ -69,6 +72,7 @@ class ArtistListResponse(BaseModel):
 # Hey future me - this converts a domain Artist entity to an ArtistResponse DTO.
 # The datetime formatting is done here to keep the domain clean. Spotify URI is
 # converted to string if present. This is called for each artist in lists.
+# The source field is converted from enum to string for JSON serialization.
 def _artist_to_response(artist: Any) -> ArtistResponse:
     """Convert domain Artist to ArtistResponse DTO.
 
@@ -81,6 +85,7 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
     return ArtistResponse(
         id=str(artist.id.value),
         name=artist.name,
+        source=artist.source.value,  # Convert enum to string: 'local', 'spotify', 'hybrid'
         spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
         musicbrainz_id=artist.musicbrainz_id,
         image_url=artist.image_url,
@@ -152,25 +157,36 @@ async def sync_followed_artists(
         ) from e
 
 
-# Hey future me - this lists artists from our DB (not Spotify!). Use this to show
-# artists that have been synced. Supports pagination via limit/offset. Returns total
-# count for UI pagination controls. Sorted alphabetically by name in repository.
+# Hey future me - this lists artists from unified Music Manager view (LOCAL + SPOTIFY)!
+# Uses get_all_artists_unified() which returns artists with correct source field.
+# Supports filtering by source: ?source=local (only local files), ?source=spotify (followed),
+# ?source=hybrid (both), or no filter (all artists). Sorted alphabetically by name.
+# Pagination via limit/offset. Returns total count for UI pagination controls.
 @router.get("", response_model=ArtistListResponse)
 async def list_artists(
     limit: int = Query(
         100, ge=1, le=500, description="Maximum number of artists to return"
     ),
     offset: int = Query(0, ge=0, description="Number of artists to skip"),
+    source: str | None = Query(
+        None,
+        description="Filter by source: 'local', 'spotify', 'hybrid', or None for all",
+    ),
     session: AsyncSession = Depends(get_db_session),
 ) -> ArtistListResponse:
-    """List all artists from the database.
+    """List all artists from unified Music Manager view (LOCAL + SPOTIFY).
 
-    Returns paginated list of artists that have been synced to the local database.
+    Returns paginated list of artists with source field indicating origin:
+    - 'local': Artist from local file scan only
+    - 'spotify': Followed artist on Spotify only
+    - 'hybrid': Artist exists in both local library and Spotify
+
     Artists are sorted alphabetically by name.
 
     Args:
         limit: Maximum number of artists to return (1-500)
         offset: Number of artists to skip for pagination
+        source: Optional filter by source type ('local', 'spotify', 'hybrid')
         session: Database session
 
     Returns:
@@ -178,8 +194,11 @@ async def list_artists(
     """
     repo = ArtistRepository(session)
 
-    artists = await repo.list_all(limit=limit, offset=offset)
-    total_count = await repo.count_all()
+    # Use unified view that includes source field
+    artists = await repo.get_all_artists_unified(
+        limit=limit, offset=offset, source_filter=source
+    )
+    total_count = await repo.count_by_source(source=source)
 
     return ArtistListResponse(
         artists=[_artist_to_response(a) for a in artists],

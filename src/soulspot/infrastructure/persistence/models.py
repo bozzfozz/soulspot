@@ -61,6 +61,9 @@ class Base(DeclarativeBase):
 # The cascade="all, delete-orphan" on relationships means: delete artist → delete all albums/tracks!
 # This is POWERFUL but DANGEROUS - deleting "The Beatles" wipes their entire discography! Alembic
 # migrations must handle this carefully to avoid data loss.
+# Hey future me - source field tracks whether artist is LOCAL (file scan), SPOTIFY (followed), or
+# HYBRID (both)! This enables unified Music Manager view. Defaults to LOCAL for backward compatibility
+# with existing artists in DB. Use 'local', 'spotify', 'hybrid' values (not enum - SQLite compatibility).
 class ArtistModel(Base):
     """SQLAlchemy model for Artist entity (Local Library)."""
 
@@ -70,6 +73,10 @@ class ArtistModel(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # Source: 'local' (file scan), 'spotify' (followed artist), 'hybrid' (both)
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="local", index=True
+    )
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )

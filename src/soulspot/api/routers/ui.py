@@ -1062,10 +1062,26 @@ async def library_import_jobs_list(
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
+    source: str | None = None,  # NEW: Filter by source (local/spotify/hybrid/all)
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library artists browser page - only artists with local files."""
+    """Unified artists browser page - shows LOCAL + SPOTIFY + HYBRID artists.
+    
+    Hey future me - This is now the UNIFIED Music Manager artist view!
+    It shows ALL artists regardless of source (local file scan OR Spotify followed).
+    
+    Filter by source param:
+    - ?source=local → Only artists from local file scans (with or without Spotify)
+    - ?source=spotify → Only artists followed on Spotify (with or without local files)
+    - ?source=hybrid → Only artists that exist in BOTH local + Spotify
+    - ?source=all OR no param → Show ALL artists (default unified view)
+    
+    Each artist card shows badges:
+    🎵 Local (has local files)
+    🎧 Spotify (followed on Spotify)
+    🌟 Both (hybrid)
+    """
     from sqlalchemy import func, select
 
     from soulspot.infrastructure.persistence.models import (
@@ -1075,6 +1091,7 @@ async def library_artists(
     )
 
     # Subquery for track count per artist - ONLY count tracks with local files!
+    # Hey future me - track_count is 0 for Spotify-only artists (no local files yet)
     track_count_subq = (
         select(TrackModel.artist_id, func.count(TrackModel.id).label("track_count"))
         .where(TrackModel.file_path.isnot(None))
@@ -1096,32 +1113,48 @@ async def library_artists(
         .subquery()
     )
 
-    # Main query - only artists that have at least one local track
+    # Main query - SHOW ALL ARTISTS (unified view)
+    # Hey future me - LEFT JOIN track_count so Spotify-only artists (no local files) are included!
     stmt = (
         select(
             ArtistModel,
             track_count_subq.c.track_count,
             album_count_subq.c.album_count,
         )
-        .join(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
+        .outerjoin(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
         .outerjoin(album_count_subq, ArtistModel.id == album_count_subq.c.artist_id)
-        .where(track_count_subq.c.track_count > 0)
-        .order_by(ArtistModel.name)
     )
+    
+    # Apply source filter if requested
+    if source == "local":
+        # Only artists with local files (source='local' OR 'hybrid')
+        stmt = stmt.where(ArtistModel.source.in_(["local", "hybrid"]))
+    elif source == "spotify":
+        # Only Spotify followed artists (source='spotify' OR 'hybrid')
+        stmt = stmt.where(ArtistModel.source.in_(["spotify", "hybrid"]))
+    elif source == "hybrid":
+        # Only artists in BOTH sources
+        stmt = stmt.where(ArtistModel.source == "hybrid")
+    # else: source == "all" or None → Show ALL artists (no filter)
+    
+    stmt = stmt.order_by(ArtistModel.name)
     result = await session.execute(stmt)
     rows = result.all()
 
-    # Convert to template-friendly format with image_url
+    # Convert to template-friendly format with image_url + source
     # Hey future me - name is CLEAN (no disambiguation), disambiguation is stored separately!
     # After Dec 2025 folder parsing fixes, new scans store clean names. Old entries might
     # still have disambiguation in name - re-scan library to fix.
+    # NEW: source field for badge display (local/spotify/hybrid)
     artists = [
         {
             "name": artist.name,
             "disambiguation": artist.disambiguation,  # Text like "English rock band"
+            "source": artist.source,  # NEW: 'local', 'spotify', or 'hybrid'
             "track_count": track_count or 0,
             "album_count": album_count or 0,
             "image_url": artist.image_url,  # Spotify CDN URL or None
+            "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
         for artist, track_count, album_count in rows
     ]
@@ -1133,6 +1166,14 @@ async def library_artists(
     # Hey future me - count artists that need Spotify enrichment for artwork!
     artists_without_image = sum(1 for a in artists if not a["image_url"])
     enrichment_needed = artists_without_image > 0
+    
+    # Count artists by source for filter badges
+    source_counts = {
+        "all": len(artists),
+        "local": sum(1 for a in artists if a["source"] in ["local", "hybrid"]),
+        "spotify": sum(1 for a in artists if a["source"] in ["spotify", "hybrid"]),
+        "hybrid": sum(1 for a in artists if a["source"] == "hybrid"),
+    }
 
     return templates.TemplateResponse(
         request,
@@ -1141,7 +1182,10 @@ async def library_artists(
             "artists": artists,
             "enrichment_needed": enrichment_needed,
             "artists_without_image": artists_without_image,
+            "current_source": source or "all",  # Active filter
+            "source_counts": source_counts,  # For filter badge counts
         },
+    )
     )
 
 

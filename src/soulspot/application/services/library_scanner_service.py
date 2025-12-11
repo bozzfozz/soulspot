@@ -22,7 +22,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.config import Settings
-from soulspot.domain.entities import Album, Artist, Track
+from soulspot.domain.entities import Album, Artist, ArtistSource, Track
 from soulspot.domain.value_objects import AlbumId, ArtistId, FilePath, TrackId
 from soulspot.domain.value_objects.album_types import (
     SecondaryAlbumType,
@@ -409,6 +409,16 @@ class LibraryScannerService:
             artist_id = ArtistId.from_string(existing.id)
             self._artist_cache[name_lower] = artist_id
 
+            # Hey future me - UPGRADE source to HYBRID if Spotify artist found in local files!
+            # If artist was followed on Spotify (source='spotify') and is now found in local
+            # file scan, upgrade to source='hybrid' (both Spotify + local files).
+            # This is the reverse of FollowedArtistsService upgrading LOCAL → HYBRID!
+            if existing.source == "spotify":
+                existing.source = "hybrid"
+                logger.info(
+                    f"Upgraded artist '{name}' from SPOTIFY to HYBRID (local files + Spotify)"
+                )
+
             # Update musicbrainz_id if we have it now and DB doesn't
             # Hey future me - this ensures re-scans populate missing UUIDs!
             if musicbrainz_id and not existing.musicbrainz_id:
@@ -432,6 +442,7 @@ class LibraryScannerService:
             id=ArtistId.generate(),
             name=name,  # Keep original casing from folder
             disambiguation=disambiguation,  # Text disambiguation for UI display
+            source=ArtistSource.LOCAL,  # Artists from local file scans are LOCAL
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -445,12 +456,12 @@ class LibraryScannerService:
             artist_model = result.scalar_one()
             artist_model.musicbrainz_id = musicbrainz_id
             logger.debug(
-                f"Created artist '{name}' with MusicBrainz ID: {musicbrainz_id}"
+                f"Created artist '{name}' (source=LOCAL) with MusicBrainz ID: {musicbrainz_id}"
             )
 
         # Add to cache
         self._artist_cache[name_lower] = artist.id
-        logger.debug(f"Created new artist: {name}")
+        logger.debug(f"Created new artist: {name} (source=LOCAL)")
 
         return artist.id, True
 

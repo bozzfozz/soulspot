@@ -136,7 +136,10 @@ class FollowedArtistsService:
 
     # Yo future me, this processes a single artist from Spotify API response and creates/updates
     # the Artist entity in DB! We use spotify_uri as unique identifier (better than name since
-    # artists can share names). If artist exists, we update the name, genres, and image_url. If new, we create it.
+    # artists can share names). If artist exists, we update the name, genres, image_url AND source.
+    # Source is now CRITICAL for unified Music Manager:
+    # - If artist exists with source='local', upgrade to source='hybrid' (local + Spotify)
+    # - If artist doesn't exist, create with source='spotify' (Spotify followed only)
     # Spotify artist object has: id, name, uri, genres (list), images (list of artwork URLs in different sizes).
     # Genres are now persisted to DB as JSON text (migration dd18990ggh48 adds genres/tags columns).
     # Images array typically has 3 sizes: 640x640, 320x320, 160x160. We pick the medium one (index 1, ~320px)
@@ -156,6 +159,8 @@ class FollowedArtistsService:
         Raises:
             ValueError: If artist data is invalid (missing required fields)
         """
+        from soulspot.domain.entities import ArtistSource
+
         spotify_id = artist_data.get("id")
         name = artist_data.get("name")
         genres = artist_data.get("genres", [])
@@ -175,12 +180,37 @@ class FollowedArtistsService:
             preferred_image = images[1] if len(images) > 1 else images[0]
             image_url = preferred_image.get("url")
 
-        # Check if artist already exists by Spotify URI
+        # Hey future me - DEDUPLICATION LOGIC for unified Music Manager!
+        # We check TWO ways to find existing artists:
+        # 1. By spotify_uri (most reliable - exact match)
+        # 2. By name (fallback for local artists that don't have spotify_uri yet)
+        # This prevents duplicate artists when:
+        # - Local file scan found "Pink Floyd" (no spotify_uri)
+        # - Later, user follows "Pink Floyd" on Spotify
+        # → We MERGE them instead of creating duplicate!
         existing_artist = await self.artist_repo.get_by_spotify_uri(spotify_uri)
 
+        # Fallback: Check by name if spotify_uri didn't match (case-insensitive)
+        if not existing_artist:
+            existing_artist = await self.artist_repo.get_by_name(name)
+            if existing_artist:
+                logger.info(
+                    f"Found existing artist by name match: '{name}' "
+                    f"(local artist without spotify_uri, now merging)"
+                )
+
         if existing_artist:
-            # Update existing artist (name, genres, or image_url might have changed on Spotify)
+            # Update existing artist (name, genres, image_url, source, spotify_uri might have changed)
             needs_update = False
+            
+            # Always set spotify_uri if it's missing (local artist matched by name)
+            if not existing_artist.spotify_uri:
+                existing_artist.spotify_uri = spotify_uri
+                needs_update = True
+                logger.info(
+                    f"Added spotify_uri to local artist '{name}' (matched by name)"
+                )
+            
             if existing_artist.name != name:
                 existing_artist.update_name(name)
                 needs_update = True
@@ -193,15 +223,27 @@ class FollowedArtistsService:
                 existing_artist.metadata_sources["image_url"] = "spotify"
                 needs_update = True
 
+            # Hey future me - UPGRADE source if artist was local-only!
+            # If artist was found in local file scan (source='local') and is now
+            # followed on Spotify, upgrade to source='hybrid' (both local + Spotify).
+            # This is the core of the unified Music Manager - merging both sources!
+            if existing_artist.source == ArtistSource.LOCAL:
+                existing_artist.source = ArtistSource.HYBRID
+                needs_update = True
+                logger.info(
+                    f"Upgraded artist '{name}' from LOCAL to HYBRID (local + Spotify)"
+                )
+
             if needs_update:
                 await self.artist_repo.update(existing_artist)
                 logger.debug(f"Updated artist: {name} (id: {spotify_id})")
             return existing_artist, False  # Not created, was updated
 
-        # Create new artist entity
+        # Create new artist entity with source='spotify' (followed artist, no local files yet)
         new_artist = Artist(
             id=ArtistId.generate(),
             name=name,
+            source=ArtistSource.SPOTIFY,  # Spotify followed artist (no local files yet)
             spotify_uri=spotify_uri,
             image_url=image_url,
             genres=genres,  # Persisted to DB as JSON text
@@ -213,7 +255,7 @@ class FollowedArtistsService:
         )
 
         await self.artist_repo.add(new_artist)
-        logger.info(f"Created new artist: {name} (id: {spotify_id})")
+        logger.info(f"Created new Spotify followed artist: {name} (id: {spotify_id}, source=spotify)")
 
         return new_artist, True  # Was created
 

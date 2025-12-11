@@ -77,11 +77,13 @@ class ArtistRepository(IArtistRepository):
     # Hey - genres/tags are serialized as JSON strings for SQLite compatibility!
     # Hey - image_url is stored directly as string (Spotify CDN URL)!
     # Hey - disambiguation is text disambiguation from folder (e.g., "English rock band")!
+    # Hey - source tracks LOCAL/SPOTIFY/HYBRID for unified Music Manager view!
     async def add(self, artist: Artist) -> None:
         """Add a new artist."""
         model = ArtistModel(
             id=str(artist.id.value),
             name=artist.name,
+            source=artist.source.value,  # Store as string: 'local', 'spotify', 'hybrid'
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
             image_url=artist.image_url,
@@ -103,6 +105,7 @@ class ArtistRepository(IArtistRepository):
             raise EntityNotFoundException("Artist", artist.id.value)
 
         model.name = artist.name
+        model.source = artist.source.value  # Update source (local/spotify/hybrid)
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
         model.image_url = artist.image_url
@@ -135,9 +138,11 @@ class ArtistRepository(IArtistRepository):
         if not model:
             return None
 
+        from soulspot.domain.entities import ArtistSource
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
+            source=ArtistSource(model.source),  # Reconstruct from DB string
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -159,9 +164,11 @@ class ArtistRepository(IArtistRepository):
         if not model:
             return None
 
+        from soulspot.domain.entities import ArtistSource
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
+            source=ArtistSource(model.source),
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -183,9 +190,11 @@ class ArtistRepository(IArtistRepository):
         if not model:
             return None
 
+        from soulspot.domain.entities import ArtistSource
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
+            source=ArtistSource(model.source),
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -218,9 +227,11 @@ class ArtistRepository(IArtistRepository):
         if not model:
             return None
 
+        from soulspot.domain.entities import ArtistSource
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
+            source=ArtistSource(model.source),
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -241,10 +252,12 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
+        from soulspot.domain.entities import ArtistSource
         return [
             Artist(
                 id=ArtistId.from_string(model.id),
                 name=model.name,
+                source=ArtistSource(model.source),
                 spotify_uri=SpotifyUri.from_string(model.spotify_uri)
                 if model.spotify_uri
                 else None,
@@ -314,6 +327,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
+        from soulspot.domain.entities import ArtistSource
         # Filter out Various Artists patterns in Python (more flexible than SQL LIKE)
         enrichable = []
         for model in models:
@@ -325,9 +339,11 @@ class ArtistRepository(IArtistRepository):
                 Artist(
                     id=ArtistId.from_string(model.id),
                     name=model.name,
+                    source=ArtistSource(model.source),  # Include source field
                     spotify_uri=None,
                     musicbrainz_id=model.musicbrainz_id,
                     image_url=model.image_url,
+                    disambiguation=model.disambiguation,
                     genres=json.loads(model.genres) if model.genres else [],
                     tags=json.loads(model.tags) if model.tags else [],
                     created_at=model.created_at,
@@ -372,6 +388,94 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    # =======================================================================
+    # UNIFIED MUSIC MANAGER VIEW (LOCAL + SPOTIFY)
+    # =======================================================================
+    # Hey future me - this is THE CORE of the unified Music Manager!
+    # It merges LOCAL library artists (from file scans) with SPOTIFY followed artists.
+    # The source field tracks origin: LOCAL, SPOTIFY, or HYBRID (both).
+    #
+    # Why this matters:
+    # - Users want to see ALL their artists in one place
+    # - Local files provide actual music ownership
+    # - Spotify provides metadata (artwork, genres, popularity)
+    # - HYBRID artists get best of both worlds
+    #
+    # Match criteria (in order of priority):
+    # 1. spotify_uri exact match (most reliable)
+    # 2. name case-insensitive match (fallback for manual imports)
+    #
+    # Source determination:
+    # - LOCAL only: Artist has files but not in Spotify followed
+    # - SPOTIFY only: Followed artist but no local files yet
+    # - HYBRID: Artist exists in BOTH local library and Spotify
+    # =======================================================================
+
+    async def get_all_artists_unified(
+        self, limit: int = 100, offset: int = 0, source_filter: str | None = None
+    ) -> list[Artist]:
+        """Get unified view of LOCAL + SPOTIFY artists.
+
+        Hey future me - this powers the Music Manager unified artist list!
+        Returns artists from soulspot_artists table with source field correctly set.
+        Artists with source='spotify' are followed on Spotify but have no local files yet.
+        Artists with source='hybrid' exist in both local library and Spotify followed.
+        Artists with source='local' are only in local file scans (not followed on Spotify).
+
+        Args:
+            limit: Max artists to return (pagination)
+            offset: Skip N artists (pagination)
+            source_filter: Filter by source ('local', 'spotify', 'hybrid', None=all)
+
+        Returns:
+            List of Artist entities with correct source field
+        """
+        from soulspot.domain.entities import ArtistSource
+
+        stmt = select(ArtistModel).order_by(ArtistModel.name)
+
+        # Apply source filter if provided
+        if source_filter:
+            stmt = stmt.where(ArtistModel.source == source_filter)
+
+        stmt = stmt.limit(limit).offset(offset)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            Artist(
+                id=ArtistId.from_string(model.id),
+                name=model.name,
+                source=ArtistSource(model.source),
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                image_url=model.image_url,
+                disambiguation=model.disambiguation,
+                genres=json.loads(model.genres) if model.genres else [],
+                tags=json.loads(model.tags) if model.tags else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
+    async def count_by_source(self, source: str | None = None) -> int:
+        """Count artists by source type.
+
+        Args:
+            source: Filter by source ('local', 'spotify', 'hybrid', None=all)
+
+        Returns:
+            Count of artists matching source filter
+        """
+        stmt = select(func.count(ArtistModel.id))
+        if source:
+            stmt = stmt.where(ArtistModel.source == source)
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def get_missing_artwork(self, limit: int = 50) -> list[Artist]:
         """Get artists that have Spotify URI but missing artwork.
 
@@ -400,13 +504,16 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
+        from soulspot.domain.entities import ArtistSource
         return [
             Artist(
                 id=ArtistId.from_string(model.id),
                 name=model.name,
+                source=ArtistSource(model.source),  # Include source field
                 spotify_uri=SpotifyUri(model.spotify_uri) if model.spotify_uri else None,
                 musicbrainz_id=model.musicbrainz_id,
                 image_url=model.image_url,
+                disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
                 created_at=model.created_at,
