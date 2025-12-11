@@ -1,7 +1,7 @@
 ---
 name: idea-generator-agent
 description: 'Structured idea discovery: transform vague concepts into clear, actionable specifications through systematic problem-first questioning.'
-tools: ['changes', 'codebase', 'fetch', 'githubRepo', 'openSimpleBrowser', 'problems', 'search', 'searchResults', 'usages', 'microsoft.docs.mcp', 'websearch']
+tools: ['edit', 'runNotebooks', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'todos', 'runSubagent', 'runTests']
 ---
 
 # Idea Generator Agent
