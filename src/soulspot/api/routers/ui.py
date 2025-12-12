@@ -1458,6 +1458,7 @@ async def library_artist_detail(
                 DatabaseTokenManager,
             )
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+            from soulspot.config import get_settings
 
             if hasattr(request.app.state, "db_token_manager"):
                 db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
@@ -1465,8 +1466,9 @@ async def library_artist_detail(
 
                 if access_token:
                     # Use FollowedArtistsService with SpotifyPlugin
-                    spotify_client = SpotifyClient()
-                    spotify_plugin = SpotifyPlugin(spotify_client, access_token)
+                    app_settings = get_settings()
+                    spotify_client = SpotifyClient(app_settings.spotify)
+                    spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
                     followed_service = FollowedArtistsService(session, spotify_plugin)
 
                     # Sync albums for this artist (albums, singles, EPs, compilations)
