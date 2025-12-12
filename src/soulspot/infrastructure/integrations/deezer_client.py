@@ -424,6 +424,23 @@ class DeezerClient:
     # RATE-LIMITED REQUESTS
     # =========================================================================
 
+    async def _rate_limit(self) -> None:
+        """Apply rate limiting without making a request.
+
+        Hey future me - use this before making manual HTTP requests with _get_client().
+        For standard requests, use _rate_limited_request() instead which combines both.
+
+        This ensures we don't exceed Deezer's 50 req/5s limit.
+        """
+        async with self._rate_limit_lock:
+            current_time = asyncio.get_event_loop().time()
+            time_since_last = current_time - self._last_request_time
+
+            if time_since_last < self.RATE_LIMIT_DELAY:
+                await asyncio.sleep(self.RATE_LIMIT_DELAY - time_since_last)
+
+            self._last_request_time = asyncio.get_event_loop().time()
+
     async def _rate_limited_request(
         self, method: str, url: str, **kwargs: Any
     ) -> httpx.Response:
@@ -1197,10 +1214,10 @@ class DeezerClient:
             await self._rate_limit()
 
             # Deezer uses /album/upc:{upc} endpoint
-            async with self._client as client:
-                response = await client.get(f"/album/upc:{upc}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/album/upc:{upc}")
+            response.raise_for_status()
+            data = response.json()
 
             # Check if we got an error response
             if "error" in data:
@@ -1294,10 +1311,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/chart/0/tracks?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/chart/0/tracks?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             tracks = []
             for track_data in data.get("data", []):
@@ -1324,10 +1341,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/chart/0/albums?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/chart/0/albums?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             albums = []
             for album_data in data.get("data", []):
@@ -1354,10 +1371,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/chart/0/artists?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/chart/0/artists?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             artists = []
             for artist_data in data.get("data", []):
@@ -1392,10 +1409,10 @@ class DeezerClient:
             await self._rate_limit()
 
             # /editorial/0/releases gives new releases from editorial team
-            async with self._client as client:
-                response = await client.get(f"/editorial/0/releases?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/editorial/0/releases?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             albums = []
             for album_data in data.get("data", []):
@@ -1424,10 +1441,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/editorial/0/selection?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/editorial/0/selection?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             albums = []
             for item in data.get("data", []):
@@ -1459,10 +1476,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get("/genre")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get("/genre")
+            response.raise_for_status()
+            data = response.json()
 
             genres = []
             for genre_data in data.get("data", []):
@@ -1498,10 +1515,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/genre/{genre_id}/artists?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/genre/{genre_id}/artists?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             artists = []
             for artist_data in data.get("data", []):
@@ -1533,10 +1550,10 @@ class DeezerClient:
         try:
             await self._rate_limit()
 
-            async with self._client as client:
-                response = await client.get(f"/genre/{genre_id}/radios?limit={limit}")
-                response.raise_for_status()
-                data = response.json()
+            client = await self._get_client()
+            response = await client.get(f"/genre/{genre_id}/radios?limit={limit}")
+            response.raise_for_status()
+            data = response.json()
 
             radios = []
             for radio_data in data.get("data", []):
