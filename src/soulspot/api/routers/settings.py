@@ -845,12 +845,10 @@ async def trigger_manual_sync(
     # Plugin handles token management internally.
     spotify_client = SpotifyClient(app_settings.spotify)
 
-    # Create SpotifyPlugin with DatabaseTokenManager from app state
-    db_token_manager = request.app.state.db_token_manager
+    # Create SpotifyPlugin with correct signature
     spotify_plugin = SpotifyPlugin(
-        spotify_client=spotify_client,
-        db_token_manager=db_token_manager,
-        db_session=db,
+        client=spotify_client,
+        access_token=token.access_token,
     )
 
     image_service = SpotifyImageService(app_settings)

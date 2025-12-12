@@ -161,11 +161,20 @@ async def get_spotify_plugin(
         spotify_client = SpotifyClient(settings.spotify)
         db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
 
+        # Get access token from token manager
+        access_token = await db_token_manager.get_token_for_background()
+        if not access_token:
+            raise HTTPException(
+                status_code=401,
+                detail="Not authenticated with Spotify. Please connect your account first.",
+            )
+
         return SpotifyPlugin(
-            spotify_client=spotify_client,
-            db_token_manager=db_token_manager,
-            db_session=session,
+            client=spotify_client,
+            access_token=access_token,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create SpotifyPlugin: {e}")
         raise HTTPException(
@@ -672,10 +681,17 @@ async def get_spotify_sync_service(
     spotify_client = SpotifyClient(settings.spotify)
     db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
 
+    # Get access token from token manager
+    access_token = await db_token_manager.get_token_for_background()
+    if not access_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     spotify_plugin = SpotifyPlugin(
-        spotify_client=spotify_client,
-        db_token_manager=db_token_manager,
-        db_session=session,
+        client=spotify_client,
+        access_token=access_token,
     )
 
     yield SpotifySyncService(session=session, spotify_plugin=spotify_plugin)

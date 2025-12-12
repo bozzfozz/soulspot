@@ -322,19 +322,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_followed_artists(access_token, force=False)
+            result = await sync_service.sync_followed_artists(force=False)
 
             # Update tracking
             self._last_sync["artists"] = now
@@ -370,19 +372,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_user_playlists(access_token, force=False)
+            result = await sync_service.sync_user_playlists(force=False)
 
             self._last_sync["playlists"] = now
             self._sync_stats["playlists"]["count"] += 1
@@ -417,19 +421,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_liked_songs(access_token, force=False)
+            result = await sync_service.sync_liked_songs(force=False)
 
             self._last_sync["liked_songs"] = now
             self._sync_stats["liked_songs"]["count"] += 1
@@ -463,19 +469,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_saved_albums(access_token, force=False)
+            result = await sync_service.sync_saved_albums(force=False)
 
             self._last_sync["saved_albums"] = now
             self._sync_stats["saved_albums"]["count"] += 1
@@ -590,13 +598,16 @@ class SpotifySyncWorker:
             )
 
             # Set up services
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
@@ -608,7 +619,6 @@ class SpotifySyncWorker:
                 try:
                     # Sync albums for this artist
                     result = await sync_service.sync_artist_albums(
-                        access_token=access_token,
                         artist_id=artist.spotify_id,
                         force=True,  # Skip cooldown since we're doing gradual sync
                     )
