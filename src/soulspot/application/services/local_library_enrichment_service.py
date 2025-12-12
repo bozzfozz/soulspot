@@ -42,20 +42,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.spotify_image_service import SpotifyImageService
+from soulspot.domain.dtos import AlbumDTO, ArtistDTO
 from soulspot.domain.entities import Album, Artist
-from soulspot.infrastructure.integrations.coverartarchive_client import CoverArtArchiveClient
+from soulspot.infrastructure.integrations.coverartarchive_client import (
+    CoverArtArchiveClient,
+)
 from soulspot.infrastructure.integrations.deezer_client import DeezerClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
-from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel, TrackModel
+from soulspot.infrastructure.persistence.models import (
+    AlbumModel,
+    ArtistModel,
+    TrackModel,
+)
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
     ArtistRepository,
     TrackRepository,
 )
+from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 if TYPE_CHECKING:
     from soulspot.config import Settings
-    from soulspot.domain.ports import ISpotifyClient
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +187,7 @@ class LocalLibraryEnrichmentService:
     metadata like images, genres, and Spotify URIs.
 
     Usage:
-        service = LocalLibraryEnrichmentService(session, spotify_client, settings)
+        service = LocalLibraryEnrichmentService(session, spotify_plugin, settings)
         stats = await service.enrich_batch()
         # Returns: {"artists_enriched": 5, "albums_enriched": 3, ...}
 
@@ -198,22 +205,27 @@ class LocalLibraryEnrichmentService:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: ISpotifyClient,
+        spotify_plugin: SpotifyPlugin | None,
         settings: Settings,
-        access_token: str,
     ) -> None:
         """Initialize enrichment service.
 
+        Hey future me - wir nutzen jetzt SpotifyPlugin statt SpotifyClient!
+        Das Plugin managed Token intern, daher kein access_token Parameter mehr.
+
+        spotify_plugin kann None sein für lokale Operationen wie:
+        - find_duplicate_artists/albums
+        - merge_artists/albums
+        - enrich_disambiguation_batch (nur MusicBrainz)
+
         Args:
             session: Database session
-            spotify_client: Spotify API client
+            spotify_plugin: Spotify plugin (handles auth internally), optional
             settings: Application settings
-            access_token: Spotify OAuth access token
         """
         self._session = session
-        self._spotify_client = spotify_client
+        self._spotify_plugin = spotify_plugin
         self._settings = settings
-        self._access_token = access_token
 
         # Repositories
         self._artist_repo = ArtistRepository(session)
@@ -227,12 +239,12 @@ class LocalLibraryEnrichmentService:
         # Unlike Spotify, Deezer doesn't need OAuth for metadata/artwork.
         # Perfect for Various Artists compilations where Spotify matching fails.
         self._deezer_client = DeezerClient()
-        
+
         # Hey future me - CoverArtArchive is THE source for high-res album artwork!
         # Uses MusicBrainz Release IDs to fetch 1000x1000+ cover art for FREE.
         # This is the THIRD fallback: Spotify → Deezer → CoverArtArchive
         self._caa_client = CoverArtArchiveClient()
-        
+
         # Hey future me - MusicBrainz is our source for DISAMBIGUATION data!
         # This is critical for Lidarr-style naming templates where same-name artists
         # need disambiguation (e.g. "Nirvana (US)" vs "Nirvana (UK band)").
@@ -249,11 +261,12 @@ class LocalLibraryEnrichmentService:
         """Run a batch enrichment for unenriched artists and albums.
 
         This is the MAIN entry point! Call this after library scans.
-        
+
         Hey future me - this method now respects Provider Modes!
         - If Spotify is OFF and Deezer is ON → delegates to enrich_batch_deezer_only()
         - If both are OFF → returns early with no enrichment
         - If Spotify is ON → uses Spotify with Deezer fallback (if Deezer ON)
+        - If spotify_plugin is None → treats Spotify as disabled
 
         Returns:
             Stats dict with enrichment results
@@ -262,7 +275,12 @@ class LocalLibraryEnrichmentService:
         # This allows users to completely disable providers in Settings UI.
         spotify_enabled = await self._settings_service.is_provider_enabled("spotify")
         deezer_enabled = await self._settings_service.is_provider_enabled("deezer")
-        
+
+        # Hey future me - wenn kein spotify_plugin, dann ist Spotify effektiv disabled!
+        # Das passiert wenn Service für lokale Operationen (merge, duplicates) erstellt wurde.
+        if self._spotify_plugin is None:
+            spotify_enabled = False
+
         if not spotify_enabled and not deezer_enabled:
             # Both providers disabled - nothing to do
             logger.info("Enrichment skipped: both Spotify and Deezer providers are disabled")
@@ -272,16 +290,16 @@ class LocalLibraryEnrichmentService:
                 "skipped": True,
                 "reason": "All enrichment providers disabled in settings",
             }
-        
+
         if not spotify_enabled and deezer_enabled:
             # Spotify OFF but Deezer ON - use Deezer-only mode
             logger.info("Using Deezer-only enrichment (Spotify provider disabled)")
             return await self.enrich_batch_deezer_only()
-        
+
         # Continue with normal Spotify-based enrichment (with optional Deezer fallback)
         # If Deezer is OFF, we just won't use the fallback methods
         use_deezer_fallback = deezer_enabled
-        
+
         stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
             "completed_at": None,
@@ -721,18 +739,17 @@ class LocalLibraryEnrichmentService:
                 # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
                 spotify_id = artist.spotify_uri.value.split(":")[-1]
 
-                # Fetch artist info from Spotify to get image URL
-                artist_info = await self._spotify_client.get_artist(
+                # Hey future me - wir nutzen SpotifyPlugin statt SpotifyClient!
+                # Plugin gibt ArtistDTO zurück, nicht dict.
+                artist_dto = await self._spotify_plugin.get_artist(
                     artist_id=spotify_id,
-                    access_token=self._access_token,
                 )
 
-                images = artist_info.get("images", [])
-                if not images:
+                if not artist_dto.image_url:
                     logger.debug(f"No images available for artist {artist.name}")
                     continue
 
-                image_url = images[0]["url"]
+                image_url = artist_dto.image_url
 
                 # Download artwork
                 local_path = await self._image_service.download_artist_image(
@@ -914,7 +931,7 @@ class LocalLibraryEnrichmentService:
 
                 if matched_key:
                     spotify_uri, image_url, image_path = followed_artists_lookup[matched_key]
-                    
+
                     # Hey future me - CHECK if URI was already assigned in this batch!
                     # Prevents UNIQUE constraint error for duplicate artists.
                     if assigned_uris and spotify_uri in assigned_uris:
@@ -929,7 +946,7 @@ class LocalLibraryEnrichmentService:
                             success=False,
                             error="Duplicate: URI already assigned in this batch",
                         )
-                    
+
                     logger.debug(
                         f"Artist '{artist.name}' matched via followed artists hint"
                     )
@@ -958,13 +975,13 @@ class LocalLibraryEnrichmentService:
             # Hey future me - artist.name is CLEAN (no UUID/MusicBrainz ID from folder parsing)!
             # LibraryFolderParser strips disambiguation before creating Artist entity.
             # We send only the artist name to Spotify API, nothing else!
-            search_results = await self._spotify_client.search_artist(
+            # Hey future me - SpotifyPlugin gibt PaginatedResponse[ArtistDTO] zurück!
+            search_response = await self._spotify_plugin.search_artist(
                 query=artist.name,
-                access_token=self._access_token,
                 limit=search_limit,  # Configurable via settings (default 20)
             )
 
-            artists_data = search_results.get("artists", {}).get("items", [])
+            artists_data = search_response.items  # Liste von ArtistDTOs
 
             # Hey future me - FALLBACK SEARCH with normalized name!
             # If original name (e.g., "DJ Paul Elstak") returns no results or only
@@ -976,12 +993,11 @@ class LocalLibraryEnrichmentService:
                 logger.debug(
                     f"No results for '{artist.name}', trying normalized: '{normalized_name}'"
                 )
-                fallback_results = await self._spotify_client.search_artist(
+                fallback_response = await self._spotify_plugin.search_artist(
                     query=normalized_name,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
-                artists_data = fallback_results.get("artists", {}).get("items", [])
+                artists_data = fallback_response.items
 
             if not artists_data:
                 # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
@@ -1021,12 +1037,11 @@ class LocalLibraryEnrichmentService:
                 logger.debug(
                     f"No candidates for '{artist.name}', searching with normalized: '{normalized_name}'"
                 )
-                fallback_results = await self._spotify_client.search_artist(
+                fallback_response = await self._spotify_plugin.search_artist(
                     query=normalized_name,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
-                fallback_data = fallback_results.get("artists", {}).get("items", [])
+                fallback_data = fallback_response.items  # Liste von ArtistDTOs
                 if fallback_data:
                     candidates = self._score_artist_candidates(
                         artist.name, fallback_data, name_weight=name_weight
@@ -1056,7 +1071,7 @@ class LocalLibraryEnrichmentService:
 
             # Check if top candidate is confident enough for auto-apply
             top_candidate = candidates[0]
-            
+
             # Hey future me - CHECK if URI was already assigned in this batch!
             # Prevents UNIQUE constraint error for duplicate artists via search.
             if assigned_uris and top_candidate.spotify_uri in assigned_uris:
@@ -1101,10 +1116,13 @@ class LocalLibraryEnrichmentService:
     def _score_artist_candidates(
         self,
         local_name: str,
-        spotify_artists: list[dict[str, Any]],
+        spotify_artists: list[ArtistDTO],
         name_weight: float = 0.85,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify artist candidates against local artist name.
+
+        Hey future me - jetzt mit ArtistDTOs statt dicts!
+        SpotifyPlugin gibt DTOs zurück, also arbeiten wir direkt damit.
 
         Scoring factors:
         - Name similarity (fuzzy match) - configurable weight (default 85%)
@@ -1112,7 +1130,7 @@ class LocalLibraryEnrichmentService:
 
         Args:
             local_name: Local artist name
-            spotify_artists: List of Spotify artist dicts
+            spotify_artists: List of ArtistDTO from SpotifyPlugin
             name_weight: Weight of name similarity (0.0-1.0, default 0.85)
 
         Returns:
@@ -1126,15 +1144,13 @@ class LocalLibraryEnrichmentService:
         local_normalized = normalize_artist_name(local_name)
 
         for sp_artist in spotify_artists:
-            sp_name = sp_artist.get("name", "")
-            sp_uri = sp_artist.get("uri", "")
-            sp_popularity = sp_artist.get("popularity", 0) / 100.0  # Normalize to 0-1
-            sp_followers = sp_artist.get("followers", {}).get("total", 0)
-            sp_genres = sp_artist.get("genres", [])
-
-            # Get best image URL
-            images = sp_artist.get("images", [])
-            sp_image_url = images[0]["url"] if images else None
+            # Hey future me - DTOs haben Attribute, keine dicts!
+            sp_name = sp_artist.name
+            sp_uri = sp_artist.spotify_uri or ""
+            sp_popularity = (sp_artist.popularity or 0) / 100.0  # Normalize to 0-1
+            sp_followers = sp_artist.followers or 0
+            sp_genres = sp_artist.genres or []
+            sp_image_url = sp_artist.image_url
 
             # Normalize Spotify name for comparison
             sp_normalized = normalize_artist_name(sp_name)
@@ -1160,7 +1176,7 @@ class LocalLibraryEnrichmentService:
                         spotify_image_url=sp_image_url,
                         confidence_score=confidence,
                         extra_info={
-                            "popularity": sp_artist.get("popularity", 0),
+                            "popularity": sp_artist.popularity or 0,
                             "followers": sp_followers,
                             "genres": sp_genres,
                         },
@@ -1276,7 +1292,7 @@ class LocalLibraryEnrichmentService:
         # BUT first check if we can REUSE existing artwork from Followed Artists!
         image_downloaded = False
         image_error: str | None = None
-        
+
         # Hey future me - REUSE ARTWORK from Followed Artists if available!
         # This is the key optimization: if the local artist matched a Followed Artist,
         # we already have the artwork downloaded. No need to download again!
@@ -1430,7 +1446,7 @@ class LocalLibraryEnrichmentService:
 
                 if matched_key:
                     spotify_uri, image_url, image_path = followed_albums_lookup[matched_key]
-                    
+
                     # Hey future me - CHECK if URI was already assigned in this batch!
                     if assigned_uris and spotify_uri in assigned_uris:
                         logger.warning(
@@ -1444,7 +1460,7 @@ class LocalLibraryEnrichmentService:
                             success=False,
                             error="Duplicate: URI already assigned in this batch",
                         )
-                    
+
                     logger.debug(
                         f"Album '{album.title}' by '{artist_name}' matched via followed albums hint"
                     )
@@ -1479,6 +1495,8 @@ class LocalLibraryEnrichmentService:
             # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
             # LibraryFolderParser and DB already handle disambiguation stripping.
             # Adding year to search narrows results to correct release edition!
+            # Hey future me - wir nutzen jetzt search_album statt search_track!
+            # Das gibt direkt AlbumDTOs zurück statt Tracks mit eingebetteten Albums.
             if is_various_artists:
                 # For Various Artists: search by album title only!
                 # Adding "tag:compilation" helps but isn't always accurate.
@@ -1496,38 +1514,27 @@ class LocalLibraryEnrichmentService:
             else:
                 search_query = f"artist:{artist_name} album:{album.title}"
 
-            search_results = await self._spotify_client.search_track(
+            search_response = await self._spotify_plugin.search_album(
                 query=search_query,
-                access_token=self._access_token,
                 limit=search_limit,  # Configurable via settings (default 20)
             )
 
+            albums_data = search_response.items  # Liste von AlbumDTOs
+
             # Hey future me - if year search yields nothing, retry WITHOUT year!
             # Some albums have different years across regions or releases.
-            tracks_data = search_results.get("tracks", {}).get("items", [])
-            if not tracks_data and album.release_year:
+            if not albums_data and album.release_year:
                 logger.debug(
                     f"No results with year {album.release_year}, retrying without year"
                 )
                 search_query_no_year = f"artist:{artist_name} album:{album.title}"
-                search_results = await self._spotify_client.search_track(
+                fallback_response = await self._spotify_plugin.search_album(
                     query=search_query_no_year,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
+                albums_data = fallback_response.items
 
-            # Extract unique albums from track search results
-            # Hey - Spotify search_track returns tracks, we extract albums from them
-            tracks_data = search_results.get("tracks", {}).get("items", [])
-            albums_seen: dict[str, dict[str, Any]] = {}
-
-            for track in tracks_data:
-                sp_album = track.get("album", {})
-                sp_album_uri = sp_album.get("uri", "")
-                if sp_album_uri and sp_album_uri not in albums_seen:
-                    albums_seen[sp_album_uri] = sp_album
-
-            if not albums_seen:
+            if not albums_data:
                 # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
                 # But ONLY if use_deezer_fallback is True (respects provider settings)
                 # Deezer is especially good for Various Artists compilations because
@@ -1557,10 +1564,11 @@ class LocalLibraryEnrichmentService:
 
             # Score candidates with name normalization + year matching (Lidarr-style!)
             # Hey future me - pass is_various_artists so scoring uses title-only for compilations!
+            # albums_data ist jetzt eine Liste von AlbumDTOs
             candidates = self._score_album_candidates(
                 album.title,
                 artist_name,
-                list(albums_seen.values()),
+                albums_data,  # Direkt AlbumDTOs, nicht mehr albums_seen.values()
                 local_year=album.release_year,  # Pass year for Lidarr-style matching
                 is_various_artists=is_various_artists,  # Skip artist match for compilations
             )
@@ -1594,7 +1602,7 @@ class LocalLibraryEnrichmentService:
 
             # Check if top candidate is confident enough
             top_candidate = candidates[0]
-            
+
             # Hey future me - CHECK if URI was already assigned in this batch!
             if assigned_uris and top_candidate.spotify_uri in assigned_uris:
                 logger.warning(
@@ -1637,14 +1645,14 @@ class LocalLibraryEnrichmentService:
         self,
         local_title: str,
         local_artist: str,
-        spotify_albums: list[dict[str, Any]],
+        spotify_albums: list[AlbumDTO],
         local_year: int | None = None,
         is_various_artists: bool = False,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify album candidates with name normalization + year matching.
 
-        Hey future me - this now uses normalize_artist_name() for better matching!
-        "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
+        Hey future me - jetzt mit AlbumDTOs statt dicts!
+        SpotifyPlugin.search_album() gibt DTOs zurück, also arbeiten wir direkt damit.
 
         Lidarr-style scoring formula (normal albums):
         - Title similarity - 45%
@@ -1659,7 +1667,7 @@ class LocalLibraryEnrichmentService:
         Args:
             local_title: Local album title
             local_artist: Local artist name
-            spotify_albums: List of Spotify album dicts
+            spotify_albums: List of AlbumDTO from SpotifyPlugin
             local_year: Local album release year (optional, from folder name)
             is_various_artists: If True, use title-only scoring for compilations
 
@@ -1672,16 +1680,13 @@ class LocalLibraryEnrichmentService:
         local_artist_normalized = normalize_artist_name(local_artist)
 
         for sp_album in spotify_albums:
-            sp_title = sp_album.get("name", "")
-            sp_uri = sp_album.get("uri", "")
-            sp_artists = sp_album.get("artists", [])
-            sp_artist_name = sp_artists[0]["name"] if sp_artists else ""
-            sp_release_date = sp_album.get("release_date", "")
-            sp_total_tracks = sp_album.get("total_tracks", 0)
-
-            # Get best image URL
-            images = sp_album.get("images", [])
-            sp_image_url = images[0]["url"] if images else None
+            # Hey future me - DTOs haben Attribute, keine dicts!
+            sp_title = sp_album.title
+            sp_uri = sp_album.spotify_uri or ""
+            sp_artist_name = sp_album.artist_name
+            sp_release_date = sp_album.release_date or ""
+            sp_total_tracks = sp_album.total_tracks or 0
+            sp_image_url = sp_album.artwork_url
 
             # Normalize Spotify artist name
             sp_artist_normalized = normalize_artist_name(sp_artist_name)
@@ -1798,11 +1803,7 @@ class LocalLibraryEnrichmentService:
             "soundtrack",
         ]
 
-        for pattern in partial_patterns:
-            if pattern in name_lower:
-                return True
-
-        return False
+        return any(pattern in name_lower for pattern in partial_patterns)
 
     async def _try_deezer_album_fallback(
         self,
@@ -1969,30 +1970,30 @@ class LocalLibraryEnrichmentService:
         musicbrainz_release_group_id: str | None = None,
     ) -> str | None:
         """Try CoverArtArchive for album artwork via MusicBrainz IDs.
-        
+
         Hey future me - CoverArtArchive is the THIRD fallback for artwork!
         It uses MusicBrainz Release IDs to fetch 1000x1000+ cover art.
         CAA is completely FREE and has great coverage for popular releases.
-        
+
         This is called when:
         1. Album has musicbrainz_id but no artwork_url
         2. Spotify AND Deezer both failed to provide artwork
         3. We have a Release Group ID from MB search
-        
+
         Args:
             album_title: Album title (for logging)
             musicbrainz_release_id: MusicBrainz Release ID (specific edition)
             musicbrainz_release_group_id: MusicBrainz Release Group ID (album concept)
-        
+
         Returns:
             Artwork URL (1000x1000 or 500px thumbnail) or None
         """
         if not self._caa_client:
             return None
-        
+
         if not musicbrainz_release_id and not musicbrainz_release_group_id:
             return None
-        
+
         try:
             # Prefer Release ID (specific edition) over Release Group
             if musicbrainz_release_id:
@@ -2000,7 +2001,7 @@ class LocalLibraryEnrichmentService:
                     f"Trying CoverArtArchive for album '{album_title}' "
                     f"(MB Release: {musicbrainz_release_id})"
                 )
-                
+
                 # Try to get full artwork info first (has multiple sizes)
                 artwork = await self._caa_client.get_release_artwork(musicbrainz_release_id)
                 if artwork and artwork.front_url:
@@ -2009,7 +2010,7 @@ class LocalLibraryEnrichmentService:
                         f"via Release ID"
                     )
                     return artwork.front_url
-                
+
                 # Fallback to direct front cover URL
                 front_url = await self._caa_client.get_front_cover_url(musicbrainz_release_id)
                 if front_url:
@@ -2018,14 +2019,14 @@ class LocalLibraryEnrichmentService:
                         f"via Release ID"
                     )
                     return front_url
-            
+
             # Try Release Group ID (album concept - redirects to "best" release)
             if musicbrainz_release_group_id:
                 logger.debug(
                     f"Trying CoverArtArchive for album '{album_title}' "
                     f"(MB Release Group: {musicbrainz_release_group_id})"
                 )
-                
+
                 front_url = await self._caa_client.get_release_group_front_cover(
                     musicbrainz_release_group_id
                 )
@@ -2035,10 +2036,10 @@ class LocalLibraryEnrichmentService:
                         f"via Release Group ID"
                     )
                     return front_url
-            
+
             logger.debug(f"No CoverArtArchive artwork found for album '{album_title}'")
             return None
-            
+
         except Exception as e:
             logger.warning(f"CoverArtArchive fallback failed for album '{album_title}': {e}")
             return None
@@ -2053,18 +2054,18 @@ class LocalLibraryEnrichmentService:
 
     async def enrich_disambiguation_batch(self, limit: int = 50) -> dict[str, Any]:
         """Enrich artists and albums with MusicBrainz disambiguation data.
-        
+
         Hey future me - this fills the disambiguation field on artists and albums!
         This is essential for Lidarr-style naming templates that use {ArtistDisambiguation}.
-        
+
         Process:
         1. Find artists/albums without disambiguation but with existing metadata
         2. Search MusicBrainz by name/title
         3. Match by similarity score and store disambiguation string
-        
+
         Args:
             limit: Maximum number of items to process per entity type
-        
+
         Returns:
             Stats dict with enriched counts and errors
         """
@@ -2076,7 +2077,7 @@ class LocalLibraryEnrichmentService:
             "albums_enriched": 0,
             "errors": [],
         }
-        
+
         # Check if MusicBrainz provider is enabled
         musicbrainz_enabled = await self._settings_service.is_provider_enabled("musicbrainz")
         if not musicbrainz_enabled:
@@ -2084,7 +2085,7 @@ class LocalLibraryEnrichmentService:
             stats["skipped"] = True
             stats["reason"] = "MusicBrainz provider disabled in settings"
             return stats
-        
+
         # Enrich artists without disambiguation
         artists = await self._get_artists_without_disambiguation(limit=limit)
         for artist in artists:
@@ -2100,10 +2101,10 @@ class LocalLibraryEnrichmentService:
                     "name": artist.name,
                     "error": str(e),
                 })
-            
+
             # Rate limiting - MusicBrainz requires 1 req/sec
             await asyncio.sleep(1.0)
-        
+
         # Enrich albums without disambiguation
         albums = await self._get_albums_without_disambiguation(limit=limit)
         for album in albums:
@@ -2119,25 +2120,25 @@ class LocalLibraryEnrichmentService:
                     "name": album.name,
                     "error": str(e),
                 })
-            
+
             # Rate limiting
             await asyncio.sleep(1.0)
-        
+
         await self._session.commit()
         stats["completed_at"] = datetime.now(UTC).isoformat()
-        
+
         logger.info(
             f"Disambiguation enrichment complete: {stats['artists_enriched']} artists, "
             f"{stats['albums_enriched']} albums enriched"
         )
-        
+
         return stats
 
     async def _get_artists_without_disambiguation(
         self, limit: int = 50
     ) -> list[ArtistModel]:
         """Get artists that don't have disambiguation but have names.
-        
+
         Hey future me - we prioritize artists that have some existing enrichment
         (like spotify_uri) because they're more likely to be real, matched artists.
         """
@@ -2177,51 +2178,51 @@ class LocalLibraryEnrichmentService:
 
     async def _enrich_artist_disambiguation(self, artist: ArtistModel) -> bool:
         """Enrich a single artist with MusicBrainz disambiguation.
-        
+
         Hey future me - this searches MusicBrainz for the artist name and finds
         the best match based on fuzzy string similarity. If MB has a disambiguation
         string for that artist, we store it.
-        
+
         Returns True if disambiguation was found and stored.
         """
         if not artist.name:
             return False
-        
+
         try:
             # Search MusicBrainz for artist matches with disambiguation
             mb_results = await self._musicbrainz_client.search_artist_with_disambiguation(
                 name=artist.name,
                 limit=5,
             )
-            
+
             if not mb_results:
                 logger.debug(f"No MusicBrainz results for artist '{artist.name}'")
                 return False
-            
+
             # Find best match by name similarity
             best_match = None
             best_score = 0.0
-            
+
             for mb_artist in mb_results:
                 mb_name = mb_artist.get("name", "")
                 score = fuzz.ratio(artist.name.lower(), mb_name.lower()) / 100.0
-                
+
                 if score > best_score:
                     best_score = score
                     best_match = mb_artist
-            
+
             # Require decent match (>80% similarity)
             if best_match and best_score >= 0.80:
                 disambiguation = best_match.get("disambiguation")
-                
+
                 if disambiguation:
                     artist.disambiguation = disambiguation
                     artist.updated_at = datetime.now(UTC)
-                    
+
                     # Also store MusicBrainz ID if we don't have one
                     if not artist.musicbrainz_id and best_match.get("id"):
                         artist.musicbrainz_id = best_match["id"]
-                    
+
                     logger.info(
                         f"Added disambiguation for artist '{artist.name}': "
                         f"'{disambiguation}' (score: {best_score:.2f})"
@@ -2232,48 +2233,48 @@ class LocalLibraryEnrichmentService:
                         f"MusicBrainz has no disambiguation for artist '{artist.name}' "
                         f"(matched: {best_match.get('name')})"
                     )
-            
+
             return False
-            
+
         except Exception as e:
             logger.warning(f"MusicBrainz disambiguation failed for artist '{artist.name}': {e}")
             return False
 
     async def _enrich_album_disambiguation(self, album: AlbumModel) -> bool:
         """Enrich a single album with MusicBrainz disambiguation.
-        
+
         Hey future me - albums can also have disambiguation in MusicBrainz!
         For example "Greatest Hits (1998 compilation)" vs "Greatest Hits (2005 remaster)".
         This helps differentiate albums with generic titles.
-        
+
         Returns True if disambiguation was found and stored.
         """
         if not album.name:
             return False
-        
+
         try:
             # Search MusicBrainz for album matches with disambiguation
             # Use artist name if available for better matching
             artist_name = album.artist_name or None
-            
+
             mb_results = await self._musicbrainz_client.search_album_with_disambiguation(
                 title=album.name,
                 artist=artist_name,
                 limit=5,
             )
-            
+
             if not mb_results:
                 logger.debug(f"No MusicBrainz results for album '{album.name}'")
                 return False
-            
+
             # Find best match by title similarity
             best_match = None
             best_score = 0.0
-            
+
             for mb_album in mb_results:
                 mb_title = mb_album.get("title", "")
                 score = fuzz.ratio(album.name.lower(), mb_title.lower()) / 100.0
-                
+
                 # Boost score if artist also matches
                 if artist_name and mb_album.get("artist_credit"):
                     mb_artist = mb_album["artist_credit"]
@@ -2283,26 +2284,26 @@ class LocalLibraryEnrichmentService:
                         pass  # Use as-is
                     else:
                         mb_artist = ""
-                    
+
                     artist_score = fuzz.ratio(artist_name.lower(), str(mb_artist).lower()) / 100.0
                     score = (score + artist_score) / 2.0
-                
+
                 if score > best_score:
                     best_score = score
                     best_match = mb_album
-            
+
             # Require decent match (>75% similarity for albums, slightly lower than artists)
             if best_match and best_score >= 0.75:
                 disambiguation = best_match.get("disambiguation")
-                
+
                 if disambiguation:
                     album.disambiguation = disambiguation
                     album.updated_at = datetime.now(UTC)
-                    
+
                     # Also store MusicBrainz ID if we don't have one
                     if not album.musicbrainz_id and best_match.get("id"):
                         album.musicbrainz_id = best_match["id"]
-                    
+
                     logger.info(
                         f"Added disambiguation for album '{album.name}': "
                         f"'{disambiguation}' (score: {best_score:.2f})"
@@ -2313,23 +2314,23 @@ class LocalLibraryEnrichmentService:
                         f"MusicBrainz has no disambiguation for album '{album.name}' "
                         f"(matched: {best_match.get('title')})"
                     )
-            
+
             return False
-            
+
         except Exception as e:
             logger.warning(f"MusicBrainz disambiguation failed for album '{album.name}': {e}")
             return False
 
     async def repair_missing_artwork_via_caa(self, limit: int = 50) -> dict[str, Any]:
         """Repair missing artwork using CoverArtArchive for albums with MusicBrainz IDs.
-        
+
         Hey future me - this is for albums that have musicbrainz_id but no artwork!
         Maybe they were enriched via MusicBrainz but CAA wasn't available then,
         or the artwork download failed. Now we can fix them.
-        
+
         Args:
             limit: Maximum number of albums to process
-        
+
         Returns:
             Stats dict with repaired count and errors
         """
@@ -2340,7 +2341,7 @@ class LocalLibraryEnrichmentService:
             "no_caa_artwork": 0,
             "errors": [],
         }
-        
+
         # Find albums with musicbrainz_id but no artwork
         stmt = (
             select(AlbumModel)
@@ -2352,22 +2353,22 @@ class LocalLibraryEnrichmentService:
         )
         result = await self._session.execute(stmt)
         albums = result.scalars().all()
-        
+
         logger.info(f"Found {len(albums)} albums with MB IDs but no artwork")
-        
+
         for album in albums:
             stats["processed"] += 1
-            
+
             if album.artwork_url:
                 stats["already_has_artwork"] += 1
                 continue
-            
+
             try:
                 artwork_url = await self._try_coverartarchive_album_artwork(
                     album_title=album.name,
                     musicbrainz_release_id=album.musicbrainz_id,
                 )
-                
+
                 if artwork_url:
                     # Download artwork
                     local_path = await self._image_service.download_album_image(
@@ -2375,29 +2376,29 @@ class LocalLibraryEnrichmentService:
                         artist_name=album.artist_name or "Unknown Artist",
                         album_name=album.name,
                     )
-                    
+
                     album.artwork_url = artwork_url
                     album.artwork_path = local_path
                     album.updated_at = datetime.now(UTC)
-                    
+
                     stats["repaired"] += 1
                     logger.info(f"Repaired artwork for album '{album.name}' via CAA")
                 else:
                     stats["no_caa_artwork"] += 1
-                    
+
             except Exception as e:
                 stats["errors"].append({
                     "album": album.name,
                     "error": str(e),
                 })
-        
+
         await self._session.commit()
-        
+
         logger.info(
             f"CAA artwork repair complete: {stats['repaired']} albums repaired, "
             f"{stats['no_caa_artwork']} had no CAA artwork"
         )
-        
+
         return stats
 
     async def _apply_album_enrichment(
@@ -2410,7 +2411,7 @@ class LocalLibraryEnrichmentService:
         """Apply enrichment from a candidate to an album.
 
         Uses no_autoflush block to prevent premature flushes during duplicate check.
-        
+
         Args:
             album: Album entity to update
             candidate: Selected EnrichmentCandidate
@@ -2464,7 +2465,7 @@ class LocalLibraryEnrichmentService:
         # BUT first check if we can REUSE existing artwork from Followed Albums!
         image_downloaded = False
         image_error: str | None = None
-        
+
         # Hey future me - REUSE ARTWORK from Followed Albums if available!
         # Same optimization as for artists.
         existing_image_path = candidate.extra_info.get("existing_image_path")
@@ -2479,7 +2480,7 @@ class LocalLibraryEnrichmentService:
             # Hey future me - handle both Spotify and Deezer artwork downloads!
             # Deezer candidates have URIs like "deezer:12345" instead of "spotify:album:xyz"
             source = candidate.extra_info.get("source", "spotify")
-            
+
             if source == "deezer":
                 # For Deezer, use the Deezer ID for the filename
                 deezer_id = candidate.extra_info.get("deezer_id", "unknown")
@@ -2607,6 +2608,7 @@ class LocalLibraryEnrichmentService:
             - suggested_primary_id: ID of suggested "keep" artist (most tracks/has spotify_uri)
         """
         from collections import defaultdict
+
         from sqlalchemy import func
 
         from soulspot.infrastructure.persistence.models import TrackModel
@@ -2794,6 +2796,7 @@ class LocalLibraryEnrichmentService:
             - suggested_primary_id: ID of suggested "keep" album
         """
         from collections import defaultdict
+
         from sqlalchemy import func
 
         from soulspot.infrastructure.persistence.models import TrackModel

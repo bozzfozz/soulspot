@@ -271,30 +271,32 @@ Triggered via UI button "Sync Artist":
 
 ```python
 from datetime import datetime, UTC
+from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-async def sync_artist(spotify_client: SpotifyClient, spotify_artist_id: str) -> Artist:
+async def sync_artist(spotify_plugin: SpotifyPlugin, spotify_artist_id: str) -> Artist:
     """Sync a single artist from Spotify.
     
     Args:
-        spotify_client: Spotify API client instance
+        spotify_plugin: SpotifyPlugin instance for Spotify API access
         spotify_artist_id: Spotify artist ID (e.g., '1Xyo4u8uXC1ZmMpatF05PJ')
     """
-    data = await spotify_client.get_artist(spotify_artist_id)
+    # Returns ArtistDTO with typed attributes
+    artist_dto = await spotify_plugin.get_artist(spotify_artist_id)
     
     artist = Artist(
-        spotify_id=data["id"],
-        name=data["name"],
-        genres=data.get("genres", []),
-        popularity=data.get("popularity"),
-        followers_total=data.get("followers", {}).get("total"),
-        images=data.get("images", []),
-        external_url=data.get("external_urls", {}).get("spotify"),
-        href=data.get("href"),
+        spotify_id=artist_dto.id,
+        name=artist_dto.name,
+        genres=artist_dto.genres,
+        popularity=artist_dto.popularity,
+        followers_total=artist_dto.followers,
+        images=artist_dto.images,
+        external_url=artist_dto.external_urls.get("spotify") if artist_dto.external_urls else None,
+        href=artist_dto.href,
         last_synced_at=datetime.now(UTC),
-        raw=data  # Store full payload
     )
     
     return await artist_repository.upsert(artist)
+```
 ```
 
 ### Periodic Sync (Background Worker)

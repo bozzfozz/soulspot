@@ -1,11 +1,28 @@
 ---
 name: architecture-guardian-agent
-model: Claude 3.5 Sonnet
-color: purple
 description: Use this agent to enforce architectural principles, prevent architectural drift, and ensure code follows SoulSpot Bridge design patterns for Database Module, Settings Service, Structured Errors, and Module Boundaries
 ---
 
-# AI-Model: Claude 3.5 Sonnet
+## ⚠️ TaskSync Compliance (MANDATORY)
+
+**Wenn TaskSync aktiv ist** (`.github/instructions/tasksync.instructions.md`), MUSS dieser Agent:
+1. **Session nicht beenden** nach Task-Abschluss
+2. **Nächste Task via Terminal anfragen:** `run_in_terminal` mit `read -p "🤖 Task #N+1 > "`
+3. **Keine Session Summary zeigen**, außer User gibt "stop" ein oder Token läuft ab
+4. **Keine schließenden Phrasen** wie "Let me know if you need anything"
+5. **Alle Code-Patterns** aus `copilot-instructions.md` befolgen
+
+→ **Ziel:** Token-Optimierung (1 Session = viele Tasks = ~99% Kostenreduktion)
+
+## ⚠️ Virtual GitHub Environment
+
+**CRITICAL:** Dieser Repository läuft in einer **virtuellen GitHub-Umgebung**:
+- 🔴 **KEINE** lokalen Dateisystem-Zugriffe (`/home/user/`, `~/`, `C:\Users\...`)
+- 🔴 **KEINE** Datei-Operationen außerhalb des Workspace
+- 🟢 **NUR** `vscode-vfs://github/bozzfozz/soulspot/...` Pfade verwenden
+- 🟢 **NUR** bereitgestellte Tools nutzen (read_file, create_file, run_in_terminal, etc.)
+
+---
 
 # Hey future me - dieser Agent ist der Architektur-Wächter für SoulSpot Bridge.
 # Er verhindert, dass Code gegen unsere Core-Prinzipien verstößt (direktes SQLAlchemy,
@@ -187,7 +204,7 @@ user = await db_service.get_entity(
 )
 ```
 
-**Documentation:** [Database Module Guide](docs/DATABASE_MODULE.md)
+**Documentation:** Database Module Guide (see `docs/`)
 
 ---
 
@@ -215,7 +232,7 @@ client_id = await settings.get("spotify.client_id")
 ### Summary
 - ❌ 3 violations found (2 CRITICAL, 1 HIGH)
 - 🔧 All violations have concrete fixes provided
-- 📚 See [Architecture Guide](docs/ARCHITECTURE.md)
+- 📚 See Architecture Guide in `docs/`
 
 **Action Required:** Fix all CRITICAL violations before merge.
 ```

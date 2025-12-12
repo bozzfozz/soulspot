@@ -26,7 +26,7 @@
 import asyncio
 import contextlib
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -213,7 +213,7 @@ class SpotifySyncWorker:
                 )
 
                 # Check which syncs are enabled and due
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
 
                 # Artists sync
                 if await settings_service.get_bool(
@@ -242,17 +242,30 @@ class SpotifySyncWorker:
                 # Gradual Artist Albums sync - loads albums for a few artists per cycle
                 # Hey future me - this syncs albums gradually to avoid API rate limits!
                 # Default: 5 artists per cycle, every 2 minutes = ~150 artists/hour
+                # NEW: Also resyncs existing artists to catch new releases!
                 artist_albums_interval = await settings_service.get_int(
                     "spotify.artist_albums_sync_interval_minutes", default=2
                 )
                 artists_per_cycle = await settings_service.get_int(
                     "spotify.artist_albums_per_cycle", default=5
                 )
+                # Resync settings - how often to refresh existing artists
+                resync_enabled = await settings_service.get_bool(
+                    "spotify.auto_resync_artist_albums", default=True
+                )
+                resync_hours = await settings_service.get_int(
+                    "spotify.artist_albums_resync_hours", default=24
+                )
                 if await settings_service.get_bool(
                     "spotify.auto_sync_artist_albums", default=True
                 ) and self._is_sync_due("artist_albums", artist_albums_interval, now):
                     await self._run_artist_albums_sync(
-                        session, access_token, now, artists_per_cycle
+                        session,
+                        access_token,
+                        now,
+                        artists_per_cycle,
+                        resync_hours,
+                        resync_enabled,
                     )
 
                 # Commit any changes
@@ -309,19 +322,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_followed_artists(access_token, force=False)
+            result = await sync_service.sync_followed_artists(force=False)
 
             # Update tracking
             self._last_sync["artists"] = now
@@ -357,19 +372,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_user_playlists(access_token, force=False)
+            result = await sync_service.sync_user_playlists(force=False)
 
             self._last_sync["playlists"] = now
             self._sync_stats["playlists"]["count"] += 1
@@ -404,19 +421,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_liked_songs(access_token, force=False)
+            result = await sync_service.sync_liked_songs(force=False)
 
             self._last_sync["liked_songs"] = now
             self._sync_stats["liked_songs"]["count"] += 1
@@ -450,19 +469,21 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
 
-            result = await sync_service.sync_saved_albums(access_token, force=False)
+            result = await sync_service.sync_saved_albums(force=False)
 
             self._last_sync["saved_albums"] = now
             self._sync_stats["saved_albums"]["count"] += 1
@@ -478,9 +499,15 @@ class SpotifySyncWorker:
             raise
 
     async def _run_artist_albums_sync(
-        self, session: Any, access_token: str, now: datetime, artists_per_cycle: int = 5
+        self,
+        session: Any,
+        access_token: str,
+        now: datetime,
+        artists_per_cycle: int = 5,
+        resync_hours: int = 24,
+        resync_enabled: bool = True,
     ) -> None:
-        """Run gradual artist albums sync.
+        """Run gradual artist albums sync (initial + periodic resync).
 
         Hey future me - this is the GRADUAL background album sync!
         Instead of syncing all 358+ artists at once (would hit API limits),
@@ -493,11 +520,22 @@ class SpotifySyncWorker:
         This runs AFTER the initial artist sync, gradually filling in albums
         for artists that haven't had their albums synced yet.
 
+        NEW (Dec 2025): Also resyncs existing artists periodically!
+        If resync_enabled=True, we'll also include artists whose albums_synced_at
+        is older than resync_hours. This ensures New Releases stay fresh
+        without requiring manual page visits.
+
+        Priority order:
+        1. Artists that have NEVER been synced (albums_synced_at IS NULL)
+        2. Artists that need RESYNC (albums_synced_at older than resync_hours)
+
         Args:
             session: Database session
             access_token: Spotify OAuth token
             now: Current timestamp
             artists_per_cycle: How many artists to process (default 5)
+            resync_hours: How many hours before resync is needed (default 24)
+            resync_enabled: Whether to resync existing artists (default True)
         """
         try:
             from soulspot.application.services.app_settings_service import (
@@ -516,32 +554,60 @@ class SpotifySyncWorker:
                 SpotifyBrowseRepository,
             )
 
-            # Get artists that need album sync
             repo = SpotifyBrowseRepository(session)
+
+            # Hey future me - TWO-PHASE SYNC:
+            # 1. First, get artists that have NEVER been synced (priority)
+            # 2. Then, if resync enabled and space left, get artists needing RESYNC
+            artists_to_sync: list[Any] = []
+
+            # Phase 1: Get never-synced artists (highest priority)
             pending_artists = await repo.get_artists_pending_album_sync(
                 limit=artists_per_cycle
             )
             pending_count = await repo.count_artists_pending_album_sync()
+            artists_to_sync.extend(pending_artists)
 
-            if not pending_artists:
-                # All artists have been synced - nothing to do
-                logger.debug("No artists pending album sync")
+            # Phase 2: If resync enabled and we have room, add artists needing resync
+            resync_count = 0
+            if resync_enabled and len(artists_to_sync) < artists_per_cycle:
+                remaining_slots = artists_per_cycle - len(artists_to_sync)
+                resync_artists = await repo.get_artists_due_for_resync(
+                    max_age_hours=resync_hours,
+                    limit=remaining_slots,
+                )
+                resync_count = await repo.count_artists_due_for_resync(
+                    max_age_hours=resync_hours
+                )
+                artists_to_sync.extend(resync_artists)
+
+            if not artists_to_sync:
+                # All artists have been synced and none need resync
+                logger.debug("No artists pending album sync or needing resync")
                 self._sync_stats["artist_albums"]["pending"] = 0
+                self._sync_stats["artist_albums"]["resync_pending"] = 0
                 return
 
+            # Log what we're doing
+            new_count = len(pending_artists)
+            resync_this_cycle = len(artists_to_sync) - new_count
             logger.info(
-                f"Starting gradual artist albums sync: {len(pending_artists)} artists "
-                f"this cycle, {pending_count} total pending"
+                f"Starting gradual artist albums sync: "
+                f"{new_count} new + {resync_this_cycle} resync = {len(artists_to_sync)} artists "
+                f"this cycle. Pending: {pending_count} new, {resync_count} resync"
             )
 
             # Set up services
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
             spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
             image_service = SpotifyImageService(self.settings)
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
-                spotify_client=spotify_client,
                 session=session,
+                spotify_plugin=spotify_plugin,
                 image_service=image_service,
                 settings_service=settings_service,
             )
@@ -549,11 +615,10 @@ class SpotifySyncWorker:
             synced_count = 0
             total_albums = 0
 
-            for artist in pending_artists:
+            for artist in artists_to_sync:
                 try:
                     # Sync albums for this artist
                     result = await sync_service.sync_artist_albums(
-                        access_token=access_token,
                         artist_id=artist.spotify_id,
                         force=True,  # Skip cooldown since we're doing gradual sync
                     )
@@ -580,13 +645,16 @@ class SpotifySyncWorker:
             self._sync_stats["artist_albums"]["last_result"] = {
                 "artists_synced": synced_count,
                 "total_albums": total_albums,
+                "new_artists": new_count,
+                "resync_artists": resync_this_cycle,
             }
             self._sync_stats["artist_albums"]["last_error"] = None
-            self._sync_stats["artist_albums"]["pending"] = pending_count - synced_count
+            self._sync_stats["artist_albums"]["pending"] = pending_count
+            self._sync_stats["artist_albums"]["resync_pending"] = resync_count
 
             logger.info(
                 f"Gradual artist albums sync complete: {synced_count} artists, "
-                f"{total_albums} albums, {pending_count - synced_count} still pending"
+                f"{total_albums} albums. Still pending: {pending_count} new, {resync_count} resync"
             )
 
         except Exception as e:
@@ -640,7 +708,7 @@ class SpotifySyncWorker:
                 if not access_token:
                     return {"error": "No valid Spotify token available"}
 
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
 
                 if sync_type is None or sync_type == "artists":
                     try:

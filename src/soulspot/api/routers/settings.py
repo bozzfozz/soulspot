@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -268,39 +268,51 @@ async def update_settings(
     }
 
 
-# Listen up, reset is also a TODO stub - it SAYS it resets but doesn't actually do anything! Implementing
-# this is DANGEROUS - you could delete user's API keys, break integrations, lose custom config. Add a
-# "are you sure?" modal in UI! The reset should: 1) Clear DB config rows, 2) Delete .env overrides (not
-# the whole .env!), 3) Reload defaults. BUT don't touch database URL or secrets that would lock users out!
-# Maybe have "safe reset" (just UI prefs) vs "full reset" (everything). Restart is REQUIRED after reset.
+# Hey future me - reset endpoint NOW WORKS! It uses AppSettingsService.reset_all() to delete DB-stored
+# settings, which makes them fall back to hardcoded defaults from Settings() classes. IMPORTANT: This
+# does NOT touch .env files or secrets - those are still loaded from env vars. Only dynamic DB-stored
+# settings (like sync intervals, UI prefs) are reset. The optional 'category' param allows "safe reset"
+# of just UI prefs vs everything. Add "are you sure?" modal in UI before calling this!
 @router.post("/reset")
-async def reset_settings() -> dict[str, Any]:
-    """Reset all settings to defaults.
+async def reset_settings(
+    category: str | None = None,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Reset settings to defaults by deleting from database.
 
-    Returns settings to factory defaults by reloading from default Settings() instances.
+    Removes custom settings from DB so they fall back to hardcoded defaults.
+    Does NOT affect .env files or secrets - only dynamic DB-stored settings.
 
-    Implementation needed:
-    - Clear any database-stored settings
-    - Remove custom .env overrides
-    - Reset in-memory configuration
-    - Trigger configuration reload
+    Args:
+        category: Optional category to reset (e.g., 'ui', 'spotify', 'downloads').
+                 If not provided, resets ALL settings.
 
     Returns:
-        Success message with default settings
+        Success message with count of settings reset
 
     Raises:
         HTTPException: If reset operation fails
     """
-    # TODO: Implement reset functionality
-    # Steps:
-    # 1. Delete custom settings from database/file
-    # 2. Reload Settings() with defaults
-    # 3. Clear any cached configuration
-    # 4. Return default settings object
-    return {
-        "message": "Settings reset to defaults",
-        "note": "Please restart the application for changes to take effect",
-    }
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    try:
+        settings_service = AppSettingsService(db)
+        deleted_count = await settings_service.reset_all(category=category)
+        await db.commit()
+
+        return {
+            "message": f"Reset {deleted_count} settings to defaults",
+            "category": category or "all",
+            "settings_deleted": deleted_count,
+            "note": "Some settings may require application restart to take effect",
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Failed to reset settings: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset settings: {str(e)}",
+        ) from e
 
 
 # Hey, this returns the HARDCODED defaults from the Settings models, not what's currently in use! These
@@ -413,6 +425,17 @@ class SpotifySyncSettings(BaseModel):
     )
     remove_unfollowed_playlists: bool = Field(
         default=False, description="Remove playlists when deleted on Spotify"
+    )
+    # New Releases / Album Resync settings
+    auto_resync_artist_albums: bool = Field(
+        default=True,
+        description="Periodically resync artist albums to catch new releases",
+    )
+    artist_albums_resync_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="How many hours before resyncing artist albums (default 24 = daily)",
     )
 
 
@@ -565,6 +588,19 @@ async def update_spotify_sync_settings(
         value_type="boolean",
         category="spotify",
     )
+    # New Releases / Album Resync settings
+    await settings_service.set(
+        "spotify.auto_resync_artist_albums",
+        settings_update.auto_resync_artist_albums,
+        value_type="boolean",
+        category="spotify",
+    )
+    await settings_service.set(
+        "spotify.artist_albums_resync_hours",
+        settings_update.artist_albums_resync_hours,
+        value_type="integer",
+        category="spotify",
+    )
 
     await db.commit()
 
@@ -596,6 +632,7 @@ async def toggle_spotify_sync_setting(
         "download_images": "spotify.download_images",
         "remove_unfollowed_artists": "spotify.remove_unfollowed_artists",
         "remove_unfollowed_playlists": "spotify.remove_unfollowed_playlists",
+        "auto_resync_artist_albums": "spotify.auto_resync_artist_albums",
     }
 
     setting_key = key_mapping.get(setting_name)
@@ -765,6 +802,7 @@ class SyncTriggerResponse(BaseModel):
 @router.post("/spotify-sync/trigger/{sync_type}")
 async def trigger_manual_sync(
     sync_type: str,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
 ) -> SyncTriggerResponse:
     """Trigger a manual Spotify sync.
@@ -782,6 +820,7 @@ async def trigger_manual_sync(
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
     valid_types = {"artists", "playlists", "liked", "albums", "all"}
     if sync_type not in valid_types:
@@ -802,40 +841,49 @@ async def trigger_manual_sync(
             detail="Not authenticated with Spotify. Please connect your account first.",
         )
 
+    # Hey future me - use SpotifyPlugin instead of raw SpotifyClient!
+    # Plugin handles token management internally.
     spotify_client = SpotifyClient(app_settings.spotify)
+
+    # Create SpotifyPlugin with correct signature
+    spotify_plugin = SpotifyPlugin(
+        client=spotify_client,
+        access_token=token.access_token,
+    )
+
     image_service = SpotifyImageService(app_settings)
     settings_service = AppSettingsService(db)
 
     sync_service = SpotifySyncService(
         session=db,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         image_service=image_service,
         settings_service=settings_service,
     )
 
-    # Hey future me – das access_token holen wir aus dem gespeicherten Token.
-    access_token = token.access_token
+    # Hey future me - no more access_token parameter!
+    # SpotifyPlugin handles auth internally.
 
     try:
         if sync_type == "artists":
-            result = await sync_service.sync_followed_artists(access_token, force=True)
+            result = await sync_service.sync_followed_artists(force=True)
             message = f"Artists synced: {result.get('synced', 0)} updated, {result.get('removed', 0)} removed"
 
         elif sync_type == "playlists":
-            result = await sync_service.sync_user_playlists(access_token, force=True)
+            result = await sync_service.sync_user_playlists(force=True)
             message = f"Playlists synced: {result.get('synced', 0)} updated, {result.get('removed', 0)} removed"
 
         elif sync_type == "liked":
-            result = await sync_service.sync_liked_songs(access_token, force=True)
+            result = await sync_service.sync_liked_songs(force=True)
             message = f"Liked Songs synced: {result.get('track_count', 0)} tracks"
 
         elif sync_type == "albums":
-            result = await sync_service.sync_saved_albums(access_token, force=True)
+            result = await sync_service.sync_saved_albums(force=True)
             message = f"Saved Albums synced: {result.get('synced', 0)} updated"
 
         elif sync_type == "all":
             # Run all syncs
-            results = await sync_service.run_full_sync(access_token, force=True)
+            results = await sync_service.run_full_sync(force=True)
             # Die Ergebnisse sind dicts mit details, extrahiere die Counts
             artists_count = (
                 results.get("artists", {}).get("synced", 0)
@@ -1713,10 +1761,10 @@ async def update_library_enrichment_settings(
 
 class ProviderModeSettings(BaseModel):
     """Provider mode settings for all external services.
-    
+
     Values: 0=off, 1=basic (free tier), 2=pro (full features)
     """
-    
+
     spotify: int = Field(
         default=2,
         ge=0,
@@ -1767,7 +1815,7 @@ async def get_provider_settings(
     """
     settings_service = AppSettingsService(db)
     modes = await settings_service.get_all_provider_modes()
-    
+
     # Convert mode names to integers for API response
     return ProviderModeSettings(
         spotify=_MODE_NAME_TO_INT.get(modes.get("spotify", "pro"), 2),
@@ -1803,10 +1851,10 @@ async def update_provider_settings(
         "lastfm": _MODE_INT_TO_NAME.get(settings_update.lastfm, "basic"),
         "slskd": _MODE_INT_TO_NAME.get(settings_update.slskd, "pro"),
     }
-    
+
     await settings_service.set_all_provider_modes(modes_to_save)
     await db.commit()
-    
+
     logger.info(f"Updated provider modes: {modes_to_save}")
 
     return settings_update

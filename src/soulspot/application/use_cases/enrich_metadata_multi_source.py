@@ -12,9 +12,9 @@ from soulspot.domain.ports import (
     IArtistRepository,
     ILastfmClient,
     IMusicBrainzClient,
-    ISpotifyClient,
     ITrackRepository,
 )
+from soulspot.domain.ports.plugin import IMusicServicePlugin
 from soulspot.domain.value_objects import TrackId
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class EnrichMetadataMultiSourceRequest:
     use_spotify: bool = True
     use_musicbrainz: bool = True
     use_lastfm: bool = True
-    spotify_access_token: str | None = None
+    # spotify_access_token REMOVED - Plugin handles token internally!
     manual_overrides: dict[str, Any] | None = None
 
 
@@ -67,6 +67,7 @@ class EnrichMetadataMultiSourceUseCase(
     # Authority hierarchy: Manual overrides > MusicBrainz > Spotify > Last.fm
     # WHY this order? MusicBrainz is crowd-sourced and curated, Spotify is official but limited, Last.fm is user-tagged
     # GOTCHA: If sources disagree on basic facts (track title, duration), we trust the hierarchy
+    # REFACTORED: Now uses IMusicServicePlugin instead of ISpotifyClient - token handled internally!
     def __init__(
         self,
         track_repository: ITrackRepository,
@@ -74,7 +75,7 @@ class EnrichMetadataMultiSourceUseCase(
         album_repository: IAlbumRepository,
         musicbrainz_client: IMusicBrainzClient,
         lastfm_client: ILastfmClient | None = None,
-        spotify_client: ISpotifyClient | None = None,
+        spotify_plugin: IMusicServicePlugin | None = None,
         metadata_merger: MetadataMerger | None = None,
     ) -> None:
         """Initialize the use case with required dependencies.
@@ -85,7 +86,7 @@ class EnrichMetadataMultiSourceUseCase(
             album_repository: Repository for album persistence
             musicbrainz_client: Client for MusicBrainz API operations
             lastfm_client: Optional client for Last.fm API operations (None if not configured)
-            spotify_client: Optional client for Spotify API operations
+            spotify_plugin: Optional SpotifyPlugin for Spotify API operations (handles token internally!)
             metadata_merger: Optional metadata merger service
         """
         self._track_repository = track_repository
@@ -93,7 +94,7 @@ class EnrichMetadataMultiSourceUseCase(
         self._album_repository = album_repository
         self._musicbrainz_client = musicbrainz_client
         self._lastfm_client = lastfm_client
-        self._spotify_client = spotify_client
+        self._spotify_plugin = spotify_plugin
         self._metadata_merger = metadata_merger or MetadataMerger()
 
     async def _fetch_musicbrainz_metadata(
@@ -123,24 +124,55 @@ class EnrichMetadataMultiSourceUseCase(
             return None
 
     async def _fetch_spotify_metadata(
-        self, track: Track, access_token: str
+        self, track: Track
     ) -> dict[str, Any] | None:
-        """Fetch metadata from Spotify."""
-        if not self._spotify_client:
+        """Fetch metadata from Spotify via Plugin.
+        
+        Hey future me - Plugin handles token internally! No more access_token param.
+        Returns dict for backward compatibility with MetadataMerger.
+        """
+        if not self._spotify_plugin:
             return None
 
         try:
             if track.spotify_uri:
                 track_id = track.spotify_uri.value.split(":")[-1]
-                return await self._spotify_client.get_track(track_id, access_token)
+                # Plugin returns TrackDTO - convert to dict for merger
+                track_dto = await self._spotify_plugin.get_track(track_id)
+                return {
+                    "id": track_dto.spotify_id,
+                    "name": track_dto.name,
+                    "duration_ms": track_dto.duration_ms,
+                    "popularity": track_dto.popularity,
+                    "preview_url": track_dto.preview_url,
+                    "external_ids": {"isrc": track_dto.isrc} if track_dto.isrc else {},
+                    "album": {
+                        "id": track_dto.album.spotify_id if track_dto.album else None,
+                        "name": track_dto.album.name if track_dto.album else None,
+                        "release_date": track_dto.album.release_date if track_dto.album else None,
+                        "images": [{"url": track_dto.album.image_url}] if track_dto.album and track_dto.album.image_url else [],
+                    } if track_dto.album else {},
+                    "artists": [
+                        {"id": a.spotify_id, "name": a.name}
+                        for a in (track_dto.artists or [])
+                    ],
+                }
 
             # Fall back to search
             query = f"track:{track.title}"
-            results = await self._spotify_client.search_track(
-                query, access_token, limit=1
-            )
-            if results and "tracks" in results and results["tracks"]["items"]:
-                return dict(results["tracks"]["items"][0])
+            results = await self._spotify_plugin.search(query, types=["track"], limit=1)
+            if results.tracks:
+                first_track = results.tracks[0]
+                return {
+                    "id": first_track.spotify_id,
+                    "name": first_track.name,
+                    "duration_ms": first_track.duration_ms,
+                    "popularity": first_track.popularity,
+                    "artists": [
+                        {"id": a.spotify_id, "name": a.name}
+                        for a in (first_track.artists or [])
+                    ],
+                }
 
             return None
         except Exception as e:
@@ -215,10 +247,9 @@ class EnrichMetadataMultiSourceUseCase(
                 sources_used.append("MusicBrainz")
                 enriched_fields.append("musicbrainz_data_fetched")
 
-        if request.use_spotify and request.spotify_access_token:
-            spotify_data = await self._fetch_spotify_metadata(
-                track, request.spotify_access_token
-            )
+        if request.use_spotify:
+            # No access_token needed - plugin handles it internally!
+            spotify_data = await self._fetch_spotify_metadata(track)
             if spotify_data:
                 sources_used.append("Spotify")
                 enriched_fields.append("spotify_data_fetched")

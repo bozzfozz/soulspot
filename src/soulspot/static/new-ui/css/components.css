@@ -1050,7 +1050,152 @@
     color: var(--text-muted);
 }
 
-/* Mobile: Tooltip links ausrichten statt zentriert */
+/* Enhanced Worker Tooltip Styles - All Workers + Services */
+
+.worker-tooltip {
+    /* Override base tooltip styles for a richer look */
+    padding: 0; /* Remove padding to let header touch edges */
+    overflow: hidden; /* For header border-radius */
+    background-color: var(--bg-secondary);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-primary);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    min-width: 280px;
+}
+
+.tooltip-header {
+    background: linear-gradient(to right, var(--bg-tertiary), var(--bg-secondary));
+    padding: var(--space-3) var(--space-4);
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.tooltip-workers-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-3);
+}
+
+.tooltip-worker-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
+    border-left: none; /* Removed heavy border */
+}
+
+.tooltip-worker-row:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.tooltip-worker-name {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+.tooltip-worker-name i {
+    font-size: 1rem;
+    width: 16px; /* Fixed width for alignment */
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.tooltip-detail {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    padding-left: 34px; /* Align with text start (icon + gap) */
+    line-height: 1.4;
+}
+
+.tooltip-syncs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-left: 34px;
+    margin-top: 2px;
+}
+
+.tooltip-sync-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    padding: 1px 6px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.tooltip-divider {
+    height: 1px;
+    background-color: var(--border-primary);
+    margin: 0;
+}
+
+/* Services Status Section */
+.tooltip-services-section {
+    padding: var(--space-3) var(--space-4);
+    background-color: rgba(0, 0, 0, 0.02); /* Very subtle contrast */
+}
+
+.tooltip-services-title {
+    font-size: 10px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--space-2);
+}
+
+/* Grid layout for services */
+.tooltip-services-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+}
+
+/* We need to target the flex container from python and make it a grid via CSS override if possible, 
+   or just style the rows to be inline-block/flex. 
+   Actually, let's just make the container a grid. The python code outputs a div with class .tooltip-services-section.
+   I'll add display: grid to .tooltip-services-section directly if I can't change HTML.
+   Wait, python code outputs:
+   <div class="tooltip-services-section">
+       <div class="tooltip-services-title">...</div>
+       {service_rows}
+   </div>
+   So I can't easily make it a grid because the title is a child.
+   I will style the rows to look good in a list for now, or I can use flex-wrap.
+*/
+
+.tooltip-service-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    padding: 2px 0;
+}
+
+.tooltip-service-row span:first-child {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.tooltip-service-row span:last-child {
+    color: var(--text-secondary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* Mobile: Make tooltip wider and positioned better */
 @media (max-width: 768px) {
     .worker-tooltip {
         left: 8px;

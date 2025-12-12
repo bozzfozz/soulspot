@@ -1,175 +1,203 @@
-# AI Agents Overview - SoulSpot Bridge
+# AI Agents Overview – SoulSpot Bridge
 
-This document provides an overview of all AI agents available in `.github/agents/` for the SoulSpot Bridge project.
+Konsolidierte AI-Agenten für effiziente Entwicklung.
 
-## Agent Directory Structure
+## Agent-Struktur (7 Agents)
 
 ```
 .github/agents/
-├── architecture-guardian-agent.md        (NEW)
-├── backend-agent.md                      (Existing)
-├── backend-frontend-agent.md             (Existing)
-├── code-quality-reviewer-agent.md        (NEW)
-├── dependency-security-agent.md          (NEW)
-├── documentation-sync-agent.md           (NEW)
-├── frontend-agent.md                     (Existing)
-├── review-agent.md                       (Existing)
-└── test-coverage-guardian-agent.md       (NEW)
+├── idea-generator-agent.md       # Brainstorming, App Ideas, Fun Ideation
+├── planner-agent.md              # Planning, Specs, Strategy
+├── backend-agent.md              # Python, FastAPI, Backend
+├── frontend-agent-pro.md         # HTMX, Templates, UI
+├── qa-agent.md                   # Tests, Coverage, Code Quality
+├── architecture-guardian-agent.md # Architektur-Enforcement
+└── review-agent-new.md           # Pre-PR: Docs, Security, Final
 ```
 
-## Existing Agents (4)
+## Workflow
 
-### 1. **backend-agent** 
-- **Model:** Claude 3.5 Sonnet
-- **Color:** Red
-- **Purpose:** Server-side Python FastAPI/Flask application logic, API endpoints, database operations, service layer implementations, backend architecture decisions
-- **Expertise:** Clean/Onion Architecture, dependency injection, repository pattern, async/await
+```
+idea: → plan:/spec: → backend:/frontend: → test: → arch: → review: → PR
+```
 
-### 2. **frontend-agent**
-- **Model:** Google Gemini 3 Pro
-- **Color:** Blue
-- **Purpose:** HTMX-based interactions, TailwindCSS-styled UIs, FastAPI server-rendered HTML templates
-- **Expertise:** Progressive enhancement, responsive design, accessibility (WCAG 2.1), HTMX integration patterns
+| Schritt | Agent | Präfix |
+|---------|-------|--------|
+| 0. Ideation | idea-generator-agent | `idea:`, `brainstorm:` |
+| 1. Planung | planner-agent | `plan:`, `spec:` |
+| 2. Backend | backend-agent | `backend:`, `api:` |
+| 3. Frontend | frontend-agent-pro | `frontend:`, `ui:` |
+| 4. Testing | qa-agent | `test:`, `qa:`, `coverage:` |
+| 5. Architektur | architecture-guardian | `arch:` |
+| 6. Review | review-agent | `review:`, `docs:`, `security:` |
 
-### 3. **review-agent**
-- **Model:** (Not specified)
-- **Color:** Cyan
-- **Purpose:** QA & Test Automation for FastAPI + HTMX + SQLAlchemy + SQLite applications
-- **Expertise:** Unit/integration/E2E testing, coverage requirements (≥90%), pytest, playwright
+## Agent-Beschreibungen
 
-### 4. **backend-frontend-agent**
-- **Model:** (From config)
-- **Color:** (From config)
-- **Purpose:** Integration between backend and frontend, ensuring cohesive system behavior
-- **Expertise:** Cross-layer coordination, architectural consistency
+### 0. Idea Generator Agent (`idea:`, `brainstorm:`)
+**Zweck:** App-Ideen durch interaktive Fragen entwickeln
 
-## New Agents (5)
+- Brainstorming-Sessions moderieren
+- Nutzer-Anforderungen spielerisch sammeln
+- Scope & Komplexität bewerten
+- Übergang zu Specification vorbereiten
 
-### 1. **architecture-guardian-agent** ⭐
-- **Model:** Claude 3.5 Sonnet
-- **Color:** Purple
-- **Purpose:** Enforce architectural principles and prevent architectural drift
-- **Key Responsibilities:**
-  - Database Module enforcement (no direct SQLAlchemy outside DB layer)
-  - Settings Service enforcement (no direct `os.getenv`)
-  - Structured Errors enforcement (no generic exceptions)
-  - Module Boundaries enforcement (no cross-module imports)
-  - Type Hints enforcement (mypy strict mode)
-- **Output:** Detailed violation reports with concrete fixes, line numbers, and documentation links
-- **Severity Levels:** CRITICAL, HIGH, MEDIUM, LOW
+### 1. Planner Agent (`plan:`, `spec:`)
+**Zweck:** Strategische Planung vor Implementation
 
-### 2. **test-coverage-guardian-agent** ⭐
-- **Model:** Claude 3.5 Sonnet
-- **Color:** Green
-- **Purpose:** Prevent test coverage regression and suggest concrete, actionable tests
-- **Key Responsibilities:**
-  - Measure and report coverage (target: ≥80%, service layer: 100%)
-  - Identify under-tested files and specific untested lines
-  - Generate complete, copy-paste-ready pytest test code
-  - Suggest tests for error handling, edge cases, async operations
-- **Output:** Coverage reports with concrete test suggestions including fixtures and mocks
-- **Coverage Thresholds:** <70% CRITICAL, 70-79% WARNING, 80-89% ACCEPTABLE, 90%+ EXCELLENT
+- Implementation Plans erstellen
+- Specification Documents generieren
+- Requirements analysieren
+- Architektur-Strategie entwickeln
 
-### 3. **documentation-sync-agent** ⭐
-- **Model:** GPT-4o
-- **Color:** Yellow
-- **Purpose:** Keep documentation synchronized with code changes
-- **Key Responsibilities:**
-  - API documentation (when FastAPI routes change)
-  - Architecture & module documentation (when modules change)
-  - Database & migration documentation (when Alembic migrations added)
-  - README & getting started (when installation/config changes)
-  - Changelog & release notes (on significant changes)
-- **Output:** Documentation update proposals with complete markdown content
-- **Quality Checks:** Accuracy, completeness, consistency, clarity
+### 2. Backend Agent (`backend:`, `api:`)
+**Zweck:** Python/FastAPI Backend-Entwicklung
 
-### 4. **dependency-security-agent** ⭐
-- **Model:** Claude 3.5 Sonnet
-- **Color:** Orange
-- **Purpose:** Check dependencies for security vulnerabilities before adding them
-- **Key Responsibilities:**
-  - Scan dependencies against GitHub Advisory Database, Safety DB, npm audit
-  - Check for CVEs and known vulnerabilities
-  - Verify license compatibility (MIT, Apache, BSD ✅; GPL, AGPL ⚠️)
-  - Detect supply chain attacks (typosquatting, malware)
-  - Prioritize fixes by severity (CRITICAL, HIGH, MODERATE, LOW)
-- **Output:** Security reports with CVE details, CVSS scores, fix commands, and urgency levels
-- **Ecosystems:** Python (pip), JavaScript (npm), GitHub Actions
+- FastAPI Routes und Routers
+- Service Layer Logic
+- Database Operations
+- Authentication/Authorization
 
-### 5. **code-quality-reviewer-agent** ⭐
-- **Model:** Claude 3.5 Sonnet
-- **Color:** Blue
-- **Purpose:** Comprehensive automated code reviews
-- **Key Responsibilities:**
-  - Run and analyze ruff, mypy, bandit
-  - Check for DRY violations and SOLID principles
-  - Review documentation quality (docstrings, comments)
-  - Identify performance issues (N+1 queries, sequential async)
-  - Ensure adequate test coverage
-- **Output:** Structured reviews with critical/important/minor issues, concrete fixes, and positive highlights
-- **Review Dimensions:** Code quality, architecture, documentation, performance, testing
+### 3. Frontend Agent (`frontend:`, `ui:`)
+**Zweck:** HTMX/Templates UI-Entwicklung
+
+- HTMX Interactions
+- Jinja2 Templates
+- CSS/Tailwind Styling
+- Responsive Design
+
+### 4. QA Agent (`test:`, `qa:`, `coverage:`)
+**Zweck:** Quality Assurance & Testing
+
+- Unit/Integration/E2E Tests schreiben
+- Code Quality Reviews
+- Coverage-Analyse (min. 80%)
+- Linter/Type-Check ausführen
+
+### 5. Architecture Guardian (`arch:`)
+**Zweck:** Architektur-Enforcement
+
+- Layer-Violations erkennen
+- Port-Repository-Sync prüfen
+- Import-Regeln durchsetzen
+- Architectural Drift verhindern
+
+### 6. Review Agent (`review:`, `docs:`, `security:`)
+**Zweck:** Pre-PR Final Checks
+
+- Documentation Sync prüfen
+- Dependency Security Checks
+- Changelog erstellen
+- Final Quality Gates
+
+## Beispiel-Workflow
+
+```bash
+# 0. Ideation (New App Ideas)
+idea: Brainstorm a productivity app
+brainstorm: What should this app do?
+
+# 1. Planung
+plan: Implement new download queue feature
+
+# 2. Backend
+backend: Add DownloadQueueService with priority support
+
+# 3. Frontend
+frontend: Add download queue UI with progress indicators
+
+# 4. Testing
+test: Write unit tests for DownloadQueueService
+coverage: Check coverage for new service
+
+# 5. Architektur
+arch: Verify layer boundaries for download module
+
+# 6. Review
+review: Final pre-PR check
+docs: Update API docs for download endpoints
+```
+
+## Parallele Ausführung
+
+```bash
+parallel: backend: Add API | frontend: Add UI | test: Write tests
+```
+
+## Idea-to-Implementation Workflow Example 🚀
+
+Complete flow from brainstorming to implementation:
+
+```bash
+# Step 1: Brainstorm App Idea
+idea: I want to build something for managing tasks
+
+# [Interactive Q&A with idea-generator-agent]
+# Agent asks fun questions to explore:
+# - What kind of tasks?
+# - Who would use it?
+# - What makes it special?
+# - Platform preferences?
+
+# Step 2: Transition to Specification
+# Agent declares: "OK! We've got enough to build a specification!"
+# Agent summarizes the idea and suggests:
+
+spec: TaskMaster - Smart Task Management App
+- Gamified task completion
+- Social accountability features
+- Mobile-first design
+- Offline capability
+
+# Step 3: Implementation Planning
+plan: Implement TaskMaster MVP Phase 1
+# Planner creates detailed implementation plan
+
+# Step 4-7: Execute (Backend → Frontend → Test → Review)
+backend: Create task CRUD endpoints
+frontend: Build task list UI with HTMX
+test: Write tests for task management
+review: Final pre-PR check
+```
+
+This shows the complete journey from "I have an idea!" to production-ready code! ✨
+
+## Archivierte Agents (Konsolidiert)
+
+| Alt (12 Agents) | Neu (6 Agents) |
+|-----------------|----------------|
+| plan.agent.md | → planner-agent.md |
+| planner.agent.md | → planner-agent.md |
+| specification.agent.md | → planner-agent.md |
+| review-agent.md (QA) | → qa-agent.md |
+| test-coverage-guardian-agent.md | → qa-agent.md |
+| code-quality-reviewer-agent.md | → qa-agent.md |
+| documentation-sync-agent.md | → review-agent-new.md |
+| dependency-security-agent.md | → review-agent-new.md |
+| backend-frontend-agent.md | → backend-agent.md |
 
 ## Agent Usage Guide
 
-### When to Use Which Agent
+| Scenario | Agent | Präfix |
+|----------|-------|--------|
+| App-Idee brainstormen | idea-generator-agent | `idea:`, `brainstorm:` |
+| Neue Feature planen | planner-agent | `plan:` |
+| Specification erstellen | planner-agent | `spec:` |
+| API Endpoints schreiben | backend-agent | `backend:` |
+| HTMX UI bauen | frontend-agent | `frontend:` |
+| Tests schreiben | qa-agent | `test:` |
+| Coverage prüfen | qa-agent | `coverage:` |
+| Architektur prüfen | architecture-guardian | `arch:` |
+| Docs aktualisieren | review-agent | `docs:` |
+| Security Check | review-agent | `security:` |
+| Pre-PR Review | review-agent | `review:` |
 
-| Scenario | Recommended Agent |
-|----------|-------------------|
-| Writing new API endpoints | `backend-agent` |
-| Building HTMX UI components | `frontend-agent` |
-| Coordinating backend-frontend integration | `backend-frontend-agent` |
-| Checking architectural compliance | `architecture-guardian-agent` ⭐ |
-| Reviewing test coverage | `test-coverage-guardian-agent` ⭐ |
-| Updating documentation | `documentation-sync-agent` ⭐ |
-| Adding new dependencies | `dependency-security-agent` ⭐ |
-| Comprehensive code review | `code-quality-reviewer-agent` ⭐ |
-| Writing/reviewing tests | `review-agent` |
+## Quality Gates
 
-### Agent Workflow (Recommended Order)
-
-For a complete feature development cycle:
-
-1. **Development Phase:**
-   - Use `backend-agent` or `frontend-agent` for implementation
-   - Use `backend-frontend-agent` for integration
-
-2. **Quality Assurance Phase:**
-   - Run `architecture-guardian-agent` to check architectural compliance
-   - Run `test-coverage-guardian-agent` to ensure adequate testing
-   - Run `code-quality-reviewer-agent` for comprehensive review
-   - Use `review-agent` to write/improve tests
-
-3. **Pre-Commit Phase:**
-   - Run `dependency-security-agent` if dependencies changed
-   - Run `documentation-sync-agent` to update docs
-
-4. **Pre-Merge Phase:**
-   - Final check with `code-quality-reviewer-agent`
-   - Verify all critical issues resolved
-
-## Common Agent Patterns
-
-All agents follow these patterns:
-
-### 1. AI Model Attribution
-Every agent file includes:
-```markdown
-# AI-Model: <model-name>
-```
-
-### 2. Future-Self Comments
-Agents encourage "future-self" explanatory comments:
-```python
-# Hey future me - this function does X because Y.
-# Watch out for Z when modifying.
-```
-
-### 3. Quality Gates
-All agents enforce quality gates before considering work complete:
-- ✅ `ruff` passes
+Alle Agents enforced diese Gates vor Completion:
+- ✅ `ruff check` passes
 - ✅ `mypy` passes
-- ✅ `bandit` passes (no HIGH/CRITICAL findings)
-- ✅ CodeQL workflow green
+- ✅ `bandit` passes (keine HIGH/CRITICAL)
+- ✅ Tests grün (> 80% coverage)
 
 ### 4. Structured Output
 Agents provide:
@@ -240,6 +268,6 @@ Agents are successful when they:
 
 ---
 
-**Last Updated:** 2024-11-24
-**Total Agents:** 9 (4 existing + 5 new)
-**Total Lines:** ~2,920 lines of agent instructions
+**Last Updated:** 2024-12-08
+**Total Agents:** 7 (idea-generator + 6 core agents)
+**Total Lines:** ~12,000+ lines of agent instructions

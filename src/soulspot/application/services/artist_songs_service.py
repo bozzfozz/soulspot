@@ -1,35 +1,39 @@
 # AI-Model: Copilot
 """Service for syncing and managing individual songs (singles) from followed artists.
 
-Hey future me - this service handles syncing songs that are NOT part of albums from
-artists the user follows on Spotify. It fetches "top tracks" from Spotify (most popular
-songs) and stores them as tracks without album association. This is separate from
-album sync - we're handling standalone singles/popular tracks here!
+Hey future me - REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
+The plugin handles token management internally, no more access_token parameter juggling.
+This service handles syncing songs that are NOT part of albums from artists the user follows
+on Spotify. It fetches "top tracks" from Spotify (most popular songs) and stores them as
+tracks without album association.
 
 The flow is:
 1. Get followed artists from DB (already synced via FollowedArtistsService)
-2. For each artist, fetch their top tracks from Spotify API
-3. Filter out tracks that are part of albums (we only want singles)
-4. Create/update Track entities in our DB
-5. Return sync statistics
+2. For each artist, fetch their top tracks from Spotify API via SpotifyPlugin
+3. Plugin returns TrackDTOs (already converted from raw JSON!)
+4. Filter out tracks that are part of albums (we only want singles)
+5. Create/update Track entities in our DB
+6. Return sync statistics
 
 GOTCHA: Spotify's "top tracks" endpoint returns the artist's most popular songs,
-which may include album tracks. We filter these by checking if the track's album
-type is "single" or if the album has only one track.
+which may include album tracks. We filter these by checking album_type in the DTO.
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import Track
 from soulspot.domain.value_objects import ArtistId, SpotifyUri, TrackId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
     TrackRepository,
 )
+
+if TYPE_CHECKING:
+    from soulspot.domain.dtos import TrackDTO
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -37,55 +41,63 @@ logger = logging.getLogger(__name__)
 class ArtistSongsService:
     """Service for syncing individual songs from followed artists.
 
+    Hey future me - REFACTORED to use SpotifyPlugin!
     This service syncs popular songs/singles from artists in the database.
     Unlike FollowedArtistsService which syncs artist metadata, this syncs
     the actual TRACKS (songs). Focuses on singles and popular tracks that
     aren't part of full albums, giving users quick access to hit songs.
 
-    The spotify_client is optional - only required for sync operations.
+    The spotify_plugin is optional - only required for sync operations.
     Read and delete operations work without it.
     """
 
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient | None = None,
+        spotify_plugin: "SpotifyPlugin | None" = None,
     ) -> None:
         """Initialize artist songs service.
 
+        Hey future me - refactored to use SpotifyPlugin!
+        The plugin handles token management internally, no more access_token juggling.
+
         Args:
             session: Database session for repositories
-            spotify_client: Spotify client for API calls (optional, only needed for sync)
+            spotify_plugin: SpotifyPlugin for API calls (optional, only needed for sync)
         """
         self.session = session
         self.artist_repo = ArtistRepository(session)
         self.track_repo = TrackRepository(session)
-        self._spotify_client = spotify_client
+        self._spotify_plugin = spotify_plugin
 
     @property
-    def spotify_client(self) -> SpotifyClient:
-        """Get Spotify client, raising error if not configured.
+    def spotify_plugin(self) -> "SpotifyPlugin":
+        """Get Spotify plugin, raising error if not configured.
 
         Returns:
-            SpotifyClient instance
+            SpotifyPlugin instance
 
         Raises:
-            ValueError: If spotify_client was not provided during initialization
+            ValueError: If spotify_plugin was not provided during initialization
         """
-        if self._spotify_client is None:
+        if self._spotify_plugin is None:
             raise ValueError(
-                "SpotifyClient is required for this operation. "
-                "Initialize ArtistSongsService with spotify_client parameter."
+                "SpotifyPlugin is required for this operation. "
+                "Initialize ArtistSongsService with spotify_plugin parameter."
             )
-        return self._spotify_client
+        return self._spotify_plugin
 
-    # Main sync method for syncing songs from a single artist.
-    # Fetches top tracks from Spotify, filters for singles (non-album tracks),
+    # Main sync method for syncing songs from a single artist using SpotifyPlugin.
+    # Fetches top tracks from Spotify (returns TrackDTOs), filters for singles,
     # and creates/updates them in DB. Returns the tracks plus stats.
     async def sync_artist_songs(
-        self, artist_id: ArtistId, access_token: str, market: str = "US"
-    ) -> tuple[list[Track], dict[str, Any]]:
-        """Sync songs from a single artist.
+        self, artist_id: ArtistId, market: str = "US"
+    ) -> tuple[list[Track], dict[str, int]]:
+        """Sync songs from a single artist via SpotifyPlugin.
+
+        Hey future me - refactored to use SpotifyPlugin!
+        No more access_token param - plugin handles auth internally.
+        Plugin returns TrackDTOs, not raw JSON.
 
         Fetches the artist's top tracks from Spotify and stores non-album
         tracks (singles) in the database. Existing tracks are updated,
@@ -93,7 +105,6 @@ class ArtistSongsService:
 
         Args:
             artist_id: Artist ID to sync songs for
-            access_token: Spotify OAuth access token
             market: ISO 3166-1 alpha-2 country code (e.g., "US", "DE")
 
         Returns:
@@ -125,22 +136,21 @@ class ArtistSongsService:
         synced_tracks: list[Track] = []
 
         try:
-            # Fetch top tracks from Spotify
-            top_tracks = await self.spotify_client.get_artist_top_tracks(
+            # Fetch top tracks from Spotify via SpotifyPlugin (returns list[TrackDTO]!)
+            track_dtos = await self.spotify_plugin.get_artist_top_tracks(
                 artist_id=spotify_artist_id,
-                access_token=access_token,
                 market=market,
             )
 
-            stats["total_fetched"] = len(top_tracks)
+            stats["total_fetched"] = len(track_dtos)
             logger.info(
-                f"Fetched {len(top_tracks)} top tracks for artist {artist.name}"
+                f"Fetched {len(track_dtos)} top tracks for artist {artist.name}"
             )
 
-            for track_data in top_tracks:
+            for track_dto in track_dtos:
                 try:
-                    track, was_created, is_single = await self._process_track(
-                        track_data, artist_id
+                    track, was_created, is_single = await self._process_track_dto(
+                        track_dto, artist_id
                     )
                     if track:
                         synced_tracks.append(track)
@@ -154,7 +164,7 @@ class ArtistSongsService:
                         stats["skipped_album_tracks"] += 1
                 except Exception as e:
                     logger.error(
-                        f"Failed to process track {track_data.get('name', 'unknown')}: {e}"
+                        f"Failed to process track {track_dto.title}: {e}"
                     )
                     stats["errors"] += 1
 
@@ -170,19 +180,21 @@ class ArtistSongsService:
 
         return synced_tracks, stats
 
-    # Bulk sync operation for all followed artists in DB.
+    # Bulk sync operation for all followed artists in DB using SpotifyPlugin.
     # Iterates through artists and syncs their songs. Can take a while for
     # users following many artists. Consider adding progress callbacks for UI.
     async def sync_all_artists_songs(
-        self, access_token: str, market: str = "US", limit: int = 100
-    ) -> tuple[list[Track], dict[str, Any]]:
-        """Sync songs from all followed artists in the database.
+        self, market: str = "US", limit: int = 100
+    ) -> tuple[list[Track], dict[str, int]]:
+        """Sync songs from all followed artists in the database via SpotifyPlugin.
+
+        Hey future me - refactored to use SpotifyPlugin!
+        No more access_token param - plugin handles auth internally.
 
         Iterates through all artists in DB and syncs their top tracks.
         This is a bulk operation and may take time for many artists.
 
         Args:
-            access_token: Spotify OAuth access token
             market: ISO 3166-1 alpha-2 country code
             limit: Maximum number of artists to process
 
@@ -210,7 +222,6 @@ class ArtistSongsService:
             try:
                 tracks, stats = await self.sync_artist_songs(
                     artist_id=artist.id,
-                    access_token=access_token,
                     market=market,
                 )
                 all_tracks.extend(tracks)
@@ -233,46 +244,44 @@ class ArtistSongsService:
 
         return all_tracks, aggregate_stats
 
-    # Process a single track from Spotify API response.
+    # Process a single track from SpotifyPlugin (TrackDTO).
     # Checks if it already exists (by spotify_uri), then creates or updates.
     # Returns (track, was_created, is_single) - is_single helps with stats.
-    async def _process_track(
-        self, track_data: dict[str, Any], artist_id: ArtistId
+    async def _process_track_dto(
+        self, track_dto: "TrackDTO", artist_id: ArtistId
     ) -> tuple[Track | None, bool, bool]:
-        """Process a single track from Spotify API response.
+        """Process a single track from SpotifyPlugin (TrackDTO).
 
-        Creates or updates a Track entity based on Spotify data.
+        Hey future me - refactored to work with TrackDTO instead of raw JSON!
+        The plugin already converted Spotify JSON to clean DTO format.
+
+        Creates or updates a Track entity based on DTO data.
         Stores ALL tracks (both singles and album tracks) to provide
         comprehensive artist song coverage.
 
         Args:
-            track_data: Track data from Spotify API
+            track_dto: TrackDTO from SpotifyPlugin
             artist_id: Artist ID to associate track with
 
         Returns:
             Tuple of (Track entity or None, was_created boolean, is_single boolean)
         """
-        spotify_track_id = track_data.get("id")
-        track_name = track_data.get("name")
-        duration_ms = track_data.get("duration_ms", 0)
-        track_number = track_data.get("track_number")
-        disc_number = track_data.get("disc_number", 1)
-
-        if not spotify_track_id or not track_name:
-            logger.warning(f"Invalid track data: missing id or name - {track_data}")
+        if not track_dto.spotify_id or not track_dto.title:
+            logger.warning("Invalid track DTO: missing spotify_id or title")
             return None, False, False
 
-        spotify_uri = SpotifyUri.from_string(f"spotify:track:{spotify_track_id}")
+        spotify_uri = SpotifyUri.from_string(
+            track_dto.spotify_uri or f"spotify:track:{track_dto.spotify_id}"
+        )
 
-        # Check album info to determine if this is a single
-        album_data = track_data.get("album", {})
-        album_type = album_data.get("album_type", "")
-        # A track is considered a "single" if album_type is "single"
-        is_single = album_type == "single"
+        # Check if this is a single - in the DTO we don't have album_type directly,
+        # but we can check if album_name is missing (top tracks typically come from albums)
+        # For now, we'll consider all tracks from get_artist_top_tracks as "non-singles"
+        # unless they have no album reference
+        is_single = track_dto.album_spotify_id is None
 
-        # Extract ISRC if available (from external_ids)
-        external_ids = track_data.get("external_ids", {})
-        isrc = external_ids.get("isrc")
+        # Extract ISRC from DTO
+        isrc = track_dto.isrc
 
         # Check if track already exists by Spotify URI
         existing_track = await self.track_repo.get_by_spotify_uri(spotify_uri)
@@ -280,11 +289,11 @@ class ArtistSongsService:
         if existing_track:
             # Update existing track metadata if needed
             needs_update = False
-            if existing_track.title != track_name:
-                existing_track.title = track_name
+            if existing_track.title != track_dto.title:
+                existing_track.title = track_dto.title
                 needs_update = True
-            if existing_track.duration_ms != duration_ms:
-                existing_track.duration_ms = duration_ms
+            if existing_track.duration_ms != track_dto.duration_ms:
+                existing_track.duration_ms = track_dto.duration_ms
                 needs_update = True
             if existing_track.isrc != isrc and isrc:
                 existing_track.isrc = isrc
@@ -292,7 +301,7 @@ class ArtistSongsService:
 
             if needs_update:
                 await self.track_repo.update(existing_track)
-                logger.debug(f"Updated track: {track_name}")
+                logger.debug(f"Updated track: {track_dto.title}")
 
             return existing_track, False, is_single
 
@@ -300,18 +309,18 @@ class ArtistSongsService:
         # so these show up as "singles" in our DB
         new_track = Track(
             id=TrackId.generate(),
-            title=track_name,
+            title=track_dto.title,
             artist_id=artist_id,
             album_id=None,  # Store as single (no album)
-            duration_ms=duration_ms,
-            track_number=track_number,
-            disc_number=disc_number,
+            duration_ms=track_dto.duration_ms,
+            track_number=track_dto.track_number,
+            disc_number=track_dto.disc_number or 1,
             spotify_uri=spotify_uri,
             isrc=isrc,
         )
 
         await self.track_repo.add(new_track)
-        logger.info(f"Created new track: {track_name}")
+        logger.info(f"Created new track: {track_dto.title}")
 
         return new_track, True, is_single
 

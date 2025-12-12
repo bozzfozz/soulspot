@@ -15,7 +15,9 @@ and albums features. The tracks synced here have album_id = NULL (no album assoc
 """
 
 import logging
-from typing import Any
+
+# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -23,12 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.application.services.artist_songs_service import ArtistSongsService
 from soulspot.domain.value_objects import ArtistId, TrackId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -104,12 +107,12 @@ async def sync_artist_songs(
     artist_id: str,
     market: str = Query("US", description="ISO 3166-1 alpha-2 country code"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SyncSongsResponse:
     """Sync songs (top tracks/singles) for a specific artist.
 
-    Uses shared server-side token for authentication.
+    Hey future me - refactored to use SpotifyPlugin!
+    No more access_token juggling - plugin handles auth internally.
     Fetches the artist's top tracks from Spotify and stores them in the database.
     Tracks are stored without album association (as singles).
 
@@ -117,8 +120,7 @@ async def sync_artist_songs(
         artist_id: Artist UUID
         market: Country code for track availability (default: US)
         session: Database session
-        spotify_client: Spotify client
-        access_token: Valid Spotify access token from shared server-side storage
+        spotify_plugin: SpotifyPlugin for Spotify API calls
 
     Returns:
         List of synced tracks and sync statistics
@@ -135,13 +137,12 @@ async def sync_artist_songs(
 
     service = ArtistSongsService(
         session=session,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
     )
 
     try:
         tracks, stats = await service.sync_artist_songs(
             artist_id=artist_id_obj,
-            access_token=access_token,
             market=market,
         )
 
@@ -182,12 +183,12 @@ async def sync_all_artists_songs(
     market: str = Query("US", description="ISO 3166-1 alpha-2 country code"),
     limit: int = Query(100, ge=1, le=500, description="Max artists to process"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SyncSongsResponse:
     """Sync songs for ALL followed artists in the database.
 
-    Uses shared server-side token for authentication.
+    Hey future me - refactored to use SpotifyPlugin!
+    No more access_token juggling - plugin handles auth internally.
     Iterates through all artists in DB and syncs their top tracks.
     This is a bulk operation that may take significant time.
 
@@ -195,20 +196,18 @@ async def sync_all_artists_songs(
         market: Country code for track availability
         limit: Maximum number of artists to process
         session: Database session
-        spotify_client: Spotify client
-        access_token: Valid Spotify access token from shared server-side storage
+        spotify_plugin: SpotifyPlugin for Spotify API calls
 
     Returns:
         List of all synced tracks and aggregate statistics
     """
     service = ArtistSongsService(
         session=session,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
     )
 
     try:
         tracks, stats = await service.sync_all_artists_songs(
-            access_token=access_token,
             market=market,
             limit=limit,
         )

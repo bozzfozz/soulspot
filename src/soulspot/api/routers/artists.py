@@ -8,7 +8,9 @@ This is separate from watchlists (which track NEW releases) - this is just the a
 """
 
 import logging
-from typing import Any
+
+# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -16,15 +18,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
 )
 from soulspot.domain.value_objects import ArtistId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +37,14 @@ router = APIRouter(prefix="/artists", tags=["Artists"])
 # Hey future me - these are the response DTOs for the artists API. ArtistResponse maps
 # the domain Artist entity to what the frontend needs. Keep it flat (no nested objects)
 # for easy JSON serialization. genres is list[str] from the DB JSON field.
+# Hey - source field shows where artist comes from! 'local' = file scan, 'spotify' = followed,
+# 'hybrid' = both. UI uses this for badges (🎵 Local | 🎧 Spotify | 🌟 Both).
 class ArtistResponse(BaseModel):
     """Response model for an artist."""
 
     id: str = Field(..., description="Artist UUID")
     name: str = Field(..., description="Artist name")
+    source: str = Field(..., description="Artist source: local, spotify, or hybrid")
     spotify_uri: str | None = Field(
         None, description="Spotify URI (e.g., spotify:artist:xxxx)"
     )
@@ -69,6 +75,7 @@ class ArtistListResponse(BaseModel):
 # Hey future me - this converts a domain Artist entity to an ArtistResponse DTO.
 # The datetime formatting is done here to keep the domain clean. Spotify URI is
 # converted to string if present. This is called for each artist in lists.
+# The source field is converted from enum to string for JSON serialization.
 def _artist_to_response(artist: Any) -> ArtistResponse:
     """Convert domain Artist to ArtistResponse DTO.
 
@@ -81,6 +88,7 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
     return ArtistResponse(
         id=str(artist.id.value),
         name=artist.name,
+        source=artist.source.value,  # Convert enum to string: 'local', 'spotify', 'hybrid'
         spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
         musicbrainz_id=artist.musicbrainz_id,
         image_url=artist.image_url,
@@ -98,19 +106,18 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
 @router.post("/sync", response_model=SyncArtistsResponse)
 async def sync_followed_artists(
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SyncArtistsResponse:
     """Sync followed artists from Spotify to the database.
 
-    Uses shared server-side token so any device on the network can trigger sync.
+    Hey future me - refactored to use SpotifyPlugin!
+    No more access_token - plugin handles auth internally.
     Fetches all artists the user follows on Spotify and creates/updates them
     in the local database. Uses spotify_uri as unique key to prevent duplicates.
 
     Args:
         session: Database session
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token from shared server-side storage
+        spotify_plugin: SpotifyPlugin for Spotify API calls
 
     Returns:
         List of synced artists and sync statistics
@@ -121,10 +128,10 @@ async def sync_followed_artists(
     try:
         service = FollowedArtistsService(
             session=session,
-            spotify_client=spotify_client,
+            spotify_plugin=spotify_plugin,
         )
 
-        artists, stats = await service.sync_followed_artists(access_token)
+        artists, stats = await service.sync_followed_artists()
 
         # Commit the transaction to persist changes
         await session.commit()
@@ -152,25 +159,36 @@ async def sync_followed_artists(
         ) from e
 
 
-# Hey future me - this lists artists from our DB (not Spotify!). Use this to show
-# artists that have been synced. Supports pagination via limit/offset. Returns total
-# count for UI pagination controls. Sorted alphabetically by name in repository.
+# Hey future me - this lists artists from unified Music Manager view (LOCAL + SPOTIFY)!
+# Uses get_all_artists_unified() which returns artists with correct source field.
+# Supports filtering by source: ?source=local (only local files), ?source=spotify (followed),
+# ?source=hybrid (both), or no filter (all artists). Sorted alphabetically by name.
+# Pagination via limit/offset. Returns total count for UI pagination controls.
 @router.get("", response_model=ArtistListResponse)
 async def list_artists(
     limit: int = Query(
         100, ge=1, le=500, description="Maximum number of artists to return"
     ),
     offset: int = Query(0, ge=0, description="Number of artists to skip"),
+    source: str | None = Query(
+        None,
+        description="Filter by source: 'local', 'spotify', 'hybrid', or None for all",
+    ),
     session: AsyncSession = Depends(get_db_session),
 ) -> ArtistListResponse:
-    """List all artists from the database.
+    """List all artists from unified Music Manager view (LOCAL + SPOTIFY).
 
-    Returns paginated list of artists that have been synced to the local database.
+    Returns paginated list of artists with source field indicating origin:
+    - 'local': Artist from local file scan only
+    - 'spotify': Followed artist on Spotify only
+    - 'hybrid': Artist exists in both local library and Spotify
+
     Artists are sorted alphabetically by name.
 
     Args:
         limit: Maximum number of artists to return (1-500)
         offset: Number of artists to skip for pagination
+        source: Optional filter by source type ('local', 'spotify', 'hybrid')
         session: Database session
 
     Returns:
@@ -178,8 +196,11 @@ async def list_artists(
     """
     repo = ArtistRepository(session)
 
-    artists = await repo.list_all(limit=limit, offset=offset)
-    total_count = await repo.count_all()
+    # Use unified view that includes source field
+    artists = await repo.get_all_artists_unified(
+        limit=limit, offset=offset, source_filter=source
+    )
+    total_count = await repo.count_by_source(source=source)
 
     return ArtistListResponse(
         artists=[_artist_to_response(a) for a in artists],
@@ -321,8 +342,7 @@ class FollowingStatusResponse(BaseModel):
 )
 async def follow_artist_on_spotify(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowArtistResponse:
     """Follow an artist on Spotify.
 
@@ -331,8 +351,7 @@ async def follow_artist_on_spotify(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-modify scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Success status and message
@@ -341,7 +360,7 @@ async def follow_artist_on_spotify(
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
     try:
-        await spotify_client.follow_artist([spotify_id], access_token)
+        await spotify_plugin.follow_artists([spotify_id])
 
         logger.info(f"Followed artist on Spotify: {spotify_id}")
 
@@ -365,8 +384,7 @@ async def follow_artist_on_spotify(
 )
 async def unfollow_artist_on_spotify(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowArtistResponse:
     """Unfollow an artist on Spotify.
 
@@ -375,8 +393,7 @@ async def unfollow_artist_on_spotify(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-modify scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Success status and message
@@ -385,7 +402,7 @@ async def unfollow_artist_on_spotify(
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
     try:
-        await spotify_client.unfollow_artist([spotify_id], access_token)
+        await spotify_plugin.unfollow_artists([spotify_id])
 
         logger.info(f"Unfollowed artist on Spotify: {spotify_id}")
 
@@ -409,8 +426,7 @@ async def unfollow_artist_on_spotify(
 )
 async def check_following_status(
     request: FollowingStatusRequest,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowingStatusResponse:
     """Check if user follows one or more artists on Spotify.
 
@@ -419,8 +435,7 @@ async def check_following_status(
 
     Args:
         request: List of Spotify artist IDs to check (max 50)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-read scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Map of artist_id → is_following status
@@ -435,12 +450,8 @@ async def check_following_status(
         )
 
     try:
-        results = await spotify_client.check_if_following_artists(
-            request.artist_ids, access_token
-        )
-
-        # Build map of artist_id → is_following
-        statuses = dict(zip(request.artist_ids, results, strict=True))
+        # SpotifyPlugin.check_following_artists returns dict[str, bool] directly!
+        statuses = await spotify_plugin.check_following_artists(request.artist_ids)
 
         return FollowingStatusResponse(statuses=statuses)
     except Exception as e:
@@ -489,8 +500,7 @@ class RelatedArtistsResponse(BaseModel):
 )
 async def get_related_artists(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> RelatedArtistsResponse:
     """Get up to 20 artists similar to the given artist.
 
@@ -501,8 +511,7 @@ async def get_related_artists(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of similar artists with following status
@@ -512,51 +521,44 @@ async def get_related_artists(
     """
     try:
         # Get the source artist details first (for name in response)
-        source_artist = await spotify_client.get_artist(spotify_id, access_token)
+        source_artist = await spotify_plugin.get_artist(spotify_id)
 
-        # Get related artists
-        related = await spotify_client.get_related_artists(spotify_id, access_token)
+        # Get related artists (returns list[ArtistDTO])
+        related_dtos = await spotify_plugin.get_related_artists(spotify_id)
 
-        if not related:
+        if not related_dtos:
             return RelatedArtistsResponse(
                 artist_id=spotify_id,
-                artist_name=source_artist.get("name", "Unknown"),
+                artist_name=source_artist.name,
                 related_artists=[],
                 total=0,
             )
 
         # Batch check following status for all related artists
-        related_ids: list[str] = [
-            str(a.get("id")) for a in related if a.get("id") is not None
-        ]
-        following_statuses: list[bool] = []
+        related_ids: list[str] = [a.spotify_id for a in related_dtos if a.spotify_id]
+        following_statuses: dict[str, bool] = {}
         if related_ids:
-            following_statuses = await spotify_client.check_if_following_artists(
-                related_ids, access_token
+            following_statuses = await spotify_plugin.check_following_artists(
+                related_ids
             )
 
         # Build response with following status
         related_artists: list[RelatedArtistResponse] = []
-        for idx, artist in enumerate(related):
-            images = artist.get("images", [])
-            image_url = images[0]["url"] if images else None
-
+        for artist_dto in related_dtos:
             related_artists.append(
                 RelatedArtistResponse(
-                    spotify_id=artist.get("id", ""),
-                    name=artist.get("name", "Unknown"),
-                    image_url=image_url,
-                    genres=artist.get("genres", [])[:3],  # Limit to 3 genres
-                    popularity=artist.get("popularity", 0),
-                    is_following=following_statuses[idx]
-                    if idx < len(following_statuses)
-                    else False,
+                    spotify_id=artist_dto.spotify_id or "",
+                    name=artist_dto.name,
+                    image_url=artist_dto.image_url,
+                    genres=artist_dto.genres[:3] if artist_dto.genres else [],
+                    popularity=artist_dto.popularity or 0,
+                    is_following=following_statuses.get(artist_dto.spotify_id or "", False),
                 )
             )
 
         return RelatedArtistsResponse(
             artist_id=spotify_id,
-            artist_name=source_artist.get("name", "Unknown"),
+            artist_name=source_artist.name,
             related_artists=related_artists,
             total=len(related_artists),
         )

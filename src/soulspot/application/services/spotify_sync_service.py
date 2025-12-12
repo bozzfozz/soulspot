@@ -1,4 +1,6 @@
-# Hey future me - this service handles AUTO-SYNC of Spotify data to our database!
+# Hey future me - REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
+# The plugin handles token management internally, no more access_token parameter juggling.
+# This service handles AUTO-SYNC of Spotify data to our database!
 # The key difference from FollowedArtistsService: this syncs to SEPARATE tables
 # (spotify_artists, spotify_albums, spotify_tracks) NOT the local library tables.
 # It also has DIFF-SYNC logic: compares Spotify with DB and removes unfollowed artists.
@@ -22,19 +24,23 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.models import ensure_utc_aware
 from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
 
 class SpotifySyncService:
     """Service for auto-syncing Spotify data with diff logic.
+
+    Hey future me - REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
+    The plugin handles token management internally, no more access_token parameter.
+    All methods that used to take access_token now just work - plugin has the token!
 
     This service handles:
     1. Auto-sync followed artists on page load (with cooldown)
@@ -59,20 +65,23 @@ class SpotifySyncService:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient,
+        spotify_plugin: "SpotifyPlugin",
         image_service: "SpotifyImageService | None" = None,
         settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize sync service.
 
+        Hey future me - refactored to use SpotifyPlugin!
+        The plugin handles token management internally, no more access_token juggling.
+
         Args:
             session: Database session
-            spotify_client: Spotify client for API calls
+            spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
             image_service: Optional image service for downloading images
             settings_service: Optional settings service for sync config
         """
         self.repo = SpotifyBrowseRepository(session)
-        self.spotify_client = spotify_client
+        self.spotify_plugin = spotify_plugin
         self.session = session
         self._image_service = image_service
         self._settings_service = settings_service
@@ -82,9 +91,12 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_followed_artists(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
         """Sync followed artists from Spotify with diff logic.
+
+        Hey future me - refactored to use SpotifyPlugin!
+        No more access_token param - plugin handles auth internally.
 
         This is the MAIN auto-sync method! Called on page load.
         - Checks cooldown first (skip if recently synced)
@@ -93,7 +105,6 @@ class SpotifySyncService:
         - Returns stats for UI display
 
         Args:
-            access_token: Spotify OAuth access token
             force: Skip cooldown check
 
         Returns:
@@ -136,8 +147,8 @@ class SpotifySyncService:
             await self.session.commit()
 
             # Fetch all followed artists from Spotify
-            spotify_artists = await self._fetch_all_followed_artists(access_token)
-            spotify_ids = {a["id"] for a in spotify_artists}
+            spotify_artists = await self._fetch_all_followed_artists()
+            spotify_ids = {a.spotify_id for a in spotify_artists if a.spotify_id}
 
             # Get existing artist IDs from DB
             db_ids = await self.repo.get_all_artist_ids()
@@ -160,17 +171,17 @@ class SpotifySyncService:
                 )
 
             # Add new artists
-            for artist_data in spotify_artists:
-                if artist_data["id"] in to_add:
-                    await self._upsert_artist(
-                        artist_data, download_images=should_download_images
+            for artist_dto in spotify_artists:
+                if artist_dto.spotify_id and artist_dto.spotify_id in to_add:
+                    await self._upsert_artist_from_dto(
+                        artist_dto, download_images=should_download_images
                     )
 
             # Update existing artists (in case name/image changed)
-            for artist_data in spotify_artists:
-                if artist_data["id"] in unchanged:
-                    await self._upsert_artist(
-                        artist_data, download_images=should_download_images
+            for artist_dto in spotify_artists:
+                if artist_dto.spotify_id and artist_dto.spotify_id in unchanged:
+                    await self._upsert_artist_from_dto(
+                        artist_dto, download_images=should_download_images
                     )
 
             # Remove unfollowed artists (CASCADE deletes albums/tracks)
@@ -226,60 +237,68 @@ class SpotifySyncService:
         return stats
 
     async def _fetch_all_followed_artists(
-        self, access_token: str
-    ) -> list[dict[str, Any]]:
+        self,
+    ) -> list[Any]:
         """Fetch all followed artists from Spotify (handles pagination).
 
+        Hey future me - refactored to use SpotifyPlugin!
+        Returns list of ArtistDTOs instead of raw dicts.
         Spotify uses cursor-based pagination. We loop until no more pages.
         """
-        all_artists: list[dict[str, Any]] = []
+        from soulspot.domain.dtos import ArtistDTO
+
+        all_artists: list[ArtistDTO] = []
         after_cursor: str | None = None
 
         while True:
-            response = await self.spotify_client.get_followed_artists(
-                access_token=access_token,
+            response = await self.spotify_plugin.get_followed_artists(
                 limit=50,
                 after=after_cursor,
             )
 
-            artists_data = response.get("artists", {})
-            items = artists_data.get("items", [])
-
+            items = response.items
             if not items:
                 break
 
             all_artists.extend(items)
 
-            cursors = artists_data.get("cursors", {})
-            after_cursor = cursors.get("after")
-
-            if not after_cursor:
+            # Get cursor for next page from last artist's spotify_id
+            if response.next_offset and items:
+                after_cursor = items[-1].spotify_id
+            else:
                 break
 
         return all_artists
 
-    async def _upsert_artist(
-        self, artist_data: dict[str, Any], download_images: bool = False
+    async def _upsert_artist_from_dto(
+        self, artist_dto: Any, download_images: bool = False
     ) -> None:
-        """Insert or update a Spotify artist in DB.
+        """Insert or update a Spotify artist in DB from ArtistDTO.
+
+        Hey future me - this is the DTO version of _upsert_artist!
+        Accepts ArtistDTO from SpotifyPlugin instead of raw dict.
+        The image_url comes directly from DTO (plugin already selects best image).
 
         Args:
-            artist_data: Artist data from Spotify API
+            artist_dto: ArtistDTO from SpotifyPlugin
             download_images: Whether to download profile image locally
         """
-        spotify_id = artist_data["id"]
-        name = artist_data.get("name", "Unknown")
-        genres = artist_data.get("genres", [])
-        images = artist_data.get("images", [])
-        popularity = artist_data.get("popularity")
-        followers = artist_data.get("followers", {})
-        follower_count = followers.get("total")
+        from soulspot.domain.dtos import ArtistDTO
 
-        # Pick medium-sized image (index 1) or first available
-        image_url = None
-        if images:
-            preferred = images[1] if len(images) > 1 else images[0]
-            image_url = preferred.get("url")
+        if not isinstance(artist_dto, ArtistDTO):
+            logger.warning(f"Expected ArtistDTO, got {type(artist_dto)}")
+            return
+
+        spotify_id = artist_dto.spotify_id
+        if not spotify_id:
+            logger.warning("ArtistDTO missing spotify_id, skipping")
+            return
+
+        name = artist_dto.name or "Unknown"
+        genres = artist_dto.genres or []
+        image_url = artist_dto.image_url  # Plugin already selects best image
+        popularity = artist_dto.popularity
+        follower_count = artist_dto.followers
 
         # Download image if enabled
         image_path = None
@@ -313,15 +332,16 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_artist_albums(
-        self, access_token: str, artist_id: str, force: bool = False
+        self, artist_id: str, force: bool = False
     ) -> dict[str, Any]:
         """Sync albums for a specific artist from Spotify.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Called when user navigates to artist detail page.
         Lazy-loads albums only when needed.
 
         Args:
-            access_token: Spotify OAuth access token
             artist_id: Spotify artist ID
             force: Skip cooldown check
 
@@ -357,14 +377,14 @@ class SpotifySyncService:
                     stats["total"] = await self.repo.count_albums_by_artist(artist_id)
                     return stats
 
-            # Fetch albums from Spotify
-            albums = await self._fetch_artist_albums(access_token, artist_id)
+            # Fetch albums from Spotify using plugin
+            album_dtos = await self._fetch_artist_albums(artist_id)
 
-            for album_data in albums:
-                await self._upsert_album(album_data, artist_id)
+            for album_dto in album_dtos:
+                await self._upsert_album_from_dto(album_dto, artist_id)
                 stats["added"] += 1
 
-            stats["total"] = len(albums)
+            stats["total"] = len(album_dtos)
 
             # Mark albums as synced
             await self.repo.set_albums_synced(artist_id)
@@ -380,35 +400,44 @@ class SpotifySyncService:
         return stats
 
     async def _fetch_artist_albums(
-        self, access_token: str, artist_id: str
-    ) -> list[dict[str, Any]]:
-        """Fetch all albums for an artist from Spotify.
+        self, artist_id: str
+    ) -> list[Any]:
+        """Fetch all albums for an artist from Spotify using SpotifyPlugin.
 
-        Note: The spotify_client.get_artist_albums method returns a list directly
-        with a default limit of 50 albums.
+        Hey future me - returns AlbumDTOs now!
+        Plugin handles pagination and auth internally.
         """
-        # The client method already handles include_groups and returns a list
-        albums = await self.spotify_client.get_artist_albums(
+
+        response = await self.spotify_plugin.get_artist_albums(
             artist_id=artist_id,
-            access_token=access_token,
             limit=50,
         )
-        return albums
+        return response.items if response.items else []
 
-    async def _upsert_album(self, album_data: dict[str, Any], artist_id: str) -> None:
-        """Insert or update a Spotify album in DB."""
-        spotify_id = album_data["id"]
-        name = album_data.get("name", "Unknown")
-        images = album_data.get("images", [])
-        release_date = album_data.get("release_date")
-        release_date_precision = album_data.get("release_date_precision")
-        album_type = album_data.get("album_type", "album")
-        total_tracks = album_data.get("total_tracks", 0)
+    async def _upsert_album_from_dto(self, album_dto: Any, artist_id: str) -> None:
+        """Insert or update a Spotify album in DB from AlbumDTO.
 
-        image_url = None
-        if images:
-            preferred = images[0]  # Largest image for album covers
-            image_url = preferred.get("url")
+        Hey future me - DTO version of _upsert_album!
+        AlbumDTO has artwork_url (not images array).
+        """
+        from soulspot.domain.dtos import AlbumDTO
+
+        if not isinstance(album_dto, AlbumDTO):
+            logger.warning(f"Expected AlbumDTO, got {type(album_dto)}")
+            return
+
+        spotify_id = album_dto.spotify_id
+        if not spotify_id:
+            logger.warning("AlbumDTO missing spotify_id, skipping")
+            return
+
+        name = album_dto.name or "Unknown"
+        image_url = album_dto.artwork_url
+        release_date = album_dto.release_date
+        # AlbumDTO doesn't have release_date_precision, default to 'day'
+        release_date_precision = "day" if release_date else None
+        album_type = album_dto.album_type or "album"
+        total_tracks = album_dto.total_tracks or 0
 
         await self.repo.upsert_album(
             spotify_id=spotify_id,
@@ -426,14 +455,15 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_album_tracks(
-        self, access_token: str, album_id: str, force: bool = False
+        self, album_id: str, force: bool = False
     ) -> dict[str, Any]:
         """Sync tracks for a specific album from Spotify.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Called when user navigates to album detail page.
 
         Args:
-            access_token: Spotify OAuth access token
             album_id: Spotify album ID
             force: Skip cooldown check
 
@@ -469,19 +499,21 @@ class SpotifySyncService:
                     stats["total"] = await self.repo.count_tracks_by_album(album_id)
                     return stats
 
-            # Fetch album with tracks from Spotify
-            album_data = await self.spotify_client.get_album(
-                access_token=access_token,
-                album_id=album_id,
-            )
+            # Fetch album with tracks from Spotify using plugin
+            album_dto = await self.spotify_plugin.get_album(album_id=album_id)
 
-            tracks = album_data.get("tracks", {}).get("items", [])
+            if not album_dto:
+                stats["error"] = f"Album {album_id} not found on Spotify"
+                return stats
 
-            for track_data in tracks:
-                await self._upsert_track(track_data, album_id)
+            # Album DTO contains tracks list
+            track_dtos = album_dto.tracks if hasattr(album_dto, 'tracks') and album_dto.tracks else []
+
+            for track_dto in track_dtos:
+                await self._upsert_track_from_dto(track_dto, album_id)
                 stats["added"] += 1
 
-            stats["total"] = len(tracks)
+            stats["total"] = len(track_dtos)
 
             # Mark tracks as synced
             await self.repo.set_tracks_synced(album_id)
@@ -496,19 +528,30 @@ class SpotifySyncService:
 
         return stats
 
-    async def _upsert_track(self, track_data: dict[str, Any], album_id: str) -> None:
-        """Insert or update a Spotify track in DB."""
-        spotify_id = track_data["id"]
-        name = track_data.get("name", "Unknown")
-        track_number = track_data.get("track_number", 1)
-        disc_number = track_data.get("disc_number", 1)
-        duration_ms = track_data.get("duration_ms", 0)
-        explicit = track_data.get("explicit", False)
-        preview_url = track_data.get("preview_url")
+    async def _upsert_track_from_dto(self, track_dto: Any, album_id: str) -> None:
+        """Insert or update a Spotify track in DB from TrackDTO.
 
-        # ISRC from external_ids
-        external_ids = track_data.get("external_ids", {})
-        isrc = external_ids.get("isrc")
+        Hey future me - DTO version of _upsert_track!
+        TrackDTO has spotify_id (not id) and isrc directly on object.
+        """
+        from soulspot.domain.dtos import TrackDTO
+
+        if not isinstance(track_dto, TrackDTO):
+            logger.warning(f"Expected TrackDTO, got {type(track_dto)}")
+            return
+
+        spotify_id = track_dto.spotify_id
+        if not spotify_id:
+            logger.warning("TrackDTO missing spotify_id, skipping")
+            return
+
+        name = track_dto.name or "Unknown"
+        track_number = track_dto.track_number or 1
+        disc_number = track_dto.disc_number or 1
+        duration_ms = track_dto.duration_ms or 0
+        explicit = track_dto.explicit or False
+        preview_url = track_dto.preview_url
+        isrc = track_dto.isrc
 
         await self.repo.upsert_track(
             spotify_id=spotify_id,
@@ -573,15 +616,16 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_user_playlists(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
         """Sync user's playlists from Spotify with diff logic.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Similar to artists sync but for playlists. Called on page load.
         Checks settings to see if playlist sync is enabled.
 
         Args:
-            access_token: Spotify OAuth access token
             force: Skip cooldown check
 
         Returns:
@@ -623,8 +667,8 @@ class SpotifySyncService:
             await self.session.commit()
 
             # Fetch all playlists from Spotify
-            spotify_playlists = await self._fetch_all_user_playlists(access_token)
-            spotify_uris = {f"spotify:playlist:{p['id']}" for p in spotify_playlists}
+            spotify_playlists = await self._fetch_all_user_playlists()
+            spotify_uris = {f"spotify:playlist:{p.spotify_id}" for p in spotify_playlists if p.spotify_id}
 
             # Get existing Spotify playlist URIs from DB
             db_uris = await self.repo.get_spotify_playlist_uris()
@@ -647,12 +691,13 @@ class SpotifySyncService:
                 )
 
             # Add new playlists
-            for playlist_data in spotify_playlists:
-                spotify_uri = f"spotify:playlist:{playlist_data['id']}"
-                if spotify_uri in to_add or spotify_uri in unchanged:
-                    await self._upsert_playlist(
-                        playlist_data, download_images=should_download_images
-                    )
+            for playlist_dto in spotify_playlists:
+                if playlist_dto.spotify_id:
+                    spotify_uri = f"spotify:playlist:{playlist_dto.spotify_id}"
+                    if spotify_uri in to_add or spotify_uri in unchanged:
+                        await self._upsert_playlist_from_dto(
+                            playlist_dto, download_images=should_download_images
+                        )
 
             # Remove playlists that no longer exist on Spotify
             should_remove = True
@@ -707,55 +752,68 @@ class SpotifySyncService:
         return stats
 
     async def _fetch_all_user_playlists(
-        self, access_token: str
-    ) -> list[dict[str, Any]]:
-        """Fetch all user playlists from Spotify (handles pagination)."""
-        all_playlists: list[dict[str, Any]] = []
+        self,
+    ) -> list[Any]:
+        """Fetch all user playlists from Spotify using SpotifyPlugin.
+
+        Hey future me - returns PlaylistDTOs now!
+        Plugin handles pagination and auth internally.
+        """
+        from soulspot.domain.dtos import PlaylistDTO
+
+        all_playlists: list[PlaylistDTO] = []
         offset = 0
         limit = 50
 
         while True:
-            response = await self.spotify_client.get_user_playlists(
-                access_token=access_token,
+            response = await self.spotify_plugin.get_user_playlists(
                 limit=limit,
                 offset=offset,
             )
 
-            items = response.get("items", [])
+            items = response.items if response.items else []
             if not items:
                 break
 
             all_playlists.extend(items)
 
             # Check if there are more pages
-            if response.get("next") is None:
+            if response.next_offset is None:
                 break
 
-            offset += limit
+            offset = response.next_offset
 
         return all_playlists
 
-    async def _upsert_playlist(
+    async def _upsert_playlist_from_dto(
         self,
-        playlist_data: dict[str, Any],
+        playlist_dto: Any,
         download_images: bool = False,
     ) -> None:
-        """Insert or update a Spotify playlist in DB.
+        """Insert or update a Spotify playlist in DB from PlaylistDTO.
+
+        Hey future me - DTO version of _upsert_playlist!
+        PlaylistDTO has spotify_id, artwork_url (not images array).
 
         Args:
-            playlist_data: Playlist data from Spotify API
+            playlist_dto: PlaylistDTO from SpotifyPlugin
             download_images: Whether to download cover image locally
         """
-        spotify_id = playlist_data["id"]
-        spotify_uri = f"spotify:playlist:{spotify_id}"
-        name = playlist_data.get("name", "Unknown")
-        description = playlist_data.get("description", "")
-        images = playlist_data.get("images", [])
+        from soulspot.domain.dtos import PlaylistDTO
 
-        # Get cover URL (first/largest image)
-        cover_url = None
-        if images:
-            cover_url = images[0].get("url")
+        if not isinstance(playlist_dto, PlaylistDTO):
+            logger.warning(f"Expected PlaylistDTO, got {type(playlist_dto)}")
+            return
+
+        spotify_id = playlist_dto.spotify_id
+        if not spotify_id:
+            logger.warning("PlaylistDTO missing spotify_id, skipping")
+            return
+
+        spotify_uri = f"spotify:playlist:{spotify_id}"
+        name = playlist_dto.name or "Unknown"
+        description = playlist_dto.description or ""
+        cover_url = playlist_dto.artwork_url
 
         # Download image if enabled
         cover_path = None
@@ -793,16 +851,17 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_liked_songs(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
         """Sync user's Liked Songs from Spotify.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Creates/updates a special playlist with is_liked_songs=True.
         This playlist doesn't have a Spotify URI since "Liked Songs"
         isn't a real playlist on Spotify.
 
         Args:
-            access_token: Spotify OAuth access token
             force: Skip cooldown check
 
         Returns:
@@ -842,7 +901,7 @@ class SpotifySyncService:
             await self.session.commit()
 
             # Fetch all liked songs from Spotify
-            liked_tracks = await self._fetch_all_liked_songs(access_token)
+            liked_tracks = await self._fetch_all_liked_songs()
             stats["total"] = len(liked_tracks)
 
             # Ensure the Liked Songs playlist exists
@@ -882,37 +941,66 @@ class SpotifySyncService:
 
         return stats
 
-    async def _fetch_all_liked_songs(self, access_token: str) -> list[dict[str, Any]]:
-        """Fetch all liked songs from Spotify (handles pagination).
+    async def _fetch_all_liked_songs(self) -> list[dict[str, Any]]:
+        """Fetch all liked songs from Spotify using SpotifyPlugin.
+
+        Hey future me - returns TrackDTOs converted to dicts for compatibility!
+        The repo.sync_liked_songs_tracks expects dict format still.
+        We convert TrackDTOs to dicts with added_at field.
 
         Returns list of track data with added_at timestamp.
         """
+
         all_tracks: list[dict[str, Any]] = []
         offset = 0
         limit = 50
 
         while True:
-            response = await self.spotify_client.get_saved_tracks(
-                access_token=access_token,
+            response = await self.spotify_plugin.get_saved_tracks(
                 limit=limit,
                 offset=offset,
             )
 
-            items = response.get("items", [])
+            items = response.items if response.items else []
             if not items:
                 break
 
-            # Extract track data with added_at
-            for item in items:
-                track_data = item.get("track", {})
-                track_data["added_at"] = item.get("added_at")
-                all_tracks.append(track_data)
+            # Convert TrackDTOs to dict format expected by repo
+            for track_dto in items:
+                track_dict = {
+                    "id": track_dto.spotify_id,
+                    "name": track_dto.name,
+                    "duration_ms": track_dto.duration_ms,
+                    "explicit": track_dto.explicit,
+                    "preview_url": track_dto.preview_url,
+                    "isrc": track_dto.isrc,
+                    "track_number": track_dto.track_number,
+                    "disc_number": track_dto.disc_number,
+                    # added_at is not on DTO, use current time
+                    "added_at": None,
+                }
+                # Include artists info if available
+                if track_dto.artists:
+                    track_dict["artists"] = [
+                        {"id": a.spotify_id, "name": a.name}
+                        for a in track_dto.artists
+                    ]
+                # Include album info if available
+                if track_dto.album:
+                    track_dict["album"] = {
+                        "id": track_dto.album.spotify_id,
+                        "name": track_dto.album.name,
+                        "images": [{"url": track_dto.album.artwork_url}]
+                        if track_dto.album.artwork_url
+                        else [],
+                    }
+                all_tracks.append(track_dict)
 
             # Check if there are more pages
-            if response.get("next") is None:
+            if response.next_offset is None:
                 break
 
-            offset += limit
+            offset = response.next_offset
 
         return all_tracks
 
@@ -926,15 +1014,16 @@ class SpotifySyncService:
     # =========================================================================
 
     async def sync_saved_albums(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
         """Sync user's Saved Albums from Spotify.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Saved albums are albums the user explicitly saved to their library.
         These get is_saved=True flag so they persist even if artist is unfollowed.
 
         Args:
-            access_token: Spotify OAuth access token
             force: Skip cooldown check
 
         Returns:
@@ -975,8 +1064,8 @@ class SpotifySyncService:
             await self.session.commit()
 
             # Fetch all saved albums from Spotify
-            saved_albums = await self._fetch_all_saved_albums(access_token)
-            spotify_album_ids = {a["album"]["id"] for a in saved_albums}
+            saved_albums = await self._fetch_all_saved_albums()
+            spotify_album_ids = {a.spotify_id for a in saved_albums if a.spotify_id}
 
             # Get existing saved album IDs from DB
             db_saved_ids = await self.repo.get_saved_album_ids()
@@ -996,22 +1085,22 @@ class SpotifySyncService:
                     await self._settings_service.should_download_images()
                 )
 
-            # Process saved albums
-            for item in saved_albums:
-                album_data = item["album"]
+            # Process saved albums (now using AlbumDTOs)
+            for album_dto in saved_albums:
+                if not album_dto.spotify_id:
+                    continue
 
                 # Ensure artist exists (create minimal entry if not followed)
-                artists = album_data.get("artists", [])
-                if artists:
-                    artist_data = artists[0]  # Primary artist
-                    await self._ensure_artist_exists(artist_data)
-                    artist_id = artist_data["id"]
+                if album_dto.artists:
+                    primary_artist = album_dto.artists[0]
+                    await self._ensure_artist_exists_from_dto(primary_artist)
+                    artist_id = primary_artist.spotify_id
                 else:
                     continue  # Skip albums without artists
 
                 # Upsert album with is_saved=True
-                await self._upsert_saved_album(
-                    album_data,
+                await self._upsert_saved_album_from_dto(
+                    album_dto,
                     artist_id,
                     download_images=should_download_images,
                 )
@@ -1051,46 +1140,59 @@ class SpotifySyncService:
 
         return stats
 
-    async def _fetch_all_saved_albums(self, access_token: str) -> list[dict[str, Any]]:
-        """Fetch all saved albums from Spotify (handles pagination).
+    async def _fetch_all_saved_albums(self) -> list[Any]:
+        """Fetch all saved albums from Spotify using SpotifyPlugin.
 
-        Returns list of items with album data and added_at timestamp.
+        Hey future me - returns AlbumDTOs now!
+        Plugin handles pagination and auth internally.
+
+        Returns list of AlbumDTOs.
         """
-        all_albums: list[dict[str, Any]] = []
+        from soulspot.domain.dtos import AlbumDTO
+
+        all_albums: list[AlbumDTO] = []
         offset = 0
         limit = 50
 
         while True:
-            response = await self.spotify_client.get_saved_albums(
-                access_token=access_token,
+            response = await self.spotify_plugin.get_saved_albums(
                 limit=limit,
                 offset=offset,
             )
 
-            items = response.get("items", [])
+            items = response.items if response.items else []
             if not items:
                 break
 
             all_albums.extend(items)
 
             # Check if there are more pages
-            if response.get("next") is None:
+            if response.next_offset is None:
                 break
 
-            offset += limit
+            offset = response.next_offset
 
         return all_albums
 
-    async def _ensure_artist_exists(self, artist_data: dict[str, Any]) -> None:
-        """Ensure an artist exists in DB (create minimal entry if not).
+    async def _ensure_artist_exists_from_dto(self, artist_dto: Any) -> None:
+        """Ensure an artist exists in DB from ArtistDTO (create minimal entry if not).
 
+        Hey future me - DTO version of _ensure_artist_exists!
         Called when syncing saved albums where the artist might not be followed.
         Creates a minimal artist entry without full metadata.
 
         Args:
-            artist_data: Minimal artist data from album (id, name)
+            artist_dto: ArtistDTO with at least spotify_id and name
         """
-        spotify_id = artist_data["id"]
+        from soulspot.domain.dtos import ArtistDTO
+
+        if not isinstance(artist_dto, ArtistDTO):
+            logger.warning(f"Expected ArtistDTO, got {type(artist_dto)}")
+            return
+
+        spotify_id = artist_dto.spotify_id
+        if not spotify_id:
+            return
 
         # Check if artist exists
         existing = await self.repo.get_artist_by_id(spotify_id)
@@ -1098,42 +1200,49 @@ class SpotifySyncService:
             return  # Artist exists, nothing to do
 
         # Create minimal artist entry
-        name = artist_data.get("name", "Unknown")
+        name = artist_dto.name or "Unknown"
         await self.repo.upsert_artist(
             spotify_id=spotify_id,
             name=name,
-            image_url=None,
-            genres=[],
-            popularity=None,
-            follower_count=None,
+            image_url=artist_dto.image_url,
+            genres=artist_dto.genres or [],
+            popularity=artist_dto.popularity,
+            follower_count=artist_dto.followers,
         )
         logger.debug(f"Created minimal artist entry for: {name} ({spotify_id})")
 
-    async def _upsert_saved_album(
+    async def _upsert_saved_album_from_dto(
         self,
-        album_data: dict[str, Any],
+        album_dto: Any,
         artist_id: str,
         download_images: bool = False,
     ) -> None:
-        """Insert or update a saved album in DB with is_saved=True.
+        """Insert or update a saved album in DB from AlbumDTO with is_saved=True.
+
+        Hey future me - DTO version of _upsert_saved_album!
+        AlbumDTO has artwork_url directly.
 
         Args:
-            album_data: Album data from Spotify API
+            album_dto: AlbumDTO from SpotifyPlugin
             artist_id: Spotify artist ID
             download_images: Whether to download cover image locally
         """
-        spotify_id = album_data["id"]
-        name = album_data.get("name", "Unknown")
-        images = album_data.get("images", [])
-        release_date = album_data.get("release_date")
-        release_date_precision = album_data.get("release_date_precision")
-        album_type = album_data.get("album_type", "album")
-        total_tracks = album_data.get("total_tracks", 0)
+        from soulspot.domain.dtos import AlbumDTO
 
-        # Get cover URL
-        image_url = None
-        if images:
-            image_url = images[0].get("url")
+        if not isinstance(album_dto, AlbumDTO):
+            logger.warning(f"Expected AlbumDTO, got {type(album_dto)}")
+            return
+
+        spotify_id = album_dto.spotify_id
+        if not spotify_id:
+            return
+
+        name = album_dto.name or "Unknown"
+        image_url = album_dto.artwork_url
+        release_date = album_dto.release_date
+        release_date_precision = "day" if release_date else None
+        album_type = album_dto.album_type or "album"
+        total_tracks = album_dto.total_tracks or 0
 
         # Download image if enabled
         image_path = None
@@ -1209,15 +1318,16 @@ class SpotifySyncService:
     # =========================================================================
 
     async def run_full_sync(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
         """Run all enabled sync operations.
 
+        Hey future me - refactored for SpotifyPlugin!
+        No more access_token - plugin manages auth internally.
         Convenience method to run artists, playlists, liked songs, and saved albums
         sync in sequence. Checks settings for each sync type.
 
         Args:
-            access_token: Spotify OAuth access token
             force: Skip cooldown checks
 
         Returns:
@@ -1231,17 +1341,15 @@ class SpotifySyncService:
         }
 
         # Artists sync
-        results["artists"] = await self.sync_followed_artists(access_token, force=force)
+        results["artists"] = await self.sync_followed_artists(force=force)
 
         # Playlists sync
-        results["playlists"] = await self.sync_user_playlists(access_token, force=force)
+        results["playlists"] = await self.sync_user_playlists(force=force)
 
         # Liked Songs sync
-        results["liked_songs"] = await self.sync_liked_songs(access_token, force=force)
+        results["liked_songs"] = await self.sync_liked_songs(force=force)
 
         # Saved Albums sync
-        results["saved_albums"] = await self.sync_saved_albums(
-            access_token, force=force
-        )
+        results["saved_albums"] = await self.sync_saved_albums(force=force)
 
         return results

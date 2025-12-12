@@ -381,6 +381,6 @@ Diese werden in der API-Response mit `***` maskiert.
 ## Verwandte Features
 
 - [Spotify Sync](./spotify-sync.md) - Auto-Sync Einstellungen ⭐ NEU
-- [Authentication](./authentication.md) - Spotify OAuth Konfiguration
+- [Authentication](../api/auth-api.md) - Spotify OAuth Konfiguration
 - [Download Management](./download-management.md) - Download-Einstellungen
 - [Metadata Enrichment](./metadata-enrichment.md) - MusicBrainz-Konfiguration

@@ -1,163 +1,389 @@
-
 # Copilot / AI Assistant Instructions
 
-This file contains focused, repository-specific guidance to help AI coding agents be productive immediately.
+Focused repository-specific guidance for AI coding agents to be productive immediately.
 
-1. Purpose & Big Picture
-- **What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
-- **Architecture:** Python FastAPI app (async SQLAlchemy) in `src/soulspot`, background workers coordinating with `slskd`, and a web UI. DB migrations in `alembic/`.
+## 0. CRITICAL: Virtual GitHub Environment
 
-2. Recommended dev environment
+⚠️ **THIS REPOSITORY RUNS IN A VIRTUAL GITHUB ENVIRONMENT**
+
+**What this means:**
+- 🔴 **NO** local file system access (e.g., `/home/user/`, `~/`, `C:\Users\...`)
+- 🔴 **NO** attempting to `mkdir`, `touch`, or create files outside the workspace
+- 🔴 **NO** reading from system paths or environment variables (except through tools)
+- 🟢 **ONLY** use absolute paths with `vscode-vfs://` scheme (e.g., `vscode-vfs://github/bozzfozz/soulspot/src/...`)
+- 🟢 **ONLY** use provided tools (read_file, create_file, run_in_terminal, etc.)
+- 🟢 **ONLY** reference files that exist within the workspace
+
+**Path Format:**
+```
+✅ CORRECT:   vscode-vfs://github/bozzfozz/soulspot/src/soulspot/main.py
+❌ WRONG:     /home/user/soulspot/src/soulspot/main.py
+❌ WRONG:     ~/soulspot/src/soulspot/main.py
+❌ WRONG:     C:\Users\bozzfozz\soulspot\src\soulspot\main.py
+```
+
+**All Agents Must Follow This Rule:**
+- If any agent attempts local file creation or reads outside the workspace, it VIOLATES this policy
+- Use `run_in_terminal` ONLY for code execution, not filesystem exploration
+- Always use tool-provided APIs for file operations
+
+## 1. Purpose & Big Picture
+
+**What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
+
+**Architecture:**
+```
+API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
+                                                           ↓
+                                           Infrastructure (Repos, Clients)
+```
+
+- **Presentation:** FastAPI app in `src/soulspot/main.py` with HTMX/Jinja2 templates
+- **Application:** Business logic in `src/soulspot/application/services/` + use cases
+- **Domain:** Entities & ports in `src/soulspot/domain/entities/` + `domain/ports/`
+- **Infrastructure:** DB repos + clients in `src/soulspot/infrastructure/` (SQLAlchemy async)
+- **Workers:** Background tasks (Spotify sync, token refresh, downloads) managed via `app.state`
+- **Migrations:** DB schema versioning via `alembic/versions/`
+
+**Key Insight:** Strict layered architecture. Domain layer is dependency-free (no ORM, no HTTP). Infrastructure implements Domain ports. Never call infrastructure directly from routes.
+
+## 2. Recommended dev environment
+
 - **Prefer:** `poetry` (project declares `pyproject.toml`). Use `poetry install --with dev` to get dev tools (mypy, ruff, pytest).
-- **Alternative:** The `Makefile` exposes pragmatic targets (install/test/lint/format). CI may still rely on `pip` + `requirements.txt`.
+- **Alternative:** The `Makefile` exposes pragmatic targets (install/test/lint/format). CI may rely on `pip` + `requirements.txt`.
 
-3. Key commands (examples)
-- Install deps (poetry): `poetry install --with dev`
+## 3. Key commands
+
+- Install deps: `poetry install --with dev`
 - Run tests: `pytest tests/ -v` or `make test`
-- Run unit-only: `make test-unit`
-- Run coverage: `make test-cov`
 - Lint/format: `make lint` / `make format` (ruff)
-- Type-check: `make type-check` (mypy)
+- Type-check: `make type-check` (mypy strict mode)
 - Security scan: `make security` (bandit)
-- Start Docker stack: `make docker-up` (uses `docker/docker-compose.yml`)
-- DB migrations: `alembic upgrade head` (or `make db-upgrade`)
+- Start Docker: `make docker-up` (uses `docker/docker-compose.yml`)
+- DB migrate: `alembic upgrade head` or `make db-upgrade`
 
-4. Project layout & important files to inspect
-- `src/soulspot/` — application package (API, services, CLI entry `soulspot.main:main`).
-- `alembic/` — migration scripts and `env.py` (DB setup). Look at `alembic/versions/` for schema history.
-- `docker/` — `docker-compose.yml`, `docker-compose.dev.yml`, and service settings; `docker/README.md` for container setup.
-- `tests/` — unit and integration tests. Pytest config is in `pyproject.toml` (testpaths, pytest plugins).
-- `pyproject.toml` — dependencies, tooling (ruff, mypy, pytest) and strict type rules.
-- `Makefile` / `Justfile` — convenient task shortcuts used by contributors and CI.
+## 4. Critical architecture patterns
 
-5. Code patterns & conventions (observable)
-- **Strict typing:** `mypy` is enabled with `strict = true`. Follow typed function signatures for public code.
-- **Formatting & linting:** `ruff` is the primary linter/formatter. Follow its config in `pyproject.toml`.
-- **Async DB usage:** SQLAlchemy async engine is used (see `src/soulspot/*` and `alembic/env.py`); tests use `pytest-asyncio`.
-- **Tests path:** tests live under `tests/`; use `factory_boy`, `pytest-mock`, and `pytest-httpx` for HTTP clients.
+### 4.1 Layered Architecture (STRICT)
+Every change must respect dependency direction: **API → App → Domain ← Infrastructure**
 
-6. Integration points & external services
-- **Spotify OAuth:** Credentials in `.env` (see `.env.example`), required for playlist sync.
-- **slskd (Soulseek):** External downloader; API key or username/password configured via env. The app expects `mnt/downloads` and `mnt/music` mounts for files.
-- **Music metadata:** MusicBrainz and CoverArtArchive APIs are used for enrichment.
+**Domain Layer** (`src/soulspot/domain/`):
+- Pure business logic, NO external dependencies
+- Defines ports (interfaces) that infrastructure implements
+- Example: `domain/ports/spotify_client.py` defines `ISpotifyClient` interface
 
-7. When editing code (practical rules)
-- Run `make format` and `make lint` before opening a PR.
-- Add/adjust type hints to satisfy `mypy` (CI enforces strict settings). Prefer explicit return types and parameter types.
-- For DB schema changes: add an Alembic revision under `alembic/versions/` and update `alembic.ini` if needed; run migrations locally with `make db-upgrade`.
+**Application Layer** (`src/soulspot/application/services/`):
+- Orchestrates domain + infrastructure
+- Contains use cases (commands/queries)
+- Depends on domain ports (abstractions), not concrete clients
+- Pattern: `async def execute(self, cmd) → DTO`
 
-8. Tests and CI expectations
-- Unit and integration tests run under `pytest` using config in `pyproject.toml`. Use `pytest --maxfail=1 -q` for quick local feedback.
-- Coverage is gathered with `make test-cov` and HTML output is in `htmlcov/`.
+**Infrastructure Layer** (`src/soulspot/infrastructure/`):
+- Implements domain ports (adapters)
+- Database repos with `async def` SQLAlchemy
+- HTTP clients for Spotify/MusicBrainz
+- Example: `infrastructure/clients/spotify_client.py` implements `ISpotifyClient`
 
-9. Files/locations an AI should open first for context
-- `src/soulspot/main.py` (entry/CLI)
-- `src/soulspot/api/` (routes and request flow)
-- `alembic/env.py` and `alembic/versions/` (DB migrations)
-- `docker/docker-compose.yml` and `docker/README.md` (runtime environment)
-- `pyproject.toml` (tooling and strict config)
+**API Layer** (`src/soulspot/api/`):
+- HTTP routes, request validation only
+- Calls application services, never infrastructure directly
+- Pattern: Route → AppService → DomainLogic + Infrastructure
 
-10. Useful examples to copy or follow
-- When adding async DB code, mirror patterns used in `src/soulspot/infrastructure/persistence/repositories.py` and the session management in `alembic/env.py`.
-- For HTTP clients, prefer `httpx` and follow testing style in `tests/` using `pytest-httpx`.
+### 4.2 Adding a new feature (correct order)
+1. **Domain:** Define entity + port (interface)
+2. **Infrastructure:** Implement port (client/repo)
+3. **Application:** Add service that uses port
+4. **API:** Add route that calls service
+5. **Test:** Mock ports, test each layer separately
 
-11. What not to assume
-- Do not assume `pip` is the canonical source of truth — the repo uses Poetry in `pyproject.toml`, but the `Makefile` contains pragmatic pip-based targets used by some workflows.
-- Do not assume synchronous DB usage; code is primarily async.
+❌ WRONG: Add route → Add service → Oops, domain logic is in service  
+✅ RIGHT: Domain port → Infrastructure → Application → API
 
-12. Reserved (placeholder for future use)
-
-13. Verify Before Writing (PFLICHT)
-
-**Anweisung für alle Agenten:**  
-Bevor du Pfade, Konfigurationswerte, Dateinamen oder technische Details in Code oder Dokumentation schreibst, **MUSST** du diese im Repository verifizieren.
-
-**Was IMMER zu prüfen ist:**
-- **Dateipfade:** Prüfe `.env.example`, `settings.py`, `docker-compose.yml` für tatsächliche Pfade (z.B. DB-Pfad ist `./soulspot.db` lokal, `/config/soulspot.db` in Docker – NICHT `data/soulspot.db`)
-- **Konfigurationswerte:** Lies die tatsächlichen Defaults aus dem Code, nicht raten
-- **Klassennamen/Imports:** Nutze `grep_search` oder `read_file` um existierende Namen zu verifizieren
-- **Test-Dateipfade:** Prüfe die tatsächliche Verzeichnisstruktur unter `tests/`
-- **Port-Nummern, URLs, API-Endpunkte:** Verifiziere gegen den tatsächlichen Code
-
-**Verboten:**
-- Pfade oder Werte aus dem Gedächtnis oder "üblichen Konventionen" schreiben
-- Annahmen über Verzeichnisstrukturen ohne Verifizierung
-- Dateien referenzieren die nicht existieren
-
-**Beispiel-Workflow:**
-```
-❌ FALSCH: "Die DB liegt unter data/soulspot.db"
-✅ RICHTIG: Erst `.env.example` lesen → DATABASE_URL=sqlite+aiosqlite:///./soulspot.db → "Die DB liegt unter ./soulspot.db"
-```
-
-14. Häufige Fehlerquellen vermeiden (Lessons Learned)
-
-### 14.1 Interface-Repository-Sync
-Wenn du eine Methode zu einem Repository hinzufügst (z.B. `TrackRepository.get_by_isrc()`), **MUSST** du auch das entsprechende Interface in `src/soulspot/domain/ports/__init__.py` aktualisieren.
-
-```
-❌ FALSCH: Nur TrackRepository.get_by_isrc() hinzufügen
-✅ RICHTIG: Auch ITrackRepository.get_by_isrc() als abstrakte Methode hinzufügen
-```
-
-### 14.2 Export-Vollständigkeit
-Neue Klassen/Funktionen müssen in der `__init__.py` des Moduls exportiert werden, sonst sind sie nicht importierbar.
-
-**Checkliste bei neuen Klassen:**
-- [ ] Klasse in `__init__.py` importieren
-- [ ] Klasse zu `__all__` hinzufügen (falls vorhanden)
-
-### 14.3 Migration-Kette prüfen
-Bevor du eine neue Alembic-Migration erstellst:
-1. `ls alembic/versions/` ausführen um die letzte Revision zu finden
-2. `down_revision` auf die **tatsächlich letzte** Migration setzen
-3. Bei Merge-Konflikten: `alembic merge heads` nutzen
-
-### 14.4 Bestehenden Code nicht duplizieren
-**Vor jeder Implementierung:**
-1. `grep_search` nach ähnlichen Funktionsnamen/Patterns
-2. Prüfen ob Service/Repository/Helper bereits existiert
-3. Bestehende Patterns wiederverwenden statt neu erfinden
-
-```
-❌ FALSCH: Neue `get_spotify_token()` Funktion schreiben
-✅ RICHTIG: Erst suchen → DatabaseTokenManager existiert bereits → wiederverwenden
-```
-
-### 14.5 Async-Konsistenz
-**ALLE** Datenbankoperationen müssen `async`/`await` nutzen. Keine synchronen DB-Calls!
-
+### 4.3 Repository + Port sync (critical!)
+When you add a method to `TrackRepository`, **MUST** add it to `ITrackRepository` interface too.
 ```python
-# ❌ FALSCH
+# src/soulspot/domain/ports/__init__.py
+class ITrackRepository(Protocol):
+    async def get_by_isrc(self, isrc: str) -> Track | None: ...
+
+# src/soulspot/infrastructure/persistence/repositories.py
+class TrackRepository:
+    async def get_by_isrc(self, isrc: str) -> Track | None:
+        ...
+```
+
+## 5. Project layout & critical files
+
+| Path | Purpose |
+|------|---------|
+| `src/soulspot/main.py` | FastAPI factory + app singleton + CLI entry |
+| `src/soulspot/api/routers/` | Routes for each feature (spotify, library, settings, etc.) |
+| `src/soulspot/application/services/` | Business logic orchestration |
+| `src/soulspot/domain/entities/` | Domain models (Track, Artist, Playlist, etc.) |
+| `src/soulspot/domain/ports/` | Interface definitions (ISpotifyClient, IRepository, etc.) |
+| `src/soulspot/infrastructure/persistence/repositories.py` | SQLAlchemy repo implementations |
+| `src/soulspot/infrastructure/clients/` | External API clients (Spotify, MusicBrainz) |
+| `alembic/versions/` | DB migrations (strict order, never edit history) |
+| `pyproject.toml` | Dependencies + strict mypy/ruff config |
+| `tests/unit/` | Isolated unit tests (mock everything) |
+| `tests/integration/` | API tests with real DB (use fixtures) |
+
+## 6. Code patterns & conventions
+
+- **Strict typing:** `mypy strict = true`. All functions must have type hints.
+- **Async/await:** Use `async def` for all DB/HTTP. Never block event loop.
+- **SQLAlchemy:** Async engine + `async with session()`. See `src/soulspot/infrastructure/persistence/repositories.py` for pattern.
+- **Workers:** Background tasks in `app.state` (token refresh, spotify sync, downloads). Start in `infrastructure/lifecycle.py`.
+- **Testing:** 
+  - Unit: Mock all external dependencies, test logic in isolation
+  - Integration: Use async fixtures with real DB (see `tests/conftest.py`)
+  - HTTP: Use `pytest-httpx` for client mocking
+
+## 7. Integration points & external services
+
+| Service | Config | Use Case |
+|---------|--------|----------|
+| **Spotify OAuth** | `.env`: `SPOTIFY_CLIENT_ID`, `SPOTIFY_REDIRECT_URI` | Authenticate users, fetch playlists |
+| **slskd** | `.env`: `SLSKD_URL`, `SLSKD_KEY` | Download tracks via Soulseek |
+| **MusicBrainz** | No auth (rate-limited 1/sec) | Track metadata enrichment |
+| **CoverArtArchive** | No auth | Fetch album artwork |
+
+Key files:
+- `src/soulspot/infrastructure/clients/spotify_client.py` - Spotify API wrapper
+- `src/soulspot/infrastructure/clients/slskd_client.py` - Soulseek download client
+- `src/soulspot/infrastructure/clients/musicbrainz_client.py` - Metadata client
+
+## 8. Verification Before Writing (PFLICHT)
+
+**Before writing paths, config values, or classnames, verify them:**
+
+```bash
+# Dateipfade prüfen
+grep -r "DATABASE_URL" .env.example  # → sqlite+aiosqlite:///./soulspot.db
+grep -r "downloads" docker-compose.yml  # → /mnt/downloads
+
+# Klassennamen + Imports verifizieren
+grep -r "class ISpotifyClient" src/soulspot/domain/
+
+# Port-Nummern prüfen
+grep "5000\|8000\|5030" docker/docker-compose.yml
+```
+
+❌ WRONG: "DB is at /data/soulspot.db"  
+✅ RIGHT: Check `.env.example` first → "DB is at ./soulspot.db (or /config/soulspot.db in Docker)"
+
+## 9. Common errors to avoid
+
+### 9.1 Breaking Interface-Repository Contract
+```python
+# ❌ WRONG: Add method only to TrackRepository
+class TrackRepository:
+    async def get_by_isrc(self, isrc: str): ...
+
+# ✅ RIGHT: Update interface AND implementation
+class ITrackRepository(Protocol):
+    async def get_by_isrc(self, isrc: str): ...
+```
+
+### 9.2 Missing exports in __init__.py
+```python
+# ❌ WRONG: Define class in entity.py but don't export
+# src/soulspot/domain/entities/__init__.py is empty
+
+# ✅ RIGHT: Always export in __init__.py
+from .track import Track
+__all__ = ["Track"]
+```
+
+### 9.3 Calling infrastructure directly from API
+```python
+# ❌ WRONG: Route calls repo directly
+@router.get("/tracks")
+async def list_tracks(repo: TrackRepository):
+    return await repo.all()
+
+# ✅ RIGHT: Route calls service, which calls repo
+@router.get("/tracks")
+async def list_tracks(service: TrackService):
+    return await service.list_all()
+```
+
+### 9.4 Datetime timezone mismatches
+```python
+# ❌ WRONG: Mix naive (datetime.utcnow()) + aware (datetime.now(timezone.utc))
+diff = datetime.utcnow() - stored_dt  # Crash if stored_dt is aware!
+
+# ✅ RIGHT: Always use aware (UTC)
+from datetime import datetime, timezone
+now = datetime.now(timezone.utc)
+if dt.tzinfo is None:
+    dt = dt.replace(tzinfo=timezone.utc)
+diff = now - dt
+```
+
+## 10. When unsure — minimal reproducible setup
+
+```bash
+cp .env.example .env
+# Fill: SPOTIFY_CLIENT_ID, SPOTIFY_REDIRECT_URI, SLSKD_URL
+
+poetry install --with dev
+make docker-up
+
+pytest tests/unit/ -v
+```
+
+## 11. Final checklist before PR
+
+- [ ] `ruff check . --config pyproject.toml` passes
+- [ ] `mypy --config-file mypy.ini src/` passes (strict mode)
+- [ ] `bandit -r src/` shows no HIGH/MEDIUM findings
+- [ ] `pytest tests/ -q` passes
+- [ ] Domain layer has NO external dependencies
+## 12. Advanced patterns - Part 1
+
+### 12.1 Interface-Repository sync
+When adding a method to a repository, **always update the interface** in `src/soulspot/domain/ports/__init__.py`:
+- ❌ WRONG: Add only `TrackRepository.get_by_isrc()`
+- ✅ RIGHT: Add to both `ITrackRepository` (interface) and `TrackRepository` (impl)
+
+### 12.2 Export completeness
+New classes/functions must be exported in `__init__.py`:
+- [ ] Import in `__init__.py`
+- [ ] Add to `__all__` (if present)
+
+## 12. Advanced patterns - Part 2
+
+### 12.3 Alembic migration order
+Before creating migrations:
+1. `ls alembic/versions/` to find latest revision
+2. Set `down_revision` to **actual** latest (not guessed)
+3. On conflicts: `alembic merge heads`
+
+### 12.4 Don't duplicate code
+Search before implementing:
+1. Use `grep_search` for similar functions
+2. Check if Service/Repo exists
+3. Reuse patterns, don't reinvent
+
+### 12.5 Async consistency
+**ALL** database ops must use `async`/`await`:
+```python
+# ❌ WRONG
 def get_track(self, id):
     return self.session.query(Track).get(id)
 
-# ✅ RICHTIG  
+# ✅ RIGHT
 async def get_track(self, id):
     result = await self.session.execute(select(Track).where(Track.id == id))
     return result.scalar_one_or_none()
 ```
 
-### 14.6 Test-Datei-Struktur spiegelt Source-Struktur
-Tests müssen die Source-Struktur spiegeln:
-- `src/soulspot/application/services/foo.py` → `tests/unit/application/services/test_foo.py`
-- **NICHT:** `tests/unit/test_foo.py`
+### 12.6 Test structure mirrors source
+- ✅ `src/soulspot/application/services/foo.py` → `tests/unit/application/services/test_foo.py`
+- ❌ NOT: `tests/unit/test_foo.py`
 
-### 14.7 Keine Placeholder/Stubs als "fertig" markieren
-Eine Funktion ist **NICHT fertig** wenn sie:
-- `pass` oder `...` enthält
-- `# TODO` hat
-- Nur `return None` ohne Logik
-- Einen `NotImplementedError` wirft
+### 12.7 Complete functions only
+Functions are **NOT done** if:
+- Contain `pass`, `...`, or `# TODO`
+- Return only `None` without logic
+- Raise `NotImplementedError`
 
-### 14.8 Service-spezifische Namenskonvention (Erweiterbarkeit)
+## 13. Service-specific extensibility
 
-Bei Klassen/Modulen die **service-spezifisch** sind (Spotify, Tidal, Deezer, etc.), **MUSS** der Service-Name im Namen enthalten sein für spätere Erweiterbarkeit.
+Classes tied to one service (Spotify, Tidal, Deezer) **must include service name**:
+- ✅ `SpotifySession`, `TidalSession` (expandable)
+- ✅ `spotify_sessions` table
+- ❌ `Session` is ambiguous
 
-**Namensschema:**
+**Use prefix for:** OAuth (`SpotifyAuth`), sessions (`SpotifySession`), clients (`SpotifyClient`), tables (`spotify_sessions`).
+**No prefix for:** Utilities (`AudioFileProcessor`), domain (`Track`), infrastructure (`Database`).
+
+## 14. Documentation sync (required every PR)
+
+Keep docs synchronized:
+| Change | Update |
+|--------|--------|
+| API changes | `docs/api/` |
+| New features | `README.md` |
+| Config changes | `.env.example` |
+| DB schema | Migrations + docs |
+| Breaking changes | `CHANGELOG.md` |
+
+**Forbidden:** Changing code without checking docs. Shipping features without docs.
+
+## 15. Quality gates before PR
+
+**All must pass locally:**
+```bash
+ruff check . --config pyproject.toml
+mypy --config-file mypy.ini src/
+bandit -r src/
+pytest tests/ -q
 ```
-{ServiceName}{Funktion}
+
+**PR requirements:**
+- [ ] Ruff: 0 violations
+- [ ] mypy: 0 type errors
+- [ ] bandit: No HIGH/MEDIUM findings
+- [ ] Tests: All green
+- [ ] Repo + Port interfaces synced
+- [ ] Docs synchronized
+
+---
+
+**Final note:** Strict layering is key. If something feels hard, check dependency direction: **API → App → Domain ← Infrastructure**.
+
+---
+
+## 16. TaskSync V5 – Terminal-Based Session Management
+
+**When TaskSync is active** (detected by `tasksync.instructions.md` being loaded):
+
+### Core Behavior
+1. **Keep Session Alive** – Do NOT end conversation between tasks
+2. **Request Next Task via Terminal** – After completing Task #N, immediately call `run_in_terminal` with `read -p "Task #N+1: " task_input`
+3. **Wait for User Input** – Keep conversation open while waiting for terminal input
+4. **Parse Special Commands:**
+   - `"stop"` → Terminate gracefully, show session summary
+   - `"status"` → Report task count and metrics, then request next task
+   - `"help"` → Show available commands, then request next task
+5. **Respect Code Patterns** – Follow all patterns from Sections 1-15 (architecture, testing, docs, quality gates)
+
+### Session Lifecycle
 ```
+Task #1 Input (Terminal)
+         ↓
+Agent completes Task #1
+         ↓
+Terminal: read -p "Task #2: " (Session stays open)
+         ↓
+Task #2 Input OR "stop" entered
+         ↓
+Repeat until "stop" OR Token lifetime expires
+         ↓
+Show Session Summary → End
+```
+
+### Token Optimization Math
+```
+Without TaskSync:
+  50 tasks = 50 separate sessions = 50× token consumption = $$$$
+
+With TaskSync V5:
+  50 tasks in ONE session = 1× token consumption
+  Result: ~99% cost reduction
+  Token stays alive until user "stop" or expiry
+```
+
+### Rules
+- ❌ Do NOT use closing phrases ("Let me know if you need anything", etc.)
+- ❌ Do NOT end conversation after task completion
+- ✅ Always request next task immediately via `run_in_terminal`
+- ✅ Keep conversation active between tasks
+- ✅ Session ends ONLY on "stop" OR token lifetime expiry
+
+---
 
 **Beispiele:**
 | Generisch (❌) | Service-spezifisch (✅) | Warum |

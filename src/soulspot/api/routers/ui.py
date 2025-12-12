@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,15 +17,14 @@ from soulspot.api.dependencies import (
     get_library_scanner_service,
     get_playlist_repository,
     get_spotify_browse_repository,
-    get_spotify_client,
+    get_spotify_plugin,
     get_spotify_sync_service,
-    get_spotify_token_shared,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+from soulspot.domain.entities import DownloadStatus
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     PlaylistRepository,
@@ -35,6 +34,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -481,26 +481,61 @@ async def playlist_detail(
 # Hey future me - Downloads page now has DB-LEVEL pagination! Default 100 per page, max 500.
 # We pass pagination metadata to template for rendering page navigation. Stats (active, queue,
 # completed, failed) are fetched separately for the stats cards at the top of the page.
-@router.get("/downloads", response_class=HTMLResponse)
-async def downloads(
-    request: Request,
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(100, ge=1, le=500, description="Items per page"),
-    download_repository: DownloadRepository = Depends(get_download_repository),
-) -> Any:
-    """Downloads page with pagination.
+# Track info (title, artist, album_art) is loaded via joinedload for display in queue items.
 
-    Args:
-        request: FastAPI request
-        page: Page number (1-indexed)
-        limit: Items per page (default 100, max 500)
-        download_repository: Download repository
+
+async def _get_downloads_data(
+    download_repository: DownloadRepository,
+    session: AsyncSession,
+    page: int = 1,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Shared helper to fetch downloads data for both full page and partial.
+
+    Hey future me - das ist extrahiert weil wir 2 Endpoints brauchen:
+    1. /downloads - Volle Seite mit Header, Stats, Tabs
+    2. /downloads/queue-partial - Nur die Queue-Liste für HTMX auto-refresh
+
+    Returns dict with: downloads, page, limit, total, total_pages, has_next, has_previous,
+    active_count, queue_count, failed_count, completed_today
     """
+    from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
+
     # Calculate offset
     offset = (page - 1) * limit
 
-    # Fetch paginated downloads from DB
-    downloads_list = await download_repository.list_active(limit=limit, offset=offset)
+    # Fetch downloads with track info directly (bypassing repository for richer data)
+    stmt = (
+        select(DownloadModel)
+        .options(
+            joinedload(DownloadModel.track).joinedload(TrackModel.artist),
+            joinedload(DownloadModel.track).joinedload(TrackModel.album),
+        )
+        .where(
+            DownloadModel.status.in_(
+                [
+                    DownloadStatus.WAITING.value,
+                    DownloadStatus.PENDING.value,
+                    DownloadStatus.QUEUED.value,
+                    DownloadStatus.DOWNLOADING.value,
+                    DownloadStatus.COMPLETED.value,
+                    DownloadStatus.FAILED.value,
+                ]
+            )
+        )
+        .order_by(
+            DownloadModel.priority.desc(),
+            DownloadModel.created_at.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await session.execute(stmt)
+    download_models = result.unique().scalars().all()
+
     total_count = await download_repository.count_active()
 
     # Calculate pagination metadata
@@ -509,8 +544,6 @@ async def downloads(
     has_previous = page > 1
 
     # Fetch stats for the cards at the top
-    from soulspot.domain.entities import DownloadStatus
-
     active_count = await download_repository.count_by_status(
         DownloadStatus.DOWNLOADING.value
     )
@@ -524,41 +557,87 @@ async def downloads(
         DownloadStatus.COMPLETED.value
     )
 
-    # Convert to template-friendly format
-    downloads_data = [
-        {
-            "id": str(download.id.value),
-            "track_id": str(download.track_id.value),
-            "status": download.status.value,
-            "priority": download.priority,
-            "progress_percent": download.progress_percent,
-            "error_message": download.error_message,
-            "started_at": download.started_at.isoformat()
-            if download.started_at
-            else None,
-            "created_at": download.created_at.isoformat(),
-        }
-        for download in downloads_list
-    ]
+    # Convert to template-friendly format with track info
+    downloads_data = []
+    for dl in download_models:
+        track = dl.track
+        downloads_data.append({
+            "id": dl.id,
+            "track_id": dl.track_id,
+            "status": dl.status,
+            "priority": dl.priority,
+            "progress_percent": dl.progress_percent or 0,
+            "error_message": dl.error_message,
+            "started_at": dl.started_at.isoformat() if dl.started_at else None,
+            "created_at": dl.created_at.isoformat() if dl.created_at else None,
+            # Track info for display
+            "title": track.title if track else f"Track {dl.track_id[:8]}",
+            "artist": track.artist.name if track and track.artist else "Unknown Artist",
+            "album": track.album.title if track and track.album else "Unknown Album",
+            "album_art": track.album.artwork_url if track and track.album and hasattr(track.album, "artwork_url") else None,
+        })
+
+    return {
+        "downloads": downloads_data,
+        "page": page,
+        "limit": limit,
+        "total": total_count,
+        "total_pages": total_pages,
+        "has_next": has_next,
+        "has_previous": has_previous,
+        "active_count": active_count,
+        "queue_count": queue_count,
+        "failed_count": failed_count,
+        "completed_today": completed_count,
+    }
+
+
+@router.get("/downloads", response_class=HTMLResponse)
+async def downloads(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(100, ge=1, le=500, description="Items per page"),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Downloads page with pagination - full page with header, stats, tabs.
+
+    Args:
+        request: FastAPI request
+        page: Page number (1-indexed)
+        limit: Items per page (default 100, max 500)
+        download_repository: Download repository
+        session: DB session for direct queries
+    """
+    data = await _get_downloads_data(download_repository, session, page, limit)
 
     return templates.TemplateResponse(
         request,
         "downloads.html",
-        context={
-            "downloads": downloads_data,
-            # Pagination
-            "page": page,
-            "limit": limit,
-            "total": total_count,
-            "total_pages": total_pages,
-            "has_next": has_next,
-            "has_previous": has_previous,
-            # Stats for cards
-            "active_count": active_count,
-            "queue_count": queue_count,
-            "failed_count": failed_count,
-            "completed_today": completed_count,  # TODO: Filter by today
-        },
+        context=data,
+    )
+
+
+@router.get("/downloads/queue-partial", response_class=HTMLResponse)
+async def downloads_queue_partial(
+    request: Request,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(100, ge=1, le=500, description="Items per page"),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+    session: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Downloads queue partial - ONLY the queue list for HTMX auto-refresh.
+
+    Hey future me - dieser Endpoint gibt NUR die Queue-Liste zurück, nicht die ganze Seite!
+    Das Template downloads_queue_partial.html rendert nur die Items ohne Header/Stats/Tabs.
+    Das löst das Duplikations-Problem beim Auto-Refresh.
+    """
+    data = await _get_downloads_data(download_repository, session, page, limit)
+
+    return templates.TemplateResponse(
+        request,
+        "downloads_queue_partial.html",
+        context=data,
     )
 
 
@@ -593,8 +672,7 @@ async def search(request: Request) -> Any:
 async def quick_search(
     request: Request,
     q: str = "",
-    track_repository: TrackRepository = Depends(get_track_repository),
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Quick search partial for header search bar.
 
@@ -604,53 +682,72 @@ async def quick_search(
     Args:
         request: FastAPI request
         q: Search query string
-        track_repository: Track repository
-        playlist_repository: Playlist repository
+        session: Database session
 
     Returns:
         HTML partial with search results dropdown
     """
+    from sqlalchemy import or_, select
+    from sqlalchemy.orm import joinedload
+
+    from soulspot.infrastructure.persistence.models import (
+        ArtistModel,
+        PlaylistModel,
+        TrackModel,
+    )
+
     results: list[dict[str, Any]] = []
     query = q.strip()
 
     if len(query) >= 2:
-        # Search tracks by name or artist
-        # Note: track.artist is ORM relationship attribute not on domain entity
-        all_tracks = await track_repository.list_all()
-        query_lower = query.lower()
+        search_term = f"%{query}%"
 
-        for track in all_tracks:
-            track_artist = track.artist  # type: ignore[attr-defined]
-            if query_lower in track.title.lower() or (
-                track_artist and query_lower in track_artist.lower()
-            ):
-                results.append(
-                    {
-                        "type": "track",
-                        "name": track.title,
-                        "subtitle": track_artist or "Unknown Artist",
-                        "url": f"/library/tracks/{track.id.value}",
-                    }
+        # Search tracks (title or artist name)
+        stmt = (
+            select(TrackModel)
+            .join(TrackModel.artist)
+            .options(joinedload(TrackModel.artist))
+            .where(
+                or_(
+                    TrackModel.title.ilike(search_term),
+                    ArtistModel.name.ilike(search_term)
                 )
+            )
+            .limit(5)
+        )
+        result = await session.execute(stmt)
+        tracks = result.scalars().all()
+
+        for track in tracks:
+            results.append({
+                "type": "track",
+                "name": track.title,
+                "subtitle": track.artist.name if track.artist else "Unknown Artist",
+                "url": f"/library/tracks/{track.id}",
+            })
 
         # Search playlists by name
-        all_playlists = await playlist_repository.list_all()
-        for playlist in all_playlists:
-            if query_lower in playlist.name.lower():
-                results.append(
-                    {
-                        "type": "playlist",
-                        "name": playlist.name,
-                        "subtitle": f"{len(playlist.track_ids)} tracks",
-                        "url": f"/playlists/{playlist.id.value}",
-                    }
-                )
+        stmt = (
+            select(PlaylistModel)
+            .where(PlaylistModel.name.ilike(search_term))
+            .limit(5)
+        )
+        result = await session.execute(stmt)
+        playlists = result.scalars().all()
+
+        for playlist in playlists:
+            results.append({
+                "type": "playlist",
+                "name": playlist.name,
+                "subtitle": "Playlist",
+                "url": f"/playlists/{playlist.id}",
+            })
 
         # Sort: exact matches first, then by type (playlist > track)
         type_order = {"playlist": 0, "artist": 1, "album": 2, "track": 3}
         results.sort(
             key=lambda x: (
-                0 if x["name"].lower() == query_lower else 1,
+                0 if x["name"].lower() == query.lower() else 1,
                 type_order.get(x["type"], 99),
             )
         )
@@ -969,10 +1066,26 @@ async def library_import_jobs_list(
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
+    source: str | None = None,  # NEW: Filter by source (local/spotify/hybrid/all)
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library artists browser page - only artists with local files."""
+    """Unified artists browser page - shows LOCAL + SPOTIFY + HYBRID artists.
+
+    Hey future me - This is now the UNIFIED Music Manager artist view!
+    It shows ALL artists regardless of source (local file scan OR Spotify followed).
+
+    Filter by source param:
+    - ?source=local → Only artists from local file scans (with or without Spotify)
+    - ?source=spotify → Only artists followed on Spotify (with or without local files)
+    - ?source=hybrid → Only artists that exist in BOTH local + Spotify
+    - ?source=all OR no param → Show ALL artists (default unified view)
+
+    Each artist card shows badges:
+    🎵 Local (has local files)
+    🎧 Spotify (followed on Spotify)
+    🌟 Both (hybrid)
+    """
     from sqlalchemy import func, select
 
     from soulspot.infrastructure.persistence.models import (
@@ -982,6 +1095,7 @@ async def library_artists(
     )
 
     # Subquery for track count per artist - ONLY count tracks with local files!
+    # Hey future me - track_count is 0 for Spotify-only artists (no local files yet)
     track_count_subq = (
         select(TrackModel.artist_id, func.count(TrackModel.id).label("track_count"))
         .where(TrackModel.file_path.isnot(None))
@@ -1003,32 +1117,48 @@ async def library_artists(
         .subquery()
     )
 
-    # Main query - only artists that have at least one local track
+    # Main query - SHOW ALL ARTISTS (unified view)
+    # Hey future me - LEFT JOIN track_count so Spotify-only artists (no local files) are included!
     stmt = (
         select(
             ArtistModel,
             track_count_subq.c.track_count,
             album_count_subq.c.album_count,
         )
-        .join(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
+        .outerjoin(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
         .outerjoin(album_count_subq, ArtistModel.id == album_count_subq.c.artist_id)
-        .where(track_count_subq.c.track_count > 0)
-        .order_by(ArtistModel.name)
     )
+
+    # Apply source filter if requested
+    if source == "local":
+        # Only artists with local files (source='local' OR 'hybrid')
+        stmt = stmt.where(ArtistModel.source.in_(["local", "hybrid"]))
+    elif source == "spotify":
+        # Only Spotify followed artists (source='spotify' OR 'hybrid')
+        stmt = stmt.where(ArtistModel.source.in_(["spotify", "hybrid"]))
+    elif source == "hybrid":
+        # Only artists in BOTH sources
+        stmt = stmt.where(ArtistModel.source == "hybrid")
+    # else: source == "all" or None → Show ALL artists (no filter)
+
+    stmt = stmt.order_by(ArtistModel.name)
     result = await session.execute(stmt)
     rows = result.all()
 
-    # Convert to template-friendly format with image_url
+    # Convert to template-friendly format with image_url + source
     # Hey future me - name is CLEAN (no disambiguation), disambiguation is stored separately!
     # After Dec 2025 folder parsing fixes, new scans store clean names. Old entries might
     # still have disambiguation in name - re-scan library to fix.
+    # NEW: source field for badge display (local/spotify/hybrid)
     artists = [
         {
             "name": artist.name,
             "disambiguation": artist.disambiguation,  # Text like "English rock band"
+            "source": artist.source,  # NEW: 'local', 'spotify', or 'hybrid'
             "track_count": track_count or 0,
             "album_count": album_count or 0,
             "image_url": artist.image_url,  # Spotify CDN URL or None
+            "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
         for artist, track_count, album_count in rows
     ]
@@ -1041,6 +1171,14 @@ async def library_artists(
     artists_without_image = sum(1 for a in artists if not a["image_url"])
     enrichment_needed = artists_without_image > 0
 
+    # Count artists by source for filter badges
+    source_counts = {
+        "all": len(artists),
+        "local": sum(1 for a in artists if a["source"] in ["local", "hybrid"]),
+        "spotify": sum(1 for a in artists if a["source"] in ["spotify", "hybrid"]),
+        "hybrid": sum(1 for a in artists if a["source"] == "hybrid"),
+    }
+
     return templates.TemplateResponse(
         request,
         "library_artists.html",
@@ -1048,6 +1186,8 @@ async def library_artists(
             "artists": artists,
             "enrichment_needed": enrichment_needed,
             "artists_without_image": artists_without_image,
+            "current_source": source or "all",  # Active filter
+            "source_counts": source_counts,  # For filter badge counts
         },
     )
 
@@ -1251,27 +1391,37 @@ async def library_artist_detail(
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Artist detail page with albums and tracks."""
+    """Artist detail page with albums and tracks.
+    
+    Hey future me - UNIFIED Music Manager view!
+    Shows ALL albums for this artist (LOCAL + SPOTIFY):
+    - Albums with local files → Show tracks
+    - Spotify albums (no local files yet) → Show album card with download button
+    
+    This works for all source types:
+    - LOCAL artists → Show albums from file scans
+    - SPOTIFY artists → Show albums from Spotify API sync
+    - HYBRID artists → Show ALL albums (merged)
+    """
     from urllib.parse import unquote
 
-    from sqlalchemy import select
+    from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.infrastructure.persistence.models import TrackModel
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        TrackModel,
+    )
 
     artist_name = unquote(artist_name)
 
-    # Query tracks with joined loads for artist and album
-    stmt = (
-        select(TrackModel)
-        .join(TrackModel.artist)
-        .where(TrackModel.artist.has(name=artist_name))
-        .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
-    )
-    result = await session.execute(stmt)
-    track_models = result.unique().scalars().all()
+    # Step 1: Get artist by name (case-insensitive)
+    artist_stmt = select(ArtistModel).where(func.lower(ArtistModel.name) == artist_name.lower())
+    artist_result = await session.execute(artist_stmt)
+    artist_model = artist_result.scalar_one_or_none()
 
-    if not track_models:
+    if not artist_model:
         return templates.TemplateResponse(
             request,
             "error.html",
@@ -1282,38 +1432,95 @@ async def library_artist_detail(
             status_code=404,
         )
 
-    # Group tracks by album, including artwork_url from album
+    # Step 2: Get ALL albums for this artist (including Spotify albums without local files)
+    albums_stmt = (
+        select(AlbumModel)
+        .where(AlbumModel.artist_id == artist_model.id)
+        .order_by(AlbumModel.release_year.desc().nullslast(), AlbumModel.title)
+    )
+    albums_result = await session.execute(albums_stmt)
+    album_models = albums_result.scalars().all()
+
+    # Hey future me - AUTO-SYNC Spotify albums if artist has none yet!
+    # If artist is from Spotify (source='spotify' or 'hybrid') and has NO albums in DB,
+    # fetch albums from Spotify API on-demand. This ensures Spotify followed artists
+    # show their discography immediately without manual sync button.
+    if not album_models and artist_model.source in ["spotify", "hybrid"] and artist_model.spotify_uri:
+        try:
+            # Get Spotify plugin and token
+            from soulspot.application.services.followed_artists_service import (
+                FollowedArtistsService,
+            )
+            from soulspot.infrastructure.integrations.spotify_client import (
+                SpotifyClient,
+            )
+            from soulspot.infrastructure.persistence.database import (
+                DatabaseTokenManager,
+            )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+            from soulspot.config import get_settings
+
+            if hasattr(request.app.state, "db_token_manager"):
+                db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+                access_token = await db_token_manager.get_token_for_background()
+
+                if access_token:
+                    # Use FollowedArtistsService with SpotifyPlugin
+                    app_settings = get_settings()
+                    spotify_client = SpotifyClient(app_settings.spotify)
+                    spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+                    followed_service = FollowedArtistsService(session, spotify_plugin)
+
+                    # Sync albums for this artist (albums, singles, EPs, compilations)
+                    # No access_token param - plugin has it!
+                    await followed_service.sync_artist_albums(artist_model.id)
+                    await session.commit()  # Commit new albums
+
+                    # Re-query albums after sync
+                    albums_result = await session.execute(albums_stmt)
+                    album_models = albums_result.scalars().all()
+        except Exception as e:
+            logger.warning(f"Failed to auto-sync Spotify albums for {artist_model.name}: {e}")
+            # Continue anyway - show empty albums list
+
+    # Step 3: Get tracks for these albums (for LOCAL/HYBRID artists)
+    tracks_stmt = (
+        select(TrackModel)
+        .where(TrackModel.artist_id == artist_model.id)
+        .options(joinedload(TrackModel.album))
+    )
+    tracks_result = await session.execute(tracks_stmt)
+    track_models = tracks_result.unique().scalars().all()
+
+    # Build albums list with track counts
     albums_dict: dict[str, dict[str, Any]] = {}
+    for album in album_models:
+        album_key = album.title
+        albums_dict[album_key] = {
+            "id": f"{artist_name}::{album.title}",
+            "title": album.title,
+            "track_count": 0,  # Will be updated from tracks
+            "year": album.release_year,
+            "artwork_url": album.artwork_url if hasattr(album, "artwork_url") else None,
+            "spotify_id": album.spotify_id if hasattr(album, "spotify_id") else None,
+        }
+
+    # Count tracks per album
     for track in track_models:
         if track.album:
             album_key = track.album.title
-            if album_key not in albums_dict:
-                albums_dict[album_key] = {
-                    "id": f"{artist_name}::{track.album.title}",
-                    "title": track.album.title,
-                    "track_count": 0,
-                    "year": track.album.release_year
-                    if hasattr(track.album, "release_year")
-                    else None,
-                    "artwork_url": track.album.artwork_url
-                    if hasattr(track.album, "artwork_url")
-                    else None,
-                }
-            albums_dict[album_key]["track_count"] += 1
+            if album_key in albums_dict:
+                albums_dict[album_key]["track_count"] += 1
 
-    # Hey future me - sort albums by year (desc, newest first), then by title!
-    # None years go last. This is Lidarr-style chronological ordering.
-    albums = sorted(
-        albums_dict.values(),
-        key=lambda x: (x["year"] is None, -(x["year"] or 0), x["title"].lower()),
-    )
+    # Convert to list (already sorted by SQL query)
+    albums = list(albums_dict.values())
 
     # Convert tracks to template format
     tracks_data = [
         {
             "id": track.id,
             "title": track.title,
-            "artist": track.artist.name if track.artist else "Unknown Artist",
+            "artist": artist_model.name,
             "album": track.album.title if track.album else "Unknown Album",
             "duration_ms": track.duration_ms,
             "file_path": track.file_path,
@@ -1325,33 +1532,16 @@ async def library_artist_detail(
     # Sort tracks by album, then track number/title
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
 
-    # Hey future me – get image_url from the artist model for Spotify CDN profile pic
-    image_url = (
-        track_models[0].artist.image_url
-        if track_models
-        and track_models[0].artist
-        and hasattr(track_models[0].artist, "image_url")
-        else None
-    )
-
-    # Hey future me – disambiguation is for showing "(English rock band)" etc. next to artist name.
-    # Parsed from Lidarr folder structure like "Genesis (English rock band)/". Clean name stays in
-    # artist_name, disambiguation is shown separately in UI to avoid Spotify search issues.
-    disambiguation = (
-        track_models[0].artist.disambiguation
-        if track_models
-        and track_models[0].artist
-        and hasattr(track_models[0].artist, "disambiguation")
-        else None
-    )
-
     artist_data = {
-        "name": artist_name,
-        "disambiguation": disambiguation,
+        "name": artist_model.name,
+        "source": artist_model.source,  # NEW: Show source badge
+        "disambiguation": artist_model.disambiguation,
         "albums": albums,
         "tracks": tracks_data,
         "track_count": len(tracks_data),
-        "image_url": image_url,  # Spotify CDN URL or None
+        "album_count": len(albums),
+        "image_url": artist_model.image_url,  # Spotify CDN URL or None
+        "genres": artist_model.genres,  # Spotify genres
     }
 
     return templates.TemplateResponse(
@@ -1430,6 +1620,7 @@ async def library_album_detail(
             "artist": track.artist.name if track.artist else "Unknown Artist",
             "album": track.album.title if track.album else "Unknown Album",
             "track_number": track.track_number,
+            "disc_number": track.disc_number if hasattr(track, "disc_number") else 1,
             "duration_ms": track.duration_ms,
             "file_path": track.file_path,
             "is_broken": track.is_broken,
@@ -1437,8 +1628,8 @@ async def library_album_detail(
         for track in track_models
     ]
 
-    # Sort by track number, then title
-    tracks_data.sort(key=lambda x: (x["track_number"] or 999, x["title"].lower()))  # type: ignore[union-attr]
+    # Sort by disc number, then track number, then title
+    tracks_data.sort(key=lambda x: (x["disc_number"], x["track_number"] or 999, x["title"].lower()))  # type: ignore[union-attr]
 
     # Calculate total duration
     total_duration_ms = sum(t["duration_ms"] or 0 for t in tracks_data)  # type: ignore[misc]
@@ -1534,8 +1725,8 @@ async def track_metadata_editor(
             "title": track_model.title,
             "artist": track_model.artist.name if track_model.artist else None,
             "album": track_model.album.title if track_model.album else None,
-            "album_artist": None,  # TODO: Add album_artist field
-            "genre": None,  # TODO: Add genre field
+            "album_artist": track_model.album.album_artist if track_model.album else None,
+            "genre": track_model.genre,
             "year": track_model.album.year
             if track_model.album and hasattr(track_model.album, "year")
             else None,
@@ -1691,16 +1882,12 @@ async def spotify_artists_page(
     # 2. ALWAYS load from DB for display - even if sync fails or token is invalid!
     # This ensures data is visible even without a valid Spotify token.
 
-    # Step 1: Try to sync if token available (OPTIONAL - failures don't block DB load)
+    # Step 1: Try to sync if SpotifyPlugin has valid token (OPTIONAL - failures don't block DB load)
     try:
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
-        if access_token:
-            # Auto-sync (respects cooldown) - updates DB and commits
-            sync_stats = await sync_service.sync_followed_artists(access_token)
+        # Hey future me - SpotifySyncService now uses SpotifyPlugin internally!
+        # No more access_token passing - plugin handles auth internally.
+        # Auto-sync (respects cooldown) - updates DB and commits
+        sync_stats = await sync_service.sync_followed_artists()
     except Exception as sync_error:
         # Sync failed (token invalid, API error, etc.) - log but don't block
         # We'll still load existing data from DB below
@@ -1754,19 +1941,21 @@ async def spotify_artists_page(
 async def spotify_discover_page(
     request: Request,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> Any:
     """Discover Similar Artists page.
 
     Hey future me - this is the REAL discovery page! Shows artists similar to your favorites.
-    Fetches related artists from Spotify API for your followed artists and aggregates
+    Fetches related artists from SpotifyPlugin for your followed artists and aggregates
     the suggestions, filtering out ones you already follow.
+    SpotifyPlugin handles auth internally - no more manual token passing!
     """
     import random
 
-    # Get all followed artists
-    artists = await sync_service.get_all_followed_artists()
+    # Get all followed artists (limit to 1000 for performance)
+    artists = await sync_service.get_artists(limit=1000)
+
+    logger.info(f"Discover page: Found {len(artists) if artists else 0} artists in DB")
 
     if not artists:
         return templates.TemplateResponse(
@@ -1776,13 +1965,18 @@ async def spotify_discover_page(
                 "discoveries": [],
                 "based_on_count": 0,
                 "total_discoveries": 0,
-                "error": "No followed artists found. Follow some artists on Spotify first!",
+                "error": "No followed artists found. Sync your Spotify artists first in Settings!",
             },
         )
 
     # Pick random artists to base discovery on (max 5 to avoid rate limits)
     sample_size = min(5, len(artists))
     sample_artists = random.sample(artists, sample_size)
+
+    logger.info(
+        f"Discover page: Sampling {sample_size} artists for related lookup: "
+        f"{[a.name for a in sample_artists]}"
+    )
 
     # Get followed artist IDs for filtering
     followed_ids = {a.spotify_id for a in artists}
@@ -1791,33 +1985,44 @@ async def spotify_discover_page(
     discoveries: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     error: str | None = None
+    api_errors: int = 0
 
     for artist in sample_artists:
         if not artist.spotify_id:
+            logger.warning(f"Artist {artist.name} has no spotify_id, skipping")
             continue
         try:
-            related = await spotify_client.get_related_artists(
-                artist.spotify_id, access_token
-            )
-            for r in related:
-                rid = r.get("id")
+            # SpotifyPlugin returns list[ArtistDTO] - clean DTO access!
+            related_dtos = await spotify_plugin.get_related_artists(artist.spotify_id)
+            logger.debug(f"Got {len(related_dtos)} related artists for {artist.name}")
+            for r in related_dtos:
+                rid = r.spotify_id
                 # Skip if already following or already in discoveries
                 if rid and rid not in followed_ids and rid not in seen_ids:
                     seen_ids.add(rid)
-                    images = r.get("images", [])
                     discoveries.append(
                         {
                             "spotify_id": rid,
-                            "name": r.get("name", "Unknown"),
-                            "image_url": images[0]["url"] if images else None,
-                            "genres": r.get("genres", [])[:3],
-                            "popularity": r.get("popularity", 0),
+                            "name": r.name,
+                            "image_url": r.image_url,
+                            "genres": (r.genres or [])[:3],
+                            "popularity": r.popularity or 0,
                             "based_on": artist.name,
                         }
                     )
         except Exception as e:
+            api_errors += 1
             logger.warning(f"Failed to get related artists for {artist.name}: {e}")
             continue
+
+    logger.info(
+        f"Discover page: Found {len(discoveries)} unique discoveries, "
+        f"{api_errors} API errors"
+    )
+
+    # If all API calls failed, show error
+    if api_errors == sample_size and not discoveries:
+        error = "Could not fetch recommendations. Please check your Spotify connection."
 
     # Sort by popularity (most popular first)
     discoveries.sort(key=lambda x: x["popularity"], reverse=True)
@@ -1842,14 +2047,14 @@ async def spotify_artist_detail_page(
     request: Request,
     artist_id: str,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> Any:
     """Spotify artist detail page with albums.
 
+    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
     Auto-syncs artist's albums from Spotify on page load (with cooldown).
     Shows artist info and album grid.
 
-    Uses SHARED server-side token from DatabaseTokenManager.
+    SpotifyPlugin handles auth internally - no more manual token fetching!
     """
     artist = None
     albums = []
@@ -1857,12 +2062,6 @@ async def spotify_artist_detail_page(
     error = None
 
     try:
-        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
 
@@ -1898,9 +2097,14 @@ async def spotify_artist_detail_page(
             "follower_count": artist_model.follower_count,
         }
 
-        if access_token:
-            # Auto-sync albums (respects cooldown)
-            sync_stats = await sync_service.sync_artist_albums(access_token, artist_id)
+        # Hey future me - SpotifyPlugin handles auth internally!
+        # No more "if access_token:" checks needed.
+        # Auto-sync albums (respects cooldown)
+        try:
+            sync_stats = await sync_service.sync_artist_albums(artist_id)
+        except Exception as sync_error:
+            # Sync failed but we can still show cached data
+            logger.warning(f"Album sync failed (showing cached): {sync_error}")
 
         # Get albums from DB
         album_models = await sync_service.get_artist_albums(artist_id, limit=200)
@@ -2004,10 +2208,11 @@ async def spotify_album_detail_page(
 ) -> Any:
     """Spotify album detail page with tracks.
 
+    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
     Auto-syncs album's tracks from Spotify on page load (with cooldown).
     Shows album info and track list with download buttons.
 
-    Uses SHARED server-side token from DatabaseTokenManager.
+    SpotifyPlugin handles auth internally - no more manual token fetching!
     """
     artist = None
     album = None
@@ -2016,12 +2221,6 @@ async def spotify_album_detail_page(
     error = None
 
     try:
-        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
         if artist_model:
@@ -2053,9 +2252,14 @@ async def spotify_album_detail_page(
             "total_tracks": album_model.total_tracks,
         }
 
-        if access_token:
-            # Auto-sync tracks (respects cooldown)
-            sync_stats = await sync_service.sync_album_tracks(access_token, album_id)
+        # Hey future me - SpotifyPlugin handles auth internally!
+        # No more "if access_token:" checks needed.
+        # Auto-sync tracks (respects cooldown)
+        try:
+            sync_stats = await sync_service.sync_album_tracks(album_id)
+        except Exception as sync_error:
+            # Sync failed but we can still show cached data
+            logger.warning(f"Track sync failed (showing cached): {sync_error}")
 
         # Get tracks from DB
         track_models = await sync_service.get_album_tracks(album_id, limit=100)
@@ -2111,27 +2315,26 @@ async def spotify_album_detail_page(
     )
 
 
-# Hey future me, this renders the followed artists sync page! It's a simple GET that loads the template
-# with empty state. The actual sync happens client-side via HTMX POST to /api/automation/followed-artists/sync
-# which returns JSON that gets rendered by JavaScript in the template. No DB queries on initial page load -
-# keeps it fast. Users see empty state with "Sync from Spotify" button. After sync, artists list populates
-# and users can select which artists to add to watchlists. The bulk create uses POST to /api/automation/
-# followed-artists/watchlists/bulk. This page requires Spotify OAuth token in session or sync will fail!
-# DEPRECATED: Use /spotify/artists instead for auto-sync experience!
-@router.get("/automation/followed-artists", response_class=HTMLResponse)
-async def followed_artists_page(request: Request) -> Any:
-    """Followed artists sync and watchlist creation page.
+# Hey future me, DEPRECATED route! Users should use /spotify/artists instead for auto-sync.
+# Returns HTTP 410 Gone (permanently removed) with helpful redirect message.
+# This prevents 404 confusion and guides users to the new location.
+@router.get("/automation/followed-artists", response_class=JSONResponse, status_code=410)
+async def followed_artists_page_deprecated(request: Request) -> Any:
+    """Followed artists sync page - DEPRECATED.
 
-    DEPRECATED: Use /spotify/artists for auto-sync experience.
-
-    Args:
-        request: FastAPI request object
+    This endpoint has been permanently moved to /spotify/artists for a better
+    auto-sync experience. Please update your bookmarks.
 
     Returns:
-        HTML page for managing followed artists
+        HTTP 410 Gone with redirect information
     """
-    return templates.TemplateResponse(
-        request,
-        "followed_artists.html",
-        context={},
+    return JSONResponse(
+        status_code=410,
+        content={
+            "error": "Endpoint Deprecated",
+            "message": "This endpoint has been permanently removed. Please use the new location.",
+            "redirect_to": "/spotify/artists",
+            "reason": "Moved to auto-sync experience",
+        },
+        headers={"Location": "/spotify/artists"},
     )

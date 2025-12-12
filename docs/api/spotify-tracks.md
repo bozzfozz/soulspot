@@ -432,7 +432,6 @@ async def handle_rate_limit(response: httpx.Response) -> None:
 
 ## Related Documentation
 
-- [SPOTIFY_MODULE.md](../version-3.0/SPOTIFY_MODULE.md) - Full Spotify module specification
 - [Library Management API](library-management-api.md) - Library operations
 - [Download Management](download-management.md) - Download queue management
 - [Advanced Search API](advanced-search-api.md) - Search capabilities

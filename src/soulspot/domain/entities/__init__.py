@@ -32,6 +32,21 @@ class MetadataSource(str, Enum):
     LASTFM = "lastfm"
 
 
+# Hey future me - ArtistSource tracks WHERE the artist comes from in the unified view!
+# This enables SoulSpot to become a true Music Manager combining local library + streaming services.
+# - LOCAL: Artist found in local file scan (Lidarr-style folder structure)
+# - SPOTIFY: Followed artist from Spotify (synced from user's Spotify account)
+# - HYBRID: Artist exists in BOTH local library AND Spotify followed artists
+# This field drives the UI badge display (🎵 Local | 🎧 Spotify | 🌟 Both) and determines
+# which operations are available (e.g., can't "unfollow" a LOCAL-only artist on Spotify).
+class ArtistSource(str, Enum):
+    """Source of the artist in the unified music manager view."""
+
+    LOCAL = "local"  # Artist found in local library file scan
+    SPOTIFY = "spotify"  # Followed artist from Spotify
+    HYBRID = "hybrid"  # Artist exists in both local library and Spotify
+
+
 # Hey future me - ProviderMode is the 3-way toggle for each external service provider!
 # This controls whether a provider is used and at what level.
 #
@@ -65,16 +80,27 @@ class ProviderMode(str, Enum):
 # of images in different sizes (640x640, 320x320, 160x160). We pick the medium-sized one (usually 320px)
 # for display in the followed artists UI. This field is nullable because not all artists have images
 # (especially indie/underground artists). The URL points to Spotify's CDN - it's stable and cacheable.
+# Hey future me - source field tracks whether artist is from LOCAL library, SPOTIFY, or HYBRID (both)!
+# This enables the unified Music Manager view where local scanned artists and Spotify followed artists
+# are shown together. UI uses this to display badges and enable/disable actions (e.g., can't "unfollow"
+# a LOCAL-only artist). When an artist exists in both sources, it's marked HYBRID and we merge metadata
+# from both (Spotify provides artwork/genres, local files provide actual track ownership).
 @dataclass
 class Artist:
     """Artist entity representing a music artist."""
 
     id: ArtistId
     name: str
+    source: ArtistSource = ArtistSource.LOCAL  # Default to LOCAL for backward compat
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
     image_url: str | None = None
+    # Hey future me - multi-service IDs for cross-service artist deduplication!
+    # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
+    # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     # Hey future me - disambiguation is for Lidarr-style naming templates!
     # Sourced from MusicBrainz to differentiate artists with the same name.
     # Example: "Genesis" has disambiguation "English rock band" vs other Genesis artists.
@@ -123,6 +149,11 @@ class Album:
     release_year: int | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
+    # Hey future me - multi-service IDs for cross-service album deduplication!
+    # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
+    # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     artwork_path: FilePath | None = None
     artwork_url: str | None = None  # Spotify CDN URL for album cover
     # Hey future me - Lidarr-style dual album type system for naming templates!
@@ -217,6 +248,11 @@ class Track:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     isrc: str | None = None
+    # Hey future me - multi-service IDs for cross-service deduplication!
+    # ISRC is the universal track identifier, these are service-specific IDs for API calls.
+    # When syncing from multiple services, ISRC is primary dedup key.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     file_path: FilePath | None = None
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)

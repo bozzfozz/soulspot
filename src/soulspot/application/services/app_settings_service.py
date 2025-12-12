@@ -23,10 +23,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.infrastructure.persistence.models import AppSettingsModel
@@ -75,7 +75,7 @@ class AppSettingsService:
         """
         if key in self._cache:
             value, cached_at = self._cache[key]
-            if datetime.utcnow() - cached_at < timedelta(seconds=CACHE_TTL_SECONDS):
+            if datetime.now(UTC) - cached_at < timedelta(seconds=CACHE_TTL_SECONDS):
                 return value, True
             # Expired, remove from cache
             del self._cache[key]
@@ -88,7 +88,7 @@ class AppSettingsService:
             key: Setting key.
             value: Parsed value to cache.
         """
-        self._cache[key] = (value, datetime.utcnow())
+        self._cache[key] = (value, datetime.now(UTC))
 
     def invalidate_cache(self, key: str | None = None) -> None:
         """Invalidate cache for specific key or all keys.
@@ -329,6 +329,40 @@ class AppSettingsService:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def reset_all(self, category: str | None = None) -> int:
+        """Reset settings to defaults by deleting from database.
+
+        Hey future me - this is the "nuclear option"! Deletes settings from DB so they fall back
+        to hardcoded defaults from Settings() classes. Use with caution - users will lose their
+        custom config! The category parameter allows "safe reset" of just UI prefs vs everything.
+
+        IMPORTANT: This does NOT touch .env files or secrets - those are still loaded from env vars.
+        Only dynamic DB-stored settings (like sync intervals, UI prefs) are reset.
+
+        Args:
+            category: If provided, only reset settings in this category (e.g., 'ui', 'spotify').
+                     If None, reset ALL settings.
+
+        Returns:
+            Number of settings deleted.
+        """
+        if category:
+            stmt = delete(AppSettingsModel).where(AppSettingsModel.category == category)
+            logger.info(f"Resetting app settings in category: {category}")
+        else:
+            stmt = delete(AppSettingsModel)
+            logger.info("Resetting ALL app settings to defaults")
+
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+
+        # Clear entire cache since we deleted potentially many keys
+        self.invalidate_cache()
+
+        deleted_count = result.rowcount or 0
+        logger.info(f"Reset {deleted_count} app settings")
+        return deleted_count
+
     # =========================================================================
     # SPOTIFY-SPECIFIC CONVENIENCE METHODS
     # =========================================================================
@@ -387,6 +421,27 @@ class AppSettingsService:
         """Check if deleted playlists should be removed from DB."""
         return await self.get_bool("spotify.remove_unfollowed_playlists", default=False)
 
+    async def is_artist_albums_resync_enabled(self) -> bool:
+        """Check if periodic resync of artist albums is enabled.
+
+        Hey future me - this is the NEW feature! When enabled, the worker
+        will not only sync NEW artists but also RESYNC existing artists
+        whose albums haven't been updated in a while. This ensures
+        New Releases on the dashboard stay fresh without manual page visits.
+        """
+        return await self.get_bool("spotify.auto_resync_artist_albums", default=True)
+
+    async def get_artist_albums_resync_hours(self) -> int:
+        """Get how many hours before artist albums need resync.
+
+        Default is 24 hours - once a day we refresh album data for each artist.
+        Lower values = more API calls but fresher data.
+        Higher values = fewer API calls but potentially stale New Releases.
+        """
+        return await self.get_int(
+            "spotify.artist_albums_resync_hours", default=24
+        )
+
     async def get_spotify_settings_summary(self) -> dict[str, Any]:
         """Get summary of all Spotify sync settings for UI display.
 
@@ -422,6 +477,12 @@ class AppSettingsService:
             ),
             "remove_unfollowed_playlists": await self.get_bool(
                 "spotify.remove_unfollowed_playlists", default=False
+            ),
+            "auto_resync_artist_albums": await self.get_bool(
+                "spotify.auto_resync_artist_albums", default=True
+            ),
+            "artist_albums_resync_hours": await self.get_int(
+                "spotify.artist_albums_resync_hours", default=24
             ),
         }
 

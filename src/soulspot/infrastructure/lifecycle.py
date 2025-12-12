@@ -360,13 +360,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
             # Sie laufen im Hintergrund und checken nur, ob enabled via AppSettingsService.
             # Wenn disabled, loggen sie nur "skipping" und warten auf nächsten Interval.
+            # REFACTORED (Dec 2025): Now uses SpotifyPlugin instead of SpotifyClient!
             from soulspot.application.workers.automation_workers import (
                 AutomationWorkerManager,
+            )
+            from soulspot.infrastructure.plugins import SpotifyPlugin
+
+            # Create SpotifyPlugin for automation workers
+            # Token will be set dynamically before each operation via token_manager
+            automation_spotify_plugin = SpotifyPlugin(
+                client=spotify_client,
+                access_token=None,  # Token set via set_token() by workers
             )
 
             automation_manager = AutomationWorkerManager(
                 session=worker_session,
-                spotify_client=spotify_client,
+                spotify_plugin=automation_spotify_plugin,
                 token_manager=db_token_manager,
                 watchlist_interval=3600,  # 1 hour
                 discography_interval=86400,  # 24 hours
@@ -433,7 +442,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
-                spotify_client=spotify_client,  # For Spotify artwork downloads
+                spotify_plugin=automation_spotify_plugin,  # For Spotify artwork downloads
                 app_settings_service=app_settings_service,  # For dynamic naming templates
             )
             app.state.auto_import = auto_import_service

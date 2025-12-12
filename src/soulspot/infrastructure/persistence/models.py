@@ -61,6 +61,9 @@ class Base(DeclarativeBase):
 # The cascade="all, delete-orphan" on relationships means: delete artist → delete all albums/tracks!
 # This is POWERFUL but DANGEROUS - deleting "The Beatles" wipes their entire discography! Alembic
 # migrations must handle this carefully to avoid data loss.
+# Hey future me - source field tracks whether artist is LOCAL (file scan), SPOTIFY (followed), or
+# HYBRID (both)! This enables unified Music Manager view. Defaults to LOCAL for backward compatibility
+# with existing artists in DB. Use 'local', 'spotify', 'hybrid' values (not enum - SQLite compatibility).
 class ArtistModel(Base):
     """SQLAlchemy model for Artist entity (Local Library)."""
 
@@ -70,11 +73,24 @@ class ArtistModel(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # Source: 'local' (file scan), 'spotify' (followed artist), 'hybrid' (both)
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="local", index=True
+    )
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
+    )
+    # Hey future me - service-specific IDs for multi-service support!
+    # Same pattern as Track: store all service IDs to avoid duplicates when syncing
+    # from multiple services. MusicBrainz ID is the universal key (like ISRC for tracks).
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
     )
     # Hey future me - image_url stores the artist's profile picture from Spotify CDN!
     # Typically 320x320 resolution. String(512) allows for long URLs. Nullable because
@@ -127,6 +143,14 @@ class AlbumModel(Base):
     )
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
+    )
+    # Hey future me - service-specific IDs for multi-service support!
+    # Same pattern as Track/Artist. Albums can be synced from Spotify, Deezer, or Tidal.
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
     )
     artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Hey future me - artwork_url stores album cover from Spotify CDN! Similar to artist
@@ -219,6 +243,18 @@ class TrackModel(Base):
     )
     isrc: Mapped[str | None] = mapped_column(
         String(12), nullable=True, unique=True, index=True
+    )
+    # Hey future me - service-specific IDs for multi-service support! ISRC is the universal key
+    # but each streaming service has their own ID format. Store all of them so we can:
+    # 1. Link same track across services (Spotify track X = Deezer track Y = Tidal track Z)
+    # 2. Avoid re-downloading if user syncs from multiple services
+    # 3. Query back to original service for metadata refresh
+    # ISRC is primary dedup key, these are secondary links for API calls.
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
     )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
@@ -586,21 +622,22 @@ class QualityUpgradeCandidateModel(Base):
     )
 
 
-# Hey future me, SessionModel persists user sessions to survive Docker restarts!
+# Hey future me, SpotifySessionModel persists Spotify OAuth sessions to survive Docker restarts!
 # The access_token and refresh_token are SENSITIVE - they grant full access to user's Spotify.
 # Consider encrypting these fields at rest for production (use SQLAlchemy TypeDecorator with Fernet).
 # The session_id is the PRIMARY KEY - it's the random urlsafe string stored in user's cookie.
 # Sessions expire based on last_accessed_at + timeout (default 1 hour) - expired ones get cleaned up.
 # oauth_state and code_verifier are TEMPORARY - only needed during OAuth flow, cleared after callback.
 # This model replaces the in-memory dict in SessionStore - now sessions persist across restarts!
-class SessionModel(Base):
-    """User session with OAuth tokens for persistence across restarts.
+# RENAMED from SessionModel to SpotifySessionModel for service-agnostic architecture (2025-12-12).
+class SpotifySessionModel(Base):
+    """Spotify OAuth session with tokens for persistence across restarts.
 
     Stores Spotify OAuth tokens and session state in database to survive
     container restarts. Sessions are identified by session_id (cookie value).
     """
 
-    __tablename__ = "sessions"
+    __tablename__ = "spotify_sessions"
 
     # Primary key: session_id from cookie (urlsafe random string)
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -626,8 +663,8 @@ class SessionModel(Base):
 
     # Indexes for efficient cleanup queries
     __table_args__ = (
-        Index("ix_sessions_last_accessed", "last_accessed_at"),
-        Index("ix_sessions_token_expires", "token_expires_at"),
+        Index("ix_spotify_sessions_last_accessed", "last_accessed_at"),
+        Index("ix_spotify_sessions_token_expires", "token_expires_at"),
     )
 
 

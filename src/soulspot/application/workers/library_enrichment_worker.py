@@ -58,6 +58,9 @@ class LibraryEnrichmentWorker:
     async def _handle_enrichment_job(self, job: Job) -> dict[str, Any]:
         """Handle a library enrichment job.
 
+        Hey future me - wir nutzen jetzt SpotifyPlugin statt SpotifyClient!
+        Das Plugin managed Token intern, daher kein access_token Parameter mehr.
+
         Called by JobQueue when a LIBRARY_SPOTIFY_ENRICHMENT job is ready.
 
         Args:
@@ -73,6 +76,7 @@ class LibraryEnrichmentWorker:
         from soulspot.infrastructure.persistence.repositories import (
             SpotifyTokenRepository,
         )
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
         payload = job.payload
         triggered_by = payload.get("triggered_by", "manual")
@@ -97,13 +101,15 @@ class LibraryEnrichmentWorker:
 
                 access_token = token_model.access_token
 
-                # Create Spotify client and enrichment service
+                # Hey future me - SpotifyPlugin erstellen mit Token!
+                # Das Plugin managed den Token intern.
                 spotify_client = SpotifyClient(self.settings.spotify)
+                spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+
                 service = LocalLibraryEnrichmentService(
                     session=session,
-                    spotify_client=spotify_client,
+                    spotify_plugin=spotify_plugin,
                     settings=self.settings,
-                    access_token=access_token,
                 )
 
                 # Run batch enrichment

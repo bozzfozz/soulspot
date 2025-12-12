@@ -4,7 +4,7 @@ import asyncio
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import httpx
 from PIL import Image as PILImage
@@ -12,6 +12,9 @@ from PIL import Image as PILImage
 from soulspot.config import Settings
 from soulspot.domain.entities import Album, Track
 from soulspot.infrastructure.security import PathValidator
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -32,19 +35,19 @@ class ArtworkService:
     def __init__(
         self,
         settings: Settings,
-        spotify_client: Any | None = None,
-        access_token: str | None = None,
+        spotify_plugin: "SpotifyPlugin | None" = None,
     ) -> None:
         """Initialize artwork service.
 
+        Hey future me - refactored to use SpotifyPlugin instead of raw SpotifyClient!
+        The plugin handles token management internally, no more access_token juggling.
+
         Args:
             settings: Application settings
-            spotify_client: Optional Spotify client for artwork fallback
-            access_token: Optional Spotify access token for API calls
+            spotify_plugin: Optional SpotifyPlugin for artwork fallback (handles auth internally)
         """
         self._settings = settings
-        self._spotify_client = spotify_client
-        self._access_token = access_token
+        self._spotify_plugin = spotify_plugin
         self._artwork_path = settings.storage.artwork_path
         self._max_size = settings.postprocessing.artwork_max_size
         self._quality = settings.postprocessing.artwork_quality
@@ -52,16 +55,16 @@ class ArtworkService:
         # Ensure artwork directory exists
         self._artwork_path.mkdir(parents=True, exist_ok=True)
 
-    def set_access_token(self, token: str) -> None:
-        """Update the Spotify access token.
+    def set_spotify_plugin(self, plugin: "SpotifyPlugin") -> None:
+        """Update the Spotify plugin reference.
 
-        Hey future me - this allows setting the token after construction,
-        useful when the token is obtained asynchronously after service init.
+        Hey future me - allows setting the plugin after construction,
+        useful when plugin is initialized asynchronously after service init.
 
         Args:
-            token: Valid Spotify OAuth access token
+            plugin: Authenticated SpotifyPlugin instance
         """
-        self._access_token = token
+        self._spotify_plugin = plugin
 
     # Hey future me: Artwork downloading - the album art pipeline
     # WHY multiple sources? CoverArtArchive is free and high-quality, Spotify as fallback (needs auth token)
@@ -114,7 +117,7 @@ class ArtworkService:
                 return artwork_data
 
         # Try Spotify as fallback
-        if self._spotify_client and album and album.spotify_uri:
+        if self._spotify_plugin and album and album.spotify_uri:
             logger.info(
                 "Attempting to download artwork from Spotify for album: %s",
                 album.title,
@@ -124,7 +127,7 @@ class ArtworkService:
                 return artwork_data
 
         # Try Spotify track artwork as last resort
-        if self._spotify_client and track.spotify_uri:
+        if self._spotify_plugin and track.spotify_uri:
             logger.info(
                 "Attempting to download artwork from Spotify track: %s", track.title
             )
@@ -191,12 +194,15 @@ class ArtworkService:
             logger.exception("Error downloading artwork from CoverArtArchive: %s", e)
             return None
 
-    # Yo Spotify album artwork - IMPLEMENTED!
+    # Yo Spotify album artwork - REFACTORED to use SpotifyPlugin!
     # WHY Spotify? Almost 100% coverage for albums - way better than CoverArtArchive
-    # Spotify images array is sorted largest first (usually 640x640)
-    # We extract album_id from the URI/URL, then fetch via Spotify API
-    async def _download_from_spotify(self, album_uri: Any) -> bytes | None:
-        """Download artwork from Spotify album.
+    # Now uses SpotifyPlugin which returns AlbumDTO with artwork_url directly!
+    # No more manual JSON parsing or access_token management.
+    async def _download_from_spotify(self, album_uri: str) -> bytes | None:
+        """Download artwork from Spotify album via SpotifyPlugin.
+
+        Hey future me – refactored to use SpotifyPlugin!
+        Plugin handles auth internally and returns AlbumDTO with artwork_url.
 
         Args:
             album_uri: Spotify album URI (spotify:album:XXX) or ID
@@ -204,10 +210,8 @@ class ArtworkService:
         Returns:
             Processed artwork data or None
         """
-        if not self._spotify_client or not self._access_token:
-            logger.debug(
-                "Spotify client or access token not available for artwork download"
-            )
+        if not self._spotify_plugin:
+            logger.debug("SpotifyPlugin not available for artwork download")
             return None
 
         try:
@@ -217,33 +221,22 @@ class ArtworkService:
                 logger.warning("Could not extract album ID from: %s", album_uri)
                 return None
 
-            # Fetch album data from Spotify
-            album_data = await self._spotify_client.get_album(
-                album_id, self._access_token
-            )
-            if not album_data:
-                logger.debug("Album not found on Spotify: %s", album_id)
-                return None
+            # Fetch album data from Spotify (returns AlbumDTO!)
+            album_dto = await self._spotify_plugin.get_album(album_id)
 
-            # Extract image URL (largest first)
-            images = album_data.get("images", [])
-            if not images:
-                logger.debug("No images found for album: %s", album_id)
-                return None
-
-            # Get largest image (first in array)
-            image_url = images[0].get("url")
-            if not image_url:
+            # AlbumDTO has artwork_url directly
+            if not album_dto.artwork_url:
+                logger.debug("No artwork URL found for album: %s", album_id)
                 return None
 
             # Download the image
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(image_url, follow_redirects=True)
+                response = await client.get(album_dto.artwork_url, follow_redirects=True)
                 response.raise_for_status()
                 image_data = response.content
                 logger.info(
                     "Downloaded artwork from Spotify for album: %s (%d bytes)",
-                    album_data.get("name", album_id),
+                    album_dto.title,
                     len(image_data),
                 )
                 return await self._process_image(image_data)
@@ -252,13 +245,15 @@ class ArtworkService:
             logger.warning("Error downloading artwork from Spotify: %s", e)
             return None
 
-    # Listen, Spotify track artwork - tracks inherit album artwork
+    # Listen, Spotify track artwork - REFACTORED to use SpotifyPlugin!
     # When album artwork fails, try getting it via the track's album reference
-    async def _download_from_spotify_track(self, track_uri: Any) -> bytes | None:
-        """Download artwork from Spotify track (via its album).
+    # Now uses SpotifyPlugin.get_track() which returns TrackDTO with album reference.
+    async def _download_from_spotify_track(self, track_uri: str) -> bytes | None:
+        """Download artwork from Spotify track (via its album) using SpotifyPlugin.
 
-        Hey future me - tracks don't have their own artwork, they inherit from album.
-        So we fetch the track, get its album, then download album artwork.
+        Hey future me - refactored to use SpotifyPlugin!
+        Tracks don't have their own artwork, they inherit from album.
+        TrackDTO has album_spotify_id which we use to fetch album artwork.
 
         Args:
             track_uri: Spotify track URI (spotify:track:XXX) or ID
@@ -266,7 +261,7 @@ class ArtworkService:
         Returns:
             Processed artwork data or None
         """
-        if not self._spotify_client or not self._access_token:
+        if not self._spotify_plugin:
             return None
 
         try:
@@ -276,31 +271,27 @@ class ArtworkService:
                 logger.warning("Could not extract track ID from: %s", track_uri)
                 return None
 
-            # Fetch track data to get album
-            track_data = await self._spotify_client.get_track(
-                track_id, self._access_token
-            )
-            if not track_data:
+            # Fetch track data to get album reference (returns TrackDTO!)
+            track_dto = await self._spotify_plugin.get_track(track_id)
+
+            # TrackDTO has album_spotify_id - use that to fetch album artwork
+            if not track_dto.album_spotify_id:
+                logger.debug("Track has no album reference: %s", track_id)
                 return None
 
-            # Get album from track
-            album_data = track_data.get("album", {})
-            images = album_data.get("images", [])
-            if not images:
-                return None
-
-            # Download largest image
-            image_url = images[0].get("url")
-            if not image_url:
+            # Now fetch the album to get artwork
+            album_dto = await self._spotify_plugin.get_album(track_dto.album_spotify_id)
+            if not album_dto.artwork_url:
                 return None
 
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(image_url, follow_redirects=True)
+                response = await client.get(album_dto.artwork_url, follow_redirects=True)
                 response.raise_for_status()
                 image_data = response.content
                 logger.info(
-                    "Downloaded artwork from Spotify track: %s (%d bytes)",
-                    track_data.get("name", track_id),
+                    "Downloaded artwork from Spotify track: %s → album %s (%d bytes)",
+                    track_dto.title,
+                    album_dto.title,
                     len(image_data),
                 )
                 return await self._process_image(image_data)

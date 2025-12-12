@@ -9,9 +9,9 @@ from soulspot.domain.ports import (
     IAlbumRepository,
     IArtistRepository,
     IPlaylistRepository,
-    ISpotifyClient,
     ITrackRepository,
 )
+from soulspot.domain.ports.plugin import IMusicServicePlugin
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
@@ -26,7 +26,7 @@ class ImportSpotifyPlaylistRequest:
     """Request to import a Spotify playlist."""
 
     playlist_id: str
-    access_token: str
+    # access_token REMOVED - Plugin handles token internally!
     fetch_all_tracks: bool = True
 
 
@@ -55,28 +55,26 @@ class ImportSpotifyPlaylistUseCase(
 
     def __init__(
         self,
-        spotify_client: ISpotifyClient,
+        spotify_plugin: IMusicServicePlugin,
         playlist_repository: IPlaylistRepository,
         track_repository: ITrackRepository,
         artist_repository: IArtistRepository,
-        album_repository: IAlbumRepository,  # Added album_repository
+        album_repository: IAlbumRepository,
     ) -> None:
         """Initialize the use case with required dependencies.
 
         Args:
-            spotify_client: Client for Spotify API operations
+            spotify_plugin: SpotifyPlugin handles token internally!
             playlist_repository: Repository for playlist persistence
             track_repository: Repository for track persistence
             artist_repository: Repository for artist persistence
-            album_repository: Repository for album persistence # Added album_repository docstring
+            album_repository: Repository for album persistence
         """
-        self._spotify_client = spotify_client
+        self._spotify_plugin = spotify_plugin
         self._playlist_repository = playlist_repository
         self._track_repository = track_repository
         self._artist_repository = artist_repository
-        self._album_repository = (
-            album_repository  # Added album_repository initialization
-        )
+        self._album_repository = album_repository
 
     # Hey future me, this helper extracts year from Spotify release_date! Spotify returns dates
     # in different formats: "2023-11-26" (full date), "2023-11" (year-month), or "2023" (year only).
@@ -102,24 +100,53 @@ class ImportSpotifyPlaylistUseCase(
     # WHY fetch_all_tracks? Sometimes you just want playlist metadata without pulling 200 tracks
     # GOTCHA: This creates OR UPDATES tracks - if the track exists by Spotify URI, we update it
     # This is idempotent - running it twice on same playlist won't create duplicates
+    # REFACTORED: Now uses SpotifyPlugin - no more access_token parameter!
     async def execute(
         self, request: ImportSpotifyPlaylistRequest
     ) -> ImportSpotifyPlaylistResponse:
         """Execute the import playlist use case.
 
         Args:
-            request: Request containing playlist ID and access token
+            request: Request containing playlist ID (token handled by plugin)
 
         Returns:
             Response with imported playlist and statistics
         """
 
-        # 1. Fetch playlist metadata from Spotify
+        # 1. Fetch playlist metadata from Spotify via Plugin
         try:
-            spotify_playlist = await self._spotify_client.get_playlist(
-                request.playlist_id,
-                request.access_token,
-            )
+            # Plugin returns PlaylistDTO - convert to dict for backward compat
+            playlist_dto = await self._spotify_plugin.get_playlist(request.playlist_id)
+            spotify_playlist = {
+                "name": playlist_dto.name,
+                "description": playlist_dto.description,
+                "images": [{"url": playlist_dto.image_url}] if playlist_dto.image_url else [],
+                "tracks": {
+                    "items": [
+                        {
+                            "track": {
+                                "name": t.name,
+                                "uri": f"spotify:track:{t.spotify_id}",
+                                "duration_ms": t.duration_ms,
+                                "external_ids": {"isrc": t.isrc} if t.isrc else {},
+                                "track_number": t.track_number,
+                                "disc_number": t.disc_number,
+                                "artists": [
+                                    {"id": a.spotify_id, "name": a.name}
+                                    for a in (t.artists or [])
+                                ],
+                                "album": {
+                                    "name": t.album.name if t.album else None,
+                                    "uri": f"spotify:album:{t.album.spotify_id}" if t.album else None,
+                                    "images": [{"url": t.album.image_url}] if t.album and t.album.image_url else [],
+                                    "release_date": t.album.release_date if t.album else None,
+                                } if t.album else None,
+                            }
+                        }
+                        for t in (playlist_dto.tracks or [])
+                    ]
+                },
+            }
         except Exception as e:
             raise ValueError(f"Failed to fetch playlist from Spotify: {e}") from e
 
@@ -176,8 +203,9 @@ class ImportSpotifyPlaylistUseCase(
                     unique_artist_ids.add(track_data["artists"][0]["id"])
 
             # Step 2: Batch fetch and create all artists (10x faster!)
+            # No access_token needed - plugin handles it!
             artists_map = await self._fetch_and_create_artists_batch(
-                list(unique_artist_ids), request.access_token, errors
+                list(unique_artist_ids), errors
             )
 
             # Step 3: Process tracks (artists already in DB!)
@@ -351,14 +379,14 @@ class ImportSpotifyPlaylistUseCase(
     # maps artist_id -> Artist entity so the track loop can just look them up. IMPORTANT: We
     # handle errors gracefully - if a batch fails, we log it but continue with other batches.
     # This prevents one bad artist from killing the entire import!
+    # REFACTORED: Uses SpotifyPlugin - no more access_token parameter!
     async def _fetch_and_create_artists_batch(
-        self, artist_ids: list[str], access_token: str, errors: list[str]
+        self, artist_ids: list[str], errors: list[str]
     ) -> dict[str, Artist]:
         """Fetch and create multiple artists in batches of 50.
 
         Args:
             artist_ids: List of Spotify artist IDs to fetch
-            access_token: Spotify OAuth token
             errors: List to append errors to
 
         Returns:
@@ -379,22 +407,27 @@ class ImportSpotifyPlaylistUseCase(
         if not missing_ids:
             return artists_map  # All artists already in DB!
 
-        # Step 3: Fetch missing artists in batches of 50
-        for i in range(0, len(missing_ids), 50):
-            batch = missing_ids[i : i + 50]
+        # Step 3: Fetch missing artists via Plugin (handles batching internally)
+        for artist_id in missing_ids:
             try:
-                artists_data = await self._spotify_client.get_several_artists(
-                    batch, access_token
-                )
+                # Plugin returns ArtistDTO
+                artist_dto = await self._spotify_plugin.get_artist(artist_id)
 
-                # Create and save artist entities
-                for artist_data in artists_data:
-                    artist = self._create_artist_from_data(artist_data)
-                    await self._artist_repository.add(artist)
-                    artists_map[artist_data["id"]] = artist
+                # Convert DTO to Artist entity
+                artist = Artist(
+                    id=ArtistId.generate(),
+                    name=artist_dto.name,
+                    spotify_uri=SpotifyUri(f"spotify:artist:{artist_dto.spotify_id}"),
+                    image_url=artist_dto.image_url,
+                    genres=artist_dto.genres,
+                    metadata_sources={"name": "spotify"},
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+                await self._artist_repository.add(artist)
+                artists_map[artist_id] = artist
 
             except Exception as e:
-                # Log error but continue with other batches
-                errors.append(f"Failed to fetch artist batch: {e}")
+                errors.append(f"Failed to fetch artist {artist_id}: {e}")
 
         return artists_map

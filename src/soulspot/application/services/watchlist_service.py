@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
 from soulspot.domain.value_objects import ArtistId, WatchlistId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import ArtistWatchlistRepository
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -17,19 +17,21 @@ logger = logging.getLogger(__name__)
 class WatchlistService:
     """Service for managing artist watchlists."""
 
+    # Hey future me – Refactored to use SpotifyPlugin statt SpotifyClient!
+    # Plugin gibt AlbumDTOs zurück, nicht raw JSON. Token-Management im Plugin.
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient | None = None,
+        spotify_plugin: SpotifyPlugin | None = None,
     ) -> None:
         """Initialize watchlist service.
 
         Args:
             session: Database session
-            spotify_client: Spotify client for fetching releases
+            spotify_plugin: Spotify plugin for fetching releases (returns DTOs)
         """
         self.repository = ArtistWatchlistRepository(session)
-        self.spotify_client = spotify_client
+        self.spotify_plugin = spotify_plugin
 
     # Hey future me: Watchlist service - monitors artists for new releases
     # WHY watchlist? User wants to auto-download new albums from favorite artists
@@ -128,33 +130,35 @@ class WatchlistService:
     # WHY parse release_date? Spotify returns YYYY-MM-DD or just YYYY - need to handle both
     # GOTCHA: Spotify returns albums in reverse chronological order - newest first
     # If band releases 3 albums while we were down, we'll get all 3 as "new"
+    # REFACTORED: Now uses SpotifyPlugin.get_artist_albums() which returns PaginatedResponse[AlbumDTO]!
     async def check_for_new_releases(
-        self, watchlist: ArtistWatchlist, access_token: str
+        self, watchlist: ArtistWatchlist, access_token: str | None = None
     ) -> list[dict[str, Any]]:
         """Check for new releases for an artist.
 
         Args:
             watchlist: Artist watchlist
-            access_token: Spotify access token
+            access_token: DEPRECATED - Plugin manages token internally
 
         Returns:
-            List of new releases found
+            List of new releases found (as dicts for backward compat)
         """
-        if not self.spotify_client:
-            logger.warning("Spotify client not available for release checking")
+        if not self.spotify_plugin:
+            logger.warning("Spotify plugin not available for release checking")
             return []
 
         try:
-            # Get artist's albums from Spotify
+            # Get artist's albums from Spotify via Plugin
             artist_spotify_id = str(watchlist.artist_id.value)
-            albums = await self.spotify_client.get_artist_albums(
-                artist_spotify_id, access_token
-            )
+
+            # Hey future me – Plugin gibt PaginatedResponse[AlbumDTO] zurück!
+            response = await self.spotify_plugin.get_artist_albums(artist_spotify_id)
+            albums = response.items  # list[AlbumDTO]
 
             # Filter for new releases since last check
             new_releases = []
             for album in albums:
-                release_date_str = album.get("release_date", "")
+                release_date_str = album.release_date or ""
                 if not release_date_str:
                     continue
 
@@ -171,7 +175,16 @@ class WatchlistService:
                         watchlist.last_release_date is None
                         or release_date > watchlist.last_release_date
                     ):
-                        new_releases.append(album)
+                        # Convert AlbumDTO to dict for backward compatibility
+                        new_releases.append({
+                            "id": album.spotify_id,
+                            "name": album.title,
+                            "release_date": album.release_date,
+                            "total_tracks": album.total_tracks,
+                            "album_type": album.album_type,
+                            "images": [{"url": album.artwork_url}] if album.artwork_url else [],
+                            "spotify_uri": album.spotify_uri,
+                        })
                         if (
                             watchlist.last_release_date is None
                             or release_date > watchlist.last_release_date

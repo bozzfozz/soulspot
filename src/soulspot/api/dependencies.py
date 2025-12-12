@@ -1,5 +1,6 @@
 """Dependency injection for API endpoints."""
 
+import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, cast
 
@@ -13,7 +14,11 @@ from soulspot.application.services.token_manager import TokenManager
 from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
+    from soulspot.application.services.spotify_auth_service import (
+        SpotifyAuthService,
+    )
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
     ImportSpotifyPlaylistUseCase,
@@ -40,6 +45,8 @@ from soulspot.infrastructure.persistence.repositories import (
     SpotifyBrowseRepository,
     TrackRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Hey future me, NOW WE GET SESSION STORE FROM APP STATE! The DatabaseSessionStore is initialized
@@ -93,6 +100,87 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
 def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyClient:
     """Get Spotify client instance."""
     return SpotifyClient(settings.spotify)
+
+
+# Hey future me - SpotifyAuthService wraps all OAuth operations cleanly!
+# Use this instead of creating SpotifyClient in routers for auth operations.
+# The service handles: auth URL generation, code exchange, token refresh.
+# It's stateless - doesn't store tokens, that's the caller's job.
+def get_spotify_auth_service(
+    settings: Settings = Depends(get_settings),
+) -> "SpotifyAuthService":
+    """Get SpotifyAuthService for OAuth operations.
+
+    Creates a SpotifyAuthService that handles all OAuth complexity:
+    - Auth URL generation with PKCE
+    - Authorization code exchange
+    - Token refresh
+
+    Args:
+        settings: Application settings
+
+    Returns:
+        SpotifyAuthService instance
+    """
+    from soulspot.application.services.spotify_auth_service import SpotifyAuthService
+
+    return SpotifyAuthService(settings.spotify)
+
+
+# Hey future me - SpotifyPlugin dependency! The plugin wraps SpotifyClient and handles token
+# management internally. This is the NEW way to interact with Spotify API. All services should
+# use SpotifyPlugin instead of raw SpotifyClient. The plugin handles:
+# 1. Token management (auto-refresh when needed)
+# 2. Converting raw JSON responses to DTOs (ArtistDTO, AlbumDTO, TrackDTO, etc.)
+# 3. Pagination handling for list endpoints
+# Use this in endpoint params like: "spotify_plugin: SpotifyPlugin = Depends(get_spotify_plugin)"
+async def get_spotify_plugin(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> "SpotifyPlugin":
+    """Get SpotifyPlugin instance with token management.
+
+    Creates a SpotifyPlugin that wraps SpotifyClient and handles token management
+    internally. The plugin fetches tokens from DatabaseTokenManager.
+
+    Args:
+        request: FastAPI request for app state access
+        session: Database session for token storage
+        settings: Application settings
+
+    Returns:
+        SpotifyPlugin instance ready for API calls
+
+    Raises:
+        HTTPException: 503 if plugin cannot be created
+    """
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+    try:
+        spotify_client = SpotifyClient(settings.spotify)
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+
+        # Get access token from token manager
+        access_token = await db_token_manager.get_token_for_background()
+        if not access_token:
+            raise HTTPException(
+                status_code=401,
+                detail="Not authenticated with Spotify. Please connect your account first.",
+            )
+
+        return SpotifyPlugin(
+            client=spotify_client,
+            access_token=access_token,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create SpotifyPlugin: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify plugin not available",
+        ) from e
 
 
 # Hey future me, this is a helper to parse Bearer tokens consistently! We extract this logic
@@ -335,7 +423,8 @@ async def check_slskd_available(
     try:
         result = await slskd_client.test_connection()
         return result.get("success", False)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"slskd connection check failed: {e}")
         return False
 
 
@@ -433,12 +522,13 @@ def get_spotify_browse_repository(
     return SpotifyBrowseRepository(session)
 
 
-# Hey future me, this is a USE CASE - application layer orchestration! It coordinates SpotifyClient and
-# multiple repositories to import a playlist from Spotify into our DB. Use cases encapsulate business
-# logic that spans multiple repositories/services. Created fresh per request with all dependencies injected.
-# This is Clean Architecture - endpoint just calls use_case.execute(), the use case does the work!
+# Hey future me, this is a USE CASE - application layer orchestration! It coordinates SpotifyPlugin
+# (NOT SpotifyClient anymore!) and multiple repositories to import a playlist from Spotify into our DB.
+# Use cases encapsulate business logic that spans multiple repositories/services. Created fresh per
+# request with all dependencies injected. SpotifyPlugin handles token management internally - no more
+# passing access_token around! This is Clean Architecture - endpoint just calls use_case.execute()!
 def get_import_playlist_use_case(
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     track_repository: TrackRepository = Depends(get_track_repository),
     artist_repository: ArtistRepository = Depends(get_artist_repository),
@@ -446,7 +536,7 @@ def get_import_playlist_use_case(
 ) -> ImportSpotifyPlaylistUseCase:
     """Get import playlist use case instance."""
     return ImportSpotifyPlaylistUseCase(
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         playlist_repository=playlist_repository,
         track_repository=track_repository,
         artist_repository=artist_repository,
@@ -563,24 +653,48 @@ def get_queue_playlist_downloads_use_case(
 
 
 # Hey future me - this creates SpotifySyncService for auto-syncing Spotify data!
+# REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
 # Used by the /spotify/* UI routes to auto-sync on page load and fetch data from DB.
-# Requires both DB session and Spotify client for API calls + persistence.
+# Requires both DB session and SpotifyPlugin for API calls + persistence.
 async def get_spotify_sync_service(
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    settings: Settings = Depends(get_settings),
 ) -> AsyncGenerator:
     """Get Spotify sync service for auto-sync and browse.
 
+    Hey future me - refactored to use SpotifyPlugin!
+    No more raw SpotifyClient - plugin handles auth and returns DTOs.
+
     Args:
+        request: FastAPI request for app state access
         session: Database session
-        spotify_client: Spotify client for API calls
+        settings: Application settings
 
     Yields:
         SpotifySyncService instance
     """
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-    yield SpotifySyncService(session=session, spotify_client=spotify_client)
+    # Create SpotifyPlugin for the sync service
+    spotify_client = SpotifyClient(settings.spotify)
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+
+    # Get access token from token manager
+    access_token = await db_token_manager.get_token_for_background()
+    if not access_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
+    spotify_plugin = SpotifyPlugin(
+        client=spotify_client,
+        access_token=access_token,
+    )
+
+    yield SpotifySyncService(session=session, spotify_plugin=spotify_plugin)
 
 
 # Hey future me - this creates LibraryScannerService for scanning local music files!

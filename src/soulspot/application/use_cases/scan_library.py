@@ -9,9 +9,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.application.services.library_scanner import (
+from soulspot.application.services.file_discovery_service import (
+    FileDiscoveryService,
     FileInfo,
-    LibraryScannerService,
 )
 from soulspot.domain.entities import LibraryScan, ScanStatus
 from soulspot.infrastructure.persistence.models import (
@@ -31,7 +31,7 @@ class ScanLibraryUseCase:
         self,
         session: AsyncSession,
         settings: Any,
-        scanner_service: LibraryScannerService | None = None,
+        scanner_service: FileDiscoveryService | None = None,
     ) -> None:
         """Initialize use case.
 
@@ -42,7 +42,7 @@ class ScanLibraryUseCase:
         """
         self.session = session
         self.settings = settings
-        self.scanner_service = scanner_service or LibraryScannerService()
+        self.scanner_service = scanner_service or FileDiscoveryService()
 
     # Hey future me: Library scanning - the file system crawler that builds our music database
     # WHY validate_safe_path? CRITICAL security check - users could pass "../../../etc/passwd"

@@ -11,22 +11,24 @@ downloadable files. The frontend can then:
 - Show Spotify artist → user clicks "Follow" → syncs to our DB
 - Show Spotify track → user clicks "Download" → searches Soulseek for that track
 
-Single-user architecture: Uses shared token (get_spotify_token_shared) so any device
-can search without per-browser sessions.
+Single-user architecture: Uses SpotifyPlugin (token management built-in) so any
+device can search without per-browser sessions.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from soulspot.api.dependencies import (
     get_slskd_client,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +119,7 @@ class SoulseekSearchResponse(BaseModel):
 async def search_spotify_artists(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SpotifySearchResponse:
     """Search for artists on Spotify.
 
@@ -128,33 +129,28 @@ async def search_spotify_artists(
     Args:
         query: Search query (artist name)
         limit: Maximum number of results (1-50)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of matching artists with metadata
     """
     try:
-        results = await spotify_client.search_artist(query, access_token, limit=limit)
+        # search_artist returns PaginatedResponse[ArtistDTO]
+        result = await spotify_plugin.search_artist(query, limit=limit)
 
         artists = []
-        for item in results.get("artists", {}).get("items", []):
-            # Get largest image if available
-            images = item.get("images", [])
-            image_url = images[0]["url"] if images else None
-
-            # Get external URL
-            external_urls = item.get("external_urls", {})
-            spotify_url = external_urls.get("spotify")
-
+        for artist_dto in result.items:
+            # Get Spotify URL from external_urls dict
+            spotify_url = artist_dto.external_urls.get("spotify", "")
+            
             artists.append(
                 SpotifyArtistResult(
-                    id=item["id"],
-                    name=item["name"],
-                    popularity=item.get("popularity", 0),
-                    followers=item.get("followers", {}).get("total", 0),
-                    genres=item.get("genres", []),
-                    image_url=image_url,
+                    id=artist_dto.spotify_id or "",
+                    name=artist_dto.name,
+                    popularity=artist_dto.popularity or 0,
+                    followers=artist_dto.followers or 0,
+                    genres=artist_dto.genres or [],
+                    image_url=artist_dto.image_url,
                     spotify_url=spotify_url,
                 )
             )
@@ -173,8 +169,7 @@ async def search_spotify_artists(
 async def search_spotify_tracks(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SpotifySearchResponse:
     """Search for tracks on Spotify.
 
@@ -184,48 +179,37 @@ async def search_spotify_tracks(
     Args:
         query: Search query (track name, "artist - track", ISRC)
         limit: Maximum number of results (1-50)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of matching tracks with metadata
     """
     try:
-        results = await spotify_client.search_track(query, access_token, limit=limit)
+        # search_track returns PaginatedResponse[TrackDTO]
+        result = await spotify_plugin.search_track(query, limit=limit)
 
         tracks = []
-        for item in results.get("tracks", {}).get("items", []):
-            # Primary artist
-            artists = item.get("artists", [])
-            artist_name = artists[0]["name"] if artists else "Unknown"
-            artist_id = artists[0]["id"] if artists else None
-
-            # Album info
-            album = item.get("album", {})
-            album_name = album.get("name")
-            album_id = album.get("id")
-
-            # External URLs
-            external_urls = item.get("external_urls", {})
-            spotify_url = external_urls.get("spotify")
-
-            # ISRC from external_ids
-            external_ids = item.get("external_ids", {})
-            isrc = external_ids.get("isrc")
+        for track_dto in result.items:
+            # Extract artist info from DTO
+            artist_name = track_dto.artist_name or "Unknown"
+            artist_id = track_dto.artist_spotify_id
+            
+            # Get Spotify URL from external_urls dict
+            spotify_url = track_dto.external_urls.get("spotify", "")
 
             tracks.append(
                 SpotifyTrackResult(
-                    id=item["id"],
-                    name=item["name"],
+                    id=track_dto.spotify_id or "",
+                    name=track_dto.title,
                     artist_name=artist_name,
                     artist_id=artist_id,
-                    album_name=album_name,
-                    album_id=album_id,
-                    duration_ms=item.get("duration_ms", 0),
-                    popularity=item.get("popularity", 0),
-                    preview_url=item.get("preview_url"),
+                    album_name=track_dto.album_name,
+                    album_id=track_dto.album_spotify_id,
+                    duration_ms=track_dto.duration_ms or 0,
+                    popularity=track_dto.popularity or 0,
+                    preview_url=track_dto.preview_url,
                     spotify_url=spotify_url,
-                    isrc=isrc,
+                    isrc=track_dto.isrc,
                 )
             )
 
@@ -243,8 +227,7 @@ async def search_spotify_tracks(
 async def search_spotify_albums(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SpotifySearchResponse:
     """Search for albums on Spotify.
 
@@ -254,54 +237,34 @@ async def search_spotify_albums(
     Args:
         query: Search query (album name, "artist - album")
         limit: Maximum number of results (1-50)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of matching albums with metadata
     """
     try:
-        # Hey future me - Spotify doesn't have a separate "album search" method in our client
-        # We need to use the generic search endpoint with type=album
-        # For now, we'll use search_track and filter albums, or add a search_album method
-        # TODO: Add search_album to SpotifyClient for proper album search
-
-        # Workaround: Use track search and extract unique albums
-        # This is not ideal but works for MVP
-        client = await spotify_client._get_client()
-        response = await client.get(
-            f"{spotify_client.API_BASE_URL}/search",
-            params={"q": query, "type": "album", "limit": limit},
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        response.raise_for_status()
-        results = response.json()
+        # search_album returns PaginatedResponse[AlbumDTO]
+        result = await spotify_plugin.search_album(query, limit=limit)
 
         albums = []
-        for item in results.get("albums", {}).get("items", []):
-            # Primary artist
-            artists = item.get("artists", [])
-            artist_name = artists[0]["name"] if artists else "Unknown"
-            artist_id = artists[0]["id"] if artists else None
-
-            # Get largest image
-            images = item.get("images", [])
-            image_url = images[0]["url"] if images else None
-
-            # External URL
-            external_urls = item.get("external_urls", {})
-            spotify_url = external_urls.get("spotify")
+        for album_dto in result.items:
+            # Extract artist info from DTO
+            artist_name = album_dto.artist_name or "Unknown"
+            artist_id = album_dto.artist_spotify_id
+            
+            # Get Spotify URL from external_urls dict
+            spotify_url = album_dto.external_urls.get("spotify", "")
 
             albums.append(
                 SpotifyAlbumResult(
-                    id=item["id"],
-                    name=item["name"],
+                    id=album_dto.spotify_id or "",
+                    name=album_dto.title,
                     artist_name=artist_name,
                     artist_id=artist_id,
-                    release_date=item.get("release_date"),
-                    album_type=item.get("album_type"),
-                    total_tracks=item.get("total_tracks", 0),
-                    image_url=image_url,
+                    release_date=album_dto.release_date,
+                    album_type=album_dto.album_type,
+                    total_tracks=album_dto.total_tracks or 0,
+                    image_url=album_dto.artwork_url,
                     spotify_url=spotify_url,
                 )
             )
@@ -388,8 +351,7 @@ class SearchSuggestion(BaseModel):
 @router.get("/suggestions", response_model=list[SearchSuggestion])
 async def get_search_suggestions(
     query: str = Query(..., min_length=2, description="Partial search query"),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> list[SearchSuggestion]:
     """Get search autocomplete suggestions from Spotify.
 
@@ -398,8 +360,7 @@ async def get_search_suggestions(
 
     Args:
         query: Partial search query (minimum 2 characters)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of suggestions with type indicators
@@ -408,21 +369,24 @@ async def get_search_suggestions(
         suggestions: list[SearchSuggestion] = []
 
         # Search artists (top 3)
-        artist_results = await spotify_client.search_artist(
-            query, access_token, limit=3
-        )
-        for item in artist_results.get("artists", {}).get("items", [])[:3]:
+        artist_results = await spotify_plugin.search_artist(query, limit=3)
+        for artist_dto in artist_results.items[:3]:
             suggestions.append(
-                SearchSuggestion(text=item["name"], type="artist", id=item["id"])
+                SearchSuggestion(
+                    text=artist_dto.name,
+                    type="artist",
+                    id=artist_dto.spotify_id,
+                )
             )
 
         # Search tracks (top 5)
-        track_results = await spotify_client.search_track(query, access_token, limit=5)
-        for item in track_results.get("tracks", {}).get("items", [])[:5]:
-            artists = item.get("artists", [])
-            artist_name = artists[0]["name"] if artists else ""
-            text = f"{item['name']} - {artist_name}" if artist_name else item["name"]
-            suggestions.append(SearchSuggestion(text=text, type="track", id=item["id"]))
+        track_results = await spotify_plugin.search_track(query, limit=5)
+        for track_dto in track_results.items[:5]:
+            artist_name = track_dto.artist_name or ""
+            text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
+            suggestions.append(
+                SearchSuggestion(text=text, type="track", id=track_dto.spotify_id)
+            )
 
         return suggestions
 

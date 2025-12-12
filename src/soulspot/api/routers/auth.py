@@ -1,5 +1,6 @@
 """Authentication and OAuth endpoints."""
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response
@@ -8,13 +9,16 @@ from fastapi.responses import RedirectResponse
 from soulspot.api.dependencies import (
     get_session_id,
     get_session_store,
+    get_spotify_auth_service,
 )
 from soulspot.application.services.session_store import DatabaseSessionStore
+from soulspot.application.services.spotify_auth_service import SpotifyAuthService
 from soulspot.config import Settings, get_settings
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -24,11 +28,13 @@ router = APIRouter()
 # state matches (CSRF protection!) and we need the verifier to exchange the auth code. The session
 # cookie is HttpOnly to prevent XSS, and SameSite=lax to allow Spotify's redirect. DON'T make it
 # SameSite=strict or the callback will fail! Secure flag depends on settings - True in prod with HTTPS.
+# REFACTORED (Dec 2025): Now uses SpotifyAuthService for cleaner OAuth handling!
 @router.get("/authorize")
 async def authorize(
     response: Response,
     settings: Settings = Depends(get_settings),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    auth_service: SpotifyAuthService = Depends(get_spotify_auth_service),
 ) -> dict[str, Any]:
     """Start OAuth authorization flow with session management.
 
@@ -39,21 +45,17 @@ async def authorize(
         response: FastAPI response for setting cookies
         settings: Application settings
         session_store: Session store for managing user sessions
+        auth_service: SpotifyAuthService for OAuth URL generation
 
     Returns:
         Authorization URL for user to visit
     """
-    spotify_client = SpotifyClient(settings.spotify)
-
-    # Generate state for CSRF protection and PKCE verifier
-    import secrets
-
-    state = secrets.token_urlsafe(32)
-    code_verifier = SpotifyClient.generate_code_verifier()
+    # Generate auth URL with state and PKCE verifier
+    auth_result = await auth_service.generate_auth_url()
 
     # Create session and store state + verifier
     session = await session_store.create_session(
-        oauth_state=state, code_verifier=code_verifier
+        oauth_state=auth_result.state, code_verifier=auth_result.code_verifier
     )
 
     # Set session cookie (HttpOnly for security, Secure flag from settings)
@@ -66,11 +68,8 @@ async def authorize(
         max_age=settings.api.session_max_age,
     )
 
-    # Get authorization URL
-    auth_url = await spotify_client.get_authorization_url(state, code_verifier)
-
     return {
-        "authorization_url": auth_url,
+        "authorization_url": auth_result.authorization_url,
         "message": "Visit the authorization_url to grant access. Your session is stored securely.",
     }
 
@@ -85,14 +84,15 @@ async def authorize(
 #
 # NEW: We also store tokens in DatabaseTokenManager for background workers (WatchlistWorker, etc.)
 # This is SEPARATE from session storage - workers need tokens even when no user session is active!
+# REFACTORED (Dec 2025): Now uses SpotifyAuthService for cleaner OAuth handling!
 @router.get("/callback", response_model=None)
 async def callback(
     request: Request,
     code: str = Query(..., description="Authorization code from Spotify"),
     state: str = Query(..., description="State parameter for CSRF protection"),
     redirect_to: str = Query("/", description="Redirect URL after success"),
-    settings: Settings = Depends(get_settings),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    auth_service: SpotifyAuthService = Depends(get_spotify_auth_service),
     session_id: str | None = Cookie(None, alias="session_id"),
 ) -> RedirectResponse | dict[str, Any]:
     """Handle OAuth callback from Spotify with session verification.
@@ -107,9 +107,9 @@ async def callback(
         code: Authorization code from Spotify
         state: CSRF protection state
         redirect_to: URL to redirect to after successful authentication
-        session_id: Session ID from cookie
-        settings: Application settings
         session_store: Session store
+        auth_service: SpotifyAuthService for token exchange
+        session_id: Session ID from cookie
 
     Returns:
         Redirect to specified URL or success message with token info
@@ -143,17 +143,15 @@ async def callback(
             status_code=400, detail="Code verifier not found in session."
         )
 
-    spotify_client = SpotifyClient(settings.spotify)
-
     try:
-        # Exchange code for tokens
-        token_data = await spotify_client.exchange_code(code, session.code_verifier)
+        # Exchange code for tokens using SpotifyAuthService
+        token_result = await auth_service.exchange_code(code, session.code_verifier)
 
         # Store tokens in session (for user requests)
         session.set_tokens(
-            access_token=token_data["access_token"],
-            refresh_token=token_data.get("refresh_token", ""),
-            expires_in=token_data.get("expires_in", 3600),
+            access_token=token_result.access_token,
+            refresh_token=token_result.refresh_token or "",
+            expires_in=token_result.expires_in,
         )
 
         # Clear OAuth state and verifier (no longer needed)
@@ -175,10 +173,10 @@ async def callback(
         if hasattr(request.app.state, "db_token_manager"):
             db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
             await db_token_manager.store_from_oauth(
-                access_token=token_data["access_token"],
-                refresh_token=token_data.get("refresh_token", ""),
-                expires_in=token_data.get("expires_in", 3600),
-                scope=token_data.get("scope"),
+                access_token=token_result.access_token,
+                refresh_token=token_result.refresh_token or "",
+                expires_in=token_result.expires_in,
+                scope=token_result.scope,
             )
 
         # Redirect to specified URL (default: dashboard)
@@ -194,10 +192,11 @@ async def callback(
 # a new access_token. IMPORTANT: Spotify MIGHT return a new refresh_token or might not - if they
 # don't, keep using the old one! Don't overwrite it with None or you'll break everything. This is
 # idempotent - safe to call multiple times, unlike the auth flow which is one-shot.
+# REFACTORED (Dec 2025): Now uses SpotifyAuthService for cleaner OAuth handling!
 @router.post("/refresh")
 async def refresh_token(
-    settings: Settings = Depends(get_settings),
     session_store: DatabaseSessionStore = Depends(get_session_store),
+    auth_service: SpotifyAuthService = Depends(get_spotify_auth_service),
     session_id: str | None = Depends(get_session_id),
 ) -> dict[str, Any]:
     """Refresh access token using session's refresh token.
@@ -205,9 +204,9 @@ async def refresh_token(
     Retrieves the refresh token from the session and obtains a new access token.
 
     Args:
-        session_id: Session ID from cookie or Authorization header
-        settings: Application settings
         session_store: Session store
+        auth_service: SpotifyAuthService for token refresh
+        session_id: Session ID from cookie or Authorization header
 
     Returns:
         New token information
@@ -229,18 +228,17 @@ async def refresh_token(
             detail="No refresh token in session. Please re-authenticate.",
         )
 
-    spotify_client = SpotifyClient(settings.spotify)
-
     try:
-        token_data = await spotify_client.refresh_token(session.refresh_token)
+        # Use SpotifyAuthService for token refresh
+        token_result = await auth_service.refresh_token(session.refresh_token)
 
         # Update session with new token
+        # Use old refresh token if Spotify didn't return a new one
+        new_refresh_token = token_result.refresh_token or session.refresh_token
         session.set_tokens(
-            access_token=token_data["access_token"],
-            refresh_token=token_data.get(
-                "refresh_token", session.refresh_token
-            ),  # Use old refresh token if not provided
-            expires_in=token_data.get("expires_in", 3600),
+            access_token=token_result.access_token,
+            refresh_token=new_refresh_token,
+            expires_in=token_result.expires_in,
         )
 
         # Persist session changes to database
@@ -253,8 +251,8 @@ async def refresh_token(
 
         return {
             "message": "Token refreshed successfully",
-            "expires_in": token_data.get("expires_in", 3600),
-            "token_type": token_data.get("token_type", "Bearer"),
+            "expires_in": token_result.expires_in,
+            "token_type": token_result.token_type,
         }
     except Exception as e:
         raise HTTPException(
@@ -400,9 +398,9 @@ async def skip_onboarding(
     if session_id:
         session = await session_store.get_session(session_id)
         if session:
-            # We could add a flag here if needed in the future
-            # For now, just acknowledge the skip
-            pass
+            # Currently no additional metadata needed for skip tracking
+            # Session existence already indicates active user
+            logger.info(f"User skipped onboarding (session: {session_id[:8]}...)")
 
     return {
         "ok": True,

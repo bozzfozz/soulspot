@@ -633,7 +633,7 @@ INFO  - Artist sync complete: 42 synced, 3 removed
 ## Verwandte Dokumentation
 
 - [Settings](./settings.md) - Allgemeine Settings-Dokumentation
-- [Authentication](./authentication.md) - Spotify OAuth Setup
+- [Authentication](../api/auth-api.md) - Spotify OAuth Setup
 - [Followed Artists](./followed-artists.md) - Artist-Management
 - [Playlist Management](./playlist-management.md) - Playlist-Features
 

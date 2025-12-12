@@ -8,7 +8,8 @@
 # 2. Aktualisiert Job.result mit echtem Progress (bytes_downloaded, percent)
 # 3. Markiert Jobs als COMPLETED wenn Download fertig
 # 4. Markiert Jobs als FAILED wenn Download fehlschlägt
-# 5. Triggert AutoImportService bei Completion (optional)
+# 5. **NEU: Erkennt "stale" Downloads (keine Aktivität > 12h) und restartet sie**
+# 6. Triggert AutoImportService bei Completion (optional)
 #
 # WICHTIG: Dieser Worker ist READ-ONLY für Jobs! Er modifiziert nur result/status,
 # startet keine neuen Downloads. Das macht DownloadWorker.
@@ -17,7 +18,7 @@
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -26,6 +27,12 @@ if TYPE_CHECKING:
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 
 logger = logging.getLogger(__name__)
+
+# Timeout-Konfiguration
+# Downloads die länger als STALE_TIMEOUT_HOURS ohne Progress sind, werden neugestartet
+STALE_TIMEOUT_HOURS = 12
+# Wie oft soll Stale-Check laufen (nicht bei jedem Poll)
+STALE_CHECK_INTERVAL_POLLS = 60  # ~alle 10 Minuten bei 10s poll interval
 
 
 # slskd Download States (from API docs)
@@ -67,6 +74,7 @@ class DownloadMonitorWorker:
         job_queue: JobQueue,
         slskd_client: "SlskdClient",
         poll_interval_seconds: int = 10,
+        stale_timeout_hours: int = STALE_TIMEOUT_HOURS,
     ) -> None:
         """Initialize download monitor worker.
 
@@ -74,18 +82,22 @@ class DownloadMonitorWorker:
             job_queue: Job queue to update job statuses
             slskd_client: Client for slskd API calls
             poll_interval_seconds: How often to poll slskd (default 10s)
+            stale_timeout_hours: Hours without progress before restart (default 12)
         """
         self._job_queue = job_queue
         self._slskd_client = slskd_client
         self._poll_interval = poll_interval_seconds
+        self._stale_timeout = timedelta(hours=stale_timeout_hours)
         self._running = False
         self._task: asyncio.Task[None] | None = None
+        self._poll_count = 0  # Track polls for stale check interval
 
         # Stats for monitoring - values can be int, str, or None
         self._stats: dict[str, int | str | None] = {
             "polls_completed": 0,
             "downloads_completed": 0,
             "downloads_failed": 0,
+            "downloads_restarted": 0,  # NEU: Stale restarts
             "last_poll_at": None,
             "last_error": None,
         }
@@ -143,6 +155,7 @@ class DownloadMonitorWorker:
         2. Für jeden Job: Hole Status von slskd
         3. Update Job mit Progress
         4. Wenn fertig: Markiere als COMPLETED/FAILED
+        5. **NEU: Alle X Polls: Check auf stale Downloads (>12h ohne Aktivität)**
         """
         # Short delay on startup to let other services initialize
         await asyncio.sleep(5)
@@ -152,10 +165,16 @@ class DownloadMonitorWorker:
         while self._running:
             try:
                 await self._poll_downloads()
+                self._poll_count += 1
                 polls = self._stats.get("polls_completed")
                 self._stats["polls_completed"] = (int(polls) if polls else 0) + 1
                 self._stats["last_poll_at"] = datetime.now(UTC).isoformat()
                 self._stats["last_error"] = None
+
+                # Check for stale downloads periodically (not every poll for efficiency)
+                if self._poll_count % STALE_CHECK_INTERVAL_POLLS == 0:
+                    await self._check_stale_downloads()
+
             except Exception as e:
                 # Don't crash the loop on errors
                 logger.error(f"Error in download monitor loop: {e}", exc_info=True)
@@ -297,3 +316,137 @@ class DownloadMonitorWorker:
         failed = self._stats.get("downloads_failed")
         self._stats["downloads_failed"] = (int(failed) if failed else 0) + 1
         logger.warning(f"Download job {job.id} failed: {error_message}")
+
+    async def _check_stale_downloads(self) -> None:
+        """Check for stale downloads and restart them.
+
+        Hey future me - diese Methode läuft alle X Polls (nicht jedes Mal für Performance).
+        Ein Download ist "stale" wenn:
+        1. Status ist RUNNING (also aktiv)
+        2. last_updated ist älter als stale_timeout (default 12h)
+        3. ODER started_at ist älter als timeout UND kein Progress passiert
+
+        Stale Downloads werden als FAILED markiert und ein neuer Job erstellt.
+        Das passiert z.B. wenn:
+        - User auf Soulseek ist offline gegangen
+        - Netzwerk-Timeout aber slskd meldet nix
+        - Download hängt einfach fest
+
+        WICHTIG: Wir canceln bei slskd UND erstellen neuen Job mit WAITING status!
+        """
+        try:
+            jobs = await self._job_queue.list_jobs(
+                status=JobStatus.RUNNING, job_type=JobType.DOWNLOAD
+            )
+        except Exception as e:
+            logger.error(f"Failed to list jobs for stale check: {e}")
+            return
+
+        now = datetime.now(UTC)
+
+        for job in jobs:
+            try:
+                # Check last_updated timestamp
+                last_updated_str = job.result.get("last_updated")
+                started_at_str = job.result.get("started_at")
+
+                # Determine the reference time for staleness
+                ref_time: datetime | None = None
+
+                if last_updated_str:
+                    ref_time = datetime.fromisoformat(last_updated_str)
+                elif started_at_str:
+                    ref_time = datetime.fromisoformat(started_at_str)
+                else:
+                    # No timestamp - use job created_at if available
+                    if hasattr(job, "created_at") and job.created_at:
+                        ref_time = job.created_at
+                        if ref_time.tzinfo is None:
+                            ref_time = ref_time.replace(tzinfo=UTC)
+
+                if not ref_time:
+                    # Can't determine age, skip
+                    continue
+
+                # Ensure timezone aware
+                if ref_time.tzinfo is None:
+                    ref_time = ref_time.replace(tzinfo=UTC)
+
+                age = now - ref_time
+
+                if age > self._stale_timeout:
+                    logger.warning(
+                        f"Stale download detected: Job {job.id} - "
+                        f"last activity {age.total_seconds() / 3600:.1f}h ago "
+                        f"(threshold: {self._stale_timeout.total_seconds() / 3600:.0f}h)"
+                    )
+                    await self._restart_stale_download(job)
+
+            except Exception as e:
+                logger.error(f"Error checking job {job.id} for staleness: {e}")
+                continue
+
+    async def _restart_stale_download(self, job: Any) -> None:
+        """Restart a stale download by cancelling and re-queueing.
+
+        Hey future me - hier passiert das Restart-Magic:
+        1. Cancel bei slskd (falls noch aktiv)
+        2. Mark alten Job als FAILED
+        3. Erstelle neuen Job mit WAITING status
+        4. Stats updaten
+
+        Der neue Job wird von DownloadWorker gepickt wenn er wieder pollt.
+        """
+        try:
+            # Try to cancel at slskd if we have the download ID
+            slskd_id = job.result.get("slskd_download_id")
+            if slskd_id:
+                try:
+                    await self._slskd_client.cancel_download(slskd_id)
+                    logger.info(f"Cancelled stale download at slskd: {slskd_id}")
+                except Exception as e:
+                    # Don't fail if cancel fails - maybe already gone
+                    logger.debug(f"Could not cancel slskd download {slskd_id}: {e}")
+
+            # Mark old job as failed
+            await self._mark_job_failed(
+                job,
+                f"Download timed out after {self._stale_timeout.total_seconds() / 3600:.0f} hours - restarting",
+            )
+
+            # Create new job with same payload but WAITING status
+            # Extract original payload
+            payload = {
+                "track_id": job.result.get("track_id"),
+                "spotify_id": job.result.get("spotify_id"),
+                "title": job.result.get("title"),
+                "artist": job.result.get("artist"),
+                "album": job.result.get("album"),
+                "retry_of": str(job.id),  # Track that this is a retry
+            }
+
+            # Remove None values
+            payload = {k: v for k, v in payload.items() if v is not None}
+
+            if payload.get("track_id") or payload.get("spotify_id"):
+                new_job = await self._job_queue.create_job(
+                    job_type=JobType.DOWNLOAD,
+                    payload=payload,
+                    priority=job.priority if hasattr(job, "priority") else 0,
+                )
+                logger.info(
+                    f"Created retry job {new_job.id} for stale download (was: {job.id})"
+                )
+
+                # Update stats
+                restarted = self._stats.get("downloads_restarted")
+                self._stats["downloads_restarted"] = (
+                    int(restarted) if restarted else 0
+                ) + 1
+            else:
+                logger.warning(
+                    f"Could not restart stale job {job.id} - missing track info"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to restart stale download {job.id}: {e}")

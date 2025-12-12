@@ -1,7 +1,6 @@
 """Tests for artists API endpoints."""
 
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -164,43 +163,53 @@ class TestArtistRepository:
 
 
 class TestFollowedArtistsServiceIntegration:
-    """Test FollowedArtistsService methods."""
+    """Test FollowedArtistsService methods.
+
+    Hey future me - these tests were updated for SpotifyPlugin!
+    We now mock SpotifyPlugin instead of SpotifyClient.
+    The plugin returns DTOs, not raw JSON.
+    """
 
     @pytest.mark.asyncio
     async def test_sync_followed_artists_creates_artists(self) -> None:
-        """Test that sync creates new artists from Spotify data."""
+        """Test that sync creates new artists from Spotify data.
+
+        Hey future me - now uses SpotifyPlugin with DTOs!
+        """
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.domain.dtos import ArtistDTO, PaginatedResponse
 
         session = AsyncMock(spec=AsyncSession)
-        spotify_client = AsyncMock()
+        spotify_plugin = AsyncMock()
 
-        # Mock Spotify API response (single page)
-        spotify_client.get_followed_artists.return_value = {
-            "artists": {
-                "items": [
-                    {
-                        "id": "spotify123",
-                        "name": "Test Artist",
-                        "genres": ["rock"],
-                        "images": [
-                            {"url": "https://example.com/large.jpg"},
-                            {"url": "https://example.com/medium.jpg"},
-                        ],
-                    }
-                ],
-                "cursors": {"after": None},  # No more pages
-            }
-        }
+        # Mock SpotifyPlugin response - returns PaginatedResponse[ArtistDTO]
+        mock_artist_dto = ArtistDTO(
+            spotify_id="spotify123",
+            deezer_id=None,
+            tidal_id=None,
+            name="Test Artist",
+            genres=["rock"],
+            image_url="https://example.com/medium.jpg",
+            popularity=75,
+            followers=10000,
+        )
+        spotify_plugin.get_followed_artists.return_value = PaginatedResponse(
+            items=[mock_artist_dto],
+            total=1,
+            offset=0,
+            limit=50,
+            next_offset=None,
+        )
 
-        service = FollowedArtistsService(session, spotify_client)
+        service = FollowedArtistsService(session, spotify_plugin)
 
         # Mock the repository methods
         service.artist_repo.get_by_spotify_uri = AsyncMock(return_value=None)
         service.artist_repo.add = AsyncMock()
 
-        artists, stats = await service.sync_followed_artists("test_token")
+        artists, stats = await service.sync_followed_artists()
 
         assert len(artists) == 1
         assert artists[0].name == "Test Artist"
@@ -210,30 +219,38 @@ class TestFollowedArtistsServiceIntegration:
 
     @pytest.mark.asyncio
     async def test_sync_followed_artists_updates_existing(self) -> None:
-        """Test that sync updates existing artists."""
+        """Test that sync updates existing artists.
+
+        Hey future me - now uses SpotifyPlugin with DTOs!
+        """
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.domain.dtos import ArtistDTO, PaginatedResponse
 
         session = AsyncMock(spec=AsyncSession)
-        spotify_client = AsyncMock()
+        spotify_plugin = AsyncMock()
 
-        # Mock Spotify API response
-        spotify_client.get_followed_artists.return_value = {
-            "artists": {
-                "items": [
-                    {
-                        "id": "spotify123",
-                        "name": "Updated Artist Name",
-                        "genres": ["rock", "metal"],
-                        "images": [],
-                    }
-                ],
-                "cursors": {"after": None},
-            }
-        }
+        # Mock SpotifyPlugin response with updated data
+        mock_artist_dto = ArtistDTO(
+            spotify_id="spotify123",
+            deezer_id=None,
+            tidal_id=None,
+            name="Updated Artist Name",
+            genres=["rock", "metal"],
+            image_url=None,
+            popularity=80,
+            followers=15000,
+        )
+        spotify_plugin.get_followed_artists.return_value = PaginatedResponse(
+            items=[mock_artist_dto],
+            total=1,
+            offset=0,
+            limit=50,
+            next_offset=None,
+        )
 
-        service = FollowedArtistsService(session, spotify_client)
+        service = FollowedArtistsService(session, spotify_plugin)
 
         # Mock existing artist
         existing_artist = Artist(
@@ -245,7 +262,7 @@ class TestFollowedArtistsServiceIntegration:
         service.artist_repo.get_by_spotify_uri = AsyncMock(return_value=existing_artist)
         service.artist_repo.update = AsyncMock()
 
-        artists, stats = await service.sync_followed_artists("test_token")
+        artists, stats = await service.sync_followed_artists()
 
         assert len(artists) == 1
         assert artists[0].name == "Updated Artist Name"
@@ -253,28 +270,33 @@ class TestFollowedArtistsServiceIntegration:
         assert stats["created"] == 0
 
     @pytest.mark.asyncio
-    async def test_preview_followed_artists(self) -> None:
-        """Test preview method returns raw Spotify data."""
+    async def test_empty_followed_artists(self) -> None:
+        """Test sync with no followed artists.
+
+        Hey future me - SpotifyPlugin returns empty PaginatedResponse.
+        """
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.domain.dtos import PaginatedResponse
 
         session = AsyncMock(spec=AsyncSession)
-        spotify_client = AsyncMock()
+        spotify_plugin = AsyncMock()
 
-        expected_data: dict[str, Any] = {
-            "artists": {
-                "items": [{"id": "123", "name": "Test"}],
-                "total": 1,
-            }
-        }
-        spotify_client.get_followed_artists.return_value = expected_data
-
-        service = FollowedArtistsService(session, spotify_client)
-        result = await service.preview_followed_artists("test_token", limit=10)
-
-        assert result == expected_data
-        spotify_client.get_followed_artists.assert_called_once_with(
-            access_token="test_token",
-            limit=10,
+        # Mock empty response
+        spotify_plugin.get_followed_artists.return_value = PaginatedResponse(
+            items=[],
+            total=0,
+            offset=0,
+            limit=50,
+            next_offset=None,
         )
+
+        service = FollowedArtistsService(session, spotify_plugin)
+
+        artists, stats = await service.sync_followed_artists()
+
+        assert len(artists) == 0
+        assert stats["total_fetched"] == 0
+        assert stats["created"] == 0
+        assert stats["updated"] == 0

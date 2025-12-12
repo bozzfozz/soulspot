@@ -287,7 +287,7 @@ class TestMusicBrainzClientContext:
 
 class TestMusicBrainzClientDisambiguation:
     """Test MusicBrainz disambiguation operations.
-    
+
     Hey future me - these are the CRITICAL methods for Lidarr-style naming templates!
     Disambiguation helps differentiate same-name artists/albums.
     """

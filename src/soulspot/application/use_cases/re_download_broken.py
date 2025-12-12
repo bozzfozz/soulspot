@@ -166,41 +166,54 @@ class ReDownloadBrokenFilesUseCase:
             "tracks": queued_tracks,
         }
 
-    # Hey, this summary endpoint is for UI to show "10 broken files, 3 already queued, 7 ready to queue".
-    # It does SEPARATE query per track to check download status - this is O(n) queries and SLOW for hundreds
-    # of tracks! Should be rewritten with JOIN or subquery. For now, only call this with small datasets or
-    # you'll timeout. The result tells UI whether to show "queue all" button or "downloads in progress" message.
+    # Hey future me, optimized summary with JOIN instead of O(n) queries! Uses LEFT OUTER JOIN
+    # because not all broken tracks have downloads yet. The WHERE filter on download status happens
+    # in SQL (efficient) instead of Python loop. COUNT with CASE gives us queued count in one query.
+    # Result is FAST even with thousands of broken tracks - single DB round trip!
     async def get_broken_files_summary(self) -> dict[str, Any]:
         """Get summary of broken files.
+
+        Optimized with JOIN to avoid N+1 queries.
 
         Returns:
             Summary of broken files
         """
-        # Count total broken files
-        stmt = select(TrackModel).where(TrackModel.is_broken == True)  # noqa: E712
-        result = await self.session.execute(stmt)
-        broken_tracks = result.scalars().all()
+        from sqlalchemy import case, func
 
-        total_broken = len(broken_tracks)
-
-        # Check how many are already in download queue
-        queued_count = 0
-        for track in broken_tracks:
-            download_stmt = select(DownloadModel).where(
-                DownloadModel.track_id == track.id
+        # Single query with LEFT JOIN to get all broken tracks + their download status
+        # COUNT with CASE filters active downloads in SQL instead of Python loop
+        stmt = (
+            select(
+                func.count(TrackModel.id).label("total_broken"),
+                func.count(
+                    case(
+                        (
+                            DownloadModel.status.in_(
+                                [
+                                    DownloadStatus.PENDING.value,
+                                    DownloadStatus.QUEUED.value,
+                                    DownloadStatus.DOWNLOADING.value,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=None,
+                    )
+                ).label("already_queued"),
             )
-            download_result = await self.session.execute(download_stmt)
-            download = download_result.scalar_one_or_none()
+            .select_from(TrackModel)
+            .outerjoin(DownloadModel, TrackModel.id == DownloadModel.track_id)
+            .where(TrackModel.is_broken == True)  # noqa: E712
+        )
 
-            if download and download.status in (
-                DownloadStatus.PENDING.value,
-                DownloadStatus.QUEUED.value,
-                DownloadStatus.DOWNLOADING.value,
-            ):
-                queued_count += 1
+        result = await self.session.execute(stmt)
+        row = result.one()
+
+        total_broken = row.total_broken
+        already_queued = row.already_queued
 
         return {
             "total_broken": total_broken,
-            "already_queued": queued_count,
-            "available_to_queue": total_broken - queued_count,
+            "already_queued": already_queued,
+            "available_to_queue": total_broken - already_queued,
         }

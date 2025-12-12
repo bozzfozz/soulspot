@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -15,8 +15,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
     get_library_scanner_service,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.use_cases.check_album_completeness import (
@@ -33,6 +32,9 @@ from soulspot.application.use_cases.scan_library import (
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.config import Settings, get_settings
 
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
 logger = logging.getLogger(__name__)
 
 # Initialize templates (same pattern as ui.py)
@@ -40,6 +42,12 @@ _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 router = APIRouter(prefix="/library", tags=["library"])
+
+# Hey future me - keep the giant library router readable by splitting feature areas.
+# This sub-router owns the duplicate artist/album merge endpoints (still mounted under /library/*).
+from soulspot.api.routers.library_duplicates import router as duplicates_router
+
+router.include_router(duplicates_router)
 
 
 # Hey future me, these are DTOs for library scanning! ScanRequest is minimal - just the path to scan.
@@ -306,6 +314,7 @@ async def get_incomplete_albums(
         3, description="Minimum track count to consider (filters out singles)"
     ),
     session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Get albums with missing tracks.
 
@@ -313,18 +322,17 @@ async def get_incomplete_albums(
         incomplete_only: Only return incomplete albums
         min_track_count: Minimum track count to consider
         session: Database session
+        spotify_plugin: SpotifyPlugin (handles token internally)
 
     Returns:
         List of albums with completeness information
     """
     try:
-        # Note: This endpoint requires Spotify client configuration
-        # For now, it returns empty results without credentials
+        # SpotifyPlugin handles token management internally!
         use_case = CheckAlbumCompletenessUseCase(
             session=session,
-            spotify_client=None,
+            spotify_plugin=spotify_plugin,
             musicbrainz_client=None,
-            access_token=None,
         )
         albums = await use_case.execute(
             incomplete_only=incomplete_only, min_track_count=min_track_count
@@ -345,12 +353,14 @@ async def get_incomplete_albums(
 async def get_album_completeness(
     album_id: str,
     session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Get completeness information for a specific album.
 
     Args:
         album_id: Album ID
         session: Database session
+        spotify_plugin: SpotifyPlugin (handles token internally)
 
     Returns:
         Album completeness information
@@ -358,9 +368,8 @@ async def get_album_completeness(
     try:
         use_case = CheckAlbumCompletenessUseCase(
             session=session,
-            spotify_client=None,
+            spotify_plugin=spotify_plugin,
             musicbrainz_client=None,
-            access_token=None,
         )
         result = await use_case.check_single_album(album_id)
 
@@ -1073,6 +1082,7 @@ async def resolve_duplicate(
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     action = request.action.lower()
+    deleted_track_id: str | None = None
 
     if action == "dismiss":
         candidate.status = "dismissed"
@@ -1083,30 +1093,65 @@ async def resolve_duplicate(
     elif action == "keep_first":
         candidate.status = "confirmed"
         candidate.resolution_action = "keep_first"
-        # TODO: Queue deletion of track 2
+        # Hey future me - delete track 2, keep track 1! We soft-delete by clearing file_path
+        # and marking track as deleted. Hard delete would break foreign key references.
+        # The actual file gets deleted via orphan cleanup worker later.
+        deleted_track_id = candidate.track_id_2
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        track_to_delete = await db.get(TrackModel, candidate.track_id_2)
+        if track_to_delete and track_to_delete.file_path:
+            import os
+
+            try:
+                if os.path.exists(track_to_delete.file_path):
+                    os.remove(track_to_delete.file_path)
+                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+            except OSError as e:
+                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+            track_to_delete.file_path = None  # Mark as deleted
     elif action == "keep_second":
         candidate.status = "confirmed"
         candidate.resolution_action = "keep_second"
-        # TODO: Queue deletion of track 1
+        # Hey future me - delete track 1, keep track 2! Same soft-delete strategy.
+        deleted_track_id = candidate.track_id_1
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        track_to_delete = await db.get(TrackModel, candidate.track_id_1)
+        if track_to_delete and track_to_delete.file_path:
+            import os
+
+            try:
+                if os.path.exists(track_to_delete.file_path):
+                    os.remove(track_to_delete.file_path)
+                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+            except OSError as e:
+                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+            track_to_delete.file_path = None  # Mark as deleted
     else:
         raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
 
     candidate.reviewed_at = datetime.now(UTC)
     await db.commit()
 
-    return {
+    response = {
         "candidate_id": candidate_id,
         "action": action,
         "status": candidate.status,
         "message": f"Duplicate resolved with action: {action}",
     }
+    if deleted_track_id:
+        response["deleted_track_id"] = deleted_track_id
+        response["message"] += f" (deleted track: {deleted_track_id})"
+
+    return response
 
 
 # Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.
 # Nützlich wenn der User nicht auf den nächsten automatischen Scan warten will.
 @router.post("/duplicates/scan")
 async def trigger_duplicate_scan(
-    request: Any,  # Request object for app.state access
+    request: Request,
 ) -> dict[str, Any]:
     """Trigger a manual duplicate scan.
 
@@ -1735,9 +1780,8 @@ async def trigger_enrichment(
 )
 async def repair_missing_artwork(
     db: AsyncSession = Depends(get_db_session),
-    spotify_client: Any = Depends(get_spotify_client),
-    settings: Any = Depends(get_settings),
-    token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Re-download artwork for artists that have Spotify URI but missing artwork.
 
@@ -1752,9 +1796,8 @@ async def repair_missing_artwork(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         settings=settings,
-        access_token=token,
     )
 
     result = await service.repair_missing_artwork(limit=100)
@@ -2003,181 +2046,6 @@ async def reject_enrichment_candidate(
 
 
 # =============================================================================
-# DUPLICATE DETECTION & MERGE (Dec 2025)
-# Hey future me - these endpoints let users find and merge duplicate artists/albums!
-# Detection groups entities by normalized name, merge transfers all tracks/albums
-# to the "keep" entity and deletes the duplicates.
-# =============================================================================
-
-
-class MergeRequest(BaseModel):
-    """Request to merge duplicate entities."""
-
-    keep_id: str
-    merge_ids: list[str]
-
-
-@router.get(
-    "/duplicates/artists",
-    summary="Find duplicate artists",
-    tags=["duplicates"],
-)
-async def find_duplicate_artists(
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Find potential duplicate artists by normalized name matching.
-
-    Returns groups of artists that might be duplicates (same normalized name).
-    Each group includes a suggested primary (the one with Spotify URI or most tracks).
-
-    Use POST /duplicates/artists/merge to combine duplicates.
-    """
-    from soulspot.api.dependencies import (
-        get_spotify_client,
-        get_spotify_token_shared,
-    )
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
-
-    # Minimal service for detection (no spotify client needed)
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
-        settings=settings,
-    )
-
-    duplicate_groups = await service.find_duplicate_artists()
-
-    return {
-        "duplicate_groups": duplicate_groups,
-        "total_groups": len(duplicate_groups),
-        "total_duplicates": sum(len(g["artists"]) - 1 for g in duplicate_groups),
-    }
-
-
-@router.post(
-    "/duplicates/artists/merge",
-    summary="Merge duplicate artists",
-    tags=["duplicates"],
-)
-async def merge_duplicate_artists(
-    request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Merge multiple artists into one.
-
-    All tracks and albums from merge_ids artists will be transferred to keep_id artist.
-    The merge_ids artists will be deleted after transfer.
-
-    Args:
-        keep_id: ID of artist to keep
-        merge_ids: List of artist IDs to merge into keep artist
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
-        settings=settings,
-    )
-
-    try:
-        result = await service.merge_artists(request.keep_id, request.merge_ids)
-        return {
-            "success": True,
-            **result,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.get(
-    "/duplicates/albums",
-    summary="Find duplicate albums",
-    tags=["duplicates"],
-)
-async def find_duplicate_albums(
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Find potential duplicate albums by normalized name + artist matching.
-
-    Returns groups of albums that might be duplicates.
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
-        settings=settings,
-    )
-
-    duplicate_groups = await service.find_duplicate_albums()
-
-    return {
-        "duplicate_groups": duplicate_groups,
-        "total_groups": len(duplicate_groups),
-        "total_duplicates": sum(len(g["albums"]) - 1 for g in duplicate_groups),
-    }
-
-
-@router.post(
-    "/duplicates/albums/merge",
-    summary="Merge duplicate albums",
-    tags=["duplicates"],
-)
-async def merge_duplicate_albums(
-    request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Merge multiple albums into one.
-
-    All tracks from merge_ids albums will be transferred to keep_id album.
-    The merge_ids albums will be deleted after transfer.
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
-        settings=settings,
-    )
-
-    try:
-        result = await service.merge_albums(request.keep_id, request.merge_ids)
-        return {
-            "success": True,
-            **result,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-# =============================================================================
 # MUSICBRAINZ DISAMBIGUATION ENRICHMENT
 # =============================================================================
 
@@ -2194,16 +2062,16 @@ async def enrich_disambiguation(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Enrich artists and albums with MusicBrainz disambiguation data.
-    
+
     Hey future me - this is for Lidarr-style naming templates that use {ArtistDisambiguation}!
     MusicBrainz provides disambiguation strings like "(US rock band)" to differentiate
     artists with the same name (e.g., multiple artists named "Nirvana").
-    
+
     This endpoint:
     1. Finds artists/albums without disambiguation
     2. Searches MusicBrainz for matches
     3. Stores disambiguation strings from MB results
-    
+
     Note: Respects MusicBrainz 1 req/sec rate limit, so large batches take time.
     Returns HTML for HTMX integration on the library page.
     """
@@ -2213,28 +2081,27 @@ async def enrich_disambiguation(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore  
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 
     try:
         result = await service.enrich_disambiguation_batch(limit=request.limit)
-        
+
         # Hey future me - return HTML for HTMX integration!
         # This shows directly in the library page status area.
         artists_enriched = result.get("artists_enriched", 0)
         albums_enriched = result.get("albums_enriched", 0)
-        
+
         if result.get("skipped"):
             # Provider disabled
             return HTMLResponse(
-                f'''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+                '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                     <i class="bi bi-info-circle"></i>
                     <span>MusicBrainz provider is disabled in Settings.</span>
                 </div>'''
             )
-        
+
         if artists_enriched == 0 and albums_enriched == 0:
             return HTMLResponse(
                 '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
@@ -2242,14 +2109,14 @@ async def enrich_disambiguation(
                     <span>All items already have disambiguation data or no matches found.</span>
                 </div>'''
             )
-        
+
         return HTMLResponse(
             f'''<div class="musicbrainz-result" style="background: rgba(186, 83, 45, 0.1); border: 1px solid rgba(186, 83, 45, 0.2); color: #e69d3c; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-check-circle-fill"></i>
                 <span>Enriched <strong>{artists_enriched}</strong> artists and <strong>{albums_enriched}</strong> albums with disambiguation data.</span>
             </div>'''
         )
-        
+
     except Exception as e:
         logger.error(f"Disambiguation enrichment failed: {e}")
         return HTMLResponse(

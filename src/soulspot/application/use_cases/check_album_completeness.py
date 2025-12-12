@@ -11,12 +11,12 @@ from soulspot.application.services.album_completeness import (
     AlbumCompletenessService,
 )
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
     ArtistModel,
     TrackModel,
 )
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -28,24 +28,22 @@ class CheckAlbumCompletenessUseCase:
     # Think of it like checking your vinyl collection - "Wait, I'm missing track 7 on Dark Side of the Moon?!"
     # WHY two clients? Because sometimes Spotify has the data, sometimes MusicBrainz does
     # We try Spotify first (faster) then fall back to MusicBrainz (more complete but slower)
+    # REFACTORED: Now uses SpotifyPlugin which handles token internally!
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient | None = None,
+        spotify_plugin: SpotifyPlugin | None = None,
         musicbrainz_client: MusicBrainzClient | None = None,
-        access_token: str | None = None,
     ) -> None:
         """Initialize use case.
 
         Args:
             session: Database session
-            spotify_client: Spotify client for album metadata
+            spotify_plugin: Spotify plugin for album metadata (handles token internally)
             musicbrainz_client: MusicBrainz client for album metadata
-            access_token: Spotify access token
         """
         self.session = session
-        self.service = AlbumCompletenessService(spotify_client, musicbrainz_client)
-        self.access_token = access_token
+        self.service = AlbumCompletenessService(spotify_plugin, musicbrainz_client)
 
     # Hey future me: The main completeness check - scans ALL your albums
     # WHY incomplete_only? Nobody cares about the complete ones, save the CPU cycles
@@ -108,12 +106,13 @@ class CheckAlbumCompletenessUseCase:
                 # WHY check expected_count == 0 before MusicBrainz? Don't waste API calls if Spotify worked
                 # GOTCHA: If both sources say different track counts, we trust whichever we hit first
                 # This can happen with deluxe editions vs standard - might want to handle that later
+                # REFACTORED: SpotifyPlugin handles token internally now!
 
                 # Try to get expected track count from Spotify
-                if album_model.spotify_uri and self.access_token:
+                if album_model.spotify_uri:
                     spotify_count = (
                         await self.service.get_expected_track_count_from_spotify(
-                            album_model.spotify_uri, self.access_token
+                            album_model.spotify_uri
                         )
                     )
                     if spotify_count:
@@ -218,10 +217,10 @@ class CheckAlbumCompletenessUseCase:
         expected_count = 0
         source = "unknown"
 
-        # Try Spotify
-        if album_model.spotify_uri and self.access_token:
+        # Try Spotify (SpotifyPlugin handles token internally)
+        if album_model.spotify_uri:
             spotify_count = await self.service.get_expected_track_count_from_spotify(
-                album_model.spotify_uri, self.access_token
+                album_model.spotify_uri
             )
             if spotify_count:
                 expected_count = spotify_count
