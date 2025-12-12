@@ -7,8 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.value_objects import ArtistId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
+
+# Hey future me – SpotifyClient Import entfernt!
+# Service nutzt bereits lokale SpotifyBrowseRepository-Daten für Discography-Checks.
+# Kein direkter Spotify API Call mehr nötig hier.
 
 logger = logging.getLogger(__name__)
 
@@ -59,19 +62,19 @@ class DiscographyInfo:
 class DiscographyService:
     """Service for checking artist discography completeness."""
 
+    # Hey future me – SpotifyClient Parameter entfernt!
+    # Service nutzt lokale Daten aus SpotifyBrowseRepository für Discography-Checks.
+    # Background Sync hält spotify_albums aktuell, kein live API Call nötig.
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient | None = None,
     ) -> None:
         """Initialize discography service.
 
         Args:
             session: Database session
-            spotify_client: Spotify client for fetching discography
         """
         self.session = session
-        self.spotify_client = spotify_client
 
     # Hey future me: Discography completeness check - finds which albums are missing from an artist's catalog
     # WHY check this? User downloads 3 Pink Floyd albums, but they have 15 studio albums - which 12 are missing?

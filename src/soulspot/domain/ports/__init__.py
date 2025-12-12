@@ -12,6 +12,17 @@ from soulspot.domain.value_objects import (
     TrackId,
 )
 
+# Hey future me – Plugin-System Interfaces sind in separatem Modul!
+# Import hier für einfachen Zugriff: from soulspot.domain.ports import IMusicServicePlugin
+from soulspot.domain.ports.plugin import (
+    AuthStatus,
+    AuthType,
+    IMetadataPlugin,
+    IMusicServicePlugin,
+    PluginError,
+    ServiceType,
+)
+
 
 # Hey future me, IArtistRepository is a PORT (Hexagonal Architecture)! It's an INTERFACE (ABC) that
 # defines the contract for artist data access. The actual implementation is in infrastructure layer

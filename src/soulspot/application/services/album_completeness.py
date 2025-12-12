@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -74,43 +74,45 @@ class AlbumCompletenessInfo:
 # Uses TWO metadata sources (Spotify + MusicBrainz) because no single source has everything. Spotify is great
 # for mainstream albums, MusicBrainz has obscure/old stuff. Both clients are optional - service degrades
 # gracefully if one is missing. This is stateless - no caching, fetches fresh data every time!
+# Hey future me – refactored to use SpotifyPlugin statt SpotifyClient! Plugin gibt DTOs zurück.
 class AlbumCompletenessService:
     """Service for checking album completeness."""
 
     # Hey, constructor takes both metadata clients as optional dependencies. If you only have one, that's okay -
-    # the service will use what's available. Spotify usually needs access token (OAuth), MusicBrainz is
+    # the service will use what's available. SpotifyPlugin hat Token bereits, MusicBrainz ist
     # anonymous (no auth). Good separation of concerns - service doesn't know HOW to authenticate!
     def __init__(
         self,
-        spotify_client: SpotifyClient | None = None,
+        spotify_plugin: SpotifyPlugin | None = None,
         musicbrainz_client: MusicBrainzClient | None = None,
     ) -> None:
         """Initialize album completeness service.
 
         Args:
-            spotify_client: Spotify client for album metadata
+            spotify_plugin: Spotify plugin for album metadata (returns DTOs)
             musicbrainz_client: MusicBrainz client for album metadata
         """
-        self.spotify_client = spotify_client
+        self.spotify_plugin = spotify_plugin
         self.musicbrainz_client = musicbrainz_client
 
     # Hey future me: Album completeness checking - finds missing tracks from an album
-    # WHY two clients (Spotify + MusicBrainz)? Spotify has newer stuff, MusicBrainz has obscure/old stuff
+    # WHY two sources (Spotify + MusicBrainz)? Spotify has newer stuff, MusicBrainz has obscure/old stuff
     # Example: Import "OK Computer" with 10 tracks, but album should have 12 - this finds the 2 missing
     # GOTCHA: Deluxe editions vs standard - Spotify might say 15 tracks, you have standard with 10
+    # REFACTORED: Now uses SpotifyPlugin which returns AlbumDTO with total_tracks field!
     async def get_expected_track_count_from_spotify(
-        self, spotify_uri: str, access_token: str
+        self, spotify_uri: str, access_token: str | None = None
     ) -> int | None:
         """Get expected track count from Spotify.
 
         Args:
             spotify_uri: Spotify album URI
-            access_token: Spotify access token
+            access_token: DEPRECATED - Plugin manages token internally
 
         Returns:
             Expected track count or None if not found
         """
-        if not self.spotify_client:
+        if not self.spotify_plugin:
             return None
 
         try:
@@ -118,16 +120,9 @@ class AlbumCompletenessService:
             # Handles both URI format (spotify:album:XXXX) and ID string
             album_id = spotify_uri.split(":")[-1] if ":" in spotify_uri else spotify_uri
 
-            # Get album details from Spotify API
-            client = await self.spotify_client._get_client()
-            response = await client.get(
-                f"{self.spotify_client.API_BASE_URL}/albums/{album_id}",
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
-            response.raise_for_status()
-
-            album_data = response.json()
-            total_tracks: int = album_data.get("total_tracks", 0)
+            # Hey future me – Plugin gibt AlbumDTO zurück, nicht raw JSON!
+            album = await self.spotify_plugin.get_album(album_id)
+            total_tracks = album.total_tracks or 0
 
             logger.info(
                 f"Found {total_tracks} tracks for Spotify album {album_id}",

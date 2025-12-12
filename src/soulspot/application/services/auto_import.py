@@ -5,7 +5,7 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from soulspot.application.services.postprocessing.pipeline import (
     PostProcessingPipeline,
@@ -17,6 +17,7 @@ from soulspot.domain.value_objects import FilePath
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,12 @@ logger = logging.getLogger(__name__)
 class AutoImportService:
     """Service for automatically importing completed downloads to music library.
 
-    Hey future me - updated to support dynamic naming templates from DB!
-    If you pass app_settings_service, the post-processing pipeline will use
-    DB templates instead of static env var templates. This enables
-    runtime-configurable naming via the Settings UI.
+    Hey future me - refactored to use SpotifyPlugin instead of raw SpotifyClient!
+    If you pass spotify_plugin, the post-processing pipeline will use it for
+    artwork downloads from Spotify API (handles auth internally, no more token juggling).
 
-    Also supports spotify_client for artwork downloads from Spotify API
-    (gets high-quality artwork directly from Spotify when available).
+    Also supports app_settings_service for DB templates instead of static env var templates.
+    This enables runtime-configurable naming via the Settings UI.
 
     This service monitors the downloads directory and moves completed music files
     to the music library directory, organizing them appropriately.
@@ -44,10 +44,13 @@ class AutoImportService:
         album_repository: IAlbumRepository,
         poll_interval: int = 60,
         post_processing_pipeline: PostProcessingPipeline | None = None,
-        spotify_client: Any | None = None,
+        spotify_plugin: "SpotifyPlugin | None" = None,
         app_settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize auto-import service.
+
+        Hey future me - refactored to use SpotifyPlugin!
+        The plugin handles token management internally, no more access_token juggling.
 
         Args:
             settings: Application settings containing path configuration
@@ -56,7 +59,7 @@ class AutoImportService:
             album_repository: Repository for album data
             poll_interval: Seconds between directory scans (default: 60)
             post_processing_pipeline: Optional post-processing pipeline
-            spotify_client: Optional Spotify client for artwork downloads
+            spotify_plugin: Optional SpotifyPlugin for artwork downloads (handles auth internally)
             app_settings_service: Optional app settings service for dynamic naming templates
         """
         self._settings = settings
@@ -76,7 +79,7 @@ class AutoImportService:
                 settings=settings,
                 artist_repository=artist_repository,
                 album_repository=album_repository,
-                spotify_client=spotify_client,  # Pass for Spotify artwork
+                spotify_plugin=spotify_plugin,  # Pass for Spotify artwork
                 app_settings_service=app_settings_service,  # Pass for dynamic templates
             )
 

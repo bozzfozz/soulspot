@@ -1162,6 +1162,9 @@ async def sync_followed_artists(
     Fetches all artists the current user follows on Spotify, creates or updates
     Artist entities in the database, and returns the complete list with sync statistics.
 
+    Hey future me - refactored to use SpotifyPlugin instead of raw SpotifyClient!
+    The plugin handles token management internally.
+
     Args:
         request: FastAPI request object (to check HX-Request header)
         access_token: Spotify OAuth access token (from session)
@@ -1182,15 +1185,19 @@ async def sync_followed_artists(
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
         # Get templates directory
         _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
         templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
+        # Create SpotifyPlugin (wraps SpotifyClient, handles token internally)
         spotify_client = SpotifyClient(settings.spotify)
-        service = FollowedArtistsService(session, spotify_client)
+        spotify_plugin = SpotifyPlugin(spotify_client, access_token)
+        service = FollowedArtistsService(session, spotify_plugin)
 
-        artists, stats = await service.sync_followed_artists(access_token)
+        # No access_token param needed - plugin has it!
+        artists, stats = await service.sync_followed_artists()
         await session.commit()
 
         # Check if this is an HTMX request
