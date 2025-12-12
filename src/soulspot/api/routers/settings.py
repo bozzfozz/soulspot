@@ -817,6 +817,7 @@ async def trigger_manual_sync(
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
 
@@ -839,40 +840,51 @@ async def trigger_manual_sync(
             detail="Not authenticated with Spotify. Please connect your account first.",
         )
 
+    # Hey future me - use SpotifyPlugin instead of raw SpotifyClient!
+    # Plugin handles token management internally.
     spotify_client = SpotifyClient(app_settings.spotify)
+
+    # Create SpotifyPlugin with DatabaseTokenManager from app state
+    db_token_manager = request.app.state.db_token_manager
+    spotify_plugin = SpotifyPlugin(
+        spotify_client=spotify_client,
+        db_token_manager=db_token_manager,
+        db_session=db,
+    )
+
     image_service = SpotifyImageService(app_settings)
     settings_service = AppSettingsService(db)
 
     sync_service = SpotifySyncService(
         session=db,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         image_service=image_service,
         settings_service=settings_service,
     )
 
-    # Hey future me – das access_token holen wir aus dem gespeicherten Token.
-    access_token = token.access_token
+    # Hey future me - no more access_token parameter!
+    # SpotifyPlugin handles auth internally.
 
     try:
         if sync_type == "artists":
-            result = await sync_service.sync_followed_artists(access_token, force=True)
+            result = await sync_service.sync_followed_artists(force=True)
             message = f"Artists synced: {result.get('synced', 0)} updated, {result.get('removed', 0)} removed"
 
         elif sync_type == "playlists":
-            result = await sync_service.sync_user_playlists(access_token, force=True)
+            result = await sync_service.sync_user_playlists(force=True)
             message = f"Playlists synced: {result.get('synced', 0)} updated, {result.get('removed', 0)} removed"
 
         elif sync_type == "liked":
-            result = await sync_service.sync_liked_songs(access_token, force=True)
+            result = await sync_service.sync_liked_songs(force=True)
             message = f"Liked Songs synced: {result.get('track_count', 0)} tracks"
 
         elif sync_type == "albums":
-            result = await sync_service.sync_saved_albums(access_token, force=True)
+            result = await sync_service.sync_saved_albums(force=True)
             message = f"Saved Albums synced: {result.get('synced', 0)} updated"
 
         elif sync_type == "all":
             # Run all syncs
-            results = await sync_service.run_full_sync(access_token, force=True)
+            results = await sync_service.run_full_sync(force=True)
             # Die Ergebnisse sind dicts mit details, extrahiere die Counts
             artists_count = (
                 results.get("artists", {}).get("synced", 0)

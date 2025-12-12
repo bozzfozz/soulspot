@@ -14,7 +14,7 @@ from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.domain.entities import AutomationTrigger
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
@@ -29,23 +29,24 @@ class WatchlistWorker:
     # If token is invalid (is_valid=False), worker skips work gracefully and logs warning.
     # UI shows warning banner when token invalid → user re-authenticates → worker resumes.
     # The token_manager is injected via set_token_manager() after worker construction.
+    # REFACTORED (Dec 2025): Now uses SpotifyPlugin instead of SpotifyClient!
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient,
+        spotify_plugin: SpotifyPlugin,
         check_interval_seconds: int = 3600,  # Default: 1 hour
     ) -> None:
         """Initialize watchlist worker.
 
         Args:
             session: Database session
-            spotify_client: Spotify client for fetching releases
+            spotify_plugin: SpotifyPlugin for fetching releases (handles token via set_token)
             check_interval_seconds: How often to check watchlists
         """
         self.session = session
-        self.spotify_client = spotify_client
+        self.spotify_plugin = spotify_plugin
         self.check_interval_seconds = check_interval_seconds
-        self.watchlist_service = WatchlistService(session, spotify_client)
+        self.watchlist_service = WatchlistService(session, spotify_plugin)
         self.workflow_service = AutomationWorkflowService(session)
         self._running = False
         self._task: asyncio.Task | None = None
@@ -123,7 +124,7 @@ class WatchlistWorker:
     # 5. If not synced: trigger album sync for this artist (or skip)
     # 6. Process new releases as before
     #
-    # TOKEN HANDLING: Still needed for triggering album sync if albums not yet synced.
+    # TOKEN HANDLING: SpotifyPlugin.set_token() is called with token from token_manager!
     async def _check_watchlists(self) -> None:
         """Check all due watchlists for new releases using pre-synced album data."""
         try:
@@ -133,7 +134,7 @@ class WatchlistWorker:
                 SpotifyBrowseRepository,
             )
 
-            # Get access token (needed if we have to trigger album sync)
+            # Get access token and set on SpotifyPlugin
             access_token = None
             if self._token_manager:
                 access_token = await self._token_manager.get_token_for_background()
@@ -144,6 +145,9 @@ class WatchlistWorker:
                     "User needs to re-authenticate via UI."
                 )
                 return
+
+            # Set token on SpotifyPlugin before any API calls!
+            self.spotify_plugin.set_token(access_token)
 
             # Get watchlists that need checking
             watchlists = await self.watchlist_service.list_due_for_check(limit=100)
@@ -289,7 +293,8 @@ class DiscographyWorker:
     # Hey future me: Discography worker - the "complete your collection" automation
     # WHY 24h check interval? Artist discographies rarely change (few new albums per year)
     # This is more intensive than watchlist checking because we fetch ENTIRE discography
-    # WHY Spotify client? MB doesn't have complete discographies for all artists
+    # REFACTORED (Dec 2025): DiscographyService now uses LOCAL spotify_albums data!
+    # No SpotifyClient needed anymore - we query pre-synced data from DB.
     #
     # TOKEN HANDLING (2025 update):
     # Uses DatabaseTokenManager.get_token_for_background() - same pattern as WatchlistWorker.
@@ -297,20 +302,17 @@ class DiscographyWorker:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient,
         check_interval_seconds: int = 86400,  # Default: 24 hours
     ) -> None:
         """Initialize discography worker.
 
         Args:
             session: Database session
-            spotify_client: Spotify client for fetching discography
             check_interval_seconds: How often to check discography
         """
         self.session = session
-        self.spotify_client = spotify_client
         self.check_interval_seconds = check_interval_seconds
-        self.discography_service = DiscographyService(session, spotify_client)
+        self.discography_service = DiscographyService(session)
         self.workflow_service = AutomationWorkflowService(session)
         self._running = False
         self._task: asyncio.Task | None = None
@@ -652,12 +654,15 @@ class AutomationWorkerManager:
     #
     # TOKEN HANDLING (2025 update):
     # Manager now accepts token_manager param and injects it into workers that need Spotify access.
-    # WatchlistWorker and DiscographyWorker get token_manager for background token access.
+    # WatchlistWorker gets token_manager for background token access (and SpotifyPlugin).
+    # DiscographyWorker gets token_manager but now uses LOCAL data only (no SpotifyClient needed!).
     # QualityUpgradeWorker doesn't need it (scans local library, no Spotify API calls).
+    #
+    # REFACTORED (Dec 2025): Uses SpotifyPlugin instead of SpotifyClient!
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: SpotifyClient,
+        spotify_plugin: SpotifyPlugin,
         watchlist_interval: int = 3600,
         discography_interval: int = 86400,
         quality_interval: int = 86400,
@@ -667,17 +672,18 @@ class AutomationWorkerManager:
 
         Args:
             session: Database session
-            spotify_client: Spotify client
+            spotify_plugin: SpotifyPlugin for API calls (token set via set_token before operations)
             watchlist_interval: Watchlist check interval in seconds
             discography_interval: Discography check interval in seconds
             quality_interval: Quality upgrade check interval in seconds
             token_manager: Database-backed token manager for Spotify access
         """
         self.watchlist_worker = WatchlistWorker(
-            session, spotify_client, watchlist_interval
+            session, spotify_plugin, watchlist_interval
         )
+        # DiscographyWorker no longer needs SpotifyClient - uses LOCAL data!
         self.discography_worker = DiscographyWorker(
-            session, spotify_client, discography_interval
+            session, discography_interval
         )
         self.quality_worker = QualityUpgradeWorker(session, quality_interval)
 

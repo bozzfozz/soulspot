@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -15,8 +15,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
     get_library_scanner_service,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.use_cases.check_album_completeness import (
@@ -32,6 +31,9 @@ from soulspot.application.use_cases.scan_library import (
 )
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.config import Settings, get_settings
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +308,7 @@ async def get_incomplete_albums(
         3, description="Minimum track count to consider (filters out singles)"
     ),
     session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Get albums with missing tracks.
 
@@ -313,18 +316,17 @@ async def get_incomplete_albums(
         incomplete_only: Only return incomplete albums
         min_track_count: Minimum track count to consider
         session: Database session
+        spotify_plugin: SpotifyPlugin (handles token internally)
 
     Returns:
         List of albums with completeness information
     """
     try:
-        # Note: This endpoint requires Spotify client configuration
-        # For now, it returns empty results without credentials
+        # SpotifyPlugin handles token management internally!
         use_case = CheckAlbumCompletenessUseCase(
             session=session,
-            spotify_client=None,
+            spotify_plugin=spotify_plugin,
             musicbrainz_client=None,
-            access_token=None,
         )
         albums = await use_case.execute(
             incomplete_only=incomplete_only, min_track_count=min_track_count
@@ -345,12 +347,14 @@ async def get_incomplete_albums(
 async def get_album_completeness(
     album_id: str,
     session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Get completeness information for a specific album.
 
     Args:
         album_id: Album ID
         session: Database session
+        spotify_plugin: SpotifyPlugin (handles token internally)
 
     Returns:
         Album completeness information
@@ -358,9 +362,8 @@ async def get_album_completeness(
     try:
         use_case = CheckAlbumCompletenessUseCase(
             session=session,
-            spotify_client=None,
+            spotify_plugin=spotify_plugin,
             musicbrainz_client=None,
-            access_token=None,
         )
         result = await use_case.check_single_album(album_id)
 

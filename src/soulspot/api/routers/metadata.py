@@ -1,7 +1,7 @@
 """API routes for metadata management and conflict resolution."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,9 +11,7 @@ from soulspot.api.dependencies import (
     get_artist_repository,
     get_lastfm_client,
     get_musicbrainz_client,
-    get_session_id,
-    get_session_store,
-    get_spotify_client,
+    get_spotify_plugin,
     get_track_repository,
 )
 from soulspot.api.schemas.metadata import (
@@ -25,7 +23,6 @@ from soulspot.api.schemas.metadata import (
     TagNormalizationResult,
 )
 from soulspot.application.services.metadata_merger import MetadataMerger
-from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.application.use_cases.enrich_metadata_multi_source import (
     EnrichMetadataMultiSourceRequest as UseCaseRequest,
 )
@@ -36,12 +33,14 @@ from soulspot.domain.entities import Album, Artist, MetadataSource, Track
 from soulspot.domain.value_objects import AlbumId, ArtistId, TrackId
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
     ArtistRepository,
     TrackRepository,
 )
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ def get_metadata_merger() -> MetadataMerger:
 
 # Yo, this is the FULL-FEATURED metadata enrichment dependency! Gets metadata from ALL three sources
 # (MusicBrainz, Last.fm, Spotify) and merges them intelligently. Note Last.fm is optional (can be None)
-# - the use case must handle that! The MetadataMerger dependency injects conflict resolution logic.
+# - the use case must handle that! SpotifyPlugin handles token management internally!
 # All three repositories (track/artist/album) are needed because enrichment cascades - enriching a track
 # might also update its artist and album metadata. Standard Clean Architecture pattern.
 def get_enrich_use_case(
@@ -68,7 +67,7 @@ def get_enrich_use_case(
     album_repository: AlbumRepository = Depends(get_album_repository),
     musicbrainz_client: MusicBrainzClient = Depends(get_musicbrainz_client),
     lastfm_client: LastfmClient | None = Depends(get_lastfm_client),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     metadata_merger: MetadataMerger = Depends(get_metadata_merger),
 ) -> EnrichMetadataMultiSourceUseCase:
     """Get metadata enrichment use case instance."""
@@ -78,16 +77,14 @@ def get_enrich_use_case(
         album_repository=album_repository,
         musicbrainz_client=musicbrainz_client,
         lastfm_client=lastfm_client,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         metadata_merger=metadata_merger,
     )
 
 
 # Hey future me, main metadata enrichment endpoint! Converts API request to use case request which
-# seems redundant but keeps API layer separate from domain. spotify_access_token is hardcoded None -
-# Hey future me - Spotify token is NOW extracted from session! If use_spotify=True but no session/token,
-# we gracefully skip Spotify enrichment (fallback to MusicBrainz/Last.fm only). Token auto-refresh happens
-# in session_store.get_session() if expired. Authority hierarchy is Manual > MusicBrainz > Spotify > Last.fm.
+# seems redundant but keeps API layer separate from domain. SpotifyPlugin handles token internally!
+# No more manual session/token extraction needed. Authority hierarchy is Manual > MusicBrainz > Spotify > Last.fm.
 # Conflict detection IS IMPLEMENTED - MetadataMerger._detect_conflicts() finds disagreements between sources.
 @router.post(
     "/enrich",
@@ -99,14 +96,13 @@ def get_enrich_use_case(
 async def enrich_metadata(
     request: EnrichMetadataMultiSourceRequest,
     use_case: EnrichMetadataMultiSourceUseCase = Depends(get_enrich_use_case),
-    session_id: str | None = Depends(get_session_id),
-    session_store: DatabaseSessionStore = Depends(get_session_store),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> MetadataEnrichmentResponse:
     """
     Enrich track metadata from multiple sources.
 
     Authority Hierarchy: Manual > MusicBrainz > Spotify > Last.fm
+
+    SpotifyPlugin handles token management internally - no session required!
 
     Args:
         request: Enrichment request with track ID and options
@@ -119,36 +115,16 @@ async def enrich_metadata(
         HTTPException: If track not found or enrichment fails
     """
     try:
-        # Hey future me - extract Spotify token from session if available!
-        # If no session or token, spotify_access_token stays None and Spotify enrichment is skipped.
-        # This is graceful degradation - MusicBrainz and Last.fm still work without Spotify auth.
-        spotify_access_token: str | None = None
-        if request.use_spotify and session_id:
-            session = await session_store.get_session(session_id)
-            if session and session.access_token:
-                # Token auto-refresh happens in get_session if expired
-                if session.is_token_expired() and session.refresh_token:
-                    try:
-                        token_data = await spotify_client.refresh_token(
-                            session.refresh_token
-                        )
-                        session.access_token = token_data["access_token"]
-                        session.token_expires_at = token_data.get("expires_in")
-                        await session_store.update_session(session)
-                    except Exception as e:
-                        logger.warning("Failed to refresh Spotify token: %s", e)
-                spotify_access_token = session.access_token
-
         # Convert API request to use case request
+        # No more spotify_access_token - plugin handles it!
         use_case_request = UseCaseRequest(
             track_id=TrackId(UUID(request.track_id)),
             force_refresh=request.force_refresh,
             enrich_artist=request.enrich_artist,
             enrich_album=request.enrich_album,
-            use_spotify=request.use_spotify and spotify_access_token is not None,
+            use_spotify=request.use_spotify,
             use_musicbrainz=request.use_musicbrainz,
             use_lastfm=request.use_lastfm,
-            spotify_access_token=spotify_access_token,
             manual_overrides=request.manual_overrides,
         )
 

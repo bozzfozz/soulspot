@@ -1126,6 +1126,128 @@ class SpotifyPlugin(IMusicServicePlugin):
                 original_error=e,
             ) from e
 
+    # =========================================================================
+    # CONVENIENCE SEARCH METHODS
+    # Hey future me – diese Wrapper machen die Migration von SpotifyClient
+    # zu SpotifyPlugin einfacher! Statt search() mit types zu nutzen.
+    # =========================================================================
+
+    async def search_artist(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[ArtistDTO]:
+        """
+        Search for artists only.
+
+        Convenience wrapper around search() for artist-only searches.
+
+        Args:
+            query: Search query
+            limit: Max results (default 20, max 50)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with artists
+        """
+        result = await self.search(
+            query=query, types=["artist"], limit=limit, offset=offset
+        )
+        return PaginatedResponse(
+            items=result.artists or [],
+            total=result.total_artists or 0,
+            offset=offset,
+            limit=limit,
+            next_offset=offset + len(result.artists or [])
+            if result.total_artists and offset + len(result.artists or []) < result.total_artists
+            else None,
+        )
+
+    async def search_track(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[TrackDTO]:
+        """
+        Search for tracks only.
+
+        Convenience wrapper around search() for track-only searches.
+
+        Args:
+            query: Search query
+            limit: Max results (default 20, max 50)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with tracks
+        """
+        result = await self.search(
+            query=query, types=["track"], limit=limit, offset=offset
+        )
+        return PaginatedResponse(
+            items=result.tracks or [],
+            total=result.total_tracks or 0,
+            offset=offset,
+            limit=limit,
+            next_offset=offset + len(result.tracks or [])
+            if result.total_tracks and offset + len(result.tracks or []) < result.total_tracks
+            else None,
+        )
+
+    async def search_album(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[AlbumDTO]:
+        """
+        Search for albums only.
+
+        Convenience wrapper around search() for album-only searches.
+
+        Args:
+            query: Search query
+            limit: Max results (default 20, max 50)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with albums
+        """
+        result = await self.search(
+            query=query, types=["album"], limit=limit, offset=offset
+        )
+        return PaginatedResponse(
+            items=result.albums or [],
+            total=result.total_albums or 0,
+            offset=offset,
+            limit=limit,
+            next_offset=offset + len(result.albums or [])
+            if result.total_albums and offset + len(result.albums or []) < result.total_albums
+            else None,
+        )
+
+    async def search_playlist(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[PlaylistDTO]:
+        """
+        Search for playlists only.
+
+        Convenience wrapper around search() for playlist-only searches.
+
+        Args:
+            query: Search query
+            limit: Max results (default 20, max 50)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with playlists
+        """
+        result = await self.search(
+            query=query, types=["playlist"], limit=limit, offset=offset
+        )
+        return PaginatedResponse(
+            items=result.playlists or [],
+            total=result.total_playlists or 0,
+            offset=offset,
+            limit=limit,
+            next_offset=offset + len(result.playlists or [])
+            if result.total_playlists and offset + len(result.playlists or []) < result.total_playlists
+            else None,
+        )
+
 
 # Export
 __all__ = ["SpotifyPlugin"]

@@ -43,7 +43,11 @@ class MockSpotifyArtist:
 
 
 class MockSpotifySyncService:
-    """Mock SpotifySyncService for testing UI route behavior."""
+    """Mock SpotifySyncService for testing UI route behavior.
+
+    Hey future me - updated to match new SpotifyPlugin-based signatures!
+    No more access_token parameters - plugin handles auth internally.
+    """
 
     def __init__(self) -> None:
         self._artists: list[MockSpotifyArtist] = []
@@ -52,9 +56,13 @@ class MockSpotifySyncService:
         self.sync_call_order: list[str] = []
 
     async def sync_followed_artists(
-        self, access_token: str, force: bool = False
+        self, force: bool = False
     ) -> dict[str, Any]:
-        """Track that sync was called and when."""
+        """Track that sync was called and when.
+
+        Hey future me - no more access_token parameter!
+        SpotifyPlugin handles auth internally.
+        """
         self.sync_called = True
         self.sync_call_order.append("sync")
         return {
@@ -64,6 +72,20 @@ class MockSpotifySyncService:
             "removed": 0,
         }
 
+    async def sync_artist_albums(
+        self, artist_id: str, force: bool = False
+    ) -> dict[str, Any]:
+        """Track that sync_artist_albums was called."""
+        self.sync_call_order.append("sync_artist_albums")
+        return {"synced": True, "total": 0, "added": 0}
+
+    async def sync_album_tracks(
+        self, album_id: str, force: bool = False
+    ) -> dict[str, Any]:
+        """Track that sync_album_tracks was called."""
+        self.sync_call_order.append("sync_album_tracks")
+        return {"synced": True, "total": 0, "added": 0}
+
     async def get_artists(
         self, limit: int = 100, offset: int = 0
     ) -> list[MockSpotifyArtist]:
@@ -71,6 +93,29 @@ class MockSpotifySyncService:
         self.get_artists_called = True
         self.sync_call_order.append("get_artists")
         return self._artists[:limit]
+
+    async def get_artist(self, spotify_id: str) -> MockSpotifyArtist | None:
+        """Get an artist by Spotify ID."""
+        for artist in self._artists:
+            if artist.spotify_id == spotify_id:
+                return artist
+        return None
+
+    async def get_artist_albums(
+        self, artist_id: str, limit: int = 100
+    ) -> list[Any]:
+        """Get albums for an artist."""
+        return []
+
+    async def get_album(self, spotify_id: str) -> Any | None:
+        """Get an album by Spotify ID."""
+        return None
+
+    async def get_album_tracks(
+        self, album_id: str, limit: int = 100
+    ) -> list[Any]:
+        """Get tracks for an album."""
+        return []
 
     def add_artist(self, artist: MockSpotifyArtist) -> None:
         """Add an artist to the mock DB."""

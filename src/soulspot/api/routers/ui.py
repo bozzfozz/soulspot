@@ -17,16 +17,14 @@ from soulspot.api.dependencies import (
     get_library_scanner_service,
     get_playlist_repository,
     get_spotify_browse_repository,
-    get_spotify_client,
+    get_spotify_plugin,
     get_spotify_sync_service,
-    get_spotify_token_shared,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.domain.entities import DownloadStatus
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     PlaylistRepository,
@@ -36,6 +34,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -1875,16 +1874,12 @@ async def spotify_artists_page(
     # 2. ALWAYS load from DB for display - even if sync fails or token is invalid!
     # This ensures data is visible even without a valid Spotify token.
 
-    # Step 1: Try to sync if token available (OPTIONAL - failures don't block DB load)
+    # Step 1: Try to sync if SpotifyPlugin has valid token (OPTIONAL - failures don't block DB load)
     try:
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
-        if access_token:
-            # Auto-sync (respects cooldown) - updates DB and commits
-            sync_stats = await sync_service.sync_followed_artists(access_token)
+        # Hey future me - SpotifySyncService now uses SpotifyPlugin internally!
+        # No more access_token passing - plugin handles auth internally.
+        # Auto-sync (respects cooldown) - updates DB and commits
+        sync_stats = await sync_service.sync_followed_artists()
     except Exception as sync_error:
         # Sync failed (token invalid, API error, etc.) - log but don't block
         # We'll still load existing data from DB below
@@ -1938,14 +1933,14 @@ async def spotify_artists_page(
 async def spotify_discover_page(
     request: Request,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> Any:
     """Discover Similar Artists page.
 
     Hey future me - this is the REAL discovery page! Shows artists similar to your favorites.
-    Fetches related artists from Spotify API for your followed artists and aggregates
+    Fetches related artists from SpotifyPlugin for your followed artists and aggregates
     the suggestions, filtering out ones you already follow.
+    SpotifyPlugin handles auth internally - no more manual token passing!
     """
     import random
 
@@ -1989,23 +1984,21 @@ async def spotify_discover_page(
             logger.warning(f"Artist {artist.name} has no spotify_id, skipping")
             continue
         try:
-            related = await spotify_client.get_related_artists(
-                artist.spotify_id, access_token
-            )
-            logger.debug(f"Got {len(related)} related artists for {artist.name}")
-            for r in related:
-                rid = r.get("id")
+            # SpotifyPlugin returns list[ArtistDTO] - clean DTO access!
+            related_dtos = await spotify_plugin.get_related_artists(artist.spotify_id)
+            logger.debug(f"Got {len(related_dtos)} related artists for {artist.name}")
+            for r in related_dtos:
+                rid = r.spotify_id
                 # Skip if already following or already in discoveries
                 if rid and rid not in followed_ids and rid not in seen_ids:
                     seen_ids.add(rid)
-                    images = r.get("images", [])
                     discoveries.append(
                         {
                             "spotify_id": rid,
-                            "name": r.get("name", "Unknown"),
-                            "image_url": images[0]["url"] if images else None,
-                            "genres": r.get("genres", [])[:3],
-                            "popularity": r.get("popularity", 0),
+                            "name": r.name,
+                            "image_url": r.image_url,
+                            "genres": (r.genres or [])[:3],
+                            "popularity": r.popularity or 0,
                             "based_on": artist.name,
                         }
                     )
@@ -2046,14 +2039,14 @@ async def spotify_artist_detail_page(
     request: Request,
     artist_id: str,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> Any:
     """Spotify artist detail page with albums.
 
+    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
     Auto-syncs artist's albums from Spotify on page load (with cooldown).
     Shows artist info and album grid.
 
-    Uses SHARED server-side token from DatabaseTokenManager.
+    SpotifyPlugin handles auth internally - no more manual token fetching!
     """
     artist = None
     albums = []
@@ -2061,12 +2054,6 @@ async def spotify_artist_detail_page(
     error = None
 
     try:
-        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
 
@@ -2102,9 +2089,14 @@ async def spotify_artist_detail_page(
             "follower_count": artist_model.follower_count,
         }
 
-        if access_token:
-            # Auto-sync albums (respects cooldown)
-            sync_stats = await sync_service.sync_artist_albums(access_token, artist_id)
+        # Hey future me - SpotifyPlugin handles auth internally!
+        # No more "if access_token:" checks needed.
+        # Auto-sync albums (respects cooldown)
+        try:
+            sync_stats = await sync_service.sync_artist_albums(artist_id)
+        except Exception as sync_error:
+            # Sync failed but we can still show cached data
+            logger.warning(f"Album sync failed (showing cached): {sync_error}")
 
         # Get albums from DB
         album_models = await sync_service.get_artist_albums(artist_id, limit=200)
@@ -2208,10 +2200,11 @@ async def spotify_album_detail_page(
 ) -> Any:
     """Spotify album detail page with tracks.
 
+    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
     Auto-syncs album's tracks from Spotify on page load (with cooldown).
     Shows album info and track list with download buttons.
 
-    Uses SHARED server-side token from DatabaseTokenManager.
+    SpotifyPlugin handles auth internally - no more manual token fetching!
     """
     artist = None
     album = None
@@ -2220,12 +2213,6 @@ async def spotify_album_detail_page(
     error = None
 
     try:
-        # Hey future me - get token from SHARED DatabaseTokenManager, not per-session!
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
-            access_token = await db_token_manager.get_token_for_background()
-
         # Get artist from DB
         artist_model = await sync_service.get_artist(artist_id)
         if artist_model:
@@ -2257,9 +2244,14 @@ async def spotify_album_detail_page(
             "total_tracks": album_model.total_tracks,
         }
 
-        if access_token:
-            # Auto-sync tracks (respects cooldown)
-            sync_stats = await sync_service.sync_album_tracks(access_token, album_id)
+        # Hey future me - SpotifyPlugin handles auth internally!
+        # No more "if access_token:" checks needed.
+        # Auto-sync tracks (respects cooldown)
+        try:
+            sync_stats = await sync_service.sync_album_tracks(album_id)
+        except Exception as sync_error:
+            # Sync failed but we can still show cached data
+            logger.warning(f"Track sync failed (showing cached): {sync_error}")
 
         # Get tracks from DB
         track_models = await sync_service.get_album_tracks(album_id, limit=100)

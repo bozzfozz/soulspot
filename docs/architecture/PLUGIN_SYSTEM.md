@@ -334,8 +334,6 @@ artist = Artist(
 - [ ] **Plugin Health Checks** (Rate Limit Status, Token Validity)
 - [ ] **Caching Layer** für häufige Abfragen
 - [ ] **Parallel Multi-Service Search** (alle Plugins gleichzeitig)
-- [ ] **SpotifySyncService** auf SpotifyPlugin umstellen
-- [ ] **API Router** Dependencies auf SpotifyPlugin umstellen
 
 ## Migration Status
 
@@ -351,13 +349,25 @@ artist = Artist(
 | `AutoImportService` | ✅ Done | Passes SpotifyPlugin to pipeline |
 | `FollowedArtistsService` | ✅ Done | Uses SpotifyPlugin for followed artists sync |
 | `ArtistSongsService` | ✅ Done | Uses SpotifyPlugin for top tracks |
+| `SpotifySyncService` | ✅ Done | All sync methods use SpotifyPlugin (large refactor!) |
+
+### API Router Dependencies - Refactored ✅
+
+| Router | Status | Notes |
+|--------|--------|-------|
+| `dependencies.py` | ✅ Done | Added `get_spotify_plugin` and `get_spotify_sync_service` using plugin |
+| `artists.py` | ✅ Done | `sync_followed_artists` uses SpotifyPlugin |
+| `artist_songs.py` | ✅ Done | All endpoints use SpotifyPlugin |
+| `ui.py` | ✅ Done | All Spotify browse routes use SpotifyPlugin |
+| `settings.py` | ✅ Done | Sync trigger endpoint uses SpotifyPlugin |
 
 ### Not Yet Migrated
 
-| Service | Reason |
-|---------|--------|
-| `SpotifySyncService` | Large service (~1248 lines), needs careful migration |
-| API Routers | Many routers use SpotifyClient directly via dependencies |
+| Component | Reason |
+|-----------|--------|
+| `artists.py` follow/unfollow | SpotifyPlugin doesn't have follow/unfollow methods yet |
+| `artists.py` related artists | SpotifyPlugin doesn't have related_artists method yet |
+| `auth.py` | SpotifyClient needed directly for OAuth flow |
 
 ### Breaking Changes
 
@@ -374,5 +384,18 @@ await service.sync_followed_artists(access_token)
 ```python
 service = FollowedArtistsService(session, spotify_plugin)  # Plugin has token
 await service.sync_followed_artists()  # No token param!
+```
+
+**SpotifySyncService Example:**
+```python
+# Before
+sync_service = SpotifySyncService(session, spotify_client)
+await sync_service.sync_followed_artists(access_token, force=True)
+await sync_service.sync_artist_albums(access_token, artist_id)
+
+# After
+sync_service = SpotifySyncService(session, spotify_plugin)
+await sync_service.sync_followed_artists(force=True)  # No token!
+await sync_service.sync_artist_albums(artist_id)  # No token!
 ```
 

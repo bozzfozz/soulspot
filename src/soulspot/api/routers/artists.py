@@ -16,15 +16,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
-    get_spotify_client,
-    get_spotify_token_shared,
+    get_spotify_plugin,
 )
 from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
 )
 from soulspot.domain.value_objects import ArtistId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -103,19 +107,18 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
 @router.post("/sync", response_model=SyncArtistsResponse)
 async def sync_followed_artists(
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> SyncArtistsResponse:
     """Sync followed artists from Spotify to the database.
 
-    Uses shared server-side token so any device on the network can trigger sync.
+    Hey future me - refactored to use SpotifyPlugin!
+    No more access_token - plugin handles auth internally.
     Fetches all artists the user follows on Spotify and creates/updates them
     in the local database. Uses spotify_uri as unique key to prevent duplicates.
 
     Args:
         session: Database session
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token from shared server-side storage
+        spotify_plugin: SpotifyPlugin for Spotify API calls
 
     Returns:
         List of synced artists and sync statistics
@@ -126,10 +129,10 @@ async def sync_followed_artists(
     try:
         service = FollowedArtistsService(
             session=session,
-            spotify_client=spotify_client,
+            spotify_plugin=spotify_plugin,
         )
 
-        artists, stats = await service.sync_followed_artists(access_token)
+        artists, stats = await service.sync_followed_artists()
 
         # Commit the transaction to persist changes
         await session.commit()
@@ -340,8 +343,7 @@ class FollowingStatusResponse(BaseModel):
 )
 async def follow_artist_on_spotify(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowArtistResponse:
     """Follow an artist on Spotify.
 
@@ -350,8 +352,7 @@ async def follow_artist_on_spotify(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-modify scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Success status and message
@@ -360,7 +361,7 @@ async def follow_artist_on_spotify(
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
     try:
-        await spotify_client.follow_artist([spotify_id], access_token)
+        await spotify_plugin.follow_artists([spotify_id])
 
         logger.info(f"Followed artist on Spotify: {spotify_id}")
 
@@ -384,8 +385,7 @@ async def follow_artist_on_spotify(
 )
 async def unfollow_artist_on_spotify(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowArtistResponse:
     """Unfollow an artist on Spotify.
 
@@ -394,8 +394,7 @@ async def unfollow_artist_on_spotify(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-modify scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Success status and message
@@ -404,7 +403,7 @@ async def unfollow_artist_on_spotify(
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
     try:
-        await spotify_client.unfollow_artist([spotify_id], access_token)
+        await spotify_plugin.unfollow_artists([spotify_id])
 
         logger.info(f"Unfollowed artist on Spotify: {spotify_id}")
 
@@ -428,8 +427,7 @@ async def unfollow_artist_on_spotify(
 )
 async def check_following_status(
     request: FollowingStatusRequest,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> FollowingStatusResponse:
     """Check if user follows one or more artists on Spotify.
 
@@ -438,8 +436,7 @@ async def check_following_status(
 
     Args:
         request: List of Spotify artist IDs to check (max 50)
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token with user-follow-read scope
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Map of artist_id → is_following status
@@ -454,12 +451,8 @@ async def check_following_status(
         )
 
     try:
-        results = await spotify_client.check_if_following_artists(
-            request.artist_ids, access_token
-        )
-
-        # Build map of artist_id → is_following
-        statuses = dict(zip(request.artist_ids, results, strict=True))
+        # SpotifyPlugin.check_following_artists returns dict[str, bool] directly!
+        statuses = await spotify_plugin.check_following_artists(request.artist_ids)
 
         return FollowingStatusResponse(statuses=statuses)
     except Exception as e:
@@ -508,8 +501,7 @@ class RelatedArtistsResponse(BaseModel):
 )
 async def get_related_artists(
     spotify_id: str,
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> RelatedArtistsResponse:
     """Get up to 20 artists similar to the given artist.
 
@@ -520,8 +512,7 @@ async def get_related_artists(
 
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
-        spotify_client: Spotify client instance
-        access_token: Valid Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         List of similar artists with following status
@@ -531,51 +522,44 @@ async def get_related_artists(
     """
     try:
         # Get the source artist details first (for name in response)
-        source_artist = await spotify_client.get_artist(spotify_id, access_token)
+        source_artist = await spotify_plugin.get_artist(spotify_id)
 
-        # Get related artists
-        related = await spotify_client.get_related_artists(spotify_id, access_token)
+        # Get related artists (returns list[ArtistDTO])
+        related_dtos = await spotify_plugin.get_related_artists(spotify_id)
 
-        if not related:
+        if not related_dtos:
             return RelatedArtistsResponse(
                 artist_id=spotify_id,
-                artist_name=source_artist.get("name", "Unknown"),
+                artist_name=source_artist.name,
                 related_artists=[],
                 total=0,
             )
 
         # Batch check following status for all related artists
-        related_ids: list[str] = [
-            str(a.get("id")) for a in related if a.get("id") is not None
-        ]
-        following_statuses: list[bool] = []
+        related_ids: list[str] = [a.spotify_id for a in related_dtos if a.spotify_id]
+        following_statuses: dict[str, bool] = {}
         if related_ids:
-            following_statuses = await spotify_client.check_if_following_artists(
-                related_ids, access_token
+            following_statuses = await spotify_plugin.check_following_artists(
+                related_ids
             )
 
         # Build response with following status
         related_artists: list[RelatedArtistResponse] = []
-        for idx, artist in enumerate(related):
-            images = artist.get("images", [])
-            image_url = images[0]["url"] if images else None
-
+        for artist_dto in related_dtos:
             related_artists.append(
                 RelatedArtistResponse(
-                    spotify_id=artist.get("id", ""),
-                    name=artist.get("name", "Unknown"),
-                    image_url=image_url,
-                    genres=artist.get("genres", [])[:3],  # Limit to 3 genres
-                    popularity=artist.get("popularity", 0),
-                    is_following=following_statuses[idx]
-                    if idx < len(following_statuses)
-                    else False,
+                    spotify_id=artist_dto.spotify_id or "",
+                    name=artist_dto.name,
+                    image_url=artist_dto.image_url,
+                    genres=artist_dto.genres[:3] if artist_dto.genres else [],
+                    popularity=artist_dto.popularity or 0,
+                    is_following=following_statuses.get(artist_dto.spotify_id or "", False),
                 )
             )
 
         return RelatedArtistsResponse(
             artist_id=spotify_id,
-            artist_name=source_artist.get("name", "Unknown"),
+            artist_name=source_artist.name,
             related_artists=related_artists,
             total=len(related_artists),
         )

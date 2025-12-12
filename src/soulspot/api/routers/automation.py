@@ -1,19 +1,24 @@
 """Automation API endpoints for watchlists, discography, and quality upgrades."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_spotify_token_shared
+from soulspot.api.dependencies import (
+    get_db_session,
+    get_spotify_plugin,
+)
 from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.config import Settings, get_settings
 from soulspot.domain.value_objects import ArtistId, WatchlistId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 router = APIRouter(prefix="/automation", tags=["automation"])
 logger = logging.getLogger(__name__)
@@ -231,38 +236,36 @@ async def get_watchlist(
 
 
 # Hey, this check endpoint is the MANUAL trigger for "check this artist for new releases RIGHT NOW".
-# Normally background workers do this on a schedule, but users want instant gratification! This hits
-# Spotify API so it REQUIRES auth token (hence the dependency). If Spotify is down or rate-limits us,
-# this will fail. The releases list in response might be EMPTY even for active artists - that's normal
-# if there's nothing new since last check. We commit after check to update last_checked_at timestamp.
+# Normally background workers do this on a schedule, but users want instant gratification! SpotifyPlugin
+# handles token internally. If Spotify is down or rate-limits us, this will fail. The releases list in
+# response might be EMPTY even for active artists - that's normal if nothing new since last check.
+# We commit after check to update last_checked_at timestamp.
 @router.post("/watchlist/{watchlist_id}/check")
 async def check_watchlist_releases(
     watchlist_id: str,
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Check for new releases for a watchlist.
 
     Args:
         watchlist_id: Watchlist ID
-        access_token: Spotify access token
+        spotify_plugin: SpotifyPlugin handles token management internally
         session: Database session
-        settings: Application settings
 
     Returns:
         New releases found
     """
     try:
         wid = WatchlistId.from_string(watchlist_id)
-        spotify_client = SpotifyClient(settings.spotify)
-        service = WatchlistService(session, spotify_client)
+        service = WatchlistService(session, spotify_plugin)
         watchlist = await service.get_watchlist(wid)
 
         if not watchlist:
             raise HTTPException(status_code=404, detail="Watchlist not found")
 
-        releases = await service.check_for_new_releases(watchlist, access_token)
+        # No access_token needed - SpotifyPlugin handles token internally
+        releases = await service.check_for_new_releases(watchlist)
         await session.commit()
 
         return {
@@ -316,34 +319,31 @@ async def delete_watchlist(
 
 
 # Discography endpoints
-# Listen, this endpoint checks "do we have ALL albums for this artist?" It hits Spotify API to get
-# the complete discography, then compares against our DB. The result tells you what's missing. This
-# can be SLOW for prolific artists (hundreds of albums) - Spotify paginates results. The to_dict()
-# serialization might include large lists of missing albums - consider pagination if this response
-# gets huge! Requires Spotify auth token.
+# Listen, this endpoint checks "do we have ALL albums for this artist?" Uses pre-synced spotify_albums
+# data from background sync, NO live API call needed! Compares known albums with owned albums locally.
+# Fast and doesn't require Spotify auth. The to_dict() serialization might include large lists of
+# missing albums - consider pagination if this response gets huge!
 @router.post("/discography/check")
 async def check_discography(
     request: DiscographyCheckRequest,
-    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Check discography completeness for an artist.
 
+    Uses pre-synced spotify_albums data - no live API call needed.
+
     Args:
         request: Discography check request
-        access_token: Spotify access token
         session: Database session
-        settings: Application settings
 
     Returns:
         Discography information
     """
     try:
         artist_id = ArtistId.from_string(request.artist_id)
-        spotify_client = SpotifyClient(settings.spotify)
-        service = DiscographyService(session, spotify_client)
-        info = await service.check_discography(artist_id, access_token)
+        service = DiscographyService(session)
+        # access_token parameter kept for backward compatibility but unused
+        info = await service.check_discography(artist_id, "")
 
         return info.to_dict()
     except ValueError as e:
@@ -355,32 +355,29 @@ async def check_discography(
 
 
 # Hey future me, this is the "collector's dream" endpoint - show me ALL missing albums across ALL
-# artists! The limit param is CRITICAL - without it, this could try to fetch thousands of artists
-# and take FOREVER. Default 10 is conservative. This hits Spotify API for EACH artist, so it's
-# rate-limit sensitive. If you have 100 artists and set limit=100, expect this to take minutes.
-# Consider adding a timeout or making this async with a job queue for large libraries!
+# artists! Uses pre-synced spotify_albums data from background sync - NO live API calls needed!
+# The limit param is still useful for performance (checking 1000 artists = lots of DB queries).
+# Default 10 is conservative. Now FAST because it uses local data, not Spotify API!
 @router.get("/discography/missing")
 async def get_missing_albums(
     limit: int = 10,
-    access_token: str = Depends(get_spotify_token_shared),
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Get missing albums for all artists.
 
+    Uses pre-synced spotify_albums data - no live API calls needed.
+
     Args:
         limit: Maximum number of artists to check
-        access_token: Spotify access token
         session: Database session
-        settings: Application settings
 
     Returns:
         List of artists with missing albums
     """
     try:
-        spotify_client = SpotifyClient(settings.spotify)
-        service = DiscographyService(session, spotify_client)
-        infos = await service.get_missing_albums_for_all_artists(access_token, limit)
+        service = DiscographyService(session)
+        # access_token parameter kept for backward compatibility but unused
+        infos = await service.get_missing_albums_for_all_artists("", limit)
 
         return {
             "artists_with_missing_albums": [info.to_dict() for info in infos],
@@ -1148,28 +1145,26 @@ class BulkCreateWatchlistsRequest(BaseModel):
 # 10-30 seconds for users with 100+ followed artists due to pagination. Each Spotify API call
 # fetches max 50 artists, so 200 followed artists = 4 API calls. Progress is logged server-side
 # but user doesn't see it (future: add SSE progress updates). The response can be HTML (for HTMX)
-# or JSON (for API clients) - we detect HX-Request header. Requires valid access_token from session -
-# if token expired, this will fail with 401 and user must re-auth.
+# or JSON (for API clients) - we detect HX-Request header. SpotifyPlugin handles token management
+# internally - no more manual token passing!
 @router.post("/followed-artists/sync")
 async def sync_followed_artists(
     request: Request,
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> Any:
     """Sync followed artists from Spotify to local database.
 
     Fetches all artists the current user follows on Spotify, creates or updates
     Artist entities in the database, and returns the complete list with sync statistics.
 
-    Hey future me - refactored to use SpotifyPlugin instead of raw SpotifyClient!
-    The plugin handles token management internally.
+    Hey future me - SpotifyPlugin handles token management internally.
+    No more manual token passing needed!
 
     Args:
         request: FastAPI request object (to check HX-Request header)
-        access_token: Spotify OAuth access token (from session)
+        spotify_plugin: SpotifyPlugin handles token management internally
         session: Database session
-        settings: Application settings
 
     Returns:
         HTML partial for HTMX requests, JSON for API requests
@@ -1185,15 +1180,12 @@ async def sync_followed_artists(
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
-        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
         # Get templates directory
         _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
         templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-        # Create SpotifyPlugin (wraps SpotifyClient, handles token internally)
-        spotify_client = SpotifyClient(settings.spotify)
-        spotify_plugin = SpotifyPlugin(spotify_client, access_token)
+        # Use SpotifyPlugin directly - it handles token internally!
         service = FollowedArtistsService(session, spotify_plugin)
 
         # No access_token param needed - plugin has it!

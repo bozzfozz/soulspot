@@ -1,7 +1,7 @@
 """Track management endpoints."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +10,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_enrich_metadata_use_case,
     get_search_and_download_use_case,
-    get_spotify_client,
+    get_spotify_plugin,
     get_track_repository,
 )
 from soulspot.application.use_cases.enrich_metadata import (
@@ -22,8 +22,10 @@ from soulspot.application.use_cases.search_and_download import (
     SearchAndDownloadTrackUseCase,
 )
 from soulspot.domain.value_objects import TrackId
-from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 from soulspot.infrastructure.persistence.repositories import TrackRepository
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -121,44 +123,42 @@ async def enrich_track(
         ) from e
 
 
-# Listen up, this searches Spotify for tracks matching query! Requires access_token because we hit Spotify API
-# directly (not using our DB). The limit param caps results (max 100). We return simplified track objects (id,
+# Listen up, this searches Spotify for tracks matching query! Uses SpotifyPlugin which handles token
+# management internally. The limit param caps results (max 100). We return simplified track objects (id,
 # name, artists, album, duration) - not full Spotify track schema. This is for "search then download" flow or
-# "add to playlist" features. If access_token is expired, Spotify returns 401 and we bubble it up as 500 (should
-# be 401!). The query can be anything: track name, artist, album, or even ISRC code (Spotify is smart!).
+# "add to playlist" features. The query can be anything: track name, artist, album, or even ISRC code!
 @router.get("/search")
 async def search_tracks(
     query: str = Query(..., description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
-    access_token: str = Query(..., description="Spotify access token"),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Search for tracks.
 
     Args:
         query: Search query
         limit: Number of results to return
-        access_token: Spotify access token
-        spotify_client: Spotify client
+        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
         Search results
     """
     try:
-        results = await spotify_client.search_track(query, access_token, limit=limit)
+        # search_track returns PaginatedResponse[TrackDTO]
+        result = await spotify_plugin.search_track(query, limit=limit)
 
         tracks = []
-        for item in results.get("tracks", {}).get("items", []):
+        for track_dto in result.items:
             tracks.append(
                 {
-                    "id": item["id"],
-                    "name": item["name"],
+                    "id": track_dto.spotify_id,
+                    "name": track_dto.name,
                     "artists": [
-                        {"name": artist["name"]} for artist in item.get("artists", [])
+                        {"name": artist.name} for artist in (track_dto.artists or [])
                     ],
-                    "album": {"name": item.get("album", {}).get("name")},
-                    "duration_ms": item.get("duration_ms"),
-                    "uri": item.get("uri"),
+                    "album": {"name": track_dto.album.name if track_dto.album else None},
+                    "duration_ms": track_dto.duration_ms,
+                    "uri": f"spotify:track:{track_dto.spotify_id}" if track_dto.spotify_id else None,
                 }
             )
 
