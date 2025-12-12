@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session
+from soulspot.api.dependencies import get_credentials_service, get_db_session
 from soulspot.application.services.app_settings_service import AppSettingsService
+from soulspot.application.services.credentials_service import CredentialsService
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class SlskdTestResponse(BaseModel):
 @router.get("/status")
 async def get_onboarding_status(
     db: AsyncSession = Depends(get_db_session),
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> OnboardingStatus:
     """Get current onboarding status.
 
@@ -75,10 +77,8 @@ async def get_onboarding_status(
     Returns:
         Current onboarding state including Spotify/Soulseek config status
     """
-    from soulspot.config import get_settings
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
 
-    settings = get_settings()
     settings_service = AppSettingsService(db)
 
     # Check Spotify connection (via stored token)
@@ -86,11 +86,12 @@ async def get_onboarding_status(
     token = await token_repo.get_active_token()
     spotify_connected = token is not None and token.access_token is not None
 
-    # Check Soulseek configuration (via env vars)
+    # Check Soulseek configuration (via DB first, env fallback via CredentialsService)
     # Hey future me - Soulseek ist konfiguriert wenn URL + (API Key ODER Username/Password) gesetzt sind
-    soulseek_url_set = bool(settings.slskd.url and settings.slskd.url.strip())
-    soulseek_auth_set = bool(settings.slskd.api_key) or (
-        bool(settings.slskd.username) and bool(settings.slskd.password)
+    slskd_creds = await credentials_service.get_slskd_credentials()
+    soulseek_url_set = bool(slskd_creds.url and slskd_creds.url.strip())
+    soulseek_auth_set = bool(slskd_creds.api_key) or (
+        bool(slskd_creds.username) and bool(slskd_creds.password)
     )
     soulseek_configured = soulseek_url_set and soulseek_auth_set
 

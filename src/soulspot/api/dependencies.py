@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.application.services.session_store import (
     DatabaseSessionStore,
 )
@@ -96,20 +97,60 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
         yield session
 
 
+# Hey future me - CredentialsService is the NEW way to get service credentials!
+# It uses database-first approach with .env fallback for migration period.
+# After migration complete, .env fallback will be removed.
+# All credentials (Spotify, slskd, Deezer) should be accessed through this service.
+# Use this in endpoint params like: "credentials: CredentialsService = Depends(get_credentials_service)"
+async def get_credentials_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> CredentialsService:
+    """Get CredentialsService for database-first credential access.
+
+    The service checks database (app_settings) first, falls back to .env if not set.
+    This enables smooth migration from .env-based to database-based credentials.
+
+    Args:
+        session: Database session for app_settings access
+
+    Returns:
+        CredentialsService instance ready for credential lookups
+    """
+    return CredentialsService(session)
+
+
 # Yo, creates NEW SpotifyClient on EVERY request! Not cached/singleton. This is fine because
 # SpotifyClient is stateless (httpx client inside is pooled). If SpotifyClient becomes expensive
 # to construct, add @lru_cache but watch out - settings changes won't take effect until restart!
-def get_spotify_client(settings: Settings = Depends(get_settings)) -> SpotifyClient:
-    """Get Spotify client instance."""
-    return SpotifyClient(settings.spotify)
+# UPDATE: Now gets credentials from DB-first via CredentialsService (with .env fallback)!
+async def get_spotify_client(
+    credentials_service: CredentialsService = Depends(get_credentials_service),
+) -> SpotifyClient:
+    """Get Spotify client instance with DB-first credentials.
+
+    Credentials are loaded from database via CredentialsService with .env fallback.
+    This enables runtime credential updates without app restart.
+    """
+    from soulspot.config.settings import SpotifySettings
+
+    spotify_creds = await credentials_service.get_spotify_credentials()
+
+    # Create SpotifySettings from DB credentials
+    spotify_settings = SpotifySettings(
+        client_id=spotify_creds.client_id,
+        client_secret=spotify_creds.client_secret,
+        redirect_uri=spotify_creds.redirect_uri,
+    )
+    return SpotifyClient(spotify_settings)
 
 
 # Hey future me - SpotifyAuthService wraps all OAuth operations cleanly!
 # Use this instead of creating SpotifyClient in routers for auth operations.
 # The service handles: auth URL generation, code exchange, token refresh.
 # It's stateless - doesn't store tokens, that's the caller's job.
-def get_spotify_auth_service(
-    settings: Settings = Depends(get_settings),
+# UPDATE: Now gets credentials from DB-first via CredentialsService (with .env fallback)!
+async def get_spotify_auth_service(
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> "SpotifyAuthService":
     """Get SpotifyAuthService for OAuth operations.
 
@@ -118,15 +159,23 @@ def get_spotify_auth_service(
     - Authorization code exchange
     - Token refresh
 
-    Args:
-        settings: Application settings
+    Credentials are loaded from database via CredentialsService with .env fallback.
 
     Returns:
         SpotifyAuthService instance
     """
     from soulspot.application.services.spotify_auth_service import SpotifyAuthService
+    from soulspot.config.settings import SpotifySettings
 
-    return SpotifyAuthService(settings.spotify)
+    spotify_creds = await credentials_service.get_spotify_credentials()
+
+    # Create SpotifySettings from DB credentials
+    spotify_settings = SpotifySettings(
+        client_id=spotify_creds.client_id,
+        client_secret=spotify_creds.client_secret,
+        redirect_uri=spotify_creds.redirect_uri,
+    )
+    return SpotifyAuthService(spotify_settings)
 
 
 # Hey future me - SpotifyPlugin dependency! The plugin wraps SpotifyClient and handles token
@@ -136,20 +185,21 @@ def get_spotify_auth_service(
 # 2. Converting raw JSON responses to DTOs (ArtistDTO, AlbumDTO, TrackDTO, etc.)
 # 3. Pagination handling for list endpoints
 # Use this in endpoint params like: "spotify_plugin: SpotifyPlugin = Depends(get_spotify_plugin)"
+# UPDATE: Now gets credentials from DB-first via CredentialsService (with .env fallback)!
 async def get_spotify_plugin(
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> "SpotifyPlugin":
     """Get SpotifyPlugin instance with token management.
 
     Creates a SpotifyPlugin that wraps SpotifyClient and handles token management
     internally. The plugin fetches tokens from DatabaseTokenManager.
 
+    Credentials are loaded from database via CredentialsService with .env fallback.
+
     Args:
         request: FastAPI request for app state access
-        session: Database session for token storage
-        settings: Application settings
+        credentials_service: Service for DB-first credential access
 
     Returns:
         SpotifyPlugin instance ready for API calls
@@ -157,10 +207,18 @@ async def get_spotify_plugin(
     Raises:
         HTTPException: 503 if plugin cannot be created
     """
+    from soulspot.config.settings import SpotifySettings
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
     try:
-        spotify_client = SpotifyClient(settings.spotify)
+        # Get credentials from DB (with .env fallback)
+        spotify_creds = await credentials_service.get_spotify_credentials()
+        spotify_settings = SpotifySettings(
+            client_id=spotify_creds.client_id,
+            client_secret=spotify_creds.client_secret,
+            redirect_uri=spotify_creds.redirect_uri,
+        )
+        spotify_client = SpotifyClient(spotify_settings)
         db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
 
         # Get access token from token manager
@@ -404,10 +462,28 @@ async def get_spotify_token_shared(request: Request) -> str:
 # Yo, creates NEW SlskdClient on every request - not cached! Slskd is your Soulseek downloader, this
 # client talks to its API. Like SpotifyClient, it's stateless so creating new instances is fine (httpx
 # pools connections internally). If slskd server is down, this won't fail until you actually USE the
-# client in an endpoint. Settings include API key, base URL - check config if requests fail!
-def get_slskd_client(settings: Settings = Depends(get_settings)) -> SlskdClient:
-    """Get slskd client instance."""
-    return SlskdClient(settings.slskd)
+# client in an endpoint. 
+# UPDATE: Now gets credentials from DB-first via CredentialsService (with .env fallback)!
+async def get_slskd_client(
+    credentials_service: CredentialsService = Depends(get_credentials_service),
+) -> SlskdClient:
+    """Get slskd client instance with DB-first credentials.
+
+    Credentials are loaded from database via CredentialsService with .env fallback.
+    This enables runtime credential updates without app restart.
+    """
+    from soulspot.config.settings import SlskdSettings
+
+    slskd_creds = await credentials_service.get_slskd_credentials()
+
+    # Create SlskdSettings from DB credentials
+    slskd_settings = SlskdSettings(
+        url=slskd_creds.url,
+        username=slskd_creds.username,
+        password=slskd_creds.password,
+        api_key=slskd_creds.api_key,
+    )
+    return SlskdClient(slskd_settings)
 
 
 # Hey future me - this checks if slskd is currently available for downloads!

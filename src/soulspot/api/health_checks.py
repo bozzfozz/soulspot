@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.config import Settings
 from soulspot.infrastructure.observability.health import (
     HealthStatus,
@@ -127,8 +128,20 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
         if settings.observability.enable_dependency_health_checks:
             timeout = settings.observability.health_check_timeout
 
-            # slskd health check
-            slskd_check = await check_slskd_health(settings.slskd.url, timeout=timeout)
+            # slskd health check - get URL from DB via CredentialsService (with env fallback)
+            # Hey future me - we need to get slskd URL from DB-first config now!
+            slskd_url = settings.slskd.url  # Default fallback
+            if hasattr(app.state, "db"):
+                try:
+                    async with app.state.db.session_scope() as session:
+                        creds_service = CredentialsService(session)
+                        slskd_creds = await creds_service.get_slskd_credentials()
+                        slskd_url = slskd_creds.url
+                except Exception as e:
+                    logger.warning(f"Failed to get slskd credentials from DB: {e}")
+                    # Fall through to env-based settings.slskd.url
+
+            slskd_check = await check_slskd_health(slskd_url, timeout=timeout)
             checks["slskd"] = {
                 "status": slskd_check.status.value,
                 "message": slskd_check.message,

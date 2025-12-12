@@ -431,7 +431,7 @@ class SpotifySyncService:
             logger.warning("AlbumDTO missing spotify_id, skipping")
             return
 
-        name = album_dto.name or "Unknown"
+        name = album_dto.title or "Unknown"
         image_url = album_dto.artwork_url
         release_date = album_dto.release_date
         # AlbumDTO doesn't have release_date_precision, default to 'day'
@@ -545,7 +545,7 @@ class SpotifySyncService:
             logger.warning("TrackDTO missing spotify_id, skipping")
             return
 
-        name = track_dto.name or "Unknown"
+        name = track_dto.title or "Unknown"
         track_number = track_dto.track_number or 1
         disc_number = track_dto.disc_number or 1
         duration_ms = track_dto.duration_ms or 0
@@ -969,7 +969,7 @@ class SpotifySyncService:
             for track_dto in items:
                 track_dict = {
                     "id": track_dto.spotify_id,
-                    "name": track_dto.name,
+                    "name": track_dto.title,
                     "duration_ms": track_dto.duration_ms,
                     "explicit": track_dto.explicit,
                     "preview_url": track_dto.preview_url,
@@ -989,7 +989,7 @@ class SpotifySyncService:
                 if track_dto.album:
                     track_dict["album"] = {
                         "id": track_dto.album.spotify_id,
-                        "name": track_dto.album.name,
+                        "name": track_dto.album.title,
                         "images": [{"url": track_dto.album.artwork_url}]
                         if track_dto.album.artwork_url
                         else [],
@@ -1237,7 +1237,7 @@ class SpotifySyncService:
         if not spotify_id:
             return
 
-        name = album_dto.name or "Unknown"
+        name = album_dto.title or "Unknown"
         image_url = album_dto.artwork_url
         release_date = album_dto.release_date
         release_date_precision = "day" if release_date else None

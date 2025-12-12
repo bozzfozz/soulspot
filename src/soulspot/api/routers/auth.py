@@ -7,10 +7,12 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, R
 from fastapi.responses import RedirectResponse
 
 from soulspot.api.dependencies import (
+    get_credentials_service,
     get_session_id,
     get_session_store,
     get_spotify_auth_service,
 )
+from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.application.services.spotify_auth_service import SpotifyAuthService
 from soulspot.config import Settings, get_settings
@@ -432,7 +434,7 @@ async def skip_onboarding(
 @router.get("/token-status")
 async def get_token_status(
     request: Request,
-    settings: Settings = Depends(get_settings),
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> Any:
     """Get background token status for UI warning banner.
 
@@ -457,9 +459,9 @@ async def get_token_status(
     """
     # Hey future me - if Spotify isn't configured, don't flag needs_reauth!
     # The user hasn't set up Spotify credentials yet, so there's nothing to re-auth.
-    spotify_configured = bool(
-        settings.spotify.client_id and settings.spotify.client_id.strip()
-    )
+    # Now we check DB-first via CredentialsService (falls back to .env for migration period).
+    spotify_creds = await credentials_service.get_spotify_credentials()
+    spotify_configured = bool(spotify_creds.client_id and spotify_creds.client_id.strip())
 
     if not spotify_configured:
         # Spotify not configured - no banner needed

@@ -170,6 +170,16 @@ class TrackDTO:
     # Additional artists (features, collaborations)
     additional_artists: list["ArtistDTO"] = field(default_factory=list)
 
+    # Hey future me - `artists` ist eine Convenience-Property, die den Primary Artist + Additional
+    # Artists kombiniert. Wird von spotify_sync_service verwendet.
+    # Equivalent to [primary_artist, *additional_artists]
+    artists: list["ArtistDTO"] = field(default_factory=list)
+
+    # Hey future me - `album` ist ein optionales AlbumDTO für Tracks, die mit Album-Kontext geladen
+    # werden (z.B. aus get_saved_tracks). Wird von spotify_sync_service verwendet.
+    # Optional because tracks might be loaded without album context.
+    album: "AlbumDTO | None" = None
+
     # Optional metadata
     genres: list[str] = field(default_factory=list)
     preview_url: str | None = None  # 30-second preview URL

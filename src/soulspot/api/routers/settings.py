@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session
+from soulspot.api.dependencies import get_credentials_service, get_db_session
 from soulspot.application.services.app_settings_service import AppSettingsService
+from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -119,13 +120,16 @@ class AllSettings(BaseModel):
 # devtools, logs, error tracking, etc. General/Integration/Advanced come from env vars (get_settings()).
 # Download settings are NOW read from DB if set, with env as fallback - this allows runtime changes!
 # UPDATE: General settings (log_level, debug, app_name) now ALSO come from DB with env fallback!
+# UPDATE 2: Integration settings (Spotify, slskd) now ALSO read from DB first via CredentialsService!
 @router.get("/")
 async def get_all_settings(
     db: AsyncSession = Depends(get_db_session),
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> AllSettings:
     """Get all current settings.
 
     General settings (log_level, debug, app_name) are read from database (if set) with env as fallback.
+    Integration settings (Spotify, slskd) are read from database via CredentialsService (with env fallback).
     Download settings are read from database (if set) with env as fallback.
     Other settings are read directly from environment variables.
 
@@ -147,6 +151,10 @@ async def get_all_settings(
     # Download settings from DB (with env fallback)
     download_summary = await settings_service.get_download_settings_summary()
 
+    # Integration credentials from DB (with env fallback) via CredentialsService
+    spotify_creds = await credentials_service.get_spotify_credentials()
+    slskd_creds = await credentials_service.get_slskd_credentials()
+
     return AllSettings(
         general=GeneralSettings(
             app_name=general_summary["app_name"],
@@ -154,13 +162,13 @@ async def get_all_settings(
             debug=general_summary["debug"],
         ),
         integration=IntegrationSettings(
-            spotify_client_id=settings.spotify.client_id,
-            spotify_client_secret="***" if settings.spotify.client_secret else "",
-            spotify_redirect_uri=settings.spotify.redirect_uri,
-            slskd_url=settings.slskd.url,
-            slskd_username=settings.slskd.username,
-            slskd_password="***" if settings.slskd.password else "",
-            slskd_api_key="***" if settings.slskd.api_key else None,
+            spotify_client_id=spotify_creds.client_id,
+            spotify_client_secret="***" if spotify_creds.client_secret else "",
+            spotify_redirect_uri=spotify_creds.redirect_uri,
+            slskd_url=slskd_creds.url,
+            slskd_username=slskd_creds.username,
+            slskd_password="***" if slskd_creds.password else "",
+            slskd_api_key="***" if slskd_creds.api_key else None,
             musicbrainz_app_name=settings.musicbrainz.app_name,
             musicbrainz_contact=settings.musicbrainz.contact,
         ),
@@ -186,18 +194,20 @@ async def get_all_settings(
 # General settings (log_level!) are ALSO saved to DB and applied immediately!
 # Other settings (Integration, Advanced) are env-based and require restart.
 # Log level change is INSTANT - no restart needed!
+# UPDATE: Integration settings (Spotify, slskd) are NOW persisted to DB via CredentialsService!
 @router.post("/")
 async def update_settings(
     settings_update: AllSettings,
     db: AsyncSession = Depends(get_db_session),
+    credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> dict[str, Any]:
     """Update application settings.
 
     General settings (log_level, debug, app_name) are persisted to database.
     Log level changes take effect IMMEDIATELY without restart!
+    Integration settings (Spotify, slskd) are persisted to database via CredentialsService.
     Download settings are persisted to database and take effect immediately.
-    Other settings (Integration, Advanced) are environment-based
-    and require application restart to take effect.
+    Advanced settings are environment-based and require application restart.
 
     Args:
         settings_update: New settings values
@@ -229,6 +239,47 @@ async def update_settings(
         category="general",
     )
 
+    # Persist Integration credentials to DB via CredentialsService
+    # Hey future me - masked values ("***") indicate unchanged credentials!
+    # Only save if user provided actual values, not the masked placeholders.
+    integration = settings_update.integration
+
+    # Spotify credentials - only update if not masked
+    if integration.spotify_client_secret != "***":
+        await credentials_service.set_spotify_credentials(
+            client_id=integration.spotify_client_id,
+            client_secret=integration.spotify_client_secret,
+            redirect_uri=integration.spotify_redirect_uri,
+        )
+    elif integration.spotify_client_id:
+        # Client ID changed but secret stayed masked - update only client_id and redirect_uri
+        current_creds = await credentials_service.get_spotify_credentials()
+        await credentials_service.set_spotify_credentials(
+            client_id=integration.spotify_client_id,
+            client_secret=current_creds.client_secret,  # Keep existing
+            redirect_uri=integration.spotify_redirect_uri,
+        )
+
+    # slskd credentials - only update if not masked
+    if integration.slskd_password != "***" or integration.slskd_api_key not in ("***", None):
+        # Resolve masked values to current credentials
+        current_slskd = await credentials_service.get_slskd_credentials()
+        await credentials_service.set_slskd_credentials(
+            url=integration.slskd_url,
+            username=integration.slskd_username,
+            password=integration.slskd_password if integration.slskd_password != "***" else current_slskd.password,
+            api_key=integration.slskd_api_key if integration.slskd_api_key not in ("***", None) else current_slskd.api_key,
+        )
+    elif integration.slskd_url:
+        # URL/username changed but secrets stayed masked - update only non-secret fields
+        current_slskd = await credentials_service.get_slskd_credentials()
+        await credentials_service.set_slskd_credentials(
+            url=integration.slskd_url,
+            username=integration.slskd_username,
+            password=current_slskd.password,  # Keep existing
+            api_key=current_slskd.api_key,  # Keep existing
+        )
+
     # Persist Download settings to DB (these take effect immediately)
     await settings_service.set(
         "download.max_concurrent_downloads",
@@ -257,14 +308,12 @@ async def update_settings(
         settings_update.general.debug,
     )
 
-    # Note: Integration and Advanced settings are env-based
-    # They're validated by Pydantic but not persisted to DB
     return {
         "message": "Settings saved",
-        "persisted": ["general", "download"],
-        "immediate_effect": ["log_level", "download"],
-        "requires_restart": ["integration", "advanced"],
-        "note": "Log level and download settings take effect immediately. Integration and advanced settings require restart.",
+        "persisted": ["general", "integration", "download"],
+        "immediate_effect": ["log_level", "download", "spotify_credentials", "slskd_credentials"],
+        "requires_restart": ["advanced"],
+        "note": "Log level, download, and integration credentials take effect immediately. Advanced settings require restart.",
     }
 
 

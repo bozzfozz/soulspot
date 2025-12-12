@@ -114,6 +114,63 @@ OAuth sessions for Deezer:
 - `deezer_user_id`: Linked Deezer account
 - `deezer_username`: Display name
 
+## Code Patterns
+
+### Accessing Credentials (Application Layer)
+
+Use `CredentialsService` for accessing service credentials:
+
+```python
+from soulspot.application.services.credentials_service import CredentialsService
+
+# In FastAPI endpoint with dependency injection:
+async def my_endpoint(
+    credentials_service: CredentialsService = Depends(get_credentials_service),
+):
+    # Get Spotify credentials (DB-first, .env fallback)
+    spotify_creds = await credentials_service.get_spotify_credentials()
+    print(spotify_creds.client_id)
+    print(spotify_creds.client_secret)
+    print(spotify_creds.redirect_uri)
+
+    # Get slskd credentials
+    slskd_creds = await credentials_service.get_slskd_credentials()
+    print(slskd_creds.url)
+    print(slskd_creds.api_key)
+
+    # Get Deezer credentials
+    deezer_creds = await credentials_service.get_deezer_credentials()
+    print(deezer_creds.app_id)
+```
+
+### Saving Credentials (Settings UI)
+
+```python
+# Save Spotify credentials to database
+await credentials_service.set_spotify_credentials(
+    client_id="your_client_id",
+    client_secret="your_client_secret",
+    redirect_uri="http://localhost:8000/api/auth/callback",
+)
+
+# Save slskd credentials to database
+await credentials_service.set_slskd_credentials(
+    url="http://localhost:5030",
+    username="admin",
+    password="changeme",
+    api_key=None,  # Optional
+)
+```
+
+### Migration Period (Hybrid Fallback)
+
+During the migration from `.env` to database configuration, `CredentialsService` uses a hybrid approach:
+
+1. **Check database** (`app_settings` table) first
+2. **Fall back to `.env`** if database value is empty/not set
+
+This allows smooth migration without breaking existing deployments.
+
 ## Troubleshooting
 
 ### "Credentials not configured"

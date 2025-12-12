@@ -6,6 +6,12 @@ from soulspot.application.services.compilation_analyzer_service import (
     AlbumAnalysisResult,
     CompilationAnalyzerService,
 )
+from soulspot.application.services.credentials_service import (
+    CredentialsService,
+    DeezerCredentials,
+    SlskdCredentials,
+    SpotifyCredentials,
+)
 from soulspot.application.services.session_store import Session, SessionStore
 from soulspot.application.services.spotify_auth_service import (
     AuthUrlResult,
@@ -25,11 +31,15 @@ __all__ = [
     "AuthUrlResult",
     "AutoImportService",
     "CompilationAnalyzerService",
+    "CredentialsService",
+    "DeezerCredentials",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "Session",
     "SessionStore",
+    "SlskdCredentials",
     "SpotifyAuthService",
+    "SpotifyCredentials",
     "SpotifyImageService",
     "TokenManager",
     "TokenResult",

@@ -141,14 +141,14 @@ class EnrichMetadataMultiSourceUseCase(
                 track_dto = await self._spotify_plugin.get_track(track_id)
                 return {
                     "id": track_dto.spotify_id,
-                    "name": track_dto.name,
+                    "name": track_dto.title,
                     "duration_ms": track_dto.duration_ms,
                     "popularity": track_dto.popularity,
                     "preview_url": track_dto.preview_url,
                     "external_ids": {"isrc": track_dto.isrc} if track_dto.isrc else {},
                     "album": {
                         "id": track_dto.album.spotify_id if track_dto.album else None,
-                        "name": track_dto.album.name if track_dto.album else None,
+                        "name": track_dto.album.title if track_dto.album else None,
                         "release_date": track_dto.album.release_date if track_dto.album else None,
                         "images": [{"url": track_dto.album.image_url}] if track_dto.album and track_dto.album.image_url else [],
                     } if track_dto.album else {},

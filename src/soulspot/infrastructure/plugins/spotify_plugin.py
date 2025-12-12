@@ -372,6 +372,31 @@ class SpotifyPlugin(IMusicServicePlugin):
                     )
                 )
 
+        # Build primary artist DTO for the `artists` field
+        primary_artist_dto = ArtistDTO(
+            name=artist_name,
+            source_service="spotify",
+            spotify_id=artist_spotify_id,
+            spotify_uri=artists[0].get("uri") if artists else None,
+        )
+        all_artists = [primary_artist_dto] + additional_artists
+
+        # Build album DTO if album info available
+        # Hey future me - this is optional! Some track fetches don't include album context.
+        album_dto = None
+        if album:
+            album_dto = AlbumDTO(
+                title=album.get("name", "Unknown Album"),
+                artist_name=artist_name,  # Use track's primary artist
+                source_service="spotify",
+                spotify_id=album.get("id"),
+                spotify_uri=album.get("uri"),
+                artwork_url=album.get("images", [{}])[0].get("url") if album.get("images") else None,
+                release_date=album.get("release_date"),
+                album_type=album.get("album_type", "album"),
+                total_tracks=album.get("total_tracks"),
+            )
+
         return TrackDTO(
             title=data.get("name", "Unknown Track"),
             artist_name=artist_name,
@@ -390,6 +415,8 @@ class SpotifyPlugin(IMusicServicePlugin):
             preview_url=data.get("preview_url"),
             external_urls=data.get("external_urls", {}),
             additional_artists=additional_artists,
+            artists=all_artists,
+            album=album_dto,
         )
 
     def _convert_playlist(
