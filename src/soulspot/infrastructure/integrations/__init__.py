@@ -5,7 +5,10 @@ from soulspot.infrastructure.integrations.coverartarchive_client import (
     CoverArtArchiveClient,
     CoverArtRelease,
 )
-from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+from soulspot.infrastructure.integrations.deezer_client import (
+    DeezerClient,
+    DeezerOAuthConfig,
+)
 from soulspot.infrastructure.integrations.deezer_oauth_client import DeezerOAuthClient
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
@@ -19,9 +22,11 @@ __all__ = [
     "CoverArtRelease",
     "DeezerClient",
     "DeezerOAuthClient",
+    "DeezerOAuthConfig",
     "SlskdClient",
     "SpotifyClient",
     "TidalClient",
     "MusicBrainzClient",
     "LastfmClient",
 ]
+

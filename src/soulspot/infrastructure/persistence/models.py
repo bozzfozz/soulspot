@@ -668,6 +668,47 @@ class SpotifySessionModel(Base):
     )
 
 
+# Hey future me - DeezerSessionModel is like SpotifySessionModel but SIMPLER!
+# Deezer OAuth has NO refresh_token (access_token is long-lived, typically months).
+# We still store oauth_state for CSRF protection during OAuth flow.
+# No code_verifier because Deezer doesn't use PKCE (simpler OAuth 2.0).
+# Deezer user_id is stored to identify which Deezer account is linked.
+class DeezerSessionModel(Base):
+    """Deezer OAuth session for user library access.
+
+    Stores Deezer OAuth tokens to survive restarts. Unlike Spotify, Deezer
+    access_tokens are long-lived (no refresh_token needed).
+    """
+
+    __tablename__ = "deezer_sessions"
+
+    # Primary key: session_id from cookie (shared with Spotify sessions)
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+    # OAuth token (SENSITIVE - Deezer has no refresh_token!)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Deezer user info (populated after successful auth)
+    deezer_user_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    deezer_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # OAuth flow state (temporary, cleared after callback)
+    oauth_state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Session lifecycle timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_accessed_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Indexes for efficient cleanup queries
+    __table_args__ = (
+        Index("ix_deezer_sessions_last_accessed", "last_accessed_at"),
+    )
+
+
 # =============================================================================
 # SPOTIFY BROWSE MODELS (Separate from Local Library!)
 # =============================================================================
@@ -678,6 +719,7 @@ class SpotifySessionModel(Base):
 # The flow is: User follows artist on Spotify → auto-sync saves to spotify_artists →
 # user browses to artist detail → albums synced to spotify_albums → user clicks album →
 # tracks synced to spotify_tracks → user downloads → creates entry in local TrackModel.
+
 #
 # CASCADE DELETE ensures clean removal: unfollow artist → albums gone → tracks gone.
 # The local_track_id on SpotifyTrackModel links to downloaded files in local library.

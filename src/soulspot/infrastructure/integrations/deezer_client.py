@@ -26,10 +26,24 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DeezerOAuthConfig:
+    """Deezer OAuth configuration (fetched from DB app_settings).
+
+    Hey future me - this is passed to DeezerClient when OAuth is needed.
+    For public API methods (search, browse), this is NOT required!
+    """
+
+    app_id: str
+    secret: str
+    redirect_uri: str
 
 
 @dataclass
@@ -92,24 +106,47 @@ class DeezerClient:
     Deezer's public API is completely free and doesn't require authentication
     for reading metadata. Rate limit is 50 requests per 5 seconds.
 
+    OAuth is optional and only needed for user-specific data (favorites, playlists).
+    Unlike Spotify, Deezer OAuth is simpler: no PKCE, no refresh_token (access_token is long-lived).
+
     Usage:
+        # Public API (no auth needed):
         client = DeezerClient()
         albums = await client.search_albums("Bravo Hits 100")
         album = await client.get_album(albums[0].id)
         print(f"Artwork: {album.cover_xl}")  # 1000x1000 image!
+
+        # With OAuth (for user library):
+        oauth_config = DeezerOAuthConfig(app_id="...", secret="...", redirect_uri="...")
+        client = DeezerClient(oauth_config=oauth_config)
+        auth_url = client.get_authorization_url(state="my-state")
+        # User visits auth_url, gets redirected back with code
+        token = await client.exchange_code(code)
+        favorites = await client.get_user_favorites(token["access_token"])
     """
 
     API_BASE_URL = "https://api.deezer.com"
+
+    # OAuth URLs (Deezer uses connect.deezer.com for OAuth)
+    AUTHORIZE_URL = "https://connect.deezer.com/oauth/auth.php"
+    TOKEN_URL = "https://connect.deezer.com/oauth/access_token.php"  # nosec B105 - public API endpoint
 
     # Hey future me - Deezer is lenient but let's be respectful. 50/5s limit.
     # We add 100ms between requests to be safe and not trigger IP bans.
     RATE_LIMIT_DELAY = 0.1  # 100ms between requests
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        oauth_config: DeezerOAuthConfig | None = None,
+    ) -> None:
         """Initialize Deezer client.
 
-        No settings needed! Deezer's public API doesn't require authentication.
+        Args:
+            oauth_config: Optional OAuth configuration (from DB app_settings).
+                          If not provided, OAuth methods will raise errors but
+                          public API methods work fine!
         """
+        self._oauth_config = oauth_config
         self._client: httpx.AsyncClient | None = None
         self._last_request_time: float = 0.0
         self._rate_limit_lock = asyncio.Lock()
@@ -134,6 +171,258 @@ class DeezerClient:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    # =========================================================================
+    # OAUTH METHODS (optional - public API works without auth!)
+    # =========================================================================
+
+    def _ensure_oauth_configured(self) -> None:
+        """Ensure OAuth config is provided.
+
+        Hey future me - call this in OAuth methods to fail fast with clear error!
+        Public API methods should NOT call this.
+
+        Raises:
+            ValueError: If oauth_config is missing or incomplete
+        """
+        if self._oauth_config is None:
+            raise ValueError(
+                "DeezerClient was created without oauth_config. "
+                "Pass DeezerOAuthConfig to constructor for OAuth features."
+            )
+        if not self._oauth_config.app_id or not self._oauth_config.secret:
+            raise ValueError(
+                "Deezer OAuth is not configured. "
+                "Set deezer.app_id and deezer.secret in Settings."
+            )
+
+    def get_authorization_url(self, state: str) -> str:
+        """Generate Deezer OAuth authorization URL.
+
+        Hey future me - Deezer OAuth is simpler than Spotify!
+        No PKCE needed, just redirect user to this URL with app_id and permissions.
+
+        Deezer Scopes (perms parameter):
+        - basic_access: Read public info
+        - email: Access user's email
+        - offline_access: Get long-lived token (REQUIRED for persistent access!)
+        - manage_library: Add/remove favorites
+        - manage_community: Follow artists, etc.
+        - delete_library: Remove from library
+        - listening_history: Access listening history
+
+        Args:
+            state: State parameter for CSRF protection
+
+        Returns:
+            Authorization URL to redirect user to
+
+        Raises:
+            ValueError: If OAuth is not configured
+        """
+        self._ensure_oauth_configured()
+        assert self._oauth_config is not None  # For type checker
+
+        params = {
+            "app_id": self._oauth_config.app_id,
+            "redirect_uri": self._oauth_config.redirect_uri,
+            "response_type": "code",
+            "state": state,
+            # Hey future me - we request manage_library for favorites access!
+            # offline_access gives us long-lived token (no refresh_token dance).
+            "perms": "basic_access,email,offline_access,manage_library,listening_history",
+        }
+
+        return f"{self.AUTHORIZE_URL}?{urlencode(params)}"
+
+    async def exchange_code(self, code: str) -> dict[str, Any]:
+        """Exchange authorization code for access token.
+
+        Hey future me - Deezer token exchange is quirky!
+        - Response is NOT JSON, it's URL-encoded text: "access_token=xxx&expires=3600"
+        - access_token is long-lived (typically months), but CAN expire
+        - NO refresh_token - user must re-authorize if token expires/is revoked
+        - expires=0 means "never expires" (with offline_access permission)
+
+        Args:
+            code: Authorization code from OAuth callback
+
+        Returns:
+            Token response with access_token and expires
+
+        Raises:
+            ValueError: If OAuth is not configured
+            httpx.HTTPError: If the request fails
+        """
+        self._ensure_oauth_configured()
+        assert self._oauth_config is not None  # For type checker
+
+        params = {
+            "app_id": self._oauth_config.app_id,
+            "secret": self._oauth_config.secret,
+            "code": code,
+            "output": "json",  # Request JSON response (newer API feature)
+        }
+
+        client = await self._get_client()
+
+        # Hey future me - Deezer token endpoint is at connect.deezer.com, not api.deezer.com!
+        # Use absolute URL, not relative.
+        response = await client.get(
+            self.TOKEN_URL,
+            params=params,
+        )
+        response.raise_for_status()
+
+        # Handle response (can be JSON or URL-encoded depending on output param)
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            return dict(response.json())
+        else:
+            # Parse URL-encoded response: "access_token=xxx&expires=3600"
+            text = response.text
+            result: dict[str, Any] = {}
+            for pair in text.split("&"):
+                if "=" in pair:
+                    key, value = pair.split("=", 1)
+                    # Convert expires to int if present
+                    if key == "expires":
+                        result[key] = int(value)
+                    else:
+                        result[key] = value
+            return result
+
+    # =========================================================================
+    # USER METHODS (require OAuth access_token)
+    # =========================================================================
+
+    async def get_user_me(self, access_token: str) -> dict[str, Any]:
+        """Get current user's profile.
+
+        Hey future me - this is how you verify the token works!
+        Returns user ID, name, email (if permitted), etc.
+
+        Args:
+            access_token: OAuth access token
+
+        Returns:
+            User profile data
+
+        Raises:
+            httpx.HTTPError: If the request fails or token is invalid
+        """
+        response = await self._rate_limited_request(
+            "GET", "/user/me", params={"access_token": access_token}
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def get_user_favorites(
+        self, access_token: str, limit: int = 100, index: int = 0
+    ) -> dict[str, Any]:
+        """Get user's favorite tracks.
+
+        Hey future me - this returns the user's "Loved Tracks" playlist!
+        It's the heart icon in Deezer.
+
+        Args:
+            access_token: OAuth access token
+            limit: Max results per page
+            index: Offset for pagination
+
+        Returns:
+            Paginated list of favorite tracks
+        """
+        response = await self._rate_limited_request(
+            "GET",
+            "/user/me/tracks",
+            params={
+                "access_token": access_token,
+                "limit": limit,
+                "index": index,
+            },
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def get_user_albums(
+        self, access_token: str, limit: int = 100, index: int = 0
+    ) -> dict[str, Any]:
+        """Get user's saved albums.
+
+        Args:
+            access_token: OAuth access token
+            limit: Max results per page
+            index: Offset for pagination
+
+        Returns:
+            Paginated list of saved albums
+        """
+        response = await self._rate_limited_request(
+            "GET",
+            "/user/me/albums",
+            params={
+                "access_token": access_token,
+                "limit": limit,
+                "index": index,
+            },
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def get_user_artists(
+        self, access_token: str, limit: int = 100, index: int = 0
+    ) -> dict[str, Any]:
+        """Get user's followed artists.
+
+        Args:
+            access_token: OAuth access token
+            limit: Max results per page
+            index: Offset for pagination
+
+        Returns:
+            Paginated list of followed artists
+        """
+        response = await self._rate_limited_request(
+            "GET",
+            "/user/me/artists",
+            params={
+                "access_token": access_token,
+                "limit": limit,
+                "index": index,
+            },
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    async def get_user_playlists(
+        self, access_token: str, limit: int = 100, index: int = 0
+    ) -> dict[str, Any]:
+        """Get user's playlists.
+
+        Args:
+            access_token: OAuth access token
+            limit: Max results per page
+            index: Offset for pagination
+
+        Returns:
+            Paginated list of user's playlists
+        """
+        response = await self._rate_limited_request(
+            "GET",
+            "/user/me/playlists",
+            params={
+                "access_token": access_token,
+                "limit": limit,
+                "index": index,
+            },
+        )
+        response.raise_for_status()
+        return dict(response.json())
+
+    # =========================================================================
+    # RATE-LIMITED REQUESTS
+    # =========================================================================
 
     async def _rate_limited_request(
         self, method: str, url: str, **kwargs: Any
@@ -560,6 +849,123 @@ class DeezerClient:
             preview=data.get("preview"),  # 30-second preview URL
             explicit_lyrics=data.get("explicit_lyrics", False),
         )
+
+    # =========================================================================
+    # BATCH METHODS (Deezer doesn't have native batch API, we do sequential)
+    # =========================================================================
+
+    async def get_several_artists(
+        self, artist_ids: list[int], max_concurrent: int = 5
+    ) -> list[DeezerArtist]:
+        """Get multiple artists by IDs.
+
+        Hey future me - Deezer has NO batch API unlike Spotify!
+        We fetch artists sequentially with rate limiting.
+        For small lists this is fine, for large lists consider caching.
+
+        Args:
+            artist_ids: List of Deezer artist IDs
+            max_concurrent: Not used (sequential for rate limiting)
+
+        Returns:
+            List of DeezerArtist objects (None entries filtered out)
+        """
+        artists = []
+        for artist_id in artist_ids:
+            try:
+                artist = await self.get_artist(artist_id)
+                if artist:
+                    artists.append(artist)
+            except Exception as e:
+                logger.warning(f"Failed to get artist {artist_id}: {e}")
+                continue
+        return artists
+
+    async def get_several_albums(
+        self, album_ids: list[int], max_concurrent: int = 5
+    ) -> list[DeezerAlbum]:
+        """Get multiple albums by IDs.
+
+        Hey future me - Deezer has NO batch API unlike Spotify!
+        We fetch albums sequentially with rate limiting.
+
+        Args:
+            album_ids: List of Deezer album IDs
+            max_concurrent: Not used (sequential for rate limiting)
+
+        Returns:
+            List of DeezerAlbum objects (None entries filtered out)
+        """
+        albums = []
+        for album_id in album_ids:
+            try:
+                album = await self.get_album(album_id)
+                if album:
+                    albums.append(album)
+            except Exception as e:
+                logger.warning(f"Failed to get album {album_id}: {e}")
+                continue
+        return albums
+
+    async def get_several_tracks(
+        self, track_ids: list[int], max_concurrent: int = 5
+    ) -> list[DeezerTrack]:
+        """Get multiple tracks by IDs.
+
+        Hey future me - Deezer has NO batch API unlike Spotify!
+        We fetch tracks sequentially with rate limiting.
+
+        Args:
+            track_ids: List of Deezer track IDs
+            max_concurrent: Not used (sequential for rate limiting)
+
+        Returns:
+            List of DeezerTrack objects (None entries filtered out)
+        """
+        tracks = []
+        for track_id in track_ids:
+            try:
+                track = await self.get_track(track_id)
+                if track:
+                    tracks.append(track)
+            except Exception as e:
+                logger.warning(f"Failed to get track {track_id}: {e}")
+                continue
+        return tracks
+
+    async def get_related_artists(
+        self, artist_id: int, limit: int = 20
+    ) -> list[DeezerArtist]:
+        """Get artists related to the given artist.
+
+        Hey future me - Deezer has a /artist/{id}/related endpoint!
+        Returns artists that fans also like.
+
+        Args:
+            artist_id: Deezer artist ID
+            limit: Maximum results (max 100)
+
+        Returns:
+            List of related DeezerArtist objects
+        """
+        try:
+            response = await self._rate_limited_request(
+                "GET",
+                f"/artist/{artist_id}/related",
+                params={"limit": min(limit, 100)},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            artists = []
+            for item in data.get("data", []):
+                artists.append(self._parse_artist(item))
+
+            return artists
+
+        except httpx.HTTPError as e:
+            logger.error(f"Deezer get_related_artists failed: {e}")
+            raise
 
     # =========================================================================
     # CONVENIENCE METHODS for SoulSpot Enrichment

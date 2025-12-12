@@ -184,6 +184,12 @@ class LastfmSettings(BaseSettings):
         )
 
 
+# NOTE: DeezerSettings was removed! Deezer OAuth credentials are stored in the database
+# via app_settings table, not in environment variables. This allows users to configure
+# Deezer OAuth via Settings UI without app restart. User tokens are stored in deezer_sessions.
+# See: alembic/versions/ss30015uuv63_add_deezer_sessions_table.py for schema.
+
+
 # Listen up future me, StorageSettings has a CRITICAL validator ensure_path_is_absolute! All paths
 # are automatically resolved to absolute paths (./downloads becomes /home/user/app/downloads). This
 # prevents bugs when working directory changes! The validator runs on ALL four path fields. Paths
@@ -579,6 +585,7 @@ class Settings(BaseSettings):
         default_factory=LastfmSettings,
         description="Last.fm configuration",
     )
+    # NOTE: No deezer field! Deezer OAuth credentials stored in DB (app_settings).
     storage: StorageSettings = Field(
         default_factory=StorageSettings,
         description="Storage configuration",

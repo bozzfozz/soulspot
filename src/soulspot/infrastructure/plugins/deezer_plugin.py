@@ -12,24 +12,29 @@ Das Plugin folgt demselben Pattern wie SpotifyPlugin:
 
 Deezer API Besonderheiten:
 - Public API ohne OAuth für Metadaten (BASIC mode) - PERFEKT für Browse!
-- OAuth für User-Library Zugriff (PRO mode)
+- OAuth für User-Library Zugriff (PRO mode) - JETZT IMPLEMENTIERT!
 - Rate Limit: ~50 requests/5 seconds
 - ISRC verfügbar bei Tracks (gut für Cross-Service Matching!)
 - Kostenlos, keine Premium-Einschränkungen
 
-Implementierte Features (NO AUTH!):
-- search() - Suche nach Artists, Albums, Tracks
-- get_artist(), get_album(), get_track() - Einzelne Ressourcen
-- get_artist_albums() - Alle Alben eines Artists
-- get_browse_new_releases() - Editorial + Chart Albums
-- get_editorial_releases() - Kuratierte Neuerscheinungen
-- get_chart_albums() - Top-Charts
-- get_genres() - Genre-Liste
+✅ VOLLSTÄNDIG IMPLEMENTIERT:
 
-Noch nicht implementiert (benötigen OAuth):
-- get_followed_artists() - Braucht OAuth
-- get_saved_tracks/albums() - Braucht OAuth
-- get_user_playlists() - Braucht OAuth
+Public API (NO AUTH needed!):
+- search(), search_artists(), search_albums(), search_tracks()
+- get_artist(), get_artist_albums(), get_artist_top_tracks()
+- get_album(), get_album_tracks()
+- get_track(), get_tracks(), get_several_*()
+- get_browse_new_releases(), get_editorial_releases(), get_chart_albums()
+- get_genres(), get_playlist(), get_playlist_tracks()
+
+OAuth (requires auth):
+- get_auth_url() - OAuth URL generieren
+- handle_callback() - Code zu Token tauschen
+- get_auth_status() - Auth-Status prüfen
+- get_current_user() - User-Profil holen
+- get_followed_artists() - Gefolgte Artists
+- get_saved_tracks(), get_saved_albums() - User's Library
+- get_user_playlists() - User's Playlists
 """
 
 import logging
@@ -67,16 +72,29 @@ class DeezerPlugin(IMusicServicePlugin):
 
     Hey future me – das ist der Adapter zwischen Deezer API und SoulSpot!
     Das Besondere: Die meisten Methoden brauchen KEINE Auth (public API)!
+
+    OAuth ist OPTIONAL und nur für User-Library nötig (Favorites, Playlists).
+    Wenn OAuth nicht konfiguriert ist, funktionieren trotzdem:
+    - Suche, Artist/Album/Track Lookup
+    - Browse New Releases, Charts, Genres
+    - ISRC Lookup (perfekt für Cross-Service Matching!)
     """
 
-    def __init__(self, client: DeezerClient | None = None) -> None:
+    def __init__(
+        self,
+        client: DeezerClient | None = None,
+        access_token: str | None = None,
+    ) -> None:
         """
         Initialize Deezer plugin.
 
         Args:
             client: Optional DeezerClient instance. Creates new one if not provided.
+            access_token: Optional OAuth access token for user library access.
+                          If not provided, only public API methods work.
         """
         self._client = client or DeezerClient()
+        self._access_token = access_token
 
     @property
     def service_type(self) -> ServiceType:
@@ -94,47 +112,188 @@ class DeezerPlugin(IMusicServicePlugin):
         return "Deezer"
 
     # =========================================================================
-    # AUTHENTICATION (Stub)
+    # AUTHENTICATION (OAuth - optional!)
     # =========================================================================
 
     async def get_auth_url(self, state: str | None = None) -> str:
-        """Get Deezer OAuth URL (for PRO mode)."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get Deezer OAuth URL.
+
+        Hey future me - Deezer OAuth is simpler than Spotify!
+        No PKCE needed, just redirect user to this URL.
+
+        Args:
+            state: CSRF protection state (recommended!)
+
+        Returns:
+            Authorization URL
+
+        Raises:
+            PluginError: If OAuth is not configured in DeezerClient settings
+        """
+        try:
+            return self._client.get_authorization_url(state=state or "deezer-auth")
+        except ValueError as e:
+            raise PluginError(
+                message=str(e),
+                service=ServiceType.DEEZER,
+                error_code="oauth_not_configured",
+                original_error=e,
+            ) from e
 
     async def handle_callback(self, code: str, state: str | None = None) -> AuthStatus:
-        """Handle OAuth callback."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Handle OAuth callback and exchange code for token.
+
+        Hey future me - after user authorizes, Deezer redirects back with code.
+        We exchange it for access_token (long-lived, no refresh needed!).
+
+        Args:
+            code: Authorization code from callback
+            state: State for CSRF verification (should match get_auth_url)
+
+        Returns:
+            AuthStatus with authentication result
+        """
+        try:
+            token_data = await self._client.exchange_code(code)
+            access_token = token_data.get("access_token")
+
+            if not access_token:
+                return AuthStatus(
+                    is_authenticated=False,
+                    service=ServiceType.DEEZER,
+                    error="No access token in response",
+                )
+
+            # Store token for later use
+            self._access_token = access_token
+
+            # Verify token by getting user profile
+            try:
+                user_data = await self._client.get_user_me(access_token)
+                return AuthStatus(
+                    is_authenticated=True,
+                    service=ServiceType.DEEZER,
+                    user_id=str(user_data.get("id", "")),
+                    display_name=user_data.get("name"),
+                    email=user_data.get("email"),
+                    expires_at=None,  # Deezer tokens are long-lived
+                )
+            except Exception as e:
+                logger.warning(f"Failed to get user profile: {e}")
+                # Token valid but couldn't get profile - still authenticated
+                return AuthStatus(
+                    is_authenticated=True,
+                    service=ServiceType.DEEZER,
+                )
+
+        except ValueError as e:
+            raise PluginError(
+                message=str(e),
+                service=ServiceType.DEEZER,
+                error_code="oauth_not_configured",
+                original_error=e,
+            ) from e
+        except Exception as e:
+            logger.exception("Deezer OAuth callback failed")
+            return AuthStatus(
+                is_authenticated=False,
+                service=ServiceType.DEEZER,
+                error=str(e),
+            )
 
     async def get_auth_status(self) -> AuthStatus:
-        """Get auth status."""
-        return AuthStatus(
-            is_authenticated=False,
-            service=ServiceType.DEEZER,
-        )
+        """Get current authentication status.
+
+        Hey future me - Deezer tokens don't expire (with offline_access),
+        but they CAN be revoked. We verify by hitting /user/me.
+        """
+        if not self._access_token:
+            return AuthStatus(
+                is_authenticated=False,
+                service=ServiceType.DEEZER,
+            )
+
+        try:
+            user_data = await self._client.get_user_me(self._access_token)
+            return AuthStatus(
+                is_authenticated=True,
+                service=ServiceType.DEEZER,
+                user_id=str(user_data.get("id", "")),
+                display_name=user_data.get("name"),
+                email=user_data.get("email"),
+                expires_at=None,  # Long-lived token
+            )
+        except Exception:
+            # Token invalid/revoked
+            self._access_token = None
+            return AuthStatus(
+                is_authenticated=False,
+                service=ServiceType.DEEZER,
+                error="Token expired or revoked",
+            )
 
     async def logout(self) -> None:
-        """Logout (no-op for public API)."""
-        pass
+        """Clear access token (logout).
+
+        Hey future me - Deezer doesn't have a logout endpoint.
+        We just clear our stored token. User would need to revoke
+        in Deezer settings if they want full revocation.
+        """
+        self._access_token = None
 
     # =========================================================================
-    # USER PROFILE (Stub)
+    # USER PROFILE (requires OAuth)
     # =========================================================================
+
+    def _ensure_authenticated(self) -> str:
+        """Ensure user is authenticated and return access token.
+
+        Hey future me - call this in methods that require OAuth!
+
+        Returns:
+            Access token
+
+        Raises:
+            PluginError: If not authenticated
+        """
+        if not self._access_token:
+            raise PluginError(
+                message="Deezer OAuth required. Please authenticate first.",
+                service=ServiceType.DEEZER,
+                error_code="oauth_required",
+            )
+        return self._access_token
 
     async def get_current_user(self) -> UserProfileDTO:
-        """Get current user (requires OAuth)."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get current user profile (requires OAuth).
+
+        Returns:
+            UserProfileDTO with user info
+
+        Raises:
+            PluginError: If not authenticated or request fails
+        """
+        token = self._ensure_authenticated()
+
+        try:
+            user_data = await self._client.get_user_me(token)
+            return UserProfileDTO(
+                id=str(user_data.get("id", "")),
+                display_name=user_data.get("name", ""),
+                email=user_data.get("email"),
+                image_url=user_data.get("picture_big") or user_data.get("picture"),
+                service=ServiceType.DEEZER,
+                profile_url=user_data.get("link"),
+                followers_count=user_data.get("nb_fan"),
+            )
+        except Exception as e:
+            logger.exception("Failed to get Deezer user profile")
+            raise PluginError(
+                message=f"Failed to get user profile: {e}",
+                service=ServiceType.DEEZER,
+                error_code="user_profile_error",
+                original_error=e,
+            ) from e
 
     # =========================================================================
     # SEARCH (Implemented - NO AUTH!)
@@ -315,12 +474,63 @@ class DeezerPlugin(IMusicServicePlugin):
     async def get_followed_artists(
         self, limit: int = 50, after: str | None = None
     ) -> PaginatedResponse[ArtistDTO]:
-        """Get followed artists (requires OAuth - NOT IMPLEMENTED)."""
-        raise PluginError(
-            message="Deezer followed artists requires OAuth (not implemented)",
-            service=ServiceType.DEEZER,
-            error_code="oauth_required",
-        )
+        """Get user's followed artists (requires OAuth).
+
+        Hey future me - Deezer calls them "favorite artists" but it's the same thing!
+
+        Args:
+            limit: Max artists to return (max 100)
+            after: Pagination cursor (index for Deezer API)
+
+        Returns:
+            Paginated list of followed artists
+        """
+        token = self._ensure_authenticated()
+        index = int(after) if after else 0
+
+        try:
+            data = await self._client.get_user_artists(
+                access_token=token,
+                limit=min(limit, 100),
+                index=index,
+            )
+
+            artists = [
+                ArtistDTO(
+                    id=str(artist.get("id", "")),
+                    name=artist.get("name", "Unknown"),
+                    image_url=artist.get("picture_big") or artist.get("picture_medium"),
+                    genres=[],
+                    external_url=artist.get("link"),
+                    service=ServiceType.DEEZER,
+                    followers_count=artist.get("nb_fan"),
+                )
+                for artist in data.get("data", [])
+            ]
+
+            total = data.get("total", len(artists))
+            next_index = index + len(artists)
+            has_more = next_index < total
+
+            return PaginatedResponse(
+                items=artists,
+                total=total,
+                limit=limit,
+                offset=index,
+                has_more=has_more,
+                next_cursor=str(next_index) if has_more else None,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception("Failed to get followed artists")
+            raise PluginError(
+                message=f"Failed to get followed artists: {e}",
+                service=ServiceType.DEEZER,
+                error_code="followed_artists_error",
+                original_error=e,
+            ) from e
 
     # =========================================================================
     # ALBUMS (Implemented - NO AUTH!)
@@ -448,67 +658,518 @@ class DeezerPlugin(IMusicServicePlugin):
                 logger.warning(f"Failed to get track {track_id}, skipping")
                 continue
         return tracks
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
 
     # =========================================================================
-    # PLAYLISTS (Stub)
+    # BATCH OPERATIONS (Sequential - Deezer has no native batch API)
+    # =========================================================================
+
+    async def get_several_artists(self, artist_ids: list[str]) -> list[ArtistDTO]:
+        """Get multiple artists by Deezer IDs.
+
+        Hey future me – Deezer hat keine Batch-API wie Spotify!
+        Wir holen Artists einzeln mit Rate-Limiting im Client.
+
+        Args:
+            artist_ids: List of Deezer artist IDs
+
+        Returns:
+            List of ArtistDTOs (failed lookups filtered out)
+        """
+        try:
+            int_ids = [int(aid) for aid in artist_ids]
+            deezer_artists = await self._client.get_several_artists(int_ids)
+            return [self._convert_artist(a) for a in deezer_artists]
+        except Exception as e:
+            logger.error(f"DeezerPlugin get_several_artists failed: {e}")
+            raise PluginError(
+                message=f"Failed to get artists: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="batch_artists_error",
+                original_error=e,
+            ) from e
+
+    async def get_several_albums(self, album_ids: list[str]) -> list[AlbumDTO]:
+        """Get multiple albums by Deezer IDs.
+
+        Hey future me – Deezer hat keine Batch-API wie Spotify!
+        Wir holen Albums einzeln mit Rate-Limiting im Client.
+
+        Args:
+            album_ids: List of Deezer album IDs
+
+        Returns:
+            List of AlbumDTOs (failed lookups filtered out)
+        """
+        try:
+            int_ids = [int(aid) for aid in album_ids]
+            deezer_albums = await self._client.get_several_albums(int_ids)
+            return [self._convert_album(a) for a in deezer_albums]
+        except Exception as e:
+            logger.error(f"DeezerPlugin get_several_albums failed: {e}")
+            raise PluginError(
+                message=f"Failed to get albums: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="batch_albums_error",
+                original_error=e,
+            ) from e
+
+    # =========================================================================
+    # DISCOVERY FEATURES
+    # =========================================================================
+
+    async def get_related_artists(
+        self, artist_id: str, limit: int = 20
+    ) -> list[ArtistDTO]:
+        """Get artists related to the given artist.
+
+        Hey future me – Deezer's "fans also like" feature!
+        Perfekt für Discovery ohne Spotify-Login.
+
+        Args:
+            artist_id: Deezer artist ID
+            limit: Maximum results (max 100)
+
+        Returns:
+            List of related ArtistDTOs
+        """
+        try:
+            deezer_artists = await self._client.get_related_artists(
+                int(artist_id), limit=limit
+            )
+            return [self._convert_artist(a) for a in deezer_artists]
+        except Exception as e:
+            logger.error(f"DeezerPlugin get_related_artists failed: {e}")
+            raise PluginError(
+                message=f"Failed to get related artists: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="related_artists_error",
+                original_error=e,
+            ) from e
+
+    # =========================================================================
+    # SEARCH CONVENIENCE HELPERS
+    # =========================================================================
+
+    async def search_artists(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[ArtistDTO]:
+        """Search for artists on Deezer.
+
+        Hey future me – Convenience-Wrapper um search() für nur Artists.
+
+        Args:
+            query: Search query
+            limit: Maximum results (max 25 per Deezer API)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with artist results
+        """
+        try:
+            deezer_artists = await self._client.search_artists(
+                query, limit=min(limit, 25)
+            )
+            artists = [self._convert_artist(a) for a in deezer_artists]
+
+            return PaginatedResponse(
+                items=artists,
+                total=len(artists),
+                limit=limit,
+                offset=offset,
+                has_more=len(artists) >= limit,
+            )
+        except Exception as e:
+            logger.error(f"DeezerPlugin search_artists failed: {e}")
+            raise PluginError(
+                message=f"Artist search failed: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="search_artists_error",
+                original_error=e,
+            ) from e
+
+    async def search_albums(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[AlbumDTO]:
+        """Search for albums on Deezer.
+
+        Hey future me – Convenience-Wrapper um search() für nur Albums.
+
+        Args:
+            query: Search query
+            limit: Maximum results (max 25 per Deezer API)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with album results
+        """
+        try:
+            deezer_albums = await self._client.search_albums(
+                query, limit=min(limit, 25)
+            )
+            albums = [self._convert_album(a) for a in deezer_albums]
+
+            return PaginatedResponse(
+                items=albums,
+                total=len(albums),
+                limit=limit,
+                offset=offset,
+                has_more=len(albums) >= limit,
+            )
+        except Exception as e:
+            logger.error(f"DeezerPlugin search_albums failed: {e}")
+            raise PluginError(
+                message=f"Album search failed: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="search_albums_error",
+                original_error=e,
+            ) from e
+
+    async def search_tracks(
+        self, query: str, limit: int = 20, offset: int = 0
+    ) -> PaginatedResponse[TrackDTO]:
+        """Search for tracks on Deezer.
+
+        Hey future me – Convenience-Wrapper um search() für nur Tracks.
+        ISRC ist verfügbar für Cross-Service Matching!
+
+        Args:
+            query: Search query
+            limit: Maximum results (max 25 per Deezer API)
+            offset: Pagination offset
+
+        Returns:
+            PaginatedResponse with track results
+        """
+        try:
+            deezer_tracks = await self._client.search_tracks(
+                query, limit=min(limit, 25)
+            )
+            tracks = [self._convert_track(t) for t in deezer_tracks]
+
+            return PaginatedResponse(
+                items=tracks,
+                total=len(tracks),
+                limit=limit,
+                offset=offset,
+                has_more=len(tracks) >= limit,
+            )
+        except Exception as e:
+            logger.error(f"DeezerPlugin search_tracks failed: {e}")
+            raise PluginError(
+                message=f"Track search failed: {e!s}",
+                service=ServiceType.DEEZER,
+                error_code="search_tracks_error",
+                original_error=e,
+            ) from e
+
+    # =========================================================================
+    # ISRC-BASED LOOKUP (Unique Deezer Feature!)
+    # =========================================================================
+
+    async def get_track_by_isrc(self, isrc: str) -> TrackDTO | None:
+        """Get track by ISRC code.
+
+        Hey future me – DAS IST GOLD FÜR CROSS-SERVICE MATCHING!
+        ISRC (International Standard Recording Code) ist ein eindeutiger
+        Identifier für Recordings. Wenn du einen Track in deiner lokalen
+        Library hast und dessen ISRC kennst, kannst du ihn damit auf Deezer
+        finden - egal wie der Titel geschrieben ist!
+
+        Args:
+            isrc: International Standard Recording Code (e.g., "USRC11700123")
+
+        Returns:
+            TrackDTO if found, None otherwise
+        """
+        try:
+            deezer_track = await self._client.get_track_by_isrc(isrc)
+            if not deezer_track:
+                return None
+            return self._convert_track(deezer_track)
+        except Exception as e:
+            logger.warning(f"DeezerPlugin get_track_by_isrc failed for {isrc}: {e}")
+            return None
+
+    # =========================================================================
+    # PLAYLISTS (Stub - requires OAuth)
     # =========================================================================
 
     async def get_playlist(self, playlist_id: str) -> PlaylistDTO:
-        """Get playlist by Deezer ID."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get playlist by Deezer ID.
+
+        Hey future me - public playlists can be fetched without auth!
+        """
+        try:
+            response = await self._client._rate_limited_request(
+                "GET", f"/playlist/{playlist_id}"
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if "error" in data:
+                raise PluginError(
+                    message=f"Playlist not found: {data['error'].get('message', 'Unknown')}",
+                    service=ServiceType.DEEZER,
+                    error_code="not_found",
+                )
+
+            return PlaylistDTO(
+                id=str(data.get("id", "")),
+                name=data.get("title", ""),
+                description=data.get("description"),
+                image_url=data.get("picture_big") or data.get("picture_medium"),
+                owner_id=str(data.get("creator", {}).get("id", "")),
+                owner_name=data.get("creator", {}).get("name"),
+                track_count=data.get("nb_tracks", 0),
+                is_public=data.get("public", True),
+                external_url=data.get("link"),
+                service=ServiceType.DEEZER,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception(f"Failed to get playlist {playlist_id}")
+            raise PluginError(
+                message=f"Failed to get playlist: {e}",
+                service=ServiceType.DEEZER,
+                error_code="playlist_error",
+                original_error=e,
+            ) from e
 
     async def get_playlist_tracks(
         self, playlist_id: str, limit: int = 100, offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
-        """Get playlist tracks."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get playlist tracks (public playlists work without auth)."""
+        try:
+            response = await self._client._rate_limited_request(
+                "GET",
+                f"/playlist/{playlist_id}/tracks",
+                params={"limit": min(limit, 100), "index": offset},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            tracks = [
+                self._convert_track(
+                    DeezerTrack(
+                        id=track.get("id", 0),
+                        title=track.get("title", ""),
+                        artist_name=track.get("artist", {}).get("name", "Unknown"),
+                        artist_id=track.get("artist", {}).get("id"),
+                        album_title=track.get("album", {}).get("title", ""),
+                        album_id=track.get("album", {}).get("id"),
+                        duration=track.get("duration", 0),
+                        track_position=track.get("track_position"),
+                        disk_number=track.get("disk_number"),
+                        isrc=track.get("isrc"),
+                        preview=track.get("preview"),
+                        explicit_lyrics=track.get("explicit_lyrics", False),
+                    )
+                )
+                for track in data.get("data", [])
+            ]
+
+            total = data.get("total", len(tracks))
+            has_more = (offset + len(tracks)) < total
+
+            return PaginatedResponse(
+                items=tracks,
+                total=total,
+                limit=limit,
+                offset=offset,
+                has_more=has_more,
+                next_cursor=str(offset + len(tracks)) if has_more else None,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception(f"Failed to get playlist tracks for {playlist_id}")
+            raise PluginError(
+                message=f"Failed to get playlist tracks: {e}",
+                service=ServiceType.DEEZER,
+                error_code="playlist_tracks_error",
+                original_error=e,
+            ) from e
 
     async def get_user_playlists(
         self, limit: int = 50, offset: int = 0
     ) -> PaginatedResponse[PlaylistDTO]:
-        """Get user playlists (requires OAuth)."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get user's playlists (requires OAuth).
+
+        Hey future me - this returns playlists owned by the user AND
+        playlists they've added to their library!
+        """
+        token = self._ensure_authenticated()
+
+        try:
+            data = await self._client.get_user_playlists(
+                access_token=token,
+                limit=min(limit, 100),
+                index=offset,
+            )
+
+            playlists = [
+                PlaylistDTO(
+                    id=str(pl.get("id", "")),
+                    name=pl.get("title", ""),
+                    description=pl.get("description"),
+                    image_url=pl.get("picture_big") or pl.get("picture_medium"),
+                    owner_id=str(pl.get("creator", {}).get("id", "")),
+                    owner_name=pl.get("creator", {}).get("name"),
+                    track_count=pl.get("nb_tracks", 0),
+                    is_public=pl.get("public", True),
+                    external_url=pl.get("link"),
+                    service=ServiceType.DEEZER,
+                )
+                for pl in data.get("data", [])
+            ]
+
+            total = data.get("total", len(playlists))
+            has_more = (offset + len(playlists)) < total
+
+            return PaginatedResponse(
+                items=playlists,
+                total=total,
+                limit=limit,
+                offset=offset,
+                has_more=has_more,
+                next_cursor=str(offset + len(playlists)) if has_more else None,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception("Failed to get user playlists")
+            raise PluginError(
+                message=f"Failed to get user playlists: {e}",
+                service=ServiceType.DEEZER,
+                error_code="user_playlists_error",
+                original_error=e,
+            ) from e
 
     # =========================================================================
-    # LIBRARY (Stub)
+    # LIBRARY (OAuth required)
     # =========================================================================
 
     async def get_saved_tracks(
         self, limit: int = 50, offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
-        """Get saved tracks (requires OAuth)."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get user's favorite/saved tracks (requires OAuth).
+
+        Hey future me - Deezer calls them "favorites" (heart icon).
+        """
+        token = self._ensure_authenticated()
+
+        try:
+            data = await self._client.get_user_favorites(
+                access_token=token,
+                limit=min(limit, 100),
+                index=offset,
+            )
+
+            tracks = [
+                self._convert_track(
+                    DeezerTrack(
+                        id=track.get("id", 0),
+                        title=track.get("title", ""),
+                        artist_name=track.get("artist", {}).get("name", "Unknown"),
+                        artist_id=track.get("artist", {}).get("id"),
+                        album_title=track.get("album", {}).get("title", ""),
+                        album_id=track.get("album", {}).get("id"),
+                        duration=track.get("duration", 0),
+                        track_position=track.get("track_position"),
+                        disk_number=track.get("disk_number"),
+                        isrc=track.get("isrc"),
+                        preview=track.get("preview"),
+                        explicit_lyrics=track.get("explicit_lyrics", False),
+                    )
+                )
+                for track in data.get("data", [])
+            ]
+
+            total = data.get("total", len(tracks))
+            has_more = (offset + len(tracks)) < total
+
+            return PaginatedResponse(
+                items=tracks,
+                total=total,
+                limit=limit,
+                offset=offset,
+                has_more=has_more,
+                next_cursor=str(offset + len(tracks)) if has_more else None,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception("Failed to get saved tracks")
+            raise PluginError(
+                message=f"Failed to get saved tracks: {e}",
+                service=ServiceType.DEEZER,
+                error_code="saved_tracks_error",
+                original_error=e,
+            ) from e
 
     async def get_saved_albums(
         self, limit: int = 50, offset: int = 0
     ) -> PaginatedResponse[AlbumDTO]:
-        """Get saved albums (requires OAuth)."""
-        raise PluginError(
-            message="Deezer plugin not implemented yet",
-            service=ServiceType.DEEZER,
-            error_code="not_implemented",
-        )
+        """Get user's saved albums (requires OAuth).
+
+        Hey future me - returns albums user has added to their library.
+        """
+        token = self._ensure_authenticated()
+
+        try:
+            data = await self._client.get_user_albums(
+                access_token=token,
+                limit=min(limit, 100),
+                index=offset,
+            )
+
+            albums = [
+                AlbumDTO(
+                    id=str(album.get("id", "")),
+                    name=album.get("title", ""),
+                    artist_id=str(album.get("artist", {}).get("id", "")),
+                    artist_name=album.get("artist", {}).get("name", "Unknown"),
+                    image_url=(
+                        album.get("cover_big")
+                        or album.get("cover_medium")
+                        or album.get("cover")
+                    ),
+                    release_date=album.get("release_date"),
+                    total_tracks=album.get("nb_tracks", 0),
+                    album_type=album.get("record_type"),
+                    external_url=album.get("link"),
+                    service=ServiceType.DEEZER,
+                )
+                for album in data.get("data", [])
+            ]
+
+            total = data.get("total", len(albums))
+            has_more = (offset + len(albums)) < total
+
+            return PaginatedResponse(
+                items=albums,
+                total=total,
+                limit=limit,
+                offset=offset,
+                has_more=has_more,
+                next_cursor=str(offset + len(albums)) if has_more else None,
+            )
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception("Failed to get saved albums")
+            raise PluginError(
+                message=f"Failed to get saved albums: {e}",
+                service=ServiceType.DEEZER,
+                error_code="saved_albums_error",
+                original_error=e,
+            ) from e
 
     # =========================================================================
     # BROWSE - NO AUTH REQUIRED! (Implemented)

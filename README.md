@@ -52,24 +52,19 @@ SoulSpot connects your Spotify playlists with the Soulseek network. The applicat
    ```bash
    mkdir -p mnt/downloads mnt/music
    ```
-3. Copy and edit the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-   Enter at least the following values:
-   ```env
-   SPOTIFY_CLIENT_ID=your_spotify_client_id
-   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-   SLSKD_API_KEY=your_slskd_api_key   # alternatively username/password
-   ```
-4. Start the containers:
+3. Start the containers:
    ```bash
    docker-compose -f docker/docker-compose.yml up -d
    ```
-5. Check logs (optional):
-   ```bash
-   docker-compose -f docker/docker-compose.yml logs -f
-   ```
+4. Open the web interface at http://localhost:8765
+5. Navigate to **Settings** and configure:
+   - **Spotify**: Enter your Client ID and Secret from [developer.spotify.com](https://developer.spotify.com/dashboard)
+   - **Deezer** (optional): Enter App ID and Secret from [developers.deezer.com](https://developers.deezer.com)
+   - **slskd**: Enter the URL and API key of your slskd instance
+6. Click "Connect" buttons to complete OAuth flows
+7. Start syncing your playlists!
+
+> **Note**: No `.env` file needed! All credentials are configured via the Settings UI and stored in the database.
 
 More configuration options (e.g., user IDs, timezone, secret keys) can be found in the [Docker Setup Guide](docker/README.md).
 

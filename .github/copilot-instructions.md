@@ -139,28 +139,65 @@ class TrackRepository:
   - Integration: Use async fixtures with real DB (see `tests/conftest.py`)
   - HTTP: Use `pytest-httpx` for client mocking
 
-## 7. Integration points & external services
+## 7. Configuration Architecture (DATABASE-FIRST!)
 
-| Service | Config | Use Case |
-|---------|--------|----------|
-| **Spotify OAuth** | `.env`: `SPOTIFY_CLIENT_ID`, `SPOTIFY_REDIRECT_URI` | Authenticate users, fetch playlists |
-| **slskd** | `.env`: `SLSKD_URL`, `SLSKD_KEY` | Download tracks via Soulseek |
+⚠️ **CRITICAL: NO `.env` FILES FOR CREDENTIALS!**
+
+SoulSpot uses a **database-first configuration** approach:
+- All user-configurable settings are stored in the `app_settings` database table
+- Users configure credentials via the Settings UI (not by editing files)
+- Changes take effect immediately without app restart
+
+**Where configurations live:**
+
+| Configuration Type | Storage Location | NOT |
+|-------------------|------------------|-----|
+| **OAuth Credentials** | `app_settings` table | ❌ `.env` |
+| **User OAuth Tokens** | `*_sessions` tables | ❌ `.env` |
+| **App Preferences** | `app_settings` table | ❌ `.env` |
+| **Database URL** | ENV var (only if custom) | - |
+
+**Pattern for accessing credentials:**
+```python
+# ✅ RIGHT: Load from DB via AppSettingsService
+settings_service = AppSettingsService(session)
+client_id = await settings_service.get_str("spotify.client_id")
+
+# ❌ WRONG: Load from settings.py / .env
+from soulspot.config.settings import get_settings
+client_id = get_settings().spotify.client_id  # DON'T DO THIS!
+```
+
+**Key Tables:**
+- `app_settings`: Key-value store for credentials and preferences
+- `spotify_sessions`: Spotify OAuth tokens per browser session
+- `deezer_sessions`: Deezer OAuth tokens per browser session
+
+See: `docs/architecture/CONFIGURATION.md` for full details.
+
+## 8. Integration points & external services
+
+| Service | Config Location | Use Case |
+|---------|-----------------|----------|
+| **Spotify OAuth** | `app_settings` (key: `spotify.*`) | Authenticate users, fetch playlists |
+| **Deezer OAuth** | `app_settings` (key: `deezer.*`) | Browse new releases, user library |
+| **slskd** | `app_settings` (key: `slskd.*`) | Download tracks via Soulseek |
 | **MusicBrainz** | No auth (rate-limited 1/sec) | Track metadata enrichment |
 | **CoverArtArchive** | No auth | Fetch album artwork |
 
 Key files:
-- `src/soulspot/infrastructure/clients/spotify_client.py` - Spotify API wrapper
-- `src/soulspot/infrastructure/clients/slskd_client.py` - Soulseek download client
-- `src/soulspot/infrastructure/clients/musicbrainz_client.py` - Metadata client
+- `src/soulspot/infrastructure/integrations/spotify_client.py` - Spotify API wrapper
+- `src/soulspot/infrastructure/integrations/deezer_client.py` - Deezer API wrapper
+- `src/soulspot/infrastructure/integrations/slskd_client.py` - Soulseek download client
+- `src/soulspot/infrastructure/integrations/musicbrainz_client.py` - Metadata client
 
-## 8. Verification Before Writing (PFLICHT)
+## 9. Verification Before Writing (PFLICHT)
 
 **Before writing paths, config values, or classnames, verify them:**
 
 ```bash
-# Dateipfade prüfen
-grep -r "DATABASE_URL" .env.example  # → sqlite+aiosqlite:///./soulspot.db
-grep -r "downloads" docker-compose.yml  # → /mnt/downloads
+# Datenbank-Tabellen prüfen
+grep -r "app_settings" src/soulspot/
 
 # Klassennamen + Imports verifizieren
 grep -r "class ISpotifyClient" src/soulspot/domain/
@@ -169,10 +206,10 @@ grep -r "class ISpotifyClient" src/soulspot/domain/
 grep "5000\|8000\|5030" docker/docker-compose.yml
 ```
 
-❌ WRONG: "DB is at /data/soulspot.db"  
-✅ RIGHT: Check `.env.example` first → "DB is at ./soulspot.db (or /config/soulspot.db in Docker)"
+❌ WRONG: "Credentials from .env"  
+✅ RIGHT: "Credentials from `app_settings` table via `AppSettingsService`"
 
-## 9. Common errors to avoid
+## 10. Common errors to avoid
 
 ### 9.1 Breaking Interface-Repository Contract
 ```python
