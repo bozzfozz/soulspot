@@ -45,12 +45,12 @@
   - [ ] `features/deezer-integration.md` → Mark as **PLANNED** (future feature)
   - [ ] Merge 3 onboarding docs (`onboarding-ui-implementation.md`, `onboarding-ui-overview.md`, `onboarding-ui-visual-guide.md`) into `onboarding-complete-guide.md`
 
-- [ ] **Day 4-5: Create Missing Critical API Docs**
-  - [ ] `docs/api/settings-api.md` (33 endpoints!) - **HIGHEST PRIORITY**
-  - [ ] `docs/api/artist-songs-api.md` (5 endpoints)
-  - [ ] `docs/api/metadata-api.md` (6 endpoints)
-  - [ ] `docs/api/onboarding-api.md` (5 endpoints)
-  - [ ] `docs/api/compilations-api.md` (7 endpoints)
+- [ ] **Day 4-5: Create Missing Critical API Docs** ✅ COMPLETED
+  - [x] `docs/api/settings-api.md` (24 endpoints) - ✅ EXISTS
+  - [x] `docs/api/artist-songs-api.md` (5 endpoints) - ✅ EXISTS
+  - [x] `docs/api/metadata-api.md` (6 endpoints) - ✅ EXISTS
+  - [x] `docs/api/onboarding-api.md` (5 endpoints) - ✅ EXISTS
+  - [x] `docs/api/compilations-api.md` (7 endpoints) - ✅ EXISTS
 
 ### Template für neue API Docs
 

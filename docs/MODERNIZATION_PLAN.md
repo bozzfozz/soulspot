@@ -421,13 +421,50 @@ class ISessionRepository(Protocol):
   - Includes "future-self" comments explaining multi-service strategy
 - Migration tested: ⚠️ REQUIRES DB CONNECTION (cannot test in virtual GitHub env)
 
-**Week 4: ISRC Matching**
+**Week 4: Client Interfaces** ✅ ALREADY IMPLEMENTED
+
+**Implementation Status (2025-12-12):**
+- [x] ISpotifyClient interface already exists in `domain/ports/__init__.py` (line 459-650+)
+- [x] SpotifyClient already implements ISpotifyClient (`infrastructure/integrations/spotify_client.py`)
+- [x] Interface includes ALL required methods:
+  - **OAuth:** `get_authorization_url()`, `exchange_code()`, `refresh_token()`
+  - **Tracks:** `get_track()`, `search_track()`
+  - **Playlists:** `get_playlist()`, `get_user_playlists()`
+  - **Albums:** `get_album()`, `get_albums()`, `get_album_tracks()`
+  - **Artists:** `get_artist()`, `get_several_artists()`, `get_artist_albums()`, `get_artist_top_tracks()`, `get_followed_artists()`, `search_artist()`
+
+**Architecture Notes:**
+- ISpotifyClient is SERVICE-SPECIFIC (correct!) - not a generic ITrackClient
+- When adding Tidal/Deezer, create ITidalClient/IDeezerClient interfaces (same pattern)
+- Domain services receive ISpotifyClient via dependency injection
+- Tests can mock ISpotifyClient for isolated testing
+
+**Future Multi-Service Strategy:**
+```python
+# Domain layer will have service-specific interfaces:
+- ISpotifyClient (exists) ✅
+- ITidalClient (future)
+- IDeezerClient (future)
+
+# Application services will be service-agnostic:
+class TrackService:
+    def __init__(
+        self, 
+        spotify_client: ISpotifyClient,
+        tidal_client: ITidalClient | None = None
+    ):
+        self.clients = {"spotify": spotify_client}
+        if tidal_client:
+            self.clients["tidal"] = tidal_client
+```
+
+**Week 5: ISRC Matching & Deduplication** (OPTIONAL - Future Enhancement)
 - [ ] Add ISRC field to Track entity (if not exists)
 - [ ] Create mapping tables (spotify_track_mappings, tidal_track_mappings)
 - [ ] Implement get_or_create_track() service method
 - [ ] Backfill ISRC for existing tracks (via MusicBrainz)
 
-**Week 5: Documentation Update**
+**Week 6: Documentation Update** (RECOMMENDED)
 - [ ] Update all docs marked as UPDATE NEEDED
 - [ ] Create SERVICE_AGNOSTIC_BACKEND.md
 - [ ] Update README.md with v2.0 architecture
