@@ -1073,6 +1073,7 @@ async def resolve_duplicate(
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     action = request.action.lower()
+    deleted_track_id: str | None = None
 
     if action == "dismiss":
         candidate.status = "dismissed"
@@ -1083,23 +1084,58 @@ async def resolve_duplicate(
     elif action == "keep_first":
         candidate.status = "confirmed"
         candidate.resolution_action = "keep_first"
-        # TODO: Queue deletion of track 2
+        # Hey future me - delete track 2, keep track 1! We soft-delete by clearing file_path
+        # and marking track as deleted. Hard delete would break foreign key references.
+        # The actual file gets deleted via orphan cleanup worker later.
+        deleted_track_id = candidate.track_id_2
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        track_to_delete = await db.get(TrackModel, candidate.track_id_2)
+        if track_to_delete and track_to_delete.file_path:
+            import os
+
+            try:
+                if os.path.exists(track_to_delete.file_path):
+                    os.remove(track_to_delete.file_path)
+                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+            except OSError as e:
+                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+            track_to_delete.file_path = None  # Mark as deleted
     elif action == "keep_second":
         candidate.status = "confirmed"
         candidate.resolution_action = "keep_second"
-        # TODO: Queue deletion of track 1
+        # Hey future me - delete track 1, keep track 2! Same soft-delete strategy.
+        deleted_track_id = candidate.track_id_1
+        from soulspot.infrastructure.persistence.models import TrackModel
+
+        track_to_delete = await db.get(TrackModel, candidate.track_id_1)
+        if track_to_delete and track_to_delete.file_path:
+            import os
+
+            try:
+                if os.path.exists(track_to_delete.file_path):
+                    os.remove(track_to_delete.file_path)
+                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+            except OSError as e:
+                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+            track_to_delete.file_path = None  # Mark as deleted
     else:
         raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
 
     candidate.reviewed_at = datetime.now(UTC)
     await db.commit()
 
-    return {
+    response = {
         "candidate_id": candidate_id,
         "action": action,
         "status": candidate.status,
         "message": f"Duplicate resolved with action: {action}",
     }
+    if deleted_track_id:
+        response["deleted_track_id"] = deleted_track_id
+        response["message"] += f" (deleted track: {deleted_track_id})"
+
+    return response
 
 
 # Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.

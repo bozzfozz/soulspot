@@ -667,6 +667,22 @@ class ISpotifyClient(ABC):
         """Search for artists on Spotify."""
         pass
 
+    @abstractmethod
+    async def search_album(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
+        """Search for albums on Spotify.
+
+        Args:
+            query: Search query (album name, "artist - album")
+            access_token: OAuth access token
+            limit: Maximum number of results (1-50)
+
+        Returns:
+            Search results with 'albums' key containing items array
+        """
+        pass
+
     # =========================================================================
     # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
     # =========================================================================

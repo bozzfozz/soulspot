@@ -780,6 +780,48 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
+    # Hey future me - album search is similar to artist search but with type=album.
+    # Returns albums matching query with images, artist info, release date, track count.
+    # Use this instead of workaround in search.py! Cleaner architecture.
+    async def search_album(
+        self, query: str, access_token: str, limit: int = 20
+    ) -> dict[str, Any]:
+        """Search for albums on Spotify.
+
+        Hey future me - finally added proper album search! Works just like search_artist
+        but returns albums. Use for album-specific searches, "artist - album" queries,
+        and the albums tab in search UI. Results include images, artist info, release_date,
+        total_tracks, and album_type (album/single/compilation).
+
+        Args:
+            query: Search query (album name, "artist - album", etc.)
+            access_token: OAuth access token
+            limit: Maximum number of results (1-50, default 20)
+
+        Returns:
+            Search results with 'albums' key containing items array. Each item has:
+            - id, name, album_type, release_date, total_tracks
+            - artists: [{id, name, ...}]
+            - images: [{url, width, height}]
+            - external_urls: {spotify: "..."}
+
+        Raises:
+            httpx.HTTPError: If the request fails
+        """
+        client = await self._get_client()
+        params: dict[str, str | int] = {
+            "q": query,
+            "type": "album",
+            "limit": limit,
+        }
+        response = await client.get(
+            f"{self.API_BASE_URL}/search",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
     # =========================================================================
     # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
     # =========================================================================

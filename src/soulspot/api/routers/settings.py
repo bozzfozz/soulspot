@@ -268,39 +268,51 @@ async def update_settings(
     }
 
 
-# Listen up, reset is also a TODO stub - it SAYS it resets but doesn't actually do anything! Implementing
-# this is DANGEROUS - you could delete user's API keys, break integrations, lose custom config. Add a
-# "are you sure?" modal in UI! The reset should: 1) Clear DB config rows, 2) Delete .env overrides (not
-# the whole .env!), 3) Reload defaults. BUT don't touch database URL or secrets that would lock users out!
-# Maybe have "safe reset" (just UI prefs) vs "full reset" (everything). Restart is REQUIRED after reset.
+# Hey future me - reset endpoint NOW WORKS! It uses AppSettingsService.reset_all() to delete DB-stored
+# settings, which makes them fall back to hardcoded defaults from Settings() classes. IMPORTANT: This
+# does NOT touch .env files or secrets - those are still loaded from env vars. Only dynamic DB-stored
+# settings (like sync intervals, UI prefs) are reset. The optional 'category' param allows "safe reset"
+# of just UI prefs vs everything. Add "are you sure?" modal in UI before calling this!
 @router.post("/reset")
-async def reset_settings() -> dict[str, Any]:
-    """Reset all settings to defaults.
+async def reset_settings(
+    category: str | None = None,
+    db: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Reset settings to defaults by deleting from database.
 
-    Returns settings to factory defaults by reloading from default Settings() instances.
+    Removes custom settings from DB so they fall back to hardcoded defaults.
+    Does NOT affect .env files or secrets - only dynamic DB-stored settings.
 
-    Implementation needed:
-    - Clear any database-stored settings
-    - Remove custom .env overrides
-    - Reset in-memory configuration
-    - Trigger configuration reload
+    Args:
+        category: Optional category to reset (e.g., 'ui', 'spotify', 'downloads').
+                 If not provided, resets ALL settings.
 
     Returns:
-        Success message with default settings
+        Success message with count of settings reset
 
     Raises:
         HTTPException: If reset operation fails
     """
-    # TODO: Implement reset functionality
-    # Steps:
-    # 1. Delete custom settings from database/file
-    # 2. Reload Settings() with defaults
-    # 3. Clear any cached configuration
-    # 4. Return default settings object
-    return {
-        "message": "Settings reset to defaults",
-        "note": "Please restart the application for changes to take effect",
-    }
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    try:
+        settings_service = AppSettingsService(db)
+        deleted_count = await settings_service.reset_all(category=category)
+        await db.commit()
+
+        return {
+            "message": f"Reset {deleted_count} settings to defaults",
+            "category": category or "all",
+            "settings_deleted": deleted_count,
+            "note": "Some settings may require application restart to take effect",
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Failed to reset settings: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset settings: {str(e)}",
+        ) from e
 
 
 # Hey, this returns the HARDCODED defaults from the Settings models, not what's currently in use! These

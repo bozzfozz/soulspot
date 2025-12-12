@@ -11,6 +11,8 @@ from soulspot.api.dependencies import (
     get_artist_repository,
     get_lastfm_client,
     get_musicbrainz_client,
+    get_session_id,
+    get_session_store,
     get_spotify_client,
     get_track_repository,
 )
@@ -23,6 +25,7 @@ from soulspot.api.schemas.metadata import (
     TagNormalizationResult,
 )
 from soulspot.application.services.metadata_merger import MetadataMerger
+from soulspot.application.services.session_store import DatabaseSessionStore
 from soulspot.application.use_cases.enrich_metadata_multi_source import (
     EnrichMetadataMultiSourceRequest as UseCaseRequest,
 )
@@ -81,12 +84,11 @@ def get_enrich_use_case(
 
 
 # Hey future me, main metadata enrichment endpoint! Converts API request to use case request which
-# seems redundant but keeps API layer separate from domain. spotify_access_token is hardcoded None
-# with a TODO - this will break Spotify enrichment! The TODO says get from session/JWT but that's
-# not implemented yet. Authority hierarchy is Manual > MusicBrainz > Spotify > Last.fm which makes
-# sense (trust user > official DB > streaming service > community). conflicts array is empty with
-# TODO - conflict detection isn't implemented! That's a pretty critical feature. Returns 404 if
-# track doesn't exist after enrichment which is odd - enrichment might create the track?
+# seems redundant but keeps API layer separate from domain. spotify_access_token is hardcoded None -
+# Hey future me - Spotify token is NOW extracted from session! If use_spotify=True but no session/token,
+# we gracefully skip Spotify enrichment (fallback to MusicBrainz/Last.fm only). Token auto-refresh happens
+# in session_store.get_session() if expired. Authority hierarchy is Manual > MusicBrainz > Spotify > Last.fm.
+# Conflict detection IS IMPLEMENTED - MetadataMerger._detect_conflicts() finds disagreements between sources.
 @router.post(
     "/enrich",
     response_model=MetadataEnrichmentResponse,
@@ -97,6 +99,9 @@ def get_enrich_use_case(
 async def enrich_metadata(
     request: EnrichMetadataMultiSourceRequest,
     use_case: EnrichMetadataMultiSourceUseCase = Depends(get_enrich_use_case),
+    session_id: str | None = Depends(get_session_id),
+    session_store: DatabaseSessionStore = Depends(get_session_store),
+    spotify_client: SpotifyClient = Depends(get_spotify_client),
 ) -> MetadataEnrichmentResponse:
     """
     Enrich track metadata from multiple sources.
@@ -114,16 +119,36 @@ async def enrich_metadata(
         HTTPException: If track not found or enrichment fails
     """
     try:
+        # Hey future me - extract Spotify token from session if available!
+        # If no session or token, spotify_access_token stays None and Spotify enrichment is skipped.
+        # This is graceful degradation - MusicBrainz and Last.fm still work without Spotify auth.
+        spotify_access_token: str | None = None
+        if request.use_spotify and session_id:
+            session = await session_store.get_session(session_id)
+            if session and session.access_token:
+                # Token auto-refresh happens in get_session if expired
+                if session.is_token_expired() and session.refresh_token:
+                    try:
+                        token_data = await spotify_client.refresh_token(
+                            session.refresh_token
+                        )
+                        session.access_token = token_data["access_token"]
+                        session.token_expires_at = token_data.get("expires_in")
+                        await session_store.update_session(session)
+                    except Exception as e:
+                        logger.warning("Failed to refresh Spotify token: %s", e)
+                spotify_access_token = session.access_token
+
         # Convert API request to use case request
         use_case_request = UseCaseRequest(
             track_id=TrackId(UUID(request.track_id)),
             force_refresh=request.force_refresh,
             enrich_artist=request.enrich_artist,
             enrich_album=request.enrich_album,
-            use_spotify=request.use_spotify,
+            use_spotify=request.use_spotify and spotify_access_token is not None,
             use_musicbrainz=request.use_musicbrainz,
             use_lastfm=request.use_lastfm,
-            spotify_access_token=None,  # TODO: Get from auth context - requires session/JWT token extraction
+            spotify_access_token=spotify_access_token,
             manual_overrides=request.manual_overrides,
         )
 

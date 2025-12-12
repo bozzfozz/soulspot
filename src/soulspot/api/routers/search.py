@@ -261,21 +261,9 @@ async def search_spotify_albums(
         List of matching albums with metadata
     """
     try:
-        # Hey future me - Spotify doesn't have a separate "album search" method in our client
-        # We need to use the generic search endpoint with type=album
-        # For now, we'll use search_track and filter albums, or add a search_album method
-        # TODO: Add search_album to SpotifyClient for proper album search
-
-        # Workaround: Use track search and extract unique albums
-        # This is not ideal but works for MVP
-        client = await spotify_client._get_client()
-        response = await client.get(
-            f"{spotify_client.API_BASE_URL}/search",
-            params={"q": query, "type": "album", "limit": limit},
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        response.raise_for_status()
-        results = response.json()
+        # Hey future me - now using proper SpotifyClient.search_album() method!
+        # This is cleaner than the old workaround that directly called the API.
+        results = await spotify_client.search_album(query, access_token, limit)
 
         albums = []
         for item in results.get("albums", {}).get("items", []):

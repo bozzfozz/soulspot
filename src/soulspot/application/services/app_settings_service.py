@@ -26,7 +26,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.infrastructure.persistence.models import AppSettingsModel
@@ -328,6 +328,40 @@ class AppSettingsService:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def reset_all(self, category: str | None = None) -> int:
+        """Reset settings to defaults by deleting from database.
+
+        Hey future me - this is the "nuclear option"! Deletes settings from DB so they fall back
+        to hardcoded defaults from Settings() classes. Use with caution - users will lose their
+        custom config! The category parameter allows "safe reset" of just UI prefs vs everything.
+
+        IMPORTANT: This does NOT touch .env files or secrets - those are still loaded from env vars.
+        Only dynamic DB-stored settings (like sync intervals, UI prefs) are reset.
+
+        Args:
+            category: If provided, only reset settings in this category (e.g., 'ui', 'spotify').
+                     If None, reset ALL settings.
+
+        Returns:
+            Number of settings deleted.
+        """
+        if category:
+            stmt = delete(AppSettingsModel).where(AppSettingsModel.category == category)
+            logger.info(f"Resetting app settings in category: {category}")
+        else:
+            stmt = delete(AppSettingsModel)
+            logger.info("Resetting ALL app settings to defaults")
+
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+
+        # Clear entire cache since we deleted potentially many keys
+        self.invalidate_cache()
+
+        deleted_count = result.rowcount or 0
+        logger.info(f"Reset {deleted_count} app settings")
+        return deleted_count
 
     # =========================================================================
     # SPOTIFY-SPECIFIC CONVENIENCE METHODS
