@@ -25,86 +25,86 @@
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot?include_prereleases)](https://github.com/bozzfozz/soulspot/releases)
 
-## Was ist SoulSpot?
-SoulSpot verknüpft deine Spotify-Playlists mit dem Soulseek-Netzwerk. Die Anwendung lädt Titel automatisch herunter, reichert sie mit Metadaten an und legt sie strukturiert in deiner Musikbibliothek ab – komplett über eine moderne Weboberfläche für den lokalen Single-User Einsatz.
+## What is SoulSpot?
+SoulSpot connects your Spotify playlists with the Soulseek network. The application automatically downloads tracks, enriches them with metadata, and stores them in a structured way in your music library – all via a modern web interface for local single-user use.
 
-## Highlights für Anwender
-- **Playlist-Synchronisation:** Importiere Spotify-Playlists per OAuth und halte sie aktuell.
-- **Automatisierte Downloads:** Lädt Songs über den Soulseek-Dienst [slskd](https://github.com/slskd/slskd).
-- **Bibliotheksverwaltung:** Verschiebt fertige Downloads automatisch in deine Musikbibliothek.
-- **Metadaten & Cover:** Ergänzt Titel mit Informationen aus MusicBrainz und CoverArtArchive.
-- **Moderne Web-App:** Bedienung per Browser mit intuitivem UI, Suchfiltern und Statusmeldungen.
-- **Lokale Nutzung:** Optimiert für Single-User Setup ohne Cloud-Deployment.
+## Highlights for Users
+- **Playlist Synchronization:** Import Spotify playlists via OAuth and keep them up to date.
+- **Automated Downloads:** Downloads songs via the Soulseek service [slskd](https://github.com/slskd/slskd).
+- **Library Management:** Automatically moves finished downloads to your music library.
+- **Metadata & Cover Art:** Enriches tracks with information from MusicBrainz and CoverArtArchive.
+- **Modern Web App:** Browser-based interface with intuitive UI, search filters, and status messages.
+- **Local Use:** Optimized for single-user setup without cloud deployment.
 
-## Systemvoraussetzungen
-- Docker 20.10 oder neuer sowie Docker Compose 2.x.
-- Ein Spotify-Entwicklerkonto (Client ID & Secret) für den OAuth-Zugriff.
-- Ein Soulseek-Account bzw. slskd-API-Schlüssel.
-- Genügend Speicherplatz für Downloads sowie zwei lokale Ordner: `mnt/downloads` und `mnt/music`.
+## System Requirements
+- Docker 20.10 or newer plus Docker Compose 2.x.
+- A Spotify developer account (Client ID & Secret) for OAuth access.
+- A Soulseek account or slskd API key.
+- Sufficient storage space for downloads and two local folders: `mnt/downloads` and `mnt/music`.
 
-## Schnellstart mit Docker
-1. Repository klonen und wechseln:
+## Quickstart with Docker
+1. Clone the repository and navigate to it:
    ```bash
    git clone https://github.com/bozzfozz/soulspot.git
    cd soulspot
    ```
-2. Ordner für Downloads und Bibliothek anlegen:
+2. Create folders for downloads and library:
    ```bash
    mkdir -p mnt/downloads mnt/music
    ```
-3. Beispiel-Umgebungsdatei kopieren und bearbeiten:
+3. Copy and edit the example environment file:
    ```bash
    cp .env.example .env
    ```
-   Trage mindestens folgende Werte ein:
+   Enter at least the following values:
    ```env
-   SPOTIFY_CLIENT_ID=deine_spotify_client_id
-   SPOTIFY_CLIENT_SECRET=dein_spotify_client_secret
-   SLSKD_API_KEY=dein_slskd_api_key   # alternativ Benutzername/Passwort
+   SPOTIFY_CLIENT_ID=your_spotify_client_id
+   SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
+   SLSKD_API_KEY=your_slskd_api_key   # alternatively username/password
    ```
-4. Container starten:
+4. Start the containers:
    ```bash
    docker-compose -f docker/docker-compose.yml up -d
    ```
-5. Logs prüfen (optional):
+5. Check logs (optional):
    ```bash
    docker-compose -f docker/docker-compose.yml logs -f
    ```
 
-Weitere Konfigurationsmöglichkeiten (z. B. Benutzer-IDs, Zeitzone, geheime Schlüssel) findest du im [Docker Setup Guide](docker/README.md).
+More configuration options (e.g., user IDs, timezone, secret keys) can be found in the [Docker Setup Guide](docker/README.md).
 
-## Zugriff nach dem Start
-| Dienst | URL | Beschreibung |
+## Access After Startup
+| Service | URL | Description |
 | --- | --- | --- |
-| Web-App | http://localhost:8765 | Hauptoberfläche zum Verwalten deiner Musik |
-| API | http://localhost:8765/api | API-Endpoints der Anwendung |
-| API-Dokumentation | http://localhost:8765/docs | Technische API-Ansicht (optional) |
-| slskd Web UI | http://localhost:5030 | Verwaltung des Soulseek-Dienstes |
+| Web App | http://localhost:8765 | Main interface for managing your music |
+| API | http://localhost:8765/api | API endpoints of the application |
+| API Documentation | http://localhost:8765/docs | Technical API view (optional) |
+| slskd Web UI | http://localhost:5030 | Management of the Soulseek service |
 
-## Erste Schritte in der Anwendung
-1. Öffne die Web-App und melde dich mit deinem Spotify-Konto an, um Playlists freizugeben.
-2. Hinterlege deinen Soulseek-Zugang (API-Key oder Benutzername/Passwort).
-3. Wähle die Playlists aus, die synchronisiert werden sollen.
-4. Beobachte den Download-Status und prüfe deine `mnt/music`-Bibliothek.
+## Getting Started
+1. Open the web app and log in with your Spotify account to authorize playlists.
+2. Configure your Soulseek access (API key or username/password).
+3. Select the playlists you want to synchronize.
+4. Monitor the download status and check your `mnt/music` library.
 
-Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien in regelmäßigen Abständen aus `mnt/downloads` nach `mnt/music`. Unterstützte Formate sind u. a. MP3, FLAC, M4A und OGG.
+The automatic music import function periodically moves finished downloads from `mnt/downloads` to `mnt/music`. Supported formats include MP3, FLAC, M4A, and OGG.
 
-## Dokumentation
+## Documentation
 
-### Für Anwender
-- **[Setup Guide](docs/guides/user/setup-guide.md)** - Ausführliche Installations- und Konfigurationsanleitung
-- **[User Guide](docs/guides/user/user-guide.md)** - Vollständige Anleitung für alle Funktionen
-- **[Troubleshooting](docs/guides/user/troubleshooting-guide.md)** - Lösungen für häufige Probleme
-- **[Docker Setup Guide](docker/README.md)** - Docker-spezifische Konfiguration
+### For Users
+- **[Setup Guide](docs/guides/user/setup-guide.md)** - Detailed installation and configuration instructions
+- **[User Guide](docs/guides/user/user-guide.md)** - Complete guide for all features
+- **[Troubleshooting](docs/guides/user/troubleshooting-guide.md)** - Solutions for common problems
+- **[Docker Setup Guide](docker/README.md)** - Docker-specific configuration
 
-### Für Entwickler
-- **[Architecture](docs/project/architecture.md)** - System-Architektur und Design
-- **[Service-Agnostic Backend](docs/architecture/SERVICE_AGNOSTIC_BACKEND.md)** - Multi-Service Architektur (Spotify/Tidal/Deezer)
-- **[Contributing](docs/project/contributing.md)** - Richtlinien für Beiträge
-- **[Backend Roadmap](docs/development/backend-roadmap.md)** - Backend-Entwicklungsplan
-- **[API Documentation](docs/api/)** - REST API Referenz (200 Endpoints)
+### For Developers
+- **[Architecture](docs/project/architecture.md)** - System architecture and design
+- **[Service-Agnostic Backend](docs/architecture/SERVICE_AGNOSTIC_BACKEND.md)** - Multi-service architecture (Spotify/Tidal/Deezer)
+- **[Contributing](docs/project/contributing.md)** - Guidelines for contributions
+- **[Backend Roadmap](docs/development/backend-roadmap.md)** - Backend development plan
+- **[API Documentation](docs/api/)** - REST API reference (200 endpoints)
 
-### Architektur-Übersicht
+### Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -133,17 +133,22 @@ Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien
 ```
 
 **Key Features:**
-- **ISRC-basierte Deduplizierung** - Tracks werden via International Standard Recording Code eindeutig identifiziert
-- **Multi-Service IDs** - Entities haben `spotify_uri`, `deezer_id`, `tidal_id` für Cross-Service-Kompatibilität
-- **Service-agnostische Domain** - Gleiche Track/Artist/Album-Entities für alle Musik-Services
+- **ISRC-based Deduplication** - Tracks are uniquely identified via International Standard Recording Code
+- **Multi-Service IDs** - Entities have `spotify_uri`, `deezer_id`, `tidal_id` for cross-service compatibility
+- **Service-agnostic Domain** - Same Track/Artist/Album entities for all music services
 
-### Weitere Ressourcen
-- **[CHANGELOG](docs/project/CHANGELOG.md)** - Versionshinweise und Änderungshistorie
-- **[Modernization Plan](docs/MODERNIZATION_PLAN.md)** - Backend-Modernisierung Roadmap
-- **[Complete Documentation](docs/)** - Vollständige Dokumentationsübersicht
+### Additional Resources
+- **[CHANGELOG](docs/project/CHANGELOG.md)** - Release notes and change history
+- **[Modernization Plan](docs/MODERNIZATION_PLAN.md)** - Backend modernization roadmap
+- **[Complete Documentation](docs/)** - Full documentation overview
 
-## Lizenz
-Die Lizenz ist noch in Arbeit und wird vor dem ersten Stable-Release veröffentlicht.
+## License
+The license is still being finalized and will be published before the first stable release.
 
 ---
-**Version:** 2.0 · **Status:** Active Development · **Verwendung:** Local Single-User · **Letzte Aktualisierung:** 2025-12-12
+
+<div align="center">
+
+**Version:** 2.0 · **Status:** ⚠️ ACTIVE DEVELOPMENT - NOT FOR PRODUCTION ⚠️ · **Use:** Local Single-User · **Last Updated:** 2025-01-15
+
+</div>
