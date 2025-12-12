@@ -12,12 +12,13 @@ from soulspot.api.dependencies import (
     get_download_repository,
     get_download_worker,
     get_job_queue,
+    get_track_repository,
 )
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.domain.entities import Download, DownloadStatus
-from soulspot.domain.value_objects import DownloadId, TrackId
-from soulspot.infrastructure.persistence.repositories import DownloadRepository
+from soulspot.domain.value_objects import DownloadId, SpotifyUri, TrackId
+from soulspot.infrastructure.persistence.repositories import DownloadRepository, TrackRepository
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -108,6 +109,7 @@ class SingleDownloadRequest(BaseModel):
 async def create_download(
     request: SingleDownloadRequest,
     download_repository: DownloadRepository = Depends(get_download_repository),
+    track_repository: TrackRepository = Depends(get_track_repository),
     download_worker: DownloadWorker = Depends(get_download_worker),
     slskd_available: bool = Depends(check_slskd_available),
 ) -> dict[str, Any]:
@@ -117,10 +119,13 @@ async def create_download(
     with WAITING status and will be processed when slskd becomes available.
 
     Accepts either track_id (local DB ID) or spotify_id (Spotify track ID).
+    If spotify_id is provided, looks up the track in DB first. If not found,
+    returns 404 (track must be imported first via playlist sync or manual import).
 
     Args:
         request: Download request with track_id/spotify_id and optional metadata
         download_repository: Download repository
+        track_repository: Track repository for spotify_id lookup
         download_worker: Download worker for queueing
         slskd_available: Whether slskd is currently available
 
@@ -135,12 +140,26 @@ async def create_download(
         # Determine track_id to use
         track_id_str = request.track_id
 
-        # If only spotify_id provided, use it as the track reference
-        # (In a full implementation, we'd look up or create the track in our DB first)
+        # Hey future me - if only spotify_id provided, LOOK UP the track in our DB!
+        # This is important because TrackId expects a UUID, not a spotify URI.
+        # The track should already exist (from playlist import). If not found, 404.
         if not track_id_str and request.spotify_id:
-            # For now, use spotify_id directly as track reference
-            # TODO: Look up track by spotify_id or create placeholder
-            track_id_str = request.spotify_id
+            # Look up track by spotify URI (e.g., "spotify:track:abc123")
+            spotify_uri = SpotifyUri.from_string(request.spotify_id)
+            existing_track = await track_repository.get_by_spotify_uri(spotify_uri)
+
+            if existing_track:
+                # Found track - use its ID
+                track_id_str = str(existing_track.id.value)
+                logger.debug(f"Found track by spotify_id: {request.spotify_id} -> {track_id_str}")
+            else:
+                # Track not in DB - user needs to import it first
+                logger.warning(f"Track not found for spotify_id: {request.spotify_id}")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Track with spotify_id '{request.spotify_id}' not found in database. "
+                           "Please import the track first (via playlist sync or manual import)."
+                )
 
         track_id = TrackId.from_string(track_id_str)
 

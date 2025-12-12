@@ -79,17 +79,51 @@ Die automatische Musik-Importfunktion verschiebt fertig heruntergeladene Dateien
 
 ### Für Entwickler
 - **[Architecture](docs/project/architecture.md)** - System-Architektur und Design
+- **[Service-Agnostic Backend](docs/architecture/SERVICE_AGNOSTIC_BACKEND.md)** - Multi-Service Architektur (Spotify/Tidal/Deezer)
 - **[Contributing](docs/project/contributing.md)** - Richtlinien für Beiträge
 - **[Backend Roadmap](docs/development/backend-roadmap.md)** - Backend-Entwicklungsplan
-- **[Frontend Roadmap](docs/development/frontend-roadmap.md)** - Frontend-Entwicklungsplan
-- **[API Documentation](docs/api/)** - REST API Referenz
+- **[API Documentation](docs/api/)** - REST API Referenz (200 Endpoints)
+
+### Architektur-Übersicht
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    API Layer (FastAPI)                       │
+│   18 Router · 200 Endpoints · HTMX/Jinja2 Templates         │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                Application Layer (Services)                  │
+│   20+ Services · Clean Architecture · Async/Await           │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Domain Layer (Entities + Ports)                 │
+│   Track · Artist · Album · Playlist │ Interface Definitions │
+│   (Service-agnostic: Spotify/Tidal/Deezer ready)            │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│            Infrastructure Layer (Implementations)            │
+│   SpotifyClient · SQLAlchemy Repos · MusicBrainz Client     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+- **ISRC-basierte Deduplizierung** - Tracks werden via International Standard Recording Code eindeutig identifiziert
+- **Multi-Service IDs** - Entities haben `spotify_uri`, `deezer_id`, `tidal_id` für Cross-Service-Kompatibilität
+- **Service-agnostische Domain** - Gleiche Track/Artist/Album-Entities für alle Musik-Services
 
 ### Weitere Ressourcen
 - **[CHANGELOG](docs/project/CHANGELOG.md)** - Versionshinweise und Änderungshistorie
+- **[Modernization Plan](docs/MODERNIZATION_PLAN.md)** - Backend-Modernisierung Roadmap
 - **[Complete Documentation](docs/)** - Vollständige Dokumentationsübersicht
 
 ## Lizenz
 Die Lizenz ist noch in Arbeit und wird vor dem ersten Stable-Release veröffentlicht.
 
 ---
-**Version:** 1.0 · **Status:** Active Development · **Verwendung:** Local Single-User · **Letzte Aktualisierung:** 2025-11-19
+**Version:** 2.0 · **Status:** Active Development · **Verwendung:** Local Single-User · **Letzte Aktualisierung:** 2025-12-12

@@ -96,6 +96,11 @@ class Artist:
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
     image_url: str | None = None
+    # Hey future me - multi-service IDs for cross-service artist deduplication!
+    # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
+    # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     # Hey future me - disambiguation is for Lidarr-style naming templates!
     # Sourced from MusicBrainz to differentiate artists with the same name.
     # Example: "Genesis" has disambiguation "English rock band" vs other Genesis artists.
@@ -144,6 +149,11 @@ class Album:
     release_year: int | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
+    # Hey future me - multi-service IDs for cross-service album deduplication!
+    # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
+    # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     artwork_path: FilePath | None = None
     artwork_url: str | None = None  # Spotify CDN URL for album cover
     # Hey future me - Lidarr-style dual album type system for naming templates!
@@ -238,6 +248,11 @@ class Track:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     isrc: str | None = None
+    # Hey future me - multi-service IDs for cross-service deduplication!
+    # ISRC is the universal track identifier, these are service-specific IDs for API calls.
+    # When syncing from multiple services, ISRC is primary dedup key.
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     file_path: FilePath | None = None
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)

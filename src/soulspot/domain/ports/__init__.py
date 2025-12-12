@@ -110,6 +110,42 @@ class IArtistRepository(ABC):
         """
         pass
 
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+    # Hey future me - these are THE KEY for multi-service deduplication!
+    # When syncing from Deezer/Tidal, check if artist already exists via these IDs
+    # before creating a new one. This prevents duplicates across services.
+    # =========================================================================
+
+    @abstractmethod
+    async def get_by_deezer_id(self, deezer_id: str) -> Artist | None:
+        """Get an artist by Deezer ID.
+
+        Used when syncing from Deezer to check if artist already exists.
+
+        Args:
+            deezer_id: Deezer artist ID (e.g., '27')
+
+        Returns:
+            Artist entity if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_tidal_id(self, tidal_id: str) -> Artist | None:
+        """Get an artist by Tidal ID.
+
+        Used when syncing from Tidal to check if artist already exists.
+
+        Args:
+            tidal_id: Tidal artist ID (e.g., '3566')
+
+        Returns:
+            Artist entity if found, None otherwise
+        """
+        pass
+
 
 class IAlbumRepository(ABC):
     """Repository interface for Album entities."""
@@ -179,6 +215,34 @@ class IAlbumRepository(ABC):
 
         Returns:
             Count of albums with spotify_uri IS NOT NULL
+        """
+        pass
+
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_by_deezer_id(self, deezer_id: str) -> Album | None:
+        """Get an album by Deezer ID.
+
+        Args:
+            deezer_id: Deezer album ID
+
+        Returns:
+            Album entity if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_tidal_id(self, tidal_id: str) -> Album | None:
+        """Get an album by Tidal ID.
+
+        Args:
+            tidal_id: Tidal album ID
+
+        Returns:
+            Album entity if found, None otherwise
         """
         pass
 
@@ -275,6 +339,34 @@ class ITrackRepository(ABC):
 
         Returns:
             List of Track entities with ISRC but no spotify_uri
+        """
+        pass
+
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_by_deezer_id(self, deezer_id: str) -> Track | None:
+        """Get a track by Deezer ID.
+
+        Args:
+            deezer_id: Deezer track ID
+
+        Returns:
+            Track entity if found, None otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_tidal_id(self, tidal_id: str) -> Track | None:
+        """Get a track by Tidal ID.
+
+        Args:
+            tidal_id: Tidal track ID
+
+        Returns:
+            Track entity if found, None otherwise
         """
         pass
 
@@ -1071,4 +1163,325 @@ class ISessionRepository(ABC):
     @abstractmethod
     async def get_by_oauth_state(self, state: str) -> Any | None:
         """Get session by OAuth state parameter (during OAuth callback)."""
+        pass
+
+
+# =============================================================================
+# MULTI-SERVICE CLIENT INTERFACES (Future: Deezer, Tidal)
+# =============================================================================
+# Hey future me - these are STUB interfaces for future Deezer/Tidal integration!
+# They follow the same pattern as ISpotifyClient (service-specific, not generic).
+# When implementing:
+# 1. Create DeezerClient/TidalClient in infrastructure/integrations/
+# 2. Add OAuth routes in api/routers/deezer_auth.py, tidal_auth.py
+# 3. Create session models (DeezerSessionModel, TidalSessionModel)
+# 4. Update services to support multiple clients
+#
+# IMPORTANT: Each service has different:
+# - OAuth flows (PKCE vs client_secret)
+# - API response formats
+# - Rate limits
+# - Available features (HiFi, Flow, etc.)
+# =============================================================================
+
+
+class IDeezerClient(ABC):
+    """Port for Deezer API client operations.
+
+    Hey future me - Deezer uses OAuth 2.0 with access_token (no PKCE).
+    Rate limit: 50 requests/5 seconds. API base: https://api.deezer.com
+
+    Deezer-specific features:
+    - "Flow" personalized radio
+    - Podcasts integration
+    - No refresh tokens (tokens expire after ~30 days)
+
+    Implementation notes:
+    - Deezer IDs are integers (stored as strings in our DB)
+    - Track ISRC available via /track/{id} endpoint
+    - Album artwork: cover_medium, cover_big, cover_xl fields
+    """
+
+    # =========================================================================
+    # OAUTH
+    # =========================================================================
+
+    @abstractmethod
+    async def get_authorization_url(self, state: str) -> str:
+        """Generate Deezer OAuth authorization URL.
+
+        Args:
+            state: State parameter for CSRF protection
+
+        Returns:
+            Authorization URL (https://connect.deezer.com/oauth/auth.php?...)
+        """
+        pass
+
+    @abstractmethod
+    async def exchange_code(self, code: str) -> dict[str, Any]:
+        """Exchange authorization code for access token.
+
+        Args:
+            code: Authorization code from OAuth callback
+
+        Returns:
+            Token response with access_token, expires (seconds)
+            Note: Deezer doesn't provide refresh_token!
+        """
+        pass
+
+    # =========================================================================
+    # USER DATA
+    # =========================================================================
+
+    @abstractmethod
+    async def get_user_info(self, access_token: str) -> dict[str, Any]:
+        """Get current user's profile info.
+
+        Returns:
+            User data including id, name, email, picture
+        """
+        pass
+
+    @abstractmethod
+    async def get_user_playlists(
+        self, access_token: str, limit: int = 50, index: int = 0
+    ) -> dict[str, Any]:
+        """Get current user's playlists.
+
+        Args:
+            access_token: OAuth access token
+            limit: Maximum playlists to return
+            index: Offset for pagination
+
+        Returns:
+            Paginated list with 'data', 'total', 'next' fields
+        """
+        pass
+
+    @abstractmethod
+    async def get_favorite_artists(
+        self, access_token: str, limit: int = 50, index: int = 0
+    ) -> dict[str, Any]:
+        """Get user's favorite (followed) artists.
+
+        Returns:
+            Paginated list of artists with 'data', 'total' fields
+        """
+        pass
+
+    # =========================================================================
+    # TRACKS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_track(self, track_id: str, access_token: str) -> dict[str, Any]:
+        """Get track details by Deezer ID.
+
+        Returns:
+            Track data including title, isrc, duration, album, artist
+        """
+        pass
+
+    @abstractmethod
+    async def search_track(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for tracks.
+
+        Returns:
+            Search results with 'data' array of tracks
+        """
+        pass
+
+    # =========================================================================
+    # ALBUMS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_album(self, album_id: str, access_token: str) -> dict[str, Any]:
+        """Get album details including track list."""
+        pass
+
+    @abstractmethod
+    async def search_album(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for albums."""
+        pass
+
+    # =========================================================================
+    # ARTISTS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_artist(self, artist_id: str, access_token: str) -> dict[str, Any]:
+        """Get artist details."""
+        pass
+
+    @abstractmethod
+    async def get_artist_albums(
+        self, artist_id: str, access_token: str, limit: int = 50
+    ) -> dict[str, Any]:
+        """Get artist's albums."""
+        pass
+
+    @abstractmethod
+    async def search_artist(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for artists."""
+        pass
+
+
+class ITidalClient(ABC):
+    """Port for Tidal API client operations.
+
+    Hey future me - Tidal uses OAuth 2.0 with PKCE (like Spotify).
+    Rate limit: 100 requests/minute. API base: https://openapi.tidal.com
+
+    Tidal-specific features:
+    - "Master" quality (MQA/FLAC, up to 24-bit/192kHz)
+    - "HiFi" quality (FLAC, 16-bit/44.1kHz)
+    - Dolby Atmos tracks
+    - Sony 360 Reality Audio
+
+    Implementation notes:
+    - Tidal uses UUIDs for some IDs, integers for others
+    - Track ISRC available via track metadata
+    - Different API for catalog vs user library
+    """
+
+    # =========================================================================
+    # OAUTH
+    # =========================================================================
+
+    @abstractmethod
+    async def get_authorization_url(self, state: str, code_verifier: str) -> str:
+        """Generate Tidal OAuth authorization URL with PKCE.
+
+        Args:
+            state: State parameter for CSRF protection
+            code_verifier: PKCE code verifier
+
+        Returns:
+            Authorization URL
+        """
+        pass
+
+    @abstractmethod
+    async def exchange_code(self, code: str, code_verifier: str) -> dict[str, Any]:
+        """Exchange authorization code for tokens.
+
+        Args:
+            code: Authorization code
+            code_verifier: PKCE code verifier
+
+        Returns:
+            Token response with access_token, refresh_token, expires_in
+        """
+        pass
+
+    @abstractmethod
+    async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        """Refresh access token.
+
+        Returns:
+            New token response
+        """
+        pass
+
+    # =========================================================================
+    # USER DATA
+    # =========================================================================
+
+    @abstractmethod
+    async def get_user_info(self, access_token: str) -> dict[str, Any]:
+        """Get current user's profile and subscription info.
+
+        Returns:
+            User data including subscription tier (HiFi, HiFi Plus)
+        """
+        pass
+
+    @abstractmethod
+    async def get_user_playlists(
+        self, access_token: str, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        """Get current user's playlists.
+
+        Returns:
+            Paginated list of playlists
+        """
+        pass
+
+    @abstractmethod
+    async def get_favorite_artists(
+        self, access_token: str, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        """Get user's favorite artists.
+
+        Returns:
+            Paginated list of artists
+        """
+        pass
+
+    # =========================================================================
+    # TRACKS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_track(self, track_id: str, access_token: str) -> dict[str, Any]:
+        """Get track details by Tidal ID.
+
+        Returns:
+            Track data including title, isrc, duration, quality info
+        """
+        pass
+
+    @abstractmethod
+    async def search_track(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for tracks."""
+        pass
+
+    # =========================================================================
+    # ALBUMS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_album(self, album_id: str, access_token: str) -> dict[str, Any]:
+        """Get album details including track list and quality info."""
+        pass
+
+    @abstractmethod
+    async def search_album(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for albums."""
+        pass
+
+    # =========================================================================
+    # ARTISTS
+    # =========================================================================
+
+    @abstractmethod
+    async def get_artist(self, artist_id: str, access_token: str) -> dict[str, Any]:
+        """Get artist details."""
+        pass
+
+    @abstractmethod
+    async def get_artist_albums(
+        self, artist_id: str, access_token: str, limit: int = 50
+    ) -> dict[str, Any]:
+        """Get artist's albums."""
+        pass
+
+    @abstractmethod
+    async def search_artist(
+        self, query: str, access_token: str, limit: int = 25
+    ) -> dict[str, Any]:
+        """Search for artists."""
         pass

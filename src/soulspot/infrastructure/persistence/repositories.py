@@ -83,6 +83,7 @@ class ArtistRepository(IArtistRepository):
     # Hey - image_url is stored directly as string (Spotify CDN URL)!
     # Hey - disambiguation is text disambiguation from folder (e.g., "English rock band")!
     # Hey - source tracks LOCAL/SPOTIFY/HYBRID for unified Music Manager view!
+    # Hey - deezer_id/tidal_id are multi-service IDs for cross-service deduplication!
     async def add(self, artist: Artist) -> None:
         """Add a new artist."""
         model = ArtistModel(
@@ -92,6 +93,8 @@ class ArtistRepository(IArtistRepository):
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
             image_url=artist.image_url,
+            deezer_id=artist.deezer_id,
+            tidal_id=artist.tidal_id,
             disambiguation=artist.disambiguation,
             genres=json.dumps(artist.genres) if artist.genres else None,
             tags=json.dumps(artist.tags) if artist.tags else None,
@@ -114,6 +117,8 @@ class ArtistRepository(IArtistRepository):
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
         model.image_url = artist.image_url
+        model.deezer_id = artist.deezer_id
+        model.tidal_id = artist.tidal_id
         model.disambiguation = artist.disambiguation
         model.genres = json.dumps(artist.genres) if artist.genres else None
         model.tags = json.dumps(artist.tags) if artist.tags else None
@@ -527,6 +532,88 @@ class ArtistRepository(IArtistRepository):
             for model in models
         ]
 
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+    # Hey future me - these are THE KEY for multi-service deduplication!
+    # When syncing from Deezer/Tidal, check if artist already exists via these IDs
+    # before creating a new one. Pattern identical to get_by_spotify_uri.
+    # =========================================================================
+
+    async def get_by_deezer_id(self, deezer_id: str) -> Artist | None:
+        """Get an artist by Deezer ID.
+
+        Used when syncing from Deezer to check if artist already exists.
+
+        Args:
+            deezer_id: Deezer artist ID (e.g., '27')
+
+        Returns:
+            Artist entity if found, None otherwise
+        """
+        stmt = select(ArtistModel).where(ArtistModel.deezer_id == deezer_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        from soulspot.domain.entities import ArtistSource
+        return Artist(
+            id=ArtistId.from_string(model.id),
+            name=model.name,
+            source=ArtistSource(model.source),
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            image_url=model.image_url,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            disambiguation=model.disambiguation,
+            genres=json.loads(model.genres) if model.genres else [],
+            tags=json.loads(model.tags) if model.tags else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_tidal_id(self, tidal_id: str) -> Artist | None:
+        """Get an artist by Tidal ID.
+
+        Used when syncing from Tidal to check if artist already exists.
+
+        Args:
+            tidal_id: Tidal artist ID (e.g., '3566')
+
+        Returns:
+            Artist entity if found, None otherwise
+        """
+        stmt = select(ArtistModel).where(ArtistModel.tidal_id == tidal_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        from soulspot.domain.entities import ArtistSource
+        return Artist(
+            id=ArtistId.from_string(model.id),
+            name=model.name,
+            source=ArtistSource(model.source),
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            image_url=model.image_url,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            disambiguation=model.disambiguation,
+            genres=json.loads(model.genres) if model.genres else [],
+            tags=json.loads(model.tags) if model.tags else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
 
 class AlbumRepository(IAlbumRepository):
     """SQLAlchemy implementation of Album repository."""
@@ -804,6 +891,78 @@ class AlbumRepository(IAlbumRepository):
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+
+    async def get_by_deezer_id(self, deezer_id: str) -> Album | None:
+        """Get an album by Deezer ID.
+
+        Args:
+            deezer_id: Deezer album ID
+
+        Returns:
+            Album entity if found, None otherwise
+        """
+        stmt = select(AlbumModel).where(AlbumModel.deezer_id == deezer_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            release_year=model.release_year,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_tidal_id(self, tidal_id: str) -> Album | None:
+        """Get an album by Tidal ID.
+
+        Args:
+            tidal_id: Tidal album ID
+
+        Returns:
+            Album entity if found, None otherwise
+        """
+        stmt = select(AlbumModel).where(AlbumModel.tidal_id == tidal_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            release_year=model.release_year,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
 
 
 class TrackRepository(ITrackRepository):
@@ -1347,6 +1506,95 @@ class TrackRepository(ITrackRepository):
             )
             for model in models
         ]
+
+    # =========================================================================
+    # MULTI-SERVICE LOOKUP METHODS
+    # =========================================================================
+    # Hey future me - these are for multi-service deduplication!
+    # Pattern: Check ISRC first (universal), then service ID, then name match.
+    # =========================================================================
+
+    async def get_by_deezer_id(self, deezer_id: str) -> Track | None:
+        """Get a track by Deezer ID.
+
+        Args:
+            deezer_id: Deezer track ID
+
+        Returns:
+            Track entity if found, None otherwise
+        """
+        stmt = select(TrackModel).where(TrackModel.deezer_id == deezer_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id)
+            if model.album_id
+            else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    async def get_by_tidal_id(self, tidal_id: str) -> Track | None:
+        """Get a track by Tidal ID.
+
+        Args:
+            tidal_id: Tidal track ID
+
+        Returns:
+            Track entity if found, None otherwise
+        """
+        stmt = select(TrackModel).where(TrackModel.tidal_id == tidal_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id)
+            if model.album_id
+            else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
 
 
 class PlaylistRepository(IPlaylistRepository):

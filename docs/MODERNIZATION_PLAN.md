@@ -458,11 +458,53 @@ class TrackService:
             self.clients["tidal"] = tidal_client
 ```
 
-**Week 5: ISRC Matching & Deduplication** (OPTIONAL - Future Enhancement)
-- [ ] Add ISRC field to Track entity (if not exists)
-- [ ] Create mapping tables (spotify_track_mappings, tidal_track_mappings)
-- [ ] Implement get_or_create_track() service method
-- [ ] Backfill ISRC for existing tracks (via MusicBrainz)
+**Week 5: ISRC Matching & Multi-Service Deduplication** ✅ COMPLETED (2025-12-12)
+- [x] Add deezer_id/tidal_id fields to Models (ArtistModel, AlbumModel, TrackModel)
+- [x] Add deezer_id/tidal_id fields to Entities (Artist, Album, Track)
+- [x] Create migration `ss30015uuv63_add_multi_service_ids.py`
+- [x] ISRC field already exists on TrackModel (unique=True, index=True)
+- [x] Add `get_by_isrc()` method to ITrackRepository (already existed)
+- [x] Add `get_by_deezer_id()` and `get_by_tidal_id()` methods to:
+  - IArtistRepository + ArtistRepository
+  - IAlbumRepository + AlbumRepository
+  - ITrackRepository + TrackRepository
+
+**Implementation Details (2025-12-12):**
+- **Models (`infrastructure/persistence/models.py`):**
+  - ArtistModel: Added `deezer_id` and `tidal_id` (String(50), nullable, unique, indexed)
+  - AlbumModel: Added `deezer_id` and `tidal_id` (String(50), nullable, unique, indexed)
+  - TrackModel: Added `deezer_id` and `tidal_id` (String(50), nullable, unique, indexed)
+
+- **Entities (`domain/entities/__init__.py`):**
+  - Artist: Added `deezer_id: str | None = None` and `tidal_id: str | None = None`
+  - Album: Added `deezer_id: str | None = None` and `tidal_id: str | None = None`
+  - Track: Added `deezer_id: str | None = None` and `tidal_id: str | None = None`
+
+- **Interfaces (`domain/ports/__init__.py`):**
+  - IArtistRepository: Added `get_by_deezer_id()` and `get_by_tidal_id()`
+  - IAlbumRepository: Added `get_by_deezer_id()` and `get_by_tidal_id()`
+  - ITrackRepository: Added `get_by_deezer_id()` and `get_by_tidal_id()` (get_by_isrc already existed)
+
+- **Repositories (`infrastructure/persistence/repositories.py`):**
+  - ArtistRepository: Implemented `get_by_deezer_id()` and `get_by_tidal_id()`
+  - AlbumRepository: Implemented `get_by_deezer_id()` and `get_by_tidal_id()`
+  - TrackRepository: Implemented `get_by_deezer_id()` and `get_by_tidal_id()` (get_by_isrc already existed)
+
+- **Migration (`alembic/versions/ss30015uuv63_add_multi_service_ids.py`):**
+  - Adds 6 columns (deezer_id, tidal_id) to 3 tables (soulspot_artists, soulspot_albums, soulspot_tracks)
+  - Creates 6 unique indexes for fast deduplication lookups
+  - Includes "future-self" comments explaining multi-service strategy
+  - Full downgrade() path implemented
+
+**Multi-Service Deduplication Strategy:**
+```
+When syncing from Deezer/Tidal in the future:
+1. Check ISRC first (tracks only) - universal identifier
+2. Check service ID (deezer_id/tidal_id) - prevent duplicate imports
+3. Check name match - fallback for entities without universal IDs
+4. If found: Update existing entity with new service ID
+5. If not found: Create new entity with service ID
+```
 
 **Week 6: Documentation Update** (RECOMMENDED)
 - [ ] Update all docs marked as UPDATE NEEDED

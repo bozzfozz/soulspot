@@ -83,6 +83,15 @@ class ArtistModel(Base):
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
     )
+    # Hey future me - service-specific IDs for multi-service support!
+    # Same pattern as Track: store all service IDs to avoid duplicates when syncing
+    # from multiple services. MusicBrainz ID is the universal key (like ISRC for tracks).
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
     # Hey future me - image_url stores the artist's profile picture from Spotify CDN!
     # Typically 320x320 resolution. String(512) allows for long URLs. Nullable because
     # not all artists have images. This is added after genres/tags migration.
@@ -134,6 +143,14 @@ class AlbumModel(Base):
     )
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
+    )
+    # Hey future me - service-specific IDs for multi-service support!
+    # Same pattern as Track/Artist. Albums can be synced from Spotify, Deezer, or Tidal.
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
     )
     artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Hey future me - artwork_url stores album cover from Spotify CDN! Similar to artist
@@ -226,6 +243,18 @@ class TrackModel(Base):
     )
     isrc: Mapped[str | None] = mapped_column(
         String(12), nullable=True, unique=True, index=True
+    )
+    # Hey future me - service-specific IDs for multi-service support! ISRC is the universal key
+    # but each streaming service has their own ID format. Store all of them so we can:
+    # 1. Link same track across services (Spotify track X = Deezer track Y = Tidal track Z)
+    # 2. Avoid re-downloading if user syncs from multiple services
+    # 3. Query back to original service for metadata refresh
+    # ISRC is primary dedup key, these are secondary links for API calls.
+    deezer_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
+    )
+    tidal_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, unique=True, index=True
     )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 

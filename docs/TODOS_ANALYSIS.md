@@ -1,68 +1,49 @@
 # TODOs & Unvollständige Implementierungen
 
 **Generated:** 2025-12-12  
-**Total TODOs:** 35  
-**Status:** Kategorisiert nach Kritikalität
+**Last Updated:** 2025-12-12 (Backend Modernization Complete)  
+**Total TODOs:** 35 → **8 remaining**  
+**Status:** ✅ CRITICAL TODOs behoben, nur mittlere/niedrige verbleiben
 
 ---
 
-## 🔴 CRITICAL (Funktionalität fehlt / Bug-Risiko)
+## 🟢 STATUS: KRITISCHE TODOs BEHOBEN
 
-### 1. Metadata Conflict Detection (metadata.py:88)
-**Issue:** `# TODO - conflict detection isn't implemented! That's a pretty critical feature`
+Die folgenden kritischen Issues wurden in der Backend-Modernisierung behoben:
 
-**Location:** `src/soulspot/api/routers/metadata.py:88`
+### ✅ 1. Metadata Conflict Detection - ERLEDIGT
+**Was:** `metadata.py:88` - Conflict detection implementiert  
+**Fix:** MetadataMerger._detect_conflicts() findet Widersprüche zwischen Quellen  
+**Datum:** 2025-12-12
 
-**Problem:** Kein Konflikt-Handling bei widersprüchlichen Metadaten aus verschiedenen Quellen (Spotify vs. MusicBrainz).
+### ✅ 2. Spotify Token Extraction - ERLEDIGT
+**Was:** `metadata.py:126` - Token aus Session extrahieren  
+**Fix:** get_spotify_token_shared() mit auto-refresh implementiert  
+**Datum:** 2025-12-12
 
-**Impact:** 🔴 HIGH - Kann zu falschen Metadaten führen, Datenintegrität gefährdet.
+### ✅ 3. Settings Reset - ERLEDIGT
+**Was:** `settings.py:294` - Reset-Funktion fehlte  
+**Fix:** AppSettingsService.reset_all(category) implementiert  
+**Datum:** 2025-12-12
 
-**Fix Required:**
-```python
-# Implement conflict resolution strategy:
-# 1. Authority hierarchy (MusicBrainz > Spotify > Last.fm)
-# 2. Confidence scoring per field
-# 3. Manual review queue for critical conflicts
-```
+### ✅ 4. Album Search - ERLEDIGT
+**Was:** `search.py:267` - Album-Suche fehlte  
+**Fix:** SpotifyClient.search_album() + Interface hinzugefügt  
+**Datum:** 2025-12-12
 
----
-
-### 2. Spotify Token Extraction (metadata.py:126)
-**Issue:** `# TODO: Get from auth context - requires session/JWT token extraction`
-
-**Location:** `src/soulspot/api/routers/metadata.py:126`
-
-**Problem:** Spotify-Token wird nicht korrekt aus Session/Auth-Context extrahiert.
-
-**Impact:** 🟡 MEDIUM - Metadata-Enrichment könnte 401 Errors bekommen.
-
-**Fix Required:**
-```python
-# Extract from session:
-spotify_access_token = await get_spotify_token_shared(request)
-```
+### ✅ 5. Deezer ID Field - ERLEDIGT
+**Was:** `local_library_enrichment_service.py:552` - deezer_id Feld fehlte  
+**Fix:** deezer_id + tidal_id zu TrackModel/AlbumModel/ArtistModel hinzugefügt  
+**Datum:** 2025-12-12
 
 ---
 
-### 3. Settings Reset Not Implemented (settings.py:294)
-**Issue:** `# TODO: Implement reset functionality`
+## 🟡 MEDIUM (Verbleibende Feature-Lücken)
 
-**Location:** `src/soulspot/api/routers/settings.py:294`
-
-**Problem:** POST /api/settings/reset funktioniert nicht.
-
-**Impact:** 🟢 LOW - Feature fehlt, aber nicht kritisch.
-
-**Fix Required:**
-```python
-# Load defaults from AppSettingsService
-defaults = await settings_service.get_defaults()
-await settings_service.reset_to_defaults()
-```
-
----
-
-## 🟡 MEDIUM (Feature-Lücken / Verbesserungen)
+### ✅ 6. Duplicate Track Deletion Queue - ERLEDIGT
+**Was:** `library.py:1086-1090` - Automatisches Löschen von Duplikaten  
+**Fix:** resolve_duplicate() löscht Dateien via os.remove() + setzt file_path=None  
+**Datum:** War bereits implementiert, TODO veraltet
 
 ### 4. Duplicate Track Deletion Queue (library.py:1086-1090)
 **Issue:** 
@@ -103,27 +84,14 @@ async def search_album(self, query: str, access_token: str, limit: int = 20):
 
 ---
 
-### 6. Track Lookup by Spotify ID (downloads.py:142)
-**Issue:** `# TODO: Look up track by spotify_id or create placeholder`
-
-**Location:** `src/soulspot/api/routers/downloads.py:142`
-
-**Problem:** Download ohne existierenden Track erstellt keinen Placeholder.
-
-**Impact:** 🟡 MEDIUM - Downloads könnten ohne Track-Referenz bleiben.
-
-**Fix Required:**
-```python
-# Create placeholder track if not found:
-track = await track_repo.get_by_spotify_uri(spotify_uri)
-if not track:
-    track = Track(title="Unknown", artist_id=ArtistId(...))
-    await track_repo.add(track)
-```
+### ✅ 7. Track Lookup by Spotify ID - ERLEDIGT
+**Was:** `downloads.py:142` - Download ohne Track-Lookup  
+**Fix:** Implementiert track_repository.get_by_spotify_uri() lookup. Gibt 404 zurück wenn Track nicht in DB (muss erst importiert werden).  
+**Datum:** 2025-12-12
 
 ---
 
-### 7. Deezer ID Field Missing (local_library_enrichment_service.py:552)
+### ✅ 8. Deezer ID Field Missing - ERLEDIGT (Week 5)
 **Issue:** `# TODO: Consider adding deezer_id field to TrackModel`
 
 **Location:** `src/soulspot/application/services/local_library_enrichment_service.py:552`
