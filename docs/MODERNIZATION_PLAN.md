@@ -387,17 +387,39 @@ class ISessionRepository(Protocol):
 - [ ] Mark deprecated docs with ⚠️ DEPRECATED headers
 - [ ] Create DOCS_STATUS.md with all findings
 
-**Week 2: Interface Standardization**
-- [ ] Add missing repository interfaces (IArtistWatchlistRepository, etc.)
-- [ ] Update all repositories to implement interfaces
-- [ ] Add ITrackClient, IPlaylistClient, IArtistClient interfaces
-- [ ] Update SpotifyClient to implement interfaces
+**Week 2: Interface Standardization** ✅ COMPLETED (2025-12-12)
+- [x] Add missing repository interfaces (IArtistWatchlistRepository, IFilterRuleRepository, IAutomationRuleRepository, IQualityUpgradeCandidateRepository, ISessionRepository)
+- [x] Update all repositories to implement interfaces
+- [ ] Add ITrackClient, IPlaylistClient, IArtistClient interfaces (DEFERRED to Week 4)
+- [ ] Update SpotifyClient to implement interfaces (DEFERRED to Week 4)
 
-**Week 3: Model Renaming**
-- [ ] Rename SessionModel → SpotifySessionModel
-- [ ] Create alembic migration for table rename
-- [ ] Update all repository references
-- [ ] Test migration rollback
+**Implementation Details (2025-12-12):**
+- Added `ISessionRepository` interface in `domain/ports/__init__.py`
+- Updated 5 repositories to implement interfaces:
+  - `ArtistWatchlistRepository(IArtistWatchlistRepository)`
+  - `FilterRuleRepository(IFilterRuleRepository)`
+  - `AutomationRuleRepository(IAutomationRuleRepository)`
+  - `QualityUpgradeCandidateRepository(IQualityUpgradeCandidateRepository)`
+  - `SessionRepository(ISessionRepository)`
+- All interface imports added to `repositories.py`
+- No type errors (verified with get_errors)
+
+**Week 3: Model Renaming** ✅ COMPLETED (2025-12-12)
+- [x] Rename SessionModel → SpotifySessionModel
+- [x] Create alembic migration for table rename
+- [x] Update all repository references
+- [ ] Test migration rollback (REQUIRES DEPLOYMENT ENV)
+
+**Implementation Details (2025-12-12):**
+- Renamed `SessionModel` → `SpotifySessionModel` in `infrastructure/persistence/models.py`
+- Changed table name: `sessions` → `spotify_sessions`
+- Renamed indexes: `ix_sessions_*` → `ix_spotify_sessions_*`
+- Updated all 13 references in `SessionRepository` methods (create, get, update, delete, cleanup_expired, get_by_oauth_state)
+- Created migration `rr29014ttu62_rename_sessions_to_spotify_sessions.py`:
+  - `upgrade()`: Renames table + indexes using batch_alter_table (SQLite-compatible)
+  - `downgrade()`: Rollback path fully implemented
+  - Includes "future-self" comments explaining multi-service strategy
+- Migration tested: ⚠️ REQUIRES DB CONNECTION (cannot test in virtual GitHub env)
 
 **Week 4: ISRC Matching**
 - [ ] Add ISRC field to Track entity (if not exists)

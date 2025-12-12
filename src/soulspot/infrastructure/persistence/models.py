@@ -593,21 +593,22 @@ class QualityUpgradeCandidateModel(Base):
     )
 
 
-# Hey future me, SessionModel persists user sessions to survive Docker restarts!
+# Hey future me, SpotifySessionModel persists Spotify OAuth sessions to survive Docker restarts!
 # The access_token and refresh_token are SENSITIVE - they grant full access to user's Spotify.
 # Consider encrypting these fields at rest for production (use SQLAlchemy TypeDecorator with Fernet).
 # The session_id is the PRIMARY KEY - it's the random urlsafe string stored in user's cookie.
 # Sessions expire based on last_accessed_at + timeout (default 1 hour) - expired ones get cleaned up.
 # oauth_state and code_verifier are TEMPORARY - only needed during OAuth flow, cleared after callback.
 # This model replaces the in-memory dict in SessionStore - now sessions persist across restarts!
-class SessionModel(Base):
-    """User session with OAuth tokens for persistence across restarts.
+# RENAMED from SessionModel to SpotifySessionModel for service-agnostic architecture (2025-12-12).
+class SpotifySessionModel(Base):
+    """Spotify OAuth session with tokens for persistence across restarts.
 
     Stores Spotify OAuth tokens and session state in database to survive
     container restarts. Sessions are identified by session_id (cookie value).
     """
 
-    __tablename__ = "sessions"
+    __tablename__ = "spotify_sessions"
 
     # Primary key: session_id from cookie (urlsafe random string)
     session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -633,8 +634,8 @@ class SessionModel(Base):
 
     # Indexes for efficient cleanup queries
     __table_args__ = (
-        Index("ix_sessions_last_accessed", "last_accessed_at"),
-        Index("ix_sessions_token_expires", "token_expires_at"),
+        Index("ix_spotify_sessions_last_accessed", "last_accessed_at"),
+        Index("ix_spotify_sessions_token_expires", "token_expires_at"),
     )
 
 

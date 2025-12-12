@@ -1012,3 +1012,47 @@ class IQualityUpgradeCandidateRepository(ABC):
     async def delete(self, candidate_id: str) -> None:
         """Delete a candidate."""
         pass
+
+
+# Hey future me, ISessionRepository is the interface for persisting user OAuth sessions!
+# Sessions need to survive Docker restarts, so they're stored in DB (not in-memory dict).
+# The access_token and refresh_token are SENSITIVE - handle with care! Consider encryption
+# at rest for production. Expired sessions get cleaned up by cleanup_expired() method.
+class ISessionRepository(ABC):
+    """Repository interface for Session entities (OAuth persistence)."""
+
+    @abstractmethod
+    async def create(self, session: Any) -> None:
+        """Create a new session in database."""
+        pass
+
+    @abstractmethod
+    async def get(self, session_id: str) -> Any | None:
+        """Get session by ID and update last accessed time.
+        
+        Implements sliding expiration - updates last_accessed_at on each access.
+        """
+        pass
+
+    @abstractmethod
+    async def update(self, session: Any) -> None:
+        """Update an existing session (token refresh)."""
+        pass
+
+    @abstractmethod
+    async def delete(self, session_id: str) -> None:
+        """Delete a session by ID."""
+        pass
+
+    @abstractmethod
+    async def cleanup_expired(self, max_age_seconds: int) -> int:
+        """Delete sessions not accessed in max_age_seconds.
+        
+        Returns number of sessions deleted.
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_oauth_state(self, state: str) -> Any | None:
+        """Get session by OAuth state parameter (during OAuth callback)."""
+        pass

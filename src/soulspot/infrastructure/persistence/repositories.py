@@ -27,8 +27,13 @@ from soulspot.domain.exceptions import EntityNotFoundException, ValidationExcept
 from soulspot.domain.ports import (
     IAlbumRepository,
     IArtistRepository,
+    IArtistWatchlistRepository,
+    IAutomationRuleRepository,
     IDownloadRepository,
+    IFilterRuleRepository,
     IPlaylistRepository,
+    IQualityUpgradeCandidateRepository,
+    ISessionRepository,
     ITrackRepository,
 )
 from soulspot.domain.value_objects import (
@@ -47,7 +52,7 @@ from .models import (
     DownloadModel,
     PlaylistModel,
     PlaylistTrackModel,
-    SessionModel,
+    SpotifySessionModel,
     SpotifyTokenModel,
     TrackModel,
     ensure_utc_aware,
@@ -1935,7 +1940,7 @@ class DownloadRepository(IDownloadRepository):
         return downloads
 
 
-class ArtistWatchlistRepository:
+class ArtistWatchlistRepository(IArtistWatchlistRepository):
     """SQLAlchemy implementation of Artist Watchlist repository."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -2162,7 +2167,7 @@ class ArtistWatchlistRepository:
             raise EntityNotFoundException("ArtistWatchlist", watchlist_id.value)
 
 
-class FilterRuleRepository:
+class FilterRuleRepository(IFilterRuleRepository):
     """SQLAlchemy implementation of Filter Rule repository."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -2346,7 +2351,7 @@ class FilterRuleRepository:
             raise EntityNotFoundException("FilterRule", rule_id.value)
 
 
-class AutomationRuleRepository:
+class AutomationRuleRepository(IAutomationRuleRepository):
     """SQLAlchemy implementation of Automation Rule repository."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -2586,7 +2591,7 @@ class AutomationRuleRepository:
             raise EntityNotFoundException("AutomationRule", rule_id.value)
 
 
-class QualityUpgradeCandidateRepository:
+class QualityUpgradeCandidateRepository(IQualityUpgradeCandidateRepository):
     """SQLAlchemy implementation of Quality Upgrade Candidate repository."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -2807,11 +2812,11 @@ class QualityUpgradeCandidateRepository:
 
 # Hey future me, SessionRepository is THE fix for the Docker restart auth bug! It persists
 # sessions to SQLite instead of keeping them in-memory. Each method maps Session dataclass
-# (application layer) to SessionModel (ORM). The get() method refreshes last_accessed_at on
+# (application layer) to SpotifySessionModel (ORM). The get() method refreshes last_accessed_at on
 # EVERY read to implement sliding session expiration - sessions stay alive while used!
 # The cleanup_expired() is CRITICAL for housekeeping - run it periodically (e.g., every 5 min)
 # or the sessions table grows forever. Returns count of deleted sessions for monitoring.
-class SessionRepository:
+class SessionRepository(ISessionRepository):
     """Repository for session persistence.
 
     Handles database operations for user sessions, enabling persistence
@@ -2837,7 +2842,7 @@ class SessionRepository:
             session_data: Session dataclass to persist
         """
 
-        model = SessionModel(
+        model = SpotifySessionModel(
             session_id=session_data.session_id,
             access_token=session_data.access_token,
             refresh_token=session_data.refresh_token,
@@ -2864,7 +2869,7 @@ class SessionRepository:
         """
 
         # Get the session
-        stmt = select(SessionModel).where(SessionModel.session_id == session_id)
+        stmt = select(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -2902,7 +2907,7 @@ class SessionRepository:
             Updated session or None if not found
         """
 
-        stmt = select(SessionModel).where(SessionModel.session_id == session_id)
+        stmt = select(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -2943,7 +2948,7 @@ class SessionRepository:
         Returns:
             True if deleted, False if not found
         """
-        stmt = delete(SessionModel).where(SessionModel.session_id == session_id)
+        stmt = delete(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
         result = await self.session.execute(stmt)
         rowcount = cast(int, result.rowcount)  # type: ignore[attr-defined]
         return bool(rowcount > 0)
@@ -2964,7 +2969,7 @@ class SessionRepository:
             Number of sessions deleted
         """
         cutoff_time = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
-        stmt = delete(SessionModel).where(SessionModel.last_accessed_at < cutoff_time)
+        stmt = delete(SpotifySessionModel).where(SpotifySessionModel.last_accessed_at < cutoff_time)
         result = await self.session.execute(stmt)
         rowcount = cast(int, result.rowcount)  # type: ignore[attr-defined]
         return int(rowcount or 0)
@@ -2984,7 +2989,7 @@ class SessionRepository:
             Session dataclass or None if not found
         """
 
-        stmt = select(SessionModel).where(SessionModel.oauth_state == state)
+        stmt = select(SpotifySessionModel).where(SpotifySessionModel.oauth_state == state)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
