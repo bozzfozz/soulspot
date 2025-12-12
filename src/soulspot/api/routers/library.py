@@ -1908,11 +1908,16 @@ async def apply_enrichment_candidate(
     1. Mark the candidate as selected
     2. Update the entity (artist/album) with Spotify URI and image
     3. Reject other candidates for the same entity
+
+    Hey future me - provider check is implicit here because enrichment candidates
+    only exist if Spotify enrichment ran (which checks is_provider_enabled).
+    But we still check before downloading images in case settings changed.
     """
     from datetime import UTC, datetime
 
     from sqlalchemy import select, update
 
+    from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
     from soulspot.infrastructure.persistence.models import (
         AlbumModel,
@@ -1933,6 +1938,10 @@ async def apply_enrichment_candidate(
     if candidate.is_selected or candidate.is_rejected:
         raise HTTPException(status_code=400, detail="Candidate already processed")
 
+    # Check if Spotify provider is enabled for image download
+    app_settings = AppSettingsService(db)
+    spotify_enabled = await app_settings.is_provider_enabled("spotify")
+
     # Update entity with Spotify data
     image_service = SpotifyImageService(settings)
     image_downloaded = False
@@ -1947,8 +1956,8 @@ async def apply_enrichment_candidate(
             artist_model.image_url = candidate.spotify_image_url
             artist_model.updated_at = datetime.now(UTC)
 
-            # Download image
-            if candidate.spotify_image_url:
+            # Download image only if Spotify provider is enabled
+            if candidate.spotify_image_url and spotify_enabled:
                 try:
                     spotify_id = candidate.spotify_uri.split(":")[-1]
                     await image_service.download_artist_image(
@@ -1968,8 +1977,8 @@ async def apply_enrichment_candidate(
             album_model.artwork_url = candidate.spotify_image_url
             album_model.updated_at = datetime.now(UTC)
 
-            # Download image
-            if candidate.spotify_image_url:
+            # Download image only if Spotify provider is enabled
+            if candidate.spotify_image_url and spotify_enabled:
                 try:
                     spotify_id = candidate.spotify_uri.split(":")[-1]
                     local_path = await image_service.download_album_image(

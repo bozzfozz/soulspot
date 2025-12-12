@@ -99,7 +99,8 @@ class SpotifySyncService:
         No more access_token param - plugin handles auth internally.
 
         This is the MAIN auto-sync method! Called on page load.
-        - Checks cooldown first (skip if recently synced)
+        - First checks if Spotify provider is enabled at all (provider mode)
+        - Checks cooldown next (skip if recently synced)
         - Fetches all followed artists from Spotify (paginated)
         - Compares with DB: adds new, removes unfollowed
         - Returns stats for UI display
@@ -119,10 +120,18 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
             "skipped_disabled": False,
+            "skipped_provider_disabled": False,
         }
 
         try:
-            # Check if artists sync is enabled
+            # Hey future me - PROVIDER LEVEL CHECK FIRST!
+            # If Spotify provider is disabled in Settings, skip ALL Spotify operations.
+            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+                stats["skipped_provider_disabled"] = True
+                logger.debug("Spotify provider is disabled, skipping artists sync")
+                return stats
+
+            # Check if artists sync is enabled (feature-level)
             if (
                 self._settings_service
                 and not await self._settings_service.is_spotify_artists_sync_enabled()
@@ -640,10 +649,17 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
             "skipped_disabled": False,
+            "skipped_provider_disabled": False,
         }
 
         try:
-            # Check if playlist sync is enabled
+            # Hey future me - PROVIDER LEVEL CHECK FIRST!
+            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+                stats["skipped_provider_disabled"] = True
+                logger.debug("Spotify provider is disabled, skipping playlists sync")
+                return stats
+
+            # Check if playlist sync is enabled (feature-level)
             if (
                 self._settings_service
                 and not await self._settings_service.is_spotify_playlists_sync_enabled()
@@ -874,10 +890,17 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
             "skipped_disabled": False,
+            "skipped_provider_disabled": False,
         }
 
         try:
-            # Check if Liked Songs sync is enabled
+            # Hey future me - PROVIDER LEVEL CHECK FIRST!
+            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+                stats["skipped_provider_disabled"] = True
+                logger.debug("Spotify provider is disabled, skipping Liked Songs sync")
+                return stats
+
+            # Check if Liked Songs sync is enabled (feature-level)
             if (
                 self._settings_service
                 and not await self._settings_service.is_spotify_liked_songs_sync_enabled()
@@ -1037,10 +1060,17 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
             "skipped_disabled": False,
+            "skipped_provider_disabled": False,
         }
 
         try:
-            # Check if Saved Albums sync is enabled
+            # Hey future me - PROVIDER LEVEL CHECK FIRST!
+            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+                stats["skipped_provider_disabled"] = True
+                logger.debug("Spotify provider is disabled, skipping Saved Albums sync")
+                return stats
+
+            # Check if Saved Albums sync is enabled (feature-level)
             if (
                 self._settings_service
                 and not await self._settings_service.is_spotify_saved_albums_sync_enabled()

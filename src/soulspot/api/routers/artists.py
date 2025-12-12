@@ -115,6 +115,9 @@ async def sync_followed_artists(
     Fetches all artists the user follows on Spotify and creates/updates them
     in the local database. Uses spotify_uri as unique key to prevent duplicates.
 
+    Also respects is_provider_enabled("spotify") - if Spotify is disabled in settings,
+    returns early with a message instead of making API calls.
+
     Args:
         session: Database session
         spotify_plugin: SpotifyPlugin for Spotify API calls
@@ -125,6 +128,16 @@ async def sync_followed_artists(
     Raises:
         HTTPException: If Spotify API fails or authentication issues
     """
+    # Check if Spotify provider is enabled
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings. Enable it to sync artists.",
+        )
+
     try:
         service = FollowedArtistsService(
             session=session,

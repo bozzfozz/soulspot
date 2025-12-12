@@ -1060,11 +1060,14 @@ class SpotifyPlugin(IMusicServicePlugin):
         Hey future me – super nützlich für "Fans Also Like" Feature!
         Spotify gibt bis zu 20 ähnliche Artists zurück.
 
+        WICHTIG: Nicht alle Artists haben Related-Data bei Spotify!
+        Bei 404 geben wir einfach eine leere Liste zurück (kein Fehler).
+
         Args:
             artist_id: Spotify artist ID
 
         Returns:
-            List of related ArtistDTOs (up to 20)
+            List of related ArtistDTOs (up to 20), or empty list if no data available
         """
         token = self._ensure_token()
 
@@ -1072,6 +1075,16 @@ class SpotifyPlugin(IMusicServicePlugin):
             data = await self._client.get_related_artists(artist_id, token)
             return [self._convert_artist(a) for a in data if a]
         except Exception as e:
+            # Hey future me - Spotify returns 404 for artists without related data.
+            # This is normal and expected - just return empty list instead of error.
+            error_str = str(e)
+            if "404" in error_str or "Not Found" in error_str:
+                logger.debug(
+                    f"No related artists data available for {artist_id} (Spotify 404)"
+                )
+                return []
+
+            # For other errors, raise properly
             raise PluginError(
                 message=f"Failed to get related artists for {artist_id}: {e!s}",
                 service=ServiceType.SPOTIFY,

@@ -112,6 +112,70 @@ class TrackRepository:
         ...
 ```
 
+### 4.4 Multi-Service Aggregation (MANDATORY!) ⭐
+
+> **"Always use ALL available services, deduplicate, and combine results"**
+
+For ANY feature that fetches external data (Browse, Search, Discovery, New Releases, etc.):
+
+1. **Query ALL enabled services** - Deezer + Spotify + Tidal + ...
+2. **Aggregate results** - Combine responses into unified list
+3. **Deduplicate** - Use normalized keys (artist_name + album_title, ISRC)
+4. **Tag source** - Each result keeps `source` field ("spotify", "deezer", etc.)
+5. **Graceful fallback** - If one service fails, show results from others
+
+**Pattern:**
+```python
+async def get_new_releases():
+    all_releases = []
+    seen_keys = set()
+    
+    # 1. Deezer (no auth needed, always try)
+    if service_enabled("deezer"):
+        for r in await deezer_plugin.get_new_releases():
+            key = normalize(r.artist, r.title)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                r.source = "deezer"
+                all_releases.append(r)
+    
+    # 2. Spotify (needs auth)
+    if service_enabled("spotify") and spotify_authenticated:
+        for r in await spotify_plugin.get_new_releases():
+            key = normalize(r.artist, r.title)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                r.source = "spotify"
+                all_releases.append(r)
+    
+    return sorted(all_releases, key=lambda x: x.release_date, reverse=True)
+```
+
+**Service Availability Check (USE THESE METHODS!):**
+```python
+# Check if provider is enabled (not set to "off")
+from soulspot.application.services.app_settings_service import AppSettingsService
+
+settings = AppSettingsService(session)
+
+# Check if service is enabled
+deezer_enabled = await settings.is_provider_enabled("deezer")  # True if basic/pro
+spotify_enabled = await settings.is_provider_enabled("spotify")  # True if basic/pro
+
+# Check specific mode
+mode = await settings.get_provider_mode("deezer")  # Returns "off", "basic", "pro"
+
+# Set provider mode (in settings UI)
+await settings.set_provider_mode("deezer", "basic")
+```
+
+**Provider Modes:**
+- `off` = Disabled completely
+- `basic` = Enabled with basic features (metadata/browse)
+- `pro` = Full features enabled
+
+See: `docs/architecture/CORE_PHILOSOPHY.md` Section 3 for full details.
+
 ## 5. Project layout & critical files
 
 | Path | Purpose |

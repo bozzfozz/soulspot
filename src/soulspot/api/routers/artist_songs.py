@@ -116,6 +116,9 @@ async def sync_artist_songs(
     Fetches the artist's top tracks from Spotify and stores them in the database.
     Tracks are stored without album association (as singles).
 
+    Also respects is_provider_enabled("spotify") - if Spotify is disabled in settings,
+    returns early with a message instead of making API calls.
+
     Args:
         artist_id: Artist UUID
         market: Country code for track availability (default: US)
@@ -128,6 +131,16 @@ async def sync_artist_songs(
     Raises:
         HTTPException: 400 if invalid artist ID, 404 if artist not found
     """
+    # Check if Spotify provider is enabled
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings. Enable it to sync songs.",
+        )
+
     try:
         artist_id_obj = ArtistId.from_string(artist_id)
     except ValueError as e:
@@ -192,6 +205,9 @@ async def sync_all_artists_songs(
     Iterates through all artists in DB and syncs their top tracks.
     This is a bulk operation that may take significant time.
 
+    Also respects is_provider_enabled("spotify") - if Spotify is disabled in settings,
+    returns early with a message instead of making API calls.
+
     Args:
         market: Country code for track availability
         limit: Maximum number of artists to process
@@ -201,6 +217,16 @@ async def sync_all_artists_songs(
     Returns:
         List of all synced tracks and aggregate statistics
     """
+    # Check if Spotify provider is enabled
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings. Enable it to sync songs.",
+        )
+
     service = ArtistSongsService(
         session=session,
         spotify_plugin=spotify_plugin,

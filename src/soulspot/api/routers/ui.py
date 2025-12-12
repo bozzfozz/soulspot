@@ -1942,59 +1942,218 @@ async def spotify_artists_page(
 @router.get("/browse/new-releases", response_class=HTMLResponse)
 async def browse_new_releases_page(
     request: Request,
+    session: AsyncSession = Depends(get_db_session),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
-    limit: int = Query(default=50, ge=10, le=100, description="Number of releases"),
+    days: int = Query(default=90, ge=7, le=365, description="Days to look back"),
     include_compilations: bool = Query(default=True, description="Include compilations"),
+    include_singles: bool = Query(default=True, description="Include singles"),
 ) -> Any:
-    """Browse New Releases page - uses Deezer Plugin (no auth required!).
+    """New Releases from MULTIPLE SOURCES - combines Deezer + Spotify releases.
 
-    Hey future me - this is the NEW RELEASES browse page that works WITHOUT Spotify OAuth!
-    Uses DeezerPlugin which wraps DeezerClient and handles all the API interaction.
-    The plugin provides editorial releases + chart albums for a good mix of new music.
+    Hey future me - this aggregates releases from ALL music services!
+    1. Deezer: Global new releases (editorial + charts) - NO AUTH NEEDED
+    2. Spotify: Releases from YOUR followed artists (from DB)
 
-    Later we can add Spotify as an additional source when the user IS authenticated.
-    For now, Deezer is the primary source because:
-    1. No OAuth needed - works for everyone immediately
-    2. Good quality editorial curation
-    3. Fast API with reasonable rate limits
+    We deduplicate by artist_name + album_title (normalized) to avoid
+    showing the same album twice from different sources.
+
+    The source badge on each album shows where it came from.
+    Users get the best of both worlds:
+    - Discovery of popular new releases (Deezer)
+    - Personal releases from followed artists (Spotify)
 
     Args:
         request: FastAPI request
-        deezer_plugin: DeezerPlugin dependency (no auth needed)
-        limit: Number of releases to fetch (10-100)
-        include_compilations: Whether to include compilation albums
+        session: Database session for Spotify data
+        deezer_plugin: DeezerPlugin for global releases
+        days: How many days back to look for releases (default 90)
+        include_compilations: Include compilation albums
+        include_singles: Include singles/EPs
 
     Returns:
-        HTML page with new release albums
+        HTML page with combined new releases from all sources
     """
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import select
+
+    from soulspot.infrastructure.persistence.models import (
+        SpotifyAlbumModel,
+        SpotifyArtistModel,
+    )
+
     error: str | None = None
-    albums: list[dict[str, Any]] = []
+    all_releases: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()  # For deduplication
 
-    try:
-        result = await deezer_plugin.get_browse_new_releases(
-            limit=limit,
-            include_compilations=include_compilations,
-        )
+    def normalize_key(artist: str, album: str) -> str:
+        """Create normalized key for deduplication."""
+        return f"{artist.lower().strip()}::{album.lower().strip()}"
 
-        if result.get("success"):
-            albums = result.get("albums", [])
-            logger.info(f"New Releases page: Fetched {len(albums)} albums from Deezer")
+    # Check provider availability via AppSettingsService
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    settings_service = AppSettingsService(session)
+    deezer_enabled = await settings_service.is_provider_enabled("deezer")
+    spotify_enabled = await settings_service.is_provider_enabled("spotify")
+
+    # -------------------------------------------------------------------------
+    # 1. DEEZER: Global New Releases (no auth required!)
+    # -------------------------------------------------------------------------
+    if deezer_enabled:
+        try:
+            deezer_result = await deezer_plugin.get_browse_new_releases(
+                limit=50,
+                include_compilations=include_compilations,
+            )
+
+            if deezer_result.get("success") and deezer_result.get("albums"):
+                for album in deezer_result["albums"]:
+                    # Filter singles if not wanted
+                    record_type = album.get("record_type", "album")
+                    if not include_singles and record_type in ("single", "ep"):
+                        continue
+
+                    key = normalize_key(
+                        album.get("artist_name", ""),
+                        album.get("title", ""),
+                    )
+                    if key not in seen_keys:
+                        seen_keys.add(key)
+                        all_releases.append({
+                            "id": album.get("deezer_id") or album.get("id"),
+                            "name": album.get("title"),
+                            "artist_name": album.get("artist_name"),
+                            "artist_id": album.get("artist_id"),
+                            "artwork_url": album.get("cover_big") or album.get("cover_medium"),
+                        "release_date": album.get("release_date"),
+                        "album_type": record_type,
+                        "total_tracks": album.get("total_tracks") or album.get("nb_tracks"),
+                        "external_url": album.get("link") or f"https://www.deezer.com/album/{album.get('id')}",
+                        "source": "deezer",
+                    })
+
+            logger.info(f"New Releases: Got {len(all_releases)} from Deezer")
+
+        except Exception as e:
+            logger.warning(f"New Releases: Deezer fetch failed: {e}")
+    else:
+        logger.debug("New Releases: Deezer provider disabled, skipping")
+
+    # -------------------------------------------------------------------------
+    # 2. SPOTIFY: Releases from followed artists (from database)
+    # -------------------------------------------------------------------------
+    if spotify_enabled:
+        try:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+            # Build album type filter
+            allowed_types = ["album"]
+            if include_singles:
+                allowed_types.extend(["single", "ep"])
+            if include_compilations:
+                allowed_types.append("compilation")
+
+            stmt = (
+                select(SpotifyAlbumModel, SpotifyArtistModel)
+                .join(SpotifyArtistModel, SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id)
+                .where(SpotifyAlbumModel.release_date >= cutoff_str)
+                .where(SpotifyAlbumModel.album_type.in_(allowed_types))
+                .order_by(SpotifyAlbumModel.release_date.desc())
+                .limit(100)
+            )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            spotify_count = 0
+            for album, artist in rows:
+                key = normalize_key(artist.name, album.name)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    all_releases.append({
+                        "id": album.spotify_id,
+                        "name": album.name,
+                        "artist_name": artist.name,
+                        "artist_id": artist.spotify_id,
+                        "artwork_url": album.image_url or album.image_path,
+                        "release_date": album.release_date,
+                        "album_type": album.album_type,
+                        "total_tracks": album.total_tracks,
+                        "external_url": f"https://open.spotify.com/album/{album.spotify_id}",
+                        "source": "spotify",
+                    })
+                    spotify_count += 1
+
+            logger.info(f"New Releases: Got {spotify_count} from Spotify (after dedup)")
+
+        except Exception as e:
+            logger.warning(f"New Releases: Spotify DB fetch failed: {e}")
+    else:
+        logger.debug("New Releases: Spotify provider disabled, skipping")
+
+    # -------------------------------------------------------------------------
+    # 3. SORT BY RELEASE DATE (newest first)
+    # -------------------------------------------------------------------------
+    def parse_date(release: dict) -> str:
+        """Get sortable date string, default to old date if missing."""
+        date = release.get("release_date") or "1900-01-01"
+        # Handle YYYY, YYYY-MM, YYYY-MM-DD formats
+        if len(date) == 4:
+            return f"{date}-12-31"
+        elif len(date) == 7:
+            return f"{date}-28"
+        return date[:10]
+
+    all_releases.sort(key=lambda r: parse_date(r), reverse=True)
+
+    # -------------------------------------------------------------------------
+    # 4. GROUP BY WEEK for better display
+    # -------------------------------------------------------------------------
+    from collections import defaultdict
+
+    releases_by_week: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for release in all_releases:
+        date_str = release.get("release_date")
+        if date_str:
+            try:
+                # Parse date (handle different precisions)
+                if len(date_str) >= 10:
+                    dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+                elif len(date_str) == 7:
+                    dt = datetime.strptime(f"{date_str}-01", "%Y-%m-%d")
+                else:
+                    dt = datetime.strptime(f"{date_str}-01-01", "%Y-%m-%d")
+
+                week_start = dt - timedelta(days=dt.weekday())
+                week_label = week_start.strftime("%B %d, %Y")
+                releases_by_week[week_label].append(release)
+            except (ValueError, TypeError):
+                releases_by_week["Unknown Date"].append(release)
         else:
-            error = result.get("error", "Failed to fetch new releases")
-            logger.warning(f"New Releases page: Deezer error - {error}")
+            releases_by_week["Unknown Date"].append(release)
 
-    except Exception as e:
-        error = f"Failed to fetch new releases: {e}"
-        logger.error(f"New Releases page: Exception - {e}")
+    # Count sources
+    source_counts = {
+        "deezer": sum(1 for r in all_releases if r.get("source") == "deezer"),
+        "spotify": sum(1 for r in all_releases if r.get("source") == "spotify"),
+    }
+
+    if not all_releases:
+        error = "No new releases found. Try syncing your Spotify artists first!"
 
     return templates.TemplateResponse(
         request,
         "new_releases.html",
         context={
-            "albums": albums,
-            "total_count": len(albums),
-            "source": "Deezer",
+            "releases": all_releases,
+            "releases_by_week": dict(releases_by_week),
+            "total_count": len(all_releases),
+            "source_counts": source_counts,
+            "days": days,
             "include_compilations": include_compilations,
+            "include_singles": include_singles,
+            "source": f"Deezer ({source_counts['deezer']}) + Spotify ({source_counts['spotify']})",
             "error": error,
         },
     )
@@ -2075,13 +2234,25 @@ async def spotify_discover_page(
                     )
         except Exception as e:
             api_errors += 1
-            logger.warning(f"Failed to get related artists for {artist.name}: {e}")
+            # Hey future me - Spotify returns 404 for some artists (no related data available).
+            # This is normal - not all artists have related artist data in Spotify's database.
+            # Log as DEBUG for 404s (expected), WARNING for other errors (unexpected).
+            error_str = str(e)
+            if "404" in error_str:
+                logger.debug(
+                    f"No related artists available for {artist.name} "
+                    "(Spotify has no data for this artist)"
+                )
+            else:
+                logger.warning(f"Failed to get related artists for {artist.name}: {e}")
             continue
 
-    logger.info(
-        f"Discover page: Found {len(discoveries)} unique discoveries, "
-        f"{api_errors} API errors"
-    )
+    # Log summary at INFO level only if there were discoveries or errors worth noting
+    if discoveries or api_errors > sample_size // 2:
+        logger.info(
+            f"Discover page: Found {len(discoveries)} unique discoveries, "
+            f"{api_errors} API calls skipped (no data available)"
+        )
 
     # If all API calls failed, show error
     if api_errors == sample_size and not discoveries:

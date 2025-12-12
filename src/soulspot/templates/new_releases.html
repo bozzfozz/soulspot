@@ -1,7 +1,8 @@
-{# Hey future me - New Releases browse page!
-   Uses Deezer (no auth!) to show latest album releases. Perfect for discovery without Spotify OAuth.
-   Albums link to their detail pages where users can preview, add to wishlist, or queue downloads.
-   Source badge shows where data comes from (Deezer now, maybe Spotify later when auth'd). #}
+{# Hey future me - New Releases from MULTIPLE SOURCES!
+   Combines releases from Deezer (global) + Spotify (your followed artists).
+   Deduplicates by artist+album name so same release doesn't show twice.
+   Each album card shows a source badge (Deezer/Spotify).
+   The "days" parameter controls how far back to look (default 90 days). #}
 
 {% extends "base.html" %}
 
@@ -12,20 +13,34 @@
 <div class="page-header">
     <div class="header-content">
         <div class="header-icon-wrapper">
-            <div class="header-icon" style="background: linear-gradient(135deg, #ff6b35, #ff8c5a);">
+            <div class="header-icon" style="background: linear-gradient(135deg, #ff6b35, #1DB954);">
                 <i class="bi bi-vinyl-fill"></i>
             </div>
-            <div class="header-icon-glow" style="background: linear-gradient(135deg, #ff6b35, #ff8c5a);"></div>
+            <div class="header-icon-glow" style="background: linear-gradient(135deg, #ff6b35, #1DB954);"></div>
         </div>
         <div>
             <h1>New Releases</h1>
-            <p class="subtitle">Fresh music from around the world • Powered by {{ source }}</p>
+            <p class="subtitle">Fresh music from multiple sources • {{ source }}</p>
         </div>
     </div>
     <div class="header-actions">
+        <div class="filter-group" style="display: flex; gap: 0.5rem; align-items: center;">
+            <label style="font-size: 0.85rem; color: var(--text-muted);">Last:</label>
+            <select id="days-filter" class="form-select form-select-sm" style="width: auto;" onchange="updateDaysFilter()">
+                <option value="30" {{ 'selected' if days == 30 }}>30 days</option>
+                <option value="60" {{ 'selected' if days == 60 }}>60 days</option>
+                <option value="90" {{ 'selected' if days == 90 }}>90 days</option>
+                <option value="180" {{ 'selected' if days == 180 }}>6 months</option>
+                <option value="365" {{ 'selected' if days == 365 }}>1 year</option>
+            </select>
+        </div>
+        <button class="btn btn-outline" onclick="toggleSingles()" id="singles-toggle">
+            <i class="bi bi-music-note"></i>
+            <span>{{ 'Hide' if include_singles else 'Show' }} Singles</span>
+        </button>
         <button class="btn btn-outline" onclick="toggleCompilations()" id="compilations-toggle">
-            <i class="bi bi-collection"></i> 
-            <span id="compilations-text">{{ 'Hide' if include_compilations else 'Show' }} Compilations</span>
+            <i class="bi bi-collection"></i>
+            <span>{{ 'Hide' if include_compilations else 'Show' }} Compilations</span>
         </button>
         <button class="btn btn-primary" onclick="window.location.reload()">
             <i class="bi bi-arrow-clockwise"></i> Refresh
@@ -39,36 +54,129 @@
 </div>
 {% endif %}
 
-{% if albums %}
+{% if releases %}
 <div class="release-stats" style="margin-bottom: 2rem; color: var(--text-muted); font-size: 0.9rem;">
     <i class="bi bi-disc"></i> Showing <strong>{{ total_count }}</strong> new releases
-    <span class="source-badge" style="margin-left: 1rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.8rem;">
-        <i class="bi bi-broadcast"></i> {{ source }}
+    {% if source_counts %}
+    <span class="source-badges" style="margin-left: 1rem;">
+        {% if source_counts.deezer > 0 %}
+        <span class="source-badge source-deezer" style="padding: 0.25rem 0.5rem; background: #ff6b35; color: white; border-radius: 4px; font-size: 0.75rem; margin-right: 0.5rem;">
+            <i class="bi bi-broadcast"></i> Deezer: {{ source_counts.deezer }}
+        </span>
+        {% endif %}
+        {% if source_counts.spotify > 0 %}
+        <span class="source-badge source-spotify" style="padding: 0.25rem 0.5rem; background: #1DB954; color: white; border-radius: 4px; font-size: 0.75rem;">
+            <i class="bi bi-spotify"></i> Spotify: {{ source_counts.spotify }}
+        </span>
+        {% endif %}
     </span>
+    {% endif %}
 </div>
 
+{# Group releases by week for better organization #}
+{% if releases_by_week %}
+{% for week, week_releases in releases_by_week.items() %}
+<div class="release-week" style="margin-bottom: 2rem;">
+    <h3 style="font-size: 1rem; color: var(--text-muted); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
+        <i class="bi bi-calendar-week"></i> {{ week }}
+    </h3>
+    <div class="album-grid">
+        {% for album in week_releases %}
+        <div class="album-card" data-id="{{ album.id }}" data-source="{{ album.source }}">
+            <div class="album-cover">
+                {% if album.artwork_url %}
+                <img src="{{ album.artwork_url }}" alt="{{ album.name }}" loading="lazy">
+                {% else %}
+                <div class="album-cover-placeholder">
+                    <i class="bi bi-music-note-beamed"></i>
+                </div>
+                {% endif %}
+                {# Source badge on cover #}
+                <span class="source-indicator source-{{ album.source }}" title="From {{ album.source|capitalize }}">
+                    {% if album.source == 'spotify' %}
+                    <i class="bi bi-spotify"></i>
+                    {% else %}
+                    <i class="bi bi-broadcast"></i>
+                    {% endif %}
+                </span>
+                <div class="album-overlay">
+                    <a href="{{ album.external_url }}" target="_blank" rel="noopener" class="btn-play btn-play-{{ album.source }}" title="Open in {{ album.source|capitalize }}">
+                        {% if album.source == 'spotify' %}
+                        <i class="bi bi-spotify"></i>
+                        {% else %}
+                        <i class="bi bi-play-fill"></i>
+                        {% endif %}
+                    </a>
+                </div>
+            </div>
+            <div class="album-info">
+                <h3 class="album-title" title="{{ album.name }}">{{ album.name }}</h3>
+                <p class="album-artist" title="{{ album.artist_name }}">{{ album.artist_name }}</p>
+                <div class="album-meta">
+                    {% if album.release_date %}
+                    <span class="release-date"><i class="bi bi-calendar3"></i> {{ album.release_date[:10] if album.release_date|length > 10 else album.release_date }}</span>
+                    {% endif %}
+                    {% if album.total_tracks %}
+                    <span class="track-count"><i class="bi bi-music-note-list"></i> {{ album.total_tracks }} tracks</span>
+                    {% endif %}
+                </div>
+                <div class="album-type">
+                    {% if album.album_type %}
+                    <span class="type-badge type-{{ album.album_type }}">{{ album.album_type|capitalize }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="album-actions">
+                <a href="{{ album.external_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline btn-{{ album.source }}" title="Open in {{ album.source|capitalize }}">
+                    {% if album.source == 'spotify' %}
+                    <i class="bi bi-spotify"></i>
+                    {% else %}
+                    <i class="bi bi-box-arrow-up-right"></i>
+                    {% endif %}
+                    Listen
+                </a>
+                <button class="btn btn-sm btn-primary" onclick="queueAlbumDownload('{{ album.id }}', '{{ album.name|e }}', '{{ album.artist_name|e }}', '{{ album.source }}')" title="Download Album">
+                    <i class="bi bi-download"></i>
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+{# Fallback: flat list without week grouping #}
 <div class="album-grid">
-    {% for album in albums %}
-    <div class="album-card" data-deezer-id="{{ album.deezer_id }}">
+    {% for album in releases %}
+    <div class="album-card" data-id="{{ album.id }}" data-source="{{ album.source }}">
         <div class="album-cover">
-            {% if album.cover_medium or album.cover_big %}
-            <img src="{{ album.cover_big or album.cover_medium }}" alt="{{ album.title }}" loading="lazy">
+            {% if album.artwork_url %}
+            <img src="{{ album.artwork_url }}" alt="{{ album.name }}" loading="lazy">
             {% else %}
             <div class="album-cover-placeholder">
                 <i class="bi bi-music-note-beamed"></i>
             </div>
             {% endif %}
-            {% if album.explicit %}
-            <span class="explicit-badge">E</span>
-            {% endif %}
+            {# Source badge on cover #}
+            <span class="source-indicator source-{{ album.source }}" title="From {{ album.source|capitalize }}">
+                {% if album.source == 'spotify' %}
+                <i class="bi bi-spotify"></i>
+                {% else %}
+                <i class="bi bi-broadcast"></i>
+                {% endif %}
+            </span>
             <div class="album-overlay">
-                <button class="btn-play" onclick="previewAlbum('{{ album.deezer_id }}')" title="Preview">
+                <a href="{{ album.external_url }}" target="_blank" rel="noopener" class="btn-play btn-play-{{ album.source }}" title="Open in {{ album.source|capitalize }}">
+                    {% if album.source == 'spotify' %}
+                    <i class="bi bi-spotify"></i>
+                    {% else %}
                     <i class="bi bi-play-fill"></i>
-                </button>
+                    {% endif %}
+                </a>
             </div>
         </div>
         <div class="album-info">
-            <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
+            <h3 class="album-title" title="{{ album.name }}">{{ album.name }}</h3>
             <p class="album-artist" title="{{ album.artist_name }}">{{ album.artist_name }}</p>
             <div class="album-meta">
                 {% if album.release_date %}
@@ -79,30 +187,41 @@
                 {% endif %}
             </div>
             <div class="album-type">
-                {% if album.record_type %}
-                <span class="type-badge type-{{ album.record_type }}">{{ album.record_type|capitalize }}</span>
+                {% if album.album_type %}
+                <span class="type-badge type-{{ album.album_type }}">{{ album.album_type|capitalize }}</span>
                 {% endif %}
             </div>
         </div>
         <div class="album-actions">
-            <a href="{{ album.link }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open in Deezer">
+            <a href="{{ album.external_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline btn-{{ album.source }}" title="Open in {{ album.source|capitalize }}">
+                {% if album.source == 'spotify' %}
+                <i class="bi bi-spotify"></i>
+                {% else %}
                 <i class="bi bi-box-arrow-up-right"></i>
+                {% endif %}
+                Listen
             </a>
-            <button class="btn btn-sm btn-primary" onclick="addToWishlist('{{ album.deezer_id }}', '{{ album.title|e }}', '{{ album.artist_name|e }}')" title="Add to Wishlist">
-                <i class="bi bi-bookmark-plus"></i>
+            <button class="btn btn-sm btn-primary" onclick="queueAlbumDownload('{{ album.id }}', '{{ album.name|e }}', '{{ album.artist_name|e }}', '{{ album.source }}')" title="Download Album">
+                <i class="bi bi-download"></i>
             </button>
         </div>
     </div>
     {% endfor %}
 </div>
+{% endif %}
 {% else %}
 <div class="empty-state">
     <i class="bi bi-vinyl" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5;"></i>
-    <h3>No releases found</h3>
-    <p>Could not fetch new releases. Please try again later.</p>
-    <button class="btn btn-primary" onclick="window.location.reload()">
-        <i class="bi bi-arrow-clockwise"></i> Try Again
-    </button>
+    <h3>No new releases found</h3>
+    <p>Try syncing your Spotify artists or check back later for new Deezer releases.</p>
+    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1rem;">
+        <button class="btn btn-outline" onclick="updateDaysFilter(365)">
+            <i class="bi bi-calendar"></i> Check Last Year
+        </button>
+        <a href="/settings" class="btn btn-primary">
+            <i class="bi bi-gear"></i> Sync Artists
+        </a>
+    </div>
 </div>
 {% endif %}
 {% endblock %}
@@ -152,6 +271,21 @@
 .header-actions {
     display: flex;
     gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.filter-group {
+    background: var(--bg-secondary);
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.form-select-sm {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
 }
 
 .album-grid {
@@ -198,18 +332,6 @@
     opacity: 0.3;
 }
 
-.explicit-badge {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    font-size: 0.65rem;
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
 .album-overlay {
     position: absolute;
     top: 0;
@@ -230,7 +352,7 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: var(--accent-primary);
+    background: #1DB954;
     color: white;
     border: none;
     font-size: 1.5rem;
@@ -239,10 +361,12 @@
     align-items: center;
     justify-content: center;
     transition: transform 0.2s, background 0.2s;
+    text-decoration: none;
 }
 .btn-play:hover {
     transform: scale(1.1);
-    background: var(--accent-hover);
+    background: #1ed760;
+    color: white;
 }
 
 .album-info {
@@ -285,10 +409,40 @@
     text-transform: uppercase;
     font-weight: 600;
 }
-.type-album { background: var(--accent-primary); color: white; }
+.type-album { background: #1DB954; color: white; }
 .type-single { background: #8b5cf6; color: white; }
 .type-ep { background: #06b6d4; color: white; }
-.type-compile { background: #f59e0b; color: white; }
+.type-compilation { background: #f59e0b; color: white; }
+
+/* Source indicator badge on album cover */
+.source-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: white;
+    z-index: 2;
+}
+.source-indicator.source-spotify { background: #1DB954; }
+.source-indicator.source-deezer { background: #ff6b35; }
+
+/* Play button colors per source */
+.btn-play-spotify { background: #1DB954; }
+.btn-play-spotify:hover { background: #1ed760; }
+.btn-play-deezer { background: #ff6b35; }
+.btn-play-deezer:hover { background: #ff8c5a; }
+
+/* Button colors per source */
+.btn-spotify { border-color: #1DB954; color: #1DB954; }
+.btn-spotify:hover { background: #1DB954; color: white; }
+.btn-deezer { border-color: #ff6b35; color: #ff6b35; }
+.btn-deezer:hover { background: #ff6b35; color: white; }
 
 .album-actions {
     padding: 0 1rem 1rem;
@@ -311,6 +465,15 @@
     margin-bottom: 1.5rem;
 }
 
+.release-week {
+    margin-bottom: 2.5rem;
+}
+.release-week h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 @media (max-width: 768px) {
     .page-header {
         flex-direction: column;
@@ -329,6 +492,24 @@
 </style>
 
 <script>
+function updateDaysFilter(days) {
+    const url = new URL(window.location.href);
+    if (days) {
+        url.searchParams.set('days', days);
+    } else {
+        const select = document.getElementById('days-filter');
+        url.searchParams.set('days', select.value);
+    }
+    window.location.href = url.toString();
+}
+
+function toggleSingles() {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('include_singles') !== 'false';
+    url.searchParams.set('include_singles', !current);
+    window.location.href = url.toString();
+}
+
 function toggleCompilations() {
     const url = new URL(window.location.href);
     const current = url.searchParams.get('include_compilations') !== 'false';
@@ -336,34 +517,55 @@ function toggleCompilations() {
     window.location.href = url.toString();
 }
 
-function previewAlbum(deezerId) {
-    // Open Deezer preview in new tab for now
-    // Later we could add an audio player integration
-    window.open(`https://www.deezer.com/album/${deezerId}`, '_blank');
-}
-
-async function addToWishlist(deezerId, title, artist) {
-    // Placeholder for wishlist functionality
-    // Could integrate with a local wishlist or download queue
-    console.log('Add to wishlist:', { deezerId, title, artist });
-    
-    // For now, show a simple confirmation
+async function queueAlbumDownload(albumId, title, artist, source) {
+    // Hey future me - this queues an album for download via the download queue!
+    // The source param tells us if it's from Spotify or Deezer so we know which API to use.
     const btn = event.target.closest('button');
     const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-check"></i>';
-    btn.disabled = true;
     
+    try {
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+        btn.disabled = true;
+        
+        // Build request body based on source
+        const body = { title, artist };
+        if (source === 'spotify') {
+            body.spotify_id = albumId;
+        } else if (source === 'deezer') {
+            body.deezer_id = albumId;
+        }
+        
+        const response = await fetch('/api/downloads/album', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        
+        if (response.ok) {
+            btn.innerHTML = '<i class="bi bi-check"></i> Queued';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+        } else {
+            const error = await response.json();
+            btn.innerHTML = '<i class="bi bi-x"></i> Failed';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-danger');
+            console.error('Failed to queue album:', error);
+        }
+    } catch (err) {
+        btn.innerHTML = '<i class="bi bi-x"></i> Error';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+        console.error('Error queuing album:', err);
+    }
+    
+    // Reset button after 3 seconds
     setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.disabled = false;
-    }, 2000);
-    
-    // TODO: Implement actual wishlist/queue integration
-    // await fetch('/api/wishlist', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ deezer_id: deezerId, title, artist })
-    // });
+        btn.classList.remove('btn-success', 'btn-danger');
+        btn.classList.add('btn-primary');
+    }, 3000);
 }
 </script>
 {% endblock %}
