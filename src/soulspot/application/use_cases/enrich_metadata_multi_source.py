@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from soulspot.application.services.metadata_merger import MetadataMerger
 from soulspot.application.use_cases import UseCase

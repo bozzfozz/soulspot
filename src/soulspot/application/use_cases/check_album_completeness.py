@@ -11,12 +11,12 @@ from soulspot.application.services.album_completeness import (
     AlbumCompletenessService,
 )
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
-from soulspot.infrastructure.plugins import SpotifyPlugin
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
     ArtistModel,
     TrackModel,
 )
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 

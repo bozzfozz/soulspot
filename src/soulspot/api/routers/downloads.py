@@ -18,7 +18,10 @@ from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.domain.entities import Download, DownloadStatus
 from soulspot.domain.value_objects import DownloadId, SpotifyUri, TrackId
-from soulspot.infrastructure.persistence.repositories import DownloadRepository, TrackRepository
+from soulspot.infrastructure.persistence.repositories import (
+    DownloadRepository,
+    TrackRepository,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

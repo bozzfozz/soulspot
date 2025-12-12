@@ -70,7 +70,6 @@ class FollowedArtistsService:
         Raises:
             PluginError: If Spotify API request fails
         """
-        from soulspot.domain.dtos import ArtistDTO
 
         all_artists: list[Artist] = []
         after_cursor: str | None = None
@@ -167,11 +166,10 @@ class FollowedArtistsService:
         Raises:
             ValueError: If artist data is invalid (missing required fields)
         """
-        from soulspot.domain.dtos import ArtistDTO
         from soulspot.domain.entities import ArtistSource
 
         if not artist_dto.spotify_id or not artist_dto.name:
-            raise ValueError(f"Invalid artist DTO: missing spotify_id or name")
+            raise ValueError("Invalid artist DTO: missing spotify_id or name")
 
         spotify_uri = SpotifyUri.from_string(
             artist_dto.spotify_uri or f"spotify:artist:{artist_dto.spotify_id}"
@@ -281,21 +279,21 @@ class FollowedArtistsService:
         Returns:
             Dict with sync stats (total, added, skipped)
         """
-        from soulspot.domain.value_objects import AlbumId
         from soulspot.domain.entities import Album
+        from soulspot.domain.value_objects import AlbumId
         from soulspot.infrastructure.persistence.repositories import AlbumRepository
-        
+
         stats = {"total": 0, "added": 0, "skipped": 0}
-        
+
         # Get artist by ID
         artist = await self.artist_repo.get(artist_id)
         if not artist or not artist.spotify_uri:
             logger.warning(f"Artist {artist_id} not found or has no spotify_uri")
             return stats
-        
+
         # Extract Spotify ID from spotify_uri (format: spotify:artist:xxx)
         spotify_artist_id = str(artist.spotify_uri).split(":")[-1]
-        
+
         # Fetch albums from Spotify API using SpotifyPlugin (returns PaginatedResponse[AlbumDTO])
         try:
             response = await self.spotify_plugin.get_artist_albums(
@@ -306,23 +304,23 @@ class FollowedArtistsService:
         except Exception as e:
             logger.error(f"Failed to fetch albums for artist {artist.name}: {e}")
             return stats
-        
+
         album_repo = AlbumRepository(self.session)
-        
+
         # Process each album (now AlbumDTO instead of raw dict!)
         for album_dto in albums_dtos:
             stats["total"] += 1
-            
+
             spotify_uri = SpotifyUri.from_string(
                 album_dto.spotify_uri or f"spotify:album:{album_dto.spotify_id}"
             )
-            
+
             # Check if album already exists
             existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
             if existing_album:
                 stats["skipped"] += 1
                 continue
-            
+
             # Create new album in unified table (using DTO fields!)
             new_album = Album(
                 id=AlbumId.generate(),
@@ -332,11 +330,11 @@ class FollowedArtistsService:
                 spotify_uri=spotify_uri,
                 artwork_url=album_dto.artwork_url,
             )
-            
+
             await album_repo.add(new_album)
             stats["added"] += 1
             logger.debug(f"Added Spotify album: {album_dto.title} ({album_dto.release_year})")
-        
+
         logger.info(
             f"Synced {stats['added']} new albums for {artist.name} "
             f"({stats['skipped']} already existed)"
@@ -362,7 +360,6 @@ class FollowedArtistsService:
         Returns:
             List of ArtistDTOs from Spotify
         """
-        from soulspot.domain.dtos import ArtistDTO
 
         response = await self.spotify_plugin.get_followed_artists(
             limit=min(limit, 50),

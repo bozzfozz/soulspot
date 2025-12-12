@@ -140,6 +140,9 @@ async def search_spotify_artists(
 
         artists = []
         for artist_dto in result.items:
+            # Get Spotify URL from external_urls dict
+            spotify_url = artist_dto.external_urls.get("spotify", "")
+            
             artists.append(
                 SpotifyArtistResult(
                     id=artist_dto.spotify_id or "",
@@ -148,7 +151,7 @@ async def search_spotify_artists(
                     followers=artist_dto.followers or 0,
                     genres=artist_dto.genres or [],
                     image_url=artist_dto.image_url,
-                    spotify_url=artist_dto.url,
+                    spotify_url=spotify_url,
                 )
             )
 
@@ -189,20 +192,23 @@ async def search_spotify_tracks(
         for track_dto in result.items:
             # Extract artist info from DTO
             artist_name = track_dto.artist_name or "Unknown"
-            artist_id = track_dto.artists[0].spotify_id if track_dto.artists else None
+            artist_id = track_dto.artist_spotify_id
+            
+            # Get Spotify URL from external_urls dict
+            spotify_url = track_dto.external_urls.get("spotify", "")
 
             tracks.append(
                 SpotifyTrackResult(
                     id=track_dto.spotify_id or "",
-                    name=track_dto.name,
+                    name=track_dto.title,
                     artist_name=artist_name,
                     artist_id=artist_id,
-                    album_name=track_dto.album.name if track_dto.album else None,
-                    album_id=track_dto.album.spotify_id if track_dto.album else None,
+                    album_name=track_dto.album_name,
+                    album_id=track_dto.album_spotify_id,
                     duration_ms=track_dto.duration_ms or 0,
                     popularity=track_dto.popularity or 0,
                     preview_url=track_dto.preview_url,
-                    spotify_url=track_dto.url,
+                    spotify_url=spotify_url,
                     isrc=track_dto.isrc,
                 )
             )
@@ -244,19 +250,22 @@ async def search_spotify_albums(
         for album_dto in result.items:
             # Extract artist info from DTO
             artist_name = album_dto.artist_name or "Unknown"
-            artist_id = album_dto.artists[0].spotify_id if album_dto.artists else None
+            artist_id = album_dto.artist_spotify_id
+            
+            # Get Spotify URL from external_urls dict
+            spotify_url = album_dto.external_urls.get("spotify", "")
 
             albums.append(
                 SpotifyAlbumResult(
                     id=album_dto.spotify_id or "",
-                    name=album_dto.name,
+                    name=album_dto.title,
                     artist_name=artist_name,
                     artist_id=artist_id,
                     release_date=album_dto.release_date,
                     album_type=album_dto.album_type,
                     total_tracks=album_dto.total_tracks or 0,
-                    image_url=album_dto.image_url,
-                    spotify_url=album_dto.url,
+                    image_url=album_dto.artwork_url,
+                    spotify_url=spotify_url,
                 )
             )
 
@@ -374,7 +383,7 @@ async def get_search_suggestions(
         track_results = await spotify_plugin.search_track(query, limit=5)
         for track_dto in track_results.items[:5]:
             artist_name = track_dto.artist_name or ""
-            text = f"{track_dto.name} - {artist_name}" if artist_name else track_dto.name
+            text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
             suggestions.append(
                 SearchSuggestion(text=text, type="track", id=track_dto.spotify_id)
             )

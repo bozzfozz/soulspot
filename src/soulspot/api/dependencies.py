@@ -14,6 +14,9 @@ from soulspot.application.services.token_manager import TokenManager
 from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
+    from soulspot.application.services.spotify_auth_service import (
+        SpotifyAuthService,
+    )
     from soulspot.application.services.token_manager import DatabaseTokenManager
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
@@ -156,7 +159,7 @@ async def get_spotify_plugin(
 
     try:
         spotify_client = SpotifyClient(settings.spotify)
-        db_token_manager: "DatabaseTokenManager" = request.app.state.db_token_manager
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
 
         return SpotifyPlugin(
             spotify_client=spotify_client,
@@ -667,7 +670,7 @@ async def get_spotify_sync_service(
 
     # Create SpotifyPlugin for the sync service
     spotify_client = SpotifyClient(settings.spotify)
-    db_token_manager: "DatabaseTokenManager" = request.app.state.db_token_manager
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
 
     spotify_plugin = SpotifyPlugin(
         spotify_client=spotify_client,

@@ -14,7 +14,6 @@ from soulspot.api.dependencies import (
 from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
-from soulspot.config import Settings, get_settings
 from soulspot.domain.value_objects import ArtistId, WatchlistId
 
 if TYPE_CHECKING:

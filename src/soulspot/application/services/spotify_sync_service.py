@@ -407,7 +407,6 @@ class SpotifySyncService:
         Hey future me - returns AlbumDTOs now!
         Plugin handles pagination and auth internally.
         """
-        from soulspot.domain.dtos import AlbumDTO
 
         response = await self.spotify_plugin.get_artist_albums(
             artist_id=artist_id,
@@ -951,7 +950,6 @@ class SpotifySyncService:
 
         Returns list of track data with added_at timestamp.
         """
-        from soulspot.domain.dtos import TrackDTO
 
         all_tracks: list[dict[str, Any]] = []
         offset = 0

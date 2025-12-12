@@ -15,7 +15,9 @@ and albums features. The tracks synced here have album_id = NULL (no album assoc
 """
 
 import logging
-from typing import Any
+
+# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -27,9 +29,6 @@ from soulspot.api.dependencies import (
 )
 from soulspot.application.services.artist_songs_service import ArtistSongsService
 from soulspot.domain.value_objects import ArtistId, TrackId
-
-# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin

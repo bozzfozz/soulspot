@@ -267,7 +267,7 @@ class ArtistSongsService:
             Tuple of (Track entity or None, was_created boolean, is_single boolean)
         """
         if not track_dto.spotify_id or not track_dto.title:
-            logger.warning(f"Invalid track DTO: missing spotify_id or title")
+            logger.warning("Invalid track DTO: missing spotify_id or title")
             return None, False, False
 
         spotify_uri = SpotifyUri.from_string(

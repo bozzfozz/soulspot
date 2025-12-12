@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -802,6 +802,7 @@ class SyncTriggerResponse(BaseModel):
 @router.post("/spotify-sync/trigger/{sync_type}")
 async def trigger_manual_sync(
     sync_type: str,
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
 ) -> SyncTriggerResponse:
     """Trigger a manual Spotify sync.
@@ -817,9 +818,9 @@ async def trigger_manual_sync(
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
-    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
     valid_types = {"artists", "playlists", "liked", "albums", "all"}
     if sync_type not in valid_types:

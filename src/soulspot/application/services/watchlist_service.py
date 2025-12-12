@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import ArtistWatchlist, WatchlistStatus
 from soulspot.domain.value_objects import ArtistId, WatchlistId
-from soulspot.infrastructure.plugins import SpotifyPlugin
 from soulspot.infrastructure.persistence.repositories import ArtistWatchlistRepository
+from soulspot.infrastructure.plugins import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class WatchlistService:
         try:
             # Get artist's albums from Spotify via Plugin
             artist_spotify_id = str(watchlist.artist_id.value)
-            
+
             # Hey future me – Plugin gibt PaginatedResponse[AlbumDTO] zurück!
             response = await self.spotify_plugin.get_artist_albums(artist_spotify_id)
             albums = response.items  # list[AlbumDTO]

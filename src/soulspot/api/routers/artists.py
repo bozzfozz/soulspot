@@ -8,7 +8,9 @@ This is separate from watchlists (which track NEW releases) - this is just the a
 """
 
 import logging
-from typing import Any
+
+# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -23,9 +25,6 @@ from soulspot.application.services.followed_artists_service import (
 )
 from soulspot.domain.value_objects import ArtistId
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
-
-# Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin

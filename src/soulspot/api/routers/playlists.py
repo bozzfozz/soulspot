@@ -11,6 +11,7 @@ from soulspot.api.dependencies import (
     get_import_playlist_use_case,
     get_playlist_repository,
     get_queue_playlist_downloads_use_case,
+    get_spotify_plugin,
     get_track_repository,
 )
 from soulspot.application.use_cases.import_spotify_playlist import (
@@ -28,6 +29,7 @@ from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
     TrackRepository,
 )
+from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 router = APIRouter()
 
