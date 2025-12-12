@@ -412,7 +412,7 @@ class ImportSpotifyPlaylistUseCase(
             try:
                 # Plugin returns ArtistDTO
                 artist_dto = await self._spotify_plugin.get_artist(artist_id)
-                
+
                 # Convert DTO to Artist entity
                 artist = Artist(
                     id=ArtistId.generate(),

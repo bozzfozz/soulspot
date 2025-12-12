@@ -24,7 +24,6 @@ Token Storage:
 import logging
 import secrets
 from dataclasses import dataclass
-from typing import Any
 
 from soulspot.config import SpotifyConfig
 from soulspot.infrastructure.integrations.spotify_client import SpotifyClient

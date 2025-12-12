@@ -4,13 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
-from soulspot.domain.value_objects import (
-    AlbumId,
-    ArtistId,
-    DownloadId,
-    PlaylistId,
-    TrackId,
-)
 
 # Hey future me – Plugin-System Interfaces sind in separatem Modul!
 # Import hier für einfachen Zugriff: from soulspot.domain.ports import IMusicServicePlugin
@@ -21,6 +14,13 @@ from soulspot.domain.ports.plugin import (
     IMusicServicePlugin,
     PluginError,
     ServiceType,
+)
+from soulspot.domain.value_objects import (
+    AlbumId,
+    ArtistId,
+    DownloadId,
+    PlaylistId,
+    TrackId,
 )
 
 

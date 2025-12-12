@@ -1440,7 +1440,7 @@ async def library_artist_detail(
     )
     albums_result = await session.execute(albums_stmt)
     album_models = albums_result.scalars().all()
-    
+
     # Hey future me - AUTO-SYNC Spotify albums if artist has none yet!
     # If artist is from Spotify (source='spotify' or 'hybrid') and has NO albums in DB,
     # fetch albums from Spotify API on-demand. This ensures Spotify followed artists
@@ -1448,26 +1448,32 @@ async def library_artist_detail(
     if not album_models and artist_model.source in ["spotify", "hybrid"] and artist_model.spotify_uri:
         try:
             # Get Spotify plugin and token
-            from soulspot.application.services.followed_artists_service import FollowedArtistsService
-            from soulspot.infrastructure.persistence.database import DatabaseTokenManager
-            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+            from soulspot.application.services.followed_artists_service import (
+                FollowedArtistsService,
+            )
+            from soulspot.infrastructure.integrations.spotify_client import (
+                SpotifyClient,
+            )
+            from soulspot.infrastructure.persistence.database import (
+                DatabaseTokenManager,
+            )
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-            
+
             if hasattr(request.app.state, "db_token_manager"):
                 db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
                 access_token = await db_token_manager.get_token_for_background()
-                
+
                 if access_token:
                     # Use FollowedArtistsService with SpotifyPlugin
                     spotify_client = SpotifyClient()
                     spotify_plugin = SpotifyPlugin(spotify_client, access_token)
                     followed_service = FollowedArtistsService(session, spotify_plugin)
-                    
+
                     # Sync albums for this artist (albums, singles, EPs, compilations)
                     # No access_token param - plugin has it!
                     await followed_service.sync_artist_albums(artist_model.id)
                     await session.commit()  # Commit new albums
-                    
+
                     # Re-query albums after sync
                     albums_result = await session.execute(albums_stmt)
                     album_models = albums_result.scalars().all()

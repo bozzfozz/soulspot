@@ -4,7 +4,7 @@ Hey future me - this module exists to keep `automation.py` from becoming an unma
 `automation.py` mounts this router under the `/automation` prefix.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

@@ -21,11 +21,11 @@ Thread-Safety:
     Für async ist sie safe (GIL in CPython).
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from soulspot.domain.ports.plugin import (
-    IMusicServicePlugin,
     IMetadataPlugin,
+    IMusicServicePlugin,
     ServiceType,
 )
 
