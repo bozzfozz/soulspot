@@ -40,6 +40,11 @@ Transform SoulSpot's UI into a **professional, scalable, and intuitive system** 
 - **Light/Dark theme toggle** with persistent user preference (Pydantic Settings)
 - **Zero breaking changes** to existing routes (component macros are additive)
 
+### Core Values
+- **Professionalism**: Pixel-perfect execution, consistent design tokens, and "premium" feel (Glassmorphism).
+- **Diligence**: No shortcuts. Full accessibility (WCAG AA), robust error handling, and comprehensive testing.
+- **Innovation**: "Magic" moments (Staggered animations, Command Palette) that elevate the UX beyond a simple CRUD app.
+
 ---
 
 ## Phase 1: Foundation (CSS Design Tokens & Variables)
@@ -54,6 +59,9 @@ Establish a **single source of truth** for colors, spacing, typography, and anim
 
 **Enhancements**:
 ```css
+/* ===== CSS LAYERS (Modern Reset & Specificity Management) ===== */
+@layer base, components, utilities;
+
 /* ===== SERVICE-SPECIFIC COLORS ===== */
 /* Hey future me - Spotify is primary, but leaving room for Tidal/Deezer in the future
    Each service gets its own brand color palette for clear visual distinction */
@@ -300,6 +308,25 @@ Establish a **single source of truth** for colors, spacing, typography, and anim
 .glow {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* ===== STAGGER DELAYS (Utility Classes) ===== */
+/* Hey future me - Use these for grid items (artists, albums) to create
+   that satisfying "wave" load effect. No JS needed! */
+.delay-75  { animation-delay: 75ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-225 { animation-delay: 225ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Accessibility: Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 ```
 
 **Why**: Foundation for all animated UI feedback (loaders, transitions, reveals).
@@ -366,6 +393,15 @@ Create **modular, reusable Jinja2 components** for all common UI patterns. Each 
 | **Tabs** | `tabs.html` | Horizontal tabs (HTMX-enabled) | Phase 2 |
 | **Pagination** | `pagination.html` | Page navigation (HTMX lazy-load) | Phase 2 |
 
+#### Library Management (`templates/components/library/`)
+
+| Component | File | Purpose | Status |
+|-----------|------|---------|--------|
+| **Album Studio** | `album-studio.html` | Dense grid for bulk monitoring | Phase 2 |
+| **Bulk Actions** | `bulk-actions.html` | Floating bar for batch ops | Phase 2 |
+| **Scan Progress** | `scan-progress.html` | SSE-driven progress bar | Phase 2 |
+| **Stats Widget** | `stats-widget.html` | Library statistics dashboard | Phase 2 |
+
 ### 2.3 Implementation Example: Card Component
 
 **File**: `src/soulspot/templates/components/data-display/card.html`
@@ -390,11 +426,13 @@ Create **modular, reusable Jinja2 components** for all common UI patterns. Each 
         {'icon': 'fa-solid fa-plus', 'label': 'Add', 'variant': 'outline', 'htmx_post': '/api/library/add'}
       ],
       'status_badge': 'downloaded',  # 'downloaded' | 'streaming' | null
-      'variant': 'default'  # 'default' | 'glass' | 'hover'
+      'variant': 'default',  # 'default' | 'glass' | 'hover'
+      'animate': true,       # Enable entrance animation
+      'delay': 100           # Stagger delay in ms (optional)
     } %}
 #}
 
-<div class="card card-{{ variant or 'default' }}" role="article">
+<div class="card card-{{ variant or 'default' }} {% if animate %}blur-fade{% endif %} {{ 'delay-' ~ delay if delay else '' }}" role="article">
   {# Image Section #}
   {% if image %}
   <div class="card-image {% if image_type == 'artist' %}card-image-circular{% endif %}">
@@ -503,6 +541,13 @@ Create **modular, reusable Jinja2 components** for all common UI patterns. Each 
   background: var(--bg-tertiary);
 }
 
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+/* Artist Card: Playful hover effect */
+.card:hover .card-image-circular {
+  transform: scale(1.05) rotate(2deg);
+  box-shadow: 0 10px 30px -10px var(--accent-primary); /* Colored glow based on brand */
 .card-image-circular {
   border-radius: var(--radius-full);
 }
@@ -619,8 +664,17 @@ Implement **enterprise-grade interactions** that separate Pro users from casual 
 - **Mobile Bottom Sheets** – Native-feeling modals for mobile flows (artist selection, filters)
 - **Advanced Search** – Multi-field search with real-time HTMX results
 - **Queue Manager** – Drag-and-drop reordering, pause/resume controls
+- **Expanded Artist Cards** – (Future) Inline expansion to show all albums/tracks directly in the grid
 
-### 3.2 Command Palette Component
+### 3.2 Advanced Search Interface
+**Backend Alignment**: Supports `AdvancedSearchService` (Fuzzy, Bitrate, Formats).
+
+**Features**:
+- **Filter Panel**: Range sliders (Bitrate), Multi-select (Formats: FLAC, MP3), Tag Input (Exclusions).
+- **Result Card**: Displays `match_score` (Color-coded badge), `quality_score`, and `fuzzy_score`.
+- **Smart Sort**: Default sort by "Smart Score" (Backend formula).
+
+### 3.3 Command Palette Component
 
 **File**: `src/soulspot/templates/components/specialized/command-palette.html`
 
@@ -982,7 +1036,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter' && selected) {
     e.preventDefault();
     selected.click();
-    commandPalette.setAttribute('hidden', '');
+    co4mandPalette.setAttribute('hidden', '');
   }
 });
 </script>
@@ -1399,6 +1453,13 @@ src/soulspot/templates/
 │   │   ├── tabs.html
 │   │   └── pagination.html
 │   └── specialized/                   # Pro features
+
+src/soulspot/static/new-ui/js/
+├── modules/                           # ES Modules (reusable logic)
+│   ├── theme.js                       # Theme switching logic
+│   ├── search.js                      # Command palette & fuzzy search
+│   └── ui.js                          # UI utilities (bottom sheets, modals)
+└── main.js                            # Main entry point (imports modules)
 │       ├── command-palette.html       # Cmd+K search
 │       ├── bottom-sheet.html          # Mobile modals
 │       ├── queue-manager.html         # Download queue
@@ -1414,11 +1475,11 @@ src/soulspot/static/new-ui/css/
 ### 5.2 API Endpoints (New Pro Features)
 
 | Endpoint | Method | Purpose | Response |
-|----------|--------|---------|----------|
-| `/api/search/fuzzy` | GET | Command palette fuzzy search | `{tracks, artists, albums, playlists, actions, settings}` |
-| `/api/search/recent` | GET | Recent searches | `[{query, type, timestamp}]` |
-| `/api/settings/theme` | POST | Save theme preference | `{theme: 'light' \| 'dark'}` |
-| `/api/queue/reorder` | POST | Reorder downloads | `{success: bool}` |
+|---- Architecture | **CSS `@layer`** for specificity control (Base > Components > Utilities) |
+| CSS Variables | Extensive use of Custom Properties for theming & responsiveness |
+| JavaScript | **ES Modules** (`<script type="module">`) for clean, scoped logic without bundlers |
+| Icons | Bootstrap Icons (WOFF2) preloaded + `font-display: swap` |
+| Animations | Pure CSS `@keyframes` with `prefers-reduced-motion` support
 | `/api/downloads/stream` | GET | SSE stream for progress | `{id, progress, status}` |
 
 **Implementation Location**: `src/soulspot/api/routers/search.py`, `src/soulspot/api/routers/settings.py`
