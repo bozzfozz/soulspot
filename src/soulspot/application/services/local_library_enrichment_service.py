@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.spotify_image_service import SpotifyImageService
+from soulspot.domain.dtos import AlbumDTO, ArtistDTO
 from soulspot.domain.entities import Album, Artist
 from soulspot.infrastructure.integrations.coverartarchive_client import (
     CoverArtArchiveClient,
@@ -58,10 +59,10 @@ from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
     TrackRepository,
 )
+from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 if TYPE_CHECKING:
     from soulspot.config import Settings
-    from soulspot.domain.ports import ISpotifyClient
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ class LocalLibraryEnrichmentService:
     metadata like images, genres, and Spotify URIs.
 
     Usage:
-        service = LocalLibraryEnrichmentService(session, spotify_client, settings)
+        service = LocalLibraryEnrichmentService(session, spotify_plugin, settings)
         stats = await service.enrich_batch()
         # Returns: {"artists_enriched": 5, "albums_enriched": 3, ...}
 
@@ -204,22 +205,27 @@ class LocalLibraryEnrichmentService:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_client: ISpotifyClient,
+        spotify_plugin: SpotifyPlugin | None,
         settings: Settings,
-        access_token: str,
     ) -> None:
         """Initialize enrichment service.
 
+        Hey future me - wir nutzen jetzt SpotifyPlugin statt SpotifyClient!
+        Das Plugin managed Token intern, daher kein access_token Parameter mehr.
+
+        spotify_plugin kann None sein für lokale Operationen wie:
+        - find_duplicate_artists/albums
+        - merge_artists/albums
+        - enrich_disambiguation_batch (nur MusicBrainz)
+
         Args:
             session: Database session
-            spotify_client: Spotify API client
+            spotify_plugin: Spotify plugin (handles auth internally), optional
             settings: Application settings
-            access_token: Spotify OAuth access token
         """
         self._session = session
-        self._spotify_client = spotify_client
+        self._spotify_plugin = spotify_plugin
         self._settings = settings
-        self._access_token = access_token
 
         # Repositories
         self._artist_repo = ArtistRepository(session)
@@ -260,6 +266,7 @@ class LocalLibraryEnrichmentService:
         - If Spotify is OFF and Deezer is ON → delegates to enrich_batch_deezer_only()
         - If both are OFF → returns early with no enrichment
         - If Spotify is ON → uses Spotify with Deezer fallback (if Deezer ON)
+        - If spotify_plugin is None → treats Spotify as disabled
 
         Returns:
             Stats dict with enrichment results
@@ -268,6 +275,11 @@ class LocalLibraryEnrichmentService:
         # This allows users to completely disable providers in Settings UI.
         spotify_enabled = await self._settings_service.is_provider_enabled("spotify")
         deezer_enabled = await self._settings_service.is_provider_enabled("deezer")
+
+        # Hey future me - wenn kein spotify_plugin, dann ist Spotify effektiv disabled!
+        # Das passiert wenn Service für lokale Operationen (merge, duplicates) erstellt wurde.
+        if self._spotify_plugin is None:
+            spotify_enabled = False
 
         if not spotify_enabled and not deezer_enabled:
             # Both providers disabled - nothing to do
@@ -727,18 +739,17 @@ class LocalLibraryEnrichmentService:
                 # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
                 spotify_id = artist.spotify_uri.value.split(":")[-1]
 
-                # Fetch artist info from Spotify to get image URL
-                artist_info = await self._spotify_client.get_artist(
+                # Hey future me - wir nutzen SpotifyPlugin statt SpotifyClient!
+                # Plugin gibt ArtistDTO zurück, nicht dict.
+                artist_dto = await self._spotify_plugin.get_artist(
                     artist_id=spotify_id,
-                    access_token=self._access_token,
                 )
 
-                images = artist_info.get("images", [])
-                if not images:
+                if not artist_dto.image_url:
                     logger.debug(f"No images available for artist {artist.name}")
                     continue
 
-                image_url = images[0]["url"]
+                image_url = artist_dto.image_url
 
                 # Download artwork
                 local_path = await self._image_service.download_artist_image(
@@ -964,13 +975,13 @@ class LocalLibraryEnrichmentService:
             # Hey future me - artist.name is CLEAN (no UUID/MusicBrainz ID from folder parsing)!
             # LibraryFolderParser strips disambiguation before creating Artist entity.
             # We send only the artist name to Spotify API, nothing else!
-            search_results = await self._spotify_client.search_artist(
+            # Hey future me - SpotifyPlugin gibt PaginatedResponse[ArtistDTO] zurück!
+            search_response = await self._spotify_plugin.search_artist(
                 query=artist.name,
-                access_token=self._access_token,
                 limit=search_limit,  # Configurable via settings (default 20)
             )
 
-            artists_data = search_results.get("artists", {}).get("items", [])
+            artists_data = search_response.items  # Liste von ArtistDTOs
 
             # Hey future me - FALLBACK SEARCH with normalized name!
             # If original name (e.g., "DJ Paul Elstak") returns no results or only
@@ -982,12 +993,11 @@ class LocalLibraryEnrichmentService:
                 logger.debug(
                     f"No results for '{artist.name}', trying normalized: '{normalized_name}'"
                 )
-                fallback_results = await self._spotify_client.search_artist(
+                fallback_response = await self._spotify_plugin.search_artist(
                     query=normalized_name,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
-                artists_data = fallback_results.get("artists", {}).get("items", [])
+                artists_data = fallback_response.items
 
             if not artists_data:
                 # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
@@ -1027,12 +1037,11 @@ class LocalLibraryEnrichmentService:
                 logger.debug(
                     f"No candidates for '{artist.name}', searching with normalized: '{normalized_name}'"
                 )
-                fallback_results = await self._spotify_client.search_artist(
+                fallback_response = await self._spotify_plugin.search_artist(
                     query=normalized_name,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
-                fallback_data = fallback_results.get("artists", {}).get("items", [])
+                fallback_data = fallback_response.items  # Liste von ArtistDTOs
                 if fallback_data:
                     candidates = self._score_artist_candidates(
                         artist.name, fallback_data, name_weight=name_weight
@@ -1107,10 +1116,13 @@ class LocalLibraryEnrichmentService:
     def _score_artist_candidates(
         self,
         local_name: str,
-        spotify_artists: list[dict[str, Any]],
+        spotify_artists: list[ArtistDTO],
         name_weight: float = 0.85,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify artist candidates against local artist name.
+
+        Hey future me - jetzt mit ArtistDTOs statt dicts!
+        SpotifyPlugin gibt DTOs zurück, also arbeiten wir direkt damit.
 
         Scoring factors:
         - Name similarity (fuzzy match) - configurable weight (default 85%)
@@ -1118,7 +1130,7 @@ class LocalLibraryEnrichmentService:
 
         Args:
             local_name: Local artist name
-            spotify_artists: List of Spotify artist dicts
+            spotify_artists: List of ArtistDTO from SpotifyPlugin
             name_weight: Weight of name similarity (0.0-1.0, default 0.85)
 
         Returns:
@@ -1132,15 +1144,13 @@ class LocalLibraryEnrichmentService:
         local_normalized = normalize_artist_name(local_name)
 
         for sp_artist in spotify_artists:
-            sp_name = sp_artist.get("name", "")
-            sp_uri = sp_artist.get("uri", "")
-            sp_popularity = sp_artist.get("popularity", 0) / 100.0  # Normalize to 0-1
-            sp_followers = sp_artist.get("followers", {}).get("total", 0)
-            sp_genres = sp_artist.get("genres", [])
-
-            # Get best image URL
-            images = sp_artist.get("images", [])
-            sp_image_url = images[0]["url"] if images else None
+            # Hey future me - DTOs haben Attribute, keine dicts!
+            sp_name = sp_artist.name
+            sp_uri = sp_artist.spotify_uri or ""
+            sp_popularity = (sp_artist.popularity or 0) / 100.0  # Normalize to 0-1
+            sp_followers = sp_artist.followers or 0
+            sp_genres = sp_artist.genres or []
+            sp_image_url = sp_artist.image_url
 
             # Normalize Spotify name for comparison
             sp_normalized = normalize_artist_name(sp_name)
@@ -1166,7 +1176,7 @@ class LocalLibraryEnrichmentService:
                         spotify_image_url=sp_image_url,
                         confidence_score=confidence,
                         extra_info={
-                            "popularity": sp_artist.get("popularity", 0),
+                            "popularity": sp_artist.popularity or 0,
                             "followers": sp_followers,
                             "genres": sp_genres,
                         },
@@ -1485,6 +1495,8 @@ class LocalLibraryEnrichmentService:
             # Hey future me - artist_name is CLEAN (no UUID/MusicBrainz ID)!
             # LibraryFolderParser and DB already handle disambiguation stripping.
             # Adding year to search narrows results to correct release edition!
+            # Hey future me - wir nutzen jetzt search_album statt search_track!
+            # Das gibt direkt AlbumDTOs zurück statt Tracks mit eingebetteten Albums.
             if is_various_artists:
                 # For Various Artists: search by album title only!
                 # Adding "tag:compilation" helps but isn't always accurate.
@@ -1502,38 +1514,27 @@ class LocalLibraryEnrichmentService:
             else:
                 search_query = f"artist:{artist_name} album:{album.title}"
 
-            search_results = await self._spotify_client.search_track(
+            search_response = await self._spotify_plugin.search_album(
                 query=search_query,
-                access_token=self._access_token,
                 limit=search_limit,  # Configurable via settings (default 20)
             )
 
+            albums_data = search_response.items  # Liste von AlbumDTOs
+
             # Hey future me - if year search yields nothing, retry WITHOUT year!
             # Some albums have different years across regions or releases.
-            tracks_data = search_results.get("tracks", {}).get("items", [])
-            if not tracks_data and album.release_year:
+            if not albums_data and album.release_year:
                 logger.debug(
                     f"No results with year {album.release_year}, retrying without year"
                 )
                 search_query_no_year = f"artist:{artist_name} album:{album.title}"
-                search_results = await self._spotify_client.search_track(
+                fallback_response = await self._spotify_plugin.search_album(
                     query=search_query_no_year,
-                    access_token=self._access_token,
                     limit=search_limit,
                 )
+                albums_data = fallback_response.items
 
-            # Extract unique albums from track search results
-            # Hey - Spotify search_track returns tracks, we extract albums from them
-            tracks_data = search_results.get("tracks", {}).get("items", [])
-            albums_seen: dict[str, dict[str, Any]] = {}
-
-            for track in tracks_data:
-                sp_album = track.get("album", {})
-                sp_album_uri = sp_album.get("uri", "")
-                if sp_album_uri and sp_album_uri not in albums_seen:
-                    albums_seen[sp_album_uri] = sp_album
-
-            if not albums_seen:
+            if not albums_data:
                 # Hey future me - DEEZER FALLBACK! If Spotify finds nothing, try Deezer.
                 # But ONLY if use_deezer_fallback is True (respects provider settings)
                 # Deezer is especially good for Various Artists compilations because
@@ -1563,10 +1564,11 @@ class LocalLibraryEnrichmentService:
 
             # Score candidates with name normalization + year matching (Lidarr-style!)
             # Hey future me - pass is_various_artists so scoring uses title-only for compilations!
+            # albums_data ist jetzt eine Liste von AlbumDTOs
             candidates = self._score_album_candidates(
                 album.title,
                 artist_name,
-                list(albums_seen.values()),
+                albums_data,  # Direkt AlbumDTOs, nicht mehr albums_seen.values()
                 local_year=album.release_year,  # Pass year for Lidarr-style matching
                 is_various_artists=is_various_artists,  # Skip artist match for compilations
             )
@@ -1643,14 +1645,14 @@ class LocalLibraryEnrichmentService:
         self,
         local_title: str,
         local_artist: str,
-        spotify_albums: list[dict[str, Any]],
+        spotify_albums: list[AlbumDTO],
         local_year: int | None = None,
         is_various_artists: bool = False,
     ) -> list[EnrichmentCandidate]:
         """Score Spotify album candidates with name normalization + year matching.
 
-        Hey future me - this now uses normalize_artist_name() for better matching!
-        "DJ Paul Elstak - Party Animals" will match "Paul Elstak - Party Animals".
+        Hey future me - jetzt mit AlbumDTOs statt dicts!
+        SpotifyPlugin.search_album() gibt DTOs zurück, also arbeiten wir direkt damit.
 
         Lidarr-style scoring formula (normal albums):
         - Title similarity - 45%
@@ -1665,7 +1667,7 @@ class LocalLibraryEnrichmentService:
         Args:
             local_title: Local album title
             local_artist: Local artist name
-            spotify_albums: List of Spotify album dicts
+            spotify_albums: List of AlbumDTO from SpotifyPlugin
             local_year: Local album release year (optional, from folder name)
             is_various_artists: If True, use title-only scoring for compilations
 
@@ -1678,16 +1680,13 @@ class LocalLibraryEnrichmentService:
         local_artist_normalized = normalize_artist_name(local_artist)
 
         for sp_album in spotify_albums:
-            sp_title = sp_album.get("name", "")
-            sp_uri = sp_album.get("uri", "")
-            sp_artists = sp_album.get("artists", [])
-            sp_artist_name = sp_artists[0]["name"] if sp_artists else ""
-            sp_release_date = sp_album.get("release_date", "")
-            sp_total_tracks = sp_album.get("total_tracks", 0)
-
-            # Get best image URL
-            images = sp_album.get("images", [])
-            sp_image_url = images[0]["url"] if images else None
+            # Hey future me - DTOs haben Attribute, keine dicts!
+            sp_title = sp_album.title
+            sp_uri = sp_album.spotify_uri or ""
+            sp_artist_name = sp_album.artist_name
+            sp_release_date = sp_album.release_date or ""
+            sp_total_tracks = sp_album.total_tracks or 0
+            sp_image_url = sp_album.artwork_url
 
             # Normalize Spotify artist name
             sp_artist_normalized = normalize_artist_name(sp_artist_name)

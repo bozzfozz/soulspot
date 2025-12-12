@@ -1774,9 +1774,8 @@ async def trigger_enrichment(
 )
 async def repair_missing_artwork(
     db: AsyncSession = Depends(get_db_session),
-    spotify_client: Any = Depends(get_spotify_client),
-    settings: Any = Depends(get_settings),
-    token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Re-download artwork for artists that have Spotify URI but missing artwork.
 
@@ -1791,9 +1790,8 @@ async def repair_missing_artwork(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=spotify_client,
+        spotify_plugin=spotify_plugin,
         settings=settings,
-        access_token=token,
     )
 
     result = await service.repair_missing_artwork(limit=100)
@@ -2076,11 +2074,10 @@ async def find_duplicate_artists(
         LocalLibraryEnrichmentService,
     )
 
-    # Minimal service for detection (no spotify client needed)
+    # Hey future me - spotify_plugin=None weil wir nur lokale DB-Operationen machen!
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 
@@ -2118,8 +2115,7 @@ async def merge_duplicate_artists(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 
@@ -2152,8 +2148,7 @@ async def find_duplicate_albums(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 
@@ -2187,8 +2182,7 @@ async def merge_duplicate_albums(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 
@@ -2238,8 +2232,7 @@ async def enrich_disambiguation(
 
     service = LocalLibraryEnrichmentService(
         session=db,
-        spotify_client=None,  # type: ignore
-        access_token="",
+        spotify_plugin=None,
         settings=settings,
     )
 

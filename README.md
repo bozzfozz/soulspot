@@ -1,6 +1,26 @@
 # SoulSpot
 
-> 🎵 Musik von Spotify-Playlists automatisch über Soulseek herunterladen und sauber organisieren - für lokale Nutzung.
+<div align="center">
+
+# ⚠️ ACTIVE DEVELOPMENT - DO NOT USE IN PRODUCTION ⚠️
+
+## 🚧 THIS PROJECT IS UNDER HEAVY DEVELOPMENT 🚧
+
+**This software is experimental and unstable. Use at your own risk.**
+
+- 🔴 **APIs change frequently without notice**
+- 🔴 **Database schemas may break between commits**
+- 🔴 **Features are incomplete or broken**
+- 🔴 **No backwards compatibility guaranteed**
+- 🔴 **Data loss may occur**
+
+**If you're looking for a stable music downloader, please wait for a stable release.**
+
+---
+
+</div>
+
+> 🎵 Automatically download music from Spotify playlists via Soulseek and organize it cleanly - for local use.
 
 [![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![Release](https://img.shields.io/github/v/release/bozzfozz/soulspot?include_prereleases)](https://github.com/bozzfozz/soulspot/releases)
