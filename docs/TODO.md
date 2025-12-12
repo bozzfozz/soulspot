@@ -1,6 +1,6 @@
 # SoulSpot TODO
 
-> **Stand:** November 2025
+> **Stand:** Dezember 2025
 
 ---
 
@@ -22,7 +22,7 @@
 ## 🟡 Mittlere Priorität
 
 ### Tests erweitern
-- [ ] Integration Tests für neue API-Endpoints (`/api/library/duplicates/*`, `/api/settings/automation/*`)
+- [x] Integration Tests für neue API-Endpoints (`/api/library/duplicates/*`, `/api/automation/watchlist*`)
 - [ ] E2E Tests für Duplicate Review UI
 - [ ] Tests für Automation Workers im Zusammenspiel
 
@@ -37,18 +37,9 @@
 
 ## 🟢 Niedrige Priorität (Refactoring)
 
-### Leere Router entfernen ✅ BEREIT ZUM LÖSCHEN
+### Leere Router entfernen ✅ ERLEDIGT
 
-Die folgenden Router sind leer und werden nicht in `routers/__init__.py` importiert:
-
-```bash
-rm src/soulspot/api/routers/albums.py
-rm src/soulspot/api/routers/dashboard.py
-rm src/soulspot/api/routers/widget_templates.py
-rm src/soulspot/api/routers/widgets.py
-```
-
-**Status:** Sicher zu löschen - keine Abhängigkeiten gefunden.
+Die Router `albums.py`, `dashboard.py`, `widget_templates.py`, `widgets.py` existieren nicht mehr.
 
 ### Große Router aufteilen
 
@@ -57,17 +48,6 @@ rm src/soulspot/api/routers/widgets.py
 | `automation.py` | 25 | → `watchlists.py`, `rules.py`, `filters.py`, `discography.py` |
 | `ui.py` | 26 | → `ui_pages.py`, `ui_library.py`, `ui_spotify.py` |
 | `library.py` | 15 | → `library_scan.py`, `library_duplicates.py`, `library_import.py` |
-
-### Leere Router entfernen
-
-```bash
-rm src/soulspot/api/routers/albums.py
-rm src/soulspot/api/routers/dashboard.py
-rm src/soulspot/api/routers/widget_templates.py
-rm src/soulspot/api/routers/widgets.py
-```
-
-Nach dem Löschen: Imports in `routers/__init__.py` prüfen.
 
 ### Code-Cleanup (siehe CLEANUP.md)
 - [ ] Obsolete Templates entfernen

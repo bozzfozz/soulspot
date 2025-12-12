@@ -43,6 +43,12 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 router = APIRouter(prefix="/library", tags=["library"])
 
+# Hey future me - keep the giant library router readable by splitting feature areas.
+# This sub-router owns the duplicate artist/album merge endpoints (still mounted under /library/*).
+from soulspot.api.routers.library_duplicates import router as duplicates_router
+
+router.include_router(duplicates_router)
+
 
 # Hey future me, these are DTOs for library scanning! ScanRequest is minimal - just the path to scan.
 # ScanResponse tracks scan progress (scanned_files, broken_files, duplicate_files counts) and provides
@@ -1145,7 +1151,7 @@ async def resolve_duplicate(
 # Nützlich wenn der User nicht auf den nächsten automatischen Scan warten will.
 @router.post("/duplicates/scan")
 async def trigger_duplicate_scan(
-    request: Any,  # Request object for app.state access
+    request: Request,
 ) -> dict[str, Any]:
     """Trigger a manual duplicate scan.
 
@@ -2037,163 +2043,6 @@ async def reject_enrichment_candidate(
         "success": True,
         "message": "Candidate rejected",
     }
-
-
-# =============================================================================
-# DUPLICATE DETECTION & MERGE (Dec 2025)
-# Hey future me - these endpoints let users find and merge duplicate artists/albums!
-# Detection groups entities by normalized name, merge transfers all tracks/albums
-# to the "keep" entity and deletes the duplicates.
-# =============================================================================
-
-
-class MergeRequest(BaseModel):
-    """Request to merge duplicate entities."""
-
-    keep_id: str
-    merge_ids: list[str]
-
-
-@router.get(
-    "/duplicates/artists",
-    summary="Find duplicate artists",
-    tags=["duplicates"],
-)
-async def find_duplicate_artists(
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Find potential duplicate artists by normalized name matching.
-
-    Returns groups of artists that might be duplicates (same normalized name).
-    Each group includes a suggested primary (the one with Spotify URI or most tracks).
-
-    Use POST /duplicates/artists/merge to combine duplicates.
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    # Hey future me - spotify_plugin=None weil wir nur lokale DB-Operationen machen!
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_plugin=None,
-        settings=settings,
-    )
-
-    duplicate_groups = await service.find_duplicate_artists()
-
-    return {
-        "duplicate_groups": duplicate_groups,
-        "total_groups": len(duplicate_groups),
-        "total_duplicates": sum(len(g["artists"]) - 1 for g in duplicate_groups),
-    }
-
-
-@router.post(
-    "/duplicates/artists/merge",
-    summary="Merge duplicate artists",
-    tags=["duplicates"],
-)
-async def merge_duplicate_artists(
-    request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Merge multiple artists into one.
-
-    All tracks and albums from merge_ids artists will be transferred to keep_id artist.
-    The merge_ids artists will be deleted after transfer.
-
-    Args:
-        keep_id: ID of artist to keep
-        merge_ids: List of artist IDs to merge into keep artist
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_plugin=None,
-        settings=settings,
-    )
-
-    try:
-        result = await service.merge_artists(request.keep_id, request.merge_ids)
-        return {
-            "success": True,
-            **result,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.get(
-    "/duplicates/albums",
-    summary="Find duplicate albums",
-    tags=["duplicates"],
-)
-async def find_duplicate_albums(
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Find potential duplicate albums by normalized name + artist matching.
-
-    Returns groups of albums that might be duplicates.
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_plugin=None,
-        settings=settings,
-    )
-
-    duplicate_groups = await service.find_duplicate_albums()
-
-    return {
-        "duplicate_groups": duplicate_groups,
-        "total_groups": len(duplicate_groups),
-        "total_duplicates": sum(len(g["albums"]) - 1 for g in duplicate_groups),
-    }
-
-
-@router.post(
-    "/duplicates/albums/merge",
-    summary="Merge duplicate albums",
-    tags=["duplicates"],
-)
-async def merge_duplicate_albums(
-    request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Merge multiple albums into one.
-
-    All tracks from merge_ids albums will be transferred to keep_id album.
-    The merge_ids albums will be deleted after transfer.
-    """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
-    )
-
-    service = LocalLibraryEnrichmentService(
-        session=db,
-        spotify_plugin=None,
-        settings=settings,
-    )
-
-    try:
-        result = await service.merge_albums(request.keep_id, request.merge_ids)
-        return {
-            "success": True,
-            **result,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # =============================================================================

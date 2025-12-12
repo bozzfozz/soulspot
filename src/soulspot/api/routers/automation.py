@@ -23,6 +23,29 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/automation", tags=["automation"])
 logger = logging.getLogger(__name__)
 
+# Hey future me - router split: keep old endpoints on legacy_router so we can migrate
+# incrementally without duplicate route registrations.
+legacy_router = router
+
+from soulspot.api.routers.automation_discography import router as discography_router
+from soulspot.api.routers.automation_filters import router as filters_router
+from soulspot.api.routers.automation_followed_artists import (
+    router as followed_artists_router,
+)
+from soulspot.api.routers.automation_quality_upgrades import (
+    router as quality_upgrades_router,
+)
+from soulspot.api.routers.automation_rules import router as rules_router
+from soulspot.api.routers.automation_watchlists import router as watchlists_router
+
+router = APIRouter(prefix="/automation", tags=["automation"])
+router.include_router(watchlists_router)
+router.include_router(discography_router)
+router.include_router(quality_upgrades_router)
+router.include_router(filters_router)
+router.include_router(rules_router)
+router.include_router(followed_artists_router)
+
 
 # Pydantic models for API
 # Hey future me, these are REQUEST/RESPONSE schemas - Pydantic validates incoming JSON and serializes
@@ -88,7 +111,7 @@ class QualityUpgradeRequest(BaseModel):
 # for specific use cases (e.g., "low" for rare bootlegs where quality doesn't matter). We commit
 # immediately after creation - no batch operations here. If this fails, the whole transaction rolls
 # back. The artist_id parsing can throw ValueError if someone sends garbage - we catch and return 400.
-@router.post("/watchlist")
+@legacy_router.post("/watchlist")
 async def create_watchlist(
     request: CreateWatchlistRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -135,7 +158,7 @@ async def create_watchlist(
 # but if watchlists grow huge (thousands of artists), you'll want cursor pagination to avoid missing
 # rows when data changes between page fetches. The active_only flag is a performance optimization -
 # most UI queries only care about active watchlists, why fetch disabled ones? Defaults to showing all.
-@router.get("/watchlist")
+@legacy_router.get("/watchlist")
 async def list_watchlists(
     limit: int = 100,
     offset: int = 0,
@@ -190,7 +213,7 @@ async def list_watchlists(
 # is malformed (not a valid UUID format), hence the catch block. We return 404 if watchlist doesn't
 # exist - standard REST semantics. Don't cache this response - watchlist stats (releases found, downloads
 # triggered) change frequently when background workers run!
-@router.get("/watchlist/{watchlist_id}")
+@legacy_router.get("/watchlist/{watchlist_id}")
 async def get_watchlist(
     watchlist_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -240,7 +263,7 @@ async def get_watchlist(
 # handles token internally. If Spotify is down or rate-limits us, this will fail. The releases list in
 # response might be EMPTY even for active artists - that's normal if nothing new since last check.
 # We commit after check to update last_checked_at timestamp.
-@router.post("/watchlist/{watchlist_id}/check")
+@legacy_router.post("/watchlist/{watchlist_id}/check")
 async def check_watchlist_releases(
     watchlist_id: str,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
@@ -288,7 +311,7 @@ async def check_watchlist_releases(
 # all its history (releases found, downloads triggered counts) is GONE. We should probably add a
 # "are you sure?" in the UI. The service layer might cascade-delete related records - check the model
 # relationships. This commits immediately, no undo. Returns 200 even if watchlist didn't exist (idempotent).
-@router.delete("/watchlist/{watchlist_id}")
+@legacy_router.delete("/watchlist/{watchlist_id}")
 async def delete_watchlist(
     watchlist_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -323,7 +346,7 @@ async def delete_watchlist(
 # data from background sync, NO live API call needed! Compares known albums with owned albums locally.
 # Fast and doesn't require Spotify auth. The to_dict() serialization might include large lists of
 # missing albums - consider pagination if this response gets huge!
-@router.post("/discography/check")
+@legacy_router.post("/discography/check")
 async def check_discography(
     request: DiscographyCheckRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -358,7 +381,7 @@ async def check_discography(
 # artists! Uses pre-synced spotify_albums data from background sync - NO live API calls needed!
 # The limit param is still useful for performance (checking 1000 artists = lots of DB queries).
 # Default 10 is conservative. Now FAST because it uses local data, not Spotify API!
-@router.get("/discography/missing")
+@legacy_router.get("/discography/missing")
 async def get_missing_albums(
     limit: int = 10,
     session: AsyncSession = Depends(get_db_session),
@@ -395,7 +418,7 @@ async def get_missing_albums(
 # (might upgrade 320kbps to FLAC), higher means only upgrade really bad files (128kbps to anything).
 # The algorithm is in QualityUpgradeService - it scores based on bitrate, format, source quality.
 # Limit=100 prevents massive result sets, but this could still return lots of data!
-@router.post("/quality-upgrades/identify")
+@legacy_router.post("/quality-upgrades/identify")
 async def identify_quality_upgrades(
     request: QualityUpgradeRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -435,7 +458,7 @@ async def identify_quality_upgrades(
 # This is basically a work queue - the automation workers pick from here. If this list is HUGE, your
 # workers are falling behind! Might indicate Soulseek network issues or rate limiting. The limit
 # prevents overwhelming the response, but you might need pagination if queue grows into thousands.
-@router.get("/quality-upgrades/unprocessed")
+@legacy_router.get("/quality-upgrades/unprocessed")
 async def get_unprocessed_upgrades(
     limit: int = 100,
     session: AsyncSession = Depends(get_db_session),
@@ -498,7 +521,7 @@ class UpdateFilterRequest(BaseModel):
 # whitelist/blacklist allowed). The filter is enabled by default (check FilterRule entity) so it takes
 # effect IMMEDIATELY after commit! priority determines evaluation order when multiple filters match. Higher
 # priority = runs first. Returns full filter object with generated ID and timestamps.
-@router.post("/filters")
+@legacy_router.post("/filters")
 async def create_filter(
     request: CreateFilterRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -553,7 +576,7 @@ async def create_filter(
 # is what download workers use - they only care about active filters. The type filter (whitelist/
 # blacklist) is for UI organization. NO CACHING HERE - filter changes should take effect immediately!
 # If you cache this, users will be confused why their new filter isn't working.
-@router.get("/filters")
+@legacy_router.get("/filters")
 async def list_filters(
     filter_type: str | None = None,
     enabled_only: bool = False,
@@ -615,7 +638,7 @@ async def list_filters(
 # REST pattern. Returns full filter config including execution stats (if that's tracked - check FilterRule
 # entity for hit_count or similar fields). The lazy import pattern again for FilterService and FilterRuleId.
 # 404 if filter doesn't exist. Good for "edit filter" UI where you pre-populate form with existing values.
-@router.get("/filters/{filter_id}")
+@legacy_router.get("/filters/{filter_id}")
 async def get_filter(
     filter_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -662,7 +685,7 @@ async def get_filter(
 # to temporarily disable a filter without losing it. This is instant - next download will respect the
 # change. If you disable a whitelist that was blocking everything, downloads will suddenly start working.
 # If you disable a blacklist, junk will start getting through. Think before you click!
-@router.post("/filters/{filter_id}/enable")
+@legacy_router.post("/filters/{filter_id}/enable")
 async def enable_filter(
     filter_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -695,7 +718,7 @@ async def enable_filter(
 # Yo, this is the opposite of enable - turns filter OFF without deleting it. Same immediate effect
 # as enable - next download operation will skip this filter. Useful for debugging ("is this filter
 # blocking my downloads?") - just temporarily disable it and try again!
-@router.post("/filters/{filter_id}/disable")
+@legacy_router.post("/filters/{filter_id}/disable")
 async def disable_filter(
     filter_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -729,7 +752,7 @@ async def disable_filter(
 # filters accumulate hit counts and stats - if you delete and recreate, you lose that history! The
 # is_regex flag can be toggled here too - careful, changing a simple string pattern to regex or vice
 # versa completely changes match behavior! Test the new pattern before applying.
-@router.patch("/filters/{filter_id}")
+@legacy_router.patch("/filters/{filter_id}")
 async def update_filter_pattern(
     filter_id: str,
     request: UpdateFilterRequest,
@@ -766,7 +789,7 @@ async def update_filter_pattern(
 # Hey, DELETE is permanent - the filter configuration is GONE, including all historical stats and hit
 # counts. Unlike disable, this can't be undone. Make sure users know this is destructive! Returns 200
 # even if filter doesn't exist (idempotent). Commits immediately.
-@router.delete("/filters/{filter_id}")
+@legacy_router.delete("/filters/{filter_id}")
 async def delete_filter(
     filter_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -825,7 +848,7 @@ class CreateAutomationRuleRequest(BaseModel):
 # right away if there are pending events matching the trigger. The response includes execution stats
 # (total/successful/failed counts) which are 0 for new rules. Check AutomationWorkflowService for the
 # actual rule execution logic - this endpoint just stores configuration.
-@router.post("/rules")
+@legacy_router.post("/rules")
 async def create_automation_rule(
     request: CreateAutomationRuleRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -884,7 +907,7 @@ async def create_automation_rule(
 # the automation workers query to find active rules. The trigger filter helps UI show "all rules for
 # new releases" etc. The execution counts (total, successful, failed) are critical for debugging why
 # automation isn't working - if failed_executions is high, check logs!
-@router.get("/rules")
+@legacy_router.get("/rules")
 async def list_automation_rules(
     trigger: str | None = None,
     enabled_only: bool = False,
@@ -951,7 +974,7 @@ async def list_automation_rules(
 # tells you when this rule last fired - if it's None or ancient, maybe the rule is misconfigured or
 # the trigger never happens. The success/fail counts are your debugging friend - high failures mean
 # check logs for what went wrong (Spotify API down? Soulseek timeout? Bug in action logic?).
-@router.get("/rules/{rule_id}")
+@legacy_router.get("/rules/{rule_id}")
 async def get_automation_rule(
     rule_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -1008,7 +1031,7 @@ async def get_automation_rule(
 # Yo, enabling a rule means it will start executing on matching events IMMEDIATELY. If this rule has
 # auto_process=true, downloads might start RIGHT NOW if there are pending events! Be ready for sudden
 # activity. This is instant - no polling delay. The automation workers check enabled rules continuously.
-@router.post("/rules/{rule_id}/enable")
+@legacy_router.post("/rules/{rule_id}/enable")
 async def enable_automation_rule(
     rule_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -1044,7 +1067,7 @@ async def enable_automation_rule(
 # was queued by this rule and you disable it mid-flight, the download might still finish (it's already
 # in the download worker queue), but NEW matches won't trigger. Use this for testing rules without
 # deleting them.
-@router.post("/rules/{rule_id}/disable")
+@legacy_router.post("/rules/{rule_id}/disable")
 async def disable_automation_rule(
     rule_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -1080,7 +1103,7 @@ async def disable_automation_rule(
 # Any pending actions from this rule might still complete (they're already queued), but no NEW events
 # will match. This is for when you're truly done with a rule. Consider disabling instead if you might
 # want it back later!
-@router.delete("/rules/{rule_id}")
+@legacy_router.delete("/rules/{rule_id}")
 async def delete_automation_rule(
     rule_id: str,
     session: AsyncSession = Depends(get_db_session),
@@ -1147,7 +1170,7 @@ class BulkCreateWatchlistsRequest(BaseModel):
 # but user doesn't see it (future: add SSE progress updates). The response can be HTML (for HTMX)
 # or JSON (for API clients) - we detect HX-Request header. SpotifyPlugin handles token management
 # internally - no more manual token passing!
-@router.post("/followed-artists/sync")
+@legacy_router.post("/followed-artists/sync")
 async def sync_followed_artists(
     request: Request,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
@@ -1257,7 +1280,7 @@ async def sync_followed_artists(
 # quality_profile) - if user wants different settings per artist, they have to create individually.
 # The response includes counts of successful/failed creates. Partial success is OK - if 3 out of 10
 # fail, we still create the 7 that succeeded and report stats. Transaction commits all or nothing!
-@router.post("/followed-artists/watchlists/bulk")
+@legacy_router.post("/followed-artists/watchlists/bulk")
 async def bulk_create_watchlists(
     request: BulkCreateWatchlistsRequest,
     session: AsyncSession = Depends(get_db_session),
@@ -1319,46 +1342,4 @@ async def bulk_create_watchlists(
         ) from e
 
 
-# Hey, this is a lightweight preview endpoint - fetches first page of followed artists (up to 50)
-# WITHOUT syncing to DB! Use this for "quick peek at who I follow" before committing to full sync.
-# Useful for testing OAuth scopes - if this returns 403, user-follow-read scope is missing. If it
-# works, proceed with full sync. The response is raw Spotify API data - artists.items has artist
-# objects, artists.cursors.after has next page cursor, artists.total shows how many total artists
-# user follows. This is FAST (single API call) unlike sync which paginates through all artists.
-@router.get("/followed-artists/preview")
-async def preview_followed_artists(
-    limit: int = 50,
-    access_token: str = Depends(get_spotify_token_shared),
-    settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
-    """Preview followed artists from Spotify without syncing to database.
 
-    Quick preview of up to 50 followed artists. Useful for testing OAuth permissions
-    and seeing who you follow before committing to full sync.
-
-    Args:
-        limit: Max artists to fetch (1-50, default 50)
-        access_token: Spotify OAuth access token (from session)
-        settings: Application settings
-
-    Returns:
-        Raw Spotify API response with artist data
-
-    Raises:
-        HTTPException: 401 if token invalid, 403 if missing user-follow-read scope
-    """
-    try:
-        spotify_client = SpotifyClient(settings.spotify)
-        # Note: We don't need a session for preview (no DB writes)
-        # Just call the client method directly
-        response = await spotify_client.get_followed_artists(
-            access_token=access_token,
-            limit=min(limit, 50),
-        )
-
-        return response
-    except Exception as e:
-        logger.error(f"Failed to preview followed artists: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to preview followed artists: {e}"
-        ) from e
