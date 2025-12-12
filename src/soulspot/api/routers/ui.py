@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
+    get_deezer_plugin,
     get_download_repository,
     get_job_queue,
     get_library_scanner_service,
@@ -34,6 +35,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -1933,6 +1935,67 @@ async def spotify_artists_page(
             "sync_stats": sync_stats,
             "error": error,
             "total_count": len(artists),
+        },
+    )
+
+
+@router.get("/browse/new-releases", response_class=HTMLResponse)
+async def browse_new_releases_page(
+    request: Request,
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
+    limit: int = Query(default=50, ge=10, le=100, description="Number of releases"),
+    include_compilations: bool = Query(default=True, description="Include compilations"),
+) -> Any:
+    """Browse New Releases page - uses Deezer Plugin (no auth required!).
+
+    Hey future me - this is the NEW RELEASES browse page that works WITHOUT Spotify OAuth!
+    Uses DeezerPlugin which wraps DeezerClient and handles all the API interaction.
+    The plugin provides editorial releases + chart albums for a good mix of new music.
+
+    Later we can add Spotify as an additional source when the user IS authenticated.
+    For now, Deezer is the primary source because:
+    1. No OAuth needed - works for everyone immediately
+    2. Good quality editorial curation
+    3. Fast API with reasonable rate limits
+
+    Args:
+        request: FastAPI request
+        deezer_plugin: DeezerPlugin dependency (no auth needed)
+        limit: Number of releases to fetch (10-100)
+        include_compilations: Whether to include compilation albums
+
+    Returns:
+        HTML page with new release albums
+    """
+    error: str | None = None
+    albums: list[dict[str, Any]] = []
+
+    try:
+        result = await deezer_plugin.get_browse_new_releases(
+            limit=limit,
+            include_compilations=include_compilations,
+        )
+
+        if result.get("success"):
+            albums = result.get("albums", [])
+            logger.info(f"New Releases page: Fetched {len(albums)} albums from Deezer")
+        else:
+            error = result.get("error", "Failed to fetch new releases")
+            logger.warning(f"New Releases page: Deezer error - {error}")
+
+    except Exception as e:
+        error = f"Failed to fetch new releases: {e}"
+        logger.error(f"New Releases page: Exception - {e}")
+
+    return templates.TemplateResponse(
+        request,
+        "new_releases.html",
+        context={
+            "albums": albums,
+            "total_count": len(albums),
+            "source": "Deezer",
+            "include_compilations": include_compilations,
+            "error": error,
         },
     )
 

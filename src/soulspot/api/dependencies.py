@@ -18,6 +18,7 @@ if TYPE_CHECKING:
         SpotifyAuthService,
     )
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
 from soulspot.application.use_cases.import_spotify_playlist import (
@@ -32,6 +33,7 @@ from soulspot.application.use_cases.search_and_download import (
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.config import Settings, get_settings
+from soulspot.infrastructure.integrations.deezer_client import DeezerClient
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
@@ -719,3 +721,44 @@ async def get_library_scanner_service(
 
     settings = get_settings()
     yield LibraryScannerService(session=session, settings=settings)
+
+
+# Hey future me - DeezerClient is stateless and doesn't need OAuth!
+# Perfect for browse/discovery features when user isn't logged into Spotify.
+# Creates a new client per request (cheap - just httpx setup).
+def get_deezer_client() -> DeezerClient:
+    """Get Deezer client instance for no-auth music discovery.
+
+    Deezer API is perfect for:
+    - New releases (get_browse_new_releases, get_editorial_releases)
+    - Charts (get_chart_albums, get_chart_tracks)
+    - Genre browsing (get_genres, get_genre_artists)
+
+    No authentication required - works for all users!
+
+    Returns:
+        DeezerClient instance
+    """
+    return DeezerClient()
+
+
+# Hey future me - DeezerPlugin wraps DeezerClient and converts to DTOs!
+# Like SpotifyPlugin but simpler - no OAuth needed for most operations.
+# Use this for browse/discovery features without auth requirements.
+def get_deezer_plugin() -> "DeezerPlugin":
+    """Get Deezer plugin instance for no-auth music discovery.
+
+    The plugin wraps DeezerClient and provides:
+    - get_browse_new_releases() - Combined editorial + charts
+    - get_editorial_releases() - Curated picks
+    - get_chart_albums() - Top charting albums
+    - get_genres() - All genre categories
+
+    All methods work without authentication!
+
+    Returns:
+        DeezerPlugin instance
+    """
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+    return DeezerPlugin()

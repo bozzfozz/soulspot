@@ -1,0 +1,369 @@
+{# Hey future me - New Releases browse page!
+   Uses Deezer (no auth!) to show latest album releases. Perfect for discovery without Spotify OAuth.
+   Albums link to their detail pages where users can preview, add to wishlist, or queue downloads.
+   Source badge shows where data comes from (Deezer now, maybe Spotify later when auth'd). #}
+
+{% extends "base.html" %}
+
+{% block title %}New Releases - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #ff6b35, #ff8c5a);">
+                <i class="bi bi-vinyl-fill"></i>
+            </div>
+            <div class="header-icon-glow" style="background: linear-gradient(135deg, #ff6b35, #ff8c5a);"></div>
+        </div>
+        <div>
+            <h1>New Releases</h1>
+            <p class="subtitle">Fresh music from around the world • Powered by {{ source }}</p>
+        </div>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-outline" onclick="toggleCompilations()" id="compilations-toggle">
+            <i class="bi bi-collection"></i> 
+            <span id="compilations-text">{{ 'Hide' if include_compilations else 'Show' }} Compilations</span>
+        </button>
+        <button class="btn btn-primary" onclick="window.location.reload()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-warning" style="margin-bottom: 2rem;">
+    <i class="bi bi-exclamation-triangle"></i> {{ error }}
+</div>
+{% endif %}
+
+{% if albums %}
+<div class="release-stats" style="margin-bottom: 2rem; color: var(--text-muted); font-size: 0.9rem;">
+    <i class="bi bi-disc"></i> Showing <strong>{{ total_count }}</strong> new releases
+    <span class="source-badge" style="margin-left: 1rem; padding: 0.25rem 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.8rem;">
+        <i class="bi bi-broadcast"></i> {{ source }}
+    </span>
+</div>
+
+<div class="album-grid">
+    {% for album in albums %}
+    <div class="album-card" data-deezer-id="{{ album.deezer_id }}">
+        <div class="album-cover">
+            {% if album.cover_medium or album.cover_big %}
+            <img src="{{ album.cover_big or album.cover_medium }}" alt="{{ album.title }}" loading="lazy">
+            {% else %}
+            <div class="album-cover-placeholder">
+                <i class="bi bi-music-note-beamed"></i>
+            </div>
+            {% endif %}
+            {% if album.explicit %}
+            <span class="explicit-badge">E</span>
+            {% endif %}
+            <div class="album-overlay">
+                <button class="btn-play" onclick="previewAlbum('{{ album.deezer_id }}')" title="Preview">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+            </div>
+        </div>
+        <div class="album-info">
+            <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
+            <p class="album-artist" title="{{ album.artist_name }}">{{ album.artist_name }}</p>
+            <div class="album-meta">
+                {% if album.release_date %}
+                <span class="release-date"><i class="bi bi-calendar3"></i> {{ album.release_date[:10] if album.release_date|length > 10 else album.release_date }}</span>
+                {% endif %}
+                {% if album.total_tracks %}
+                <span class="track-count"><i class="bi bi-music-note-list"></i> {{ album.total_tracks }} tracks</span>
+                {% endif %}
+            </div>
+            <div class="album-type">
+                {% if album.record_type %}
+                <span class="type-badge type-{{ album.record_type }}">{{ album.record_type|capitalize }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="album-actions">
+            <a href="{{ album.link }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Open in Deezer">
+                <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+            <button class="btn btn-sm btn-primary" onclick="addToWishlist('{{ album.deezer_id }}', '{{ album.title|e }}', '{{ album.artist_name|e }}')" title="Add to Wishlist">
+                <i class="bi bi-bookmark-plus"></i>
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="bi bi-vinyl" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5;"></i>
+    <h3>No releases found</h3>
+    <p>Could not fetch new releases. Please try again later.</p>
+    <button class="btn btn-primary" onclick="window.location.reload()">
+        <i class="bi bi-arrow-clockwise"></i> Try Again
+    </button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<style>
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+.header-icon-wrapper { position: relative; }
+.header-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    color: white;
+}
+.header-icon-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    filter: blur(20px);
+    opacity: 0.4;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.1); }
+}
+.header-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.album-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+}
+
+.album-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.album-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+}
+
+.album-cover {
+    position: relative;
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+}
+.album-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+.album-card:hover .album-cover img {
+    transform: scale(1.05);
+}
+.album-cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: var(--text-muted);
+    opacity: 0.3;
+}
+
+.explicit-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.album-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.album-card:hover .album-overlay {
+    opacity: 1;
+}
+.btn-play {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+}
+.btn-play:hover {
+    transform: scale(1.1);
+    background: var(--accent-hover);
+}
+
+.album-info {
+    padding: 1rem;
+}
+.album-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.album-artist {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0 0 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.album-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+.album-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.type-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.type-album { background: var(--accent-primary); color: white; }
+.type-single { background: #8b5cf6; color: white; }
+.type-ep { background: #06b6d4; color: white; }
+.type-compile { background: #f59e0b; color: white; }
+
+.album-actions {
+    padding: 0 1rem 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+.album-actions .btn {
+    flex: 1;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+.empty-state h3 {
+    margin: 1rem 0 0.5rem;
+}
+.empty-state p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .page-header {
+        flex-direction: column;
+    }
+    .header-actions {
+        width: 100%;
+    }
+    .header-actions .btn {
+        flex: 1;
+    }
+    .album-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
+    }
+}
+</style>
+
+<script>
+function toggleCompilations() {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get('include_compilations') !== 'false';
+    url.searchParams.set('include_compilations', !current);
+    window.location.href = url.toString();
+}
+
+function previewAlbum(deezerId) {
+    // Open Deezer preview in new tab for now
+    // Later we could add an audio player integration
+    window.open(`https://www.deezer.com/album/${deezerId}`, '_blank');
+}
+
+async function addToWishlist(deezerId, title, artist) {
+    // Placeholder for wishlist functionality
+    // Could integrate with a local wishlist or download queue
+    console.log('Add to wishlist:', { deezerId, title, artist });
+    
+    // For now, show a simple confirmation
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check"></i>';
+    btn.disabled = true;
+    
+    setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+    }, 2000);
+    
+    // TODO: Implement actual wishlist/queue integration
+    // await fetch('/api/wishlist', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ deezer_id: deezerId, title, artist })
+    // });
+}
+</script>
+{% endblock %}

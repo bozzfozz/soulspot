@@ -50,6 +50,7 @@ class DeezerAlbum:
     record_type: str | None  # album, ep, single, compile
     explicit_lyrics: bool
     upc: str | None  # Universal Product Code for matching
+    link: str | None = None  # Deezer URL to album page
 
 
 @dataclass
@@ -297,6 +298,7 @@ class DeezerClient:
             record_type=data.get("record_type"),  # album, ep, single, compile
             explicit_lyrics=data.get("explicit_lyrics", False),
             upc=data.get("upc"),  # Only in full album response
+            link=data.get("link"),  # Deezer URL to album page
         )
 
     # =========================================================================
@@ -391,6 +393,40 @@ class DeezerClient:
 
         except httpx.HTTPError as e:
             logger.error(f"Deezer get_artist_albums failed: {e}")
+            raise
+
+    async def get_artist_top_tracks(
+        self, artist_id: int, limit: int = 10
+    ) -> list[DeezerTrack]:
+        """Get top tracks for an artist.
+
+        Hey future me - Deezer returns the artist's most popular tracks!
+        Limited to 10 by default, max 100.
+
+        Args:
+            artist_id: Deezer artist ID
+            limit: Maximum results (default 10, max 100)
+
+        Returns:
+            List of DeezerTrack objects sorted by popularity
+        """
+        try:
+            response = await self._rate_limited_request(
+                "GET",
+                f"/artist/{artist_id}/top",
+                params={"limit": min(limit, 100)},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            tracks = []
+            for item in data.get("data", []):
+                tracks.append(self._parse_track(item))
+
+            return tracks
+
+        except httpx.HTTPError as e:
+            logger.error(f"Deezer get_artist_top_tracks failed: {e}")
             raise
 
     def _parse_artist(self, data: dict[str, Any]) -> DeezerArtist:

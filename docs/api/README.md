@@ -52,6 +52,17 @@ Integration with Spotify Web API for track/song data management.
 - ISRC-based deduplication
 - Batch sync strategies
 - Field mappings and schema recommendations
+
+### [Browse API](browse-api.md)
+Discover new music releases without requiring authentication.
+
+**Key Features:**
+- No authentication required (uses Deezer)
+- New album releases from around the world
+- Editorial + chart album aggregation
+- Compilation filtering
+- Multiple source support (Deezer, future: Spotify)
+
 ### [Spotify Artist API](spotify-artist-api.md)
 Integration with Spotify Web API for artist metadata synchronization.
 

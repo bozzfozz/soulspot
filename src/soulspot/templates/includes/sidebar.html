@@ -55,6 +55,21 @@
             </a>
         </div>
 
+        <!-- Discover Section (no auth required!) -->
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">
+                <i class="bi bi-compass" style="color: #ff6b35; margin-right: 6px;"></i>Discover
+            </div>
+            <a href="/browse/new-releases" class="sidebar-item {% if '/browse/new-releases' in request.url.path %}active{% endif %}">
+                <i class="bi bi-vinyl-fill sidebar-item-icon"></i>
+                <span class="sidebar-item-text">New Releases</span>
+            </a>
+            <a href="/spotify/discover" class="sidebar-item {% if '/spotify/discover' in request.url.path %}active{% endif %}">
+                <i class="bi bi-heart-pulse sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Similar Artists</span>
+            </a>
+        </div>
+
         <!-- Local Library Section -->
         <div class="sidebar-section">
             <div class="sidebar-section-title">
