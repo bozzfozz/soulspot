@@ -24,6 +24,11 @@ Diese Dokumentation beschreibt alle implementierten Features von SoulSpot. Jedes
 | [Library Management](./library-management.md) | Bibliotheks-Scan, Duplikaterkennung, defekte Dateien | ✅ Implementiert |
 | [Track Management](./track-management.md) | Track-Suche, Download, Metadaten-Bearbeitung | ✅ Implementiert |
 | [Settings](./settings.md) | Anwendungseinstellungen und Konfiguration | ✅ Implementiert |
+| [Album Completeness](./album-completeness.md) | Erkennung unvollständiger Alben (Multi-Source: Spotify + MusicBrainz) | ✅ Implementiert |
+| [Auto-Import](./auto-import.md) | Automatischer Import von Downloads → Musikbibliothek | ✅ Implementiert |
+| [Batch Operations](./batch-operations.md) | Generisches Batching für API-Calls (Rate-Limit-Optimierung) | ✅ Implementiert |
+| [Compilation Analysis](./compilation-analysis.md) | Post-Scan Compilation-Erkennung via Track Artist Diversity | ✅ Implementiert |
+| [Notifications](./notifications.md) | Notification-System (aktuell: Stub / Logging-Only) | 🚧 Stub
 
 ---
 
