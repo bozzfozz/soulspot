@@ -1,4 +1,9 @@
-"""Playlist sync worker for background playlist synchronization."""
+"""Playlist sync worker for background playlist synchronization.
+
+Hey future me - dieser Worker erstellt SpotifyPlugin PRO JOB statt im Constructor!
+Das ist nötig weil das Plugin einen gültigen Token braucht, und der Token kommt
+erst beim Job-Processing vom TokenManager.
+"""
 
 import logging
 from typing import TYPE_CHECKING, Any
@@ -9,12 +14,12 @@ from soulspot.domain.ports import (
     IAlbumRepository,
     IArtistRepository,
     IPlaylistRepository,
-    ISpotifyClient,
     ITrackRepository,
 )
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -22,21 +27,22 @@ logger = logging.getLogger(__name__)
 class PlaylistSyncWorker:
     """Worker for processing playlist sync jobs in the background.
 
+    Hey future me - dieser Worker erstellt SpotifyPlugin PRO JOB!
+    Das ist nötig weil Token erst beim Job-Processing verfügbar ist.
+
     This worker:
     1. Monitors playlist sync queue
-    2. Fetches playlist from Spotify
-    3. Imports tracks into system
-    4. Updates playlist metadata
-    5. Handles periodic sync for active playlists
+    2. Gets fresh token from TokenManager
+    3. Creates SpotifyPlugin with token
+    4. Fetches playlist from Spotify via Plugin
+    5. Imports tracks into system
+    6. Updates playlist metadata
     """
 
-    # Hey future me, same pattern as DownloadWorker - inject dependencies and create the use case here.
-    # We need MORE repos than DownloadWorker (playlist, track, artist, album) because playlist import touches
-    # all four entities! Don't register in __init__, let caller control when worker starts consuming jobs.
     def __init__(
         self,
         job_queue: JobQueue,
-        spotify_client: ISpotifyClient,
+        settings: "Settings",
         playlist_repository: IPlaylistRepository,
         track_repository: ITrackRepository,
         artist_repository: IArtistRepository,
@@ -44,22 +50,23 @@ class PlaylistSyncWorker:
     ) -> None:
         """Initialize playlist sync worker.
 
+        Hey future me - wir speichern KEINE SpotifyClient/Plugin mehr!
+        Stattdessen erstellen wir das Plugin pro Job mit frischem Token.
+
         Args:
             job_queue: Job queue for background processing
-            spotify_client: Client for Spotify API
+            settings: Application settings (for creating SpotifyClient)
             playlist_repository: Repository for playlist persistence
             track_repository: Repository for track persistence
             artist_repository: Repository for artist persistence
             album_repository: Repository for album persistence
         """
         self._job_queue = job_queue
-        self._use_case = ImportSpotifyPlaylistUseCase(
-            spotify_client=spotify_client,
-            playlist_repository=playlist_repository,
-            track_repository=track_repository,
-            artist_repository=artist_repository,
-            album_repository=album_repository,
-        )
+        self._settings = settings
+        self._playlist_repository = playlist_repository
+        self._track_repository = track_repository
+        self._artist_repository = artist_repository
+        self._album_repository = album_repository
         # Hey future me - token_manager wird via set_token_manager() gesetzt nach Construction!
         # So vermeiden wir zirkuläre Dependencies und Worker können erstellt werden
         # bevor app.state.db_token_manager bereit ist.
@@ -94,12 +101,18 @@ class PlaylistSyncWorker:
     async def _handle_playlist_sync_job(self, job: Job) -> Any:
         """Handle a playlist sync job.
 
+        Hey future me - wir erstellen SpotifyPlugin HIER mit frischem Token!
+        Das UseCase bekommt das Plugin, nicht mehr einen SpotifyClient.
+
         Args:
             job: Job to process
 
         Returns:
             Sync result
         """
+        from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
         # Extract payload
         playlist_id = job.payload.get("playlist_id")
         fetch_all_tracks = job.payload.get("fetch_all_tracks", True)
@@ -122,6 +135,20 @@ class PlaylistSyncWorker:
                 "Either set token_manager or provide access_token in payload."
             )
 
+        # Hey future me - SpotifyPlugin PRO JOB erstellen!
+        # Das Plugin bekommt den frischen Token und handled alles intern.
+        spotify_client = SpotifyClient(self._settings.spotify)
+        spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+
+        # Create UseCase with fresh plugin
+        use_case = ImportSpotifyPlaylistUseCase(
+            spotify_plugin=spotify_plugin,
+            playlist_repository=self._playlist_repository,
+            track_repository=self._track_repository,
+            artist_repository=self._artist_repository,
+            album_repository=self._album_repository,
+        )
+
         # Execute use case
         from soulspot.application.use_cases.import_spotify_playlist import (
             ImportSpotifyPlaylistRequest,
@@ -129,11 +156,10 @@ class PlaylistSyncWorker:
 
         request = ImportSpotifyPlaylistRequest(
             playlist_id=playlist_id,
-            access_token=access_token,
             fetch_all_tracks=fetch_all_tracks,
         )
 
-        response = await self._use_case.execute(request)
+        response = await use_case.execute(request)
 
         # Check if sync had errors
         if response.tracks_failed > 0:
