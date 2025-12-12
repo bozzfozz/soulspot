@@ -97,14 +97,13 @@ POST /api/artists/550e8400-e29b-41d4-a716-446655440000/songs/sync?market=GB HTTP
 
 **Code Reference:**
 ```python
-# src/soulspot/api/routers/artist_songs.py (lines 102-175)
+# src/soulspot/api/routers/artist_songs.py (REFACTORED - uses SpotifyPlugin)
 @router.post("/{artist_id}/songs/sync", response_model=SyncSongsResponse)
 async def sync_artist_songs(
     artist_id: str,
     market: str = Query("US", description="ISO 3166-1 alpha-2 country code"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: SpotifyPlugin = Depends(get_spotify_plugin),  # Plugin handles token internally!
 ) -> SyncSongsResponse:
     """Sync songs (top tracks/singles) for a specific artist."""
     ...
@@ -163,14 +162,13 @@ POST /api/artists/songs/sync-all?market=US&limit=50 HTTP/1.1
 
 **Code Reference:**
 ```python
-# src/soulspot/api/routers/artist_songs.py (lines 180-239)
+# src/soulspot/api/routers/artist_songs.py (REFACTORED - uses SpotifyPlugin)
 @router.post("/songs/sync-all", response_model=SyncSongsResponse)
 async def sync_all_artist_songs(
     market: str = Query("US", description="ISO 3166-1 alpha-2 country code"),
     limit: int | None = Query(None, description="Max artists to sync"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
-    access_token: str = Depends(get_spotify_token_shared),
+    spotify_plugin: SpotifyPlugin = Depends(get_spotify_plugin),  # Plugin handles token internally!
 ) -> SyncSongsResponse:
     """Sync songs for all followed artists (bulk operation)."""
     ...

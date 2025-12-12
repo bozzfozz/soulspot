@@ -405,12 +405,12 @@ class UpdateFromSpotifyRequest(BaseModel):
 
 **Code Reference:**
 ```python
-# src/soulspot/api/routers/metadata.py (lines 418-498)
+# src/soulspot/api/routers/metadata.py
 @router.post("/update-from-spotify")
 async def update_from_spotify(
     request: UpdateFromSpotifyRequest,
     track_repository: TrackRepository = Depends(get_track_repository),
-    spotify_client: SpotifyClient = Depends(get_spotify_client),
+    spotify_plugin: SpotifyPlugin = Depends(get_spotify_plugin),
 ) -> dict[str, Any]:
     """Update track metadata directly from Spotify."""
     ...
