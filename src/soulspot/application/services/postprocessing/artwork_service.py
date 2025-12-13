@@ -141,6 +141,7 @@ class ArtworkService:
     # Hey future me: Direct URL downloader - fastest path when we have cached URL from DB
     # This skips all API calls and just downloads from the CDN directly
     # Used when album.artwork_url is populated from previous Spotify sync
+    # NOW USES HttpClientPool for connection reuse!
     async def _download_from_url(self, url: str) -> bytes | None:
         """Download artwork directly from a URL.
 
@@ -151,15 +152,14 @@ class ArtworkService:
             Processed artwork data or None
         """
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
-                image_data = response.content
-                logger.debug("Downloaded %d bytes from cached URL", len(image_data))
-                return await self._process_image(image_data)
-        except httpx.HTTPStatusError as e:
-            logger.warning("HTTP error downloading from cached URL: %s - %s", url, e)
-            return None
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
+            client = await HttpClientPool.get_client()
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            image_data = response.content
+            logger.debug("Downloaded %d bytes from cached URL", len(image_data))
+            return await self._process_image(image_data)
         except Exception as e:
             logger.warning("Error downloading from cached URL: %s - %s", url, e)
             return None
@@ -168,6 +168,7 @@ class ArtworkService:
     # WHY /front endpoint? Gets front cover specifically (not back, booklet, etc)
     # follow_redirects=True because CAA returns 307 redirect to actual image URL
     # 404 is normal (album doesn't have artwork), don't spam error logs
+    # NOW USES HttpClientPool for connection reuse!
     async def _download_from_coverart(self, release_id: str) -> bytes | None:
         """Download artwork from CoverArtArchive.
 
@@ -178,20 +179,20 @@ class ArtworkService:
             Processed artwork data or None
         """
         try:
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
             url = f"{self.COVERART_API_BASE}/release/{release_id}/front"
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
-                image_data = response.content
-                return await self._process_image(image_data)
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
+            client = await HttpClientPool.get_client()
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            image_data = response.content
+            return await self._process_image(image_data)
+        except Exception as e:
+            # Check if it's a 404 (no artwork) vs other error
+            if hasattr(e, "response") and e.response.status_code == 404:
                 logger.debug("No artwork found on CoverArtArchive for: %s", release_id)
             else:
                 logger.warning("Error downloading from CoverArtArchive: %s", e)
-            return None
-        except Exception as e:
-            logger.exception("Error downloading artwork from CoverArtArchive: %s", e)
             return None
 
     # Yo Spotify album artwork - REFACTORED to use SpotifyPlugin!
@@ -229,17 +230,19 @@ class ArtworkService:
                 logger.debug("No artwork URL found for album: %s", album_id)
                 return None
 
-            # Download the image
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(album_dto.artwork_url, follow_redirects=True)
-                response.raise_for_status()
-                image_data = response.content
-                logger.info(
-                    "Downloaded artwork from Spotify for album: %s (%d bytes)",
-                    album_dto.title,
-                    len(image_data),
-                )
-                return await self._process_image(image_data)
+            # Download the image using shared HTTP pool
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
+            client = await HttpClientPool.get_client()
+            response = await client.get(album_dto.artwork_url, follow_redirects=True)
+            response.raise_for_status()
+            image_data = response.content
+            logger.info(
+                "Downloaded artwork from Spotify for album: %s (%d bytes)",
+                album_dto.title,
+                len(image_data),
+            )
+            return await self._process_image(image_data)
 
         except Exception as e:
             logger.warning("Error downloading artwork from Spotify: %s", e)
@@ -284,17 +287,20 @@ class ArtworkService:
             if not album_dto.artwork_url:
                 return None
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(album_dto.artwork_url, follow_redirects=True)
-                response.raise_for_status()
-                image_data = response.content
-                logger.info(
-                    "Downloaded artwork from Spotify track: %s → album %s (%d bytes)",
-                    track_dto.title,
-                    album_dto.title,
-                    len(image_data),
-                )
-                return await self._process_image(image_data)
+            # Download using shared HTTP pool
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
+            client = await HttpClientPool.get_client()
+            response = await client.get(album_dto.artwork_url, follow_redirects=True)
+            response.raise_for_status()
+            image_data = response.content
+            logger.info(
+                "Downloaded artwork from Spotify track: %s → album %s (%d bytes)",
+                track_dto.title,
+                album_dto.title,
+                len(image_data),
+            )
+            return await self._process_image(image_data)
 
         except Exception as e:
             logger.warning("Error downloading track artwork from Spotify: %s", e)

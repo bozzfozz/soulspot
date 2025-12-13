@@ -617,3 +617,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Database connection closed")
         except Exception as e:
             logger.exception("Error closing database: %s", e)
+
+        # Close HTTP client pool (release all TCP connections)
+        try:
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
+            await HttpClientPool.close()
+            logger.info("HTTP client pool closed")
+        except Exception as e:
+            logger.exception("Error closing HTTP client pool: %s", e)

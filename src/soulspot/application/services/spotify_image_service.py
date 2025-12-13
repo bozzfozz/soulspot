@@ -193,6 +193,7 @@ class SpotifyImageService:
 
         Downloads from Spotify CDN, resizes to target size (maintaining aspect ratio),
         and converts to WebP format.
+        NOW USES HttpClientPool for connection reuse!
 
         Args:
             url: Spotify CDN URL.
@@ -205,27 +206,21 @@ class SpotifyImageService:
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
-                # Process with Pillow
-                # Hey - we run PIL in thread pool because it's CPU-bound and would block async
-                image_data = await asyncio.to_thread(
-                    self._process_image_sync, response.content, target_size
-                )
-                return image_data
+            client = await HttpClientPool.get_client()
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
 
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                f"HTTP error downloading image from {url}: {e.response.status_code}"
+            # Process with Pillow
+            # Hey - we run PIL in thread pool because it's CPU-bound and would block async
+            image_data = await asyncio.to_thread(
+                self._process_image_sync, response.content, target_size
             )
-            return None
-        except httpx.RequestError as e:
-            logger.warning(f"Network error downloading image from {url}: {e}")
-            return None
+            return image_data
+
         except Exception as e:
-            logger.exception(f"Unexpected error processing image from {url}: {e}")
+            logger.warning(f"Error downloading/processing image from {url}: {e}")
             return None
 
     async def _download_and_process_image_with_result(
@@ -253,25 +248,28 @@ class SpotifyImageService:
             )
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, follow_redirects=True)
-                response.raise_for_status()
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
-                # Process with Pillow
-                try:
-                    image_data = await asyncio.to_thread(
-                        self._process_image_sync, response.content, target_size
-                    )
-                    # Return success placeholder - actual path will be set by caller
-                    return image_data, ImageDownloadResult(success=True, url=url)
-                except Exception as e:
-                    return None, ImageDownloadResult.error(
-                        ImageDownloadErrorCode.PROCESSING_ERROR,
-                        f"Image processing failed: {str(e)}",
-                        url,
-                    )
+            client = await HttpClientPool.get_client()
+            response = await client.get(url, follow_redirects=True)
+            response.raise_for_status()
+
+            # Process with Pillow
+            try:
+                image_data = await asyncio.to_thread(
+                    self._process_image_sync, response.content, target_size
+                )
+                # Return success placeholder - actual path will be set by caller
+                return image_data, ImageDownloadResult(success=True, url=url)
+            except Exception as e:
+                return None, ImageDownloadResult.error(
+                    ImageDownloadErrorCode.PROCESSING_ERROR,
+                    f"Image processing failed: {str(e)}",
+                    url,
+                )
 
         except httpx.HTTPStatusError as e:
+            # Handle HTTP errors with specific codes
             status = e.response.status_code
             if status == 404:
                 return None, ImageDownloadResult.error(

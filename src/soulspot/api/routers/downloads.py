@@ -500,6 +500,186 @@ async def resume_downloads(
     )
 
 
+# -------------------------------------------------------------------------
+# Individual Download Actions (for Download Manager UI)
+# -------------------------------------------------------------------------
+
+
+@router.post("/{download_id}/cancel")
+async def cancel_download(
+    download_id: str,
+    download_repository: DownloadRepository = Depends(get_download_repository),
+) -> dict[str, Any]:
+    """Cancel a single download.
+
+    Hey future me – this endpoint is called by Download Manager UI (HTMX)!
+    The cancel button in download_manager_list.html hits this endpoint.
+
+    Cancelling sets status to CANCELLED and triggers slskd cancel if active.
+    Already completed/failed/cancelled downloads are ignored (no error).
+
+    Args:
+        download_id: UUID of the download to cancel
+
+    Returns:
+        Cancel result with updated status
+    """
+    try:
+        download_id_obj = DownloadId.from_string(download_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid download ID format")
+
+    download = await download_repository.get_by_id(download_id_obj)
+    if not download:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    # Check if download can be cancelled
+    if download.status in [
+        DownloadStatus.COMPLETED,
+        DownloadStatus.CANCELLED,
+    ]:
+        return {
+            "success": True,
+            "message": f"Download already {download.status.value}",
+            "status": download.status.value,
+        }
+
+    # Cancel in slskd if download is active and has external ID
+    if download.slskd_id and download.status in [
+        DownloadStatus.QUEUED,
+        DownloadStatus.DOWNLOADING,
+    ]:
+        try:
+            from soulspot.config.settings import get_settings
+            from soulspot.infrastructure.integrations.slskd_client import SlskdClient
+
+            settings = get_settings()
+            if settings.slskd.url:
+                async with SlskdClient(settings.slskd) as slskd:
+                    await slskd.cancel_download(download.slskd_id)
+                    logger.info(f"Cancelled download in slskd: {download.slskd_id}")
+        except Exception as e:
+            logger.warning(f"Failed to cancel in slskd (will still mark cancelled): {e}")
+
+    # Update status in our DB
+    download.cancel()
+    await download_repository.update(download)
+
+    logger.info(f"Download cancelled: {download_id}")
+
+    return {
+        "success": True,
+        "message": "Download cancelled",
+        "status": DownloadStatus.CANCELLED.value,
+    }
+
+
+@router.post("/{download_id}/retry")
+async def retry_download(
+    download_id: str,
+    download_repository: DownloadRepository = Depends(get_download_repository),
+) -> dict[str, Any]:
+    """Retry a failed or cancelled download.
+
+    Hey future me – this endpoint resets a failed/cancelled download!
+    Useful for "Try Again" buttons in the UI.
+
+    Sets status back to WAITING so QueueDispatcherWorker picks it up.
+
+    Args:
+        download_id: UUID of the download to retry
+
+    Returns:
+        Retry result with updated status
+    """
+    try:
+        download_id_obj = DownloadId.from_string(download_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid download ID format")
+
+    download = await download_repository.get_by_id(download_id_obj)
+    if not download:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    # Only retry failed or cancelled downloads
+    if download.status not in [
+        DownloadStatus.FAILED,
+        DownloadStatus.CANCELLED,
+    ]:
+        return {
+            "success": False,
+            "message": f"Cannot retry download with status {download.status.value}",
+            "status": download.status.value,
+        }
+
+    # Reset to WAITING for re-processing
+    download.status = DownloadStatus.WAITING
+    download.error_message = None
+    download.slskd_id = None
+    download.source_url = None
+    await download_repository.update(download)
+
+    logger.info(f"Download retry queued: {download_id}")
+
+    return {
+        "success": True,
+        "message": "Download re-queued for retry",
+        "status": DownloadStatus.WAITING.value,
+    }
+
+
+@router.patch("/{download_id}/priority")
+async def update_download_priority(
+    download_id: str,
+    request: UpdatePriorityRequest,
+    download_repository: DownloadRepository = Depends(get_download_repository),
+) -> dict[str, Any]:
+    """Update priority of a single download.
+
+    Hey future me – this endpoint is for priority drag & drop!
+    Higher priority = processed first. Default is 0, range typically 0-100.
+
+    Args:
+        download_id: UUID of the download
+        request: New priority value
+
+    Returns:
+        Updated priority confirmation
+    """
+    try:
+        download_id_obj = DownloadId.from_string(download_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid download ID format")
+
+    download = await download_repository.get_by_id(download_id_obj)
+    if not download:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    # Can only change priority for non-terminal downloads
+    if download.status in [
+        DownloadStatus.COMPLETED,
+        DownloadStatus.CANCELLED,
+        DownloadStatus.FAILED,
+    ]:
+        return {
+            "success": False,
+            "message": f"Cannot change priority of {download.status.value} download",
+            "status": download.status.value,
+        }
+
+    old_priority = download.priority
+    download.update_priority(request.priority)
+    await download_repository.update(download)
+
+    logger.info(f"Download priority changed: {download_id} {old_priority} → {request.priority}")
+
+    return {
+        "success": True,
+        "message": f"Priority updated to {request.priority}",
+        "priority": request.priority,
+    }
+
+
 # Hey, this is your dashboard endpoint - shows queue health at a glance! The stats come from job queue's
 # internal counters - active, queued, completed, failed. The paused flag tells you if queue is processing.
 # max_concurrent_downloads is from config - how many jobs run in parallel. If active_downloads is stuck

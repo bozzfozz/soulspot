@@ -129,33 +129,34 @@ class LyricsService:
             if duration_ms > 0:
                 params["duration"] = duration_ms // 1000
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self.LRCLIB_API_BASE}/get",
-                    params=params,
-                )
-                response.raise_for_status()
-                data = response.json()
+            # Use shared HTTP client pool for connection reuse
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
-                # LRClib returns synced lyrics (LRC format) and plain lyrics
-                synced_lyrics = data.get("syncedLyrics")
-                plain_lyrics = data.get("plainLyrics")
+            client = await HttpClientPool.get_client()
+            response = await client.get(
+                f"{self.LRCLIB_API_BASE}/get",
+                params=params,
+            )
+            response.raise_for_status()
+            data = response.json()
 
-                if synced_lyrics:
-                    return synced_lyrics, True
-                elif plain_lyrics:
-                    return plain_lyrics, False
+            # LRClib returns synced lyrics (LRC format) and plain lyrics
+            synced_lyrics = data.get("syncedLyrics")
+            plain_lyrics = data.get("plainLyrics")
 
-                return None, False
+            if synced_lyrics:
+                return synced_lyrics, True
+            elif plain_lyrics:
+                return plain_lyrics, False
 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
+            return None, False
+
+        except Exception as e:
+            # Check for 404 (no lyrics found) vs other errors
+            if hasattr(e, "response") and e.response.status_code == 404:
                 logger.debug("No lyrics found on LRClib")
             else:
                 logger.warning("Error fetching from LRClib: %s", e)
-            return None, False
-        except Exception as e:
-            logger.exception("Error fetching lyrics from LRClib: %s", e)
             return None, False
 
     async def _fetch_from_genius(
@@ -180,18 +181,20 @@ class LyricsService:
             return None
 
         try:
-            # Search for song
+            # Search for song using shared HTTP pool
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
             search_query = f"{artist} {title}"
             headers = {"Authorization": f"Bearer {self._genius_api_key}"}
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self.GENIUS_API_BASE}/search",
-                    params={"q": search_query},
-                    headers=headers,
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = await HttpClientPool.get_client()
+            response = await client.get(
+                f"{self.GENIUS_API_BASE}/search",
+                params={"q": search_query},
+                headers=headers,
+            )
+            response.raise_for_status()
+            data = response.json()
 
                 # Get first hit
                 hits = data.get("response", {}).get("hits", [])
@@ -225,7 +228,9 @@ class LyricsService:
             return None
 
         try:
-            # Search for track
+            # Search for track using shared HTTP pool
+            from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
             params: dict[str, str | int] = {
                 "apikey": self._musixmatch_api_key,
                 "q_artist": artist,
@@ -233,14 +238,14 @@ class LyricsService:
                 "f_has_lyrics": 1,
             }
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # First, search for the track
-                response = await client.get(
-                    f"{self.MUSIXMATCH_API_BASE}/track.search",
-                    params=params,
-                )
-                response.raise_for_status()
-                data = response.json()
+            client = await HttpClientPool.get_client()
+            # First, search for the track
+            response = await client.get(
+                f"{self.MUSIXMATCH_API_BASE}/track.search",
+                params=params,
+            )
+            response.raise_for_status()
+            data = response.json()
 
                 track_list = (
                     data.get("message", {}).get("body", {}).get("track_list", [])

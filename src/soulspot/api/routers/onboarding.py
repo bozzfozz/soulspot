@@ -224,10 +224,12 @@ async def test_slskd_connection(
     """
     import httpx
 
+    from soulspot.infrastructure.integrations.http_pool import HttpClientPool
+
     url = request.url.rstrip("/")
 
     # Build headers based on auth method
-    headers = {"Content-Type": "application/json"}
+    headers: dict[str, str] = {"Content-Type": "application/json"}
 
     # Prefer API key if provided
     if request.api_key:
@@ -237,37 +239,38 @@ async def test_slskd_connection(
         auth = httpx.BasicAuth(request.username, request.password)
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Try to hit the slskd health/version endpoint
-            # Hey future me - slskd hat verschiedene API Versionen!
-            # v0 ist die aktuelle, aber es gibt auch /api/v0/application für Status
-            response = await client.get(
-                f"{url}/api/v0/application",
-                headers=headers,
-                auth=auth,
+        # Use shared HTTP pool for connection reuse
+        client = await HttpClientPool.get_client()
+        # Try to hit the slskd health/version endpoint
+        # Hey future me - slskd hat verschiedene API Versionen!
+        # v0 ist die aktuelle, aber es gibt auch /api/v0/application für Status
+        response = await client.get(
+            f"{url}/api/v0/application",
+            headers=headers,
+            auth=auth,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            version = data.get("version", "unknown")
+
+            return SlskdTestResponse(
+                success=True,
+                message=f"Verbindung erfolgreich! slskd Version: {version}",
+                version=version,
             )
-
-            if response.status_code == 200:
-                data = response.json()
-                version = data.get("version", "unknown")
-
-                return SlskdTestResponse(
-                    success=True,
-                    message=f"Verbindung erfolgreich! slskd Version: {version}",
-                    version=version,
-                )
-            elif response.status_code == 401:
-                return SlskdTestResponse(
-                    success=False,
-                    message="Authentifizierung fehlgeschlagen",
-                    error="Ungültiger API-Key oder Benutzername/Passwort",
-                )
-            elif response.status_code == 403:
-                return SlskdTestResponse(
-                    success=False,
-                    message="Zugriff verweigert",
-                    error="API-Key oder Benutzer hat keine Berechtigung",
-                )
+        elif response.status_code == 401:
+            return SlskdTestResponse(
+                success=False,
+                message="Authentifizierung fehlgeschlagen",
+                error="Ungültiger API-Key oder Benutzername/Passwort",
+            )
+        elif response.status_code == 403:
+            return SlskdTestResponse(
+                success=False,
+                message="Zugriff verweigert",
+                error="API-Key oder Benutzer hat keine Berechtigung",
+            )
             else:
                 return SlskdTestResponse(
                     success=False,

@@ -10,6 +10,7 @@ from soulspot.infrastructure.integrations.deezer_client import (
     DeezerOAuthConfig,
 )
 from soulspot.infrastructure.integrations.deezer_oauth_client import DeezerOAuthClient
+from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
@@ -23,6 +24,7 @@ __all__ = [
     "DeezerClient",
     "DeezerOAuthClient",
     "DeezerOAuthConfig",
+    "HttpClientPool",
     "SlskdClient",
     "SpotifyClient",
     "TidalClient",

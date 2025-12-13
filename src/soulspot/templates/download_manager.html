@@ -33,6 +33,25 @@
         
         <!-- Quick Actions -->
         <div class="flex items-center gap-2">
+            {# Batch action buttons (shown when downloads exist) #}
+            <button class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 
+                          rounded-lg text-sm font-medium transition-colors flex items-center gap-2
+                          border border-red-500/30"
+                    id="cancel-all-btn"
+                    title="Cancel all active downloads"
+                    hx-post="/api/downloads/batch"
+                    hx-vals='{"action": "cancel", "download_ids": []}'
+                    hx-confirm="Cancel ALL active downloads?"
+                    hx-swap="none"
+                    hx-on::before-request="this.setAttribute('hx-vals', JSON.stringify({action: 'cancel', download_ids: getAllActiveDownloadIds()}))"
+                    hx-on::after-request="htmx.trigger('#downloads-container', 'refresh')">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancel All
+            </button>
+            
             <button class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 
                           rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                     onclick="refreshDownloads()">
@@ -182,6 +201,12 @@ function applyFilters() {
     
     document.getElementById('downloads-container').setAttribute('hx-get', url);
     htmx.trigger('#downloads-container', 'refresh');
+}
+
+// Get all active download IDs for batch operations
+function getAllActiveDownloadIds() {
+    const downloads = document.querySelectorAll('[data-download-id]');
+    return Array.from(downloads).map(el => el.getAttribute('data-download-id'));
 }
 
 // Expose for HTMX trigger condition
