@@ -57,6 +57,21 @@ async def sync_followed_artists(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Sync followed artists from Spotify to local database."""
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         from pathlib import Path
 

@@ -20,8 +20,10 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
+    get_db_session,
     get_slskd_client,
     get_spotify_plugin,
 )
@@ -120,6 +122,7 @@ async def search_spotify_artists(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifySearchResponse:
     """Search for artists on Spotify.
 
@@ -134,6 +137,15 @@ async def search_spotify_artists(
     Returns:
         List of matching artists with metadata
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings = AppSettingsService(session)
+    if not await settings.is_provider_enabled("spotify"):
+        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+
     try:
         # search_artist returns PaginatedResponse[ArtistDTO]
         result = await spotify_plugin.search_artist(query, limit=limit)
@@ -170,6 +182,7 @@ async def search_spotify_tracks(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifySearchResponse:
     """Search for tracks on Spotify.
 
@@ -184,6 +197,15 @@ async def search_spotify_tracks(
     Returns:
         List of matching tracks with metadata
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings = AppSettingsService(session)
+    if not await settings.is_provider_enabled("spotify"):
+        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+
     try:
         # search_track returns PaginatedResponse[TrackDTO]
         result = await spotify_plugin.search_track(query, limit=limit)
@@ -228,6 +250,7 @@ async def search_spotify_albums(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifySearchResponse:
     """Search for albums on Spotify.
 
@@ -242,6 +265,15 @@ async def search_spotify_albums(
     Returns:
         List of matching albums with metadata
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings = AppSettingsService(session)
+    if not await settings.is_provider_enabled("spotify"):
+        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+
     try:
         # search_album returns PaginatedResponse[AlbumDTO]
         result = await spotify_plugin.search_album(query, limit=limit)
@@ -352,6 +384,7 @@ class SearchSuggestion(BaseModel):
 async def get_search_suggestions(
     query: str = Query(..., min_length=2, description="Partial search query"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> list[SearchSuggestion]:
     """Get search autocomplete suggestions from Spotify.
 
@@ -365,6 +398,15 @@ async def get_search_suggestions(
     Returns:
         List of suggestions with type indicators
     """
+    # Provider + Auth checks - return empty list gracefully
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings = AppSettingsService(session)
+    if not await settings.is_provider_enabled("spotify"):
+        return []
+    if not spotify_plugin.is_authenticated:
+        return []
+
     try:
         suggestions: list[SearchSuggestion] = []
 

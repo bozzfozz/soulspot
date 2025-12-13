@@ -176,6 +176,21 @@ async def check_watchlist_releases(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Check for new releases for a watchlist."""
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         wid = WatchlistId.from_string(watchlist_id)
         service = WatchlistService(session, spotify_plugin)

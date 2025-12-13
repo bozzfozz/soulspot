@@ -363,6 +363,7 @@ class FollowingStatusResponse(BaseModel):
 async def follow_artist_on_spotify(
     spotify_id: str,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> FollowArtistResponse:
     """Follow an artist on Spotify.
 
@@ -372,6 +373,7 @@ async def follow_artist_on_spotify(
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
         spotify_plugin: SpotifyPlugin handles token management internally
+        session: Database session
 
     Returns:
         Success status and message
@@ -379,6 +381,21 @@ async def follow_artist_on_spotify(
     Raises:
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         await spotify_plugin.follow_artists([spotify_id])
 
@@ -405,6 +422,7 @@ async def follow_artist_on_spotify(
 async def unfollow_artist_on_spotify(
     spotify_id: str,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> FollowArtistResponse:
     """Unfollow an artist on Spotify.
 
@@ -414,6 +432,7 @@ async def unfollow_artist_on_spotify(
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
         spotify_plugin: SpotifyPlugin handles token management internally
+        session: Database session
 
     Returns:
         Success status and message
@@ -421,6 +440,21 @@ async def unfollow_artist_on_spotify(
     Raises:
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         await spotify_plugin.unfollow_artists([spotify_id])
 
@@ -447,6 +481,7 @@ async def unfollow_artist_on_spotify(
 async def check_following_status(
     request: FollowingStatusRequest,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> FollowingStatusResponse:
     """Check if user follows one or more artists on Spotify.
 
@@ -456,6 +491,7 @@ async def check_following_status(
     Args:
         request: List of Spotify artist IDs to check (max 50)
         spotify_plugin: SpotifyPlugin handles token management internally
+        session: Database session
 
     Returns:
         Map of artist_id → is_following status
@@ -463,6 +499,21 @@ async def check_following_status(
     Raises:
         HTTPException: 400 if too many IDs, 500 if Spotify API fails
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     if len(request.artist_ids) > 50:
         raise HTTPException(
             status_code=400,
@@ -521,6 +572,7 @@ class RelatedArtistsResponse(BaseModel):
 async def get_related_artists(
     spotify_id: str,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> RelatedArtistsResponse:
     """Get up to 20 artists similar to the given artist.
 
@@ -532,6 +584,7 @@ async def get_related_artists(
     Args:
         spotify_id: Spotify artist ID (e.g., "3WrFJ7ztbogyGnTHbHJFl2")
         spotify_plugin: SpotifyPlugin handles token management internally
+        session: Database session
 
     Returns:
         List of similar artists with following status
@@ -539,6 +592,21 @@ async def get_related_artists(
     Raises:
         HTTPException: 404 if artist not found, 500 if Spotify API fails
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         # Get the source artist details first (for name in response)
         source_artist = await spotify_plugin.get_artist(spotify_id)

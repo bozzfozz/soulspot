@@ -327,6 +327,21 @@ async def get_incomplete_albums(
     Returns:
         List of albums with completeness information
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         # SpotifyPlugin handles token management internally!
         use_case = CheckAlbumCompletenessUseCase(
@@ -365,6 +380,21 @@ async def get_album_completeness(
     Returns:
         Album completeness information
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         use_case = CheckAlbumCompletenessUseCase(
             session=session,
@@ -1790,6 +1820,21 @@ async def repair_missing_artwork(
 
     Use case: "DJ Paul Elstak" was enriched to "Paul Elstak" but has no image.
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(db)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     from soulspot.application.services.local_library_enrichment_service import (
         LocalLibraryEnrichmentService,
     )

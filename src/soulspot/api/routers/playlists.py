@@ -216,6 +216,7 @@ async def queue_downloads(
 async def sync_playlist_library(
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Sync user's playlist library from Spotify (metadata only, no tracks).
 
@@ -229,10 +230,26 @@ async def sync_playlist_library(
     Args:
         spotify_plugin: SpotifyPlugin handles token management internally
         playlist_repository: Playlist repository
+        session: Database session
 
     Returns:
         Sync statistics including number of playlists synced and their status
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         all_playlists: list[dict[str, Any]] = []
         offset = 0

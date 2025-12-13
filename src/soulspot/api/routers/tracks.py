@@ -132,6 +132,7 @@ async def search_tracks(
     query: str = Query(..., description="Search query"),
     limit: int = Query(20, ge=1, le=100, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Search for tracks.
 
@@ -139,10 +140,26 @@ async def search_tracks(
         query: Search query
         limit: Number of results to return
         spotify_plugin: SpotifyPlugin handles token management internally
+        session: Database session
 
     Returns:
         Search results
     """
+    # Provider + Auth checks
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    app_settings = AppSettingsService(session)
+    if not await app_settings.is_provider_enabled("spotify"):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify provider is disabled in settings.",
+        )
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         # search_track returns PaginatedResponse[TrackDTO]
         result = await spotify_plugin.search_track(query, limit=limit)

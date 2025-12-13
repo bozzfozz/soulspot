@@ -2164,6 +2164,7 @@ async def spotify_discover_page(
     request: Request,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Discover Similar Artists page.
 
@@ -2173,6 +2174,33 @@ async def spotify_discover_page(
     SpotifyPlugin handles auth internally - no more manual token passing!
     """
     import random
+
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    # Provider + Auth checks - show error page gracefully
+    settings = AppSettingsService(session)
+    if not await settings.is_provider_enabled("spotify"):
+        return templates.TemplateResponse(
+            request,
+            "spotify_discover.html",
+            context={
+                "discoveries": [],
+                "based_on_count": 0,
+                "total_discoveries": 0,
+                "error": "Spotify provider is disabled. Enable it in Settings to discover artists.",
+            },
+        )
+    if not spotify_plugin.is_authenticated:
+        return templates.TemplateResponse(
+            request,
+            "spotify_discover.html",
+            context={
+                "discoveries": [],
+                "based_on_count": 0,
+                "total_discoveries": 0,
+                "error": "Not authenticated with Spotify. Connect your account in Settings.",
+            },
+        )
 
     # Get all followed artists (limit to 1000 for performance)
     artists = await sync_service.get_artists(limit=1000)
