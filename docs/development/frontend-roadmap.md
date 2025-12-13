@@ -237,9 +237,12 @@ Client (EventSource) → /api/sse/stream → StreamingResponse
 
 #### Example Custom Widget
 
-See `src/soulspot/templates/widget_templates/system_stats.json` for a complete example of a custom widget template.
+> **⚠️ DEPRECATED:** The widget system has been removed (migration `ee19001hhj49_remove_widget_system.py`).  
+> This reference is kept for historical purposes only.
 
-**Full Details:** See implementation in `src/soulspot/api/routers/sse.py` and `src/soulspot/domain/entities/widget_template.py`
+~~See `src/soulspot/templates/widget_templates/system_stats.json` for a complete example of a custom widget template.~~
+
+**Full Details:** ~~See implementation in `src/soulspot/api/routers/sse.py` and `src/soulspot/domain/entities/widget_template.py`~~
 
 ---
 
@@ -534,7 +537,7 @@ Future Features (Phase 8+)
   - Category and tag organization
   - Search and filtering API
   - REST endpoints for template management
-  - Example custom widget (system_stats.json)
+  - ~~Example custom widget (system_stats.json)~~ ⚠️ **DEPRECATED - Widget system removed**
   - Unit tests (7 tests, all passing)
 
 - ✅ **SSE-Enabled Widgets**
