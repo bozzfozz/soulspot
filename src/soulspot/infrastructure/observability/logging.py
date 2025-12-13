@@ -175,6 +175,11 @@ def configure_logging(
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
+    # Hey future me - DISABLE Uvicorn's access log!
+    # It duplicates our middleware logs with ugly format like:
+    # INFO:     192.168.178.185:47900 - "GET /api/workers/status/html HTTP/1.1" 200 OK
+    # Our middleware already logs this in a nicer format.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
     # Log configuration complete
     logger = logging.getLogger(__name__)

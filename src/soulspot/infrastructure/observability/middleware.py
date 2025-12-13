@@ -61,40 +61,30 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Get request details
         method = request.method
         path = request.url.path
-        client_ip = request.client.host if request.client else "unknown"
 
-        # Hey future me - we don't log "Request started" for static files!
-        # It clutters logs. Only log actual API/page requests.
-        is_static = path.startswith("/static/")
-
-        if not is_static:
-            logger.info(
-                f"→ {method} {path}",
-                extra={
-                    "method": method,
-                    "path": path,
-                    "query_params": str(request.query_params),
-                    "client_ip": client_ip,
-                },
-            )
+        # Hey future me - SKIP LOGGING for noisy endpoints!
+        # These get polled constantly and clutter the logs:
+        # - /static/* - CSS, JS, images
+        # - /health - Docker healthcheck every 30s
+        # - /api/workers/status/html - HTMX polls every few seconds
+        skip_logging = (
+            path.startswith("/static/")
+            or path == "/health"
+            or path == "/api/workers/status/html"
+            or path.endswith("/jobs-list")  # HTMX polling endpoints
+        )
 
         # Process request
         start_time = time.time()
         try:
             response = await call_next(request)
 
-            # Log response (skip static files)
+            # Log response (skip noisy endpoints, only log once per request)
             duration = time.time() - start_time
-            if not is_static:
+            if not skip_logging:
                 status_emoji = "✓" if response.status_code < 400 else "✗"
                 logger.info(
-                    f"{status_emoji} {method} {path} → {response.status_code} ({duration:.0f}ms)",
-                    extra={
-                        "method": method,
-                        "path": path,
-                        "status_code": response.status_code,
-                        "duration_ms": int(duration * 1000),
-                    },
+                    f"{status_emoji} {method} {path} → {response.status_code} ({duration*1000:.0f}ms)",
                 )
 
             # Add correlation ID to response headers
@@ -103,16 +93,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
 
         except Exception as e:
-            # Log error with full context
+            # Log error with full context (always log errors!)
             duration = time.time() - start_time
             logger.exception(
-                f"Request failed: {method} {path}",
-                extra={
-                    "method": method,
-                    "path": path,
-                    "duration_seconds": duration,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                },
+                f"✗ {method} {path} FAILED ({duration*1000:.0f}ms): {e}",
             )
             raise
