@@ -1061,14 +1061,17 @@ async def library_import_jobs_list(
 
 # Hey future me – refactored to load ArtistModel directly with album/track counts!
 # Now includes image_url from Spotify CDN. SQL does aggregation via subqueries instead
-# of loading all tracks into Python memory. Still no pagination (TODO for big libraries).
-# image_url comes from Spotify sync – falls back to None if artist wasn't synced.
+# of loading all tracks into Python memory. Uses pagination (page/per_page params) for
+# big libraries - defaults to 50 per page. image_url comes from Spotify sync – falls back
+# to None if artist wasn't synced.
 # IMPORTANT: Only shows artists with at least ONE local file (file_path IS NOT NULL)!
 # Hey future me - this now checks for unenriched artists and passes enrichment_needed flag!
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
     request: Request,
-    source: str | None = None,  # NEW: Filter by source (local/spotify/hybrid/all)
+    source: str | None = None,  # Filter by source (local/spotify/hybrid/all)
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(50, ge=10, le=200, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
@@ -1143,7 +1146,24 @@ async def library_artists(
         stmt = stmt.where(ArtistModel.source == "hybrid")
     # else: source == "all" or None → Show ALL artists (no filter)
 
-    stmt = stmt.order_by(ArtistModel.name)
+    # Get total count BEFORE applying pagination (for pagination controls)
+    # Hey future me - count_stmt shares same filters but no joins needed
+    count_stmt = select(func.count(ArtistModel.id))
+    if source == "local":
+        count_stmt = count_stmt.where(ArtistModel.source.in_(["local", "hybrid"]))
+    elif source == "spotify":
+        count_stmt = count_stmt.where(ArtistModel.source.in_(["spotify", "hybrid"]))
+    elif source == "hybrid":
+        count_stmt = count_stmt.where(ArtistModel.source == "hybrid")
+    total_count_result = await session.execute(count_stmt)
+    total_count = total_count_result.scalar() or 0
+
+    # Calculate pagination
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+
+    # Apply ordering and pagination
+    stmt = stmt.order_by(ArtistModel.name).offset(offset).limit(per_page)
     result = await session.execute(stmt)
     rows = result.all()
 
@@ -1156,7 +1176,7 @@ async def library_artists(
         {
             "name": artist.name,
             "disambiguation": artist.disambiguation,  # Text like "English rock band"
-            "source": artist.source,  # NEW: 'local', 'spotify', or 'hybrid'
+            "source": artist.source,  # 'local', 'spotify', or 'hybrid'
             "track_count": track_count or 0,
             "album_count": album_count or 0,
             "image_url": artist.image_url,  # Spotify CDN URL or None
@@ -1165,20 +1185,32 @@ async def library_artists(
         for artist, track_count, album_count in rows
     ]
 
-    # Sort by name (already ordered in SQL, but ensure consistency)
-    artists.sort(key=lambda x: x["name"].lower())
-
-    # Check for unenriched artists (have local files but no image)
+    # Check for unenriched artists on THIS PAGE (have local files but no image)
     # Hey future me - count artists that need Spotify enrichment for artwork!
     artists_without_image = sum(1 for a in artists if not a["image_url"])
     enrichment_needed = artists_without_image > 0
 
-    # Count artists by source for filter badges
+    # Count ALL artists by source for filter badges (not just current page!)
+    # Hey future me - these counts come from DB, not from current page data
+    count_all = await session.execute(select(func.count(ArtistModel.id)))
+    count_local = await session.execute(
+        select(func.count(ArtistModel.id)).where(
+            ArtistModel.source.in_(["local", "hybrid"])
+        )
+    )
+    count_spotify = await session.execute(
+        select(func.count(ArtistModel.id)).where(
+            ArtistModel.source.in_(["spotify", "hybrid"])
+        )
+    )
+    count_hybrid = await session.execute(
+        select(func.count(ArtistModel.id)).where(ArtistModel.source == "hybrid")
+    )
     source_counts = {
-        "all": len(artists),
-        "local": sum(1 for a in artists if a["source"] in ["local", "hybrid"]),
-        "spotify": sum(1 for a in artists if a["source"] in ["spotify", "hybrid"]),
-        "hybrid": sum(1 for a in artists if a["source"] == "hybrid"),
+        "all": count_all.scalar() or 0,
+        "local": count_local.scalar() or 0,
+        "spotify": count_spotify.scalar() or 0,
+        "hybrid": count_hybrid.scalar() or 0,
     }
 
     return templates.TemplateResponse(
@@ -1190,19 +1222,29 @@ async def library_artists(
             "artists_without_image": artists_without_image,
             "current_source": source or "all",  # Active filter
             "source_counts": source_counts,  # For filter badge counts
+            # Pagination context
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
         },
     )
 
 
 # Hey future me – refactored to load AlbumModel directly with artist join!
 # This gives us access to artwork_url from Spotify CDN. SQL does the grouping via
-# relationship, not manual Python dict. Still no pagination (TODO for big libraries).
-# The artwork_url comes from Spotify sync – if album wasn't synced, falls back to None.
+# relationship, not manual Python dict. Uses pagination (page/per_page params) for
+# big libraries - defaults to 50 per page. artwork_url comes from Spotify sync – if
+# album wasn't synced, falls back to None.
 # IMPORTANT: Only shows albums with at least ONE local file (file_path IS NOT NULL)!
 # Also handles "Various Artists" compilations properly via album_artist field.
 @router.get("/library/albums", response_class=HTMLResponse)
 async def library_albums(
     request: Request,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(50, ge=10, le=200, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
@@ -1220,13 +1262,28 @@ async def library_albums(
         .subquery()
     )
 
-    # Only get albums that have at least one local track
+    # Get total count of albums with local files (for pagination)
+    count_stmt = (
+        select(func.count(AlbumModel.id))
+        .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
+        .where(track_count_subq.c.track_count > 0)
+    )
+    total_count_result = await session.execute(count_stmt)
+    total_count = total_count_result.scalar() or 0
+
+    # Calculate pagination
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+
+    # Only get albums that have at least one local track, with pagination
     stmt = (
         select(AlbumModel, track_count_subq.c.track_count)
         .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
         .where(track_count_subq.c.track_count > 0)
         .options(joinedload(AlbumModel.artist))
         .order_by(AlbumModel.title)
+        .offset(offset)
+        .limit(per_page)
     )
     result = await session.execute(stmt)
     rows = result.unique().all()
@@ -1251,11 +1308,19 @@ async def library_albums(
         for album, track_count in rows
     ]
 
-    # Sort by artist then album title
-    albums.sort(key=lambda x: (x["artist"].lower(), x["title"].lower()))
-
     return templates.TemplateResponse(
-        request, "library_albums.html", context={"albums": albums}
+        request,
+        "library_albums.html",
+        context={
+            "albums": albums,
+            # Pagination context
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        },
     )
 
 
@@ -1327,30 +1392,49 @@ async def library_compilations(
 # IMPORTANT: Library tracks page with SQLAlchemy direct queries! Uses Depends(get_db_session) to
 # properly manage DB session lifecycle. select() with joinedload() is proper way to eagerly load
 # relationships and avoid N+1. unique() on result prevents duplicate Track objects when joins create
-# multiple rows. scalars().all() gets list of Track models. The track data extraction handles None
-# values gracefully with "Unknown". Sorts by artist/album/title in memory using .sort() with lambda -
-# could be slow for 10000s of tracks! Should use ORDER BY in SQL query instead. The type: ignore is
-# needed for .lower() on potentially None values. Good use of joinedload to prevent N+1 queries.
-# Returns full HTML page with all tracks - could be HUGE! Should paginate or use virtual scrolling
-# for big libraries. This loads everything into memory!
+# multiple rows. Uses pagination (page/per_page params) for big libraries - defaults to 100 per page.
+# The track data extraction handles None values gracefully with "Unknown". Sort by artist/album/title
+# is done in SQL ORDER BY for efficiency. Good use of joinedload to prevent N+1 queries.
 # IMPORTANT: Only shows tracks with local files (file_path IS NOT NULL)!
 @router.get("/library/tracks", response_class=HTMLResponse)
 async def library_tracks(
     request: Request,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(100, ge=10, le=500, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Library tracks browser page - only tracks with local files."""
-    from sqlalchemy import select
+    from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.infrastructure.persistence.models import TrackModel
+    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel, TrackModel
+
+    # Get total count of tracks with local files (for pagination)
+    count_stmt = select(func.count(TrackModel.id)).where(
+        TrackModel.file_path.isnot(None)
+    )
+    total_count_result = await session.execute(count_stmt)
+    total_count = total_count_result.scalar() or 0
+
+    # Calculate pagination
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
 
     # Query with joined loads for artist and album - ONLY tracks with local files!
+    # Sort in SQL for efficiency (not in Python memory)
     stmt = (
         select(TrackModel)
         .where(TrackModel.file_path.isnot(None))
         .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+        .join(TrackModel.artist, isouter=True)
+        .join(TrackModel.album, isouter=True)
+        .order_by(
+            func.lower(func.coalesce(ArtistModel.name, "zzz")),  # Artists first, null last
+            func.lower(func.coalesce(TrackModel.title, "")),
+        )
+        .offset(offset)
+        .limit(per_page)
     )
     result = await session.execute(stmt)
     track_models = result.unique().scalars().all()
@@ -1369,13 +1453,19 @@ async def library_tracks(
         for track in track_models
     ]
 
-    # Sort by artist, album, title
-    tracks_data.sort(
-        key=lambda x: (x["artist"].lower(), x["album"].lower(), x["title"].lower())  # type: ignore[union-attr]
-    )
-
     return templates.TemplateResponse(
-        request, "library_tracks.html", context={"tracks": tracks_data}
+        request,
+        "library_tracks.html",
+        context={
+            "tracks": tracks_data,
+            # Pagination context
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+        },
     )
 
 

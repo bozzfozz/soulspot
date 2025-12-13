@@ -25,7 +25,7 @@
         </div>
         <div>
             <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Tracks</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Browse {{ tracks|length }} tracks in your library</p>
+            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Browse {{ total_count }} tracks in your library</p>
         </div>
     </div>
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-3);">
@@ -117,6 +117,36 @@
             </tbody>
         </table>
     </div>
+    
+    {# Pagination Controls #}
+    {% if total_pages > 1 %}
+    <nav class="pagination" style="padding: var(--space-4); display: flex; justify-content: center; align-items: center; gap: var(--space-3); border-top: 1px solid var(--border-primary);">
+        {% if has_prev %}
+        <a href="?page={{ page - 1 }}&per_page={{ per_page }}" class="btn btn-outline btn-sm">
+            <i class="bi bi-chevron-left"></i> Previous
+        </a>
+        {% else %}
+        <span class="btn btn-outline btn-sm" style="opacity: 0.5; pointer-events: none;">
+            <i class="bi bi-chevron-left"></i> Previous
+        </span>
+        {% endif %}
+        
+        <span class="pagination-info" style="color: var(--text-muted); font-size: var(--font-size-sm);">
+            Page {{ page }} of {{ total_pages }} ({{ total_count }} tracks)
+        </span>
+        
+        {% if has_next %}
+        <a href="?page={{ page + 1 }}&per_page={{ per_page }}" class="btn btn-outline btn-sm">
+            Next <i class="bi bi-chevron-right"></i>
+        </a>
+        {% else %}
+        <span class="btn btn-outline btn-sm" style="opacity: 0.5; pointer-events: none;">
+            Next <i class="bi bi-chevron-right"></i>
+        </span>
+        {% endif %}
+    </nav>
+    {% endif %}
+    
     {% else %}
     <div class="empty-state" style="padding: var(--space-12);">
         <div class="empty-icon">
