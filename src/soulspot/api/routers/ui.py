@@ -1985,6 +1985,7 @@ async def browse_new_releases_page(
     error: str | None = None
     all_releases: list[dict[str, Any]] = []
     seen_keys: set[str] = set()  # For deduplication
+    source_counts: dict[str, int] = {"deezer": 0, "spotify": 0}  # Track contributions
 
     def normalize_key(artist: str, album: str) -> str:
         """Create normalized key for deduplication."""
@@ -1992,14 +1993,18 @@ async def browse_new_releases_page(
 
     # Check provider availability via AppSettingsService
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
+
     settings_service = AppSettingsService(session)
     deezer_enabled = await settings_service.is_provider_enabled("deezer")
     spotify_enabled = await settings_service.is_provider_enabled("spotify")
 
     # -------------------------------------------------------------------------
-    # 1. DEEZER: Global New Releases (no auth required!)
+    # 1. DEEZER: Global New Releases (no auth required! - uses can_use())
     # -------------------------------------------------------------------------
-    if deezer_enabled:
+    # Use can_use() which checks: 1) capability supported 2) auth available if needed
+    # For Deezer BROWSE_NEW_RELEASES, no auth is needed (returns True without token)
+    if deezer_enabled and deezer_plugin.can_use(PluginCapability.BROWSE_NEW_RELEASES):
         try:
             deezer_result = await deezer_plugin.get_browse_new_releases(
                 limit=50,
@@ -2031,13 +2036,16 @@ async def browse_new_releases_page(
                         "external_url": album.get("link") or f"https://www.deezer.com/album/{album.get('id')}",
                         "source": "deezer",
                     })
+                    source_counts["deezer"] += 1
 
-            logger.info(f"New Releases: Got {len(all_releases)} from Deezer")
+            logger.info(f"New Releases: Got {source_counts['deezer']} from Deezer (using can_use)")
 
         except Exception as e:
             logger.warning(f"New Releases: Deezer fetch failed: {e}")
     else:
-        logger.debug("New Releases: Deezer provider disabled, skipping")
+        # Log why skipped: provider disabled or capability not available
+        skip_reason = "provider disabled" if not deezer_enabled else "capability not available"
+        logger.debug(f"New Releases: Deezer skipped ({skip_reason})")
 
     # -------------------------------------------------------------------------
     # 2. SPOTIFY: Releases from followed artists (from database)
@@ -2066,7 +2074,6 @@ async def browse_new_releases_page(
             result = await session.execute(stmt)
             rows = result.all()
 
-            spotify_count = 0
             for album, artist in rows:
                 key = normalize_key(artist.name, album.name)
                 if key not in seen_keys:
@@ -2083,9 +2090,9 @@ async def browse_new_releases_page(
                         "external_url": f"https://open.spotify.com/album/{album.spotify_id}",
                         "source": "spotify",
                     })
-                    spotify_count += 1
+                    source_counts["spotify"] += 1
 
-            logger.info(f"New Releases: Got {spotify_count} from Spotify (after dedup)")
+            logger.info(f"New Releases: Got {source_counts['spotify']} from Spotify DB (after dedup)")
 
         except Exception as e:
             logger.warning(f"New Releases: Spotify DB fetch failed: {e}")
@@ -2133,11 +2140,7 @@ async def browse_new_releases_page(
         else:
             releases_by_week["Unknown Date"].append(release)
 
-    # Count sources
-    source_counts = {
-        "deezer": sum(1 for r in all_releases if r.get("source") == "deezer"),
-        "spotify": sum(1 for r in all_releases if r.get("source") == "spotify"),
-    }
+    # source_counts already tracked above during aggregation
 
     if not all_releases:
         error = "No new releases found. Try syncing your Spotify artists first!"
@@ -2172,12 +2175,14 @@ async def spotify_discover_page(
     Fetches related artists from SpotifyPlugin for your followed artists and aggregates
     the suggestions, filtering out ones you already follow.
     SpotifyPlugin handles auth internally - no more manual token passing!
+    Uses can_use() for elegant capability checking.
     """
     import random
 
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
-    # Provider + Auth checks - show error page gracefully
+    # Provider + Auth checks using can_use() - checks both capability support AND auth
     settings = AppSettingsService(session)
     if not await settings.is_provider_enabled("spotify"):
         return templates.TemplateResponse(
@@ -2190,7 +2195,9 @@ async def spotify_discover_page(
                 "error": "Spotify provider is disabled. Enable it in Settings to discover artists.",
             },
         )
-    if not spotify_plugin.is_authenticated:
+
+    # can_use() checks: 1) capability supported 2) is_authenticated if required
+    if not spotify_plugin.can_use(PluginCapability.GET_RELATED_ARTISTS):
         return templates.TemplateResponse(
             request,
             "spotify_discover.html",

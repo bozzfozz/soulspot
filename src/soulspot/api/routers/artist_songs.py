@@ -131,8 +131,9 @@ async def sync_artist_songs(
     Raises:
         HTTPException: 400 if invalid artist ID, 404 if artist not found
     """
-    # Check if Spotify provider is enabled
+    # Check if Spotify provider is enabled + auth using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -141,8 +142,8 @@ async def sync_artist_songs(
             detail="Spotify provider is disabled in settings. Enable it to sync songs.",
         )
 
-    # Check if user is authenticated with Spotify
-    if not spotify_plugin.is_authenticated:
+    # can_use() checks capability + auth in one call
+    if not spotify_plugin.can_use(PluginCapability.GET_ARTIST_TOP_TRACKS):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -224,8 +225,9 @@ async def sync_all_artists_songs(
     Returns:
         List of all synced tracks and aggregate statistics
     """
-    # Check if Spotify provider is enabled
+    # Check if Spotify provider is enabled + auth using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -234,8 +236,8 @@ async def sync_all_artists_songs(
             detail="Spotify provider is disabled in settings. Enable it to sync songs.",
         )
 
-    # Check if user is authenticated with Spotify
-    if not spotify_plugin.is_authenticated:
+    # can_use() checks capability + auth in one call
+    if not spotify_plugin.can_use(PluginCapability.GET_ARTIST_TOP_TRACKS):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",

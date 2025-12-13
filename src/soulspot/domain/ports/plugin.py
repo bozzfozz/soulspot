@@ -64,6 +64,61 @@ class AuthType(str, Enum):
     OAUTH_IMPLICIT = "oauth_implicit"
 
 
+class PluginCapability(str, Enum):
+    """
+    Feature capabilities that plugins can support.
+
+    Hey future me - das ist die zentrale Liste aller Features!
+    Plugins geben an welche Features sie supporten und ob Auth nötig ist.
+
+    PUBLIC = Feature funktioniert ohne Auth
+    AUTH_REQUIRED = Feature braucht OAuth Token
+    """
+
+    # Search capabilities (usually public)
+    SEARCH_ARTISTS = "search_artists"
+    SEARCH_ALBUMS = "search_albums"
+    SEARCH_TRACKS = "search_tracks"
+    SEARCH_PLAYLISTS = "search_playlists"
+
+    # Browse capabilities (usually public)
+    BROWSE_NEW_RELEASES = "browse_new_releases"
+    BROWSE_FEATURED = "browse_featured"
+    BROWSE_GENRES = "browse_genres"
+    BROWSE_CHARTS = "browse_charts"
+
+    # Entity lookup (usually public)
+    GET_ARTIST = "get_artist"
+    GET_ALBUM = "get_album"
+    GET_TRACK = "get_track"
+    GET_PLAYLIST = "get_playlist"
+    GET_ARTIST_ALBUMS = "get_artist_albums"
+    GET_ARTIST_TOP_TRACKS = "get_artist_top_tracks"
+    GET_RELATED_ARTISTS = "get_related_artists"
+
+    # User library (always requires auth)
+    USER_PROFILE = "user_profile"
+    USER_FOLLOWED_ARTISTS = "user_followed_artists"
+    USER_SAVED_TRACKS = "user_saved_tracks"
+    USER_SAVED_ALBUMS = "user_saved_albums"
+    USER_PLAYLISTS = "user_playlists"
+
+    # Actions (always requires auth)
+    FOLLOW_ARTIST = "follow_artist"
+    UNFOLLOW_ARTIST = "unfollow_artist"
+    SAVE_TRACK = "save_track"
+    REMOVE_TRACK = "remove_track"
+
+
+@dataclass
+class CapabilityInfo:
+    """Information about a plugin capability."""
+
+    capability: PluginCapability
+    requires_auth: bool
+    description: str | None = None
+
+
 # Hey future me – PluginError ist die EINHEITLICHE Exception für alle Plugin-Fehler!
 # Wrap service-spezifische Exceptions (SpotifyAPIError, etc.) in PluginError.
 # Das ermöglicht einheitliches Error-Handling im Application Layer.
@@ -175,6 +230,51 @@ class IMusicServicePlugin(ABC):
             True if an access token is set, False otherwise
         """
         ...
+
+    @abstractmethod
+    def get_capabilities(self) -> list[CapabilityInfo]:
+        """
+        Get list of capabilities this plugin supports with auth requirements.
+
+        Hey future me - das ist DER Weg zu wissen was funktioniert!
+        Jedes Plugin gibt seine unterstützten Features zurück und ob Auth nötig ist.
+
+        Beispiel Rückgabe:
+        [
+            CapabilityInfo(SEARCH_ARTISTS, requires_auth=False),
+            CapabilityInfo(USER_FOLLOWED_ARTISTS, requires_auth=True),
+        ]
+
+        Use this for:
+        - UI: Show/hide features based on auth status
+        - Routes: Gracefully skip unavailable features
+        - Aggregation: Know which service can contribute what
+
+        Returns:
+            List of CapabilityInfo with auth requirements
+        """
+        ...
+
+    def can_use(self, capability: PluginCapability) -> bool:
+        """
+        Check if a capability can be used right now.
+
+        Considers both:
+        1. Does the plugin support this capability?
+        2. If it requires auth, is the plugin authenticated?
+
+        Args:
+            capability: The capability to check
+
+        Returns:
+            True if the capability can be used, False otherwise
+        """
+        for cap_info in self.get_capabilities():
+            if cap_info.capability == capability:
+                if cap_info.requires_auth:
+                    return self.is_authenticated
+                return True
+        return False
 
     # =========================================================================
     # AUTHENTICATION METHODS

@@ -124,29 +124,38 @@ For ANY feature that fetches external data (Browse, Search, Discovery, New Relea
 4. **Tag source** - Each result keeps `source` field ("spotify", "deezer", etc.)
 5. **Graceful fallback** - If one service fails, show results from others
 
-**Pattern:**
+**Pattern using can_use() (PREFERRED!):**
 ```python
+from soulspot.domain.ports.plugin import PluginCapability
+
 async def get_new_releases():
     all_releases = []
     seen_keys = set()
+    source_counts = {"deezer": 0, "spotify": 0}
     
-    # 1. Deezer (no auth needed, always try)
-    if service_enabled("deezer"):
-        for r in await deezer_plugin.get_new_releases():
-            key = normalize(r.artist, r.title)
-            if key not in seen_keys:
-                seen_keys.add(key)
-                r.source = "deezer"
-                all_releases.append(r)
+    # 1. Deezer - can_use() checks: capability supported + auth if needed
+    #    For Deezer BROWSE_NEW_RELEASES, no auth is needed → returns True
+    if await settings.is_provider_enabled("deezer"):
+        if deezer_plugin.can_use(PluginCapability.BROWSE_NEW_RELEASES):
+            for r in await deezer_plugin.get_browse_new_releases():
+                key = normalize(r.artist, r.title)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    r.source = "deezer"
+                    all_releases.append(r)
+                    source_counts["deezer"] += 1
     
-    # 2. Spotify (needs auth)
-    if service_enabled("spotify") and spotify_authenticated:
-        for r in await spotify_plugin.get_new_releases():
-            key = normalize(r.artist, r.title)
-            if key not in seen_keys:
-                seen_keys.add(key)
-                r.source = "spotify"
-                all_releases.append(r)
+    # 2. Spotify - can_use() checks: capability supported + auth if needed
+    #    For Spotify, ALL capabilities require auth → returns False if no token
+    if await settings.is_provider_enabled("spotify"):
+        if spotify_plugin.can_use(PluginCapability.BROWSE_NEW_RELEASES):
+            for r in await spotify_plugin.get_new_releases():
+                key = normalize(r.artist, r.title)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    r.source = "spotify"
+                    all_releases.append(r)
+                    source_counts["spotify"] += 1
     
     return sorted(all_releases, key=lambda x: x.release_date, reverse=True)
 ```
@@ -198,6 +207,33 @@ result = await spotify_plugin.get_followed_artists()
 
 **Provider Modes:**
 - `off` = Disabled completely
+- `basic` = Enabled with basic features (metadata/browse)
+- `pro` = Full features enabled
+
+**Capability Check (USE THIS FOR FEATURE DECISIONS!):**
+```python
+from soulspot.domain.ports.plugin import PluginCapability
+
+# Check if a specific feature can be used RIGHT NOW
+# (considers both: is the feature supported AND is auth available if needed)
+if deezer_plugin.can_use(PluginCapability.BROWSE_NEW_RELEASES):
+    releases = await deezer_plugin.get_browse_new_releases()
+
+if spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
+    artists = await spotify_plugin.get_followed_artists()
+
+# Get all capabilities with auth requirements
+for cap_info in spotify_plugin.get_capabilities():
+    print(f"{cap_info.capability}: requires_auth={cap_info.requires_auth}")
+```
+
+**Auth Requirements by Service:**
+
+| Service | Public API (no auth) | Auth Required |
+|---------|---------------------|---------------|
+| **Deezer** | Search, Browse, Artist/Album lookup, Charts, Genres | User favorites, playlists |
+| **Spotify** | ❌ NOTHING | ALL operations need OAuth |
+| **MusicBrainz** | Everything | N/A |
 - `basic` = Enabled with basic features (metadata/browse)
 - `pro` = Full features enabled
 

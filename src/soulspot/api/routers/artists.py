@@ -128,8 +128,9 @@ async def sync_followed_artists(
     Raises:
         HTTPException: If Spotify API fails or authentication issues
     """
-    # Check if Spotify provider is enabled
+    # Check if Spotify provider is enabled + auth using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -138,8 +139,8 @@ async def sync_followed_artists(
             detail="Spotify provider is disabled in settings. Enable it to sync artists.",
         )
 
-    # Check if user is authenticated with Spotify
-    if not spotify_plugin.is_authenticated:
+    # can_use() checks capability + auth in one call
+    if not spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -381,8 +382,9 @@ async def follow_artist_on_spotify(
     Raises:
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -390,7 +392,7 @@ async def follow_artist_on_spotify(
             status_code=503,
             detail="Spotify provider is disabled in settings.",
         )
-    if not spotify_plugin.is_authenticated:
+    if not spotify_plugin.can_use(PluginCapability.FOLLOW_ARTIST):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -440,8 +442,9 @@ async def unfollow_artist_on_spotify(
     Raises:
         HTTPException: 400 if invalid artist ID, 500 if Spotify API fails
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -449,7 +452,7 @@ async def unfollow_artist_on_spotify(
             status_code=503,
             detail="Spotify provider is disabled in settings.",
         )
-    if not spotify_plugin.is_authenticated:
+    if not spotify_plugin.can_use(PluginCapability.UNFOLLOW_ARTIST):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -499,8 +502,9 @@ async def check_following_status(
     Raises:
         HTTPException: 400 if too many IDs, 500 if Spotify API fails
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -508,7 +512,8 @@ async def check_following_status(
             status_code=503,
             detail="Spotify provider is disabled in settings.",
         )
-    if not spotify_plugin.is_authenticated:
+    # USER_FOLLOWED_ARTISTS capability is needed to check following status
+    if not spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -592,8 +597,9 @@ async def get_related_artists(
     Raises:
         HTTPException: 404 if artist not found, 500 if Spotify API fails
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
@@ -601,7 +607,7 @@ async def get_related_artists(
             status_code=503,
             detail="Spotify provider is disabled in settings.",
         )
-    if not spotify_plugin.is_authenticated:
+    if not spotify_plugin.can_use(PluginCapability.GET_RELATED_ARTISTS):
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",

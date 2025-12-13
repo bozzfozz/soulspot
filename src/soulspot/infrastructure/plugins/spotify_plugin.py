@@ -107,6 +107,47 @@ class SpotifyPlugin(IMusicServicePlugin):
         """Return human-readable service name."""
         return "Spotify"
 
+    def get_capabilities(self) -> list["CapabilityInfo"]:
+        """Get Spotify capabilities with auth requirements.
+
+        Hey future me - ALLE Spotify API calls brauchen Auth!
+        Spotify hat keine public API. Jeder Call braucht OAuth Token.
+        Das ist der große Unterschied zu Deezer!
+
+        Returns:
+            List of capabilities with auth requirements (ALL require auth)
+        """
+        from soulspot.domain.ports.plugin import CapabilityInfo, PluginCapability
+
+        return [
+            # Search - requires auth!
+            CapabilityInfo(PluginCapability.SEARCH_ARTISTS, requires_auth=True),
+            CapabilityInfo(PluginCapability.SEARCH_ALBUMS, requires_auth=True),
+            CapabilityInfo(PluginCapability.SEARCH_TRACKS, requires_auth=True),
+            CapabilityInfo(PluginCapability.SEARCH_PLAYLISTS, requires_auth=True),
+            # Browse - requires auth!
+            CapabilityInfo(PluginCapability.BROWSE_NEW_RELEASES, requires_auth=True),
+            CapabilityInfo(PluginCapability.BROWSE_FEATURED, requires_auth=True),
+            CapabilityInfo(PluginCapability.BROWSE_GENRES, requires_auth=True),
+            # Entity lookup - requires auth!
+            CapabilityInfo(PluginCapability.GET_ARTIST, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_ALBUM, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_TRACK, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_PLAYLIST, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_ARTIST_ALBUMS, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_ARTIST_TOP_TRACKS, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_RELATED_ARTISTS, requires_auth=True),
+            # User library - requires auth!
+            CapabilityInfo(PluginCapability.USER_PROFILE, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_FOLLOWED_ARTISTS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_SAVED_TRACKS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_SAVED_ALBUMS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_PLAYLISTS, requires_auth=True),
+            # Actions - requires auth!
+            CapabilityInfo(PluginCapability.FOLLOW_ARTIST, requires_auth=True),
+            CapabilityInfo(PluginCapability.UNFOLLOW_ARTIST, requires_auth=True),
+        ]
+
     # =========================================================================
     # TOKEN MANAGEMENT
     # =========================================================================

@@ -131,6 +131,41 @@ class DeezerPlugin(IMusicServicePlugin):
         """Return human-readable service name."""
         return "Deezer"
 
+    def get_capabilities(self) -> list["CapabilityInfo"]:
+        """Get Deezer capabilities with auth requirements.
+
+        Hey future me - Deezer is SPECIAL because most features work WITHOUT auth!
+        Only user-specific features (favorites, playlists) need OAuth.
+
+        Returns:
+            List of capabilities with auth requirements
+        """
+        from soulspot.domain.ports.plugin import CapabilityInfo, PluginCapability
+
+        return [
+            # Public API - NO AUTH NEEDED! 🎉
+            CapabilityInfo(PluginCapability.SEARCH_ARTISTS, requires_auth=False),
+            CapabilityInfo(PluginCapability.SEARCH_ALBUMS, requires_auth=False),
+            CapabilityInfo(PluginCapability.SEARCH_TRACKS, requires_auth=False),
+            CapabilityInfo(PluginCapability.SEARCH_PLAYLISTS, requires_auth=False),
+            CapabilityInfo(PluginCapability.BROWSE_NEW_RELEASES, requires_auth=False),
+            CapabilityInfo(PluginCapability.BROWSE_GENRES, requires_auth=False),
+            CapabilityInfo(PluginCapability.BROWSE_CHARTS, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_ARTIST, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_ALBUM, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_TRACK, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_PLAYLIST, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_ARTIST_ALBUMS, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_ARTIST_TOP_TRACKS, requires_auth=False),
+            CapabilityInfo(PluginCapability.GET_RELATED_ARTISTS, requires_auth=False),
+            # OAuth REQUIRED for user library
+            CapabilityInfo(PluginCapability.USER_PROFILE, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_FOLLOWED_ARTISTS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_SAVED_TRACKS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_SAVED_ALBUMS, requires_auth=True),
+            CapabilityInfo(PluginCapability.USER_PLAYLISTS, requires_auth=True),
+        ]
+
     # =========================================================================
     # AUTHENTICATION (OAuth - optional!)
     # =========================================================================

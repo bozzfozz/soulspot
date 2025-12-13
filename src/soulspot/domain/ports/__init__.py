@@ -10,8 +10,10 @@ from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
 from soulspot.domain.ports.plugin import (
     AuthStatus,
     AuthType,
+    CapabilityInfo,
     IMetadataPlugin,
     IMusicServicePlugin,
+    PluginCapability,
     PluginError,
     ServiceType,
 )

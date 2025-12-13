@@ -132,9 +132,10 @@ class SpotifySyncService:
                 logger.debug("Spotify provider is disabled, skipping artists sync")
                 return stats
 
-            # Hey future me - AUTH CHECK SECOND!
+            # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
             # If user is not authenticated with Spotify, skip operations that need auth.
-            if not self._spotify_plugin.is_authenticated:
+            from soulspot.domain.ports.plugin import PluginCapability
+            if not self._spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping artists sync")
                 return stats
@@ -668,8 +669,9 @@ class SpotifySyncService:
                 logger.debug("Spotify provider is disabled, skipping playlists sync")
                 return stats
 
-            # Hey future me - AUTH CHECK SECOND!
-            if not self._spotify_plugin.is_authenticated:
+            # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
+            from soulspot.domain.ports.plugin import PluginCapability
+            if not self._spotify_plugin.can_use(PluginCapability.USER_PLAYLISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping playlists sync")
                 return stats
@@ -916,8 +918,9 @@ class SpotifySyncService:
                 logger.debug("Spotify provider is disabled, skipping Liked Songs sync")
                 return stats
 
-            # Hey future me - AUTH CHECK SECOND!
-            if not self._spotify_plugin.is_authenticated:
+            # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
+            from soulspot.domain.ports.plugin import PluginCapability
+            if not self._spotify_plugin.can_use(PluginCapability.USER_SAVED_TRACKS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Liked Songs sync")
                 return stats
@@ -1093,8 +1096,9 @@ class SpotifySyncService:
                 logger.debug("Spotify provider is disabled, skipping Saved Albums sync")
                 return stats
 
-            # Hey future me - AUTH CHECK SECOND!
-            if not self._spotify_plugin.is_authenticated:
+            # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
+            from soulspot.domain.ports.plugin import PluginCapability
+            if not self._spotify_plugin.can_use(PluginCapability.USER_SAVED_ALBUMS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Saved Albums sync")
                 return stats

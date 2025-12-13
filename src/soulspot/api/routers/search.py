@@ -137,13 +137,15 @@ async def search_spotify_artists(
     Returns:
         List of matching artists with metadata
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
     if not await settings.is_provider_enabled("spotify"):
         raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    if not spotify_plugin.is_authenticated:
+    # can_use() checks capability + auth in one call
+    if not spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
         raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
 
     try:
@@ -197,13 +199,14 @@ async def search_spotify_tracks(
     Returns:
         List of matching tracks with metadata
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
     if not await settings.is_provider_enabled("spotify"):
         raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    if not spotify_plugin.is_authenticated:
+    if not spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
         raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
 
     try:
@@ -265,13 +268,14 @@ async def search_spotify_albums(
     Returns:
         List of matching albums with metadata
     """
-    # Provider + Auth checks
+    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
     if not await settings.is_provider_enabled("spotify"):
         raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    if not spotify_plugin.is_authenticated:
+    if not spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
         raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
 
     try:
@@ -398,13 +402,15 @@ async def get_search_suggestions(
     Returns:
         List of suggestions with type indicators
     """
-    # Provider + Auth checks - return empty list gracefully
+    # Provider + Auth checks using can_use() - return empty list gracefully
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
     if not await settings.is_provider_enabled("spotify"):
         return []
-    if not spotify_plugin.is_authenticated:
+    # can_use() checks capability + auth - graceful return if not available
+    if not spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
         return []
 
     try:
