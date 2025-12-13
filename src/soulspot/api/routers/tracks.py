@@ -196,9 +196,9 @@ async def search_tracks(
 # Yo future me, this gets ONE track's full details with artist/album names! Uses Depends(get_db_session)
 # to properly manage DB session lifecycle. joinedload() eagerly loads relationships to avoid N+1 queries.
 # The hasattr checks on album are because Album model might not have "artist" or "year" fields depending
-# on how it's set up. genre is hardcoded None (TODO) - should add to Track model. Returns flat dict which
-# is easy for frontend to consume. The unique() call prevents duplicate results when joins create multiple
-# rows. scalar_one_or_none() returns Track or None - perfect for 404 check.
+# on how it's set up. genre field now comes from TrackModel.genre (populated by library scanner from
+# audio file tags). Returns flat dict which is easy for frontend to consume. The unique() call prevents
+# duplicate results when joins create multiple rows. scalar_one_or_none() returns Track or None - perfect for 404 check.
 @router.get("/{track_id}")
 async def get_track(
     track_id: str,

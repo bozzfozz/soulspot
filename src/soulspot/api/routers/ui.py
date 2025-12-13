@@ -1685,10 +1685,10 @@ async def library_album_detail(
 # Yo, this returns an HTMX partial for the metadata editor modal! Uses Depends(get_db_session) to
 # properly manage DB session lifecycle. Queries one track with joinedload for artist/album. Returns
 # error.html partial for 404/400 instead of raising HTTPException - nice HTMX pattern. album_artist
-# and genre are hardcoded None (TODOs) - should add these fields to Track/Album models. year comes
-# from album relationship if it exists. The track_data dict matches what the metadata_editor.html
-# template expects. This is a modal fragment, not full page. Template should have form fields
-# pre-filled with current values.
+# comes from AlbumModel if available, genre comes from TrackModel.genre (populated from audio file
+# tags during library scan). year comes from album relationship if it exists. The track_data dict
+# matches what the metadata_editor.html template expects. This is a modal fragment, not full page.
+# Template should have form fields pre-filled with current values.
 @router.get("/tracks/{track_id}/metadata-editor", response_class=HTMLResponse)
 async def track_metadata_editor(
     request: Request,
