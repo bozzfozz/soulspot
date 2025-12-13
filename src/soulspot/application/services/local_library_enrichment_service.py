@@ -2809,10 +2809,11 @@ class LocalLibraryEnrichmentService:
         all_albums = result.all()
 
         # Group by normalized artist + album title
+        # Hey future me - AlbumModel has 'title' not 'name'! ArtistModel has 'name'.
         groups: dict[str, list[tuple[AlbumModel, str]]] = defaultdict(list)
         for album, artist_name in all_albums:
             normalized_artist = normalize_artist_name(artist_name or "Unknown")
-            normalized_album = normalize_artist_name(album.name or "Unknown")
+            normalized_album = normalize_artist_name(album.title or "Unknown")
             key = f"{normalized_artist}::{normalized_album}"
             groups[key].append((album, artist_name))
 
@@ -2834,11 +2835,12 @@ class LocalLibraryEnrichmentService:
             track_counts = dict(track_counts_result.all())
 
             # Build album info list
+            # Hey future me - AlbumModel has 'title' not 'name'!
             album_infos = []
             for album, artist_name in albums_with_artist:
                 album_infos.append({
                     "id": album.id,
-                    "name": album.name,
+                    "title": album.title,
                     "artist_name": artist_name,
                     "spotify_uri": album.spotify_uri,
                     "artwork_url": album.artwork_url,

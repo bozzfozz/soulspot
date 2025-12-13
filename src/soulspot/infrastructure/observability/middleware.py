@@ -63,34 +63,39 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         client_ip = request.client.host if request.client else "unknown"
 
-        # Log incoming request
-        logger.info(
-            "Request started",
-            extra={
-                "method": method,
-                "path": path,
-                "query_params": str(request.query_params),
-                "client_ip": client_ip,
-                "user_agent": request.headers.get("user-agent", ""),
-            },
-        )
+        # Hey future me - we don't log "Request started" for static files!
+        # It clutters logs. Only log actual API/page requests.
+        is_static = path.startswith("/static/")
+
+        if not is_static:
+            logger.info(
+                f"→ {method} {path}",
+                extra={
+                    "method": method,
+                    "path": path,
+                    "query_params": str(request.query_params),
+                    "client_ip": client_ip,
+                },
+            )
 
         # Process request
         start_time = time.time()
         try:
             response = await call_next(request)
 
-            # Log response
+            # Log response (skip static files)
             duration = time.time() - start_time
-            logger.info(
-                "Request completed",
-                extra={
-                    "method": method,
-                    "path": path,
-                    "status_code": response.status_code,
-                    "duration_seconds": duration,
-                },
-            )
+            if not is_static:
+                status_emoji = "✓" if response.status_code < 400 else "✗"
+                logger.info(
+                    f"{status_emoji} {method} {path} → {response.status_code} ({duration:.0f}ms)",
+                    extra={
+                        "method": method,
+                        "path": path,
+                        "status_code": response.status_code,
+                        "duration_ms": int(duration * 1000),
+                    },
+                )
 
             # Add correlation ID to response headers
             response.headers["X-Correlation-ID"] = get_correlation_id()

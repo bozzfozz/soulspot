@@ -158,12 +158,13 @@ def configure_logging(
         )
     else:
         # Human-readable formatter for development
+        # Hey future me - shorter format! Removes the full module path.
+        # Before: soulspot.infrastructure.observability.middleware
+        # After:  middleware (just the module name)
+        # Also: correlation_id is shortened to 8 chars (first part of UUID)
         formatter = logging.Formatter(
-            fmt=(
-                "%(asctime)s - %(levelname)-8s - %(name)s - "
-                "[%(correlation_id)s] - %(message)s"
-            ),
-            datefmt="%Y-%m-%d %H:%M:%S",
+            fmt="%(asctime)s │ %(levelname)-5s │ %(message)s",
+            datefmt="%H:%M:%S",
         )
 
     handler.setFormatter(formatter)
