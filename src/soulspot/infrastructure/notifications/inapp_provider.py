@@ -18,7 +18,6 @@ from uuid import uuid4
 from soulspot.domain.ports.notification import (
     INotificationProvider,
     Notification,
-    NotificationPriority,
     NotificationResult,
     NotificationType,
 )
@@ -47,7 +46,7 @@ class InAppNotificationProvider(INotificationProvider):
         notification.inapp.max_age_days: int (default 30, auto-cleanup)
         notification.inapp.max_count: int (default 100, per user)
     """
-    
+
     def __init__(self, session: "AsyncSession") -> None:
         """Initialize with database session.
         
@@ -57,38 +56,40 @@ class InAppNotificationProvider(INotificationProvider):
         self._session = session
         self._settings_cache: dict[str, Any] = {}
         self._cache_loaded = False
-    
+
     @property
     def name(self) -> str:
         """Provider name."""
         return "inapp"
-    
+
     @property
     def supported_types(self) -> list[NotificationType]:
         """In-app supports all notification types."""
         return []
-    
+
     async def _load_settings(self) -> None:
         """Load in-app settings from database."""
         if self._cache_loaded:
             return
-        
-        from soulspot.application.services.app_settings_service import AppSettingsService
-        
+
+        from soulspot.application.services.app_settings_service import (
+            AppSettingsService,
+        )
+
         settings_service = AppSettingsService(self._session)
-        
+
         self._settings_cache = {
             "enabled": await settings_service.get_bool("notification.inapp.enabled", True),
             "max_age_days": await settings_service.get_int("notification.inapp.max_age_days", 30),
             "max_count": await settings_service.get_int("notification.inapp.max_count", 100),
         }
         self._cache_loaded = True
-    
+
     def invalidate_cache(self) -> None:
         """Invalidate settings cache."""
         self._cache_loaded = False
         self._settings_cache.clear()
-    
+
     async def is_configured(self) -> bool:
         """Check if in-app notifications are enabled.
         
@@ -97,7 +98,7 @@ class InAppNotificationProvider(INotificationProvider):
         """
         await self._load_settings()
         return bool(self._settings_cache.get("enabled", True))
-    
+
     async def send(self, notification: Notification) -> NotificationResult:
         """Store notification in database.
         
@@ -108,7 +109,7 @@ class InAppNotificationProvider(INotificationProvider):
             NotificationResult with success status
         """
         await self._load_settings()
-        
+
         if not await self.is_configured():
             return NotificationResult(
                 success=False,
@@ -116,29 +117,29 @@ class InAppNotificationProvider(INotificationProvider):
                 notification_type=notification.type,
                 error="In-app notifications disabled",
             )
-        
+
         try:
             # Generate unique ID
             notification_id = str(uuid4())
-            
+
             # Store in database
             await self._store_notification(notification, notification_id)
-            
+
             # Cleanup old notifications if needed
             await self._cleanup_old_notifications()
-            
+
             logger.info(
                 f"[NOTIFICATION] In-app stored: {notification.type.value} - "
                 f"{notification.title[:50]}... (id={notification_id[:8]})"
             )
-            
+
             return NotificationResult(
                 success=True,
                 provider_name=self.name,
                 notification_type=notification.type,
                 external_id=notification_id,
             )
-            
+
         except Exception as e:
             logger.error(f"[NOTIFICATION] In-app storage failed: {e}")
             return NotificationResult(
@@ -147,7 +148,7 @@ class InAppNotificationProvider(INotificationProvider):
                 notification_type=notification.type,
                 error=str(e),
             )
-    
+
     async def _store_notification(
         self, notification: Notification, notification_id: str
     ) -> None:
@@ -156,12 +157,12 @@ class InAppNotificationProvider(INotificationProvider):
         Hey future me - this uses raw SQL insert for now. Could be refactored
         to use a NotificationModel if you prefer ORM style.
         """
-        from sqlalchemy import text
-        
         # Serialize data as JSON
         import json
+
+        from sqlalchemy import text
         data_json = json.dumps(notification.data or {})
-        
+
         query = text("""
             INSERT INTO notifications (
                 id, type, title, message, priority, data,
@@ -171,7 +172,7 @@ class InAppNotificationProvider(INotificationProvider):
                 :created_at, :read, :user_id
             )
         """)
-        
+
         await self._session.execute(
             query,
             {
@@ -187,7 +188,7 @@ class InAppNotificationProvider(INotificationProvider):
             },
         )
         await self._session.commit()
-    
+
     async def _cleanup_old_notifications(self) -> None:
         """Remove old notifications beyond max_age_days.
         
@@ -195,27 +196,28 @@ class InAppNotificationProvider(INotificationProvider):
         Consider running as a background job if notification volume is high.
         """
         from datetime import timedelta
+
         from sqlalchemy import text
-        
+
         max_age_days = int(self._settings_cache.get("max_age_days", 30))
         cutoff_date = datetime.now(UTC) - timedelta(days=max_age_days)
-        
+
         query = text("""
             DELETE FROM notifications
             WHERE created_at < :cutoff_date
         """)
-        
+
         try:
             await self._session.execute(query, {"cutoff_date": cutoff_date})
             await self._session.commit()
         except Exception as e:
             logger.warning(f"[NOTIFICATION] Cleanup failed (non-critical): {e}")
             await self._session.rollback()
-    
+
     # =========================================================================
     # QUERY METHODS (for API/UI use)
     # =========================================================================
-    
+
     async def get_unread_count(self, user_id: str | None = None) -> int:
         """Get count of unread notifications.
         
@@ -226,7 +228,7 @@ class InAppNotificationProvider(INotificationProvider):
             Count of unread notifications
         """
         from sqlalchemy import text
-        
+
         if user_id:
             query = text("""
                 SELECT COUNT(*) FROM notifications
@@ -239,10 +241,10 @@ class InAppNotificationProvider(INotificationProvider):
                 WHERE read = FALSE
             """)
             result = await self._session.execute(query)
-        
+
         row = result.scalar()
         return int(row) if row else 0
-    
+
     async def get_notifications(
         self,
         user_id: str | None = None,
@@ -264,23 +266,23 @@ class InAppNotificationProvider(INotificationProvider):
             List of notification dicts
         """
         from sqlalchemy import text
-        
+
         conditions = []
         params: dict[str, Any] = {"limit": limit, "offset": offset}
-        
+
         if user_id:
             conditions.append("user_id = :user_id")
             params["user_id"] = user_id
-        
+
         if unread_only:
             conditions.append("read = FALSE")
-        
+
         if notification_type:
             conditions.append("type = :type")
             params["type"] = notification_type.value
-        
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = text(f"""
             SELECT id, type, title, message, priority, data, created_at, read, user_id
             FROM notifications
@@ -288,10 +290,10 @@ class InAppNotificationProvider(INotificationProvider):
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
         """)
-        
+
         result = await self._session.execute(query, params)
         rows = result.fetchall()
-        
+
         import json
         return [
             {
@@ -307,7 +309,7 @@ class InAppNotificationProvider(INotificationProvider):
             }
             for row in rows
         ]
-    
+
     async def mark_as_read(
         self, notification_ids: list[str], user_id: str | None = None
     ) -> int:
@@ -321,14 +323,14 @@ class InAppNotificationProvider(INotificationProvider):
             Number of notifications marked as read
         """
         from sqlalchemy import text
-        
+
         if not notification_ids:
             return 0
-        
+
         # Build IN clause with placeholders
         placeholders = ", ".join(f":id_{i}" for i in range(len(notification_ids)))
         params: dict[str, Any] = {f"id_{i}": nid for i, nid in enumerate(notification_ids)}
-        
+
         if user_id:
             query = text(f"""
                 UPDATE notifications
@@ -342,12 +344,12 @@ class InAppNotificationProvider(INotificationProvider):
                 SET read = TRUE
                 WHERE id IN ({placeholders})
             """)
-        
+
         result = await self._session.execute(query, params)
         await self._session.commit()
-        
+
         return result.rowcount
-    
+
     async def mark_all_as_read(self, user_id: str | None = None) -> int:
         """Mark all notifications as read.
         
@@ -358,7 +360,7 @@ class InAppNotificationProvider(INotificationProvider):
             Number of notifications marked as read
         """
         from sqlalchemy import text
-        
+
         if user_id:
             query = text("""
                 UPDATE notifications
@@ -373,10 +375,10 @@ class InAppNotificationProvider(INotificationProvider):
                 WHERE read = FALSE
             """)
             result = await self._session.execute(query)
-        
+
         await self._session.commit()
         return result.rowcount
-    
+
     async def delete_notification(
         self, notification_id: str, user_id: str | None = None
     ) -> bool:
@@ -390,7 +392,7 @@ class InAppNotificationProvider(INotificationProvider):
             True if deleted, False if not found
         """
         from sqlalchemy import text
-        
+
         if user_id:
             query = text("""
                 DELETE FROM notifications
@@ -405,7 +407,7 @@ class InAppNotificationProvider(INotificationProvider):
                 WHERE id = :id
             """)
             result = await self._session.execute(query, {"id": notification_id})
-        
+
         await self._session.commit()
         return result.rowcount > 0
 

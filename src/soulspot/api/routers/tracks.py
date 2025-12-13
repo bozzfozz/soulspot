@@ -171,7 +171,7 @@ async def search_tracks(
             artists_list = [{"name": track_dto.artist_name}]
             if track_dto.additional_artists:
                 artists_list.extend([{"name": a.name} for a in track_dto.additional_artists])
-            
+
             tracks.append(
                 {
                     "id": track_dto.spotify_id,

@@ -276,17 +276,17 @@ class TestNotificationServiceWithProviders:
     
     Hey future me - these tests verify the provider orchestration works!
     """
-    
+
     @pytest.fixture
     def mock_session(self) -> MagicMock:
         """Create mock database session."""
         return MagicMock()
-    
+
     @pytest.fixture
     def service_with_session(self, mock_session: MagicMock) -> NotificationService:
         """Create NotificationService with mock session."""
         return NotificationService(mock_session)
-    
+
     def test_init_with_session(
         self, service_with_session: NotificationService, mock_session: MagicMock
     ) -> None:
@@ -294,27 +294,27 @@ class TestNotificationServiceWithProviders:
         assert service_with_session._session == mock_session
         assert service_with_session._providers is None
         assert service_with_session._providers_initialized is False
-    
+
     def test_invalidate_providers(
         self, service_with_session: NotificationService
     ) -> None:
         """Test that invalidate_providers resets the cache."""
         service_with_session._providers = []
         service_with_session._providers_initialized = True
-        
+
         service_with_session.invalidate_providers()
-        
+
         assert service_with_session._providers is None
         assert service_with_session._providers_initialized is False
-    
+
     async def test_init_providers_no_session(self) -> None:
         """Test provider init returns empty list when no session."""
         service = NotificationService()  # No session
         providers = await service._init_providers()
-        
+
         assert providers == []
         assert service._providers_initialized is True
-    
+
     async def test_send_notification_with_provider(
         self, service_with_session: NotificationService
     ) -> None:
@@ -330,11 +330,11 @@ class TestNotificationServiceWithProviders:
                 notification_type=NotificationType.NEW_RELEASE,
             )
         )
-        
+
         # Inject mock provider
         service_with_session._providers = [mock_provider]
         service_with_session._providers_initialized = True
-        
+
         result = await service_with_session.send_notification(
             notification_type=NotificationType.NEW_RELEASE,
             title="Test Title",
@@ -342,17 +342,17 @@ class TestNotificationServiceWithProviders:
             priority=NotificationPriority.HIGH,
             data={"key": "value"},
         )
-        
+
         assert result is True
         mock_provider.send.assert_called_once()
-        
+
         # Verify notification was built correctly
         call_args = mock_provider.send.call_args[0][0]
         assert isinstance(call_args, Notification)
         assert call_args.type == NotificationType.NEW_RELEASE
         assert call_args.title == "Test Title"
         assert call_args.priority == NotificationPriority.HIGH
-    
+
     async def test_send_notification_provider_failure(
         self, service_with_session: NotificationService
     ) -> None:
@@ -368,19 +368,19 @@ class TestNotificationServiceWithProviders:
                 error="Connection failed",
             )
         )
-        
+
         service_with_session._providers = [mock_provider]
         service_with_session._providers_initialized = True
-        
+
         result = await service_with_session.send_notification(
             notification_type=NotificationType.NEW_RELEASE,
             title="Test",
             message="Test",
         )
-        
+
         # Returns False when all providers fail
         assert result is False
-    
+
     async def test_send_notification_partial_success(
         self, service_with_session: NotificationService
     ) -> None:
@@ -395,7 +395,7 @@ class TestNotificationServiceWithProviders:
                 notification_type=NotificationType.NEW_RELEASE,
             )
         )
-        
+
         fail_provider = MagicMock()
         fail_provider.name = "fail"
         fail_provider.supports.return_value = True
@@ -407,19 +407,19 @@ class TestNotificationServiceWithProviders:
                 error="Failed",
             )
         )
-        
+
         service_with_session._providers = [success_provider, fail_provider]
         service_with_session._providers_initialized = True
-        
+
         result = await service_with_session.send_notification(
             notification_type=NotificationType.NEW_RELEASE,
             title="Test",
             message="Test",
         )
-        
+
         # Returns True if at least one provider succeeds
         assert result is True
-    
+
     async def test_provider_exception_handling(
         self, service_with_session: NotificationService
     ) -> None:
@@ -428,47 +428,47 @@ class TestNotificationServiceWithProviders:
         mock_provider.name = "crashing"
         mock_provider.supports.return_value = True
         mock_provider.send = AsyncMock(side_effect=Exception("Provider crashed"))
-        
+
         service_with_session._providers = [mock_provider]
         service_with_session._providers_initialized = True
-        
+
         # Should not raise, should return False
         result = await service_with_session.send_notification(
             notification_type=NotificationType.NEW_RELEASE,
             title="Test",
             message="Test",
         )
-        
+
         assert result is False
-    
+
     async def test_send_sync_completed_notification(self) -> None:
         """Test send_sync_completed_notification method."""
         service = NotificationService()
-        
+
         result = await service.send_sync_completed_notification(
             service_name="Spotify",
             items_synced=100,
             errors=5,
         )
-        
+
         assert result is True
-    
+
     async def test_send_system_error_notification(self) -> None:
         """Test send_system_error_notification method."""
         service = NotificationService()
-        
+
         result = await service.send_system_error_notification(
             error_type="DatabaseError",
             error_message="Connection lost",
             context={"db_host": "localhost"},
         )
-        
+
         assert result is True
 
 
 class TestNotificationTypes:
     """Tests for Notification and NotificationResult dataclasses."""
-    
+
     def test_notification_creation(self) -> None:
         """Test creating a Notification object."""
         notif = Notification(
@@ -476,14 +476,14 @@ class TestNotificationTypes:
             title="Test",
             message="Test message",
         )
-        
+
         assert notif.type == NotificationType.NEW_RELEASE
         assert notif.title == "Test"
         assert notif.message == "Test message"
         assert notif.priority == NotificationPriority.NORMAL
         assert notif.data == {}
         assert notif.timestamp is not None
-    
+
     def test_notification_result_success(self) -> None:
         """Test creating successful NotificationResult."""
         result = NotificationResult(
@@ -491,11 +491,11 @@ class TestNotificationTypes:
             provider_name="email",
             notification_type=NotificationType.NEW_RELEASE,
         )
-        
+
         assert result.success is True
         assert result.provider_name == "email"
         assert result.error is None
-    
+
     def test_notification_result_failure(self) -> None:
         """Test creating failure NotificationResult."""
         result = NotificationResult(
@@ -504,6 +504,6 @@ class TestNotificationTypes:
             notification_type=NotificationType.DOWNLOAD_FAILED,
             error="Connection timeout",
         )
-        
+
         assert result.success is False
         assert result.error == "Connection timeout"

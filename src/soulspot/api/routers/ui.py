@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -1408,7 +1409,10 @@ async def library_tracks(
     from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel, TrackModel
+    from soulspot.infrastructure.persistence.models import (
+        ArtistModel,
+        TrackModel,
+    )
 
     # Get total count of tracks with local files (for pagination)
     count_stmt = select(func.count(TrackModel.id)).where(
@@ -1543,6 +1547,7 @@ async def library_artist_detail(
             from soulspot.application.services.followed_artists_service import (
                 FollowedArtistsService,
             )
+            from soulspot.config import get_settings
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
@@ -1550,7 +1555,6 @@ async def library_artist_detail(
                 DatabaseTokenManager,
             )
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-            from soulspot.config import get_settings
 
             if hasattr(request.app.state, "db_token_manager"):
                 db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
@@ -2063,7 +2067,7 @@ async def browse_new_releases_page(
     Returns:
         HTML page with combined new releases from all sources
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from sqlalchemy import select
 
@@ -2142,7 +2146,7 @@ async def browse_new_releases_page(
     # -------------------------------------------------------------------------
     if spotify_enabled:
         try:
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff_date = datetime.now(UTC) - timedelta(days=days)
             cutoff_str = cutoff_date.strftime("%Y-%m-%d")
 
             # Build album type filter
