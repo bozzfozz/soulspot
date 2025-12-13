@@ -121,6 +121,7 @@ class SpotifySyncService:
             "skipped_cooldown": False,
             "skipped_disabled": False,
             "skipped_provider_disabled": False,
+            "skipped_not_authenticated": False,
         }
 
         try:
@@ -129,6 +130,13 @@ class SpotifySyncService:
             if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping artists sync")
+                return stats
+
+            # Hey future me - AUTH CHECK SECOND!
+            # If user is not authenticated with Spotify, skip operations that need auth.
+            if not self._spotify_plugin.is_authenticated:
+                stats["skipped_not_authenticated"] = True
+                logger.debug("Spotify not authenticated, skipping artists sync")
                 return stats
 
             # Check if artists sync is enabled (feature-level)
@@ -650,6 +658,7 @@ class SpotifySyncService:
             "skipped_cooldown": False,
             "skipped_disabled": False,
             "skipped_provider_disabled": False,
+            "skipped_not_authenticated": False,
         }
 
         try:
@@ -657,6 +666,12 @@ class SpotifySyncService:
             if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping playlists sync")
+                return stats
+
+            # Hey future me - AUTH CHECK SECOND!
+            if not self._spotify_plugin.is_authenticated:
+                stats["skipped_not_authenticated"] = True
+                logger.debug("Spotify not authenticated, skipping playlists sync")
                 return stats
 
             # Check if playlist sync is enabled (feature-level)
@@ -891,6 +906,7 @@ class SpotifySyncService:
             "skipped_cooldown": False,
             "skipped_disabled": False,
             "skipped_provider_disabled": False,
+            "skipped_not_authenticated": False,
         }
 
         try:
@@ -898,6 +914,12 @@ class SpotifySyncService:
             if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Liked Songs sync")
+                return stats
+
+            # Hey future me - AUTH CHECK SECOND!
+            if not self._spotify_plugin.is_authenticated:
+                stats["skipped_not_authenticated"] = True
+                logger.debug("Spotify not authenticated, skipping Liked Songs sync")
                 return stats
 
             # Check if Liked Songs sync is enabled (feature-level)
@@ -1061,6 +1083,7 @@ class SpotifySyncService:
             "skipped_cooldown": False,
             "skipped_disabled": False,
             "skipped_provider_disabled": False,
+            "skipped_not_authenticated": False,
         }
 
         try:
@@ -1068,6 +1091,12 @@ class SpotifySyncService:
             if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Saved Albums sync")
+                return stats
+
+            # Hey future me - AUTH CHECK SECOND!
+            if not self._spotify_plugin.is_authenticated:
+                stats["skipped_not_authenticated"] = True
+                logger.debug("Spotify not authenticated, skipping Saved Albums sync")
                 return stats
 
             # Check if Saved Albums sync is enabled (feature-level)

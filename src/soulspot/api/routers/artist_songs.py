@@ -141,6 +141,13 @@ async def sync_artist_songs(
             detail="Spotify provider is disabled in settings. Enable it to sync songs.",
         )
 
+    # Check if user is authenticated with Spotify
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         artist_id_obj = ArtistId.from_string(artist_id)
     except ValueError as e:
@@ -225,6 +232,13 @@ async def sync_all_artists_songs(
         raise HTTPException(
             status_code=503,
             detail="Spotify provider is disabled in settings. Enable it to sync songs.",
+        )
+
+    # Check if user is authenticated with Spotify
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
         )
 
     service = ArtistSongsService(

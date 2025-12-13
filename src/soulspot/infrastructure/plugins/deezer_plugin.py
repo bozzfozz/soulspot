@@ -96,6 +96,26 @@ class DeezerPlugin(IMusicServicePlugin):
         self._client = client or DeezerClient()
         self._access_token = access_token
 
+    # =========================================================================
+    # QUICK AUTH CHECK
+    # =========================================================================
+
+    @property
+    def is_authenticated(self) -> bool:
+        """Check if we have an access token (quick check, no API call).
+
+        Hey future me - use this for pre-flight checks before starting operations!
+        Unlike get_auth_status(), this doesn't validate the token with Deezer.
+        Token might be expired, but this tells you if auth was ever done.
+
+        Important: Many Deezer features work WITHOUT auth (public API)!
+        Use this to check if USER-SPECIFIC operations are available.
+
+        Returns:
+            True if an access token is set, False otherwise
+        """
+        return self._access_token is not None
+
     @property
     def service_type(self) -> ServiceType:
         """Return Deezer service type."""

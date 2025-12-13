@@ -152,6 +152,30 @@ class IMusicServicePlugin(ABC):
         """
         ...
 
+    @property
+    @abstractmethod
+    def is_authenticated(self) -> bool:
+        """
+        Quick check if authentication tokens are available.
+
+        Hey future me - this is a FAST synchronous check!
+        Unlike get_auth_status(), this doesn't validate the token with the service.
+        Token might be expired, but this tells you if auth was ever done.
+
+        Use this for:
+        - Pre-flight checks before starting operations
+        - Deciding whether to show "connect" vs "disconnect" buttons
+        - Quick auth state checks in UI
+
+        Don't use this for:
+        - Verifying token validity (use get_auth_status())
+        - Knowing token expiry time
+
+        Returns:
+            True if an access token is set, False otherwise
+        """
+        ...
+
     # =========================================================================
     # AUTHENTICATION METHODS
     # =========================================================================

@@ -169,6 +169,33 @@ mode = await settings.get_provider_mode("deezer")  # Returns "off", "basic", "pr
 await settings.set_provider_mode("deezer", "basic")
 ```
 
+**Authentication Check (USE THESE PROPERTIES!):**
+```python
+# Quick check if user has authenticated (has token)
+if not spotify_plugin.is_authenticated:
+    return {"skipped_not_authenticated": True}
+
+# Full validation (makes API call) - use sparingly!
+auth_status = await spotify_plugin.get_auth_status()
+if not auth_status.is_authenticated:
+    # Token expired or invalid
+    ...
+```
+
+**Complete Check Pattern (PROVIDER + AUTH):**
+```python
+# 1. FIRST: Provider enabled?
+if not await settings.is_provider_enabled("spotify"):
+    return {"skipped_provider_disabled": True}
+
+# 2. SECOND: User authenticated?
+if not spotify_plugin.is_authenticated:
+    return {"skipped_not_authenticated": True}
+
+# 3. THEN: Do the operation
+result = await spotify_plugin.get_followed_artists()
+```
+
 **Provider Modes:**
 - `off` = Disabled completely
 - `basic` = Enabled with basic features (metadata/browse)

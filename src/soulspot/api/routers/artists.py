@@ -138,6 +138,13 @@ async def sync_followed_artists(
             detail="Spotify provider is disabled in settings. Enable it to sync artists.",
         )
 
+    # Check if user is authenticated with Spotify
+    if not spotify_plugin.is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated with Spotify. Please connect your account first.",
+        )
+
     try:
         service = FollowedArtistsService(
             session=session,

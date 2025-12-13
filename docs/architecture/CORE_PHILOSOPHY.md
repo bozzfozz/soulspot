@@ -67,10 +67,38 @@ async def get_new_releases():
 
 ### Service Availability
 Services can be disabled in two ways:
-1. **Not Configured**: User hasn't set up credentials (e.g., no Spotify OAuth)
-2. **Explicitly Disabled**: User toggled off in Settings
+1. **Provider Disabled**: User toggled "off" in Settings (is_provider_enabled check)
+2. **Not Authenticated**: User hasn't completed OAuth flow (is_authenticated check)
 
-Check both before querying a service.
+**Check Order (IMPORTANT!)**:
+```python
+# 1. FIRST: Check if provider is enabled
+if not await settings.is_provider_enabled("spotify"):
+    return {"skipped_provider_disabled": True}
+
+# 2. SECOND: Check if user is authenticated
+if not spotify_plugin.is_authenticated:
+    return {"skipped_not_authenticated": True}
+
+# 3. THEN: Do the actual operation
+result = await spotify_plugin.get_followed_artists()
+```
+
+**Why this order?**
+- Provider check is cheap (DB lookup)
+- Auth check is cheap (memory check)
+- API calls are expensive (network + rate limits)
+- Don't waste API calls if user disabled the service
+
+### What "Not Authenticated" Means
+- `is_authenticated`: Quick sync check - "do we have a token?"
+- Does NOT validate the token (it might be expired)
+- Use `get_auth_status()` for full validation (makes API call)
+
+**For Services Without Auth (Deezer Public API)**:
+- Deezer browse/search works WITHOUT auth
+- Only user-specific operations (my playlists, my favorites) need auth
+- Check `is_authenticated` only for user-specific operations
 
 ## 4. Download Management (The "Two Queue" System)
 SoulSpot uses external downloaders (like **Soulseek/slskd**) but maintains strict control over them.
