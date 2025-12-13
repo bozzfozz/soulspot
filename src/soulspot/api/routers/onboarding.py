@@ -271,12 +271,12 @@ async def test_slskd_connection(
                 message="Zugriff verweigert",
                 error="API-Key oder Benutzer hat keine Berechtigung",
             )
-            else:
-                return SlskdTestResponse(
-                    success=False,
-                    message=f"Unerwarteter Status: {response.status_code}",
-                    error=response.text[:200] if response.text else "Keine Details",
-                )
+        else:
+            return SlskdTestResponse(
+                success=False,
+                message=f"Unerwarteter Status: {response.status_code}",
+                error=response.text[:200] if response.text else "Keine Details",
+            )
 
     except httpx.ConnectError:
         return SlskdTestResponse(

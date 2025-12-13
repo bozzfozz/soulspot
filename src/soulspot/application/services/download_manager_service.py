@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.domain.entities import Download, DownloadStatus, Track
+from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
     DownloadProvider,
@@ -389,10 +389,9 @@ class DownloadManagerService:
         # Determine provider from source_url
         provider = DownloadProvider.UNKNOWN
         provider_name = "Unknown"
-        if model.source_url:
-            if model.source_url.startswith("slskd://"):
-                provider = DownloadProvider.SOULSEEK
-                provider_name = "slskd"
+        if model.source_url and model.source_url.startswith("slskd://"):
+            provider = DownloadProvider.SOULSEEK
+            provider_name = "slskd"
 
         return UnifiedDownload(
             id=DownloadId(model.id),

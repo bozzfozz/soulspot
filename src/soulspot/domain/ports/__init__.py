@@ -10,7 +10,6 @@ from soulspot.domain.ports.download_provider import (
     IDownloadProvider,
     IDownloadProviderRegistry,
     ProviderDownload,
-    ProviderHealth,
 )
 
 # Notification system interfaces
@@ -1167,7 +1166,7 @@ class ISessionRepository(ABC):
     @abstractmethod
     async def get(self, session_id: str) -> Any | None:
         """Get session by ID and update last accessed time.
-        
+
         Implements sliding expiration - updates last_accessed_at on each access.
         """
         pass
@@ -1185,7 +1184,7 @@ class ISessionRepository(ABC):
     @abstractmethod
     async def cleanup_expired(self, max_age_seconds: int) -> int:
         """Delete sessions not accessed in max_age_seconds.
-        
+
         Returns number of sessions deleted.
         """
         pass

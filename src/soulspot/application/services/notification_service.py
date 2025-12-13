@@ -11,7 +11,7 @@ Architecture:
 Usage:
     notification_service = NotificationService(session)
     await notification_service.send_new_release_notification("Artist", "Album", "2025-01-01")
-    
+
 The service will automatically:
 1. Load enabled providers from settings
 2. Build Notification object
@@ -40,19 +40,19 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
     """Service for sending notifications through multiple providers.
-    
+
     Hey future me - this orchestrates Email, Webhook, and In-App notifications!
     Each notification is sent to ALL enabled providers in parallel.
-    
+
     Providers are initialized lazily and cached. Call invalidate_providers()
     after settings change to reload them.
-    
+
     Example:
         service = NotificationService(session)
-        
+
         # Send new release notification
         await service.send_new_release_notification("Radiohead", "Kid A", "2000-10-02")
-        
+
         # Send custom notification
         await service.send_notification(
             notification_type=NotificationType.CUSTOM,
@@ -64,7 +64,7 @@ class NotificationService:
 
     def __init__(self, session: "AsyncSession | None" = None) -> None:
         """Initialize notification service.
-        
+
         Args:
             session: Optional SQLAlchemy async session. If not provided,
                     falls back to logging-only mode for backward compatibility.
@@ -75,7 +75,7 @@ class NotificationService:
 
     async def _init_providers(self) -> list[INotificationProvider]:
         """Initialize and return enabled providers.
-        
+
         Hey future me - this lazily initializes providers on first use!
         Caches the list to avoid re-initialization on every notification.
         """
@@ -116,7 +116,7 @@ class NotificationService:
 
     def invalidate_providers(self) -> None:
         """Invalidate provider cache to force reload.
-        
+
         Call this after notification settings change.
         """
         self._providers = None
@@ -132,9 +132,9 @@ class NotificationService:
         user_id: str | None = None,
     ) -> bool:
         """Send notification to all configured providers.
-        
+
         Hey future me - this is the CORE method! All other send_* methods call this.
-        
+
         Args:
             notification_type: Type of notification
             title: Short title
@@ -142,7 +142,7 @@ class NotificationService:
             priority: Priority level (affects delivery urgency)
             data: Optional additional data (shown in details)
             user_id: Optional user ID for in-app notifications
-            
+
         Returns:
             True if at least one provider succeeded
         """
@@ -187,7 +187,7 @@ class NotificationService:
         self, notification: Notification, providers: list[INotificationProvider]
     ) -> list[NotificationResult]:
         """Send notification to multiple providers in parallel.
-        
+
         Hey future me - uses asyncio.gather for parallel sending!
         One slow provider won't block others.
         """
@@ -225,7 +225,7 @@ class NotificationService:
         self, provider: INotificationProvider, notification: Notification
     ) -> NotificationResult:
         """Send to a single provider with error handling.
-        
+
         Hey future me - wraps provider.send() with try/except!
         Individual provider failures don't crash the whole service.
         """
@@ -251,12 +251,12 @@ class NotificationService:
         self, artist_name: str, album_name: str, release_date: str
     ) -> bool:
         """Send notification about a new release.
-        
+
         Args:
             artist_name: Name of the artist
             album_name: Name of the album
             release_date: Release date
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -276,12 +276,12 @@ class NotificationService:
         self, artist_name: str, missing_count: int, total_count: int
     ) -> bool:
         """Send notification about missing albums.
-        
+
         Args:
             artist_name: Name of the artist
             missing_count: Number of missing albums
             total_count: Total number of albums
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -311,12 +311,12 @@ class NotificationService:
         self, track_title: str, current_quality: str, target_quality: str
     ) -> bool:
         """Send notification about quality upgrade opportunity.
-        
+
         Args:
             track_title: Title of the track
             current_quality: Current quality (format and bitrate)
             target_quality: Target quality (format and bitrate)
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -339,11 +339,11 @@ class NotificationService:
         self, trigger: str, context: dict[str, Any]
     ) -> bool:
         """Send generic automation notification.
-        
+
         Args:
             trigger: Trigger type (new_release, missing_album, quality_upgrade)
             context: Context information
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -372,11 +372,11 @@ class NotificationService:
         self, item_name: str, quality_profile: str
     ) -> bool:
         """Send notification about download starting.
-        
+
         Args:
             item_name: Name of the item being downloaded
             quality_profile: Quality profile used
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -395,11 +395,11 @@ class NotificationService:
         self, item_name: str, success: bool
     ) -> bool:
         """Send notification about download completion.
-        
+
         Args:
             item_name: Name of the item downloaded
             success: Whether download was successful
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -428,12 +428,12 @@ class NotificationService:
         self, service_name: str, items_synced: int, errors: int = 0
     ) -> bool:
         """Send notification about sync completion.
-        
+
         Args:
             service_name: Name of the service (e.g., 'Spotify', 'Deezer')
             items_synced: Number of items synced
             errors: Number of errors encountered
-            
+
         Returns:
             True if notification was sent successfully
         """
@@ -456,12 +456,12 @@ class NotificationService:
         self, error_type: str, error_message: str, context: dict[str, Any] | None = None
     ) -> bool:
         """Send notification about a system error.
-        
+
         Args:
             error_type: Type of error (e.g., 'DatabaseError', 'APIError')
             error_message: Error message
             context: Optional context data
-            
+
         Returns:
             True if notification was sent successfully
         """

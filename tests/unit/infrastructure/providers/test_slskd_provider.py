@@ -4,7 +4,6 @@ Tests the provider that fetches download status from slskd API
 and converts it to our unified model.
 """
 
-from datetime import datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,10 +14,9 @@ from soulspot.domain.entities.download_manager import (
 )
 from soulspot.domain.ports import ISlskdClient
 from soulspot.infrastructure.providers.slskd_provider import (
-    SLSKD_STATUS_MAP,
+    SLSKD_STATE_MAPPING,
     SlskdDownloadProvider,
 )
-
 
 # Hey future me - these tests verify the slskd provider correctly:
 # 1. Maps slskd status strings to UnifiedDownloadStatus
@@ -32,31 +30,31 @@ class TestStatusMapping:
 
     def test_inprogress_maps_to_downloading(self) -> None:
         """InProgress should map to DOWNLOADING."""
-        assert SLSKD_STATUS_MAP["inprogress"] == UnifiedDownloadStatus.DOWNLOADING
+        assert SLSKD_STATE_MAPPING["inprogress"] == UnifiedDownloadStatus.DOWNLOADING
 
     def test_downloading_maps_to_downloading(self) -> None:
         """Downloading alias should map to DOWNLOADING."""
-        assert SLSKD_STATUS_MAP["downloading"] == UnifiedDownloadStatus.DOWNLOADING
+        assert SLSKD_STATE_MAPPING["downloading"] == UnifiedDownloadStatus.DOWNLOADING
 
     def test_completed_maps_to_completed(self) -> None:
         """Completed should map to COMPLETED."""
-        assert SLSKD_STATUS_MAP["completed"] == UnifiedDownloadStatus.COMPLETED
+        assert SLSKD_STATE_MAPPING["completed"] == UnifiedDownloadStatus.COMPLETED
 
     def test_succeeded_maps_to_completed(self) -> None:
         """Succeeded alias should map to COMPLETED."""
-        assert SLSKD_STATUS_MAP["succeeded"] == UnifiedDownloadStatus.COMPLETED
+        assert SLSKD_STATE_MAPPING["succeeded"] == UnifiedDownloadStatus.COMPLETED
 
     def test_queued_maps_to_queued(self) -> None:
         """Queued should map to QUEUED."""
-        assert SLSKD_STATUS_MAP["queued"] == UnifiedDownloadStatus.QUEUED
+        assert SLSKD_STATE_MAPPING["queued"] == UnifiedDownloadStatus.QUEUED
 
     def test_errored_maps_to_failed(self) -> None:
         """Errored should map to FAILED."""
-        assert SLSKD_STATUS_MAP["errored"] == UnifiedDownloadStatus.FAILED
+        assert SLSKD_STATE_MAPPING["errored"] == UnifiedDownloadStatus.FAILED
 
     def test_cancelled_maps_to_cancelled(self) -> None:
         """Cancelled should map to CANCELLED."""
-        assert SLSKD_STATUS_MAP["cancelled"] == UnifiedDownloadStatus.CANCELLED
+        assert SLSKD_STATE_MAPPING["cancelled"] == UnifiedDownloadStatus.CANCELLED
 
 
 class TestSlskdDownloadProvider:

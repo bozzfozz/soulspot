@@ -196,15 +196,15 @@ class LyricsService:
             response.raise_for_status()
             data = response.json()
 
-                # Get first hit
-                hits = data.get("response", {}).get("hits", [])
-                if not hits:
-                    return None
-
-                # Note: We would need to scrape the lyrics URL here
-                # For now, just return None to indicate not implemented
-                logger.debug("Genius API integration requires web scraping")
+            # Get first hit
+            hits = data.get("response", {}).get("hits", [])
+            if not hits:
                 return None
+
+            # Note: We would need to scrape the lyrics URL here
+            # For now, just return None to indicate not implemented
+            logger.debug("Genius API integration requires web scraping")
+            return None
 
         except Exception as e:
             logger.exception("Error fetching lyrics from Genius: %s", e)
@@ -247,37 +247,37 @@ class LyricsService:
             response.raise_for_status()
             data = response.json()
 
-                track_list = (
-                    data.get("message", {}).get("body", {}).get("track_list", [])
-                )
-                if not track_list:
-                    return None
+            track_list = (
+                data.get("message", {}).get("body", {}).get("track_list", [])
+            )
+            if not track_list:
+                return None
 
-                # Get track ID
-                track_id = track_list[0].get("track", {}).get("track_id")
-                if not track_id:
-                    return None
+            # Get track ID
+            track_id = track_list[0].get("track", {}).get("track_id")
+            if not track_id:
+                return None
 
-                # Fetch lyrics
-                lyrics_params: dict[str, str | int] = {
-                    "apikey": self._musixmatch_api_key,
-                    "track_id": track_id,
-                }
-                lyrics_response = await client.get(
-                    f"{self.MUSIXMATCH_API_BASE}/track.lyrics.get",
-                    params=lyrics_params,
-                )
-                lyrics_response.raise_for_status()
-                lyrics_data = lyrics_response.json()
+            # Fetch lyrics
+            lyrics_params: dict[str, str | int] = {
+                "apikey": self._musixmatch_api_key,
+                "track_id": track_id,
+            }
+            lyrics_response = await client.get(
+                f"{self.MUSIXMATCH_API_BASE}/track.lyrics.get",
+                params=lyrics_params,
+            )
+            lyrics_response.raise_for_status()
+            lyrics_data = lyrics_response.json()
 
-                lyrics_body: str | None = (
-                    lyrics_data.get("message", {})
-                    .get("body", {})
-                    .get("lyrics", {})
-                    .get("lyrics_body")
-                )
+            lyrics_body: str | None = (
+                lyrics_data.get("message", {})
+                .get("body", {})
+                .get("lyrics", {})
+                .get("lyrics_body")
+            )
 
-                return lyrics_body
+            return lyrics_body
 
         except Exception as e:
             logger.exception("Error fetching lyrics from Musixmatch: %s", e)

@@ -127,7 +127,7 @@ class EnrichMetadataMultiSourceUseCase(
         self, track: Track
     ) -> dict[str, Any] | None:
         """Fetch metadata from Spotify via Plugin.
-        
+
         Hey future me - Plugin handles token internally! No more access_token param.
         Returns dict for backward compatibility with MetadataMerger.
         """

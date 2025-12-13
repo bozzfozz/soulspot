@@ -20,7 +20,7 @@ from typing import Any
 
 class NotificationType(str, Enum):
     """Types of notifications that can be sent.
-    
+
     Hey future me - add new types here when you add new notification events!
     The type is used for filtering and provider routing.
     """
@@ -38,7 +38,7 @@ class NotificationType(str, Enum):
 
 class NotificationPriority(str, Enum):
     """Priority levels for notifications.
-    
+
     Hey future me - providers can use this to decide urgency:
     - LOW: Batch together, send daily digest
     - NORMAL: Send when convenient (within minutes)
@@ -54,10 +54,10 @@ class NotificationPriority(str, Enum):
 @dataclass
 class Notification:
     """Notification data object for passing to providers.
-    
+
     Hey future me - this is the PAYLOAD that providers receive!
     Keep it provider-agnostic. Each provider formats it for their channel.
-    
+
     Example:
         notif = Notification(
             type=NotificationType.NEW_RELEASE,
@@ -88,7 +88,7 @@ class Notification:
 @dataclass
 class NotificationResult:
     """Result of sending a notification.
-    
+
     Hey future me - providers return this to indicate success/failure!
     The error field contains details if success=False.
     """
@@ -101,22 +101,22 @@ class NotificationResult:
 
 class INotificationProvider(ABC):
     """Interface for notification providers.
-    
+
     Hey future me - this is THE CONTRACT for all notification channels!
     Implement this for Email, Webhook, Push, In-App, etc.
-    
+
     Each provider must:
     1. Have a unique name (for settings/routing)
     2. Declare which notification types it supports
     3. Implement send() to actually deliver the notification
     4. Implement is_configured() to check if credentials are set
-    
+
     Example implementation:
         class EmailProvider(INotificationProvider):
             @property
             def name(self) -> str:
                 return "email"
-            
+
             async def send(self, notification: Notification) -> NotificationResult:
                 # Send email via SMTP
                 ...
@@ -132,7 +132,7 @@ class INotificationProvider(ABC):
     @abstractmethod
     def supported_types(self) -> list[NotificationType]:
         """List of notification types this provider can handle.
-        
+
         Return empty list to support ALL types.
         """
         pass
@@ -140,10 +140,10 @@ class INotificationProvider(ABC):
     @abstractmethod
     async def send(self, notification: Notification) -> NotificationResult:
         """Send a notification through this provider.
-        
+
         Args:
             notification: The notification to send
-            
+
         Returns:
             NotificationResult indicating success/failure
         """
@@ -152,7 +152,7 @@ class INotificationProvider(ABC):
     @abstractmethod
     async def is_configured(self) -> bool:
         """Check if this provider is properly configured.
-        
+
         Returns:
             True if provider has all required settings (credentials, URLs, etc.)
         """
@@ -160,10 +160,10 @@ class INotificationProvider(ABC):
 
     def supports(self, notification_type: NotificationType) -> bool:
         """Check if this provider supports a notification type.
-        
+
         Args:
             notification_type: Type to check
-            
+
         Returns:
             True if supported (or if provider supports all types)
         """

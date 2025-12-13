@@ -304,7 +304,9 @@ async def create_album_download(
 
     if request.spotify_id:
         try:
-            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+            from soulspot.infrastructure.integrations.spotify_client import (
+                SpotifyClient,
+            )
             from soulspot.infrastructure.plugins import SpotifyPlugin
 
             # Get token from session (via app state or request)

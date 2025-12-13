@@ -23,12 +23,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.ports import ISlskdClient
-from soulspot.domain.value_objects import TrackId
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
 
 logger = logging.getLogger(__name__)

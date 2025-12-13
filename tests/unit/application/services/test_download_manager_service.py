@@ -4,31 +4,26 @@ Tests the service that aggregates download status from providers
 and enriches with SoulSpot track metadata.
 """
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.services.download_manager_service import (
+    SOULSPOT_STATUS_MAPPING,
     DownloadManagerConfig,
     DownloadManagerService,
-    SOULSPOT_STATUS_MAPPING,
 )
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
-    DownloadProvider,
     QueueStatistics,
     TrackInfo,
-    UnifiedDownload,
     UnifiedDownloadStatus,
 )
 from soulspot.domain.ports.download_provider import (
     IDownloadProviderRegistry,
-    ProviderDownload,
 )
-
 
 # Hey future me - these tests verify the service correctly:
 # 1. Maps SoulSpot DownloadStatus to UnifiedDownloadStatus

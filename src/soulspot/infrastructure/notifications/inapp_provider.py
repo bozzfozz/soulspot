@@ -30,17 +30,17 @@ logger = logging.getLogger(__name__)
 
 class InAppNotificationProvider(INotificationProvider):
     """In-app notification provider storing notifications in database.
-    
+
     Hey future me - this is for showing notifications IN THE WEB UI!
     Notifications are stored in the `notifications` table (see migration).
-    
+
     Features:
     - Persistent storage with timestamps
     - Read/unread status tracking
     - Pagination support
     - Type-based filtering
     - Auto-cleanup of old notifications
-    
+
     Config keys in app_settings:
         notification.inapp.enabled: bool (default True)
         notification.inapp.max_age_days: int (default 30, auto-cleanup)
@@ -49,7 +49,7 @@ class InAppNotificationProvider(INotificationProvider):
 
     def __init__(self, session: "AsyncSession") -> None:
         """Initialize with database session.
-        
+
         Args:
             session: SQLAlchemy async session
         """
@@ -92,7 +92,7 @@ class InAppNotificationProvider(INotificationProvider):
 
     async def is_configured(self) -> bool:
         """Check if in-app notifications are enabled.
-        
+
         In-app notifications are always available (DB-backed),
         just need to check if enabled.
         """
@@ -101,10 +101,10 @@ class InAppNotificationProvider(INotificationProvider):
 
     async def send(self, notification: Notification) -> NotificationResult:
         """Store notification in database.
-        
+
         Args:
             notification: Notification to store
-            
+
         Returns:
             NotificationResult with success status
         """
@@ -153,7 +153,7 @@ class InAppNotificationProvider(INotificationProvider):
         self, notification: Notification, notification_id: str
     ) -> None:
         """Store notification in database.
-        
+
         Hey future me - this uses raw SQL insert for now. Could be refactored
         to use a NotificationModel if you prefer ORM style.
         """
@@ -191,7 +191,7 @@ class InAppNotificationProvider(INotificationProvider):
 
     async def _cleanup_old_notifications(self) -> None:
         """Remove old notifications beyond max_age_days.
-        
+
         Hey future me - this runs on every insert but is cheap (single DELETE).
         Consider running as a background job if notification volume is high.
         """
@@ -220,10 +220,10 @@ class InAppNotificationProvider(INotificationProvider):
 
     async def get_unread_count(self, user_id: str | None = None) -> int:
         """Get count of unread notifications.
-        
+
         Args:
             user_id: Optional user ID filter
-            
+
         Returns:
             Count of unread notifications
         """
@@ -254,14 +254,14 @@ class InAppNotificationProvider(INotificationProvider):
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Get notifications with filtering and pagination.
-        
+
         Args:
             user_id: Optional user ID filter
             unread_only: If True, only return unread notifications
             notification_type: Optional type filter
             limit: Max notifications to return
             offset: Pagination offset
-            
+
         Returns:
             List of notification dicts
         """
@@ -314,11 +314,11 @@ class InAppNotificationProvider(INotificationProvider):
         self, notification_ids: list[str], user_id: str | None = None
     ) -> int:
         """Mark notifications as read.
-        
+
         Args:
             notification_ids: List of notification IDs to mark
             user_id: Optional user ID for ownership check
-            
+
         Returns:
             Number of notifications marked as read
         """
@@ -352,10 +352,10 @@ class InAppNotificationProvider(INotificationProvider):
 
     async def mark_all_as_read(self, user_id: str | None = None) -> int:
         """Mark all notifications as read.
-        
+
         Args:
             user_id: Optional user ID filter
-            
+
         Returns:
             Number of notifications marked as read
         """
@@ -383,11 +383,11 @@ class InAppNotificationProvider(INotificationProvider):
         self, notification_id: str, user_id: str | None = None
     ) -> bool:
         """Delete a specific notification.
-        
+
         Args:
             notification_id: ID of notification to delete
             user_id: Optional user ID for ownership check
-            
+
         Returns:
             True if deleted, False if not found
         """

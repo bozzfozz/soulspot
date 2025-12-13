@@ -1497,12 +1497,12 @@ async def library_artist_detail(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Artist detail page with albums and tracks.
-    
+
     Hey future me - UNIFIED Music Manager view!
     Shows ALL albums for this artist (LOCAL + SPOTIFY):
     - Albums with local files → Show tracks
     - Spotify albums (no local files yet) → Show album card with download button
-    
+
     This works for all source types:
     - LOCAL artists → Show albums from file scans
     - SPOTIFY artists → Show albums from Spotify API sync

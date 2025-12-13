@@ -840,7 +840,6 @@ from soulspot.domain.entities.download_manager import (
     UnifiedDownloadStatus,
 )
 
-
 __all__ = [
     # Existing entities
     "Artist",

@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from soulspot.api.dependencies import get_db_session
 from soulspot.application.services.download_manager_service import (
@@ -24,7 +24,6 @@ from soulspot.application.services.download_manager_service import (
 )
 from soulspot.config.settings import get_settings
 from soulspot.domain.entities.download_manager import (
-    DownloadProvider,
     QueueStatistics,
     UnifiedDownload,
 )
