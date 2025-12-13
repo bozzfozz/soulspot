@@ -1,0 +1,105 @@
+<!-- Download Manager: Stats Bar Partial
+     
+     Rendered by: /api/downloads/manager/htmx/stats-bar
+     Auto-refresh: hx-get with hx-trigger="every 5s"
+     
+     Context variables:
+     - stats: QueueStatsDTO
+-->
+
+<div class="flex flex-wrap items-center gap-4 text-sm">
+    <!-- Waiting -->
+    {% if stats.waiting > 0 %}
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full 
+                    bg-amber-500/20 text-amber-400 text-xs font-bold">
+            {{ stats.waiting }}
+        </span>
+        <span class="text-slate-400">Waiting</span>
+    </div>
+    {% endif %}
+    
+    <!-- Pending -->
+    {% if stats.pending > 0 %}
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full 
+                    bg-blue-500/20 text-blue-400 text-xs font-bold">
+            {{ stats.pending }}
+        </span>
+        <span class="text-slate-400">Pending</span>
+    </div>
+    {% endif %}
+    
+    <!-- Queued -->
+    {% if stats.queued > 0 %}
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full 
+                    bg-purple-500/20 text-purple-400 text-xs font-bold">
+            {{ stats.queued }}
+        </span>
+        <span class="text-slate-400">Queued</span>
+    </div>
+    {% endif %}
+    
+    <!-- Downloading (highlight) -->
+    {% if stats.downloading > 0 %}
+    <div class="flex items-center gap-2 px-3 py-1 bg-green-500/10 rounded-full border border-green-500/20">
+        <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        </span>
+        <span class="text-green-400 font-medium">{{ stats.downloading }} Downloading</span>
+    </div>
+    {% endif %}
+    
+    <!-- Paused -->
+    {% if stats.paused > 0 %}
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full 
+                    bg-orange-500/20 text-orange-400 text-xs font-bold">
+            {{ stats.paused }}
+        </span>
+        <span class="text-slate-400">Paused</span>
+    </div>
+    {% endif %}
+    
+    <!-- Stalled -->
+    {% if stats.stalled > 0 %}
+    <div class="flex items-center gap-2">
+        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full 
+                    bg-red-500/20 text-red-400 text-xs font-bold">
+            {{ stats.stalled }}
+        </span>
+        <span class="text-slate-400">Stalled</span>
+    </div>
+    {% endif %}
+    
+    <!-- Divider -->
+    {% if stats.total_active > 0 %}
+    <div class="hidden sm:block w-px h-6 bg-slate-700"></div>
+    {% endif %}
+    
+    <!-- Today's Stats -->
+    <div class="flex items-center gap-3 text-slate-500">
+        {% if stats.completed_today > 0 %}
+        <span class="flex items-center gap-1">
+            <span class="text-emerald-400">✓</span>
+            <span>{{ stats.completed_today }} today</span>
+        </span>
+        {% endif %}
+        
+        {% if stats.failed_today > 0 %}
+        <span class="flex items-center gap-1">
+            <span class="text-red-400">✗</span>
+            <span>{{ stats.failed_today }} failed</span>
+        </span>
+        {% endif %}
+    </div>
+    
+    <!-- Empty State -->
+    {% if stats.total_active == 0 and stats.completed_today == 0 %}
+    <div class="text-slate-500">
+        No active downloads
+    </div>
+    {% endif %}
+</div>

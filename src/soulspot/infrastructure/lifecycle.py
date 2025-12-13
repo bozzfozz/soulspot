@@ -355,6 +355,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Queue dispatcher worker started (checks slskd every 30s)")
 
             # =================================================================
+            # Start Download Status Sync Worker (syncs slskd status to DB)
+            # =================================================================
+            # Hey future me - dieser Worker FIXT den "stuck status" Bug!
+            # SearchAndDownloadUseCase erstellt Downloads mit QUEUED status, aber updated
+            # nie zu DOWNLOADING/COMPLETED. Dieser Worker pollt slskd alle 5s und
+            # synchronisiert den Status in die SoulSpot DB. KRITISCH für Download Manager UI!
+            # CIRCUIT BREAKER: Nach 3 Fehlern pausiert der Worker für 60s bevor er wieder
+            # versucht slskd zu erreichen (vermeidet Hammering wenn slskd offline).
+            from soulspot.application.workers.download_status_sync_worker import (
+                DownloadStatusSyncWorker,
+            )
+
+            download_status_sync_worker = DownloadStatusSyncWorker(
+                session_factory=db.get_session_factory(),
+                slskd_client=slskd_client,
+                sync_interval=5,  # Sync every 5 seconds for responsive UI
+                completed_history_hours=24,  # Track completed downloads for 24h
+                max_consecutive_failures=3,  # Open circuit after 3 failures
+                circuit_breaker_timeout=60,  # Wait 60s before retry when circuit open
+            )
+            download_status_sync_task = asyncio.create_task(
+                download_status_sync_worker.start()
+            )
+            app.state.download_status_sync_worker = download_status_sync_worker
+            app.state.download_status_sync_task = download_status_sync_task
+            logger.info("Download status sync worker started (syncs every 5s)")
+
+
+            # =================================================================
             # Start Automation Workers (optional, controlled by settings)
             # =================================================================
             # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
@@ -514,6 +543,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Queue dispatcher worker stopped")
             except Exception as e:
                 logger.exception("Error stopping queue dispatcher worker: %s", e)
+
+        # Stop download status sync worker
+        if hasattr(app.state, "download_status_sync_worker"):
+            try:
+                logger.info("Stopping download status sync worker...")
+                app.state.download_status_sync_worker.stop()
+                if hasattr(app.state, "download_status_sync_task"):
+                    try:
+                        await asyncio.wait_for(
+                            app.state.download_status_sync_task,
+                            timeout=5.0,
+                        )
+                    except TimeoutError:
+                        app.state.download_status_sync_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await app.state.download_status_sync_task
+                logger.info("Download status sync worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping download status sync worker: %s", e)
 
         # Stop Spotify sync worker first (depends on token manager)
         if hasattr(app.state, "spotify_sync_worker"):

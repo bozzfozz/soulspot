@@ -291,9 +291,10 @@
                         <div style="display: flex; gap: var(--space-2);">
                             {% if not track.file_path or track.is_broken %}
                             <button class="btn btn-sm btn-outline"
-                                    hx-post="/api/tracks/{{ track.id }}/download"
-                                    hx-target="closest tr"
-                                    hx-swap="outerHTML">
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"track_id": "{{ track.id }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
                                 Download
                             </button>
                             {% endif %}
@@ -570,14 +571,18 @@ function downloadAllMissing() {
     queueDownloads(trackIds, `Queued all ${trackIds.length} missing track(s) for download`);
 }
 
+// Hey future me - switched from /api/tracks/{id}/download to /api/downloads with track_id in body!
+// The old endpoint doesn't support WAITING status when slskd is offline.
+// The new endpoint creates WAITING downloads that QueueDispatcherWorker will pick up later.
 function queueDownloads(trackIds, successMessage) {
     let successCount = 0;
     let failureCount = 0;
     
     const downloadPromises = trackIds.map(trackId => 
-        fetch(`/api/tracks/${trackId}/download`, {
+        fetch('/api/downloads', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ track_id: trackId })
         })
         .then(response => {
             if (!response.ok) {

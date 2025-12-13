@@ -8,6 +8,9 @@ from soulspot.application.workers.automation_workers import (
 )
 from soulspot.application.workers.cleanup_worker import CleanupWorker
 from soulspot.application.workers.download_monitor_worker import DownloadMonitorWorker
+from soulspot.application.workers.download_status_sync_worker import (
+    DownloadStatusSyncWorker,
+)
 from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.duplicate_detector_worker import (
     DuplicateDetectorWorker,
@@ -36,6 +39,7 @@ __all__ = [
     "TokenRefreshWorker",
     "QueueDispatcherWorker",
     "create_queue_dispatcher_worker",
+    "DownloadStatusSyncWorker",
     # Automation Workers
     "AutomationWorkerManager",
     "WatchlistWorker",

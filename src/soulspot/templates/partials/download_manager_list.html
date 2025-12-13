@@ -1,0 +1,174 @@
+<!-- Download Manager: Active Downloads List Partial
+     
+     Rendered by: /api/downloads/manager/htmx/active-list
+     Auto-refresh: hx-get with hx-trigger="every 3s"
+     
+     Context variables:
+     - downloads: list[UnifiedDownloadDTO]
+     - stats: QueueStatsDTO
+-->
+
+{% if not downloads %}
+<div class="flex flex-col items-center justify-center py-12 text-slate-400">
+    <svg class="w-16 h-16 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
+              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+    </svg>
+    <p class="text-lg font-medium">No Active Downloads</p>
+    <p class="text-sm mt-1">Queue tracks for download to see them here</p>
+</div>
+{% else %}
+
+<div class="space-y-3">
+    {% for download in downloads %}
+    <div class="bg-slate-800/50 rounded-lg border border-slate-700/50 overflow-hidden 
+                hover:border-slate-600/50 transition-all duration-200"
+         data-download-id="{{ download.id }}">
+        
+        <!-- Header: Track Info + Status -->
+        <div class="px-4 py-3 flex items-center justify-between gap-4">
+            <!-- Track Info -->
+            <div class="flex-1 min-w-0">
+                <h4 class="font-medium text-slate-200 truncate">
+                    {{ download.track_info.title }}
+                </h4>
+                <p class="text-sm text-slate-400 truncate">
+                    {{ download.track_info.artist }}
+                    {% if download.track_info.album %}
+                    <span class="text-slate-500">•</span>
+                    <span class="text-slate-500">{{ download.track_info.album }}</span>
+                    {% endif %}
+                </p>
+            </div>
+            
+            <!-- Status Badge -->
+            <div class="flex-shrink-0">
+                {% set status_colors = {
+                    'waiting': 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+                    'pending': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                    'queued': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                    'downloading': 'bg-green-500/20 text-green-400 border-green-500/30',
+                    'paused': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                    'stalled': 'bg-red-500/20 text-red-400 border-red-500/30',
+                    'completed': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                    'failed': 'bg-red-600/20 text-red-400 border-red-600/30',
+                    'cancelled': 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+                } %}
+                {% set status_icons = {
+                    'waiting': '⏳',
+                    'pending': '📤',
+                    'queued': '📋',
+                    'downloading': '⬇️',
+                    'paused': '⏸️',
+                    'stalled': '🚫',
+                    'completed': '✅',
+                    'failed': '❌',
+                    'cancelled': '🚫'
+                } %}
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium 
+                            rounded-full border {{ status_colors.get(download.status, 'bg-slate-500/20 text-slate-400') }}">
+                    <span>{{ status_icons.get(download.status, '❓') }}</span>
+                    <span class="capitalize">{{ download.status }}</span>
+                </span>
+            </div>
+        </div>
+        
+        <!-- Progress Bar (only for active downloads) -->
+        {% if download.status in ['downloading', 'queued', 'paused', 'stalled'] %}
+        <div class="px-4 pb-3">
+            <!-- Progress Bar -->
+            <div class="relative h-2 bg-slate-700/50 rounded-full overflow-hidden">
+                <div class="absolute inset-y-0 left-0 rounded-full transition-all duration-300
+                           {% if download.status == 'downloading' %}bg-gradient-to-r from-green-500 to-emerald-400
+                           {% elif download.status == 'paused' %}bg-orange-500
+                           {% elif download.status == 'stalled' %}bg-red-500
+                           {% else %}bg-purple-500{% endif %}"
+                     style="width: {{ download.progress.percent | round(1) }}%">
+                </div>
+                {% if download.status == 'downloading' %}
+                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent 
+                            animate-shimmer"></div>
+                {% endif %}
+            </div>
+            
+            <!-- Progress Stats -->
+            <div class="flex items-center justify-between mt-2 text-xs text-slate-400">
+                <div class="flex items-center gap-3">
+                    <span>{{ download.progress.percent | round(1) }}%</span>
+                    <span class="text-slate-500">•</span>
+                    <span>{{ download.progress.size_formatted }}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    {% if download.progress.speed_bytes_per_sec > 0 %}
+                    <span class="text-green-400">
+                        {{ download.progress.speed_formatted }}
+                    </span>
+                    {% endif %}
+                    {% if download.progress.eta_formatted != 'Unknown' %}
+                    <span class="text-slate-500">•</span>
+                    <span>ETA: {{ download.progress.eta_formatted }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Footer: Provider + Actions -->
+        <div class="px-4 py-2 bg-slate-900/30 border-t border-slate-700/30 
+                    flex items-center justify-between text-xs">
+            <!-- Provider Badge -->
+            <div class="flex items-center gap-2 text-slate-500">
+                <span class="inline-flex items-center gap-1">
+                    {% if download.provider == 'soulseek' %}
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    {% endif %}
+                    {{ download.provider_name }}
+                </span>
+                {% if download.external_id %}
+                <span class="text-slate-600 truncate max-w-[150px]" title="{{ download.external_id }}">
+                    {{ download.external_id | truncate(25) }}
+                </span>
+                {% endif %}
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-1">
+                {% if download.can_cancel %}
+                <button class="p-1.5 hover:bg-slate-700/50 rounded-md text-slate-400 hover:text-red-400 
+                              transition-colors" 
+                        title="Cancel Download"
+                        hx-post="/api/downloads/{{ download.id }}/cancel"
+                        hx-swap="none"
+                        hx-confirm="Cancel this download?">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Error Message (if failed) -->
+        {% if download.error_message %}
+        <div class="px-4 py-2 bg-red-900/20 border-t border-red-800/30 text-xs text-red-400">
+            <span class="font-medium">Error:</span> {{ download.error_message }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{% endif %}
+
+<style>
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+.animate-shimmer {
+    animation: shimmer 1.5s infinite;
+}
+</style>

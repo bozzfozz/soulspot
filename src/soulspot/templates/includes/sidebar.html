@@ -111,12 +111,16 @@
         <!-- Downloads Section -->
         <div class="sidebar-section">
             <div class="sidebar-section-title">Downloads</div>
-            <a href="/downloads" class="sidebar-item {% if '/downloads' in request.url.path %}active{% endif %}">
+            <a href="/downloads" class="sidebar-item {% if request.url.path == '/downloads' %}active{% endif %}">
                 <i class="bi bi-clock-history sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Queue</span>
                 {% if queue_count is defined and queue_count and queue_count > 0 %}
                 <span class="sidebar-item-badge">{{ queue_count }}</span>
                 {% endif %}
+            </a>
+            <a href="/download-manager" class="sidebar-item {% if '/download-manager' in request.url.path %}active{% endif %}">
+                <i class="bi bi-arrow-down-circle sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Download Manager</span>
             </a>
         </div>
 

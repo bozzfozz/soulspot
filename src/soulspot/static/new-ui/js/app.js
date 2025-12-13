@@ -290,9 +290,43 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('HTMX content swapped:', event.detail);
     });
 
+    // Hey future me - this handles ALL HTMX errors globally!
+    // Extracts error message from JSON response if available, otherwise shows generic error.
+    // Most API endpoints return {detail: "error message"} on failure.
     document.body.addEventListener('htmx:responseError', (event) => {
         console.error('HTMX error:', event.detail);
-        SoulSpot.showNotification('An error occurred. Please try again.', 'error');
+        
+        let errorMsg = 'An error occurred. Please try again.';
+        
+        // Try to extract detail from JSON response
+        try {
+            const xhr = event.detail.xhr;
+            if (xhr && xhr.responseText) {
+                const response = JSON.parse(xhr.responseText);
+                if (response.detail) {
+                    errorMsg = response.detail;
+                } else if (response.message) {
+                    errorMsg = response.message;
+                }
+            }
+        } catch (e) {
+            console.debug('Could not parse error response:', e);
+        }
+        
+        SoulSpot.showNotification(errorMsg, 'error');
+    });
+
+    // Hey future me - htmx:afterRequest fires for ALL requests including successful ones!
+    // We use this to show success toasts ONLY if request succeeded (status 2xx).
+    // Partials use hx-on::after-request which calls SoulSpot.toast() - but we need
+    // to check if there was an error first to avoid showing "success" on failures!
+    document.body.addEventListener('htmx:afterRequest', (event) => {
+        const xhr = event.detail.xhr;
+        // If request failed (non-2xx), htmx:responseError already handled it
+        if (xhr && xhr.status >= 400) {
+            // Prevent inline hx-on::after-request from showing success toast
+            event.detail.successful = false;
+        }
     });
 });
 
@@ -311,6 +345,13 @@ const utils = {
         const secs = seconds % 60;
         return `${minutes}:${secs.toString().padStart(2, '0')}`;
     }
+};
+
+// Alias toast() to showNotification() for HTMX templates compatibility
+// Hey future me - some HTMX partials use SoulSpot.toast() but the actual method is showNotification().
+// This alias ensures backwards compatibility without having to update all templates!
+SoulSpot.toast = function(message, type = 'info', duration = 5000) {
+    return SoulSpot.showNotification(message, type, duration);
 };
 
 // Export for use in other scripts

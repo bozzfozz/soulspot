@@ -98,9 +98,10 @@
                         <div style="display: flex; gap: var(--space-2);">
                             {% if not track.file_path or track.is_broken %}
                             <button class="btn btn-sm btn-outline"
-                                    hx-post="/api/tracks/{{ track.id }}/download"
-                                    hx-target="closest tr"
-                                    hx-swap="outerHTML">
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"track_id": "{{ track.id }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
                                 Download
                             </button>
                             {% endif %}

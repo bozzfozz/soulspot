@@ -54,7 +54,7 @@
                     hx-post="/api/downloads"
                     hx-vals='{"track_id": "{{ track.id }}"}'
                     hx-swap="none"
-                    hx-on::after-request="SoulSpot.toast('Track added to download queue', 'success')"
+                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Track added to download queue', 'success')"
                     aria-label="Download {{ track.title }}">
                 <i class="bi bi-download"></i> Download
             </button>

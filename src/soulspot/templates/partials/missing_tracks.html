@@ -74,17 +74,12 @@
                         </td>
                         <td style="white-space: nowrap;">
                             <button class="btn btn-outline btn-sm"
-                                    hx-post="/api/tracks/{{ track.id }}/download"
-                                    hx-target="closest tr"
-                                    hx-swap="outerHTML"
-                                    hx-indicator="#download-indicator-{{ track.id }}"
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"track_id": "{{ track.id }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')"
                                     aria-label="Download track {{ track.title }}">
-                                <span id="download-indicator-{{ track.id }}" class="htmx-indicator">
-                                    <i class="bi bi-arrow-repeat bi-spin"></i>
-                                </span>
-                                <span class="htmx-indicator-off">
-                                    <i class="bi bi-download"></i> Download
-                                </span>
+                                <i class="bi bi-download"></i> Download
                             </button>
                         </td>
                     </tr>
@@ -103,6 +98,7 @@
 </div>
 
 <script>
+// Hey future me - switched to /api/downloads for WAITING status support when slskd offline!
 function downloadAllMissing() {
     const trackRows = document.querySelectorAll('[data-track-id]');
     const trackIds = Array.from(trackRows).map(row => row.getAttribute('data-track-id'));
@@ -111,16 +107,23 @@ function downloadAllMissing() {
     
     if (confirm(`Download ${trackIds.length} missing track(s)?`)) {
         let completed = 0;
+        let failed = 0;
         trackIds.forEach(trackId => {
-            fetch(`/api/tracks/${trackId}/download`, {
+            fetch('/api/downloads', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ track_id: trackId })
             })
             .then(response => {
                 completed++;
+                if (!response.ok) failed++;
                 if (completed === trackIds.length) {
                     if (typeof SoulSpot !== 'undefined') {
-                        SoulSpot.toast(`Queued ${trackIds.length} track(s) for download`, 'success');
+                        if (failed === 0) {
+                            SoulSpot.toast(`Queued ${trackIds.length} track(s) for download`, 'success');
+                        } else {
+                            SoulSpot.toast(`Queued ${completed - failed}/${trackIds.length} tracks (${failed} failed)`, 'warning');
+                        }
                     }
                     setTimeout(() => {
                         document.getElementById('missing-tracks-section').innerHTML = '';
@@ -128,6 +131,8 @@ function downloadAllMissing() {
                 }
             })
             .catch(error => {
+                completed++;
+                failed++;
                 console.error(`Error queuing download for track ${trackId}:`, error);
             });
         });

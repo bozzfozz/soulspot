@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Download Manager - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Download Manager Page
+     
+     This page provides a unified view of all downloads across providers.
+     Like Lidarr's Download Client Queue but for managing not downloading.
+     
+     Features:
+     - Real-time progress updates via HTMX polling
+     - Stats bar showing queue counts
+     - Provider health indicators
+     - Filters by status/provider
+-->
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    
+    <!-- Page Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-100 flex items-center gap-3">
+                <svg class="w-8 h-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download Manager
+            </h1>
+            <p class="text-slate-400 mt-1">
+                Monitor and manage downloads across all providers
+            </p>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="flex items-center gap-2">
+            <button class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 
+                          rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    onclick="refreshDownloads()">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+            </button>
+        </div>
+    </div>
+    
+    <!-- Stats Bar (auto-refresh) -->
+    <div class="bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 mb-6"
+         hx-get="/api/downloads/manager/htmx/stats-bar"
+         hx-trigger="load, every 5s"
+         hx-swap="innerHTML">
+        <div class="flex items-center justify-center py-2">
+            <div class="animate-pulse flex items-center gap-2 text-slate-500">
+                <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Loading stats...
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="flex items-center gap-4 mb-4">
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-slate-400">Status:</label>
+            <select class="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200
+                         focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                    id="status-filter"
+                    onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="downloading">Downloading</option>
+                <option value="queued">Queued</option>
+                <option value="waiting">Waiting</option>
+                <option value="pending">Pending</option>
+                <option value="paused">Paused</option>
+                <option value="stalled">Stalled</option>
+            </select>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <label class="text-sm text-slate-400">Provider:</label>
+            <select class="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200
+                         focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                    id="provider-filter"
+                    onchange="applyFilters()">
+                <option value="">All</option>
+                <option value="soulseek">Soulseek (slskd)</option>
+                <option value="usenet">Usenet</option>
+            </select>
+        </div>
+        
+        <div class="flex-1"></div>
+        
+        <!-- Auto-refresh toggle -->
+        <label class="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+            <input type="checkbox" id="auto-refresh" checked
+                   class="rounded bg-slate-700 border-slate-600 text-purple-500 
+                          focus:ring-purple-500/50 focus:ring-offset-0"
+                   onchange="toggleAutoRefresh()">
+            Auto-refresh (3s)
+        </label>
+    </div>
+    
+    <!-- Downloads List (auto-refresh) -->
+    <div id="downloads-container"
+         class="bg-slate-800/30 rounded-xl border border-slate-700/50 p-4"
+         hx-get="/api/downloads/manager/htmx/active-list"
+         hx-trigger="load, every 3s [auto-refresh-enabled]"
+         hx-swap="innerHTML">
+        <div class="flex items-center justify-center py-12">
+            <div class="animate-pulse flex flex-col items-center gap-3 text-slate-500">
+                <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Loading downloads...</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Provider Health (collapsible, auto-refreshes via HTMX) -->
+    <details class="mt-6 bg-slate-800/30 rounded-xl border border-slate-700/50">
+        <summary class="px-4 py-3 cursor-pointer text-slate-400 hover:text-slate-200 transition-colors
+                       flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Provider Status
+        </summary>
+        <div class="px-4 pb-4 border-t border-slate-700/50 mt-2 pt-4">
+            {# Provider Health Widget - auto-refreshes every 10s #}
+            <div id="provider-health-container"
+                 hx-get="/api/downloads/manager/htmx/provider-health"
+                 hx-trigger="load, every 10s"
+                 hx-swap="innerHTML">
+                {# Initial loading state #}
+                <div class="text-center text-gray-500 py-4">
+                    <svg class="animate-spin h-5 w-5 mx-auto mb-2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading provider status...
+                </div>
+            </div>
+        </div>
+    </details>
+</div>
+
+
+<script>
+// Auto-refresh control
+let autoRefreshEnabled = true;
+
+function toggleAutoRefresh() {
+    autoRefreshEnabled = document.getElementById('auto-refresh').checked;
+    // Update HTMX trigger condition
+    const container = document.getElementById('downloads-container');
+    if (autoRefreshEnabled) {
+        container.setAttribute('hx-trigger', 'load, every 3s');
+    } else {
+        container.setAttribute('hx-trigger', 'load');
+    }
+    htmx.process(container);
+}
+
+function refreshDownloads() {
+    htmx.trigger('#downloads-container', 'refresh');
+}
+
+function applyFilters() {
+    const status = document.getElementById('status-filter').value;
+    const provider = document.getElementById('provider-filter').value;
+    
+    let url = '/api/downloads/manager/htmx/active-list';
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (provider) params.set('provider', provider);
+    if (params.toString()) url += '?' + params.toString();
+    
+    document.getElementById('downloads-container').setAttribute('hx-get', url);
+    htmx.trigger('#downloads-container', 'refresh');
+}
+
+// Expose for HTMX trigger condition
+window.autoRefreshEnabled = () => autoRefreshEnabled;
+</script>
+{% endblock %}

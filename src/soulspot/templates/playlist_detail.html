@@ -182,7 +182,12 @@
                     <td style="padding: var(--space-3) var(--space-4); text-align: right;">
                         <div class="flex gap-2" style="justify-content: flex-end;">
                             {% if not track.file_path or track.is_broken %}
-                            <button class="btn-icon" hx-post="/api/tracks/{{ track.id }}/download" hx-swap="none" title="Download">
+                            <button class="btn-icon" 
+                                    hx-post="/api/downloads" 
+                                    hx-vals='{"track_id": "{{ track.id }}"}'
+                                    hx-swap="none" 
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')"
+                                    title="Download">
                                 <i class="bi bi-download"></i>
                             </button>
                             {% endif %}
@@ -301,6 +306,7 @@
         }
     }
 
+    // Hey future me - switched to /api/downloads for WAITING status support when slskd offline!
     function bulkDownloadSelected() {
         const checkedBoxes = document.querySelectorAll('.track-checkbox:checked');
         const trackIds = Array.from(checkedBoxes)
@@ -313,11 +319,24 @@
         }
         
         if (confirm(`Download ${trackIds.length} track(s)?`)) {
+            let completed = 0;
+            let failed = 0;
             trackIds.forEach(trackId => {
-                fetch(`/api/tracks/${trackId}/download`, {
+                fetch('/api/downloads', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                }).catch(error => {
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ track_id: trackId })
+                })
+                .then(response => {
+                    completed++;
+                    if (!response.ok) failed++;
+                    if (completed === trackIds.length && failed > 0) {
+                        SoulSpot.showNotification(`Queued ${completed - failed}/${trackIds.length} (${failed} failed)`, 'warning');
+                    }
+                })
+                .catch(error => {
+                    completed++;
+                    failed++;
                     console.error(`Error queuing download for track ${trackId}:`, error);
                 });
             });

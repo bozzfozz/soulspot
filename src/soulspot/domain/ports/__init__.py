@@ -5,6 +5,14 @@ from typing import Any, Optional
 
 from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
 
+# Download provider interfaces for Download Manager
+from soulspot.domain.ports.download_provider import (
+    IDownloadProvider,
+    IDownloadProviderRegistry,
+    ProviderDownload,
+    ProviderHealth,
+)
+
 # Notification system interfaces
 from soulspot.domain.ports.notification import (
     INotificationProvider,

@@ -52,6 +52,11 @@ from soulspot.application.use_cases.enrich_metadata import (  # noqa: E402
 from soulspot.application.use_cases.import_spotify_playlist import (  # noqa: E402
     ImportSpotifyPlaylistUseCase,
 )
+from soulspot.application.use_cases.queue_album_downloads import (  # noqa: E402
+    QueueAlbumDownloadsRequest,
+    QueueAlbumDownloadsResponse,
+    QueueAlbumDownloadsUseCase,
+)
 from soulspot.application.use_cases.search_and_download import (  # noqa: E402
     SearchAndDownloadTrackUseCase,
 )
@@ -61,4 +66,7 @@ __all__ = [
     "ImportSpotifyPlaylistUseCase",
     "SearchAndDownloadTrackUseCase",
     "EnrichMetadataUseCase",
+    "QueueAlbumDownloadsUseCase",
+    "QueueAlbumDownloadsRequest",
+    "QueueAlbumDownloadsResponse",
 ]

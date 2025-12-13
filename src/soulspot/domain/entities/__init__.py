@@ -829,6 +829,18 @@ class QualityUpgradeCandidate:
         self.updated_at = datetime.now(UTC)
 
 
+# Import download manager entities for re-export
+from soulspot.domain.entities.download_manager import (
+    DownloadProgress,
+    DownloadProvider,
+    DownloadTimestamps,
+    QueueStatistics,
+    TrackInfo,
+    UnifiedDownload,
+    UnifiedDownloadStatus,
+)
+
+
 __all__ = [
     # Existing entities
     "Artist",
@@ -842,6 +854,14 @@ __all__ = [
     "FilterRule",
     "AutomationRule",
     "QualityUpgradeCandidate",
+    # Download Manager entities
+    "DownloadProgress",
+    "DownloadProvider",
+    "DownloadTimestamps",
+    "QueueStatistics",
+    "TrackInfo",
+    "UnifiedDownload",
+    "UnifiedDownloadStatus",
     # Enums
     "MetadataSource",
     "PlaylistSource",

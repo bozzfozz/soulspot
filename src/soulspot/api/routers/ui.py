@@ -651,6 +651,15 @@ async def auth(request: Request) -> Any:
     return templates.TemplateResponse(request, "auth.html")
 
 
+# Hey future me - this is the Download Manager page showing unified download status!
+# It aggregates downloads from slskd (and future providers like SABnzbd) into one view.
+# The page uses HTMX auto-refresh to poll /api/downloads/manager/htmx/* endpoints.
+@router.get("/download-manager", response_class=HTMLResponse)
+async def download_manager_page(request: Request) -> Any:
+    """Download Manager page - unified view of all provider downloads."""
+    return templates.TemplateResponse(request, "download_manager.html")
+
+
 # Hey future me - this is the UI styleguide page showing all components! Use it to verify the
 # design system (colors, buttons, cards, badges, etc.) is working. Doesn't hit DB, pure template.
 # Good for debugging CSS issues or showing designers what's available in the component library.

@@ -6,9 +6,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     check_slskd_available,
+    get_db_session,
     get_download_repository,
     get_download_worker,
     get_job_queue,
@@ -215,9 +217,163 @@ async def create_download(
         raise HTTPException(status_code=500, detail=f"Failed to create download: {str(e)}")
 
 
+# =========================================================================
+# Album Download Endpoint
+# =========================================================================
+
+
+class AlbumDownloadRequest(BaseModel):
+    """Request for downloading all tracks of an album.
+
+    Hey future me - provide ONE of these IDs:
+    - spotify_id: Spotify album ID (from new_releases page)
+    - deezer_id: Deezer album ID
+    - album_id: Our local DB album UUID
+
+    The endpoint will fetch all tracks and queue them individually.
+    """
+
+    spotify_id: str | None = None
+    deezer_id: str | None = None
+    album_id: str | None = None
+    title: str | None = None
+    artist: str | None = None
+    quality_filter: str | None = None  # "flac", "320", "any"
+    priority: int = 10
+
+
+class AlbumDownloadResponse(BaseModel):
+    """Response from album download queue operation."""
+
+    message: str
+    album_title: str
+    artist_name: str
+    total_tracks: int
+    queued_count: int
+    already_downloaded: int
+    skipped_count: int
+    failed_count: int
+    job_ids: list[str]
+    errors: list[str]
+    success: bool
+
+
+@router.post("/album")
+async def create_album_download(
+    request: AlbumDownloadRequest,
+    db: AsyncSession = Depends(get_db_session),
+    job_queue: JobQueue = Depends(get_job_queue),
+    track_repository: TrackRepository = Depends(get_track_repository),
+) -> AlbumDownloadResponse:
+    """Queue all tracks of an album for download.
+
+    Hey future me - this is the "Download Album" button endpoint!
+    Called from new_releases.html, album detail pages, etc.
+
+    Supports albums from:
+    - Spotify (provide spotify_id)
+    - Deezer (provide deezer_id)
+    - Local library (provide album_id)
+
+    The use case fetches all tracks, creates them in DB if needed,
+    and queues each track individually for download.
+
+    Returns details about what was queued:
+    - queued_count: Number of tracks added to download queue
+    - already_downloaded: Tracks that already have file_path
+    - failed_count: Tracks that failed to queue
+    """
+    from soulspot.application.use_cases.queue_album_downloads import (
+        QueueAlbumDownloadsRequest,
+        QueueAlbumDownloadsUseCase,
+    )
+    from soulspot.config.settings import get_settings
+
+    # Validate request
+    if not request.spotify_id and not request.deezer_id and not request.album_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Must provide one of: spotify_id, deezer_id, or album_id",
+        )
+
+    # Initialize plugins based on what ID was provided
+    spotify_plugin = None
+    deezer_plugin = None
+
+    settings = get_settings()
+
+    if request.spotify_id:
+        try:
+            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+            from soulspot.infrastructure.plugins import SpotifyPlugin
+
+            # Get token from session (via app state or request)
+            # For now, create plugin without token - it will fail if auth required
+            spotify_client = SpotifyClient(settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=None)
+            logger.debug("Created SpotifyPlugin for album download")
+        except Exception as e:
+            logger.warning(f"Failed to create SpotifyPlugin: {e}")
+
+    if request.deezer_id:
+        try:
+            from soulspot.infrastructure.plugins import DeezerPlugin
+
+            deezer_plugin = DeezerPlugin()
+            logger.debug("Created DeezerPlugin for album download")
+        except Exception as e:
+            logger.warning(f"Failed to create DeezerPlugin: {e}")
+
+    # Create and execute use case
+    use_case = QueueAlbumDownloadsUseCase(
+        session=db,
+        job_queue=job_queue,
+        track_repository=track_repository,
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
+
+    use_case_request = QueueAlbumDownloadsRequest(
+        spotify_id=request.spotify_id,
+        deezer_id=request.deezer_id,
+        album_id=request.album_id,
+        title=request.title,
+        artist=request.artist,
+        quality_filter=request.quality_filter,
+        priority=request.priority,
+    )
+
+    result = await use_case.execute(use_case_request)
+
+    # Build response message
+    if result.success:
+        message = f"Queued {result.queued_count} tracks for download"
+        if result.already_downloaded > 0:
+            message += f" ({result.already_downloaded} already downloaded)"
+    else:
+        message = "Failed to queue album for download"
+        if result.errors:
+            message += f": {result.errors[0]}"
+
+    return AlbumDownloadResponse(
+        message=message,
+        album_title=result.album_title,
+        artist_name=result.artist_name,
+        total_tracks=result.total_tracks,
+        queued_count=result.queued_count,
+        already_downloaded=result.already_downloaded,
+        skipped_count=result.skipped_count,
+        failed_count=result.failed_count,
+        job_ids=result.job_ids,
+        errors=result.errors,
+        success=result.success,
+    )
+
+
 # Hey future me, this lists downloads with optional status filter and PROPER DB-LEVEL pagination!
 # Previously we loaded ALL downloads and sliced in Python - that's O(N) memory! Now we push limit/offset
 # to DB which is O(limit) memory. For large queues (1000+ downloads), this makes a HUGE difference.
+
 # Default limit is 100 (user requested), max is 500 to prevent abuse. Total count is fetched separately
 # for pagination UI. Status filter can be: waiting, pending, queued, downloading, completed, failed, cancelled.
 #
