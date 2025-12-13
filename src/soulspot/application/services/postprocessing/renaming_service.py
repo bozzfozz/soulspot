@@ -1,7 +1,9 @@
 """File renaming service with template-based naming."""
 
+import errno
 import logging
 import re
+import shutil
 from pathlib import Path
 from string import Formatter
 from typing import TYPE_CHECKING
@@ -424,8 +426,9 @@ class RenamingService:
     # Hey future me: The actual file move operation
     # WHY mkdir with parents=True? Template might create deep paths like "Artist/2023/Album/Disc 1/"
     # WHY handle existing files? Race condition - another process might have created same file
-    # GOTCHA: We use rename() not copy - if source and dest are on different filesystems, this FAILS
-    # TODO: Add fallback to copy+delete for cross-filesystem moves
+    # CROSS-FS SUPPORT: We now handle EXDEV errors with shutil.move() fallback!
+    # rename() is atomic and fast for same-filesystem, but fails across filesystems.
+    # shutil.move() does copy+delete which works across filesystems but is slower.
     # UPDATED: Now uses dynamic DB templates if app_settings_service is available!
     async def rename_file(
         self,
@@ -473,8 +476,26 @@ class RenamingService:
             # Add numeric suffix
             dest_path = self._get_unique_path(dest_path)
 
-        # Move file
-        source_path.rename(dest_path)
+        # Move file with cross-filesystem fallback
+        # Hey future me - rename() fails with EXDEV error when source and dest are on
+        # different filesystems (e.g., Docker volumes, network mounts, different partitions).
+        # The fallback uses shutil.move() which does copy+delete automatically for cross-fs.
+        # We try rename() first because it's atomic and faster for same-filesystem moves.
+        try:
+            source_path.rename(dest_path)
+        except OSError as e:
+            if e.errno == errno.EXDEV:
+                # Cross-filesystem move - fallback to copy+delete via shutil
+                logger.info(
+                    "Cross-filesystem move detected, using copy+delete fallback: "
+                    "%s -> %s",
+                    source_path,
+                    dest_path,
+                )
+                shutil.move(str(source_path), str(dest_path))
+            else:
+                # Re-raise other OS errors (permission denied, disk full, etc.)
+                raise
         logger.info("Renamed file: %s -> %s", source_path, dest_path)
 
         return dest_path

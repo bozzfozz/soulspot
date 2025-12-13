@@ -128,26 +128,19 @@ if match_score > 85:
 
 ---
 
-### 9. Metadata Confidence Scoring (enrich_metadata.py:125)
+### 9. Metadata Confidence Scoring (enrich_metadata.py:125) ✅ ERLEDIGT
 **Issue:** `# TODO: Add confidence scoring to avoid false matches`
 
 **Location:** `src/soulspot/application/use_cases/enrich_metadata.py:125`
 
-**Problem:** Keine Confidence-Scores für Metadata-Matches.
+**Fix:** Implemented `_calculate_match_confidence()` method using rapidfuzz:
+- Title similarity (token_sort_ratio) with 60% weight
+- Artist similarity (partial_ratio) with 40% weight
+- Duration bonus/penalty for validation
+- Minimum threshold of 0.75 to accept matches
+- All MusicBrainz results are scored, best above threshold is selected
 
-**Impact:** 🟡 MEDIUM - False Positives möglich.
-
-**Fix Required:**
-```python
-# Implement scoring:
-confidence = calculate_match_confidence(
-    query_title, result_title,
-    query_artist, result_artist
-)
-if confidence < 0.8:
-    logger.warning("Low confidence match, skipping")
-    return None
-```
+**Datum:** 2025-12-13
 
 ---
 
@@ -171,24 +164,17 @@ class WebhookNotificationProvider: ...
 
 ---
 
-### 11. Cross-Filesystem Move Fallback (renaming_service.py:428)
+### 11. Cross-Filesystem Move Fallback (renaming_service.py:428) ✅ ERLEDIGT
 **Issue:** `# TODO: Add fallback to copy+delete for cross-filesystem moves`
 
 **Location:** `src/soulspot/application/services/postprocessing/renaming_service.py:428`
 
-**Problem:** Move schlägt fehl bei Cross-Filesystem-Operationen.
+**Fix:** Implemented try/except block with errno.EXDEV detection. 
+- First attempts atomic `rename()` for same-filesystem moves
+- Falls back to `shutil.move()` for cross-filesystem moves (EXDEV error)
+- Re-raises other OSError types (permission denied, disk full)
 
-**Impact:** 🟢 LOW - Seltener Edge-Case.
-
-**Fix Required:**
-```python
-try:
-    shutil.move(src, dst)
-except OSError as e:
-    if e.errno == errno.EXDEV:  # Cross-device link
-        shutil.copy2(src, dst)
-        os.remove(src)
-```
+**Datum:** 2025-12-13
 
 ---
 

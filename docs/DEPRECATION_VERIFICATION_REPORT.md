@@ -48,43 +48,31 @@ if state != session.oauth_state:
 
 ---
 
-### 2. OAuth Session Refactoring ❌ **NOT IMPLEMENTED**
+### 2. OAuth Session Refactoring ✅ **IMPLEMENTED**
 
-**Status:** `docs/development/OAUTH_SESSION_REFACTORING_PLAN.md` → **KEEP IN DEVELOPMENT (planned)**
+**Status:** `docs/development/OAUTH_SESSION_REFACTORING_PLAN.md` → **ARCHIVE (completed)**
 
-**Evidence:**
-- ❌ **Session classes still use generic names:**
-  - `class Session` (session_store.py line 13)
-  - `class SessionStore` (session_store.py line 83)
-  - `class SessionModel` (models.py line 596)
-- ❌ **No "SpotifySession" naming found** (grep_search returned no matches)
-- ❌ **Table name still `sessions`** (not `spotify_sessions`)
+**Evidence (verified 13. Dezember 2025):**
+- ✅ **SpotifySessionModel** exists in `models.py` line 633
+- ✅ **Table name `spotify_sessions`** (not generic `sessions`)
+- ✅ **DeezerSessionModel** also implemented (models.py line 676)
+- ✅ **Table name `deezer_sessions`** for multi-service support
 
 **Current State:**
 ```python
-# src/soulspot/application/services/session_store.py
-@dataclass
-class Session:  # ← Should be "SpotifySession"
-    """User OAuth session with tokens and state."""
+# src/soulspot/infrastructure/persistence/models.py
+class SpotifySessionModel(Base):  # ✅ Service-specific naming
+    __tablename__ = "spotify_sessions"  # ✅ Service-specific table
 
-class SessionStore:  # ← Should be "SpotifySessionStore"
-    """In-memory session storage."""
-```
-
-**Planned State (from refactoring plan):**
-```python
-@dataclass
-class SpotifySession:
-    """Spotify-specific OAuth session with tokens and state."""
-
-class SpotifySessionStore:
-    """In-memory Spotify session storage."""
+class DeezerSessionModel(Base):  # ✅ Multi-service ready!
+    __tablename__ = "deezer_sessions"
 ```
 
 **Conclusion:**
-- Refactoring plan is **still valid** and **NOT implemented**
-- **Action:** **KEEP in docs/development/** (active planning document)
-- **Priority:** Medium (per plan document)
+- Refactoring plan **WAS IMPLEMENTED**
+- Database models now use service-specific naming
+- Multi-service architecture ready (Spotify + Deezer sessions)
+- **Action:** **ARCHIVE as completed**
 
 ---
 

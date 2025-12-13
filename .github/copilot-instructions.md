@@ -590,12 +590,24 @@ class Session: ...  # Welcher Service?
 3. **Config-Änderungen** → `.env.example` und `docs/guides/` anpassen
 4. **DB-Schema-Änderungen** → Migration UND Docs aktualisieren
 5. **Breaking Changes** → `CHANGELOG.md` und Migration-Guide
+6. **TODO-Erledigungen** → `docs/TODO.md` und `docs/TODOS_ANALYSIS.md` aktualisieren
+7. **Action Plan Tasks** → `docs/ACTION_PLAN.md` Status updaten
+
+**KRITISCH: Tracking-Dokumente SOFORT aktualisieren!**
+| Was erledigt? | Sofort aktualisieren |
+|---------------|---------------------|
+| TODO aus Code entfernt | `docs/TODOS_ANALYSIS.md` |
+| Feature implementiert | `docs/TODO.md` + `docs/ACTION_PLAN.md` |
+| Migration durchgeführt | `docs/ACTION_PLAN.md` Week-Status |
+| Deprecation-Fix | `docs/DEPRECATION_VERIFICATION_REPORT.md` |
 
 **Dokumentations-Checkliste bei PRs:**
 - [ ] Betroffene Docs identifiziert
 - [ ] Code-Beispiele in Docs noch korrekt
 - [ ] Neue Funktionen dokumentiert
 - [ ] Veraltete Docs entfernt/aktualisiert
+- [ ] TODOs aktualisiert (wenn relevant)
+- [ ] ACTION_PLAN.md aktualisiert (wenn Task betroffen)
 
 **Wo Docs leben:**
 | Thema | Ort |
@@ -603,17 +615,18 @@ class Session: ...  # Welcher Service?
 | API-Referenz | `docs/api/` |
 | User-Guides | `docs/guides/` |
 | Development | `docs/development/` |
-| Architektur | `docs/architecture/` (falls vorhanden) |
-| Beispiele | `docs/examples/` |
+| Architektur | `docs/architecture/` |
+| Tracking | `docs/TODO.md`, `docs/ACTION_PLAN.md`, `docs/TODOS_ANALYSIS.md` |
 
 **Verboten:**
 - Code ändern ohne zugehörige Docs zu prüfen
 - Neue Features ohne Dokumentation als "fertig" markieren
 - Veraltete Docs stehen lassen
+- TODOs im Code fixen ohne TODOS_ANALYSIS.md zu aktualisieren
 
 ```
-❌ FALSCH: Feature implementieren → PR öffnen → Docs vergessen
-✅ RICHTIG: Feature implementieren → Docs aktualisieren → PR öffnen
+❌ FALSCH: TODO fixen → Commit → Docs vergessen
+✅ RICHTIG: TODO fixen → TODOS_ANALYSIS.md updaten → Commit
 ```
 
 15. When unsure — minimal reproducible steps to run locally
