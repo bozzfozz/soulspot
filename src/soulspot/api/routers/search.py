@@ -156,7 +156,7 @@ async def search_spotify_artists(
         for artist_dto in result.items:
             # Get Spotify URL from external_urls dict
             spotify_url = artist_dto.external_urls.get("spotify", "")
-            
+
             artists.append(
                 SpotifyArtistResult(
                     id=artist_dto.spotify_id or "",
@@ -218,7 +218,7 @@ async def search_spotify_tracks(
             # Extract artist info from DTO
             artist_name = track_dto.artist_name or "Unknown"
             artist_id = track_dto.artist_spotify_id
-            
+
             # Get Spotify URL from external_urls dict
             spotify_url = track_dto.external_urls.get("spotify", "")
 
@@ -287,7 +287,7 @@ async def search_spotify_albums(
             # Extract artist info from DTO
             artist_name = album_dto.artist_name or "Unknown"
             artist_id = album_dto.artist_spotify_id
-            
+
             # Get Spotify URL from external_urls dict
             spotify_url = album_dto.external_urls.get("spotify", "")
 

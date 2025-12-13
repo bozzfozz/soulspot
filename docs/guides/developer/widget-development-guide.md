@@ -1,5 +1,10 @@
 # Custom Widget Development Guide
 
+> **⚠️ DEPRECATED - December 2025**  
+> **This widget system has been removed from SoulSpot.**  
+> **The widget system was deprecated and removed via migration `ee19001hhj49_remove_widget_system.py`.**  
+> **This documentation is kept for historical reference only.**
+
 > **Version:** 1.0  
 > **Last Updated:** 2025-11-17  
 > **Audience:** Developers creating custom dashboard widgets

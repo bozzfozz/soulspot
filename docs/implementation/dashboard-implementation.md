@@ -142,11 +142,13 @@ src/soulspot/templates/partials/widgets/
 - Size constraints (4-12 column spans)
 - Category and tag-based organization
 
-**WidgetTemplateRegistry Service**
-- Centralized template management
-- In-memory caching
-- Automatic discovery from `widget_templates/` directory
-- Pre-registration of system widgets
+> **⚠️ DEPRECATED:** The widget system has been removed (migration `ee19001hhj49_remove_widget_system.py`).
+
+**WidgetTemplateRegistry Service** ~~(REMOVED)~~
+- ~~Centralized template management~~
+- ~~In-memory caching~~
+- ~~Automatic discovery from `widget_templates/` directory~~
+- ~~Pre-registration of system widgets~~
 
 ---
 

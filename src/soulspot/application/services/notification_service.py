@@ -61,7 +61,7 @@ class NotificationService:
             data={"key": "value"},
         )
     """
-    
+
     def __init__(self, session: "AsyncSession | None" = None) -> None:
         """Initialize notification service.
         
@@ -72,7 +72,7 @@ class NotificationService:
         self._session = session
         self._providers: list[INotificationProvider] | None = None
         self._providers_initialized = False
-    
+
     async def _init_providers(self) -> list[INotificationProvider]:
         """Initialize and return enabled providers.
         
@@ -81,27 +81,27 @@ class NotificationService:
         """
         if self._providers_initialized and self._providers is not None:
             return self._providers
-        
+
         self._providers = []
-        
+
         if self._session is None:
             # No session = logging-only mode (backward compatibility)
             logger.debug("[NOTIFICATION] No session provided, logging-only mode")
             self._providers_initialized = True
             return self._providers
-        
+
         # Import providers
         from soulspot.infrastructure.notifications import (
             InAppNotificationProvider,
             WebhookNotificationProvider,
         )
-        
+
         # Initialize all providers
         all_providers: list[INotificationProvider] = [
             WebhookNotificationProvider(self._session),
             InAppNotificationProvider(self._session),
         ]
-        
+
         # Filter to only configured providers
         for provider in all_providers:
             try:
@@ -110,10 +110,10 @@ class NotificationService:
                     logger.debug(f"[NOTIFICATION] Provider enabled: {provider.name}")
             except Exception as e:
                 logger.warning(f"[NOTIFICATION] Failed to check provider {provider.name}: {e}")
-        
+
         self._providers_initialized = True
         return self._providers
-    
+
     def invalidate_providers(self) -> None:
         """Invalidate provider cache to force reload.
         
@@ -121,7 +121,7 @@ class NotificationService:
         """
         self._providers = None
         self._providers_initialized = False
-    
+
     async def send_notification(
         self,
         notification_type: NotificationType,
@@ -156,33 +156,33 @@ class NotificationService:
             user_id=user_id,
             timestamp=datetime.now(UTC),
         )
-        
+
         # Always log (backward compatibility)
         logger.info(f"[NOTIFICATION] {notification_type.value}: {title} - {message[:100]}...")
-        
+
         # Get enabled providers
         providers = await self._init_providers()
-        
+
         if not providers:
             logger.debug("[NOTIFICATION] No providers configured, logged only")
             return True  # Logging succeeded
-        
+
         # Send to all providers in parallel
         results = await self._send_to_providers(notification, providers)
-        
+
         # Log results
         successes = sum(1 for r in results if r.success)
         failures = sum(1 for r in results if not r.success)
-        
+
         if failures > 0:
             failed_providers = [r.provider_name for r in results if not r.success]
             logger.warning(
                 f"[NOTIFICATION] {successes}/{len(results)} providers succeeded, "
                 f"failed: {failed_providers}"
             )
-        
+
         return successes > 0
-    
+
     async def _send_to_providers(
         self, notification: Notification, providers: list[INotificationProvider]
     ) -> list[NotificationResult]:
@@ -192,17 +192,17 @@ class NotificationService:
         One slow provider won't block others.
         """
         tasks = []
-        
+
         for provider in providers:
             if provider.supports(notification.type):
                 tasks.append(self._send_to_provider(provider, notification))
-        
+
         if not tasks:
             return []
-        
+
         # Run all sends in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         # Convert exceptions to NotificationResults
         final_results: list[NotificationResult] = []
         for i, result in enumerate(results):
@@ -218,9 +218,9 @@ class NotificationService:
                 )
             elif isinstance(result, NotificationResult):
                 final_results.append(result)
-        
+
         return final_results
-    
+
     async def _send_to_provider(
         self, provider: INotificationProvider, notification: Notification
     ) -> NotificationResult:
@@ -239,14 +239,14 @@ class NotificationService:
                 notification_type=notification.type,
                 error=str(e),
             )
-    
+
     # =========================================================================
     # CONVENIENCE METHODS (backward compatible API)
     # =========================================================================
     # Hey future me - these wrap send_notification() with pre-built messages!
     # They maintain the same API as the old logging-only version.
     # =========================================================================
-    
+
     async def send_new_release_notification(
         self, artist_name: str, album_name: str, release_date: str
     ) -> bool:
@@ -271,7 +271,7 @@ class NotificationService:
                 "release_date": release_date,
             },
         )
-    
+
     async def send_missing_album_notification(
         self, artist_name: str, missing_count: int, total_count: int
     ) -> bool:
@@ -290,7 +290,7 @@ class NotificationService:
             if total_count > 0
             else 0
         )
-        
+
         return await self.send_notification(
             notification_type=NotificationType.MISSING_ALBUM,
             title=f"Incomplete Discography: {artist_name}",
@@ -306,7 +306,7 @@ class NotificationService:
                 "completeness": f"{completeness:.1f}%",
             },
         )
-    
+
     async def send_quality_upgrade_notification(
         self, track_title: str, current_quality: str, target_quality: str
     ) -> bool:
@@ -334,7 +334,7 @@ class NotificationService:
                 "target_quality": target_quality,
             },
         )
-    
+
     async def send_automation_notification(
         self, trigger: str, context: dict[str, Any]
     ) -> bool:
@@ -348,10 +348,10 @@ class NotificationService:
             True if notification was sent successfully
         """
         timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-        
+
         # Build message from context
         message_parts = [f"Automation rule '{trigger}' triggered at {timestamp}"]
-        
+
         if "artist_id" in context:
             message_parts.append(f"Artist: {context['artist_id']}")
         if "album_info" in context:
@@ -359,7 +359,7 @@ class NotificationService:
             message_parts.append(f"Album: {album_name}")
         if "track_title" in context:
             message_parts.append(f"Track: {context['track_title']}")
-        
+
         return await self.send_notification(
             notification_type=NotificationType.AUTOMATION_TRIGGERED,
             title=f"Automation: {trigger}",
@@ -367,7 +367,7 @@ class NotificationService:
             priority=NotificationPriority.NORMAL,
             data=context,
         )
-    
+
     async def send_download_started_notification(
         self, item_name: str, quality_profile: str
     ) -> bool:
@@ -390,7 +390,7 @@ class NotificationService:
                 "quality_profile": quality_profile,
             },
         )
-    
+
     async def send_download_completed_notification(
         self, item_name: str, success: bool
     ) -> bool:
@@ -412,7 +412,7 @@ class NotificationService:
             else NotificationPriority.HIGH
         )
         status = "completed successfully" if success else "failed"
-        
+
         return await self.send_notification(
             notification_type=notification_type,
             title=f"Download {'Complete' if success else 'Failed'}",
@@ -423,7 +423,7 @@ class NotificationService:
                 "success": success,
             },
         )
-    
+
     async def send_sync_completed_notification(
         self, service_name: str, items_synced: int, errors: int = 0
     ) -> bool:
@@ -439,7 +439,7 @@ class NotificationService:
         """
         priority = NotificationPriority.NORMAL if errors == 0 else NotificationPriority.HIGH
         status = "completed" if errors == 0 else f"completed with {errors} errors"
-        
+
         return await self.send_notification(
             notification_type=NotificationType.SYNC_COMPLETED,
             title=f"{service_name} Sync Complete",
@@ -451,7 +451,7 @@ class NotificationService:
                 "errors": errors,
             },
         )
-    
+
     async def send_system_error_notification(
         self, error_type: str, error_message: str, context: dict[str, Any] | None = None
     ) -> bool:

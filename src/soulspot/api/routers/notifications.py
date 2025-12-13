@@ -19,7 +19,9 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.ports.notification import NotificationType
-from soulspot.infrastructure.notifications.inapp_provider import InAppNotificationProvider
+from soulspot.infrastructure.notifications.inapp_provider import (
+    InAppNotificationProvider,
+)
 from soulspot.infrastructure.persistence.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -99,7 +101,7 @@ async def list_notifications(
     Returns list of notifications plus counts for UI badges.
     """
     provider = InAppNotificationProvider(session)
-    
+
     # Parse notification type if provided
     type_filter = None
     if notification_type:
@@ -107,7 +109,7 @@ async def list_notifications(
             type_filter = NotificationType(notification_type)
         except ValueError:
             pass  # Invalid type, ignore filter
-    
+
     # Get notifications
     notifications = await provider.get_notifications(
         unread_only=unread_only,
@@ -115,10 +117,10 @@ async def list_notifications(
         limit=limit,
         offset=offset,
     )
-    
+
     # Get unread count for badge
     unread_count = await provider.get_unread_count()
-    
+
     return NotificationsListResponse(
         notifications=[
             NotificationResponse(
@@ -150,7 +152,7 @@ async def get_unread_count(
     """
     provider = InAppNotificationProvider(session)
     count = await provider.get_unread_count()
-    
+
     return UnreadCountResponse(unread_count=count)
 
 
@@ -166,10 +168,10 @@ async def mark_notifications_read(
     """
     if not request.notification_ids:
         return MarkReadResponse(marked_count=0)
-    
+
     provider = InAppNotificationProvider(session)
     count = await provider.mark_as_read(request.notification_ids)
-    
+
     logger.info(f"[NOTIFICATION] Marked {count} notifications as read")
     return MarkReadResponse(marked_count=count)
 
@@ -184,7 +186,7 @@ async def mark_all_notifications_read(
     """
     provider = InAppNotificationProvider(session)
     count = await provider.mark_all_as_read()
-    
+
     logger.info(f"[NOTIFICATION] Marked all ({count}) notifications as read")
     return MarkReadResponse(marked_count=count)
 
@@ -200,10 +202,10 @@ async def delete_notification(
     """
     provider = InAppNotificationProvider(session)
     success = await provider.delete_notification(notification_id)
-    
+
     if not success:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
+
     logger.info(f"[NOTIFICATION] Deleted notification {notification_id[:8]}...")
     return DeleteResponse(success=True)
 
@@ -226,10 +228,10 @@ async def get_notification_badge(
     <span class="notification-badge" hx-get="/api/notifications/badge" hx-trigger="every 30s">3</span>
     """
     from fastapi.responses import HTMLResponse
-    
+
     provider = InAppNotificationProvider(session)
     count = await provider.get_unread_count()
-    
+
     if count == 0:
         # Empty badge (hidden)
         html = '<span id="notification-badge" class="hidden" hx-get="/api/notifications/badge" hx-trigger="every 30s"></span>'
@@ -240,7 +242,7 @@ async def get_notification_badge(
             class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
             hx-get="/api/notifications/badge" 
             hx-trigger="every 30s">{badge_text}</span>'''
-    
+
     return HTMLResponse(content=html)
 
 

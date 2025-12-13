@@ -249,22 +249,6 @@ class TestWidgetEndpoints:
     pass
 
 
-class TestWidgetTemplateEndpoints:
-    """Test widget template endpoints."""
-
-    async def test_list_widget_templates_endpoint_accessible(
-        self, async_client: AsyncClient
-    ):
-        """Verify list widget templates endpoint is accessible."""
-        response = await async_client.get("/api/widgets/templates")
-        assert response.status_code == 200
-
-    async def test_get_categories_endpoint_accessible(self, async_client: AsyncClient):
-        """Verify get categories endpoint is accessible."""
-        response = await async_client.get("/api/widgets/templates/categories/list")
-        assert response.status_code == 200
-
-
 class TestAutomationEndpoints:
     """Test automation endpoints."""
 

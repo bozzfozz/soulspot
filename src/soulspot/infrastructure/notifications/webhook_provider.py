@@ -14,7 +14,6 @@ Configure via app_settings:
 - notification.webhook.auth_header (optional, e.g., 'Bearer <token>')
 """
 
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -62,7 +61,7 @@ class WebhookNotificationProvider(INotificationProvider):
         notification.webhook.auth_header: str (optional, e.g., 'Bearer <token>')
         notification.webhook.timeout: int (default 30)
     """
-    
+
     def __init__(self, session: "AsyncSession") -> None:
         """Initialize with database session.
         
@@ -72,26 +71,28 @@ class WebhookNotificationProvider(INotificationProvider):
         self._session = session
         self._settings_cache: dict[str, Any] = {}
         self._cache_loaded = False
-    
+
     @property
     def name(self) -> str:
         """Provider name."""
         return "webhook"
-    
+
     @property
     def supported_types(self) -> list[NotificationType]:
         """Webhook supports all notification types."""
         return []
-    
+
     async def _load_settings(self) -> None:
         """Load webhook settings from database."""
         if self._cache_loaded:
             return
-        
-        from soulspot.application.services.app_settings_service import AppSettingsService
-        
+
+        from soulspot.application.services.app_settings_service import (
+            AppSettingsService,
+        )
+
         settings_service = AppSettingsService(self._session)
-        
+
         self._settings_cache = {
             "enabled": await settings_service.get_bool("notification.webhook.enabled", False),
             "url": await settings_service.get_str("notification.webhook.url", ""),
@@ -100,21 +101,21 @@ class WebhookNotificationProvider(INotificationProvider):
             "timeout": await settings_service.get_int("notification.webhook.timeout", 30),
         }
         self._cache_loaded = True
-    
+
     def invalidate_cache(self) -> None:
         """Invalidate settings cache."""
         self._cache_loaded = False
         self._settings_cache.clear()
-    
+
     async def is_configured(self) -> bool:
         """Check if webhook is configured."""
         await self._load_settings()
-        
+
         url = self._settings_cache.get("url", "")
         enabled = self._settings_cache.get("enabled", False)
-        
+
         return bool(enabled and url and isinstance(url, str) and url.strip())
-    
+
     async def send(self, notification: Notification) -> NotificationResult:
         """Send notification via webhook.
         
@@ -125,7 +126,7 @@ class WebhookNotificationProvider(INotificationProvider):
             NotificationResult with success status
         """
         await self._load_settings()
-        
+
         if not await self.is_configured():
             return NotificationResult(
                 success=False,
@@ -133,28 +134,28 @@ class WebhookNotificationProvider(INotificationProvider):
                 notification_type=notification.type,
                 error="Webhook provider not configured",
             )
-        
+
         try:
             webhook_format = str(self._settings_cache.get("format", "generic")).lower()
-            
+
             # Build payload based on format
             payload = self._build_payload(notification, webhook_format)
-            
+
             # Send HTTP request
             response = await self._send_request(payload)
-            
+
             logger.info(
                 f"[NOTIFICATION] Webhook sent ({webhook_format}): "
                 f"{notification.type.value} - {notification.title[:50]}..."
             )
-            
+
             return NotificationResult(
                 success=True,
                 provider_name=self.name,
                 notification_type=notification.type,
                 external_id=response,
             )
-            
+
         except Exception as e:
             logger.error(f"[NOTIFICATION] Webhook failed: {e}")
             return NotificationResult(
@@ -163,7 +164,7 @@ class WebhookNotificationProvider(INotificationProvider):
                 notification_type=notification.type,
                 error=str(e),
             )
-    
+
     def _build_payload(self, notification: Notification, format_type: str) -> dict[str, Any]:
         """Build webhook payload based on format type.
         
@@ -177,7 +178,7 @@ class WebhookNotificationProvider(INotificationProvider):
             return self._build_gotify_payload(notification)
         else:
             return self._build_generic_payload(notification)
-    
+
     def _build_discord_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Discord webhook payload with rich embed.
         
@@ -191,7 +192,7 @@ class WebhookNotificationProvider(INotificationProvider):
             NotificationPriority.HIGH: 0xFD7E14,      # Orange
             NotificationPriority.CRITICAL: 0xDC3545,  # Red
         }
-        
+
         # Emoji for notification type
         type_emojis = {
             NotificationType.NEW_RELEASE: "🎵",
@@ -205,10 +206,10 @@ class WebhookNotificationProvider(INotificationProvider):
             NotificationType.SYSTEM_ERROR: "⚠️",
             NotificationType.CUSTOM: "📬",
         }
-        
+
         emoji = type_emojis.get(notification.type, "📬")
         color = priority_colors.get(notification.priority, 0x0D6EFD)
-        
+
         # Build fields from data
         fields = []
         for key, value in (notification.data or {}).items():
@@ -218,7 +219,7 @@ class WebhookNotificationProvider(INotificationProvider):
                     "value": str(value)[:1024],
                     "inline": True,
                 })
-        
+
         embed: dict[str, Any] = {
             "title": f"{emoji} {notification.title}"[:256],
             "description": notification.message[:4096],
@@ -232,14 +233,14 @@ class WebhookNotificationProvider(INotificationProvider):
                 "text": f"SoulSpot • {notification.type.value}",
             },
         }
-        
+
         if fields:
             embed["fields"] = fields
-        
+
         return {
             "embeds": [embed],
         }
-    
+
     def _build_slack_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Slack webhook payload with blocks.
         
@@ -253,9 +254,9 @@ class WebhookNotificationProvider(INotificationProvider):
             NotificationPriority.HIGH: "🟠",
             NotificationPriority.CRITICAL: "🔴",
         }
-        
+
         emoji = priority_emoji.get(notification.priority, "🟢")
-        
+
         blocks: list[dict[str, Any]] = [
             {
                 "type": "header",
@@ -273,7 +274,7 @@ class WebhookNotificationProvider(INotificationProvider):
                 },
             },
         ]
-        
+
         # Add fields if data exists
         if notification.data:
             fields = [
@@ -287,7 +288,7 @@ class WebhookNotificationProvider(INotificationProvider):
                 "type": "section",
                 "fields": fields,
             })
-        
+
         # Add context with timestamp and type
         timestamp_str = (
             notification.timestamp.strftime("%Y-%m-%d %H:%M UTC")
@@ -303,9 +304,9 @@ class WebhookNotificationProvider(INotificationProvider):
                 },
             ],
         })
-        
+
         return {"blocks": blocks}
-    
+
     def _build_gotify_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Gotify push notification payload.
         
@@ -320,14 +321,14 @@ class WebhookNotificationProvider(INotificationProvider):
             NotificationPriority.HIGH: 7,
             NotificationPriority.CRITICAL: 10,
         }
-        
+
         # Build message with extra details
         message_parts = [notification.message]
-        
+
         if notification.data:
             details = " | ".join(f"{k}: {v}" for k, v in notification.data.items())
             message_parts.append(f"\nDetails: {details}")
-        
+
         return {
             "title": f"[{notification.type.value}] {notification.title}",
             "message": "\n".join(message_parts),
@@ -338,7 +339,7 @@ class WebhookNotificationProvider(INotificationProvider):
                 },
             },
         }
-    
+
     def _build_generic_payload(self, notification: Notification) -> dict[str, Any]:
         """Build generic JSON payload.
         
@@ -358,7 +359,7 @@ class WebhookNotificationProvider(INotificationProvider):
             "data": notification.data or {},
             "source": "soulspot",
         }
-    
+
     async def _send_request(self, payload: dict[str, Any]) -> str | None:
         """Send HTTP POST request to webhook URL.
         
@@ -368,15 +369,15 @@ class WebhookNotificationProvider(INotificationProvider):
         url = str(self._settings_cache.get("url", ""))
         auth_header = str(self._settings_cache.get("auth_header", ""))
         timeout = int(self._settings_cache.get("timeout", 30))
-        
+
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "SoulSpot/1.0",
         }
-        
+
         if auth_header:
             headers["Authorization"] = auth_header
-        
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 url,
@@ -384,7 +385,7 @@ class WebhookNotificationProvider(INotificationProvider):
                 headers=headers,
             )
             response.raise_for_status()
-            
+
             return response.text[:200] if response.text else None
 
 

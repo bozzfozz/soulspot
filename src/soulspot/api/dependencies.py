@@ -462,7 +462,7 @@ async def get_spotify_token_shared(request: Request) -> str:
 # Yo, creates NEW SlskdClient on every request - not cached! Slskd is your Soulseek downloader, this
 # client talks to its API. Like SpotifyClient, it's stateless so creating new instances is fine (httpx
 # pools connections internally). If slskd server is down, this won't fail until you actually USE the
-# client in an endpoint. 
+# client in an endpoint.
 # UPDATE: Now gets credentials from DB-first via CredentialsService (with .env fallback)!
 async def get_slskd_client(
     credentials_service: CredentialsService = Depends(get_credentials_service),

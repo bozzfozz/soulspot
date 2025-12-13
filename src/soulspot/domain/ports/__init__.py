@@ -5,6 +5,15 @@ from typing import Any, Optional
 
 from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
 
+# Notification system interfaces
+from soulspot.domain.ports.notification import (
+    INotificationProvider,
+    Notification,
+    NotificationPriority,
+    NotificationResult,
+    NotificationType,
+)
+
 # Hey future me – Plugin-System Interfaces sind in separatem Modul!
 # Import hier für einfachen Zugriff: from soulspot.domain.ports import IMusicServicePlugin
 from soulspot.domain.ports.plugin import (
@@ -17,16 +26,6 @@ from soulspot.domain.ports.plugin import (
     PluginError,
     ServiceType,
 )
-
-# Notification system interfaces
-from soulspot.domain.ports.notification import (
-    INotificationProvider,
-    Notification,
-    NotificationPriority,
-    NotificationResult,
-    NotificationType,
-)
-
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,

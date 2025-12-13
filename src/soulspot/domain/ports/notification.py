@@ -73,11 +73,11 @@ class Notification:
     priority: NotificationPriority = NotificationPriority.NORMAL
     data: dict[str, Any] = field(default_factory=dict)
     timestamp: datetime | None = None
-    
+
     # Optional: For in-app notifications (stored in DB)
     user_id: str | None = None
     read: bool = False
-    
+
     def __post_init__(self) -> None:
         """Set timestamp if not provided."""
         if self.timestamp is None:
@@ -121,13 +121,13 @@ class INotificationProvider(ABC):
                 # Send email via SMTP
                 ...
     """
-    
+
     @property
     @abstractmethod
     def name(self) -> str:
         """Unique name for this provider (e.g., 'email', 'webhook', 'gotify')."""
         pass
-    
+
     @property
     @abstractmethod
     def supported_types(self) -> list[NotificationType]:
@@ -136,7 +136,7 @@ class INotificationProvider(ABC):
         Return empty list to support ALL types.
         """
         pass
-    
+
     @abstractmethod
     async def send(self, notification: Notification) -> NotificationResult:
         """Send a notification through this provider.
@@ -148,7 +148,7 @@ class INotificationProvider(ABC):
             NotificationResult indicating success/failure
         """
         pass
-    
+
     @abstractmethod
     async def is_configured(self) -> bool:
         """Check if this provider is properly configured.
@@ -157,7 +157,7 @@ class INotificationProvider(ABC):
             True if provider has all required settings (credentials, URLs, etc.)
         """
         pass
-    
+
     def supports(self, notification_type: NotificationType) -> bool:
         """Check if this provider supports a notification type.
         
