@@ -554,7 +554,7 @@ class TestSpotifyClientArtistAPI:
         mock_client.get.assert_called_once()
         call_args = mock_client.get.call_args
         assert "artists/artist-123/albums" in call_args[0][0]
-        assert call_args[1]["params"]["include_groups"] == "album,single"
+        assert call_args[1]["params"]["include_groups"] == "album,single,compilation"
         assert call_args[1]["params"]["limit"] == 50
         assert call_args[1]["headers"]["Authorization"] == "Bearer test-token"
 

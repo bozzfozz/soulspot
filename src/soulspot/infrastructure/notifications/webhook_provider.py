@@ -95,9 +95,9 @@ class WebhookNotificationProvider(INotificationProvider):
 
         self._settings_cache = {
             "enabled": await settings_service.get_bool("notification.webhook.enabled", False),
-            "url": await settings_service.get_str("notification.webhook.url", ""),
-            "format": await settings_service.get_str("notification.webhook.format", "generic"),
-            "auth_header": await settings_service.get_str("notification.webhook.auth_header", ""),
+            "url": await settings_service.get_string("notification.webhook.url", ""),
+            "format": await settings_service.get_string("notification.webhook.format", "generic"),
+            "auth_header": await settings_service.get_string("notification.webhook.auth_header", ""),
             "timeout": await settings_service.get_int("notification.webhook.timeout", 30),
         }
         self._cache_loaded = True

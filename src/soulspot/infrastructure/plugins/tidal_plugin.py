@@ -62,7 +62,7 @@ class TidalPlugin(IMusicServicePlugin):
     # AUTHENTICATION (Stub)
     # =========================================================================
 
-    async def get_auth_url(self, state: str | None = None) -> str:
+    async def get_auth_url(self, _state: str | None = None) -> str:
         """Get Tidal OAuth URL."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -70,7 +70,7 @@ class TidalPlugin(IMusicServicePlugin):
             error_code="not_implemented",
         )
 
-    async def handle_callback(self, code: str, state: str | None = None) -> AuthStatus:
+    async def handle_callback(self, _code: str, _state: str | None = None) -> AuthStatus:
         """Handle OAuth callback."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -107,10 +107,10 @@ class TidalPlugin(IMusicServicePlugin):
 
     async def search(
         self,
-        query: str,
-        types: list[str] | None = None,
-        limit: int = 20,
-        offset: int = 0,
+        _query: str,
+        _types: list[str] | None = None,
+        _limit: int = 20,
+        _offset: int = 0,
     ) -> SearchResultDTO:
         """Search Tidal."""
         raise PluginError(
@@ -123,7 +123,7 @@ class TidalPlugin(IMusicServicePlugin):
     # ARTISTS (Stub)
     # =========================================================================
 
-    async def get_artist(self, artist_id: str) -> ArtistDTO:
+    async def get_artist(self, _artist_id: str) -> ArtistDTO:
         """Get artist by Tidal ID."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -133,10 +133,10 @@ class TidalPlugin(IMusicServicePlugin):
 
     async def get_artist_albums(
         self,
-        artist_id: str,
-        include_groups: list[str] | None = None,
-        limit: int = 50,
-        offset: int = 0,
+        _artist_id: str,
+        _include_groups: list[str] | None = None,
+        _limit: int = 50,
+        _offset: int = 0,
     ) -> PaginatedResponse[AlbumDTO]:
         """Get artist's albums."""
         raise PluginError(
@@ -146,7 +146,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_artist_top_tracks(
-        self, artist_id: str, market: str | None = None
+        self, _artist_id: str, _market: str | None = None
     ) -> list[TrackDTO]:
         """Get artist's top tracks."""
         raise PluginError(
@@ -156,7 +156,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_followed_artists(
-        self, limit: int = 50, after: str | None = None
+        self, _limit: int = 50, _after: str | None = None
     ) -> PaginatedResponse[ArtistDTO]:
         """Get followed artists."""
         raise PluginError(
@@ -169,7 +169,7 @@ class TidalPlugin(IMusicServicePlugin):
     # ALBUMS (Stub)
     # =========================================================================
 
-    async def get_album(self, album_id: str) -> AlbumDTO:
+    async def get_album(self, _album_id: str) -> AlbumDTO:
         """Get album by Tidal ID."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -178,7 +178,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_album_tracks(
-        self, album_id: str, limit: int = 50, offset: int = 0
+        self, _album_id: str, _limit: int = 50, _offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
         """Get album tracks."""
         raise PluginError(
@@ -191,7 +191,7 @@ class TidalPlugin(IMusicServicePlugin):
     # TRACKS (Stub)
     # =========================================================================
 
-    async def get_track(self, track_id: str) -> TrackDTO:
+    async def get_track(self, _track_id: str) -> TrackDTO:
         """Get track by Tidal ID."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -199,7 +199,7 @@ class TidalPlugin(IMusicServicePlugin):
             error_code="not_implemented",
         )
 
-    async def get_tracks(self, track_ids: list[str]) -> list[TrackDTO]:
+    async def get_tracks(self, _track_ids: list[str]) -> list[TrackDTO]:
         """Get multiple tracks."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -211,7 +211,7 @@ class TidalPlugin(IMusicServicePlugin):
     # PLAYLISTS (Stub)
     # =========================================================================
 
-    async def get_playlist(self, playlist_id: str) -> PlaylistDTO:
+    async def get_playlist(self, _playlist_id: str) -> PlaylistDTO:
         """Get playlist by Tidal ID."""
         raise PluginError(
             message="Tidal plugin not implemented yet",
@@ -220,7 +220,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_playlist_tracks(
-        self, playlist_id: str, limit: int = 100, offset: int = 0
+        self, _playlist_id: str, _limit: int = 100, _offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
         """Get playlist tracks."""
         raise PluginError(
@@ -230,7 +230,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_user_playlists(
-        self, limit: int = 50, offset: int = 0
+        self, _limit: int = 50, _offset: int = 0
     ) -> PaginatedResponse[PlaylistDTO]:
         """Get user playlists."""
         raise PluginError(
@@ -244,7 +244,7 @@ class TidalPlugin(IMusicServicePlugin):
     # =========================================================================
 
     async def get_saved_tracks(
-        self, limit: int = 50, offset: int = 0
+        self, _limit: int = 50, _offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
         """Get saved tracks."""
         raise PluginError(
@@ -254,7 +254,7 @@ class TidalPlugin(IMusicServicePlugin):
         )
 
     async def get_saved_albums(
-        self, limit: int = 50, offset: int = 0
+        self, _limit: int = 50, _offset: int = 0
     ) -> PaginatedResponse[AlbumDTO]:
         """Get saved albums."""
         raise PluginError(

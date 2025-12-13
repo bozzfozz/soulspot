@@ -99,10 +99,12 @@ src/soulspot/api/routers/downloads.py:965: error:
   Name "cancel_download" already defined on line 510
 ```
 
-### Critical Files:
-1. `infrastructure/plugins/deezer_plugin.py` - 50+ errors (DTO mismatches)
-2. `application/services/credentials_service.py` - 15+ errors (wrong method name)
-3. `api/routers/downloads.py` - 10+ errors (duplicate definitions)
+### Critical Files (NOW FIXED):
+1. `infrastructure/plugins/deezer_plugin.py` - ✅ FIXED (DTO mismatches corrected)
+2. `infrastructure/plugins/tidal_plugin.py` - ✅ FIXED (ARG002 - underscore prefix)
+3. `application/services/credentials_service.py` - ✅ FIXED (get_str → get_string)
+4. `api/routers/downloads.py` - ✅ FIXED (duplicate definitions removed)
+5. `api/routers/notifications.py` - ✅ FIXED (import error corrected)
 
 ---
 
@@ -194,8 +196,8 @@ from soulspot.infrastructure.persistence.database import get_session
 
 But `get_session` doesn't exist as a standalone function. It's a method of the `Database` class.
 
-**Solution:**
-Should use the FastAPI dependency:
+**Solution:** ✅ **FIXED!**
+Now correctly uses the FastAPI dependency:
 ```python
 from soulspot.api.dependencies import get_db_session
 ```

@@ -288,7 +288,7 @@ SoulSpot uses a **database-first configuration** approach:
 ```python
 # ✅ RIGHT: Load from DB via AppSettingsService
 settings_service = AppSettingsService(session)
-client_id = await settings_service.get_str("spotify.client_id")
+client_id = await settings_service.get_string("spotify.client_id")
 
 # ❌ WRONG: Load from settings.py / .env
 from soulspot.config.settings import get_settings

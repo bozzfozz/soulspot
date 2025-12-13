@@ -181,6 +181,12 @@ class Album:
         """Validate album data."""
         if not self.title or not self.title.strip():
             raise ValueError("Album title cannot be empty")
+        if self.release_year is not None and (
+            self.release_year < 1900 or self.release_year > 2100
+        ):
+            raise ValueError(
+                f"Invalid release_year {self.release_year}: must be between 1900 and 2100"
+            )
 
     @property
     def is_compilation(self) -> bool:

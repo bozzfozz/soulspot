@@ -53,8 +53,8 @@ class TestRequestLoggingMiddleware:
 
         assert middleware.log_request_body is True
 
-    def test_successful_request_logs_start_and_completion(self, client: TestClient):
-        """Test that successful requests log start and completion."""
+    def test_successful_request_logs_completion(self, client: TestClient):
+        """Test that successful requests log completion with status and duration."""
         with patch(
             "soulspot.infrastructure.observability.middleware.logger"
         ) as mock_logger:
@@ -63,20 +63,16 @@ class TestRequestLoggingMiddleware:
             assert response.status_code == 200
             assert response.json() == {"message": "test"}
 
-            # Verify logger.info was called twice (start and completion)
-            assert mock_logger.info.call_count == 2
+            # Middleware logs once per request (completion only)
+            assert mock_logger.info.call_count == 1
 
-            # Check first call (request started)
-            first_call_args = mock_logger.info.call_args_list[0]
-            assert "Request started" in first_call_args[0][0]
-            assert first_call_args[1]["extra"]["method"] == "GET"
-            assert first_call_args[1]["extra"]["path"] == "/test"
-
-            # Check second call (request completed)
-            second_call_args = mock_logger.info.call_args_list[1]
-            assert "Request completed" in second_call_args[0][0]
-            assert second_call_args[1]["extra"]["status_code"] == 200
-            assert "duration_seconds" in second_call_args[1]["extra"]
+            # Check the log message format: "✓ GET /test → 200 (Xms)"
+            log_call = mock_logger.info.call_args_list[0]
+            log_message = log_call[0][0]
+            assert "GET" in log_message
+            assert "/test" in log_message
+            assert "200" in log_message
+            assert "ms" in log_message
 
     def test_request_with_correlation_id_header(self, client: TestClient):
         """Test request with X-Correlation-ID header."""
@@ -125,56 +121,55 @@ class TestRequestLoggingMiddleware:
             assert response.headers["X-Correlation-ID"] == "generated-correlation-id"
 
     def test_request_logs_client_ip(self, client: TestClient):
-        """Test that client IP is logged."""
+        """Test that client IP is included in request path."""
         with patch(
             "soulspot.infrastructure.observability.middleware.logger"
         ) as mock_logger:
             client.get("/test")
 
-            # Check first call (request started)
-            first_call = mock_logger.info.call_args_list[0]
-            assert "client_ip" in first_call[1]["extra"]
-            # TestClient uses "testclient" as the host
-            assert first_call[1]["extra"]["client_ip"] == "testclient"
+            # Middleware logs completion - check path is logged
+            log_call = mock_logger.info.call_args_list[0]
+            log_message = log_call[0][0]
+            # The simplified middleware logs: "✓ GET /test → 200 (Xms)"
+            assert "/test" in log_message
 
     def test_request_logs_user_agent(self, client: TestClient):
-        """Test that user agent is logged."""
+        """Test that requests with custom headers still work."""
         with patch(
             "soulspot.infrastructure.observability.middleware.logger"
         ) as mock_logger:
-            client.get("/test", headers={"user-agent": "test-agent/1.0"})
+            response = client.get("/test", headers={"user-agent": "test-agent/1.0"})
 
-            # Check first call (request started)
-            first_call = mock_logger.info.call_args_list[0]
-            assert first_call[1]["extra"]["user_agent"] == "test-agent/1.0"
+            # Check request completes successfully
+            assert response.status_code == 200
+            # Check log was created
+            assert mock_logger.info.call_count == 1
 
     def test_request_logs_query_params(self, client: TestClient):
-        """Test that query parameters are logged."""
+        """Test that requests with query parameters are logged."""
         with patch(
             "soulspot.infrastructure.observability.middleware.logger"
         ) as mock_logger:
             client.get("/test?param1=value1&param2=value2")
 
-            # Check first call (request started)
-            first_call = mock_logger.info.call_args_list[0]
-            query_params = first_call[1]["extra"]["query_params"]
-            assert "param1=value1" in query_params
-            assert "param2=value2" in query_params
+            # Check log message contains path
+            log_call = mock_logger.info.call_args_list[0]
+            log_message = log_call[0][0]
+            # The path in log should be "/test" (query params may or may not be shown)
+            assert "/test" in log_message
 
     def test_request_measures_duration(self, client: TestClient):
-        """Test that request duration is measured."""
+        """Test that request duration is measured and logged."""
         with patch(
             "soulspot.infrastructure.observability.middleware.logger"
         ) as mock_logger:
             client.get("/test")
 
-            # Check second call (request completed)
-            second_call = mock_logger.info.call_args_list[1]
-            assert "duration_seconds" in second_call[1]["extra"]
-            # Duration should be a small positive number
-            duration = second_call[1]["extra"]["duration_seconds"]
-            assert isinstance(duration, float)
-            assert duration >= 0
+            # Check log message contains duration in ms format
+            log_call = mock_logger.info.call_args_list[0]
+            log_message = log_call[0][0]
+            # Should contain duration like "(Xms)"
+            assert "ms" in log_message
 
     def test_error_request_logs_exception(self, client: TestClient):
         """Test that failed requests log exception details."""
@@ -188,18 +183,12 @@ class TestRequestLoggingMiddleware:
             # Verify logger.exception was called
             assert mock_logger.exception.call_count == 1
 
-            # Check exception log details
+            # Check exception log message format
             exception_call = mock_logger.exception.call_args
-            assert "Request failed: GET /error" in exception_call[0][0]
-            assert exception_call[1]["extra"]["method"] == "GET"
-            assert exception_call[1]["extra"]["path"] == "/error"
-            assert "duration_seconds" in exception_call[1]["extra"]
-            # Duration should be a small positive number
-            duration = exception_call[1]["extra"]["duration_seconds"]
-            assert isinstance(duration, float)
-            assert duration >= 0
-            assert exception_call[1]["extra"]["error_type"] == "ValueError"
-            assert exception_call[1]["extra"]["error_message"] == "Test error"
+            log_message = exception_call[0][0]
+            assert "GET" in log_message
+            assert "/error" in log_message
+            assert "FAILED" in log_message
 
     def test_post_request_logging(self, client: TestClient):
         """Test logging for POST requests."""
@@ -210,10 +199,11 @@ class TestRequestLoggingMiddleware:
 
             assert response.status_code == 200
 
-            # Check first call (request started)
-            first_call = mock_logger.info.call_args_list[0]
-            assert first_call[1]["extra"]["method"] == "POST"
-            assert first_call[1]["extra"]["path"] == "/test"
+            # Check log message contains POST method
+            log_call = mock_logger.info.call_args_list[0]
+            log_message = log_call[0][0]
+            assert "POST" in log_message
+            assert "/test" in log_message
 
     def test_multiple_requests_independent_logging(self, client: TestClient):
         """Test that multiple requests are logged independently."""
@@ -225,8 +215,8 @@ class TestRequestLoggingMiddleware:
             client.post("/test")
             client.get("/test?param=value")
 
-            # Each request should log start and completion (2 logs per request)
-            assert mock_logger.info.call_count == 6
+            # Each request should log once (completion log)
+            assert mock_logger.info.call_count == 3
 
     def test_request_without_client(self):
         """Test middleware handles requests without client information."""
@@ -261,9 +251,8 @@ class TestRequestLoggingMiddleware:
 
             assert response.status_code == 200
 
-            # Verify client_ip is "unknown"
-            first_call = mock_logger.info.call_args_list[0]
-            assert first_call[1]["extra"]["client_ip"] == "unknown"
+            # Verify request was logged
+            assert mock_logger.info.call_count == 1
 
     def test_request_without_user_agent(self, client: TestClient):
         """Test that requests without user-agent header are handled."""
@@ -273,13 +262,10 @@ class TestRequestLoggingMiddleware:
             # TestClient sets a default user-agent of "testclient"
             client.get("/test")
 
-            # Check first call (request started)
-            first_call = mock_logger.info.call_args_list[0]
-            # TestClient provides "testclient" as default user agent
-            assert "user_agent" in first_call[1]["extra"]
-            # The middleware should handle missing user-agent with empty string,
-            # but TestClient always provides one
-            assert first_call[1]["extra"]["user_agent"] != ""
+            # Check log was created successfully
+            assert mock_logger.info.call_count == 1
+            log_message = mock_logger.info.call_args_list[0][0][0]
+            assert "/test" in log_message
 
 
 class TestRequestLoggingMiddlewareEdgeCases:

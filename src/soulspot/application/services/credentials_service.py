@@ -125,9 +125,9 @@ class CredentialsService:
             SpotifyCredentials with client_id, client_secret, redirect_uri
         """
         # Try DB first
-        client_id = await self._settings_service.get_str("spotify.client_id", default="")
-        client_secret = await self._settings_service.get_str("spotify.client_secret", default="")
-        redirect_uri = await self._settings_service.get_str(
+        client_id = await self._settings_service.get_string("spotify.client_id", default="")
+        client_secret = await self._settings_service.get_string("spotify.client_secret", default="")
+        redirect_uri = await self._settings_service.get_string(
             "spotify.redirect_uri",
             default="http://localhost:8000/api/auth/callback",
         )
@@ -161,10 +161,10 @@ class CredentialsService:
             SlskdCredentials with url, api_key, username, password
         """
         # Try DB first
-        url = await self._settings_service.get_str("slskd.url", default="http://localhost:5030")
-        api_key = await self._settings_service.get_str("slskd.api_key", default="")
-        username = await self._settings_service.get_str("slskd.username", default="")
-        password = await self._settings_service.get_str("slskd.password", default="")
+        url = await self._settings_service.get_string("slskd.url", default="http://localhost:5030")
+        api_key = await self._settings_service.get_string("slskd.api_key", default="")
+        username = await self._settings_service.get_string("slskd.username", default="")
+        password = await self._settings_service.get_string("slskd.password", default="")
 
         # Fallback to env if DB is empty
         if url == "http://localhost:5030" and self._fallback:
@@ -200,9 +200,9 @@ class CredentialsService:
         Returns:
             DeezerCredentials with app_id, secret, redirect_uri
         """
-        app_id = await self._settings_service.get_str("deezer.app_id", default="")
-        secret = await self._settings_service.get_str("deezer.secret", default="")
-        redirect_uri = await self._settings_service.get_str(
+        app_id = await self._settings_service.get_string("deezer.app_id", default="")
+        secret = await self._settings_service.get_string("deezer.secret", default="")
+        redirect_uri = await self._settings_service.get_string(
             "deezer.redirect_uri",
             default="http://localhost:8000/api/auth/deezer/callback",
         )

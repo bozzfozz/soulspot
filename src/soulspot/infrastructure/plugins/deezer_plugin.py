@@ -333,13 +333,12 @@ class DeezerPlugin(IMusicServicePlugin):
         try:
             user_data = await self._client.get_user_me(token)
             return UserProfileDTO(
-                id=str(user_data.get("id", "")),
                 display_name=user_data.get("name", ""),
+                source_service="deezer",
+                deezer_id=str(user_data.get("id", "")),
                 email=user_data.get("email"),
                 image_url=user_data.get("picture_big") or user_data.get("picture"),
-                service=ServiceType.DEEZER,
-                profile_url=user_data.get("link"),
-                followers_count=user_data.get("nb_fan"),
+                external_urls={"deezer": user_data.get("link", "")},
             )
         except Exception as e:
             logger.exception("Failed to get Deezer user profile")
@@ -487,7 +486,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=len(albums),
                 limit=limit,
                 offset=offset,
-                has_more=False,  # Deezer returns all at once
+                next_offset=None,  # Deezer returns all at once
             )
         except Exception as e:
             logger.error(f"DeezerPlugin get_artist_albums failed: {e}")
@@ -552,13 +551,13 @@ class DeezerPlugin(IMusicServicePlugin):
 
             artists = [
                 ArtistDTO(
-                    id=str(artist.get("id", "")),
                     name=artist.get("name", "Unknown"),
+                    source_service="deezer",
+                    deezer_id=str(artist.get("id", "")),
                     image_url=artist.get("picture_big") or artist.get("picture_medium"),
                     genres=[],
-                    external_url=artist.get("link"),
-                    service=ServiceType.DEEZER,
-                    followers_count=artist.get("nb_fan"),
+                    followers=artist.get("nb_fan"),
+                    external_urls={"deezer": artist.get("link", "")},
                 )
                 for artist in data.get("data", [])
             ]
@@ -572,8 +571,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=total,
                 limit=limit,
                 offset=index,
-                has_more=has_more,
-                next_cursor=str(next_index) if has_more else None,
+                next_offset=next_index if has_more else None,
             )
 
         except PluginError:
@@ -646,7 +644,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=len(tracks),
                 limit=limit,
                 offset=offset,
-                has_more=False,
+                next_offset=None,
             )
         except Exception as e:
             logger.error(f"DeezerPlugin get_album_tracks failed: {e}")
@@ -825,13 +823,14 @@ class DeezerPlugin(IMusicServicePlugin):
                 query, limit=min(limit, 25)
             )
             artists = [self._convert_artist(a) for a in deezer_artists]
+            has_more = len(artists) >= limit
 
             return PaginatedResponse(
                 items=artists,
                 total=len(artists),
                 limit=limit,
                 offset=offset,
-                has_more=len(artists) >= limit,
+                next_offset=offset + len(artists) if has_more else None,
             )
         except Exception as e:
             logger.error(f"DeezerPlugin search_artists failed: {e}")
@@ -862,13 +861,14 @@ class DeezerPlugin(IMusicServicePlugin):
                 query, limit=min(limit, 25)
             )
             albums = [self._convert_album(a) for a in deezer_albums]
+            has_more = len(albums) >= limit
 
             return PaginatedResponse(
                 items=albums,
                 total=len(albums),
                 limit=limit,
                 offset=offset,
-                has_more=len(albums) >= limit,
+                next_offset=offset + len(albums) if has_more else None,
             )
         except Exception as e:
             logger.error(f"DeezerPlugin search_albums failed: {e}")
@@ -900,13 +900,14 @@ class DeezerPlugin(IMusicServicePlugin):
                 query, limit=min(limit, 25)
             )
             tracks = [self._convert_track(t) for t in deezer_tracks]
+            has_more = len(tracks) >= limit
 
             return PaginatedResponse(
                 items=tracks,
                 total=len(tracks),
                 limit=limit,
                 offset=offset,
-                has_more=len(tracks) >= limit,
+                next_offset=offset + len(tracks) if has_more else None,
             )
         except Exception as e:
             logger.error(f"DeezerPlugin search_tracks failed: {e}")
@@ -969,16 +970,16 @@ class DeezerPlugin(IMusicServicePlugin):
                 )
 
             return PlaylistDTO(
-                id=str(data.get("id", "")),
                 name=data.get("title", ""),
+                source_service="deezer",
+                deezer_id=str(data.get("id", "")),
                 description=data.get("description"),
-                image_url=data.get("picture_big") or data.get("picture_medium"),
+                cover_url=data.get("picture_big") or data.get("picture_medium"),
                 owner_id=str(data.get("creator", {}).get("id", "")),
                 owner_name=data.get("creator", {}).get("name"),
-                track_count=data.get("nb_tracks", 0),
+                total_tracks=data.get("nb_tracks", 0),
                 is_public=data.get("public", True),
-                external_url=data.get("link"),
-                service=ServiceType.DEEZER,
+                external_urls={"deezer": data.get("link", "")},
             )
 
         except PluginError:
@@ -1033,8 +1034,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=total,
                 limit=limit,
                 offset=offset,
-                has_more=has_more,
-                next_cursor=str(offset + len(tracks)) if has_more else None,
+                next_offset=offset + len(tracks) if has_more else None,
             )
 
         except PluginError:
@@ -1067,16 +1067,16 @@ class DeezerPlugin(IMusicServicePlugin):
 
             playlists = [
                 PlaylistDTO(
-                    id=str(pl.get("id", "")),
                     name=pl.get("title", ""),
+                    source_service="deezer",
+                    deezer_id=str(pl.get("id", "")),
                     description=pl.get("description"),
-                    image_url=pl.get("picture_big") or pl.get("picture_medium"),
+                    cover_url=pl.get("picture_big") or pl.get("picture_medium"),
                     owner_id=str(pl.get("creator", {}).get("id", "")),
                     owner_name=pl.get("creator", {}).get("name"),
-                    track_count=pl.get("nb_tracks", 0),
+                    total_tracks=pl.get("nb_tracks", 0),
                     is_public=pl.get("public", True),
-                    external_url=pl.get("link"),
-                    service=ServiceType.DEEZER,
+                    external_urls={"deezer": pl.get("link", "")},
                 )
                 for pl in data.get("data", [])
             ]
@@ -1089,8 +1089,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=total,
                 limit=limit,
                 offset=offset,
-                has_more=has_more,
-                next_cursor=str(offset + len(playlists)) if has_more else None,
+                next_offset=offset + len(playlists) if has_more else None,
             )
 
         except PluginError:
@@ -1152,8 +1151,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=total,
                 limit=limit,
                 offset=offset,
-                has_more=has_more,
-                next_cursor=str(offset + len(tracks)) if has_more else None,
+                next_offset=offset + len(tracks) if has_more else None,
             )
 
         except PluginError:
@@ -1185,20 +1183,20 @@ class DeezerPlugin(IMusicServicePlugin):
 
             albums = [
                 AlbumDTO(
-                    id=str(album.get("id", "")),
-                    name=album.get("title", ""),
-                    artist_id=str(album.get("artist", {}).get("id", "")),
+                    title=album.get("title", ""),
                     artist_name=album.get("artist", {}).get("name", "Unknown"),
-                    image_url=(
+                    source_service="deezer",
+                    deezer_id=str(album.get("id", "")),
+                    artist_deezer_id=str(album.get("artist", {}).get("id", "")),
+                    artwork_url=(
                         album.get("cover_big")
                         or album.get("cover_medium")
                         or album.get("cover")
                     ),
                     release_date=album.get("release_date"),
                     total_tracks=album.get("nb_tracks", 0),
-                    album_type=album.get("record_type"),
-                    external_url=album.get("link"),
-                    service=ServiceType.DEEZER,
+                    album_type=album.get("record_type", "album"),
+                    external_urls={"deezer": album.get("link", "")},
                 )
                 for album in data.get("data", [])
             ]
@@ -1211,8 +1209,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 total=total,
                 limit=limit,
                 offset=offset,
-                has_more=has_more,
-                next_cursor=str(offset + len(albums)) if has_more else None,
+                next_offset=offset + len(albums) if has_more else None,
             )
 
         except PluginError:
@@ -1340,21 +1337,14 @@ class DeezerPlugin(IMusicServicePlugin):
             Standard ArtistDTO
         """
         return ArtistDTO(
-            spotify_id=None,  # No Spotify ID for Deezer artists
             name=deezer_artist.name,
+            source_service="deezer",
+            deezer_id=str(deezer_artist.id),
             genres=[],  # Deezer doesn't return genres on artist object
             popularity=None,
             image_url=deezer_artist.picture_big or deezer_artist.picture_medium,
-            external_url=deezer_artist.link,
             followers=deezer_artist.nb_fan,
-            extra={
-                "deezer_id": deezer_artist.id,
-                "picture_small": deezer_artist.picture_small,
-                "picture_medium": deezer_artist.picture_medium,
-                "picture_big": deezer_artist.picture_big,
-                "picture_xl": deezer_artist.picture_xl,
-                "nb_album": deezer_artist.nb_album,
-            },
+            external_urls={"deezer": deezer_artist.link or ""},
         )
 
     def _convert_album(self, deezer_album: DeezerAlbum) -> AlbumDTO:
@@ -1370,27 +1360,17 @@ class DeezerPlugin(IMusicServicePlugin):
             Standard AlbumDTO
         """
         return AlbumDTO(
-            id=str(deezer_album.id),
-            name=deezer_album.title,
+            title=deezer_album.title,
             artist_name=deezer_album.artist_name,
-            artist_id=str(deezer_album.artist_id) if deezer_album.artist_id else None,
+            source_service="deezer",
+            deezer_id=str(deezer_album.id),
+            artist_deezer_id=str(deezer_album.artist_id) if deezer_album.artist_id else None,
             release_date=deezer_album.release_date,
             total_tracks=deezer_album.nb_tracks or 0,
             album_type=deezer_album.record_type or "album",
-            image_url=deezer_album.cover_big or deezer_album.cover_medium,
-            external_url=deezer_album.link,
-            service=ServiceType.DEEZER,
-            extra={
-                "deezer_id": deezer_album.id,
-                "cover_small": deezer_album.cover_small,
-                "cover_medium": deezer_album.cover_medium,
-                "cover_big": deezer_album.cover_big,
-                "cover_xl": deezer_album.cover_xl,
-                "explicit": deezer_album.explicit_lyrics,
-                "record_type": deezer_album.record_type,
-                "upc": deezer_album.upc,
-                "duration": deezer_album.duration,
-            },
+            artwork_url=deezer_album.cover_big or deezer_album.cover_medium,
+            upc=deezer_album.upc,
+            external_urls={"deezer": deezer_album.link or ""},
         )
 
     def _convert_track(self, deezer_track: DeezerTrack) -> TrackDTO:
