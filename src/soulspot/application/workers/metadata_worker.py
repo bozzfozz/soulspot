@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 # workers/__init__.py → metadata_worker → use_cases/__init__.py
 # By importing in TYPE_CHECKING block, mypy sees the types but runtime doesn't execute the import.
 if TYPE_CHECKING:
-    from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
+    pass
 
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import (

@@ -18,11 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.api.dependencies import get_db_session
 from soulspot.domain.ports.notification import NotificationType
 from soulspot.infrastructure.notifications.inapp_provider import (
     InAppNotificationProvider,
 )
-from soulspot.infrastructure.persistence.database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class DeleteResponse(BaseModel):
 
 @router.get("", response_model=NotificationsListResponse)
 async def list_notifications(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     unread_only: Annotated[bool, Query(description="Only return unread notifications")] = False,
     notification_type: Annotated[str | None, Query(description="Filter by type")] = None,
     limit: Annotated[int, Query(ge=1, le=100, description="Max notifications to return")] = 20,
@@ -143,7 +143,7 @@ async def list_notifications(
 
 @router.get("/unread-count", response_model=UnreadCountResponse)
 async def get_unread_count(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> UnreadCountResponse:
     """Get count of unread notifications.
 
@@ -158,7 +158,7 @@ async def get_unread_count(
 
 @router.post("/mark-read", response_model=MarkReadResponse)
 async def mark_notifications_read(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     request: MarkReadRequest,
 ) -> MarkReadResponse:
     """Mark specific notifications as read.
@@ -178,7 +178,7 @@ async def mark_notifications_read(
 
 @router.post("/mark-all-read", response_model=MarkReadResponse)
 async def mark_all_notifications_read(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> MarkReadResponse:
     """Mark all notifications as read.
 
@@ -193,7 +193,7 @@ async def mark_all_notifications_read(
 
 @router.delete("/{notification_id}", response_model=DeleteResponse)
 async def delete_notification(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
     notification_id: str,
 ) -> DeleteResponse:
     """Delete a specific notification.
@@ -217,7 +217,7 @@ async def delete_notification(
 
 @router.get("/badge")
 async def get_notification_badge(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> str:
     """Get notification badge HTML for HTMX.
 

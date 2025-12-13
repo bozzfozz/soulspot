@@ -10,9 +10,7 @@ from typing import TYPE_CHECKING, Any
 # The actual import happens LAZILY in __init__ where we instantiate the use case.
 # SearchAndDownloadTrackUseCase needs to be imported there, not at module level!
 if TYPE_CHECKING:
-    from soulspot.application.use_cases.search_and_download import (
-        SearchAndDownloadTrackUseCase,
-    )
+    pass
 
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository

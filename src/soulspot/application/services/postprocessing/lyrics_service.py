@@ -3,8 +3,6 @@
 import logging
 from typing import Any
 
-import httpx
-
 from soulspot.config import Settings
 from soulspot.domain.entities import Track
 
