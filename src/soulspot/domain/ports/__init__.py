@@ -17,6 +17,16 @@ from soulspot.domain.ports.plugin import (
     PluginError,
     ServiceType,
 )
+
+# Notification system interfaces
+from soulspot.domain.ports.notification import (
+    INotificationProvider,
+    Notification,
+    NotificationPriority,
+    NotificationResult,
+    NotificationType,
+)
+
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,

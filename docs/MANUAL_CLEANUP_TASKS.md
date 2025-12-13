@@ -11,9 +11,28 @@
 | Category | Items | Priority | Impact |
 |----------|-------|----------|--------|
 | Widget System | 4 items | 🔴 High | Clean dead code |
+| Unused Provider | 1 file | 🔴 High | Removed from code |
 | CSS Files | 11 files | 🟡 Medium | Reduce bundle size |
 | Templates | 1 file | 🟡 Medium | Clean dead code |
 | Router Refactoring | 3 routers | 🟢 Low | Maintainability |
+
+---
+
+## Unused Email Provider 🔴 HIGH PRIORITY (NEW)
+
+### Background
+Email notification provider was removed from the notification system (decision: webhooks + in-app are sufficient).
+Code references removed, but file still exists.
+
+### File to Remove
+
+```bash
+# Remove unused email provider
+rm src/soulspot/infrastructure/notifications/email_provider.py
+
+# Verify removal
+ls src/soulspot/infrastructure/notifications/  # Should show only __init__.py, inapp_provider.py, webhook_provider.py
+```
 
 ---
 
