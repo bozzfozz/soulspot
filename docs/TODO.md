@@ -35,6 +35,32 @@
 
 ---
 
+## 🔵 Feature Roadmap
+
+### Download Manager Erweiterungen
+> **Details:** [docs/features/DOWNLOAD_MANAGER_FEATURES.md](features/DOWNLOAD_MANAGER_FEATURES.md)
+
+**Phase 1: Core Improvements**
+- [ ] Auto-Retry mit Exponential Backoff
+- [ ] Quality Profiles (FLAC > 320kbps > 256kbps)
+- [ ] Batch Operations (Multi-Select)
+- [ ] Queue Limits (Max concurrent)
+- [ ] Failed History Page
+
+**Phase 2: Post-Processing**
+- [ ] Metadata Tagging (ID3 via mutagen)
+- [ ] Album Art Embed
+- [ ] Auto-Move & Rename nach Pattern
+- [ ] Notifications (Toast, Webhook)
+
+**Phase 3: Advanced**
+- [ ] Scheduler (Time-based Start/Stop)
+- [ ] Statistics Dashboard mit Charts
+- [ ] Alternative Source Search
+- [ ] Blocklist für User/Files
+
+---
+
 ## 🟢 Niedrige Priorität (Refactoring)
 
 ### Leere Router entfernen ✅ ERLEDIGT
