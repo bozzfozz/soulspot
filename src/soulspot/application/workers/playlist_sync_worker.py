@@ -8,7 +8,15 @@ erst beim Job-Processing vom TokenManager.
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soulspot.application.use_cases import ImportSpotifyPlaylistUseCase
+# TYPE_CHECKING block: Import only during type-checking (mypy/pylance), not at runtime.
+# This breaks the circular import: use_cases/__init__.py → workers → use_cases.
+if TYPE_CHECKING:
+    from soulspot.application.services.token_manager import DatabaseTokenManager
+    from soulspot.application.use_cases.import_spotify_playlist import (
+        ImportSpotifyPlaylistUseCase,
+    )
+    from soulspot.config import Settings
+
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import (
     IAlbumRepository,
@@ -16,10 +24,6 @@ from soulspot.domain.ports import (
     IPlaylistRepository,
     ITrackRepository,
 )
-
-if TYPE_CHECKING:
-    from soulspot.application.services.token_manager import DatabaseTokenManager
-    from soulspot.config import Settings
 
 logger = logging.getLogger(__name__)
 

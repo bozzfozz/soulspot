@@ -1,8 +1,14 @@
 """Metadata enrichment worker for background metadata processing."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from soulspot.application.use_cases import EnrichMetadataUseCase
+# Hey future me - TYPE_CHECKING lazy import pattern to break circular dependency:
+# use_cases/__init__.py → queue_album_downloads → workers.job_queue
+# workers/__init__.py → metadata_worker → use_cases/__init__.py
+# By importing in TYPE_CHECKING block, mypy sees the types but runtime doesn't execute the import.
+if TYPE_CHECKING:
+    from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
+
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import (
     IAlbumRepository,
@@ -28,6 +34,7 @@ class MetadataWorker:
     # three levels of the music hierarchy! MusicBrainz client is the external dependency - it has STRICT
     # rate limits (1 request per second) so don't spam it! The use case handles rate limiting internally.
     # Same pattern as other workers - inject deps, create use case, don't auto-register.
+    # NOTE: Lazy import in __init__ to break circular dependency (use_cases ↔ workers).
     def __init__(
         self,
         job_queue: JobQueue,
@@ -45,6 +52,9 @@ class MetadataWorker:
             artist_repository: Repository for artist persistence
             album_repository: Repository for album persistence
         """
+        # Lazy import to break circular dependency: use_cases → workers.job_queue → metadata_worker → use_cases
+        from soulspot.application.use_cases.enrich_metadata import EnrichMetadataUseCase
+
         self._job_queue = job_queue
         self._use_case = EnrichMetadataUseCase(
             musicbrainz_client=musicbrainz_client,

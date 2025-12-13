@@ -3057,6 +3057,59 @@ class QualityUpgradeCandidateRepository(IQualityUpgradeCandidateRepository):
         result = await self.session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined, no-any-return]
 
+    # Hey future me - this method returns candidates sorted by improvement_score DESC.
+    # Use min_score to filter out low-priority upgrades (e.g., min_score=0.3 means 30%+ quality gain).
+    # It's for the Quality Upgrade UI where users pick which tracks to upgrade first.
+    # The improvement_score is calculated as (target_bitrate - current_bitrate) / target_bitrate.
+    async def list_by_improvement_score(
+        self, min_score: float, limit: int = 100
+    ) -> list[Any]:
+        """List candidates by minimum improvement score.
+
+        Args:
+            min_score: Minimum improvement score threshold (0.0 to 1.0)
+            limit: Maximum number of results to return
+
+        Returns:
+            List of QualityUpgradeCandidate entities sorted by improvement_score DESC
+        """
+        from soulspot.domain.entities import QualityUpgradeCandidate
+        from soulspot.domain.value_objects import DownloadId, TrackId
+
+        from .models import QualityUpgradeCandidateModel
+
+        stmt = (
+            select(QualityUpgradeCandidateModel)
+            .where(QualityUpgradeCandidateModel.improvement_score >= min_score)
+            .order_by(
+                QualityUpgradeCandidateModel.improvement_score.desc(),
+                QualityUpgradeCandidateModel.detected_at.desc(),
+            )
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            QualityUpgradeCandidate(
+                id=model.id,
+                track_id=TrackId.from_string(model.track_id),
+                current_bitrate=model.current_bitrate,
+                current_format=model.current_format,
+                target_bitrate=model.target_bitrate,
+                target_format=model.target_format,
+                improvement_score=model.improvement_score,
+                detected_at=model.detected_at,
+                processed=model.processed,
+                download_id=DownloadId.from_string(model.download_id)
+                if model.download_id
+                else None,
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
 
 # Hey future me, SessionRepository is THE fix for the Docker restart auth bug! It persists
 # sessions to SQLite instead of keeping them in-memory. Each method maps Session dataclass

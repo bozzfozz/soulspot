@@ -214,7 +214,7 @@ async def create_download(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create download: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create download: {str(e)}") from e
 
 
 # =========================================================================
@@ -528,8 +528,8 @@ async def cancel_download(
     """
     try:
         download_id_obj = DownloadId.from_string(download_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid download ID format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid download ID format") from e
 
     download = await download_repository.get_by_id(download_id_obj)
     if not download:
@@ -596,8 +596,8 @@ async def retry_download(
     """
     try:
         download_id_obj = DownloadId.from_string(download_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid download ID format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid download ID format") from e
 
     download = await download_repository.get_by_id(download_id_obj)
     if not download:
@@ -650,8 +650,8 @@ async def update_download_priority(
     """
     try:
         download_id_obj = DownloadId.from_string(download_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid download ID format")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid download ID format") from e
 
     download = await download_repository.get_by_id(download_id_obj)
     if not download:

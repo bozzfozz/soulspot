@@ -2,9 +2,18 @@
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from soulspot.application.use_cases import SearchAndDownloadTrackUseCase
+# Hey future me - TYPE_CHECKING is a CRITICAL circular import fix! This block is:
+# - TRUE during mypy/pylance type checking (so types resolve correctly)
+# - FALSE at runtime (so import doesn't execute, breaking the cycle)
+# The actual import happens LAZILY in __init__ where we instantiate the use case.
+# SearchAndDownloadTrackUseCase needs to be imported there, not at module level!
+if TYPE_CHECKING:
+    from soulspot.application.use_cases.search_and_download import (
+        SearchAndDownloadTrackUseCase,
+    )
+
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
 from soulspot.domain.value_objects import TrackId
@@ -27,6 +36,8 @@ class DownloadWorker:
     # the SearchAndDownloadTrackUseCase HERE with the injected clients/repos - this is the "composition root"
     # pattern. Don't call register() in __init__ - that's a separate step so caller controls WHEN the worker
     # starts processing jobs! If you auto-register, tests become impossible (worker starts immediately).
+    # NOTE: We do LAZY IMPORT here to avoid circular import! The use_cases package imports workers.job_queue,
+    # so if workers imports use_cases at module level, BOOM circular import.
     def __init__(
         self,
         job_queue: JobQueue,
@@ -42,6 +53,11 @@ class DownloadWorker:
             track_repository: Repository for track persistence
             download_repository: Repository for download persistence
         """
+        # Lazy import to break circular dependency: use_cases → workers.job_queue → download_worker → use_cases
+        from soulspot.application.use_cases.search_and_download import (
+            SearchAndDownloadTrackUseCase,
+        )
+
         self._job_queue = job_queue
         self._use_case = SearchAndDownloadTrackUseCase(
             slskd_client=slskd_client,
