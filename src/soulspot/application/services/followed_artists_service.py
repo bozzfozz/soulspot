@@ -264,18 +264,18 @@ class FollowedArtistsService:
         self, artist_id: str,
     ) -> dict[str, int]:
         """Sync albums for a Spotify artist into unified albums table.
-        
+
         Hey future me - REFACTORED to use SpotifyPlugin!
         This syncs Spotify albums into soulspot_albums table (unified)!
         Unlike SpotifySyncService which uses separate spotify_albums table, this method
         puts albums directly into the unified music library so they appear alongside
         local albums. This is key for the Music Manager concept!
-        
+
         No more access_token param - plugin handles auth internally.
-        
+
         Args:
             artist_id: Our internal artist ID (not Spotify ID)
-            
+
         Returns:
             Dict with sync stats (total, added, skipped)
         """

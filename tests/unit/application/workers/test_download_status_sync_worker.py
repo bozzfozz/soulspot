@@ -5,10 +5,10 @@ Tests the worker that synchronizes download status from slskd to SoulSpot DB.
 
 import asyncio
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.workers.download_status_sync_worker import (
     SLSKD_STATUS_TO_SOULSPOT,
@@ -16,7 +16,6 @@ from soulspot.application.workers.download_status_sync_worker import (
 )
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.ports import ISlskdClient
-
 
 # Hey future me - these tests verify the sync worker correctly:
 # 1. Maps slskd states to SoulSpot status

@@ -27,8 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.use_cases import UseCase
 from soulspot.application.workers.job_queue import JobQueue, JobType
-from soulspot.domain.entities import Track
-from soulspot.domain.value_objects import SpotifyUri, TrackId
+from soulspot.domain.value_objects import SpotifyUri
 from soulspot.infrastructure.persistence.models import AlbumModel, TrackModel
 from soulspot.infrastructure.persistence.repositories import TrackRepository
 from soulspot.infrastructure.plugins import DeezerPlugin, SpotifyPlugin

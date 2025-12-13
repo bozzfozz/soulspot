@@ -6,7 +6,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
 from PIL import Image as PILImage
 
 from soulspot.config import Settings

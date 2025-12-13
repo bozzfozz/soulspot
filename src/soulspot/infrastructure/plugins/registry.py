@@ -7,11 +7,11 @@ Hier werden Plugins registriert und können über ServiceType abgerufen werden.
 Verwendung:
     registry = PluginRegistry()
     registry.register(SpotifyPlugin(client, token))
-    
+
     # Später...
     spotify = registry.get(ServiceType.SPOTIFY)
     artist = await spotify.get_artist("...")
-    
+
     # Oder alle verfügbaren Plugins
     for plugin in registry.all():
         status = await plugin.get_auth_status()

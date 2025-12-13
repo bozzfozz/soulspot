@@ -273,7 +273,7 @@ class TestNotificationService:
 
 class TestNotificationServiceWithProviders:
     """Test NotificationService with mock providers.
-    
+
     Hey future me - these tests verify the provider orchestration works!
     """
 

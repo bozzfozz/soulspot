@@ -35,25 +35,25 @@ logger = logging.getLogger(__name__)
 
 class WebhookNotificationProvider(INotificationProvider):
     """Webhook notification provider for Discord/Slack/Gotify/Generic.
-    
+
     Hey future me - this is VERY flexible! Supports multiple formats:
-    
+
     Discord:
         - Rich embeds with colors and fields
         - URL: https://discord.com/api/webhooks/<id>/<token>
-    
+
     Slack:
         - Block-based messages
         - URL: https://hooks.slack.com/services/<id>/<token>
-    
+
     Gotify:
         - Self-hosted push notifications
         - URL: https://gotify.example.com/message?token=<app-token>
-    
+
     Generic:
         - Simple JSON POST with notification data
         - Works with n8n, Zapier, custom endpoints
-    
+
     Config keys in app_settings:
         notification.webhook.enabled: bool
         notification.webhook.url: str
@@ -64,7 +64,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def __init__(self, session: "AsyncSession") -> None:
         """Initialize with database session.
-        
+
         Args:
             session: SQLAlchemy async session for loading config
         """
@@ -118,10 +118,10 @@ class WebhookNotificationProvider(INotificationProvider):
 
     async def send(self, notification: Notification) -> NotificationResult:
         """Send notification via webhook.
-        
+
         Args:
             notification: Notification to send
-            
+
         Returns:
             NotificationResult with success status
         """
@@ -167,7 +167,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def _build_payload(self, notification: Notification, format_type: str) -> dict[str, Any]:
         """Build webhook payload based on format type.
-        
+
         Hey future me - add new formats here! Each service has its own structure.
         """
         if format_type == "discord":
@@ -181,7 +181,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def _build_discord_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Discord webhook payload with rich embed.
-        
+
         Hey future me - Discord embeds are pretty! Colors, fields, timestamps.
         Limit: 6000 chars total, 25 fields max, 256 chars for field name.
         """
@@ -243,7 +243,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def _build_slack_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Slack webhook payload with blocks.
-        
+
         Hey future me - Slack uses "blocks" for rich messages.
         Keep it simple - a header, text section, and optional context.
         """
@@ -309,7 +309,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def _build_gotify_payload(self, notification: Notification) -> dict[str, Any]:
         """Build Gotify push notification payload.
-        
+
         Hey future me - Gotify is a self-hosted push notification server!
         Simple structure: title, message, priority (0-10).
         Priority 4+ triggers push notifications on mobile.
@@ -342,7 +342,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     def _build_generic_payload(self, notification: Notification) -> dict[str, Any]:
         """Build generic JSON payload.
-        
+
         Hey future me - this is the fallback for custom webhooks!
         Just dumps the notification as JSON. Works with n8n, Zapier, etc.
         """
@@ -362,7 +362,7 @@ class WebhookNotificationProvider(INotificationProvider):
 
     async def _send_request(self, payload: dict[str, Any]) -> str | None:
         """Send HTTP POST request to webhook URL.
-        
+
         Hey future me - uses httpx for async HTTP. Handles auth headers too.
         Returns response text for logging/debugging.
         """

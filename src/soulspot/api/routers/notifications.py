@@ -88,16 +88,16 @@ async def list_notifications(
     offset: Annotated[int, Query(ge=0, description="Pagination offset")] = 0,
 ) -> NotificationsListResponse:
     """List notifications with filtering and pagination.
-    
+
     Hey future me - this is the main endpoint for loading the notification list!
     Frontend polls this or uses it for initial load.
-    
+
     Query params:
     - unread_only: If true, only return unread notifications
     - notification_type: Filter by type (new_release, download_completed, etc.)
     - limit: Max results (default 20, max 100)
     - offset: For pagination
-    
+
     Returns list of notifications plus counts for UI badges.
     """
     provider = InAppNotificationProvider(session)
@@ -146,7 +146,7 @@ async def get_unread_count(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> UnreadCountResponse:
     """Get count of unread notifications.
-    
+
     Hey future me - frontend polls this for the notification badge!
     Lightweight endpoint that only returns the count.
     """
@@ -162,7 +162,7 @@ async def mark_notifications_read(
     request: MarkReadRequest,
 ) -> MarkReadResponse:
     """Mark specific notifications as read.
-    
+
     Hey future me - called when user clicks on a notification!
     Accepts array of IDs so frontend can batch mark.
     """
@@ -181,7 +181,7 @@ async def mark_all_notifications_read(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> MarkReadResponse:
     """Mark all notifications as read.
-    
+
     Hey future me - "Clear all" button in the UI!
     """
     provider = InAppNotificationProvider(session)
@@ -197,7 +197,7 @@ async def delete_notification(
     notification_id: str,
 ) -> DeleteResponse:
     """Delete a specific notification.
-    
+
     Hey future me - "Dismiss" button in the UI!
     """
     provider = InAppNotificationProvider(session)
@@ -220,10 +220,10 @@ async def get_notification_badge(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> str:
     """Get notification badge HTML for HTMX.
-    
+
     Hey future me - HTMX polls this to update the badge in the navbar!
     Returns raw HTML that replaces the badge element.
-    
+
     Example response:
     <span class="notification-badge" hx-get="/api/notifications/badge" hx-trigger="every 30s">3</span>
     """
@@ -238,9 +238,9 @@ async def get_notification_badge(
     else:
         # Visible badge with count
         badge_text = "99+" if count > 99 else str(count)
-        html = f'''<span id="notification-badge" 
+        html = f'''<span id="notification-badge"
             class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
-            hx-get="/api/notifications/badge" 
+            hx-get="/api/notifications/badge"
             hx-trigger="every 30s">{badge_text}</span>'''
 
     return HTMLResponse(content=html)

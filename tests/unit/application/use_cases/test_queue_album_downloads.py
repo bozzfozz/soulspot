@@ -3,7 +3,7 @@
 Tests the use case that queues all tracks of an album for download.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -17,7 +17,6 @@ from soulspot.application.use_cases.queue_album_downloads import (
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.domain.dtos import AlbumDTO, TrackDTO
 from soulspot.infrastructure.persistence.repositories import TrackRepository
-
 
 # Hey future me - these tests verify the album download use case:
 # 1. Handles missing plugins gracefully

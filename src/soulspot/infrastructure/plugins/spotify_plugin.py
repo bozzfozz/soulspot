@@ -21,6 +21,7 @@ Verwendung:
     # artist ist jetzt ArtistDTO, nicht dict!
 """
 
+import contextlib
 import logging
 from typing import Any
 
@@ -353,10 +354,8 @@ class SpotifyPlugin(IMusicServicePlugin):
         release_date = data.get("release_date", "")
         release_year = None
         if release_date:
-            try:
+            with contextlib.suppress(ValueError, IndexError):
                 release_year = int(release_date[:4])
-            except (ValueError, IndexError):
-                pass
 
         album = AlbumDTO(
             title=data.get("name", "Unknown Album"),
@@ -1216,7 +1215,7 @@ class SpotifyPlugin(IMusicServicePlugin):
 
         try:
             results = await self._client.check_if_following_artists(artist_ids, token)
-            return dict(zip(artist_ids, results))
+            return dict(zip(artist_ids, results, strict=False))
         except Exception as e:
             raise PluginError(
                 message=f"Failed to check following status: {e!s}",
