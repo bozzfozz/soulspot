@@ -185,7 +185,21 @@ class AutoImportService:
 
             # CRITICAL FILTER: Get track IDs with completed downloads
             # Only these tracks should be imported!
-            completed_track_ids = await self._download_repository.get_completed_track_ids()
+            # Retry logic for concurrent session provisioning errors during startup.
+            # Multiple workers may attempt to use the shared session simultaneously,
+            # causing SQLAlchemy to raise InvalidRequestError. We retry up to 3 times
+            # with a 0.5s delay to allow the session to complete its connection setup.
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    completed_track_ids = await self._download_repository.get_completed_track_ids()
+                    break
+                except Exception as e:
+                    if "provisioning a new connection" in str(e) and attempt < max_retries - 1:
+                        logger.debug("Session busy, retrying in 0.5s (attempt %d/%d)", attempt + 1, max_retries)
+                        await asyncio.sleep(0.5)
+                        continue
+                    raise
             
             if not completed_track_ids:
                 logger.debug("No completed downloads found, skipping import")

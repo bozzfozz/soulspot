@@ -236,7 +236,7 @@ class DownloadStatusSyncWorker:
         "slskd is offline".
         """
         # Get active downloads - let exceptions propagate for circuit breaker
-        response = await self._slskd_client.get_downloads()
+        response = await self._slskd_client.list_downloads()
 
         # slskd returns downloads grouped by user
         # Format: {username: {directories: [...downloads...]}}
