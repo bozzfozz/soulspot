@@ -185,8 +185,10 @@ class AutoImportService:
 
             # CRITICAL FILTER: Get track IDs with completed downloads
             # Only these tracks should be imported!
-            # Hey future me - retry logic for concurrent session provisioning errors!
-            # This can happen at startup when multiple workers use the same session.
+            # Retry logic for concurrent session provisioning errors during startup.
+            # Multiple workers may attempt to use the shared session simultaneously,
+            # causing SQLAlchemy to raise InvalidRequestError. We retry up to 3 times
+            # with a 0.5s delay to allow the session to complete its connection setup.
             max_retries = 3
             for attempt in range(max_retries):
                 try:

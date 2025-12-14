@@ -420,10 +420,9 @@ class SpotifyPlugin(IMusicServicePlugin):
         additional_artists: list[ArtistDTO] = []
         if len(artists) > 1:
             for artist in artists[1:]:
-                artist_name_val = artist.get("name") or "Unknown Artist"
                 additional_artists.append(
                     ArtistDTO(
-                        name=artist_name_val,
+                        name=artist.get("name") or "Unknown Artist",
                         source_service="spotify",
                         spotify_id=artist.get("id"),
                         spotify_uri=artist.get("uri"),
