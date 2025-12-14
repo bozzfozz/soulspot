@@ -3437,25 +3437,26 @@ class SessionRepository(ISessionRepository):
 
 
 # =============================================================================
-# SPOTIFY BROWSE REPOSITORY
+# PROVIDER BROWSE REPOSITORY
 # =============================================================================
-# Hey future me - this repository handles the SPOTIFY sync tables (spotify_artists,
-# spotify_albums, spotify_tracks). These are SEPARATE from the local library tables!
-# The sync flow: Spotify API → SpotifyBrowseRepository → DB. The browse flow:
-# DB → SpotifyBrowseRepository → UI. Auto-sync with diff logic on page load.
+# Hey future me - this repository handles synced provider data (artists, albums, 
+# tracks from Spotify, Deezer, Tidal, etc.).
+# The sync flow: Provider API → ProviderBrowseRepository → DB. The browse flow:
+# DB → ProviderBrowseRepository → UI. Auto-sync with diff logic on page load.
 # =============================================================================
 
 
-class SpotifyBrowseRepository:
-    """Repository for Spotify browse data (followed artists, albums, tracks).
+class ProviderBrowseRepository:
+    """Repository for provider browse data (followed artists, albums, tracks).
 
     Hey future me - Nach Table Consolidation (Nov 2025):
-    - Nutzt jetzt die unified Models: ArtistModel, AlbumModel, TrackModel
-    - KEINE separaten spotify_* Tabellen mehr!
-    - Filter nach source='spotify' für Spotify-spezifische Daten
-    - spotify_uri enthält die Spotify-IDs (z.B. "spotify:artist:xxx")
+    - Nutzt die unified Models: ArtistModel, AlbumModel, TrackModel
+    - KEINE separaten provider_* Tabellen mehr!
+    - Filter nach source='spotify'/'deezer'/'tidal' für provider-spezifische Daten
+    - spotify_uri/deezer_uri enthält die Provider-IDs (z.B. "spotify:artist:xxx")
     
-    TODO: Repository umbenennen zu ProviderBrowseRepository
+    Renamed from SpotifyBrowseRepository → ProviderBrowseRepository (Nov 2025)
+    Alias SpotifyBrowseRepository = ProviderBrowseRepository für Rückwärtskompatibilität
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -4656,6 +4657,11 @@ class SpotifyBrowseRepository:
         )
         result = await self.session.execute(stmt)
         return result.rowcount or 0  # type: ignore[attr-defined]
+
+
+# Backwards compatibility alias (renamed Nov 2025)
+# Hey future me - remove this alias when all callers are updated to use ProviderBrowseRepository
+SpotifyBrowseRepository = ProviderBrowseRepository
 
 
 # =============================================================================

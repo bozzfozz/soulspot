@@ -162,13 +162,21 @@ Since `FollowedArtistsService` already writes to unified library, consider:
 - [x] All queries now filter by `source='spotify'` instead of using separate tables
 
 **Key changes:**
-- `SpotifyBrowseRepository` now uses unified models with `source='spotify'` filter
+- `ProviderBrowseRepository` (formerly `SpotifyBrowseRepository`) now uses unified models with `source='spotify'` filter
 - Artist/Album/Track IDs mapped via `spotify_uri` field (full URI: "spotify:artist:xxx")
 - Helper methods convert Spotify IDs to URIs and vice versa
 
-### Phase 3: Service Refactoring ❌ OPTIONAL
-- [ ] Rename `SpotifySyncService` → `ProviderSyncService` (optional - works as-is)
-- [ ] Rename `SpotifyBrowseRepository` → `ProviderBrowseRepository` (optional)
+### Phase 3: Class Renaming ✅ DONE
+- [x] Renamed `SpotifyBrowseRepository` → `ProviderBrowseRepository` ✅ DONE
+- [x] Added backwards compatibility alias: `SpotifyBrowseRepository = ProviderBrowseRepository`
+- [x] `SpotifySyncService` - KEPT AS-IS (Spotify-specific, uses SpotifyPlugin)
+- [x] `SpotifySyncWorker` - KEPT AS-IS (Spotify-specific, uses SpotifyPlugin)
+
+**Rationale for keeping Spotify-prefixed services:**
+- `SpotifySyncService` uses `SpotifyPlugin` for OAuth/API calls
+- `SpotifySyncWorker` orchestrates Spotify-specific sync tasks
+- Future: Add `DeezerSyncService`, `TidalSyncService` for other providers
+- Each provider gets its own sync service with provider-specific logic
 
 ### Phase 4: Migration + Cleanup ✅ DONE
 - [x] Run Alembic migration: `alembic upgrade head`
@@ -186,25 +194,26 @@ All phases are complete. The table consolidation is finished:
 - All Spotify data now in unified `soulspot_*` tables with `source='spotify'`
 - Old `spotify_artists/albums/tracks` tables dropped
 - `spotify_sync_status` renamed to `provider_sync_status`
+- `SpotifyBrowseRepository` renamed to `ProviderBrowseRepository` (alias for backwards compat)
 - All code updated to use unified models
 
-### Phase 1: Schema Migration (Alembic)
-- [ ] Add new columns to soulspot_* tables
-- [ ] Create provider_sync_status table
-- [ ] Migrate data from spotify_* to soulspot_*
-- [ ] Keep old tables temporarily (for rollback)
+## Class Naming Summary
 
-### Phase 2: Service Refactoring
-- [ ] Update SpotifySyncService to write to soulspot_*
-- [ ] Remove _sync_to_unified_library (no longer needed)
-- [ ] Update all repository calls
-- [ ] Update UI to read from soulspot_* only
+| Old Name | New Name | Reason |
+|----------|----------|--------|
+| `SpotifyArtistModel` | ❌ DELETED | Use `ArtistModel` with `source='spotify'` |
+| `SpotifyAlbumModel` | ❌ DELETED | Use `AlbumModel` with `source='spotify'` |
+| `SpotifyTrackModel` | ❌ DELETED | Use `TrackModel` with `source='spotify'` |
+| `SpotifySyncStatusModel` | `ProviderSyncStatusModel` | Multi-provider sync status |
+| `SpotifyBrowseRepository` | `ProviderBrowseRepository` | Uses unified tables |
+| `SpotifySyncService` | KEPT AS-IS | Spotify-specific (uses SpotifyPlugin) |
+| `SpotifySyncWorker` | KEPT AS-IS | Spotify-specific (uses SpotifyPlugin) |
 
-### Phase 3: Cleanup
-- [ ] Create migration to drop spotify_artists/albums/tracks
-- [ ] Remove old SpotifyBrowseRepository methods
-- [ ] Update documentation
-- [ ] Remove legacy code
+### Questions Answered
+
+1. ✅ `is_saved` flag for albums? - YES, kept in unified `AlbumModel`
+2. ✅ Playlists unified? - No, playlists table already multi-provider
+3. ✅ Sessions merged? - No, `spotify_sessions`/`deezer_sessions` stay separate (OAuth-specific)
 
 ## Risks & Rollback
 
