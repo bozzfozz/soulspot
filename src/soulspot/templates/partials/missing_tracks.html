@@ -27,7 +27,7 @@
                 <div style="font-weight: var(--font-weight-semibold); margin-bottom: var(--space-1);">
                     {{ missing_tracks|length }} track{{ 's' if missing_tracks|length != 1 else '' }} not found in library
                 </div>
-                <p>These tracks are in the Spotify playlist but not downloaded to your library yet.</p>
+                <p>Diese Tracks sind in der Spotify Playlist aber noch nicht in deiner Library verfügbar.</p>
             </div>
         </div>
 
@@ -90,7 +90,7 @@
         {% else %}
         <div style="padding: var(--space-12); text-align: center;">
             <i class="bi bi-check-circle" style="font-size: 48px; color: var(--status-success); margin-bottom: var(--space-4); display: block;"></i>
-            <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-medium); margin-bottom: var(--space-2);">All tracks downloaded!</h3>
+            <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-medium); margin-bottom: var(--space-2);">Alle Tracks verfügbar!</h3>
             <p style="color: var(--text-muted);">All tracks from this playlist are available in your library.</p>
         </div>
         {% endif %}

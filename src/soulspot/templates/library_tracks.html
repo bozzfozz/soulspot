@@ -1,7 +1,7 @@
 {# Hey future me - Tracks browse page with table view!
    Shows all tracks with title, artist, album, duration, status.
    Client-side search + status filter. Sortable columns.
-   Status filter: all, downloaded, missing, broken.
+   Status filter: all, verfügbar, missing, broken.
    Download button for missing/broken tracks, Edit button opens metadata modal via HTMX. #}
 
 {% extends "base.html" %}
@@ -36,7 +36,7 @@
                style="min-width: 180px;">
         <select id="status-filter" class="form-select" style="min-width: 140px;">
             <option value="all">All Tracks</option>
-            <option value="downloaded">Downloaded</option>
+            <option value="available">Verfügbar</option>
             <option value="missing">Missing</option>
             <option value="broken">Broken</option>
         </select>
@@ -67,7 +67,7 @@
             <tbody id="tracks-tbody">
                 {% for track in tracks %}
                 <tr class="track-row" 
-                    data-status="{% if track.is_broken %}broken{% elif track.file_path %}downloaded{% else %}missing{% endif %}"
+                    data-status="{% if track.is_broken %}broken{% elif track.file_path %}available{% else %}missing{% endif %}"
                     data-title="{{ track.title|lower }}"
                     data-artist="{{ track.artist|lower }}"
                     data-album="{{ track.album|lower }}">
@@ -89,7 +89,7 @@
                         {% if track.is_broken %}
                             <span class="badge badge-error">Broken</span>
                         {% elif track.file_path %}
-                            <span class="badge badge-success">Downloaded</span>
+                            <span class="badge badge-success">Verfügbar</span>
                         {% else %}
                             <span class="badge badge-warning">Missing</span>
                         {% endif %}

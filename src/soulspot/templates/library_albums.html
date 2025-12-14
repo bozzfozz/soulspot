@@ -1,7 +1,7 @@
 {# Hey future me - Albums browse page!
-   Shows all albums as cards with Spotify artwork (or placeholder), artist name, track count, year.
-   artwork_url comes from Spotify CDN via album.artwork_url. Fallback to bi-disc icon if no artwork.
-   Client-side search AND sorting via data attributes on cards. Works together so you can search THEN sort. #}
+   Shows all albums from the unified library. No source badges - just shows local/total track counts.
+   X/Y format means "X verfügbar (mit files) von Y gesamt".
+   artwork_url comes from streaming CDN via album.artwork_url. Fallback to bi-disc icon if no artwork. #}
 
 {% extends "base.html" %}
 
@@ -24,7 +24,7 @@
         </div>
         <div>
             <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Albums</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Browse {{ total_count }} albums in your library</p>
+            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Browse {{ source_counts.all }} albums in your library</p>
         </div>
     </div>
     <div style="display: flex; flex-wrap: wrap; gap: var(--space-3);">
@@ -56,7 +56,7 @@
            data-title="{{ album.title|lower }}"
            data-artist="{{ album.artist|lower }}"
            data-year="{{ album.year or 0 }}"
-           data-track-count="{{ album.track_count }}">
+           data-track-count="{{ album.total_tracks }}">
             <div class="album-cover">
                 {% if album.artwork_path %}
                 <img src="/api/artwork/{{ album.artwork_path }}" alt="{{ album.title }}" loading="lazy">
@@ -83,7 +83,9 @@
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
             <p class="album-artist" title="{{ album.artist }}">{{ album.artist }}</p>
             <div class="album-meta">
-                <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
+                <span title="{{ album.local_tracks }} of {{ album.total_tracks }} tracks downloaded">
+                    <i class="bi bi-music-note"></i> {{ album.local_tracks }}/{{ album.total_tracks }}
+                </span>
                 {% if album.year %}
                 <span>{{ album.year }}</span>
                 {% endif %}
@@ -148,6 +150,7 @@
         background: var(--bg-secondary);
         border: 1px solid var(--border-primary);
         border-radius: var(--radius-lg);
+        position: relative; /* For source badge */
         padding: var(--space-4);
         text-decoration: none;
         color: var(--text-primary);
@@ -157,6 +160,7 @@
         transform: translateY(-4px);
         box-shadow: var(--shadow-xl);
     }
+    
     /* Compilation albums have a subtle gradient border */
     .album-card.compilation {
         border: 1px solid rgba(139, 92, 246, 0.3);

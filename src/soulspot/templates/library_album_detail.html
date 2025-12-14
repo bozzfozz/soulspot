@@ -1,7 +1,7 @@
 {# Hey future me - Album detail page with stats, bulk actions, and track table.
    Shows album cover from Spotify CDN (artwork_url) or placeholder icon.
    artwork_url comes from album.artwork_url. Fallback to bi-disc icon if no artwork.
-   Stats cards show total/downloaded/missing/broken counts.
+   Stats cards show total/verfügbar/missing/broken counts.
    Bulk selection like playlist_detail but scoped to album tracks.
    Download all missing button queues multiple API calls. #}
 
@@ -152,7 +152,7 @@
 </div>
 
 <!-- Stats Cards -->
-{% set downloaded_count = album.tracks | selectattr("file_path") | list | length %}
+{% set available_count = album.tracks | selectattr("file_path") | list | length %}
 {% set missing_count = album.tracks | rejectattr("file_path") | list | length %}
 {% set broken_count = album.tracks | selectattr("is_broken") | list | length %}
 <div class="stats-grid" style="margin-bottom: var(--space-6);">
@@ -170,8 +170,8 @@
             <i class="bi bi-check"></i>
         </div>
         <div class="stat-content">
-            <div class="stat-value" style="color: #22c55e;">{{ downloaded_count }}</div>
-            <div class="stat-label">Downloaded</div>
+            <div class="stat-value" style="color: #22c55e;">{{ available_count }}</div>
+            <div class="stat-label">Verfügbar</div>
         </div>
     </div>
     <div class="stat-card">
@@ -264,7 +264,7 @@
                         <input type="checkbox" 
                                class="track-checkbox form-checkbox"
                                data-track-id="{{ track.id }}"
-                               data-status="{% if track.is_broken %}broken{% elif track.file_path %}downloaded{% else %}missing{% endif %}"
+                               data-status="{% if track.is_broken %}broken{% elif track.file_path %}available{% else %}missing{% endif %}"
                                onchange="updateBulkActions()">
                     </td>
                     <td style="color: var(--text-muted);">{{ track.track_number or loop.index }}</td>
@@ -282,7 +282,7 @@
                         {% if track.is_broken %}
                             <span class="badge badge-error">Broken</span>
                         {% elif track.file_path %}
-                            <span class="badge badge-success">Downloaded</span>
+                            <span class="badge badge-success">Verfügbar</span>
                         {% else %}
                             <span class="badge badge-warning">Missing</span>
                         {% endif %}
@@ -523,7 +523,7 @@ function updateBulkActions() {
     });
     
     const downloadableSelected = Array.from(checkedBoxes).filter(cb => 
-        cb.getAttribute('data-status') !== 'downloaded'
+        cb.getAttribute('data-status') !== 'available'
     ).length;
     
     if (selectedCount) selectedCount.textContent = downloadableSelected;
@@ -542,7 +542,7 @@ function updateBulkActions() {
 function bulkDownloadSelected() {
     const checkedBoxes = document.querySelectorAll('.track-checkbox:checked');
     const trackIds = Array.from(checkedBoxes)
-        .filter(cb => cb.getAttribute('data-status') !== 'downloaded')
+        .filter(cb => cb.getAttribute('data-status') !== 'available')
         .map(cb => cb.getAttribute('data-track-id'));
     
     if (trackIds.length === 0) {
@@ -564,11 +564,12 @@ function downloadAllMissing() {
     const trackIds = Array.from(missingTracks).map(cb => cb.getAttribute('data-track-id'));
     
     if (trackIds.length === 0) {
-        SoulSpot.showNotification('All tracks are already downloaded!', 'info');
+        SoulSpot.showNotification('Alle Tracks sind bereits verfügbar!', 'info');
         return;
     }
     
     queueDownloads(trackIds, `Queued all ${trackIds.length} missing track(s) for download`);
+}
 }
 
 // Hey future me - switched from /api/tracks/{id}/download to /api/downloads with track_id in body!

@@ -1109,39 +1109,59 @@ async def library_artists(
         TrackModel,
     )
 
-    # Subquery for track count per artist - ONLY count tracks with local files!
-    # Hey future me - track_count is 0 for Spotify-only artists (no local files yet)
-    track_count_subq = (
-        select(TrackModel.artist_id, func.count(TrackModel.id).label("track_count"))
+    # Subquery for total track count per artist (ALL tracks including Spotify-only)
+    # Hey future me - After Table Consolidation (2025-12), we show ALL tracks now!
+    # We also count how many are local (have file_path) for the "X/Y local" badge.
+    total_track_count_subq = (
+        select(TrackModel.artist_id, func.count(TrackModel.id).label("total_tracks"))
+        .group_by(TrackModel.artist_id)
+        .subquery()
+    )
+    
+    # Subquery for LOCAL track count per artist (tracks with file_path)
+    local_track_count_subq = (
+        select(TrackModel.artist_id, func.count(TrackModel.id).label("local_tracks"))
         .where(TrackModel.file_path.isnot(None))
         .group_by(TrackModel.artist_id)
         .subquery()
     )
 
-    # Subquery for album count per artist - ONLY albums with at least one local track
+    # Subquery for total album count per artist (ALL albums)
+    total_album_count_subq = (
+        select(AlbumModel.artist_id, func.count(AlbumModel.id).label("total_albums"))
+        .group_by(AlbumModel.artist_id)
+        .subquery()
+    )
+    
+    # Subquery for LOCAL album count (albums with at least one local track)
     albums_with_files_subq = (
         select(func.distinct(TrackModel.album_id))
         .where(TrackModel.file_path.isnot(None))
         .where(TrackModel.album_id.isnot(None))
         .subquery()
     )
-    album_count_subq = (
-        select(AlbumModel.artist_id, func.count(AlbumModel.id).label("album_count"))
+    local_album_count_subq = (
+        select(AlbumModel.artist_id, func.count(AlbumModel.id).label("local_albums"))
         .where(AlbumModel.id.in_(select(albums_with_files_subq)))
         .group_by(AlbumModel.artist_id)
         .subquery()
     )
 
     # Main query - SHOW ALL ARTISTS (unified view)
-    # Hey future me - LEFT JOIN track_count so Spotify-only artists (no local files) are included!
+    # Hey future me - After Table Consolidation (2025-12), we show BOTH local AND total counts!
+    # This allows "X/Y" badges like "3/5 local" meaning 3 of 5 tracks have local files.
     stmt = (
         select(
             ArtistModel,
-            track_count_subq.c.track_count,
-            album_count_subq.c.album_count,
+            total_track_count_subq.c.total_tracks,
+            local_track_count_subq.c.local_tracks,
+            total_album_count_subq.c.total_albums,
+            local_album_count_subq.c.local_albums,
         )
-        .outerjoin(track_count_subq, ArtistModel.id == track_count_subq.c.artist_id)
-        .outerjoin(album_count_subq, ArtistModel.id == album_count_subq.c.artist_id)
+        .outerjoin(total_track_count_subq, ArtistModel.id == total_track_count_subq.c.artist_id)
+        .outerjoin(local_track_count_subq, ArtistModel.id == local_track_count_subq.c.artist_id)
+        .outerjoin(total_album_count_subq, ArtistModel.id == total_album_count_subq.c.artist_id)
+        .outerjoin(local_album_count_subq, ArtistModel.id == local_album_count_subq.c.artist_id)
     )
 
     # Apply source filter if requested
@@ -1181,18 +1201,20 @@ async def library_artists(
     # Hey future me - name is CLEAN (no disambiguation), disambiguation is stored separately!
     # After Dec 2025 folder parsing fixes, new scans store clean names. Old entries might
     # still have disambiguation in name - re-scan library to fix.
-    # NEW: source field for badge display (local/spotify/hybrid)
+    # NEW (2025-12): Shows BOTH total AND local counts for "X/Y local" badges!
     artists = [
         {
             "name": artist.name,
             "disambiguation": artist.disambiguation,  # Text like "English rock band"
             "source": artist.source,  # 'local', 'spotify', or 'hybrid'
-            "track_count": track_count or 0,
-            "album_count": album_count or 0,
+            "total_tracks": total_tracks or 0,  # ALL tracks (incl. Spotify-only)
+            "local_tracks": local_tracks or 0,  # Only tracks with file_path
+            "total_albums": total_albums or 0,  # ALL albums
+            "local_albums": local_albums or 0,  # Only albums with local tracks
             "image_url": artist.image_url,  # Spotify CDN URL or None
             "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
-        for artist, track_count, album_count in rows
+        for artist, total_tracks, local_tracks, total_albums, local_albums in rows
     ]
 
     # Check for unenriched artists on THIS PAGE (have local files but no image)
@@ -1253,31 +1275,67 @@ async def library_artists(
 @router.get("/library/albums", response_class=HTMLResponse)
 async def library_albums(
     request: Request,
+    source: str | None = None,  # Filter by source (local/spotify/hybrid/all)
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     per_page: int = Query(50, ge=10, le=200, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Library albums browser page - only albums with local files."""
+    """Unified library albums browser page - shows ALL albums with local/total counts.
+    
+    Hey future me - After Table Consolidation (2025-12), shows ALL albums!
+    Filter by source param like /library/artists.
+    Shows "X/Y local" badge (e.g. "3/10 tracks" = 3 downloaded, 10 total).
+    """
     from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
 
     from soulspot.infrastructure.persistence.models import AlbumModel, TrackModel
 
-    # Subquery for track count - ONLY count tracks with local files
-    track_count_subq = (
-        select(TrackModel.album_id, func.count(TrackModel.id).label("track_count"))
+    # Subquery for total track count per album (ALL tracks)
+    total_track_count_subq = (
+        select(TrackModel.album_id, func.count(TrackModel.id).label("total_tracks"))
+        .group_by(TrackModel.album_id)
+        .subquery()
+    )
+    
+    # Subquery for local track count per album (tracks with file_path)
+    local_track_count_subq = (
+        select(TrackModel.album_id, func.count(TrackModel.id).label("local_tracks"))
         .where(TrackModel.file_path.isnot(None))
         .group_by(TrackModel.album_id)
         .subquery()
     )
 
-    # Get total count of albums with local files (for pagination)
-    count_stmt = (
-        select(func.count(AlbumModel.id))
-        .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
-        .where(track_count_subq.c.track_count > 0)
+    # Build main query
+    stmt = (
+        select(
+            AlbumModel,
+            total_track_count_subq.c.total_tracks,
+            local_track_count_subq.c.local_tracks,
+        )
+        .outerjoin(total_track_count_subq, AlbumModel.id == total_track_count_subq.c.album_id)
+        .outerjoin(local_track_count_subq, AlbumModel.id == local_track_count_subq.c.album_id)
+        .options(joinedload(AlbumModel.artist))
     )
+
+    # Apply source filter
+    if source == "local":
+        stmt = stmt.where(AlbumModel.source.in_(["local", "hybrid"]))
+    elif source == "spotify":
+        stmt = stmt.where(AlbumModel.source.in_(["spotify", "hybrid"]))
+    elif source == "hybrid":
+        stmt = stmt.where(AlbumModel.source == "hybrid")
+    # else: show all
+
+    # Get total count for pagination
+    count_stmt = select(func.count(AlbumModel.id))
+    if source == "local":
+        count_stmt = count_stmt.where(AlbumModel.source.in_(["local", "hybrid"]))
+    elif source == "spotify":
+        count_stmt = count_stmt.where(AlbumModel.source.in_(["spotify", "hybrid"]))
+    elif source == "hybrid":
+        count_stmt = count_stmt.where(AlbumModel.source == "hybrid")
     total_count_result = await session.execute(count_stmt)
     total_count = total_count_result.scalar() or 0
 
@@ -1285,29 +1343,23 @@ async def library_albums(
     total_pages = max(1, (total_count + per_page - 1) // per_page)
     offset = (page - 1) * per_page
 
-    # Only get albums that have at least one local track, with pagination
-    stmt = (
-        select(AlbumModel, track_count_subq.c.track_count)
-        .join(track_count_subq, AlbumModel.id == track_count_subq.c.album_id)
-        .where(track_count_subq.c.track_count > 0)
-        .options(joinedload(AlbumModel.artist))
-        .order_by(AlbumModel.title)
-        .offset(offset)
-        .limit(per_page)
-    )
+    # Apply ordering and pagination
+    stmt = stmt.order_by(AlbumModel.title).offset(offset).limit(per_page)
     result = await session.execute(stmt)
     rows = result.unique().all()
 
     # Convert to template-friendly format with artwork_url
     # Hey future me - album_artist overrides artist.name for compilations/Various Artists!
     # artwork_path is local file, artwork_url is Spotify CDN - template prefers local
-    # primary_type is album/ep/single, secondary_types includes compilation/live/etc.
+    # NEW (2025-12): Shows BOTH total AND local track counts for "X/Y local" badge!
     albums = [
         {
             "title": album.title,
             "artist": album.album_artist
             or (album.artist.name if album.artist else "Unknown Artist"),
-            "track_count": track_count or 0,
+            "source": album.source,  # 'local', 'spotify', or 'hybrid'
+            "total_tracks": total_tracks or 0,  # ALL tracks
+            "local_tracks": local_tracks or 0,  # Only tracks with file_path
             "year": album.release_year,
             "artwork_url": album.artwork_url,  # Spotify CDN URL or None
             "artwork_path": album.artwork_path,  # Local file path or None
@@ -1315,14 +1367,34 @@ async def library_albums(
             "primary_type": album.primary_type or "album",
             "secondary_types": album.secondary_types or [],
         }
-        for album, track_count in rows
+        for album, total_tracks, local_tracks in rows
     ]
+
+    # Count albums by source for filter badges
+    count_all = await session.execute(select(func.count(AlbumModel.id)))
+    count_local = await session.execute(
+        select(func.count(AlbumModel.id)).where(AlbumModel.source.in_(["local", "hybrid"]))
+    )
+    count_spotify = await session.execute(
+        select(func.count(AlbumModel.id)).where(AlbumModel.source.in_(["spotify", "hybrid"]))
+    )
+    count_hybrid = await session.execute(
+        select(func.count(AlbumModel.id)).where(AlbumModel.source == "hybrid")
+    )
+    source_counts = {
+        "all": count_all.scalar() or 0,
+        "local": count_local.scalar() or 0,
+        "spotify": count_spotify.scalar() or 0,
+        "hybrid": count_hybrid.scalar() or 0,
+    }
 
     return templates.TemplateResponse(
         request,
         "library_albums.html",
         context={
             "albums": albums,
+            "current_source": source or "all",
+            "source_counts": source_counts,
             # Pagination context
             "page": page,
             "per_page": per_page,
