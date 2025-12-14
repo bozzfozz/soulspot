@@ -1091,8 +1091,6 @@ async def library_import_jobs_list(
 async def library_artists(
     request: Request,
     source: str | None = None,  # Filter by source (local/spotify/hybrid/all)
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    per_page: int = Query(50, ge=10, le=200, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
@@ -1100,17 +1098,14 @@ async def library_artists(
 
     Hey future me - This is now the UNIFIED Music Manager artist view!
     It shows ALL artists regardless of source (local file scan OR Spotify followed).
+    NO PAGINATION - shows all artists on one page (pagination only for download queue).
 
     Filter by source param:
     - ?source=local → Only artists from local file scans (with or without Spotify)
     - ?source=spotify → Only artists followed on Spotify (with or without local files)
     - ?source=hybrid → Only artists that exist in BOTH local + Spotify
     - ?source=all OR no param → Show ALL artists (default unified view)
-
-    Each artist card shows badges:
-    🎵 Local (has local files)
-    🎧 Spotify (followed on Spotify)
-    🌟 Both (hybrid)
+    """
     """
     from sqlalchemy import func, select
 
@@ -1187,8 +1182,7 @@ async def library_artists(
         stmt = stmt.where(ArtistModel.source == "hybrid")
     # else: source == "all" or None → Show ALL artists (no filter)
 
-    # Get total count BEFORE applying pagination (for pagination controls)
-    # Hey future me - count_stmt shares same filters but no joins needed
+    # Get total count for display (no pagination, so just count)
     count_stmt = select(func.count(ArtistModel.id))
     if source == "local":
         count_stmt = count_stmt.where(ArtistModel.source.in_(["local", "hybrid"]))
@@ -1199,12 +1193,11 @@ async def library_artists(
     total_count_result = await session.execute(count_stmt)
     total_count = total_count_result.scalar() or 0
 
-    # Calculate pagination
-    total_pages = max(1, (total_count + per_page - 1) // per_page)
-    offset = (page - 1) * per_page
+    # NO PAGINATION - load all artists, just order alphabetically
+    # Hey future me - removed pagination (2025-12), all artists shown on one page!
 
-    # Apply ordering and pagination
-    stmt = stmt.order_by(ArtistModel.name).offset(offset).limit(per_page)
+    # Apply ordering only (no pagination)
+    stmt = stmt.order_by(ArtistModel.name)
     result = await session.execute(stmt)
     rows = result.all()
 
@@ -1265,13 +1258,7 @@ async def library_artists(
             "artists_without_image": artists_without_image,
             "current_source": source or "all",  # Active filter
             "source_counts": source_counts,  # For filter badge counts
-            # Pagination context
-            "page": page,
-            "per_page": per_page,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
+            "total_count": total_count,  # Total artists shown
         },
     )
 
@@ -1281,22 +1268,22 @@ async def library_artists(
 # relationship, not manual Python dict. Uses pagination (page/per_page params) for
 # big libraries - defaults to 50 per page. artwork_url comes from Spotify sync – if
 # album wasn't synced, falls back to None.
-# IMPORTANT: Only shows albums with at least ONE local file (file_path IS NOT NULL)!
+# UNIFIED LIBRARY (2025-12): Shows ALL albums in DB, not filtered by file_path!
 # Also handles "Various Artists" compilations properly via album_artist field.
+# NO PAGINATION - all albums shown on one page!
 @router.get("/library/albums", response_class=HTMLResponse)
 async def library_albums(
     request: Request,
     source: str | None = None,  # Filter by source (local/spotify/hybrid/all)
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    per_page: int = Query(50, ge=10, le=200, description="Items per page"),
     _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Unified library albums browser page - shows ALL albums with local/total counts.
     
     Hey future me - After Table Consolidation (2025-12), shows ALL albums!
+    NO PAGINATION - all albums on one page (pagination only for download queue).
     Filter by source param like /library/artists.
-    Shows "X/Y local" badge (e.g. "3/10 tracks" = 3 downloaded, 10 total).
+    Shows "X/Y local" badge (e.g. "3/10 tracks" = 3 verfügbar, 10 total).
     """
     from sqlalchemy import func, select
     from sqlalchemy.orm import joinedload
@@ -1339,7 +1326,7 @@ async def library_albums(
         stmt = stmt.where(AlbumModel.source == "hybrid")
     # else: show all
 
-    # Get total count for pagination
+    # Get total count for display
     count_stmt = select(func.count(AlbumModel.id))
     if source == "local":
         count_stmt = count_stmt.where(AlbumModel.source.in_(["local", "hybrid"]))
@@ -1350,12 +1337,9 @@ async def library_albums(
     total_count_result = await session.execute(count_stmt)
     total_count = total_count_result.scalar() or 0
 
-    # Calculate pagination
-    total_pages = max(1, (total_count + per_page - 1) // per_page)
-    offset = (page - 1) * per_page
-
-    # Apply ordering and pagination
-    stmt = stmt.order_by(AlbumModel.title).offset(offset).limit(per_page)
+    # NO PAGINATION - load all albums, just order alphabetically
+    # Hey future me - removed pagination (2025-12), all albums shown on one page!
+    stmt = stmt.order_by(AlbumModel.title)
     result = await session.execute(stmt)
     rows = result.unique().all()
 
@@ -1406,13 +1390,7 @@ async def library_albums(
             "albums": albums,
             "current_source": source or "all",
             "source_counts": source_counts,
-            # Pagination context
-            "page": page,
-            "per_page": per_page,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
+            "total_count": total_count,  # Total albums shown
         },
     )
 

@@ -3934,6 +3934,7 @@ class ProviderBrowseRepository:
         
         Hey future me - artist_id here is SPOTIFY ID, not internal UUID!
         We need to look up the artist first.
+        album_type param maps to primary_type field in AlbumModel!
         """
         from .models import AlbumModel, ArtistModel
 
@@ -3965,7 +3966,7 @@ class ProviderBrowseRepository:
                 model.image_path = image_path
             model.release_date = release_date
             model.release_date_precision = release_date_precision
-            model.album_type = album_type
+            model.primary_type = album_type  # album_type → primary_type
             model.total_tracks = total_tracks
             # Only set is_saved to True, never back to False via this method
             if is_saved:
@@ -3980,7 +3981,7 @@ class ProviderBrowseRepository:
                 image_path=image_path,
                 release_date=release_date,
                 release_date_precision=release_date_precision,
-                album_type=album_type,
+                primary_type=album_type,  # album_type → primary_type
                 total_tracks=total_tracks,
                 is_saved=is_saved,
                 source="spotify",
