@@ -43,6 +43,36 @@ class TestSlskdClientInit:
         client = SlskdClient(settings)
         assert client.base_url == "http://localhost:5030"
 
+    def test_init_rejects_empty_url(self) -> None:
+        """Test that empty URL raises ValueError."""
+        settings = SlskdSettings(
+            url="",
+            username="testuser",
+            password="testpass",
+        )
+        with pytest.raises(ValueError, match="slskd URL is empty"):
+            SlskdClient(settings)
+
+    def test_init_rejects_url_without_protocol(self) -> None:
+        """Test that URL without http:// or https:// raises ValueError."""
+        settings = SlskdSettings(
+            url="localhost:5030",
+            username="testuser",
+            password="testpass",
+        )
+        with pytest.raises(ValueError, match="missing http:// or https:// protocol"):
+            SlskdClient(settings)
+
+    def test_init_accepts_https_url(self) -> None:
+        """Test that https:// URLs are accepted."""
+        settings = SlskdSettings(
+            url="https://slskd.example.com:5030",
+            username="testuser",
+            password="testpass",
+        )
+        client = SlskdClient(settings)
+        assert client.base_url == "https://slskd.example.com:5030"
+
 
 class TestSlskdClientSearch:
     """Test slskd search operations."""

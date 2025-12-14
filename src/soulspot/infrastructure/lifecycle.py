@@ -233,9 +233,55 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         app.state.job_queue = job_queue
 
-        # Create slskd client outside the session context (it doesn't need DB)
-        slskd_client = SlskdClient(settings.slskd)
-        app.state.slskd_client = slskd_client
+        # =================================================================
+        # Create slskd client with DB-first credentials (with env fallback)
+        # =================================================================
+        # Hey future me - we load slskd credentials from DB first, fall back to env!
+        # This matches the pattern used in API dependencies (get_slskd_client).
+        # If slskd is not configured, we create a dummy client with default URL -
+        # workers will gracefully handle connection failures via circuit breaker.
+        from soulspot.application.services.credentials_service import (
+            CredentialsService,
+        )
+        from soulspot.config.settings import SlskdSettings
+
+        # Load credentials from DB with env fallback
+        async with db.session_scope() as creds_session:
+            creds_service = CredentialsService(
+                session=creds_session,
+                fallback_settings=settings,  # Enable env fallback for migration
+            )
+            slskd_creds = await creds_service.get_slskd_credentials()
+
+        # Create SlskdSettings from credentials
+        slskd_settings = SlskdSettings(
+            url=slskd_creds.url,
+            username=slskd_creds.username or "admin",
+            password=slskd_creds.password or "changeme",
+            api_key=slskd_creds.api_key,
+        )
+
+        # Try to create slskd client - may fail if URL is invalid
+        try:
+            slskd_client = SlskdClient(slskd_settings)
+            app.state.slskd_client = slskd_client
+
+            # Log configuration status
+            if slskd_creds.is_configured():
+                logger.info("slskd client initialized: %s", slskd_creds.url)
+            else:
+                logger.warning(
+                    "slskd credentials not fully configured - download features will be disabled"
+                )
+        except ValueError as e:
+            # slskd URL validation failed - this is non-fatal for app startup
+            # Workers will handle missing client gracefully via circuit breaker
+            logger.warning(
+                "slskd client initialization failed: %s - download features will be disabled",
+                e,
+            )
+            # Create a placeholder client with None to signal it's not available
+            app.state.slskd_client = None
 
         # =================================================================
         # Create a single long-lived session for background workers
@@ -267,16 +313,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             track_repository = TrackRepository(worker_session)
             download_repository = DownloadRepository(worker_session)
 
-            download_worker = DownloadWorker(
-                job_queue=job_queue,
-                slskd_client=slskd_client,
-                track_repository=track_repository,
-                download_repository=download_repository,
-            )
-            download_worker.register()
-            app.state.download_worker = download_worker
+            # =================================================================
+            # Initialize SLSKD-dependent workers (conditional on slskd_client)
+            # =================================================================
+            # Hey future me - these workers REQUIRE slskd to be configured!
+            # If slskd_client is None (failed validation), we skip them.
+            # The app will still start but download features will be disabled.
+            if slskd_client is not None:
+                download_worker = DownloadWorker(
+                    job_queue=job_queue,
+                    slskd_client=slskd_client,
+                    track_repository=track_repository,
+                    download_repository=download_repository,
+                )
+                download_worker.register()
+                app.state.download_worker = download_worker
+                logger.info("Download worker registered")
+            else:
+                logger.warning("Download worker skipped - slskd client not available")
+                app.state.download_worker = None
 
-            # Initialize library scan worker
+            # Initialize library scan worker (doesn't need slskd)
             library_scan_worker = LibraryScanWorker(
                 job_queue=job_queue,
                 db=db,
@@ -316,18 +373,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
             # Er pollt slskd alle X Sekunden und updated Job.result mit Progress.
             # Ohne ihn bleiben Jobs ewig in RUNNING Status ohne echten Progress.
-            from soulspot.application.workers.download_monitor_worker import (
-                DownloadMonitorWorker,
-            )
+            # REQUIRES slskd_client to be configured!
+            if slskd_client is not None:
+                from soulspot.application.workers.download_monitor_worker import (
+                    DownloadMonitorWorker,
+                )
 
-            download_monitor_worker = DownloadMonitorWorker(
-                job_queue=job_queue,
-                slskd_client=slskd_client,
-                poll_interval_seconds=10,  # Poll every 10 seconds
-            )
-            await download_monitor_worker.start()
-            app.state.download_monitor_worker = download_monitor_worker
-            logger.info("Download monitor worker started (polls every 10s)")
+                download_monitor_worker = DownloadMonitorWorker(
+                    job_queue=job_queue,
+                    slskd_client=slskd_client,
+                    poll_interval_seconds=10,  # Poll every 10 seconds
+                )
+                await download_monitor_worker.start()
+                app.state.download_monitor_worker = download_monitor_worker
+                logger.info("Download monitor worker started (polls every 10s)")
+            else:
+                logger.warning("Download monitor worker skipped - slskd client not available")
+                app.state.download_monitor_worker = None
 
             # =================================================================
             # Start Queue Dispatcher Worker (dispatches WAITING downloads)
@@ -336,23 +398,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Wenn slskd nicht läuft, gehen Downloads in WAITING status statt zu failen.
             # Dieser Worker checkt alle 30s ob slskd wieder da ist und dispatcht dann
             # wartende Downloads nach und nach zur Job Queue.
-            from soulspot.application.workers.queue_dispatcher_worker import (
-                QueueDispatcherWorker,
-            )
+            # REQUIRES slskd_client to be configured!
+            if slskd_client is not None:
+                from soulspot.application.workers.queue_dispatcher_worker import (
+                    QueueDispatcherWorker,
+                )
 
-            queue_dispatcher_worker = QueueDispatcherWorker(
-                session_factory=db.get_session_factory(),
-                slskd_client=slskd_client,
-                job_queue=job_queue,
-                check_interval=30,  # Check slskd every 30 seconds
-                dispatch_delay=2.0,  # 2s between dispatches
-                max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
-            )
-            # Start in background task (non-blocking)
-            queue_dispatcher_task = asyncio.create_task(queue_dispatcher_worker.start())
-            app.state.queue_dispatcher_worker = queue_dispatcher_worker
-            app.state.queue_dispatcher_task = queue_dispatcher_task
-            logger.info("Queue dispatcher worker started (checks slskd every 30s)")
+                queue_dispatcher_worker = QueueDispatcherWorker(
+                    session_factory=db.get_session_factory(),
+                    slskd_client=slskd_client,
+                    job_queue=job_queue,
+                    check_interval=30,  # Check slskd every 30 seconds
+                    dispatch_delay=2.0,  # 2s between dispatches
+                    max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
+                )
+                # Start in background task (non-blocking)
+                queue_dispatcher_task = asyncio.create_task(queue_dispatcher_worker.start())
+                app.state.queue_dispatcher_worker = queue_dispatcher_worker
+                app.state.queue_dispatcher_task = queue_dispatcher_task
+                logger.info("Queue dispatcher worker started (checks slskd every 30s)")
+            else:
+                logger.warning("Queue dispatcher worker skipped - slskd client not available")
+                app.state.queue_dispatcher_worker = None
+                app.state.queue_dispatcher_task = None
 
             # =================================================================
             # Start Download Status Sync Worker (syncs slskd status to DB)
@@ -363,24 +431,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # synchronisiert den Status in die SoulSpot DB. KRITISCH für Download Manager UI!
             # CIRCUIT BREAKER: Nach 3 Fehlern pausiert der Worker für 60s bevor er wieder
             # versucht slskd zu erreichen (vermeidet Hammering wenn slskd offline).
-            from soulspot.application.workers.download_status_sync_worker import (
-                DownloadStatusSyncWorker,
-            )
+            # REQUIRES slskd_client to be configured!
+            if slskd_client is not None:
+                from soulspot.application.workers.download_status_sync_worker import (
+                    DownloadStatusSyncWorker,
+                )
 
-            download_status_sync_worker = DownloadStatusSyncWorker(
-                session_factory=db.get_session_factory(),
-                slskd_client=slskd_client,
-                sync_interval=5,  # Sync every 5 seconds for responsive UI
-                completed_history_hours=24,  # Track completed downloads for 24h
-                max_consecutive_failures=3,  # Open circuit after 3 failures
-                circuit_breaker_timeout=60,  # Wait 60s before retry when circuit open
-            )
-            download_status_sync_task = asyncio.create_task(
-                download_status_sync_worker.start()
-            )
-            app.state.download_status_sync_worker = download_status_sync_worker
-            app.state.download_status_sync_task = download_status_sync_task
-            logger.info("Download status sync worker started (syncs every 5s)")
+                download_status_sync_worker = DownloadStatusSyncWorker(
+                    session_factory=db.get_session_factory(),
+                    slskd_client=slskd_client,
+                    sync_interval=5,  # Sync every 5 seconds for responsive UI
+                    completed_history_hours=24,  # Track completed downloads for 24h
+                    max_consecutive_failures=3,  # Open circuit after 3 failures
+                    circuit_breaker_timeout=60,  # Wait 60s before retry when circuit open
+                )
+                download_status_sync_task = asyncio.create_task(
+                    download_status_sync_worker.start()
+                )
+                app.state.download_status_sync_worker = download_status_sync_worker
+                app.state.download_status_sync_task = download_status_sync_task
+                logger.info("Download status sync worker started (syncs every 5s)")
+            else:
+                logger.warning("Download status sync worker skipped - slskd client not available")
+                app.state.download_status_sync_worker = None
+                app.state.download_status_sync_task = None
+
 
 
             # =================================================================
@@ -518,7 +593,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping automation workers: %s", e)
 
         # Stop download monitor worker
-        if hasattr(app.state, "download_monitor_worker"):
+        if hasattr(app.state, "download_monitor_worker") and app.state.download_monitor_worker is not None:
             try:
                 logger.info("Stopping download monitor worker...")
                 await app.state.download_monitor_worker.stop()
@@ -527,12 +602,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping download monitor worker: %s", e)
 
         # Stop queue dispatcher worker
-        if hasattr(app.state, "queue_dispatcher_worker"):
+        if hasattr(app.state, "queue_dispatcher_worker") and app.state.queue_dispatcher_worker is not None:
             try:
                 logger.info("Stopping queue dispatcher worker...")
                 app.state.queue_dispatcher_worker.stop()
                 # Wait for task to complete gracefully with timeout
-                if hasattr(app.state, "queue_dispatcher_task"):
+                if hasattr(app.state, "queue_dispatcher_task") and app.state.queue_dispatcher_task is not None:
                     try:
                         await asyncio.wait_for(
                             app.state.queue_dispatcher_task,
@@ -547,11 +622,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping queue dispatcher worker: %s", e)
 
         # Stop download status sync worker
-        if hasattr(app.state, "download_status_sync_worker"):
+        if hasattr(app.state, "download_status_sync_worker") and app.state.download_status_sync_worker is not None:
             try:
                 logger.info("Stopping download status sync worker...")
                 app.state.download_status_sync_worker.stop()
-                if hasattr(app.state, "download_status_sync_task"):
+                if hasattr(app.state, "download_status_sync_task") and app.state.download_status_sync_task is not None:
                     try:
                         await asyncio.wait_for(
                             app.state.download_status_sync_task,

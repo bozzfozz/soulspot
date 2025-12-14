@@ -15,15 +15,33 @@ class SlskdClient(ISlskdClient):
     # is important: we strip the trailing slash from base_url because httpx gets confused
     # when you have double slashes in URLs. Learned that the hard way with 404 errors!
     # Client creation is lazy (in _get_client) to avoid asyncio headaches.
+    # UPDATE: Now validates URL has http:// or https:// protocol to prevent cryptic httpx errors!
     def __init__(self, settings: SlskdSettings) -> None:
         """
         Initialize slskd client.
 
         Args:
             settings: slskd configuration settings
+
+        Raises:
+            ValueError: If URL is missing or doesn't have http:// or https:// protocol
         """
         self.settings = settings
-        self.base_url = settings.url.rstrip("/")
+
+        # Validate URL has protocol before httpx tries to use it
+        url = settings.url.strip()
+        if not url:
+            raise ValueError(
+                "slskd URL is empty. Please configure slskd.url in Settings or "
+                "set SLSKD_URL environment variable."
+            )
+        if not url.startswith(("http://", "https://")):
+            raise ValueError(
+                f"slskd URL '{url}' is missing http:// or https:// protocol. "
+                "Please use a valid URL like 'http://localhost:5030'"
+            )
+
+        self.base_url = url.rstrip("/")
         self._client: httpx.AsyncClient | None = None
 
     # Listen up, slskd supports TWO auth methods: API key (preferred) OR basic auth.
