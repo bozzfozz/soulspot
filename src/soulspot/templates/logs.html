@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}Docker Logs - SoulSpot{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-1">Docker Logs</h1>
+            <p class="text-muted">Real-time container logs from {{ container_name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button id="download-logs-btn" class="btn btn-outline-primary">
+                <i class="bi bi-download"></i> Download Logs
+            </button>
+            <button id="clear-logs-btn" class="btn btn-outline-secondary">
+                <i class="bi bi-trash"></i> Clear Display
+            </button>
+        </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <!-- Log Level Filter -->
+                <div class="col-md-3">
+                    <label for="log-level" class="form-label">Log Level</label>
+                    <select id="log-level" class="form-select">
+                        <option value="ALL" selected>All Levels</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+
+                <!-- Search Filter -->
+                <div class="col-md-4">
+                    <label for="log-search" class="form-label">Search</label>
+                    <input 
+                        type="text" 
+                        id="log-search" 
+                        class="form-control" 
+                        placeholder="Filter logs by text..."
+                    >
+                </div>
+
+                <!-- Initial Lines -->
+                <div class="col-md-2">
+                    <label for="tail-lines" class="form-label">Initial Lines</label>
+                    <select id="tail-lines" class="form-select">
+                        <option value="50">50</option>
+                        <option value="100" selected>100</option>
+                        <option value="250">250</option>
+                        <option value="500">500</option>
+                        <option value="1000">1000</option>
+                    </select>
+                </div>
+
+                <!-- Auto-refresh Toggle -->
+                <div class="col-md-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="form-check form-switch">
+                            <input 
+                                type="checkbox" 
+                                id="auto-refresh" 
+                                class="form-check-input" 
+                                checked
+                            >
+                            <label for="auto-refresh" class="form-check-label">
+                                Live Stream
+                            </label>
+                        </div>
+                        <span id="connection-status" class="badge bg-secondary">
+                            <i class="bi bi-circle-fill"></i> Connecting...
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Display -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div 
+                id="log-container" 
+                style="
+                    height: 600px; 
+                    overflow-y: auto; 
+                    background: #1a1a1a; 
+                    color: #e0e0e0;
+                    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    padding: 1rem;
+                "
+            >
+                <!-- Logs will be appended here -->
+                <div id="log-content"></div>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <span id="log-count" class="text-muted">0 lines</span>
+            <div>
+                <button id="scroll-to-top" class="btn btn-sm btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-up"></i> Top
+                </button>
+                <button id="scroll-to-bottom" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-down"></i> Bottom
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CSS Styling for Log Lines -->
+<style>
+    /* Log line styling with syntax highlighting */
+    .log-line {
+        padding: 2px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+
+    .log-line:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Timestamp styling */
+    .log-timestamp {
+        color: #888;
+        margin-right: 8px;
+    }
+
+    /* Log level colors (matching DOCKER_LOGGING.md format) */
+    .log-level-DEBUG {
+        color: #00bcd4;
+    }
+
+    .log-level-INFO {
+        color: #4caf50;
+    }
+
+    .log-level-WARNING {
+        color: #ff9800;
+    }
+
+    .log-level-ERROR {
+        color: #f44336;
+    }
+
+    .log-level-CRITICAL {
+        color: #e91e63;
+        font-weight: bold;
+    }
+
+    /* Module/file path styling */
+    .log-module {
+        color: #9c27b0;
+    }
+
+    /* Auto-scroll indicator */
+    #log-container.auto-scrolling::after {
+        content: "Auto-scrolling...";
+        position: sticky;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: #4caf50;
+    }
+
+    /* Connection status colors */
+    .badge.bg-success {
+        background-color: #4caf50 !important;
+    }
+
+    .badge.bg-danger {
+        background-color: #f44336 !important;
+    }
+
+    .badge.bg-warning {
+        background-color: #ff9800 !important;
+    }
+</style>
+
+<!-- JavaScript for Log Viewer -->
+<script>
+    // Hey future me - Log Viewer Client-Side Logic!
+    // Connects to /api/logs/stream via SSE, displays logs in real-time.
+    // Handles filtering, search, auto-scroll, and download.
+    
+    let eventSource = null;
+    let logCount = 0;
+    let autoScroll = true;
+
+    const logContainer = document.getElementById('log-container');
+    const logContent = document.getElementById('log-content');
+    const logCountEl = document.getElementById('log-count');
+    const connectionStatus = document.getElementById('connection-status');
+    const autoRefreshToggle = document.getElementById('auto-refresh');
+    const logLevelSelect = document.getElementById('log-level');
+    const logSearchInput = document.getElementById('log-search');
+    const tailLinesSelect = document.getElementById('tail-lines');
+
+    // Connect to SSE stream
+    function connectSSE() {
+        // Disconnect existing connection
+        if (eventSource) {
+            eventSource.close();
+        }
+
+        // Build query parameters
+        const level = logLevelSelect.value;
+        const search = logSearchInput.value;
+        const tail = tailLinesSelect.value;
+        const url = `/api/logs/stream?level=${level}&search=${encodeURIComponent(search)}&tail=${tail}`;
+
+        // Update status
+        updateConnectionStatus('connecting');
+
+        // Create new SSE connection
+        eventSource = new EventSource(url);
+
+        eventSource.addEventListener('connected', (e) => {
+            console.log('SSE connected:', e.data);
+            updateConnectionStatus('connected');
+        });
+
+        eventSource.addEventListener('log', (e) => {
+            const data = JSON.parse(e.data);
+            appendLogLine(data.line);
+        });
+
+        eventSource.addEventListener('disconnected', (e) => {
+            console.log('SSE disconnected:', e.data);
+            updateConnectionStatus('disconnected');
+        });
+
+        eventSource.addEventListener('error', (e) => {
+            console.error('SSE error:', e);
+            updateConnectionStatus('error');
+        });
+
+        eventSource.onerror = (e) => {
+            console.error('SSE connection error:', e);
+            updateConnectionStatus('error');
+            // Retry after 5 seconds if auto-refresh is enabled
+            if (autoRefreshToggle.checked) {
+                setTimeout(connectSSE, 5000);
+            }
+        };
+    }
+
+    // Disconnect SSE
+    function disconnectSSE() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+        updateConnectionStatus('disconnected');
+    }
+
+    // Append log line to display
+    function appendLogLine(line) {
+        const lineEl = document.createElement('div');
+        lineEl.className = 'log-line';
+        
+        // Parse log line for syntax highlighting
+        // Format: HH:MM:SS │ LEVEL │ module:line │ message
+        const logLineHTML = highlightLogLine(line);
+        lineEl.innerHTML = logLineHTML;
+        
+        logContent.appendChild(lineEl);
+        logCount++;
+        logCountEl.textContent = `${logCount} lines`;
+
+        // Auto-scroll to bottom if enabled
+        if (autoScroll) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Limit display to 2000 lines (prevent memory issues)
+        if (logCount > 2000) {
+            logContent.removeChild(logContent.firstChild);
+            logCount--;
+        }
+    }
+
+    // Highlight log line with colors
+    function highlightLogLine(line) {
+        // Detect log level
+        let level = 'INFO';
+        if (line.includes('DEBUG')) level = 'DEBUG';
+        else if (line.includes('INFO')) level = 'INFO';
+        else if (line.includes('WARNING')) level = 'WARNING';
+        else if (line.includes('ERROR')) level = 'ERROR';
+        else if (line.includes('CRITICAL')) level = 'CRITICAL';
+
+        // Replace level keyword with colored span
+        line = line.replace(
+            new RegExp(`\\b${level}\\b`, 'g'),
+            `<span class="log-level-${level}">${level}</span>`
+        );
+
+        // Highlight module paths (e.g., soulspot.application.services.foo:123)
+        line = line.replace(
+            /soulspot\.[a-z_.]+:\d+/g,
+            '<span class="log-module">$&</span>'
+        );
+
+        // Highlight timestamps (HH:MM:SS)
+        line = line.replace(
+            /\d{2}:\d{2}:\d{2}/g,
+            '<span class="log-timestamp">$&</span>'
+        );
+
+        return line;
+    }
+
+    // Update connection status badge
+    function updateConnectionStatus(status) {
+        const statusMap = {
+            'connecting': { icon: 'bi-hourglass-split', text: 'Connecting...', class: 'bg-warning' },
+            'connected': { icon: 'bi-circle-fill', text: 'Live', class: 'bg-success' },
+            'disconnected': { icon: 'bi-circle', text: 'Disconnected', class: 'bg-secondary' },
+            'error': { icon: 'bi-exclamation-circle', text: 'Error', class: 'bg-danger' },
+        };
+
+        const config = statusMap[status] || statusMap.disconnected;
+        connectionStatus.className = `badge ${config.class}`;
+        connectionStatus.innerHTML = `<i class="bi ${config.icon}"></i> ${config.text}`;
+    }
+
+    // Clear log display
+    document.getElementById('clear-logs-btn').addEventListener('click', () => {
+        logContent.innerHTML = '';
+        logCount = 0;
+        logCountEl.textContent = '0 lines';
+    });
+
+    // Download logs
+    document.getElementById('download-logs-btn').addEventListener('click', () => {
+        const tail = tailLinesSelect.value;
+        window.open(`/api/logs/download?tail=${tail}`, '_blank');
+    });
+
+    // Scroll controls
+    document.getElementById('scroll-to-top').addEventListener('click', () => {
+        logContainer.scrollTop = 0;
+        autoScroll = false;
+    });
+
+    document.getElementById('scroll-to-bottom').addEventListener('click', () => {
+        logContainer.scrollTop = logContainer.scrollHeight;
+        autoScroll = true;
+    });
+
+    // Detect manual scroll (disable auto-scroll)
+    logContainer.addEventListener('scroll', () => {
+        const isAtBottom = logContainer.scrollTop + logContainer.clientHeight >= logContainer.scrollHeight - 50;
+        autoScroll = isAtBottom;
+    });
+
+    // Auto-refresh toggle
+    autoRefreshToggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            connectSSE();
+        } else {
+            disconnectSSE();
+        }
+    });
+
+    // Filter changes - reconnect with new parameters
+    logLevelSelect.addEventListener('change', () => {
+        if (autoRefreshToggle.checked) {
+            logContent.innerHTML = '';
+            logCount = 0;
+            connectSSE();
+        }
+    });
+
+    logSearchInput.addEventListener('input', () => {
+        if (autoRefreshToggle.checked) {
+            logContent.innerHTML = '';
+            logCount = 0;
+            connectSSE();
+        }
+    });
+
+    tailLinesSelect.addEventListener('change', () => {
+        if (autoRefreshToggle.checked) {
+            logContent.innerHTML = '';
+            logCount = 0;
+            connectSSE();
+        }
+    });
+
+    // Initial connection
+    connectSSE();
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        disconnectSSE();
+    });
+</script>
+{% endblock %}

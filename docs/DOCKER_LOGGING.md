@@ -63,7 +63,34 @@ ERROR: Sync cycle failed: All connection attempts failed
 
 ## Docker Logs ansehen
 
-### Alle Logs anzeigen
+### Web UI (NEU!)
+```
+http://localhost:8765/api/logs
+```
+
+**Features:**
+- 🌐 **Browser-basiert** - Keine Terminal-Befehle nötig
+- 🔴 **Live-Streaming** - Real-time log updates via SSE
+- 🔍 **Suche & Filter** - Nach Log-Level und Text filtern
+- 📥 **Download** - Logs als Datei exportieren
+- 🎨 **Syntax Highlighting** - Farbige Log-Level und Modul-Pfade
+- 📱 **Responsive** - Funktioniert auf Desktop und Mobile
+
+**Zugriff:**
+1. Öffne SoulSpot Web UI: `http://localhost:8765`
+2. Klicke auf **"Logs"** in der Sidebar unter "System"
+3. Oder direkt: `http://localhost:8765/api/logs`
+
+**Filter & Optionen:**
+- **Log Level:** ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL
+- **Suche:** Text-basierte Filterung (case-insensitive)
+- **Initial Lines:** Anzahl initialer Zeilen (50-1000)
+- **Live Stream:** Auto-refresh toggle (SSE)
+- **Download:** Export als `.txt` Datei
+
+### Terminal (klassisch)
+
+#### Alle Logs anzeigen
 ```bash
 docker compose logs -f soulspot
 ```
@@ -298,3 +325,58 @@ AttributeError: 'SpotifySyncService' object has no attribute '_spotify_plugin'. 
 - [Python Logging Best Practices](https://docs.python.org/3/howto/logging.html)
 - [Structured Logging with JSON](https://github.com/madzak/python-json-logger)
 - [Docker Compose Logs](https://docs.docker.com/compose/reference/logs/)
+
+---
+
+## Web Log Viewer API
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/logs` | Log viewer page (HTML) |
+| `GET` | `/api/logs/stream` | SSE stream for real-time logs |
+| `GET` | `/api/logs/download` | Download logs as text file |
+
+### Query Parameters
+
+**`/api/logs/stream`:**
+- `level` (string, default: `ALL`) - Filter by log level: ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL
+- `search` (string, default: `""`) - Text search filter (case-insensitive)
+- `tail` (int, default: `100`) - Number of initial lines (0-1000)
+
+**`/api/logs/download`:**
+- `tail` (int, default: `1000`) - Number of lines to download (100-10000)
+
+### SSE Events
+
+**Event Types:**
+- `connected` - Connection established
+- `log` - New log line
+- `disconnected` - Connection closed
+- `error` - Error occurred
+
+**Example (JavaScript):**
+```javascript
+const eventSource = new EventSource('/api/logs/stream?level=ERROR');
+
+eventSource.addEventListener('log', (e) => {
+    const data = JSON.parse(e.data);
+    console.log(data.line);  // "09:33:37 │ ERROR │ ..."
+});
+```
+
+### Implementation Details
+
+**Backend:**
+- Router: `src/soulspot/api/routers/logs.py`
+- Uses `docker logs -f soulspot` command
+- Async subprocess with SSE streaming
+- Auto-reconnect on connection failure
+
+**Frontend:**
+- Template: `src/soulspot/templates/logs.html`
+- Real-time updates via EventSource API
+- Syntax highlighting for log levels
+- Auto-scroll with manual override
+- Max 2000 lines in browser (memory limit)

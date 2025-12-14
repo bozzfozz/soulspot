@@ -131,6 +131,10 @@
                 <i class="bi bi-gear sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Settings</span>
             </a>
+            <a href="/api/logs" class="sidebar-item {% if '/logs' in request.url.path %}active{% endif %}">
+                <i class="bi bi-terminal sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Logs</span>
+            </a>
             <a href="/styleguide" class="sidebar-item {% if '/styleguide' in request.url.path %}active{% endif %}">
                 <i class="bi bi-palette sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Styleguide</span>
