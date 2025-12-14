@@ -3449,8 +3449,13 @@ class SessionRepository(ISessionRepository):
 class SpotifyBrowseRepository:
     """Repository for Spotify browse data (followed artists, albums, tracks).
 
-    This is SEPARATE from the local library repositories! These tables store
-    synced Spotify data for browsing, not local files.
+    Hey future me - Nach Table Consolidation (Nov 2025):
+    - Nutzt jetzt die unified Models: ArtistModel, AlbumModel, TrackModel
+    - KEINE separaten spotify_* Tabellen mehr!
+    - Filter nach source='spotify' für Spotify-spezifische Daten
+    - spotify_uri enthält die Spotify-IDs (z.B. "spotify:artist:xxx")
+    
+    TODO: Repository umbenennen zu ProviderBrowseRepository
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -3458,7 +3463,7 @@ class SpotifyBrowseRepository:
         self.session = session
 
     # =========================================================================
-    # ARTISTS
+    # ARTISTS (unified ArtistModel with source='spotify')
     # =========================================================================
 
     async def get_all_artist_ids(self) -> set[str]:
@@ -3466,30 +3471,38 @@ class SpotifyBrowseRepository:
 
         Used for diff-sync: compare with Spotify API result to find
         new follows and unfollows.
+        
+        Returns Spotify IDs extracted from spotify_uri.
         """
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
-        stmt = select(SpotifyArtistModel.spotify_id)
+        stmt = select(ArtistModel.spotify_uri).where(
+            ArtistModel.source == "spotify",
+            ArtistModel.spotify_uri.isnot(None),
+        )
         result = await self.session.execute(stmt)
-        return {row[0] for row in result.all()}
+        # Extract Spotify ID from URI: "spotify:artist:xxx" -> "xxx"
+        return {row[0].split(":")[-1] for row in result.all() if row[0]}
 
     async def get_artist_by_id(self, spotify_id: str) -> Any | None:
         """Get a Spotify artist by ID."""
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
-        stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:artist:{spotify_id}"
+        stmt = select(ArtistModel).where(
+            ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def get_all_artists(self, limit: int = 100, offset: int = 0) -> list[Any]:
         """Get all followed artists with pagination."""
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
         stmt = (
-            select(SpotifyArtistModel)
-            .order_by(SpotifyArtistModel.name)
+            select(ArtistModel)
+            .where(ArtistModel.source == "spotify")
+            .order_by(ArtistModel.name)
             .limit(limit)
             .offset(offset)
         )
@@ -3497,10 +3510,12 @@ class SpotifyBrowseRepository:
         return list(result.scalars().all())
 
     async def count_artists(self) -> int:
-        """Count total followed artists."""
-        from .models import SpotifyArtistModel
+        """Count total followed artists from Spotify."""
+        from .models import ArtistModel
 
-        stmt = select(func.count(SpotifyArtistModel.spotify_id))
+        stmt = select(func.count(ArtistModel.id)).where(
+            ArtistModel.source == "spotify"
+        )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -3516,14 +3531,17 @@ class SpotifyBrowseRepository:
             limit: Maximum number of artists to return (default 5)
 
         Returns:
-            List of SpotifyArtistModel objects without synced albums
+            List of ArtistModel objects without synced albums
         """
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
         stmt = (
-            select(SpotifyArtistModel)
-            .where(SpotifyArtistModel.albums_synced_at.is_(None))
-            .order_by(SpotifyArtistModel.name)  # Alphabetical for predictability
+            select(ArtistModel)
+            .where(
+                ArtistModel.source == "spotify",
+                ArtistModel.albums_synced_at.is_(None),
+            )
+            .order_by(ArtistModel.name)  # Alphabetical for predictability
             .limit(limit)
         )
         result = await self.session.execute(stmt)
@@ -3537,10 +3555,11 @@ class SpotifyBrowseRepository:
         Returns:
             Number of artists still needing album sync
         """
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
-        stmt = select(func.count(SpotifyArtistModel.spotify_id)).where(
-            SpotifyArtistModel.albums_synced_at.is_(None)
+        stmt = select(func.count(ArtistModel.id)).where(
+            ArtistModel.source == "spotify",
+            ArtistModel.albums_synced_at.is_(None),
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -3562,21 +3581,22 @@ class SpotifyBrowseRepository:
             limit: Maximum number of artists to return (default 5)
 
         Returns:
-            List of SpotifyArtistModel objects needing album resync
+            List of ArtistModel objects needing album resync
         """
         from datetime import timedelta
 
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
         cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         stmt = (
-            select(SpotifyArtistModel)
+            select(ArtistModel)
             .where(
-                SpotifyArtistModel.albums_synced_at.isnot(None),
-                SpotifyArtistModel.albums_synced_at < cutoff_time,
+                ArtistModel.source == "spotify",
+                ArtistModel.albums_synced_at.isnot(None),
+                ArtistModel.albums_synced_at < cutoff_time,
             )
-            .order_by(SpotifyArtistModel.albums_synced_at.asc())  # Oldest first
+            .order_by(ArtistModel.albums_synced_at.asc())  # Oldest first
             .limit(limit)
         )
         result = await self.session.execute(stmt)
@@ -3593,13 +3613,14 @@ class SpotifyBrowseRepository:
         """
         from datetime import timedelta
 
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
         cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
-        stmt = select(func.count(SpotifyArtistModel.spotify_id)).where(
-            SpotifyArtistModel.albums_synced_at.isnot(None),
-            SpotifyArtistModel.albums_synced_at < cutoff_time,
+        stmt = select(func.count(ArtistModel.id)).where(
+            ArtistModel.source == "spotify",
+            ArtistModel.albums_synced_at.isnot(None),
+            ArtistModel.albums_synced_at < cutoff_time,
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -3614,17 +3635,20 @@ class SpotifyBrowseRepository:
         popularity: int | None = None,
         follower_count: int | None = None,
     ) -> None:
-        """Insert or update a Spotify artist."""
-        from .models import SpotifyArtistModel
+        """Insert or update a Spotify artist in unified library."""
+        from .models import ArtistModel
 
-        # Check if exists
-        stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:artist:{spotify_id}"
+        
+        # Check if exists by spotify_uri
+        stmt = select(ArtistModel).where(
+            ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
         now = datetime.now(UTC)
+        # Genres stored as JSON in unified model
         genres_json = json.dumps(genres) if genres else None
 
         if model:
@@ -3639,47 +3663,66 @@ class SpotifyBrowseRepository:
             model.last_synced_at = now
             model.updated_at = now
         else:
-            # Insert new
-            model = SpotifyArtistModel(
-                spotify_id=spotify_id,
+            # Insert new with source='spotify'
+            model = ArtistModel(
                 name=name,
+                spotify_uri=spotify_uri,
                 image_url=image_url,
                 image_path=image_path,
                 genres=genres_json,
                 popularity=popularity,
                 follower_count=follower_count,
+                source="spotify",
                 last_synced_at=now,
             )
             self.session.add(model)
 
     async def delete_artists(self, spotify_ids: set[str]) -> int:
         """Delete artists by Spotify IDs (CASCADE deletes albums and tracks)."""
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
         if not spotify_ids:
             return 0
 
-        stmt = delete(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id.in_(spotify_ids)
+        # Convert IDs to URIs for matching
+        spotify_uris = {f"spotify:artist:{sid}" for sid in spotify_ids}
+
+        stmt = delete(ArtistModel).where(
+            ArtistModel.spotify_uri.in_(spotify_uris)
         )
         result = await self.session.execute(stmt)
-        # result.rowcount returns the number of rows affected (type stubs incomplete)
         return result.rowcount or 0  # type: ignore[attr-defined]
 
     # =========================================================================
-    # ALBUMS
+    # ALBUMS (unified AlbumModel with source='spotify')
     # =========================================================================
 
     async def get_albums_by_artist(
         self, artist_id: str, limit: int = 100, offset: int = 0
     ) -> list[Any]:
-        """Get albums for a Spotify artist."""
-        from .models import SpotifyAlbumModel
+        """Get albums for a Spotify artist.
+        
+        Hey future me - artist_id here is SPOTIFY ID (from API), not UUID!
+        We need to look up the artist by spotify_uri first.
+        """
+        from .models import AlbumModel, ArtistModel
+
+        # Find artist by Spotify ID to get internal ID
+        spotify_uri = f"spotify:artist:{artist_id}"
+        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_result = await self.session.execute(artist_stmt)
+        internal_artist_id = artist_result.scalar_one_or_none()
+        
+        if not internal_artist_id:
+            return []
 
         stmt = (
-            select(SpotifyAlbumModel)
-            .where(SpotifyAlbumModel.artist_id == artist_id)
-            .order_by(SpotifyAlbumModel.release_date.desc())
+            select(AlbumModel)
+            .where(
+                AlbumModel.artist_id == internal_artist_id,
+                AlbumModel.source == "spotify",
+            )
+            .order_by(AlbumModel.release_date.desc())
             .limit(limit)
             .offset(offset)
         )
@@ -3688,19 +3731,22 @@ class SpotifyBrowseRepository:
 
     async def get_album_by_id(self, spotify_id: str) -> Any | None:
         """Get a Spotify album by ID."""
-        from .models import SpotifyAlbumModel
+        from .models import AlbumModel
 
-        stmt = select(SpotifyAlbumModel).where(
-            SpotifyAlbumModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:album:{spotify_id}"
+        stmt = select(AlbumModel).where(
+            AlbumModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def count_albums(self) -> int:
         """Count total saved albums from Spotify."""
-        from .models import SpotifyAlbumModel
+        from .models import AlbumModel
 
-        stmt = select(func.count(SpotifyAlbumModel.spotify_id))
+        stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.source == "spotify"
+        )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -3713,7 +3759,7 @@ class SpotifyBrowseRepository:
 
         Hey future me - this is for the Dashboard "New Releases" feature!
         Returns albums/singles sorted by release_date (newest first), mixed together.
-        The join with SpotifyArtistModel gives us artist names without N+1 queries.
+        The join with ArtistModel gives us artist names without N+1 queries.
 
         release_date format can be:
         - "2024" (year only, release_date_precision="year")
@@ -3729,34 +3775,47 @@ class SpotifyBrowseRepository:
                          Options: "album", "single", "compilation"
 
         Returns:
-            List of tuples: (SpotifyAlbumModel, artist_name: str)
+            List of tuples: (AlbumModel, artist_name: str)
         """
-        from .models import SpotifyAlbumModel, SpotifyArtistModel
+        from .models import AlbumModel, ArtistModel
 
         stmt = (
-            select(SpotifyAlbumModel, SpotifyArtistModel.name)
+            select(AlbumModel, ArtistModel.name)
             .join(
-                SpotifyArtistModel,
-                SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id,
+                ArtistModel,
+                AlbumModel.artist_id == ArtistModel.id,
             )
-            .where(SpotifyAlbumModel.release_date.isnot(None))
-            .order_by(SpotifyAlbumModel.release_date.desc())
+            .where(
+                AlbumModel.source == "spotify",
+                AlbumModel.release_date.isnot(None),
+            )
+            .order_by(AlbumModel.release_date.desc())
             .limit(limit)
         )
 
         # Optionally filter by album type
         if album_types:
-            stmt = stmt.where(SpotifyAlbumModel.album_type.in_(album_types))
+            stmt = stmt.where(AlbumModel.album_type.in_(album_types))
 
         result = await self.session.execute(stmt)
         return list(result.all())
 
     async def count_albums_by_artist(self, artist_id: str) -> int:
-        """Count albums for an artist."""
-        from .models import SpotifyAlbumModel
+        """Count albums for an artist (by Spotify ID)."""
+        from .models import AlbumModel, ArtistModel
 
-        stmt = select(func.count(SpotifyAlbumModel.spotify_id)).where(
-            SpotifyAlbumModel.artist_id == artist_id
+        # Find artist by Spotify ID
+        spotify_uri = f"spotify:artist:{artist_id}"
+        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_result = await self.session.execute(artist_stmt)
+        internal_artist_id = artist_result.scalar_one_or_none()
+        
+        if not internal_artist_id:
+            return 0
+
+        stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.artist_id == internal_artist_id,
+            AlbumModel.source == "spotify",
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -3767,27 +3826,39 @@ class SpotifyBrowseRepository:
         """Get albums for an artist released after a specific date.
 
         Hey future me - this is for the Watchlist/New Release feature!
-        Instead of hitting Spotify API every time, we use the pre-synced
-        albums from spotify_albums table. The Background Album Sync keeps
-        this data fresh, so we just query locally.
+        Instead of hitting Spotify API every time, we use the unified
+        albums table. The Background Album Sync keeps this data fresh,
+        so we just query locally.
 
         If since_date is None, returns all albums (first check scenario).
 
         Args:
-            artist_id: Spotify artist ID
+            artist_id: Spotify artist ID (NOT internal UUID)
             since_date: Only return albums with created_at > since_date
 
         Returns:
-            List of SpotifyAlbumModel objects
+            List of AlbumModel objects
         """
-        from .models import SpotifyAlbumModel
+        from .models import AlbumModel, ArtistModel
+
+        # Find artist by Spotify ID
+        spotify_uri = f"spotify:artist:{artist_id}"
+        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_result = await self.session.execute(artist_stmt)
+        internal_artist_id = artist_result.scalar_one_or_none()
+        
+        if not internal_artist_id:
+            return []
 
         if since_date is None:
             # First check - return all albums
             stmt = (
-                select(SpotifyAlbumModel)
-                .where(SpotifyAlbumModel.artist_id == artist_id)
-                .order_by(SpotifyAlbumModel.release_date.desc())
+                select(AlbumModel)
+                .where(
+                    AlbumModel.artist_id == internal_artist_id,
+                    AlbumModel.source == "spotify",
+                )
+                .order_by(AlbumModel.release_date.desc())
             )
         else:
             # Return only albums added to DB after since_date
@@ -3795,12 +3866,13 @@ class SpotifyBrowseRepository:
             # 1. Album might have been released before we started tracking
             # 2. We want "new to us" not "new release date"
             stmt = (
-                select(SpotifyAlbumModel)
+                select(AlbumModel)
                 .where(
-                    SpotifyAlbumModel.artist_id == artist_id,
-                    SpotifyAlbumModel.created_at > since_date,
+                    AlbumModel.artist_id == internal_artist_id,
+                    AlbumModel.source == "spotify",
+                    AlbumModel.created_at > since_date,
                 )
-                .order_by(SpotifyAlbumModel.release_date.desc())
+                .order_by(AlbumModel.release_date.desc())
             )
 
         result = await self.session.execute(stmt)
@@ -3813,15 +3885,16 @@ class SpotifyBrowseRepository:
         Used by Watchlist/Discography workers to decide if they need fresh data.
 
         Args:
-            artist_id: Spotify artist ID
+            artist_id: Spotify artist ID (NOT internal UUID)
 
         Returns:
             Dict with sync status info
         """
-        from .models import SpotifyArtistModel
+        from .models import ArtistModel
 
-        stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id == artist_id
+        spotify_uri = f"spotify:artist:{artist_id}"
+        stmt = select(ArtistModel).where(
+            ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         artist = result.scalar_one_or_none()
@@ -3856,11 +3929,28 @@ class SpotifyBrowseRepository:
         total_tracks: int = 0,
         is_saved: bool = False,
     ) -> None:
-        """Insert or update a Spotify album."""
-        from .models import SpotifyAlbumModel
+        """Insert or update a Spotify album in unified library.
+        
+        Hey future me - artist_id here is SPOTIFY ID, not internal UUID!
+        We need to look up the artist first.
+        """
+        from .models import AlbumModel, ArtistModel
 
-        stmt = select(SpotifyAlbumModel).where(
-            SpotifyAlbumModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:album:{spotify_id}"
+        artist_spotify_uri = f"spotify:artist:{artist_id}"
+        
+        # Find internal artist ID
+        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == artist_spotify_uri)
+        artist_result = await self.session.execute(artist_stmt)
+        internal_artist_id = artist_result.scalar_one_or_none()
+        
+        if not internal_artist_id:
+            # Artist doesn't exist - skip this album
+            return
+
+        # Check if album exists
+        stmt = select(AlbumModel).where(
+            AlbumModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -3868,8 +3958,8 @@ class SpotifyBrowseRepository:
         now = datetime.now(UTC)
 
         if model:
-            model.name = name
-            model.image_url = image_url
+            model.title = name
+            model.artwork_url = image_url
             if image_path is not None:
                 model.image_path = image_path
             model.release_date = release_date
@@ -3881,26 +3971,28 @@ class SpotifyBrowseRepository:
                 model.is_saved = True
             model.updated_at = now
         else:
-            model = SpotifyAlbumModel(
-                spotify_id=spotify_id,
-                artist_id=artist_id,
-                name=name,
-                image_url=image_url,
+            model = AlbumModel(
+                title=name,
+                artist_id=internal_artist_id,
+                spotify_uri=spotify_uri,
+                artwork_url=image_url,
                 image_path=image_path,
                 release_date=release_date,
                 release_date_precision=release_date_precision,
                 album_type=album_type,
                 total_tracks=total_tracks,
                 is_saved=is_saved,
+                source="spotify",
             )
             self.session.add(model)
 
     async def set_albums_synced(self, artist_id: str) -> None:
-        """Mark albums as synced for an artist."""
-        from .models import SpotifyArtistModel
+        """Mark albums as synced for an artist (by Spotify ID)."""
+        from .models import ArtistModel
 
-        stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id == artist_id
+        spotify_uri = f"spotify:artist:{artist_id}"
+        stmt = select(ArtistModel).where(
+            ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -3908,19 +4000,31 @@ class SpotifyBrowseRepository:
             model.albums_synced_at = datetime.now(UTC)
 
     # =========================================================================
-    # TRACKS
+    # TRACKS (unified TrackModel with source='spotify')
     # =========================================================================
 
     async def get_tracks_by_album(
         self, album_id: str, limit: int = 100, offset: int = 0
     ) -> list[Any]:
-        """Get tracks for a Spotify album."""
-        from .models import SpotifyTrackModel
+        """Get tracks for a Spotify album (by Spotify album ID)."""
+        from .models import AlbumModel, TrackModel
+
+        # Find album by Spotify ID
+        spotify_uri = f"spotify:album:{album_id}"
+        album_stmt = select(AlbumModel.id).where(AlbumModel.spotify_uri == spotify_uri)
+        album_result = await self.session.execute(album_stmt)
+        internal_album_id = album_result.scalar_one_or_none()
+        
+        if not internal_album_id:
+            return []
 
         stmt = (
-            select(SpotifyTrackModel)
-            .where(SpotifyTrackModel.album_id == album_id)
-            .order_by(SpotifyTrackModel.disc_number, SpotifyTrackModel.track_number)
+            select(TrackModel)
+            .where(
+                TrackModel.album_id == internal_album_id,
+                TrackModel.source == "spotify",
+            )
+            .order_by(TrackModel.disc_number, TrackModel.track_number)
             .limit(limit)
             .offset(offset)
         )
@@ -3929,28 +4033,41 @@ class SpotifyBrowseRepository:
 
     async def get_track_by_id(self, spotify_id: str) -> Any | None:
         """Get a Spotify track by ID."""
-        from .models import SpotifyTrackModel
+        from .models import TrackModel
 
-        stmt = select(SpotifyTrackModel).where(
-            SpotifyTrackModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:track:{spotify_id}"
+        stmt = select(TrackModel).where(
+            TrackModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
     async def count_tracks(self) -> int:
         """Count total tracks from Spotify (all albums)."""
-        from .models import SpotifyTrackModel
+        from .models import TrackModel
 
-        stmt = select(func.count(SpotifyTrackModel.spotify_id))
+        stmt = select(func.count(TrackModel.id)).where(
+            TrackModel.source == "spotify"
+        )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
     async def count_tracks_by_album(self, album_id: str) -> int:
-        """Count tracks in an album."""
-        from .models import SpotifyTrackModel
+        """Count tracks in an album (by Spotify album ID)."""
+        from .models import AlbumModel, TrackModel
 
-        stmt = select(func.count(SpotifyTrackModel.spotify_id)).where(
-            SpotifyTrackModel.album_id == album_id
+        # Find album by Spotify ID
+        spotify_uri = f"spotify:album:{album_id}"
+        album_stmt = select(AlbumModel.id).where(AlbumModel.spotify_uri == spotify_uri)
+        album_result = await self.session.execute(album_stmt)
+        internal_album_id = album_result.scalar_one_or_none()
+        
+        if not internal_album_id:
+            return 0
+
+        stmt = select(func.count(TrackModel.id)).where(
+            TrackModel.album_id == internal_album_id,
+            TrackModel.source == "spotify",
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -3967,11 +4084,31 @@ class SpotifyBrowseRepository:
         preview_url: str | None = None,
         isrc: str | None = None,
     ) -> None:
-        """Insert or update a Spotify track."""
-        from .models import SpotifyTrackModel
+        """Insert or update a Spotify track in unified library.
+        
+        Hey future me - album_id here is SPOTIFY ID, not internal UUID!
+        """
+        from .models import AlbumModel, TrackModel
 
-        stmt = select(SpotifyTrackModel).where(
-            SpotifyTrackModel.spotify_id == spotify_id
+        spotify_uri = f"spotify:track:{spotify_id}"
+        album_spotify_uri = f"spotify:album:{album_id}"
+        
+        # Find internal album ID and artist_id
+        album_stmt = select(AlbumModel.id, AlbumModel.artist_id).where(
+            AlbumModel.spotify_uri == album_spotify_uri
+        )
+        album_result = await self.session.execute(album_stmt)
+        album_row = album_result.one_or_none()
+        
+        if not album_row:
+            # Album doesn't exist - skip this track
+            return
+        
+        internal_album_id, artist_id = album_row
+
+        # Check if track exists
+        stmt = select(TrackModel).where(
+            TrackModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
@@ -3979,7 +4116,7 @@ class SpotifyBrowseRepository:
         now = datetime.now(UTC)
 
         if model:
-            model.name = name
+            model.title = name
             model.track_number = track_number
             model.disc_number = disc_number
             model.duration_ms = duration_ms
@@ -3988,24 +4125,27 @@ class SpotifyBrowseRepository:
             model.isrc = isrc
             model.updated_at = now
         else:
-            model = SpotifyTrackModel(
-                spotify_id=spotify_id,
-                album_id=album_id,
-                name=name,
+            model = TrackModel(
+                title=name,
+                artist_id=artist_id,
+                album_id=internal_album_id,
+                spotify_uri=spotify_uri,
                 track_number=track_number,
                 disc_number=disc_number,
                 duration_ms=duration_ms,
                 explicit=explicit,
                 preview_url=preview_url,
                 isrc=isrc,
+                source="spotify",
             )
             self.session.add(model)
 
     async def set_tracks_synced(self, album_id: str) -> None:
-        """Mark tracks as synced for an album."""
-        from .models import SpotifyAlbumModel
+        """Mark tracks as synced for an album (by Spotify album ID)."""
+        from .models import AlbumModel
 
-        stmt = select(SpotifyAlbumModel).where(SpotifyAlbumModel.spotify_id == album_id)
+        spotify_uri = f"spotify:album:{album_id}"
+        stmt = select(AlbumModel).where(AlbumModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         if model:
@@ -4014,16 +4154,23 @@ class SpotifyBrowseRepository:
     async def link_track_to_local(
         self, spotify_track_id: str, local_track_id: str
     ) -> None:
-        """Link a Spotify track to a local library track after download."""
-        from .models import SpotifyTrackModel
+        """Link a Spotify track to a local library track after download.
+        
+        Hey future me - nach Table Consolidation sind Spotify tracks und local tracks
+        in derselben Tabelle! Diese Methode ist jetzt deprecated.
+        Stattdessen: Track mit source='spotify' zu source='hybrid' ändern.
+        """
+        from .models import TrackModel
 
-        stmt = select(SpotifyTrackModel).where(
-            SpotifyTrackModel.spotify_id == spotify_track_id
+        spotify_uri = f"spotify:track:{spotify_track_id}"
+        stmt = select(TrackModel).where(
+            TrackModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         if model:
-            model.local_track_id = local_track_id
+            # Mark as hybrid (both streaming and local)
+            model.source = "hybrid"
             model.updated_at = datetime.now(UTC)
 
     # =========================================================================
@@ -4458,25 +4605,32 @@ class SpotifyBrowseRepository:
         return model.id
 
     # =========================================================================
-    # SAVED ALBUMS
+    # SAVED ALBUMS (unified AlbumModel with is_saved=True)
     # =========================================================================
 
     async def get_saved_album_ids(self) -> set[str]:
-        """Get all Spotify album IDs marked as saved."""
-        from .models import SpotifyAlbumModel
+        """Get all Spotify album IDs marked as saved.
+        
+        Returns Spotify IDs extracted from spotify_uri.
+        """
+        from .models import AlbumModel
 
-        stmt = select(SpotifyAlbumModel.spotify_id).where(
-            SpotifyAlbumModel.is_saved == True  # noqa: E712
+        stmt = select(AlbumModel.spotify_uri).where(
+            AlbumModel.source == "spotify",
+            AlbumModel.is_saved == True,  # noqa: E712
+            AlbumModel.spotify_uri.isnot(None),
         )
         result = await self.session.execute(stmt)
-        return {row[0] for row in result.all()}
+        # Extract Spotify ID from URI: "spotify:album:xxx" -> "xxx"
+        return {row[0].split(":")[-1] for row in result.all() if row[0]}
 
     async def count_saved_albums(self) -> int:
         """Count albums marked as saved."""
-        from .models import SpotifyAlbumModel
+        from .models import AlbumModel
 
-        stmt = select(func.count(SpotifyAlbumModel.spotify_id)).where(
-            SpotifyAlbumModel.is_saved == True  # noqa: E712
+        stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.source == "spotify",
+            AlbumModel.is_saved == True,  # noqa: E712
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
@@ -4487,14 +4641,17 @@ class SpotifyBrowseRepository:
         Note: This doesn't delete the album - it might still exist from
         followed artist sync. Just removes the "saved" status.
         """
-        from .models import SpotifyAlbumModel
+        from .models import AlbumModel
 
         if not spotify_ids:
             return 0
 
+        # Convert IDs to URIs for matching
+        spotify_uris = {f"spotify:album:{sid}" for sid in spotify_ids}
+
         stmt = (
-            update(SpotifyAlbumModel)
-            .where(SpotifyAlbumModel.spotify_id.in_(spotify_ids))
+            update(AlbumModel)
+            .where(AlbumModel.spotify_uri.in_(spotify_uris))
             .values(is_saved=False, updated_at=datetime.now(UTC))
         )
         result = await self.session.execute(stmt)

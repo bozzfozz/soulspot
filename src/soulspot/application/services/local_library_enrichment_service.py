@@ -796,16 +796,19 @@ class LocalLibraryEnrichmentService:
     ) -> dict[str, tuple[str, str | None]]:
         """Build a lookup table of followed artists by name.
 
+        Hey future me - Nach Table Consolidation (Nov 2025):
+        - Nutzt unified ArtistModel mit source='spotify'
+        - spotify_uri ist jetzt das Feld mit voller URI (spotify:artist:xxx)
+
         Returns:
             Dict mapping lowercase artist name to (spotify_uri, image_url, image_path) tuple
         """
-        from soulspot.infrastructure.persistence.models import SpotifyArtistModel
+        from soulspot.infrastructure.persistence.models import ArtistModel
 
-        # Hey future me - SpotifyArtistModel uses spotify_id (just the ID like "0OdUWJ0sBjDrqHygGUXeCF")
-        # not spotify_uri (full URI like "spotify:artist:0OdUWJ0sBjDrqHygGUXeCF")!
-        # We need to construct the URI from the ID.
-        stmt = select(SpotifyArtistModel).where(
-            SpotifyArtistModel.spotify_id.isnot(None)
+        # Hey future me - ArtistModel nutzt jetzt spotify_uri direkt!
+        stmt = select(ArtistModel).where(
+            ArtistModel.source == "spotify",
+            ArtistModel.spotify_uri.isnot(None),
         )
         result = await self._session.execute(stmt)
         models = result.scalars().all()
@@ -816,17 +819,15 @@ class LocalLibraryEnrichmentService:
         # ALSO include image_path so we can REUSE already-downloaded artwork!
         lookup: dict[str, tuple[str, str | None, str | None]] = {}
         for model in models:
-            if model.spotify_id:
+            if model.spotify_uri:
                 name_lower = model.name.lower().strip()
-                # Construct full Spotify URI from ID
-                spotify_uri = f"spotify:artist:{model.spotify_id}"
-                # Store under original lowercase name - now with image_path!
-                lookup[name_lower] = (spotify_uri, model.image_url, model.image_path)
+                # spotify_uri ist bereits die vollständige URI (spotify:artist:xxx)
+                lookup[name_lower] = (model.spotify_uri, model.image_url, model.image_path)
                 # Also store under normalized name (without DJ/The/MC prefixes)
                 # This allows "DJ Paul Elstak" (local) to match "Paul Elstak" (Spotify)
                 name_normalized = normalize_artist_name(model.name)
                 if name_normalized != name_lower:
-                    lookup[name_normalized] = (spotify_uri, model.image_url, model.image_path)
+                    lookup[name_normalized] = (model.spotify_uri, model.image_url, model.image_path)
 
         return lookup
 
@@ -835,25 +836,31 @@ class LocalLibraryEnrichmentService:
     ) -> dict[str, tuple[str, str | None]]:
         """Build a lookup table of followed albums by "artist|album" key.
 
-        Hey future me - this allows 100% match rate for albums from followed artists!
+        Hey future me - Nach Table Consolidation (Nov 2025):
+        - Nutzt unified AlbumModel und ArtistModel
+        - Filter nach source='spotify' für Spotify-synced albums
+
         Key format: "artist_name|album_title" (both normalized and lowercase)
 
         Returns:
             Dict mapping "artist|album" to (spotify_uri, image_url) tuple
         """
         from soulspot.infrastructure.persistence.models import (
-            SpotifyAlbumModel,
-            SpotifyArtistModel,
+            AlbumModel,
+            ArtistModel,
         )
 
         # Join albums with artists to get artist name
         stmt = (
-            select(SpotifyAlbumModel, SpotifyArtistModel.name)
+            select(AlbumModel, ArtistModel.name)
             .join(
-                SpotifyArtistModel,
-                SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id,
+                ArtistModel,
+                AlbumModel.artist_id == ArtistModel.id,
             )
-            .where(SpotifyAlbumModel.spotify_id.isnot(None))
+            .where(
+                AlbumModel.source == "spotify",
+                AlbumModel.spotify_uri.isnot(None),
+            )
         )
         result = await self._session.execute(stmt)
         rows = result.all()
@@ -863,21 +870,18 @@ class LocalLibraryEnrichmentService:
         for album_model, artist_name in rows:
             # Build key: "artist|album" (lowercase)
             artist_lower = artist_name.lower().strip()
-            album_lower = album_model.name.lower().strip()
+            album_lower = album_model.title.lower().strip()
             key_original = f"{artist_lower}|{album_lower}"
 
-            # Construct full Spotify URI
-            spotify_uri = f"spotify:album:{album_model.spotify_id}"
-
-            # Store under original key - now with image_path!
-            lookup[key_original] = (spotify_uri, album_model.image_url, album_model.image_path)
+            # spotify_uri ist bereits die vollständige URI (spotify:album:xxx)
+            lookup[key_original] = (album_model.spotify_uri, album_model.artwork_url, album_model.image_path)
 
             # Also store under normalized artist name
             # "DJ Paul Elstak|Party Animals" should match "Paul Elstak|Party Animals"
             artist_normalized = normalize_artist_name(artist_name)
             if artist_normalized != artist_lower:
                 key_normalized = f"{artist_normalized}|{album_lower}"
-                lookup[key_normalized] = (spotify_uri, album_model.image_url, album_model.image_path)
+                lookup[key_normalized] = (album_model.spotify_uri, album_model.artwork_url, album_model.image_path)
 
         return lookup
 

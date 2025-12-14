@@ -752,194 +752,29 @@ class DeezerSessionModel(Base):
 
 
 # =============================================================================
-# SPOTIFY BROWSE MODELS (Separate from Local Library!)
 # =============================================================================
-# Hey future me - these models are for SYNCED SPOTIFY DATA only! They mirror what's on
-# the user's Spotify account (followed artists, their albums, tracks). Completely separate
-# from ArtistModel/AlbumModel/TrackModel which represent LOCAL library files.
-#
-# The flow is: User follows artist on Spotify → auto-sync saves to spotify_artists →
-# user browses to artist detail → albums synced to spotify_albums → user clicks album →
-# tracks synced to spotify_tracks → user downloads → creates entry in local TrackModel.
-
-#
-# CASCADE DELETE ensures clean removal: unfollow artist → albums gone → tracks gone.
-# The local_track_id on SpotifyTrackModel links to downloaded files in local library.
+# PROVIDER SYNC STATUS MODEL (Replaces old SpotifySyncStatusModel)
+# =============================================================================
+# Hey future me - Nach Table Consolidation (Nov 2025):
+# - Die alten spotify_artists/albums/tracks Tabellen sind GELÖSCHT
+# - Alle Daten sind jetzt in soulspot_artists/albums/tracks mit source='spotify'
+# - SpotifySyncStatusModel wurde zu ProviderSyncStatusModel umbenannt
+# - SpotifyTokenModel und SpotifySessionModel bleiben für OAuth!
 # =============================================================================
 
 
-class SpotifyArtistModel(Base):
-    """Spotify artist from user's followed artists.
+class ProviderSyncStatusModel(Base):
+    """Tracks sync status for different sync types (Provider-agnostic).
 
-    Hey future me - this is NOT the same as ArtistModel!
-    - ArtistModel = local library (tracks you downloaded)
-    - SpotifyArtistModel = synced from Spotify account
-
-    They can reference the same real-world artist but serve different purposes.
-    SpotifyArtistModel persists even if you haven't downloaded any tracks yet.
-
-    image_url = Spotify CDN URL (for comparison if image changed)
-    image_path = Local path to downloaded image (for offline/fast access)
-    """
-
-    __tablename__ = "spotify_artists"
-
-    # Spotify ID is the primary key (e.g., "0OdUWJ0sBjDrqHygGUXeCF")
-    spotify_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Local path to downloaded image (e.g., "artwork/spotify/artists/0OdUWJ0sBjDrqHygGUXeCF.webp")
-    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Genres stored as JSON text: '["rock", "alternative"]'
-    genres: Mapped[str | None] = mapped_column(Text, nullable=True)
-    popularity: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    follower_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Sync timestamps for cooldown logic
-    last_synced_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
-    albums_synced_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    # Relationships - CASCADE delete albums when artist unfollowed
-    albums: Mapped[list["SpotifyAlbumModel"]] = relationship(
-        "SpotifyAlbumModel", back_populates="artist", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (Index("ix_spotify_artists_last_synced", "last_synced_at"),)
-
-
-class SpotifyAlbumModel(Base):
-    """Spotify album from a followed artist.
-
-    Hey future me - albums get synced in two ways:
-    1. Artist album sync: When user views artist, we sync all their albums
-    2. Saved Albums: User explicitly saved this album (is_saved=True)
-
-    is_saved=True means user has this in their "Saved Albums" collection,
-    independent of whether they follow the artist. This affects sync behavior:
-    - Artist albums get deleted if artist is unfollowed
-    - Saved Albums persist until user removes them from saved albums
-
-    image_url = Spotify CDN URL (for comparison if image changed)
-    image_path = Local path to downloaded cover (for offline/fast access)
-    """
-
-    __tablename__ = "spotify_albums"
-
-    spotify_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    artist_id: Mapped[str] = mapped_column(
-        String(32),
-        ForeignKey("spotify_artists.spotify_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Local path to downloaded cover (e.g., "artwork/spotify/albums/abc123.webp")
-    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # True if user has this album in "Saved Albums" (not just from followed artist)
-    is_saved: Mapped[bool] = mapped_column(
-        sa.Boolean(), nullable=False, server_default="0", default=False
-    )
-    # Release date can be "2023", "2023-05", or "2023-05-15"
-    release_date: Mapped[str | None] = mapped_column(
-        String(10), nullable=True, index=True
-    )
-    release_date_precision: Mapped[str | None] = mapped_column(
-        String(10), nullable=True
-    )
-    # album, single, compilation
-    album_type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    total_tracks: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # When were tracks last synced for this album?
-    tracks_synced_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    # Relationships
-    artist: Mapped["SpotifyArtistModel"] = relationship(
-        "SpotifyArtistModel", back_populates="albums"
-    )
-    tracks: Mapped[list["SpotifyTrackModel"]] = relationship(
-        "SpotifyTrackModel", back_populates="album", cascade="all, delete-orphan"
-    )
-
-
-class SpotifyTrackModel(Base):
-    """Spotify track from an album.
-
-    Synced when user opens album detail page. The local_track_id links to
-    the local library entry AFTER the track has been downloaded via slskd.
-    """
-
-    __tablename__ = "spotify_tracks"
-
-    spotify_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    album_id: Mapped[str] = mapped_column(
-        String(32),
-        ForeignKey("spotify_albums.spotify_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    track_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    disc_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    explicit: Mapped[bool] = mapped_column(default=False, nullable=False)
-    preview_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    isrc: Mapped[str | None] = mapped_column(String(12), nullable=True, index=True)
-    # Link to local library after download
-    local_track_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("soulspot_tracks.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    # Relationships
-    album: Mapped["SpotifyAlbumModel"] = relationship(
-        "SpotifyAlbumModel", back_populates="tracks"
-    )
-    local_track: Mapped["TrackModel | None"] = relationship("TrackModel")
-
-
-class SpotifySyncStatusModel(Base):
-    """Tracks sync status for different sync types.
-
-    Enables cooldown logic - don't hammer Spotify API on every page load.
+    Hey future me - Nach Table Consolidation (Nov 2025):
+    - Tabelle umbenannt von spotify_sync_status zu provider_sync_status
+    - Unterstützt jetzt beliebige Provider (Spotify, Deezer, etc.)
+    
+    Enables cooldown logic - don't hammer APIs on every page load.
     Also provides UI feedback about last sync time and any errors.
     """
 
-    __tablename__ = "spotify_sync_status"
+    __tablename__ = "provider_sync_status"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -947,6 +782,10 @@ class SpotifySyncStatusModel(Base):
     # followed_artists, artist_albums, album_tracks
     sync_type: Mapped[str] = mapped_column(
         String(50), nullable=False, unique=True, index=True
+    )
+    # Provider: 'spotify', 'deezer', 'all', etc.
+    provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="spotify", server_default="spotify"
     )
     last_sync_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
@@ -969,6 +808,11 @@ class SpotifySyncStatusModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+# Backwards compatibility alias
+# Hey future me - entfernen sobald alle Referenzen auf ProviderSyncStatusModel umgestellt sind!
+SpotifySyncStatusModel = ProviderSyncStatusModel
 
 
 # =============================================================================

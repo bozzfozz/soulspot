@@ -156,34 +156,37 @@ Since `FollowedArtistsService` already writes to unified library, consider:
 - [x] Update `ui.py` New Releases to use unified models
 - [x] Update `discography_service.py` to use unified models
 
-### Phase 2: Repository Refactoring 🔄 IN PROGRESS
-- [ ] Rename `SpotifyBrowseRepository` → `ProviderBrowseRepository`
-- [ ] Update all repository methods to use unified `ArtistModel`, `AlbumModel`, `TrackModel`
-- [ ] Update all callers of the repository
+### Phase 2: Repository Refactoring ✅ DONE
+- [x] Update `SpotifyBrowseRepository` to use unified `ArtistModel`, `AlbumModel`, `TrackModel`
+- [x] Update `local_library_enrichment_service.py` to use unified models
+- [x] All queries now filter by `source='spotify'` instead of using separate tables
 
-**Files affected:**
-- `src/soulspot/infrastructure/persistence/repositories.py`
-- `src/soulspot/api/dependencies.py`
-- `src/soulspot/api/routers/settings.py`
-- `src/soulspot/api/routers/stats.py`
-- `src/soulspot/api/routers/ui.py`
-- `src/soulspot/application/services/spotify_sync_service.py`
-- `src/soulspot/application/workers/automation_workers.py`
-- `src/soulspot/application/workers/spotify_sync_worker.py`
+**Key changes:**
+- `SpotifyBrowseRepository` now uses unified models with `source='spotify'` filter
+- Artist/Album/Track IDs mapped via `spotify_uri` field (full URI: "spotify:artist:xxx")
+- Helper methods convert Spotify IDs to URIs and vice versa
 
-### Phase 3: Service Refactoring ❌ NOT STARTED
-- [ ] Rename `SpotifySyncService` → `ProviderSyncService`
-- [ ] Merge provider sync logic
-- [ ] Update all callers
+### Phase 3: Service Refactoring ❌ OPTIONAL
+- [ ] Rename `SpotifySyncService` → `ProviderSyncService` (optional - works as-is)
+- [ ] Rename `SpotifyBrowseRepository` → `ProviderBrowseRepository` (optional)
 
-### Phase 4: Migration + Cleanup ❌ NOT STARTED
-- [ ] Run Alembic migration: `alembic upgrade head`
-- [ ] Delete old model classes:
-  - `SpotifyArtistModel`
-  - `SpotifyAlbumModel`
-  - `SpotifyTrackModel`
-  - `SpotifySyncStatusModel`
-- [ ] Delete old table data (handled by migration)
+### Phase 4: Migration + Cleanup ✅ DONE
+- [x] Run Alembic migration: `alembic upgrade head`
+- [x] Test all functionality
+- [x] Deleted old model classes:
+  - `SpotifyArtistModel` ✅ REMOVED
+  - `SpotifyAlbumModel` ✅ REMOVED
+  - `SpotifyTrackModel` ✅ REMOVED
+- [x] Renamed `SpotifySyncStatusModel` → `ProviderSyncStatusModel`
+- [x] Added backwards compatibility alias: `SpotifySyncStatusModel = ProviderSyncStatusModel`
+
+## Completion Status: ✅ COMPLETE
+
+All phases are complete. The table consolidation is finished:
+- All Spotify data now in unified `soulspot_*` tables with `source='spotify'`
+- Old `spotify_artists/albums/tracks` tables dropped
+- `spotify_sync_status` renamed to `provider_sync_status`
+- All code updated to use unified models
 
 ### Phase 1: Schema Migration (Alembic)
 - [ ] Add new columns to soulspot_* tables
