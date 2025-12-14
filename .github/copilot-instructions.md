@@ -60,13 +60,19 @@ API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
 ## 3. Key commands
 
 - Install deps: `poetry install --with dev`
-- Run tests: `pytest tests/ -v` or `make test`
+- ~~Run tests: `pytest tests/ -v` or `make test`~~ **DEPRECATED - No automated tests, live testing only**
 - Lint/format: `make lint` / `make format` (ruff)
 - Type-check: `make type-check` (mypy strict mode)
 - Security scan: `make security` (bandit)
 - Check poetry.lock: `make check-lock` (validates sync with pyproject.toml)
 - Start Docker: `make docker-up` (uses `docker/docker-compose.yml`)
 - DB migrate: `alembic upgrade head` or `make db-upgrade`
+
+**🚨 TESTING POLICY 🚨**
+- ❌ NO automated tests (unit/integration/e2e)
+- ❌ NEVER write pytest tests
+- ✅ ALL testing is done LIVE in Docker environment
+- ✅ User tests manually via UI/API after each change
 
 ## 4. Critical architecture patterns
 
@@ -486,19 +492,26 @@ Keep docs synchronized:
 
 **All must pass locally:**
 ```bash
-ruff check . --config pyproject.toml
+ruff check . --config pyproject.toml  # NO --fix flag
 mypy --config-file mypy.ini src/
 bandit -r src/
-pytest tests/ -q
+# pytest DEPRECATED - no automated tests
 ```
 
 **PR requirements:**
 - [ ] Ruff: 0 violations
 - [ ] mypy: 0 type errors
 - [ ] bandit: No HIGH/MEDIUM findings
-- [ ] Tests: All green
+- [ ] ~~Tests: All green~~ **DEPRECATED - Live testing only**
 - [ ] Repo + Port interfaces synced
 - [ ] Docs synchronized
+- [ ] **Manual live test in Docker completed**
+
+**🚨 NO AUTOMATED TESTS 🚨**
+- This project uses **live testing only** (manual testing in Docker)
+- Do NOT write pytest tests
+- Do NOT run `pytest` commands
+- User validates all changes manually via UI/API
 
 ---
 

@@ -147,7 +147,10 @@ class DownloadStatusSyncWorker:
 
             except Exception as e:
                 await self._on_sync_failure(str(e))
-                logger.exception("DownloadStatusSyncWorker error: %s", e)
+                # Only log full exception details after multiple failures
+                if self._consecutive_failures > 2:
+                    logger.exception("DownloadStatusSyncWorker persistent error: %s", e)
+                # else: Just logged as warning in _sync_cycle()
 
             # Calculate dynamic sleep interval based on failures
             sleep_time = self._calculate_backoff_interval()
@@ -200,15 +203,40 @@ class DownloadStatusSyncWorker:
             # Use structured log message for better debugging
             from soulspot.infrastructure.observability.log_messages import LogMessages
             
-            logger.error(
-                LogMessages.connection_failed(
-                    service="slskd",
-                    target=f"{self._slskd_client._base_url}/api/v0/transfers/downloads" if hasattr(self._slskd_client, '_base_url') else "slskd API",
-                    error=str(e),
-                    hint="Check if slskd container is running: docker ps | grep slskd"
-                ),
-                exc_info=True
+            # Check if this is a connection error (expected when slskd not configured)
+            is_connection_error = any(
+                err_type in str(type(e).__name__)
+                for err_type in ["ConnectError", "ConnectionError", "OSError"]
             )
+            
+            if is_connection_error and self._consecutive_failures == 0:
+                # First failure - log as WARNING (not ERROR) since this is expected
+                logger.warning(
+                    "⚠️ slskd Not Available\n"
+                    "├─ Service: slskd download service\n"
+                    "├─ Status: Connection failed (expected if not configured)\n"
+                    "└─ 💡 To enable downloads: Configure SLSKD_URL and SLSKD_API_KEY in settings\n"
+                    f"    Error: {str(e)}"
+                )
+            elif self._consecutive_failures < 3:
+                # Early failures - still warning level
+                logger.warning(
+                    f"⚠️ slskd Connection Issue (attempt {self._consecutive_failures + 1})\n"
+                    f"├─ Target: slskd API\n"
+                    f"└─ 💡 Worker will retry with backoff. Check: docker ps | grep slskd"
+                )
+            else:
+                # Persistent failures - now it's an actual error
+                logger.error(
+                    LogMessages.connection_failed(
+                        service="slskd",
+                        target=f"{self._slskd_client._base_url}/api/v0/transfers/downloads" if hasattr(self._slskd_client, '_base_url') else "slskd API",
+                        error=str(e),
+                        hint="Persistent connection failure. Check slskd container health."
+                    ),
+                    exc_info=True
+                )
+            
             self._last_sync_stats = stats
             raise  # Re-raise so start() can handle circuit breaker
 

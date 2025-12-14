@@ -4169,17 +4169,18 @@ class SpotifyBrowseRepository:
         now = datetime.now(UTC)
 
         for position, track_data in enumerate(tracks):
-            track_id = track_data.get("id")
-            if not track_id:
+            if not track_data.get("id"):
                 continue
 
-            # Ensure track exists in tracks table
-            await self._ensure_track_exists(track_data)
+            # Ensure track exists and get its UUID (NOT Spotify ID!)
+            track_uuid = await self._ensure_track_exists(track_data)
+            # Flush to DB so FK constraint works for playlist_tracks
+            await self.session.flush()
 
-            # Add to playlist
+            # Add to playlist - use UUID, not Spotify ID!
             playlist_track = PlaylistTrackModel(
                 playlist_id=playlist_id,
-                track_id=track_id,
+                track_id=track_uuid,  # This is the soulspot_tracks.id (UUID)
                 position=position,
                 added_at=now,
             )
@@ -4286,7 +4287,7 @@ class SpotifyBrowseRepository:
         await self.session.flush()  # Get the generated ID
         return new_album.id
 
-    async def _ensure_track_exists(self, track_data: dict[str, Any]) -> None:
+    async def _ensure_track_exists(self, track_data: dict[str, Any]) -> str:
         """Ensure a track exists in the soulspot_tracks table.
 
         Hey future me - this is for Liked Songs sync. We create real TrackModel
@@ -4296,12 +4297,15 @@ class SpotifyBrowseRepository:
         '_sa_instance_state' error.
 
         Flow: Get/Create Artist → Get/Create Album → Create Track with FKs
+        
+        Returns:
+            Track UUID (NOT Spotify ID!) - this is the soulspot_tracks.id
         """
         from .models import TrackModel
 
         spotify_id = track_data.get("id")
         if not spotify_id:
-            return
+            raise ValueError("Track data missing 'id' field")
 
         # Check if track exists (by spotify_uri)
         spotify_uri = f"spotify:track:{spotify_id}"
@@ -4310,7 +4314,7 @@ class SpotifyBrowseRepository:
         existing = result.scalar_one_or_none()
 
         if existing:
-            return
+            return existing.id  # Return UUID, not Spotify ID!
 
         # Extract track metadata
         name = track_data.get("name", "Unknown")
@@ -4342,6 +4346,8 @@ class SpotifyBrowseRepository:
             spotify_uri=spotify_uri,
         )
         self.session.add(model)
+        # CRITICAL: Return the UUID (model.id), NOT the Spotify ID!
+        return model.id
 
     # =========================================================================
     # SAVED ALBUMS

@@ -102,6 +102,7 @@ class CompactExceptionFormatter(logging.Formatter):
             Formatted exception string with compact chain representation
         """
         import traceback
+        from pathlib import Path
         
         exc_type, exc_value, exc_tb = ei
         if exc_value is None:
@@ -134,14 +135,28 @@ class CompactExceptionFormatter(logging.Formatter):
             
             # Get traceback for this exception
             if exc.__traceback__:
-                tb_lines = traceback.format_tb(exc.__traceback__)
-                # Format each stack frame more compactly
-                for tb_line in tb_lines:
-                    # Remove leading/trailing whitespace and newlines
-                    tb_line = tb_line.strip()
-                    if tb_line:
-                        # Indent stack frames
-                        lines.append(f"    {tb_line}")
+                tb_lines = traceback.extract_tb(exc.__traceback__)
+                
+                # Filter stack frames - only show OUR code (soulspot package)
+                relevant_frames = []
+                for frame in tb_lines:
+                    filepath = frame.filename
+                    
+                    # Skip site-packages and standard library
+                    if '/site-packages/' in filepath or '/usr/lib/python' in filepath:
+                        continue
+                    
+                    # Show only soulspot code
+                    if 'soulspot' in filepath:
+                        # Get just the filename without full path
+                        filename = Path(filepath).name
+                        relevant_frames.append((filename, frame.lineno, frame.name, frame.line))
+                
+                # Format relevant frames
+                for filename, lineno, name, line in relevant_frames:
+                    lines.append(f"    File \"{filename}\", line {lineno}, in {name}")
+                    if line:
+                        lines.append(f"      {line.strip()}")
         
         return "\n".join(lines)
 
