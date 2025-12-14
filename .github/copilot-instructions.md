@@ -52,6 +52,11 @@ API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
 - **Prefer:** `poetry` (project declares `pyproject.toml`). Use `poetry install --with dev` to get dev tools (mypy, ruff, pytest).
 - **Alternative:** The `Makefile` exposes pragmatic targets (install/test/lint/format). CI may rely on `pip` + `requirements.txt`.
 
+⚠️ **CRITICAL: poetry.lock MUST be in sync with pyproject.toml!**
+- When modifying `pyproject.toml`, **ALWAYS** run `poetry lock --no-update` immediately
+- See `docs/development/POETRY_LOCK_MANAGEMENT.md` for 3-layer protection system
+- Pre-commit hook blocks commits if lock file out of sync (setup: `git config core.hooksPath .githooks`)
+
 ## 3. Key commands
 
 - Install deps: `poetry install --with dev`
@@ -59,6 +64,7 @@ API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
 - Lint/format: `make lint` / `make format` (ruff)
 - Type-check: `make type-check` (mypy strict mode)
 - Security scan: `make security` (bandit)
+- Check poetry.lock: `make check-lock` (validates sync with pyproject.toml)
 - Start Docker: `make docker-up` (uses `docker/docker-compose.yml`)
 - DB migrate: `alembic upgrade head` or `make db-upgrade`
 
