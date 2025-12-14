@@ -198,13 +198,13 @@ async def index(
     latest_releases_raw = await spotify_repository.get_latest_releases(limit=12)
     latest_releases = [
         {
-            "spotify_id": album.spotify_id,
-            "name": album.name,
+            "spotify_id": album.spotify_uri,
+            "name": album.title,
             "artist_name": artist_name,
             "artist_id": album.artist_id,
-            "image_url": album.image_url,
+            "image_url": album.artwork_url,
             "release_date": album.release_date,
-            "album_type": album.album_type,
+            "album_type": album.primary_type,
             "total_tracks": album.total_tracks,
         }
         for album, artist_name in latest_releases_raw
@@ -1612,7 +1612,7 @@ async def library_artist_detail(
             "track_count": 0,  # Will be updated from tracks
             "year": album.release_year,
             "artwork_url": album.artwork_url if hasattr(album, "artwork_url") else None,
-            "spotify_id": album.spotify_id if hasattr(album, "spotify_id") else None,
+            "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
         }
 
     # Count tracks per album
@@ -2204,7 +2204,7 @@ async def browse_new_releases_page(
                         "artist_id": spotify_artist_id,
                         "artwork_url": album.artwork_url or album.image_path,
                         "release_date": album.release_date,
-                        "album_type": album.album_type,
+                        "album_type": album.primary_type,
                         "total_tracks": album.total_tracks,
                         "external_url": f"https://open.spotify.com/album/{spotify_album_id}",
                         "source": "spotify",
@@ -2500,11 +2500,11 @@ async def spotify_artist_detail_page(
         for album in album_models:
             albums.append(
                 {
-                    "spotify_id": album.spotify_id,
-                    "name": album.name,
-                    "image_url": album.image_url,
+                    "spotify_id": album.spotify_uri,
+                    "name": album.title,
+                    "image_url": album.artwork_url,
                     "release_date": album.release_date,
-                    "album_type": album.album_type,
+                    "album_type": album.primary_type,
                     "total_tracks": album.total_tracks,
                 }
             )

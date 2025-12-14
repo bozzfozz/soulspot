@@ -2118,10 +2118,10 @@ class LocalLibraryEnrichmentService:
                 if result:
                     stats["albums_enriched"] += 1
             except Exception as e:
-                logger.warning(f"Disambiguation failed for album '{album.name}': {e}")
+                logger.warning(f"Disambiguation failed for album '{album.title}': {e}")
                 stats["errors"].append({
                     "type": "album",
-                    "name": album.name,
+                    "name": album.title,
                     "error": str(e),
                 })
 
@@ -2253,22 +2253,22 @@ class LocalLibraryEnrichmentService:
 
         Returns True if disambiguation was found and stored.
         """
-        if not album.name:
+        if not album.title:
             return False
 
         try:
             # Search MusicBrainz for album matches with disambiguation
             # Use artist name if available for better matching
-            artist_name = album.artist_name or None
+            artist_name = album.artist.name if album.artist else None
 
             mb_results = await self._musicbrainz_client.search_album_with_disambiguation(
-                title=album.name,
+                title=album.title,
                 artist=artist_name,
                 limit=5,
             )
 
             if not mb_results:
-                logger.debug(f"No MusicBrainz results for album '{album.name}'")
+                logger.debug(f"No MusicBrainz results for album '{album.title}'") 
                 return False
 
             # Find best match by title similarity
@@ -2277,7 +2277,7 @@ class LocalLibraryEnrichmentService:
 
             for mb_album in mb_results:
                 mb_title = mb_album.get("title", "")
-                score = fuzz.ratio(album.name.lower(), mb_title.lower()) / 100.0
+                score = fuzz.ratio(album.title.lower(), mb_title.lower()) / 100.0
 
                 # Boost score if artist also matches
                 if artist_name and mb_album.get("artist_credit"):
@@ -2309,20 +2309,20 @@ class LocalLibraryEnrichmentService:
                         album.musicbrainz_id = best_match["id"]
 
                     logger.info(
-                        f"Added disambiguation for album '{album.name}': "
+                        f"Added disambiguation for album '{album.title}': "
                         f"'{disambiguation}' (score: {best_score:.2f})"
                     )
                     return True
                 else:
                     logger.debug(
-                        f"MusicBrainz has no disambiguation for album '{album.name}' "
+                        f"MusicBrainz has no disambiguation for album '{album.title}' "
                         f"(matched: {best_match.get('title')})"
                     )
 
             return False
 
         except Exception as e:
-            logger.warning(f"MusicBrainz disambiguation failed for album '{album.name}': {e}")
+            logger.warning(f"MusicBrainz disambiguation failed for album '{album.title}': {e}")
             return False
 
     async def repair_missing_artwork_via_caa(self, limit: int = 50) -> dict[str, Any]:
@@ -2369,7 +2369,7 @@ class LocalLibraryEnrichmentService:
 
             try:
                 artwork_url = await self._try_coverartarchive_album_artwork(
-                    album_title=album.name,
+                    album_title=album.title,
                     musicbrainz_release_id=album.musicbrainz_id,
                 )
 
@@ -2377,8 +2377,8 @@ class LocalLibraryEnrichmentService:
                     # Download artwork
                     local_path = await self._image_service.download_album_image(
                         image_url=artwork_url,
-                        artist_name=album.artist_name or "Unknown Artist",
-                        album_name=album.name,
+                        artist_name=album.artist.name if album.artist else "Unknown Artist",
+                        album_name=album.title,
                     )
 
                     album.artwork_url = artwork_url
@@ -2386,13 +2386,13 @@ class LocalLibraryEnrichmentService:
                     album.updated_at = datetime.now(UTC)
 
                     stats["repaired"] += 1
-                    logger.info(f"Repaired artwork for album '{album.name}' via CAA")
+                    logger.info(f"Repaired artwork for album '{album.title}' via CAA")
                 else:
                     stats["no_caa_artwork"] += 1
 
             except Exception as e:
                 stats["errors"].append({
-                    "album": album.name,
+                    "album": album.title,
                     "error": str(e),
                 })
 
@@ -2915,8 +2915,8 @@ class LocalLibraryEnrichmentService:
         stats = {
             "tracks_moved": 0,
             "albums_deleted": 0,
-            "keep_album": keep_album.name,
-            "merged_albums": [a.name for a in merge_albums],
+            "keep_album": keep_album.title,
+            "merged_albums": [a.title for a in merge_albums],
         }
 
         # Transfer artwork if keep album doesn't have one
@@ -2926,7 +2926,7 @@ class LocalLibraryEnrichmentService:
                     keep_album.artwork_url = ma.artwork_url
                     keep_album.artwork_path = ma.artwork_path
                     logger.debug(
-                        f"Transferred artwork from '{ma.name}' to '{keep_album.name}'"
+                        f"Transferred artwork from '{ma.title}' to '{keep_album.title}'"
                     )
                     break
 
@@ -2936,7 +2936,7 @@ class LocalLibraryEnrichmentService:
                 if ma.spotify_uri:
                     keep_album.spotify_uri = ma.spotify_uri
                     logger.debug(
-                        f"Transferred spotify_uri from '{ma.name}' to '{keep_album.name}'"
+                        f"Transferred spotify_uri from '{ma.title}' to '{keep_album.title}'"
                     )
                     break
 
@@ -2959,7 +2959,7 @@ class LocalLibraryEnrichmentService:
         await self._session.commit()
 
         logger.info(
-            f"Merged {stats['albums_deleted']} albums into '{keep_album.name}': "
+            f"Merged {stats['albums_deleted']} albums into '{keep_album.title}': "
             f"{stats['tracks_moved']} tracks moved"
         )
 

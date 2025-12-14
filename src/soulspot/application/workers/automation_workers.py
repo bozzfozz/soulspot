@@ -217,13 +217,13 @@ class WatchlistWorker:
                     for album in new_album_models:
                         new_releases.append(
                             {
-                                "album_id": album.spotify_id,
-                                "album_name": album.name,
-                                "album_type": album.album_type,
+                                "album_id": album.spotify_uri,
+                                "album_name": album.title,
+                                "album_type": album.primary_type,
                                 "release_date": album.release_date,
                                 "total_tracks": album.total_tracks,
-                                "images": [{"url": album.image_url}]
-                                if album.image_url
+                                "images": [{"url": album.artwork_url}]
+                                if album.artwork_url
                                 else [],
                             }
                         )

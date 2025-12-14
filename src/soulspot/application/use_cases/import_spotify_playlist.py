@@ -136,9 +136,9 @@ class ImportSpotifyPlaylistUseCase(
                                     for a in (t.artists or [])
                                 ],
                                 "album": {
-                                    "name": t.album.name if t.album else None,
+                                    "name": t.album.title if t.album else None,
                                     "uri": f"spotify:album:{t.album.spotify_id}" if t.album else None,
-                                    "images": [{"url": t.album.image_url}] if t.album and t.album.image_url else [],
+                                    "images": [{"url": t.album.artwork_url}] if t.album and t.album.artwork_url else [],
                                     "release_date": t.album.release_date if t.album else None,
                                 } if t.album else None,
                             }

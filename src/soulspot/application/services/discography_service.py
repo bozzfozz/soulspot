@@ -203,7 +203,7 @@ class DiscographyService:
                         "spotify_id": spotify_id,
                         "release_date": album.release_date or "",
                         "total_tracks": album.total_tracks or 0,
-                        "album_type": album.album_type,
+                        "album_type": album.primary_type,
                         "image_url": album.artwork_url,
                     }
                 )
