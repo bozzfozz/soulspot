@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
@@ -872,7 +874,11 @@ async def clear_local_library(
         "deleted_artists": 0,
     }
 
-    logger.info("Starting local library clear operation...")
+    logger.info(
+        "🗑️ Library Clear Started\n"
+        "├─ Operation: Clear local library\n"
+        "└─ Target: All tracks with file_path + orphaned albums/artists"
+    )
 
     # Step 1: Delete all tracks that have a file_path (local imports)
     # Tracks without file_path are from Spotify sync and should be kept
@@ -885,7 +891,10 @@ async def clear_local_library(
     if stats["deleted_tracks"] > 0:
         delete_tracks_stmt = delete(TrackModel).where(TrackModel.file_path.isnot(None))
         await session.execute(delete_tracks_stmt)
-        logger.info(f"Deleted {stats['deleted_tracks']} local tracks")
+        logger.info(
+            f"🗑️ Local Tracks Deleted\n"
+            f"└─ Count: {stats['deleted_tracks']} tracks"
+        )
 
     # Step 2: Delete orphaned albums (albums with no remaining tracks)
     orphan_albums_stmt = (
@@ -903,7 +912,10 @@ async def clear_local_library(
             AlbumModel.id.in_(orphan_album_ids)
         )
         await session.execute(delete_albums_stmt)
-        logger.info(f"Deleted {stats['deleted_albums']} orphaned albums")
+        logger.info(
+            f"🗑️ Orphaned Albums Deleted\n"
+            f"└─ Count: {stats['deleted_albums']} albums"
+        )
 
     # Step 3: Delete orphaned artists (artists with no tracks AND no albums)
     orphan_artists_stmt = (
@@ -922,13 +934,18 @@ async def clear_local_library(
             ArtistModel.id.in_(orphan_artist_ids)
         )
         await session.execute(delete_artists_stmt)
-        logger.info(f"Deleted {stats['deleted_artists']} orphaned artists")
+        logger.info(
+            f"🗑️ Orphaned Artists Deleted\n"
+            f"└─ Count: {stats['deleted_artists']} artists"
+        )
 
     await session.commit()
 
     logger.info(
-        f"Local library cleared: {stats['deleted_tracks']} tracks, "
-        f"{stats['deleted_albums']} albums, {stats['deleted_artists']} artists"
+        f"✅ Library Clear Completed\n"
+        f"├─ Tracks: {stats['deleted_tracks']}\n"
+        f"├─ Albums: {stats['deleted_albums']}\n"
+        f"└─ Artists: {stats['deleted_artists']}"
     )
 
     return {
@@ -1138,9 +1155,23 @@ async def resolve_duplicate(
             try:
                 if os.path.exists(track_to_delete.file_path):
                     os.remove(track_to_delete.file_path)
-                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+                    logger.info(
+                        LogMessages.file_imported(
+                            path=track_to_delete.file_path,
+                            track_name="<duplicate>",
+                            artist="<various>"
+                        ).format().replace("File Imported", "Duplicate File Deleted (Track 2)")
+                    )
             except OSError as e:
-                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+                logger.warning(
+                    LogMessages.file_operation_failed(
+                        operation="delete",
+                        path=track_to_delete.file_path,
+                        reason=str(e),
+                        hint="File may already be deleted or locked by another process"
+                    ).format(),
+                    exc_info=e
+                )
             track_to_delete.file_path = None  # Mark as deleted
     elif action == "keep_second":
         candidate.status = "confirmed"
@@ -1156,9 +1187,23 @@ async def resolve_duplicate(
             try:
                 if os.path.exists(track_to_delete.file_path):
                     os.remove(track_to_delete.file_path)
-                    logger.info(f"Deleted duplicate file: {track_to_delete.file_path}")
+                    logger.info(
+                        LogMessages.file_imported(
+                            path=track_to_delete.file_path,
+                            track_name="<duplicate>",
+                            artist="<various>"
+                        ).format().replace("File Imported", "Duplicate File Deleted (Track 1)")
+                    )
             except OSError as e:
-                logger.warning(f"Failed to delete file {track_to_delete.file_path}: {e}")
+                logger.warning(
+                    LogMessages.file_operation_failed(
+                        operation="delete",
+                        path=track_to_delete.file_path,
+                        reason=str(e),
+                        hint="File may already be deleted or locked by another process"
+                    ).format(),
+                    exc_info=e
+                )
             track_to_delete.file_path = None  # Mark as deleted
     else:
         raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
@@ -2013,7 +2058,15 @@ async def apply_enrichment_candidate(
                     )
                     image_downloaded = True
                 except Exception as e:
-                    logger.warning(f"Failed to download artist image: {e}")
+                    logger.warning(
+                        LogMessages.download_failed(
+                            download_id=spotify_id,
+                            track_name="<artist image>",
+                            reason="Failed to download artist image from Spotify",
+                            hint="Check network connectivity and Spotify API status"
+                        ).format(),
+                        exc_info=e
+                    )
 
     else:  # album
         album_stmt = select(AlbumModel).where(AlbumModel.id == candidate.entity_id)
@@ -2035,7 +2088,15 @@ async def apply_enrichment_candidate(
                     album_model.artwork_path = str(local_path)
                     image_downloaded = True
                 except Exception as e:
-                    logger.warning(f"Failed to download album image: {e}")
+                    logger.warning(
+                        LogMessages.download_failed(
+                            download_id=spotify_id,
+                            track_name="<album artwork>",
+                            reason="Failed to download album image from Spotify",
+                            hint="Check network connectivity and Spotify API status"
+                        ).format(),
+                        exc_info=e
+                    )
 
     # Mark candidate as selected
     candidate.is_selected = True
@@ -2175,7 +2236,14 @@ async def enrich_disambiguation(
         )
 
     except Exception as e:
-        logger.error(f"Disambiguation enrichment failed: {e}", exc_info=True)
+        logger.error(
+            LogMessages.sync_failed(
+                sync_type="disambiguation_enrichment",
+                reason="MusicBrainz enrichment failed",
+                hint="Check MusicBrainz API availability and rate limits (1 req/sec)"
+            ).format(),
+            exc_info=True
+        )
         return HTMLResponse(
             f'''<div class="musicbrainz-result" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-exclamation-triangle"></i>

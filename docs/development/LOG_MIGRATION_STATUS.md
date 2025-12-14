@@ -1,40 +1,52 @@
 # Log-Design-System Migration Status
 
-**Stand:** 2025-12-14
+**Stand:** 2025-12-14 (Update #5 - Task #30)
 
 ## 📊 Übersicht
 
 | Metrik | Wert | Status |
 |--------|------|--------|
-| **Migriert** | 7 Dateien | 🟡 10% |
-| **Noch zu migrieren** | 69 Dateien | 🔴 90% |
+| **Migriert** | 20 Dateien | 🟡 29% |
+| **Noch zu migrieren** | 49 Dateien | 🟠 71% |
 | **System erstellt** | ✅ Komplett | 🟢 100% |
 
-## ✅ Migrierte Dateien (7)
+## ✅ Migrierte Dateien (20)
 
 ### Core Infrastructure (1)
 1. `infrastructure/observability/log_messages.py` - **NEU ERSTELLT** - Template System
 
-### Workers (3)
+### Workers (8) ✅ PHASE 2 ABGESCHLOSSEN
 2. `application/workers/download_status_sync_worker.py` - Connection errors
 3. `application/workers/spotify_sync_worker.py` - Worker start messages
 4. `application/workers/token_refresh_worker.py` - Worker start messages
+5. `application/workers/automation_workers.py` - 3× Worker starts (Watchlist, Discography, Quality Upgrade)
+6. `application/workers/download_monitor_worker.py` - Worker start messages
+7. `application/workers/cleanup_worker.py` - Worker start messages
+8. `application/workers/duplicate_detector_worker.py` - Worker start messages
 
-### Services (1)
-5. `application/services/auto_import.py` - Config validation errors
+### Services (6)
+9. `application/services/auto_import.py` - Config validation errors
+10. `application/services/spotify_sync_service.py` - Liked Songs sync error
+11. `application/services/followed_artists_service.py` - Artist processing, pagination, album fetch errors
+12. `application/services/discography_service.py` - Artist lookup, Spotify URI, discography check errors
+13. `application/services/download_manager_service.py` - Provider download fetch errors
+14. `application/services/artist_songs_service.py` - Track processing, top tracks fetch, bulk sync, DTO validation errors
 
-### API Routers (2)
-6. `api/routers/artists.py` - Sync errors
-7. `api/routers/search.py` - Search errors (Spotify, Soulseek)
+### API Routers (5) ✅ PHASE 1 ABGESCHLOSSEN
+15. `api/routers/artists.py` - Sync errors
+16. `api/routers/search.py` - Search errors (Spotify, Soulseek)
+17. `api/routers/downloads.py` - Download operations (track lookup, queue, cancel, retry, priority)
+18. `api/routers/library.py` - Library operations (clear, duplicates, images, disambiguation)
+19. `api/routers/automation.py` - Followed artists sync, watchlist creation errors
 
-## 🔴 Noch zu migrieren (62 Dateien)
+### Infrastructure Plugins (1)
+20. `infrastructure/plugins/spotify_plugin.py` - Defensive album validation (Bug Fix)
+
+## 🔴 Noch zu migrieren (49 Dateien)
 
 ### Kritisch (User-facing)
 | Datei | Error-Logs | Priorität |
 |-------|------------|-----------|
-| `api/routers/downloads.py` | ~8 | 🔴 HIGH |
-| `api/routers/library.py` | ~12 | 🔴 HIGH |
-| `api/routers/automation.py` | ~6 | 🟡 MEDIUM |
 | `api/routers/artist_songs.py` | ~4 | 🟡 MEDIUM |
 | `api/routers/download_manager.py` | ~3 | 🟡 MEDIUM |
 
@@ -61,19 +73,21 @@
 - ✅ `search.py` - Search errors
 - ✅ `artists.py` - Sync errors
 - ✅ `auto_import.py` - Config errors
-- ⏳ `downloads.py` - Download errors
-- ⏳ `library.py` - Library operations
+- ✅ `downloads.py` - Download operations
+- ✅ `library.py` - Library operations
 
-**Fortschritt:** 3/5 Dateien (60%)
+**Fortschritt:** 5/5 Dateien (100%) ✅ **PHASE KOMPLETT!**
 
-### Phase 2: Worker Lifecycle (Woche 2) ⏳ IN PROGRESS
+### Phase 2: Worker Lifecycle (Woche 2) ✅ ABGESCHLOSSEN
 - ✅ `spotify_sync_worker.py` - Worker start
 - ✅ `token_refresh_worker.py` - Worker start
 - ✅ `download_status_sync_worker.py` - Connection errors
-- ⏳ `automation_workers.py` - 3 worker starts
-- ⏳ `download_monitor_worker.py` - Worker lifecycle
+- ✅ `automation_workers.py` - 3× worker starts (Watchlist, Discography, Quality Upgrade)
+- ✅ `download_monitor_worker.py` - Worker lifecycle
+- ✅ `cleanup_worker.py` - Worker start
+- ✅ `duplicate_detector_worker.py` - Worker start
 
-**Fortschritt:** 3/5 Dateien (60%)
+**Fortschritt:** 7/7 Dateien (100%) ✅ **PHASE KOMPLETT!**
 
 ### Phase 3: Service Layer (Woche 3) 🔴 TODO
 - ⏳ `followed_artists_service.py`

@@ -114,8 +114,12 @@ class DownloadMonitorWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
+        from soulspot.infrastructure.observability.log_messages import LogMessages
         logger.info(
-            f"Download monitor worker started (polling every {self._poll_interval}s)"
+            LogMessages.worker_started(
+                worker="Download Monitor",
+                interval=self._poll_interval
+            )
         )
 
     async def stop(self) -> None:

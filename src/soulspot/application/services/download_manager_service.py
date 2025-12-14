@@ -17,6 +17,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
@@ -255,7 +257,12 @@ class DownloadManagerService:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to get downloads from {provider.provider_name}: {e}"
+                    LogMessages.sync_failed(
+                        sync_type="provider_downloads_fetch",
+                        reason=f"Failed to get downloads from {provider.provider_name}",
+                        hint="Check provider availability and connection settings"
+                    ).format(),
+                    exc_info=e
                 )
 
         return unified

@@ -72,8 +72,12 @@ class WatchlistWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
+        from soulspot.infrastructure.observability.log_messages import LogMessages
         logger.info(
-            f"Watchlist worker started (check interval: {self.check_interval_seconds}s)"
+            LogMessages.worker_started(
+                worker="Watchlist",
+                interval=self.check_interval_seconds
+            )
         )
 
     async def stop(self) -> None:
@@ -337,8 +341,12 @@ class DiscographyWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
+        from soulspot.infrastructure.observability.log_messages import LogMessages
         logger.info(
-            f"Discography worker started (check interval: {self.check_interval_seconds}s)"
+            LogMessages.worker_started(
+                worker="Discography",
+                interval=self.check_interval_seconds
+            )
         )
 
     async def stop(self) -> None:
@@ -507,8 +515,12 @@ class QualityUpgradeWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
+        from soulspot.infrastructure.observability.log_messages import LogMessages
         logger.info(
-            f"Quality upgrade worker started (check interval: {self.check_interval_seconds}s)"
+            LogMessages.worker_started(
+                worker="Quality Upgrade",
+                interval=self.check_interval_seconds
+            )
         )
 
     async def stop(self) -> None:

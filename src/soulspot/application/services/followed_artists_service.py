@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.domain.entities import Artist
 from soulspot.domain.value_objects import ArtistId, SpotifyUri
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
@@ -115,7 +117,12 @@ class FollowedArtistsService:
                             stats["updated"] += 1
                     except Exception as e:
                         logger.error(
-                            f"Failed to process artist {artist_dto.name}: {e}"
+                            LogMessages.sync_failed(
+                                sync_type="artist_processing",
+                                reason=f"Failed to process artist {artist_dto.name}",
+                                hint="Check database constraints and artist data validity"
+                            ).format(),
+                            exc_info=e
                         )
                         stats["errors"] += 1
 
@@ -129,7 +136,14 @@ class FollowedArtistsService:
                 page += 1
 
             except Exception as e:
-                logger.error(f"Error fetching followed artists page {page}: {e}")
+                logger.error(
+                    LogMessages.sync_failed(
+                        sync_type="followed_artists_pagination",
+                        reason=f"Error fetching followed artists page {page}",
+                        hint="Returning partial results - check Spotify API status"
+                    ).format(),
+                    exc_info=e
+                )
                 # Return partial results if pagination fails mid-sync
                 break
 
@@ -288,7 +302,14 @@ class FollowedArtistsService:
         # Get artist by ID
         artist = await self.artist_repo.get(artist_id)
         if not artist or not artist.spotify_uri:
-            logger.warning(f"Artist {artist_id} not found or has no spotify_uri")
+            logger.warning(
+                LogMessages.file_operation_failed(
+                    operation="artist_lookup",
+                    path=str(artist_id),
+                    reason="Artist not found or missing spotify_uri",
+                    hint="Sync followed artists first to populate artist data"
+                ).format()
+            )
             return stats
 
         # Extract Spotify ID from spotify_uri (format: spotify:artist:xxx)
@@ -302,7 +323,14 @@ class FollowedArtistsService:
             )
             albums_dtos = response.items
         except Exception as e:
-            logger.error(f"Failed to fetch albums for artist {artist.name}: {e}")
+            logger.error(
+                LogMessages.sync_failed(
+                    sync_type="artist_albums_fetch",
+                    reason=f"Failed to fetch albums for artist {artist.name}",
+                    hint="Check Spotify token validity and artist ID"
+                ).format(),
+                exc_info=e
+            )
             return stats
 
         album_repo = AlbumRepository(self.session)

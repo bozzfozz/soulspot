@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
@@ -1298,7 +1300,14 @@ async def sync_followed_artists(
             )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync followed artists: {e}", exc_info=True)
+        logger.error(
+            LogMessages.sync_failed(
+                sync_type="followed_artists",
+                reason="Failed to sync followed artists from Spotify",
+                hint="Check Spotify token validity and API connectivity"
+            ).format(),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to sync followed artists: {e}"
         ) from e
@@ -1341,7 +1350,10 @@ async def bulk_create_watchlists(
                 # Check if watchlist already exists for this artist
                 existing = await service.get_by_artist(artist_id)
                 if existing:
-                    logger.info(f"Watchlist already exists for artist {artist_id_str}")
+                    logger.info(
+                        f"⏭️ Watchlist Skipped (Already Exists)\n"
+                        f"└─ Artist ID: {artist_id_str}"
+                    )
                     continue
 
                 await service.create_watchlist(
@@ -1353,8 +1365,12 @@ async def bulk_create_watchlists(
                 created_count += 1
             except Exception as e:
                 logger.error(
-                    f"Failed to create watchlist for artist {artist_id_str}: {e}",
-                    exc_info=True,
+                    LogMessages.sync_failed(
+                        sync_type="watchlist_creation",
+                        reason=f"Failed to create watchlist for artist {artist_id_str}",
+                        hint="Check database connection and artist ID validity"
+                    ).format(),
+                    exc_info=True
                 )
                 failed_count += 1
                 failed_artists.append(artist_id_str)

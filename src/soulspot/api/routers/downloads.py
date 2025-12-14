@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.api.dependencies import (
     check_slskd_available,
     get_db_session,
@@ -159,7 +161,14 @@ async def create_download(
                 logger.debug(f"Found track by spotify_id: {request.spotify_id} -> {track_id_str}")
             else:
                 # Track not in DB - user needs to import it first
-                logger.warning(f"Track not found for spotify_id: {request.spotify_id}")
+                logger.warning(
+                    LogMessages.file_operation_failed(
+                        operation="track_lookup",
+                        path=f"spotify:{request.spotify_id}",
+                        reason="Track not found in database",
+                        hint="Import track first via playlist sync or manual import"
+                    ).format()
+                )
                 raise HTTPException(
                     status_code=404,
                     detail=f"Track with spotify_id '{request.spotify_id}' not found in database. "
@@ -195,7 +204,13 @@ async def create_download(
             except Exception as e:
                 # Log the error for debugging but fall through to WAITING status
                 logger.warning(
-                    f"Failed to queue download immediately: {e}. Will create WAITING download."
+                    LogMessages.download_failed(
+                        download_id="<new>",
+                        track_name="<unknown>",
+                        reason="Failed to queue download immediately",
+                        hint="Download will be created in WAITING status for later retry"
+                    ).format(),
+                    exc_info=e
                 )
 
         # slskd unavailable or error - create Download with WAITING status
@@ -315,7 +330,15 @@ async def create_album_download(
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=None)
             logger.debug("Created SpotifyPlugin for album download")
         except Exception as e:
-            logger.warning(f"Failed to create SpotifyPlugin: {e}")
+            logger.warning(
+                LogMessages.connection_failed(
+                    service="SpotifyPlugin",
+                    target="Plugin initialization",
+                    reason="Failed to create SpotifyPlugin instance",
+                    hint="Check Spotify API credentials in app settings"
+                ).format(),
+                exc_info=e
+            )
 
     if request.deezer_id:
         try:
@@ -324,7 +347,15 @@ async def create_album_download(
             deezer_plugin = DeezerPlugin()
             logger.debug("Created DeezerPlugin for album download")
         except Exception as e:
-            logger.warning(f"Failed to create DeezerPlugin: {e}")
+            logger.warning(
+                LogMessages.connection_failed(
+                    service="DeezerPlugin",
+                    target="Plugin initialization",
+                    reason="Failed to create DeezerPlugin instance",
+                    hint="Check Deezer API availability"
+                ).format(),
+                exc_info=e
+            )
 
     # Create and execute use case
     use_case = QueueAlbumDownloadsUseCase(
@@ -559,15 +590,35 @@ async def cancel_download(
             if settings.slskd.url:
                 async with SlskdClient(settings.slskd) as slskd:
                     await slskd.cancel_download(download.slskd_id)
-                    logger.info(f"Cancelled download in slskd: {download.slskd_id}")
+                    logger.info(
+                        LogMessages.download_completed(
+                            download_id=str(download.slskd_id),
+                            track_name="<cancelled>",
+                            size_mb=0
+                        ).format().replace("Download Completed", "Download Cancelled in slskd")
+                    )
         except Exception as e:
-            logger.warning(f"Failed to cancel in slskd (will still mark cancelled): {e}")
+            logger.warning(
+                LogMessages.download_failed(
+                    download_id=str(download.slskd_id) if download.slskd_id else "<unknown>",
+                    track_name="<cancelled>",
+                    reason="Failed to cancel in slskd",
+                    hint="Download will still be marked cancelled in local database"
+                ).format(),
+                exc_info=e
+            )
 
     # Update status in our DB
     download.cancel()
     await download_repository.update(download)
 
-    logger.info(f"Download cancelled: {download_id}")
+    logger.info(
+        LogMessages.download_completed(
+            download_id=str(download_id),
+            track_name=f"Track {download.track_id}",
+            size_mb=0
+        ).format().replace("Download Completed", "Download Cancelled")
+    )
 
     return {
         "success": True,
@@ -621,7 +672,12 @@ async def retry_download(
     download.source_url = None
     await download_repository.update(download)
 
-    logger.info(f"Download retry queued: {download_id}")
+    logger.info(
+        LogMessages.download_started(
+            download_id=str(download_id),
+            track_name=f"Track {download.track_id}"
+        ).format().replace("Download Started", "Download Retry Queued")
+    )
 
     return {
         "success": True,
@@ -673,7 +729,12 @@ async def update_download_priority(
     download.update_priority(request.priority)
     await download_repository.update(download)
 
-    logger.info(f"Download priority changed: {download_id} {old_priority} → {request.priority}")
+    logger.info(
+        f"🔄 Download Priority Changed\n"
+        f"├─ Download ID: {download_id}\n"
+        f"├─ Old Priority: {old_priority}\n"
+        f"└─ New Priority: {request.priority}"
+    )
 
     return {
         "success": True,

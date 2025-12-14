@@ -165,7 +165,13 @@ class DuplicateDetectorWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
-        logger.info("Duplicate detector worker started")
+        from soulspot.infrastructure.observability.log_messages import LogMessages
+        logger.info(
+            LogMessages.worker_started(
+                worker="Duplicate Detector",
+                config={"weekly_scan": True, "disabled_by_default": True}
+            )
+        )
 
     async def stop(self) -> None:
         """Stop the duplicate detector worker."""

@@ -58,8 +58,11 @@ RUN if [ -n "${GIT_BRANCH}" ]; then \
     fi
 
 # Ensure static CSS files are included
-RUN poetry config virtualenvs.create false && \
-    poetry install --without dev --no-interaction --no-ansi --no-root
+# Configure poetry first (separate RUN to avoid shell quoting issues)
+RUN poetry config virtualenvs.create false
+
+# Install dependencies
+RUN poetry install --without dev --no-interaction --no-ansi --no-root
 
 # Build and install the package as a wheel (non-editable)
 RUN poetry build -f wheel && \

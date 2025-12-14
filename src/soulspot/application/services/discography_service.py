@@ -6,6 +6,8 @@ from typing import Any, cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.domain.value_objects import ArtistId
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
@@ -114,7 +116,14 @@ class DiscographyService:
         artist = result.scalar_one_or_none()
 
         if not artist:
-            logger.warning(f"Artist {artist_id} not found in database")
+            logger.warning(
+                LogMessages.file_operation_failed(
+                    operation="artist_lookup",
+                    path=str(artist_id.value),
+                    reason="Artist not found in database",
+                    hint="Artist must be synced from Spotify or imported first"
+                ).format()
+            )
             return DiscographyInfo(
                 artist_id=str(artist_id.value),
                 artist_name="Unknown",
@@ -138,7 +147,13 @@ class DiscographyService:
             artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
         )
         if not spotify_artist_id:
-            logger.warning(f"Artist {artist.name} has no Spotify URI")
+            logger.warning(
+                LogMessages.sync_failed(
+                    sync_type="discography_check",
+                    reason=f"Artist {artist.name} has no Spotify URI",
+                    hint="Artist must be synced from Spotify to check discography"
+                ).format()
+            )
             return DiscographyInfo(
                 artist_id=str(artist_id.value),
                 artist_name=artist.name,
@@ -237,7 +252,14 @@ class DiscographyService:
                 if not info.is_complete():
                     discography_infos.append(info)
             except Exception as e:
-                logger.error(f"Failed to check discography for artist {artist.id}: {e}")
+                logger.error(
+                    LogMessages.sync_failed(
+                        sync_type="discography_check",
+                        reason=f"Failed to check discography for artist {artist.id}",
+                        hint="Check artist data validity and Spotify sync status"
+                    ).format(),
+                    exc_info=e
+                )
                 continue
 
         return discography_infos

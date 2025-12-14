@@ -24,6 +24,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.log_messages import LogMessages
+
 from soulspot.domain.entities import Track
 from soulspot.domain.value_objects import ArtistId, SpotifyUri, TrackId
 from soulspot.infrastructure.persistence.repositories import (
@@ -164,12 +166,24 @@ class ArtistSongsService:
                         stats["skipped_album_tracks"] += 1
                 except Exception as e:
                     logger.error(
-                        f"Failed to process track {track_dto.title}: {e}"
+                        LogMessages.sync_failed(
+                            sync_type="track_processing",
+                            reason=f"Failed to process track {track_dto.title}",
+                            hint="Check track data validity and database constraints"
+                        ).format(),
+                        exc_info=e
                     )
                     stats["errors"] += 1
 
         except Exception as e:
-            logger.error(f"Error fetching top tracks for artist {artist.name}: {e}")
+            logger.error(
+                LogMessages.sync_failed(
+                    sync_type="artist_top_tracks_fetch",
+                    reason=f"Error fetching top tracks for artist {artist.name}",
+                    hint="Check Spotify token validity and artist Spotify ID"
+                ).format(),
+                exc_info=e
+            )
             raise
 
         logger.info(
@@ -233,7 +247,14 @@ class ArtistSongsService:
                 aggregate_stats["skipped_album_tracks"] += stats["skipped_album_tracks"]
                 aggregate_stats["errors"] += stats["errors"]
             except Exception as e:
-                logger.error(f"Failed to sync songs for artist {artist.name}: {e}")
+                logger.error(
+                    LogMessages.sync_failed(
+                        sync_type="artist_songs_bulk_sync",
+                        reason=f"Failed to sync songs for artist {artist.name}",
+                        hint="Check artist Spotify URI and API connectivity"
+                    ).format(),
+                    exc_info=e
+                )
                 aggregate_stats["artist_errors"] += 1
 
         logger.info(
@@ -267,7 +288,14 @@ class ArtistSongsService:
             Tuple of (Track entity or None, was_created boolean, is_single boolean)
         """
         if not track_dto.spotify_id or not track_dto.title:
-            logger.warning("Invalid track DTO: missing spotify_id or title")
+            logger.warning(
+                LogMessages.file_operation_failed(
+                    operation="track_dto_validation",
+                    path="<track_dto>",
+                    reason="Invalid track DTO: missing spotify_id or title",
+                    hint="Check Spotify API response format"
+                ).format()
+            )
             return None, False, False
 
         spotify_uri = SpotifyUri.from_string(
