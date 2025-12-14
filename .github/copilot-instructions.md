@@ -641,6 +641,71 @@ If anything in this file is unclear or missing (CI details, secrets handling, or
 
 - "Bevor du einen PR öffnest oder eine Aufgabe als erledigt markierst, führe lokal: `ruff check . --config pyproject.toml`, `mypy --config-file mypy.ini .`, `bandit -r . -f json -o /tmp/bandit-report.json` aus und vermerke in der PR‑Beschreibung je Check Befehl, Exit‑Code, kurze Zahlen (Violations/Errors/HIGH‑Findings) sowie den CodeQL‑Workflow‑Status (GitHub Actions URL oder local run status). Öffne den PR nur, wenn alle Checks erfolgreich sind oder Ausnahmen dokumentiert und freigegeben wurden."
 
+## 16.5 Startup Validation (MANDATORY!)
+
+**CRITICAL RULE**: After ANY code change affecting services, workers, or initialization:
+
+### Required Validation Steps
+
+1. **Import Check** - Verify modified modules can be imported:
+   ```python
+   python3 -c "from soulspot.main import create_app; print('✅ Main app')"
+   python3 -c "from soulspot.infrastructure.lifecycle import lifespan; print('✅ Lifecycle')"
+   ```
+
+2. **Error Check** - Use `get_errors` tool to check VS Code diagnostics for modified files
+
+3. **Syntax Check** - Validate Python syntax:
+   ```bash
+   python3 -m py_compile src/soulspot/path/to/modified_file.py
+   ```
+
+4. **Fix Issues** - Resolve ANY import errors, missing dependencies, or initialization errors
+
+5. **Document Results** - Include validation status in task completion message
+
+### Validation Checklist (Copy to Task Completion)
+
+```
+✅ Task completed!
+
+**Validation Results:**
+- ✅ Import check: All modules import successfully
+- ✅ Error check: No errors in VS Code diagnostics
+- ✅ Syntax check: No syntax errors found
+
+Files modified: [list files]
+```
+
+### When to Validate
+
+**Always validate after changes to:**
+- Service constructors (`__init__` methods)
+- Worker initialization
+- Dependency injection (`api/dependencies.py`)
+- Database repositories/models
+- Configuration (`config/settings.py`)
+- Requirements (`pyproject.toml`, `requirements.txt`)
+
+**Example - Task Completion with Validation:**
+
+```markdown
+✅ Task #19 completed: Auto-import filter by completed downloads
+
+**Changes:**
+- Added `DownloadRepository.get_completed_track_ids()`
+- Modified `AutoImportService.__init__()` to accept `download_repository`
+- Updated service initialization in `lifecycle.py`
+
+**Validation:**
+- ✅ Import check: `from soulspot.application.services.auto_import import AutoImportService` succeeds
+- ✅ Error check: No errors in 4 modified files (via get_errors tool)
+- ✅ Syntax check: All files compile successfully
+
+Task completed. Requesting next task from terminal.
+```
+
+See: `docs/development/STARTUP_VALIDATION.md` for full protocol.
 
 
 17. Future-Self Erklärungen als Kommentar für alle Funktionen
