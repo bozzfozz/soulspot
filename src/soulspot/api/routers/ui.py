@@ -810,27 +810,34 @@ async def library(
     """Library browser page - shows stats, scan controls, and management."""
     from sqlalchemy import func, select
 
-    from soulspot.infrastructure.persistence.models import TrackModel
-
-    # Count tracks with local files
-    total_tracks_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        TrackModel,
     )
+
+    # Hey future me - After Unified Library (2025-12), we count ALL entities in DB!
+    # Artists/Albums/Tracks show TOTAL count, "Local Files" shows tracks with file_path.
+    
+    # Count ALL tracks in DB (not just with file_path)
+    total_tracks_stmt = select(func.count(TrackModel.id))
     total_tracks_result = await session.execute(total_tracks_stmt)
     total_tracks = total_tracks_result.scalar() or 0
-
-    # Count unique artists with local files
-    artists_stmt = select(func.count(func.distinct(TrackModel.artist_id))).where(
+    
+    # Count tracks WITH local files (for "Verfügbar" stat)
+    tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
         TrackModel.file_path.isnot(None)
     )
+    tracks_with_files_result = await session.execute(tracks_with_files_stmt)
+    tracks_with_files = tracks_with_files_result.scalar() or 0
+
+    # Count ALL artists in DB (not filtered by file_path anymore!)
+    artists_stmt = select(func.count(ArtistModel.id))
     artists_result = await session.execute(artists_stmt)
     total_artists = artists_result.scalar() or 0
 
-    # Count unique albums with local files
-    albums_stmt = select(func.count(func.distinct(TrackModel.album_id))).where(
-        TrackModel.file_path.isnot(None),
-        TrackModel.album_id.isnot(None),
-    )
+    # Count ALL albums in DB (not filtered by file_path anymore!)
+    albums_stmt = select(func.count(AlbumModel.id))
     albums_result = await session.execute(albums_stmt)
     total_albums = albums_result.scalar() or 0
 
@@ -858,10 +865,10 @@ async def library(
         }
 
     stats = {
-        "total_tracks": total_tracks,
-        "total_artists": total_artists,
-        "total_albums": total_albums,
-        "tracks_with_files": total_tracks,  # Same as total since we filter by file_path
+        "total_tracks": total_tracks,  # ALL tracks in DB
+        "total_artists": total_artists,  # ALL artists in DB
+        "total_albums": total_albums,  # ALL albums in DB
+        "tracks_with_files": tracks_with_files,  # Tracks with local file_path
         "broken_tracks": broken_tracks,
         "music_path": summary.get("music_path", "/music"),
     }
@@ -890,24 +897,28 @@ async def library_stats_partial(
     """
     from sqlalchemy import func, select
 
-    from soulspot.infrastructure.persistence.models import TrackModel
-
-    # Same queries as library() but just returns the stats section
-    total_tracks_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        TrackModel,
     )
-    total_tracks = (await session.execute(total_tracks_stmt)).scalar() or 0
 
-    artists_stmt = select(func.count(func.distinct(TrackModel.artist_id))).where(
-        TrackModel.file_path.isnot(None)
-    )
-    total_artists = (await session.execute(artists_stmt)).scalar() or 0
-
-    albums_stmt = select(func.count(func.distinct(TrackModel.album_id))).where(
-        TrackModel.file_path.isnot(None),
-        TrackModel.album_id.isnot(None),
-    )
-    total_albums = (await session.execute(albums_stmt)).scalar() or 0
+    # Hey future me - After Unified Library (2025-12), we count ALL entities in DB!
+    # Artists/Albums/Tracks show TOTAL count, "Local Files" shows tracks with file_path.
+    
+    # Count ALL tracks in DB
+    total_tracks = (await session.execute(select(func.count(TrackModel.id)))).scalar() or 0
+    
+    # Count tracks WITH local files
+    tracks_with_files = (await session.execute(
+        select(func.count(TrackModel.id)).where(TrackModel.file_path.isnot(None))
+    )).scalar() or 0
+    
+    # Count ALL artists in DB
+    total_artists = (await session.execute(select(func.count(ArtistModel.id)))).scalar() or 0
+    
+    # Count ALL albums in DB
+    total_albums = (await session.execute(select(func.count(AlbumModel.id)))).scalar() or 0
 
     broken_stmt = select(func.count(TrackModel.id)).where(
         TrackModel.file_path.isnot(None),
@@ -944,8 +955,8 @@ async def library_stats_partial(
     <div class="stat-card stat-card-animated" style="--delay: 3;">
         <div class="stat-icon stat-icon-files"><i class="bi bi-file-earmark-music"></i></div>
         <div class="stat-content">
-            <span class="stat-value">{total_tracks:,}</span>
-            <span class="stat-label">Local Files</span>
+            <span class="stat-value">{tracks_with_files:,}</span>
+            <span class="stat-label">Verfügbar</span>
         </div>
         <div class="stat-shine"></div>
     </div>
@@ -1074,7 +1085,7 @@ async def library_import_jobs_list(
 # of loading all tracks into Python memory. Uses pagination (page/per_page params) for
 # big libraries - defaults to 50 per page. image_url comes from Spotify sync – falls back
 # to None if artist wasn't synced.
-# IMPORTANT: Only shows artists with at least ONE local file (file_path IS NOT NULL)!
+# UNIFIED LIBRARY (2025-12): Shows ALL artists in DB, not filtered by file_path!
 # Hey future me - this now checks for unenriched artists and passes enrichment_needed flag!
 @router.get("/library/artists", response_class=HTMLResponse)
 async def library_artists(
