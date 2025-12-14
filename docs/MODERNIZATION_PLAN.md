@@ -219,27 +219,27 @@ Keep as-is if:
 
 #### Infrastructure Repositories (src/soulspot/infrastructure/persistence/)
 ```python
-# Domain Repositories (10 repositories)
-- ArtistRepository           # Implements IArtistRepository
-- AlbumRepository            # Implements IAlbumRepository
-- TrackRepository            # Implements ITrackRepository
-- PlaylistRepository         # Implements IPlaylistRepository
-- DownloadRepository         # Implements IDownloadRepository
-- ArtistWatchlistRepository  # No interface (needs adding)
-- FilterRuleRepository       # No interface (needs adding)
-- AutomationRuleRepository   # No interface (needs adding)
-- QualityUpgradeCandidateRepository  # No interface (needs adding)
-- SessionRepository          # No interface (needs adding)
-- SpotifyBrowseRepository    # Spotify-specific (needs renaming)
-- SpotifyTokenRepository     # Spotify-specific (needs renaming)
+# Domain Repositories (ALL now have interfaces! ✅ COMPLETED 2025-12)
+- ArtistRepository           # Implements IArtistRepository ✅
+- AlbumRepository            # Implements IAlbumRepository ✅
+- TrackRepository            # Implements ITrackRepository ✅
+- PlaylistRepository         # Implements IPlaylistRepository ✅
+- DownloadRepository         # Implements IDownloadRepository ✅
+- ArtistWatchlistRepository  # Implements IArtistWatchlistRepository ✅
+- FilterRuleRepository       # Implements IFilterRuleRepository ✅
+- AutomationRuleRepository   # Implements IAutomationRuleRepository ✅
+- QualityUpgradeCandidateRepository  # Implements IQualityUpgradeCandidateRepository ✅
+- SessionRepository          # Implements ISessionRepository ✅
+- ProviderBrowseRepository   # Multi-provider browse data (renamed from SpotifyBrowseRepository) ✅
+- SpotifyTokenRepository     # Spotify OAuth tokens (correctly prefixed - Spotify-specific)
 ```
 
 #### Database Models (src/soulspot/infrastructure/persistence/models.py)
 ```python
-# Generic Domain Models (6 models)
-- ArtistModel              # ✅ Generic
-- AlbumModel               # ✅ Generic
-- TrackModel               # ✅ Generic (has disambiguation fields)
+# Unified Library Models (ALL providers write here with 'source' field) ✅ COMPLETED 2025-12
+- ArtistModel              # ✅ source='local'|'spotify'|'deezer'|'tidal'|'hybrid'
+- AlbumModel               # ✅ source field + is_saved flag + image_path
+- TrackModel               # ✅ source field + preview_url + explicit flag
 - PlaylistModel            # ✅ Generic
 - PlaylistTrackModel       # ✅ Generic (junction table)
 - DownloadModel            # ✅ Generic
@@ -255,26 +255,34 @@ Keep as-is if:
 - AutomationRuleModel      # ✅ Generic
 - QualityUpgradeCandidateModel  # ✅ Generic
 
-# Spotify-Specific Models (8 models) ⚠️ NEEDS RENAMING
-- SessionModel             # ❌ Should be SpotifySessionModel
-- SpotifyArtistModel       # ✅ Correct naming
-- SpotifyAlbumModel        # ✅ Correct naming
-- SpotifyTrackModel        # ✅ Correct naming
-- SpotifySyncStatusModel   # ✅ Correct naming
-- SpotifyTokenModel        # ✅ Correct naming
-- DuplicateCandidateModel  # ❌ Should be SpotifyDuplicateCandidateModel (or generic?)
-- EnrichmentCandidateModel # ✅ Generic (no service-specific fields)
+# Provider-Specific Models (correctly named) ✅ VERIFIED 2025-12
+- SpotifySessionModel      # ✅ Renamed from SessionModel (table: spotify_sessions)
+- SpotifyTokenModel        # ✅ Spotify OAuth tokens for background workers
+- DeezerSessionModel       # ✅ Deezer OAuth sessions
+- ProviderSyncStatusModel  # ✅ Renamed from SpotifySyncStatusModel (multi-provider)
+
+# DELETED Models (Table Consolidation 2025-12)
+# ❌ SpotifyArtistModel - DELETED (use ArtistModel with source='spotify')
+# ❌ SpotifyAlbumModel - DELETED (use AlbumModel with source='spotify')
+# ❌ SpotifyTrackModel - DELETED (use TrackModel with source='spotify')
 
 # App Settings (1 model)
 - AppSettingsModel         # ✅ Generic
 ```
 
-### 2.2 Service-Agnostic Refactoring Plan
+### 2.2 Service-Agnostic Architecture Status ✅ LARGELY COMPLETED
 
-**Problem:** Current architecture is 80% generic, but has Spotify-specific assumptions in:
-1. SessionModel (should be SpotifySessionModel)
-2. Client interfaces (no ITrackClient abstraction exists)
-3. Some service names (SpotifySyncService vs generic SyncService)
+**Current State (2025-12):**
+- ✅ Table Consolidation complete (unified `soulspot_*` tables)
+- ✅ All repositories have interfaces
+- ✅ Multi-service IDs added (deezer_id, tidal_id)
+- ✅ Session models correctly prefixed (SpotifySessionModel, DeezerSessionModel)
+- ✅ ProviderBrowseRepository uses `source` filter
+- ✅ ISpotifyClient interface implemented
+
+**Remaining Work:**
+- ⏳ Router refactoring (split large routers)
+- ⏳ Documentation sync with code
 
 **Solution:** Implement SERVICE_AGNOSTIC_STRATEGY.md patterns:
 

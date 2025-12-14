@@ -67,13 +67,15 @@
 
 Die Router `albums.py`, `dashboard.py`, `widget_templates.py`, `widgets.py` existieren nicht mehr.
 
-### Große Router aufteilen
+### Große Router aufteilen ⏳ OPTIONAL
 
 | Router | Endpoints | Vorschlag |
 |--------|-----------|-----------|
 | `automation.py` | 25 | → `watchlists.py`, `rules.py`, `filters.py`, `discography.py` |
 | `ui.py` | 26 | → `ui_pages.py`, `ui_library.py`, `ui_spotify.py` |
 | `library.py` | 15 | → `library_scan.py`, `library_duplicates.py`, `library_import.py` |
+
+> **Note:** Funktioniert aktuell, Aufteilen ist Nice-to-Have für bessere Wartbarkeit.
 
 ### Code-Cleanup (siehe CLEANUP.md)
 - [ ] Obsolete Templates entfernen
@@ -82,8 +84,18 @@ Die Router `albums.py`, `dashboard.py`, `widget_templates.py`, `widgets.py` exis
 
 ---
 
-## ✅ Erledigt
+## ✅ Erledigt (Dezember 2025)
 
+### Backend Refactoring ✅ COMPLETE
+- [x] **Table Consolidation:** `spotify_artists/albums/tracks` → `soulspot_*` mit `source` Feld
+- [x] **Model Cleanup:** SpotifyArtistModel, SpotifyAlbumModel, SpotifyTrackModel gelöscht
+- [x] **Repository Renaming:** `SpotifyBrowseRepository` → `ProviderBrowseRepository`
+- [x] **Interface Standardization:** Alle Repositories haben jetzt Interfaces
+- [x] **Multi-Service IDs:** `deezer_id`, `tidal_id` zu allen Entities hinzugefügt
+- [x] **Session Renaming:** `SessionModel` → `SpotifySessionModel`
+- [x] **Sync Status Renaming:** `SpotifySyncStatusModel` → `ProviderSyncStatusModel`
+
+### Previous Items ✅
 - [x] Worker-System komplett (12 Worker)
 - [x] Automation Tab in Settings UI
 - [x] Duplicate Review API + UI
@@ -98,3 +110,5 @@ Die Router `albums.py`, `dashboard.py`, `widget_templates.py`, `widgets.py` exis
 - **API Analyse:** ~136 Endpoints total (siehe Chat-History für Details)
 - **Worker-Architektur:** 6 Core + 3 Automation + 3 Maintenance Workers
 - **UI/API Trennung:** `/api/*` = JSON, `/*` = HTML (Clean Architecture)
+- **Table Consolidation Details:** Siehe `docs/architecture/TABLE_CONSOLIDATION_PLAN.md`
+- **Modernization Status:** Siehe `docs/MODERNIZATION_PLAN.md`
