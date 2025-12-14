@@ -533,7 +533,7 @@ class SpotifyImageService:
 
             relative_path = self._get_relative_path("albums", spotify_id)
             logger.debug(
-                f"Saved album image: {relative_path} ({len(image_data)} bytes}"
+                f"Saved album image: {relative_path} ({len(image_data)} bytes)"
             )
             return ImageDownloadResult.ok(relative_path)
 
