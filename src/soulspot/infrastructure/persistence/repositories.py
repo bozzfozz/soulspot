@@ -783,6 +783,59 @@ class AlbumRepository(IAlbumRepository):
             updated_at=model.updated_at,
         )
 
+    async def get_by_title_and_artist(
+        self, title: str, artist_id: ArtistId
+    ) -> Album | None:
+        """Get an album by title and artist ID.
+
+        Hey future me - CROSS-SERVICE DEDUPLICATION!
+        This finds albums by their title+artist combination, regardless of
+        which service they came from (Spotify, Deezer, local).
+        
+        Used to prevent duplicates when same album is found from different
+        providers (e.g., Spotify returns "Dark Side of the Moon" and later
+        Deezer also returns "Dark Side of the Moon" for same artist).
+        
+        NOTE: Uses case-insensitive matching via func.lower() to catch
+        slight variations like "The Dark Side Of The Moon" vs 
+        "The Dark Side of the Moon".
+
+        Args:
+            title: Album title (case-insensitive)
+            artist_id: Artist ID
+
+        Returns:
+            Album entity if found, None otherwise
+        """
+        from sqlalchemy import func
+        
+        stmt = select(AlbumModel).where(
+            func.lower(AlbumModel.title) == title.lower(),
+            AlbumModel.artist_id == str(artist_id.value),
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            release_year=model.release_year,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     # =========================================================================
     # ENRICHMENT METHODS
     # =========================================================================
@@ -1368,6 +1421,61 @@ class TrackRepository(ITrackRepository):
             Track entity or None if not found
         """
         stmt = select(TrackModel).where(TrackModel.isrc == isrc)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
+    # Hey future me - CROSS-PROVIDER DEDUPLICATION for top tracks!
+    # When we get tracks from Deezer but might already have them from Spotify,
+    # this method finds existing tracks by title+artist (case-insensitive).
+    # Returns single track (first match) for dedup purposes.
+    async def get_by_title_and_artist(
+        self, title: str, artist_name: str
+    ) -> Track | None:
+        """Find a track by title and artist name (case-insensitive).
+
+        Used for cross-provider deduplication when ISRC is not available.
+        Returns the first match or None.
+
+        Args:
+            title: Track title to search for
+            artist_name: Artist name to filter by
+
+        Returns:
+            Track entity or None if not found
+        """
+        stmt = (
+            select(TrackModel)
+            .join(ArtistModel, TrackModel.artist_id == ArtistModel.id)
+            .where(
+                func.lower(TrackModel.title) == func.lower(title),
+                func.lower(ArtistModel.name) == func.lower(artist_name),
+            )
+            .limit(1)
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 

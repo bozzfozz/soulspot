@@ -731,9 +731,10 @@ def get_queue_playlist_downloads_use_case(
 
 
 # Hey future me - this creates SpotifySyncService for auto-syncing Spotify data!
-# REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
+# REFACTORED to use SpotifyPlugin with Deezer fallback!
 # Used by the /spotify/* UI routes to auto-sync on page load and fetch data from DB.
 # Requires both DB session and SpotifyPlugin for API calls + persistence.
+# DeezerPlugin is added for multi-provider fallback (NO AUTH NEEDED for artist albums!).
 async def get_spotify_sync_service(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -741,8 +742,14 @@ async def get_spotify_sync_service(
 ) -> AsyncGenerator:
     """Get Spotify sync service for auto-sync and browse.
 
-    Hey future me - refactored to use SpotifyPlugin!
+    Hey future me - refactored to use SpotifyPlugin WITH Deezer fallback!
     No more raw SpotifyClient - plugin handles auth and returns DTOs.
+    
+    MULTI-PROVIDER (Nov 2025):
+    - Spotify is primary for artists/albums (requires OAuth)
+    - Deezer is fallback for artist albums (NO AUTH NEEDED!)
+    - If user isn't authenticated with Spotify, we try Deezer instead
+    - This ensures artist albums work even without Spotify OAuth!
 
     Args:
         request: FastAPI request for app state access
@@ -753,6 +760,7 @@ async def get_spotify_sync_service(
         SpotifySyncService instance
     """
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
     # Create SpotifyPlugin for the sync service
@@ -771,8 +779,17 @@ async def get_spotify_sync_service(
         client=spotify_client,
         access_token=access_token,
     )
+    
+    # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
+    # Hey future me - Deezer artist albums work without OAuth!
+    # This enables browsing artist discographies even if Spotify auth fails.
+    deezer_plugin = DeezerPlugin()
 
-    yield SpotifySyncService(session=session, spotify_plugin=spotify_plugin)
+    yield SpotifySyncService(
+        session=session,
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
 
 
 # Hey future me - this creates LibraryScannerService for scanning local music files!

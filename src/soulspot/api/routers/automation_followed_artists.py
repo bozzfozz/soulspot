@@ -81,11 +81,14 @@ async def sync_followed_artists(
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
         _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
         templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-        service = FollowedArtistsService(session, spotify_plugin)
+        # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
+        deezer_plugin = DeezerPlugin()
+        service = FollowedArtistsService(session, spotify_plugin, deezer_plugin=deezer_plugin)
         artists, stats = await service.sync_followed_artists()
         await session.commit()
 

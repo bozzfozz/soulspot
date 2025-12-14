@@ -1236,13 +1236,15 @@ async def sync_followed_artists(
         from soulspot.application.services.followed_artists_service import (
             FollowedArtistsService,
         )
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
         # Get templates directory
         _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
         templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
-        # Use SpotifyPlugin directly - it handles token internally!
-        service = FollowedArtistsService(session, spotify_plugin)
+        # Use SpotifyPlugin directly with Deezer fallback - it handles token internally!
+        deezer_plugin = DeezerPlugin()  # NO AUTH NEEDED for artist albums!
+        service = FollowedArtistsService(session, spotify_plugin, deezer_plugin=deezer_plugin)
 
         # No access_token param needed - plugin has it!
         artists, stats = await service.sync_followed_artists()

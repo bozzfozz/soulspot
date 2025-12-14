@@ -147,9 +147,14 @@ async def sync_followed_artists(
         )
 
     try:
+        # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+        deezer_plugin = DeezerPlugin()
+        
         service = FollowedArtistsService(
             session=session,
             spotify_plugin=spotify_plugin,
+            deezer_plugin=deezer_plugin,
         )
 
         artists, stats = await service.sync_followed_artists()
@@ -186,6 +191,63 @@ async def sync_followed_artists(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync followed artists: {str(e)}",
+        ) from e
+
+
+# Hey future me - MULTI-PROVIDER Sync!
+# This endpoint syncs followed artists from ALL enabled providers (Spotify + Deezer).
+# Each provider needs its own OAuth authentication. Artists are deduplicated across providers.
+@router.post("/sync/all-providers", response_model=dict)
+async def sync_followed_artists_all_providers(
+    session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+) -> dict:
+    """Sync followed artists from ALL providers to unified library.
+
+    Hey future me - this is the MULTI-PROVIDER sync endpoint!
+    Aggregates followed artists from Spotify AND Deezer (both require OAuth).
+    Each artist is deduplicated across providers.
+
+    Returns:
+        Dict with aggregated stats per provider and total counts
+    """
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+    try:
+        # Create DeezerPlugin with potential OAuth token
+        deezer_plugin = DeezerPlugin()
+
+        service = FollowedArtistsService(
+            session=session,
+            spotify_plugin=spotify_plugin,
+            deezer_plugin=deezer_plugin,
+        )
+
+        artists, stats = await service.sync_followed_artists_all_providers()
+
+        await session.commit()
+
+        logger.info(
+            f"Multi-provider sync complete: {stats['total_fetched']} total, "
+            f"Spotify: {stats.get('providers', {}).get('spotify', {}).get('total_fetched', 0)}, "
+            f"Deezer: {stats.get('providers', {}).get('deezer', {}).get('total_fetched', 0)}"
+        )
+
+        return {
+            "success": True,
+            "total_artists": len(artists),
+            "stats": stats,
+            "message": (
+                f"Synced {stats['total_fetched']} artists from all providers. "
+                f"Created: {stats['total_created']}, Updated: {stats['total_updated']}"
+            ),
+        }
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Multi-provider sync failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync followed artists from all providers: {str(e)}",
         ) from e
 
 

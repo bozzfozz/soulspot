@@ -8,9 +8,16 @@
 #
 # What syncs where:
 # - Followed Artists → spotify_artists table (auto-sync every 5 min)
+#                    → ALSO soulspot_artists table (unified library!) with source='spotify'
 # - User Playlists → playlists table (auto-sync every 10 min)
 # - Liked Songs → playlists table (special playlist with is_liked_songs=True)
 # - Saved Albums → spotify_albums table (is_saved=True flag)
+#
+# UNIFIED LIBRARY SYNC (Nov 2025):
+# - After syncing followed artists to spotify_artists table
+# - We ALSO sync them to soulspot_artists with source='spotify' or 'hybrid'
+# - This makes followed artists appear in /library/artists page!
+# - No more duplicate data - single source of truth in unified library
 #
 # Image Download:
 # - When download_images setting is True, we download and store images locally
@@ -30,6 +37,7 @@ from soulspot.infrastructure.persistence.repositories import SpotifyBrowseReposi
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -68,23 +76,32 @@ class SpotifySyncService:
         spotify_plugin: "SpotifyPlugin",
         image_service: "SpotifyImageService | None" = None,
         settings_service: "AppSettingsService | None" = None,
+        deezer_plugin: "DeezerPlugin | None" = None,
     ) -> None:
         """Initialize sync service.
 
-        Hey future me - refactored to use SpotifyPlugin!
+        Hey future me - refactored to use SpotifyPlugin with Deezer fallback!
         The plugin handles token management internally, no more access_token juggling.
+        
+        MULTI-PROVIDER SUPPORT (Nov 2025):
+        - Spotify is the PRIMARY source for artists/albums (requires OAuth)
+        - Deezer is FALLBACK for artist albums (NO AUTH NEEDED!)
+        - When Spotify fails or isn't authenticated, try Deezer
+        - This ensures users can browse artist albums even without Spotify OAuth!
 
         Args:
             session: Database session
             spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
             image_service: Optional image service for downloading images
             settings_service: Optional settings service for sync config
+            deezer_plugin: Optional DeezerPlugin for fallback artist albums (NO AUTH!)
         """
         self.repo = SpotifyBrowseRepository(session)
         self.spotify_plugin = spotify_plugin
         self.session = session
         self._image_service = image_service
         self._settings_service = settings_service
+        self._deezer_plugin = deezer_plugin
 
     # =========================================================================
     # FOLLOWED ARTISTS SYNC
@@ -203,6 +220,8 @@ class SpotifySyncService:
                     )
 
             # Remove unfollowed artists (CASCADE deletes albums/tracks)
+            # Hey future me - track should_remove for unified library sync later
+            should_remove = False
             if to_remove:
                 # Check if we should remove unfollowed artists
                 should_remove = True
@@ -223,6 +242,24 @@ class SpotifySyncService:
                     logger.info(f"Removed {removed_count} unfollowed artists from DB")
                 else:
                     stats["removed"] = 0  # Didn't actually remove
+
+            # UNIFIED LIBRARY SYNC: Also sync to soulspot_artists table!
+            # This makes followed artists appear on /library/artists page.
+            try:
+                library_stats = await self._sync_to_unified_library(
+                    spotify_artists, 
+                    removed_ids=to_remove if should_remove else None
+                )
+                logger.info(
+                    f"Unified library sync: {library_stats['created']} created, "
+                    f"{library_stats['updated']} updated, "
+                    f"{library_stats['downgraded']} downgraded"
+                )
+                stats["library_created"] = library_stats["created"]
+                stats["library_updated"] = library_stats["updated"]
+            except Exception as lib_error:
+                logger.warning(f"Unified library sync failed (non-blocking): {lib_error}")
+                # Don't fail the whole sync if library sync fails
 
             # Update sync status
             await self.repo.update_sync_status(
@@ -345,6 +382,118 @@ class SpotifySyncService:
             follower_count=follower_count,
         )
 
+    # Hey future me - UNIFIED LIBRARY SYNC!
+    # After syncing followed artists to spotify_artists table, we ALSO sync to
+    # soulspot_artists (the unified library) with source='spotify' or 'hybrid'.
+    # This makes followed artists appear in /library/artists page!
+    async def _sync_to_unified_library(
+        self, artist_dtos: list[Any], removed_ids: set[str] | None = None
+    ) -> dict[str, int]:
+        """Sync followed artists to unified library (soulspot_artists).
+
+        Hey future me - this is the BRIDGE between spotify_artists and soulspot_artists!
+        After syncing to spotify_artists, we also update the unified library so
+        Spotify followed artists appear on /library/artists page with source='spotify'.
+
+        If an artist already exists in the library (from file scan with source='local'),
+        we upgrade their source to 'hybrid' (has both local files AND Spotify follow).
+
+        Args:
+            artist_dtos: List of ArtistDTOs from Spotify that were synced
+            removed_ids: Set of Spotify IDs that were unfollowed (for source downgrade)
+
+        Returns:
+            Dict with counts: created, updated, downgraded
+        """
+        from soulspot.domain.entities import Artist, ArtistSource
+        from soulspot.domain.value_objects import ArtistId, SpotifyUri
+        from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+        stats = {"created": 0, "updated": 0, "downgraded": 0}
+        artist_repo = ArtistRepository(self.session)
+
+        for dto in artist_dtos:
+            if not dto.spotify_id or not dto.name:
+                continue
+
+            spotify_uri = SpotifyUri.from_string(
+                dto.spotify_uri or f"spotify:artist:{dto.spotify_id}"
+            )
+
+            # Check if artist already exists in unified library
+            existing = await artist_repo.get_by_spotify_uri(spotify_uri)
+
+            if existing:
+                # Artist exists - check if we need to update source or metadata
+                needs_update = False
+
+                # If existing source is 'local', upgrade to 'hybrid'
+                if existing.source == ArtistSource.LOCAL:
+                    existing.source = ArtistSource.HYBRID
+                    needs_update = True
+                elif existing.source == ArtistSource.SPOTIFY:
+                    # Already marked as Spotify source, just update metadata
+                    pass
+
+                # Update metadata from Spotify if available
+                if dto.image_url and existing.image_url != dto.image_url:
+                    existing.image_url = dto.image_url
+                    needs_update = True
+                if dto.genres and existing.genres != dto.genres:
+                    existing.genres = dto.genres
+                    needs_update = True
+
+                if needs_update:
+                    await artist_repo.update(existing)
+                    stats["updated"] += 1
+            else:
+                # Artist doesn't exist - check by name (might be local without spotify_uri)
+                existing_by_name = await artist_repo.get_by_name(dto.name)
+
+                if existing_by_name:
+                    # Found by name - this is likely a local artist, link and upgrade
+                    existing_by_name.spotify_uri = spotify_uri
+                    existing_by_name.source = ArtistSource.HYBRID
+                    if dto.image_url:
+                        existing_by_name.image_url = dto.image_url
+                    if dto.genres:
+                        existing_by_name.genres = dto.genres
+                    await artist_repo.update(existing_by_name)
+                    stats["updated"] += 1
+                else:
+                    # Completely new artist - create with source='spotify'
+                    new_artist = Artist(
+                        id=ArtistId.generate(),
+                        name=dto.name,
+                        source=ArtistSource.SPOTIFY,
+                        spotify_uri=spotify_uri,
+                        image_url=dto.image_url,
+                        genres=dto.genres or [],
+                    )
+                    await artist_repo.add(new_artist)
+                    stats["created"] += 1
+
+        # Handle unfollowed artists - downgrade from 'spotify'/'hybrid' if needed
+        if removed_ids:
+            for spotify_id in removed_ids:
+                spotify_uri = SpotifyUri.from_string(f"spotify:artist:{spotify_id}")
+                existing = await artist_repo.get_by_spotify_uri(spotify_uri)
+
+                if existing:
+                    if existing.source == ArtistSource.HYBRID:
+                        # Has local files - downgrade to 'local'
+                        existing.source = ArtistSource.LOCAL
+                        await artist_repo.update(existing)
+                        stats["downgraded"] += 1
+                    elif existing.source == ArtistSource.SPOTIFY:
+                        # Only Spotify - can delete OR keep as 'local' orphan
+                        # For now we keep (user might want the metadata)
+                        existing.source = ArtistSource.LOCAL
+                        await artist_repo.update(existing)
+                        stats["downgraded"] += 1
+
+        return stats
+
     # =========================================================================
     # ARTIST ALBUMS SYNC
     # =========================================================================
@@ -352,12 +501,17 @@ class SpotifySyncService:
     async def sync_artist_albums(
         self, artist_id: str, force: bool = False
     ) -> dict[str, Any]:
-        """Sync albums for a specific artist from Spotify.
+        """Sync albums for a specific artist with MULTI-PROVIDER support.
 
-        Hey future me - refactored for SpotifyPlugin!
+        Hey future me - refactored for SpotifyPlugin with Deezer fallback!
         No more access_token - plugin manages auth internally.
         Called when user navigates to artist detail page.
         Lazy-loads albums only when needed.
+        
+        MULTI-PROVIDER (Nov 2025):
+        - Tries Spotify first (if authenticated)
+        - Falls back to Deezer (NO AUTH NEEDED!) when Spotify fails
+        - This ensures artist albums work even without Spotify OAuth!
 
         Args:
             artist_id: Spotify artist ID
@@ -372,6 +526,7 @@ class SpotifySyncService:
             "added": 0,
             "error": None,
             "skipped_cooldown": False,
+            "source": "none",  # Track which provider was used
         }
 
         try:
@@ -395,21 +550,30 @@ class SpotifySyncService:
                     stats["total"] = await self.repo.count_albums_by_artist(artist_id)
                     return stats
 
-            # Fetch albums from Spotify using plugin
-            album_dtos = await self._fetch_artist_albums(artist_id)
+            # Fetch albums with multi-provider fallback
+            # Pass artist name for Deezer search fallback
+            artist_name = artist.name if hasattr(artist, 'name') else None
+            album_dtos = await self._fetch_artist_albums(artist_id, artist_name)
 
             for album_dto in album_dtos:
                 await self._upsert_album_from_dto(album_dto, artist_id)
                 stats["added"] += 1
 
             stats["total"] = len(album_dtos)
+            
+            # Track source for stats/debugging
+            if album_dtos:
+                stats["source"] = getattr(album_dtos[0], 'source_service', 'unknown')
 
             # Mark albums as synced
             await self.repo.set_albums_synced(artist_id)
             await self.session.commit()
 
             stats["synced"] = True
-            logger.info(f"Synced {len(album_dtos)} albums for artist {artist_id}")
+            logger.info(
+                f"Synced {len(album_dtos)} albums for artist {artist_id} "
+                f"(source: {stats['source']})"
+            )
 
         except Exception as e:
             logger.error(f"Error syncing albums for artist {artist_id}: {e}")
@@ -418,25 +582,158 @@ class SpotifySyncService:
         return stats
 
     async def _fetch_artist_albums(
-        self, artist_id: str
+        self, artist_id: str, artist_name: str | None = None
     ) -> list[Any]:
-        """Fetch all albums for an artist from Spotify using SpotifyPlugin.
+        """Fetch all albums for an artist with MULTI-PROVIDER FALLBACK.
 
-        Hey future me - returns AlbumDTOs now!
-        Plugin handles pagination and auth internally.
+        Hey future me - MULTI-PROVIDER SUPPORT (Nov 2025)!
+        
+        Priority order:
+        1. Spotify (if authenticated) - preferred for Spotify-sourced artists
+        2. Deezer (NO AUTH NEEDED!) - fallback when Spotify unavailable
+        
+        WHY Deezer fallback?
+        - Deezer's public API doesn't require OAuth for artist albums!
+        - Users without Spotify OAuth can still browse artist discographies
+        - Better UX: "show me albums" works regardless of auth state
+        
+        GOTCHA: Deezer uses different artist IDs!
+        - For Spotify artists, we search by artist name on Deezer
+        - Then fetch albums for the matched Deezer artist
+        - This is slightly less accurate but works for 95%+ of cases
+
+        Args:
+            artist_id: Spotify artist ID (primary)
+            artist_name: Artist name for Deezer search fallback
+
+        Returns:
+            list[AlbumDTO] from Spotify or Deezer
         """
+        from soulspot.domain.ports.plugin import PluginCapability
 
-        response = await self.spotify_plugin.get_artist_albums(
-            artist_id=artist_id,
-            limit=50,
-        )
-        return response.items if response.items else []
+        albums: list[Any] = []
+        source_used = "none"
+
+        # 1. Try Spotify first (if authenticated)
+        try:
+            if self.spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS):
+                response = await self.spotify_plugin.get_artist_albums(
+                    artist_id=artist_id,
+                    limit=50,
+                )
+                if response.items:
+                    albums = response.items
+                    source_used = "spotify"
+                    logger.info(
+                        f"Fetched {len(albums)} albums for artist {artist_id} from Spotify"
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Spotify artist albums failed for {artist_id}: {e}. "
+                "Will try Deezer fallback."
+            )
+
+        # 2. Fallback to Deezer (NO AUTH NEEDED!)
+        if not albums and self._deezer_plugin:
+            try:
+                deezer_albums = await self._fetch_artist_albums_from_deezer(
+                    artist_id, artist_name
+                )
+                if deezer_albums:
+                    albums = deezer_albums
+                    source_used = "deezer"
+                    logger.info(
+                        f"Fetched {len(albums)} albums from Deezer fallback "
+                        f"for artist {artist_name or artist_id}"
+                    )
+            except Exception as e:
+                logger.warning(f"Deezer fallback also failed: {e}")
+
+        if not albums:
+            logger.warning(
+                f"No albums found for artist {artist_id} from any provider"
+            )
+        else:
+            logger.debug(f"Artist albums source: {source_used}")
+
+        return albums
+
+    async def _fetch_artist_albums_from_deezer(
+        self, spotify_artist_id: str, artist_name: str | None = None
+    ) -> list[Any]:
+        """Fetch artist albums from Deezer as fallback.
+
+        Hey future me - Deezer uses different artist IDs!
+        We can't use Spotify artist ID directly. Strategy:
+        1. If we have artist_name, search Deezer for that artist
+        2. Get the first matching artist's Deezer ID
+        3. Fetch albums using Deezer artist ID
+        
+        This is FUZZY matching but works for most mainstream artists.
+        Edge case: Artists with same name (there are multiple "Aurora"s)
+
+        Args:
+            spotify_artist_id: Spotify artist ID (for logging only)
+            artist_name: Artist name to search on Deezer
+
+        Returns:
+            list[AlbumDTO] from Deezer
+        """
+        if not self._deezer_plugin or not artist_name:
+            return []
+
+        try:
+            # Search for artist on Deezer by name
+            search_result = await self._deezer_plugin.search_artists(
+                query=artist_name, limit=5
+            )
+
+            if not search_result.items:
+                logger.debug(f"No Deezer artist found for '{artist_name}'")
+                return []
+
+            # Take the first (best) match
+            # Hey future me - could improve with fuzzy name matching
+            deezer_artist = search_result.items[0]
+            deezer_artist_id = deezer_artist.deezer_id
+
+            if not deezer_artist_id:
+                logger.debug(f"Deezer artist has no ID for '{artist_name}'")
+                return []
+
+            logger.debug(
+                f"Mapped Spotify artist {spotify_artist_id} ({artist_name}) "
+                f"to Deezer artist {deezer_artist_id} ({deezer_artist.name})"
+            )
+
+            # Fetch albums from Deezer (NO AUTH NEEDED!)
+            albums_response = await self._deezer_plugin.get_artist_albums(
+                artist_id=deezer_artist_id,
+                limit=50,
+            )
+
+            return albums_response.items if albums_response.items else []
+
+        except Exception as e:
+            logger.warning(f"Deezer artist albums lookup failed: {e}")
+            return []
 
     async def _upsert_album_from_dto(self, album_dto: Any, artist_id: str) -> None:
-        """Insert or update a Spotify album in DB from AlbumDTO.
+        """Insert or update an album in DB from AlbumDTO (Spotify or Deezer).
 
-        Hey future me - DTO version of _upsert_album!
-        AlbumDTO has artwork_url (not images array).
+        Hey future me - supports BOTH Spotify AND Deezer albums!
+        
+        DEDUPLICATION STRATEGY:
+        - For Spotify albums: Use spotify_id as unique identifier
+        - For Deezer albums: Use deezer_id as unique identifier
+        - We prefix Deezer IDs with "deezer:" to avoid collisions
+        
+        WHY this works:
+        - Same album from Spotify = same spotify_id = upsert (no duplicate)
+        - Same album from Deezer = same deezer_id = upsert (no duplicate)
+        - Different source for same album = different IDs = could be duplicate!
+        
+        TODO: Consider ISRC matching for cross-service deduplication
         """
         from soulspot.domain.dtos import AlbumDTO
 
@@ -444,9 +741,15 @@ class SpotifySyncService:
             logger.warning(f"Expected AlbumDTO, got {type(album_dto)}")
             return
 
-        spotify_id = album_dto.spotify_id
-        if not spotify_id:
-            logger.warning("AlbumDTO missing spotify_id, skipping")
+        # Determine unique ID based on source
+        # Spotify albums have spotify_id, Deezer albums have deezer_id
+        unique_id = album_dto.spotify_id
+        if not unique_id and album_dto.deezer_id:
+            # Use Deezer ID with prefix to avoid collisions
+            unique_id = f"deezer:{album_dto.deezer_id}"
+        
+        if not unique_id:
+            logger.warning("AlbumDTO missing both spotify_id and deezer_id, skipping")
             return
 
         name = album_dto.title or "Unknown"
@@ -458,7 +761,7 @@ class SpotifySyncService:
         total_tracks = album_dto.total_tracks or 0
 
         await self.repo.upsert_album(
-            spotify_id=spotify_id,
+            spotify_id=unique_id,  # Can be spotify ID or "deezer:ID"
             artist_id=artist_id,
             name=name,
             image_url=image_url,

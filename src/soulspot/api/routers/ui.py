@@ -1570,11 +1570,16 @@ async def library_artist_detail(
                 access_token = await db_token_manager.get_token_for_background()
 
                 if access_token:
-                    # Use FollowedArtistsService with SpotifyPlugin
+                    # Use FollowedArtistsService with SpotifyPlugin + Deezer fallback
+                    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+                    
                     app_settings = get_settings()
                     spotify_client = SpotifyClient(app_settings.spotify)
                     spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-                    followed_service = FollowedArtistsService(session, spotify_plugin)
+                    deezer_plugin = DeezerPlugin()  # NO AUTH NEEDED!
+                    followed_service = FollowedArtistsService(
+                        session, spotify_plugin, deezer_plugin=deezer_plugin
+                    )
 
                     # Sync albums for this artist (albums, singles, EPs, compilations)
                     # No access_token param - plugin has it!
