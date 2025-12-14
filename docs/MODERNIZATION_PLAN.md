@@ -230,8 +230,10 @@ Keep as-is if:
 - AutomationRuleRepository   # Implements IAutomationRuleRepository ✅
 - QualityUpgradeCandidateRepository  # Implements IQualityUpgradeCandidateRepository ✅
 - SessionRepository          # Implements ISessionRepository ✅
-- ProviderBrowseRepository   # Multi-provider browse data (renamed from SpotifyBrowseRepository) ✅
-- SpotifyTokenRepository     # Spotify OAuth tokens (correctly prefixed - Spotify-specific)
+
+# Provider-Specific Repositories (no interfaces needed - service-specific)
+- ProviderBrowseRepository   # Multi-provider browse data (renamed from SpotifyBrowseRepository)
+- SpotifyTokenRepository     # Spotify OAuth tokens for background workers
 ```
 
 #### Database Models (src/soulspot/infrastructure/persistence/models.py)
@@ -248,6 +250,10 @@ Keep as-is if:
 - LibraryScanModel         # ✅ Generic
 - FileDuplicateModel       # ✅ Generic
 - OrphanedFileModel        # ✅ Generic
+
+# Duplicate Detection (2 models)
+- DuplicateCandidateModel  # ✅ Generic (duplicate track candidates)
+- EnrichmentCandidateModel # ✅ Generic (tracks needing metadata enrichment)
 
 # Automation (4 models)
 - ArtistWatchlistModel     # ✅ Generic (service-agnostic)
