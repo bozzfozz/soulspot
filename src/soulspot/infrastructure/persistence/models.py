@@ -65,7 +65,16 @@ class Base(DeclarativeBase):
 # HYBRID (both)! This enables unified Music Manager view. Defaults to LOCAL for backward compatibility
 # with existing artists in DB. Use 'local', 'spotify', 'hybrid' values (not enum - SQLite compatibility).
 class ArtistModel(Base):
-    """SQLAlchemy model for Artist entity (Local Library)."""
+    """SQLAlchemy model for Artist entity (Unified Library - Multi-Provider).
+    
+    Hey future me - This is the UNIFIED library! All providers write here directly:
+    - Spotify followed artists (source='spotify')
+    - Deezer favorite artists (source='deezer')
+    - Local file scan (source='local')
+    - Multi-provider (source='hybrid')
+    
+    NO MORE spotify_artists table! This is the single source of truth.
+    """
 
     __tablename__ = "soulspot_artists"
 
@@ -73,7 +82,7 @@ class ArtistModel(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    # Source: 'local' (file scan), 'spotify' (followed artist), 'hybrid' (both)
+    # Source: 'local' (file scan), 'spotify', 'deezer', 'tidal', 'hybrid' (multiple)
     source: Mapped[str] = mapped_column(
         String(20), nullable=False, default="local", index=True
     )
@@ -92,21 +101,35 @@ class ArtistModel(Base):
     tidal_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, unique=True, index=True
     )
-    # Hey future me - image_url stores the artist's profile picture from Spotify CDN!
+    # Hey future me - image_url stores the artist's profile picture from streaming CDN!
     # Typically 320x320 resolution. String(512) allows for long URLs. Nullable because
-    # not all artists have images. This is added after genres/tags migration.
+    # not all artists have images.
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Hey future me - image_path is for LOCALLY CACHED images!
+    # Downloaded from CDN for offline access. Path like "artwork/artists/{id}.webp"
+    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Hey future me - genres and tags are stored as JSON text (SQLite compatible)!
     # The app layer serializes/deserializes list[str] to/from JSON string.
-    # Example: '["rock", "alternative", "indie"]'. Nullable because existing artists
-    # won't have this data until next Spotify sync. Migration dd18990ggh48 adds these.
+    # Example: '["rock", "alternative", "indie"]'.
     genres: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Hey future me - disambiguation is for Lidarr-style naming templates!
     # Sourced from MusicBrainz to differentiate artists with the same name.
-    # Example: "Genesis" has disambiguation "English rock band" vs other Genesis artists.
-    # Used in {Artist Disambiguation} naming variable. Added in migration pp27012rrs60.
     disambiguation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Hey future me - streaming metadata for sorting/filtering!
+    # popularity: 0-100 score from streaming service
+    # follower_count: number of followers on streaming service
+    popularity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    follower_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Hey future me - sync timestamps for cooldown logic!
+    # last_synced_at: when artist metadata was last synced from provider
+    # albums_synced_at: when artist's albums list was last synced
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    albums_synced_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -120,11 +143,18 @@ class ArtistModel(Base):
         "TrackModel", back_populates="artist", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (Index("ix_artists_name_lower", func.lower(name)),)
+    __table_args__ = (
+        Index("ix_artists_name_lower", func.lower(name)),
+        Index("ix_soulspot_artists_last_synced", "last_synced_at"),
+    )
 
 
 class AlbumModel(Base):
-    """SQLAlchemy model for Album entity (Local Library)."""
+    """SQLAlchemy model for Album entity (Unified Library - Multi-Provider).
+    
+    Hey future me - This is the UNIFIED library! All providers write here directly.
+    NO MORE spotify_albums table! This is the single source of truth.
+    """
 
     __tablename__ = "soulspot_albums"
 
@@ -137,15 +167,21 @@ class AlbumModel(Base):
         ForeignKey("soulspot_artists.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # Source: 'local' (file scan), 'spotify', 'deezer', 'tidal', 'hybrid' (multiple)
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="local", server_default="local", index=True
+    )
     release_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    # Hey future me - release_date is full precision (YYYY-MM-DD or YYYY-MM or YYYY)
+    # release_date_precision tells us which parts are valid: 'day', 'month', 'year'
+    release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    release_date_precision: Mapped[str | None] = mapped_column(String(10), nullable=True)
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
     musicbrainz_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, unique=True, index=True
     )
-    # Hey future me - service-specific IDs for multi-service support!
-    # Same pattern as Track/Artist. Albums can be synced from Spotify, Deezer, or Tidal.
     deezer_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, unique=True, index=True
     )
@@ -153,24 +189,11 @@ class AlbumModel(Base):
         String(50), nullable=True, unique=True, index=True
     )
     artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Hey future me - artwork_url stores album cover from Spotify CDN! Similar to artist
-    # image_url, this is the HTTP URL to the album artwork (typically 300x300 or 640x640).
-    # We store BOTH artwork_path (local file) AND artwork_url (Spotify CDN) because:
-    # 1) artwork_path is for downloaded/local album art, 2) artwork_url is for streaming
-    # from Spotify. UI can show artwork_url immediately while downloading, then switch to
-    # artwork_path once local file exists. Nullable because not all albums have covers!
     artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Hey future me - image_path is legacy alias for artwork_path (cached local image)
+    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    # Hey future me - Lidarr-style dual album type system! This allows proper handling of
-    # compilations, soundtracks, live albums etc. An album can be "album" (primary) AND
-    # "compilation" + "live" (secondary). Examples:
-    # - Normal studio album: primary_type="album", secondary_types=[]
-    # - Live compilation: primary_type="album", secondary_types=["live", "compilation"]
-    # - Movie soundtrack: primary_type="album", secondary_types=["soundtrack"]
-    # - EP with remixes: primary_type="ep", secondary_types=["remix"]
-    # The album_artist field stores the album-level artist (can differ from track artists).
-    # For compilations, this is typically "Various Artists" while individual tracks have
-    # their own artist_id. This matches ID3v2 TPE2 (Album Artist) tag convention.
+    # Hey future me - Lidarr-style dual album type system!
     album_artist: Mapped[str | None] = mapped_column(String(255), nullable=True)
     primary_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="album", server_default="album", index=True
@@ -178,11 +201,20 @@ class AlbumModel(Base):
     secondary_types: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    # Hey future me - disambiguation is for Lidarr-style naming templates!
-    # Sourced from MusicBrainz to differentiate album editions/versions.
-    # Example: "Thriller (25th Anniversary Edition)" has disambiguation "25th Anniversary Edition".
-    # Used in {Album Disambiguation} naming variable. Added in migration pp27012rrs60.
     disambiguation: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+    # Hey future me - streaming metadata!
+    # total_tracks: number of tracks in album
+    # is_saved: user saved this album (Spotify Saved Albums feature)
+    total_tracks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_saved: Mapped[bool] = mapped_column(
+        sa.Boolean(), nullable=False, server_default="0", default=False
+    )
+    
+    # Hey future me - sync timestamps for cooldown logic!
+    tracks_synced_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -216,7 +248,11 @@ class AlbumModel(Base):
 # table! The download relationship uses uselist=False because it's ONE-TO-ONE (each track has
 # at most one active download). Be careful with migrations - this table can have millions of rows!
 class TrackModel(Base):
-    """SQLAlchemy model for Track entity (Local Library)."""
+    """SQLAlchemy model for Track entity (Unified Library - Multi-Provider).
+    
+    Hey future me - This is the UNIFIED library! All providers write here directly.
+    NO MORE spotify_tracks table! This is the single source of truth.
+    """
 
     __tablename__ = "soulspot_tracks"
 
@@ -232,9 +268,19 @@ class TrackModel(Base):
     album_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("soulspot_albums.id", ondelete="SET NULL"), nullable=True
     )
+    # Source: 'local' (file scan), 'spotify', 'deezer', 'tidal', 'hybrid' (multiple)
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="local", server_default="local", index=True
+    )
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     track_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disc_number: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Hey future me - explicit flag from streaming service (explicit lyrics warning)
+    explicit: Mapped[bool] = mapped_column(
+        sa.Boolean(), nullable=False, server_default="0", default=False
+    )
+    # Hey future me - preview_url is 30s audio preview from streaming service
+    preview_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
@@ -245,11 +291,7 @@ class TrackModel(Base):
         String(12), nullable=True, unique=True, index=True
     )
     # Hey future me - service-specific IDs for multi-service support! ISRC is the universal key
-    # but each streaming service has their own ID format. Store all of them so we can:
-    # 1. Link same track across services (Spotify track X = Deezer track Y = Tidal track Z)
-    # 2. Avoid re-downloading if user syncs from multiple services
-    # 3. Query back to original service for metadata refresh
-    # ISRC is primary dedup key, these are secondary links for API calls.
+    # but each streaming service has their own ID format.
     deezer_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, unique=True, index=True
     )
@@ -258,10 +300,7 @@ class TrackModel(Base):
     )
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    # Hey future me - genre stores the primary genre for this track! We use JSON to store
-    # list[str] in DB (SQLite doesn't have array type). Multiple genres are comma-separated
-    # in the Track entity's genres list, but we store just the primary one here for filtering.
-    # If you need all genres, use the full metadata from MusicBrainz/Spotify API calls.
+    # Hey future me - genre stores the primary genre for this track!
     genre: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # File integrity and library management fields
@@ -291,7 +330,10 @@ class TrackModel(Base):
         uselist=False,
     )
 
-    __table_args__ = (Index("ix_tracks_title_artist", "title", "artist_id"),)
+    __table_args__ = (
+        Index("ix_tracks_title_artist", "title", "artist_id"),
+        Index("ix_soulspot_tracks_source", "source"),
+    )
 
 
 class PlaylistModel(Base):

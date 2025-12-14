@@ -1,18 +1,18 @@
 # AI-Model: Copilot
-"""Unified Search API endpoints for Spotify and Soulseek.
+"""Unified Search API with Multi-Provider Aggregation (Spotify + Deezer + Soulseek).
 
-Hey future me - this router provides a UNIFIED search experience across:
-1. Spotify (artists, albums, tracks) - metadata from Spotify's catalog
-2. Soulseek (files) - downloadable files from P2P network
+Hey future me - this router implements the MULTI-SERVICE AGGREGATION PRINCIPLE:
+1. Query ALL enabled providers (Spotify + Deezer)
+2. Aggregate results into unified list
+3. Deduplicate by normalized keys (artist_name, title, ISRC)
+4. Tag each result with its source provider
+5. Graceful fallback if one provider fails
 
-The Search Page UI uses these endpoints to show combined results. Spotify results
-give us metadata (artist images, popularity, etc.) while Soulseek gives us actual
-downloadable files. The frontend can then:
-- Show Spotify artist → user clicks "Follow" → syncs to our DB
-- Show Spotify track → user clicks "Download" → searches Soulseek for that track
+CRITICAL: Deezer search requires NO AUTH! If Spotify isn't connected, we can
+still search via Deezer. This is the whole point of multi-provider support.
 
-Single-user architecture: Uses SpotifyPlugin (token management built-in) so any
-device can search without per-browser sessions.
+The Search Page UI uses these endpoints to show combined results from all providers.
+Soulseek endpoints remain separate since they search the P2P network for actual files.
 """
 
 import logging
@@ -24,12 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
+    get_deezer_plugin,
     get_slskd_client,
     get_spotify_plugin,
 )
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
 
 if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -42,22 +44,29 @@ router = APIRouter(prefix="/search", tags=["Search"])
 # =============================================================================
 
 
-class SpotifyArtistResult(BaseModel):
-    """Spotify artist search result."""
+# =============================================================================
+# RESPONSE MODELS - Multi-Provider Support
+# Hey future me - all models now have 'source' field to indicate origin provider
+# =============================================================================
 
-    id: str = Field(..., description="Spotify artist ID")
+
+class ArtistSearchResult(BaseModel):
+    """Unified artist search result from any provider."""
+
+    id: str = Field(..., description="Provider-specific artist ID")
     name: str = Field(..., description="Artist name")
     popularity: int = Field(0, description="Popularity score (0-100)")
     followers: int = Field(0, description="Number of followers")
     genres: list[str] = Field(default_factory=list, description="Artist genres")
     image_url: str | None = Field(None, description="Artist profile image URL")
-    spotify_url: str | None = Field(None, description="Spotify profile URL")
+    external_url: str | None = Field(None, description="URL to artist on source provider")
+    source: str = Field("spotify", description="Source provider: spotify, deezer")
 
 
-class SpotifyAlbumResult(BaseModel):
-    """Spotify album search result."""
+class AlbumSearchResult(BaseModel):
+    """Unified album search result from any provider."""
 
-    id: str = Field(..., description="Spotify album ID")
+    id: str = Field(..., description="Provider-specific album ID")
     name: str = Field(..., description="Album name")
     artist_name: str = Field(..., description="Primary artist name")
     artist_id: str | None = Field(None, description="Primary artist ID")
@@ -65,13 +74,14 @@ class SpotifyAlbumResult(BaseModel):
     album_type: str | None = Field(None, description="album, single, compilation")
     total_tracks: int = Field(0, description="Number of tracks")
     image_url: str | None = Field(None, description="Album artwork URL")
-    spotify_url: str | None = Field(None, description="Spotify album URL")
+    external_url: str | None = Field(None, description="URL to album on source provider")
+    source: str = Field("spotify", description="Source provider: spotify, deezer")
 
 
-class SpotifyTrackResult(BaseModel):
-    """Spotify track search result."""
+class TrackSearchResult(BaseModel):
+    """Unified track search result from any provider."""
 
-    id: str = Field(..., description="Spotify track ID")
+    id: str = Field(..., description="Provider-specific track ID")
     name: str = Field(..., description="Track name")
     artist_name: str = Field(..., description="Primary artist name")
     artist_id: str | None = Field(None, description="Primary artist ID")
@@ -80,17 +90,31 @@ class SpotifyTrackResult(BaseModel):
     duration_ms: int = Field(0, description="Track duration in milliseconds")
     popularity: int = Field(0, description="Popularity score (0-100)")
     preview_url: str | None = Field(None, description="30s preview URL")
-    spotify_url: str | None = Field(None, description="Spotify track URL")
-    isrc: str | None = Field(None, description="ISRC code for matching")
+    external_url: str | None = Field(None, description="URL to track on source provider")
+    isrc: str | None = Field(None, description="ISRC code for cross-provider matching")
+    source: str = Field("spotify", description="Source provider: spotify, deezer")
 
 
-class SpotifySearchResponse(BaseModel):
-    """Combined Spotify search response."""
+class UnifiedSearchResponse(BaseModel):
+    """Multi-provider search response with aggregated results."""
 
-    artists: list[SpotifyArtistResult] = Field(default_factory=list)
-    albums: list[SpotifyAlbumResult] = Field(default_factory=list)
-    tracks: list[SpotifyTrackResult] = Field(default_factory=list)
+    artists: list[ArtistSearchResult] = Field(default_factory=list)
+    albums: list[AlbumSearchResult] = Field(default_factory=list)
+    tracks: list[TrackSearchResult] = Field(default_factory=list)
     query: str = Field(..., description="Original search query")
+    sources_queried: list[str] = Field(
+        default_factory=list, description="Providers that were queried"
+    )
+    source_counts: dict[str, int] = Field(
+        default_factory=dict, description="Results per provider"
+    )
+
+
+# Legacy alias for backwards compatibility
+SpotifySearchResponse = UnifiedSearchResponse
+SpotifyArtistResult = ArtistSearchResult
+SpotifyAlbumResult = AlbumSearchResult
+SpotifyTrackResult = TrackSearchResult
 
 
 class SoulseekFileResult(BaseModel):
@@ -113,224 +137,645 @@ class SoulseekSearchResponse(BaseModel):
 
 
 # =============================================================================
-# SPOTIFY SEARCH ENDPOINTS
+# MULTI-PROVIDER SEARCH ENDPOINTS
+# Hey future me - These implement the Multi-Service Aggregation Principle:
+# 1. Query ALL enabled providers (Spotify + Deezer)
+# 2. Aggregate results, deduplicate by normalized name
+# 3. Tag each result with source, graceful fallback on errors
 # =============================================================================
 
 
-@router.get("/spotify/artists", response_model=SpotifySearchResponse)
+@router.get("/unified", response_model=UnifiedSearchResponse)
+async def unified_search(
+    query: str = Query(..., min_length=1, description="Search query"),
+    limit: int = Query(10, ge=1, le=25, description="Number of results per type"),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
+    session: AsyncSession = Depends(get_db_session),
+) -> UnifiedSearchResponse:
+    """Unified search across all types (artists, albums, tracks) and all providers.
+
+    Hey future me - This is the ONE endpoint the search page should use!
+    Searches for artists, albums AND tracks from Spotify AND Deezer in one call.
+    Deduplicates results within each type. Perfect for a search page that shows
+    combined results. Limit is per type (10 artists + 10 albums + 10 tracks).
+
+    Args:
+        query: Search query
+        limit: Maximum results per type (artists/albums/tracks), default 10
+
+    Returns:
+        Combined artists, albums, tracks from all providers
+    """
+    import asyncio
+
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.domain.ports.plugin import PluginCapability
+
+    settings = AppSettingsService(session)
+
+    artists: list[ArtistSearchResult] = []
+    albums: list[AlbumSearchResult] = []
+    tracks: list[TrackSearchResult] = []
+
+    seen_artist_names: set[str] = set()
+    seen_album_keys: set[str] = set()
+    seen_track_isrcs: set[str] = set()
+    seen_track_keys: set[str] = set()
+
+    sources_queried: list[str] = []
+    source_counts: dict[str, int] = {"deezer": 0, "spotify": 0}
+
+    async def search_deezer() -> None:
+        """Search Deezer for all types."""
+        nonlocal artists, albums, tracks, sources_queried
+        deezer_enabled = await settings.is_provider_enabled("deezer")
+        if not deezer_enabled:
+            return
+
+        deezer_added = False
+
+        # Artists
+        if deezer_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+            try:
+                result = await deezer_plugin.search_artists(query, limit=limit)
+                for dto in result.items:
+                    norm_name = _normalize_name(dto.name)
+                    if norm_name not in seen_artist_names:
+                        seen_artist_names.add(norm_name)
+                        external_url = dto.external_urls.get("deezer", "")
+                        artists.append(
+                            ArtistSearchResult(
+                                id=dto.deezer_id or "",
+                                name=dto.name,
+                                popularity=dto.popularity or 0,
+                                followers=dto.followers or 0,
+                                genres=dto.genres or [],
+                                image_url=dto.image_url,
+                                external_url=external_url,
+                                source="deezer",
+                            )
+                        )
+                        source_counts["deezer"] += 1
+                        deezer_added = True
+            except Exception as e:
+                logger.warning(f"Deezer artist search failed: {e}")
+
+        # Albums
+        if deezer_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+            try:
+                result = await deezer_plugin.search_albums(query, limit=limit)
+                for dto in result.items:
+                    key = f"{_normalize_name(dto.artist_name or '')}|{_normalize_name(dto.title)}"
+                    if key not in seen_album_keys:
+                        seen_album_keys.add(key)
+                        external_url = dto.external_urls.get("deezer", "")
+                        albums.append(
+                            AlbumSearchResult(
+                                id=dto.deezer_id or "",
+                                name=dto.title,
+                                artist_name=dto.artist_name or "Unknown",
+                                artist_id=dto.artist_deezer_id,
+                                release_date=dto.release_date,
+                                album_type=dto.album_type,
+                                total_tracks=dto.total_tracks or 0,
+                                image_url=dto.artwork_url,
+                                external_url=external_url,
+                                source="deezer",
+                            )
+                        )
+                        source_counts["deezer"] += 1
+                        deezer_added = True
+            except Exception as e:
+                logger.warning(f"Deezer album search failed: {e}")
+
+        # Tracks
+        if deezer_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+            try:
+                result = await deezer_plugin.search_tracks(query, limit=limit)
+                for dto in result.items:
+                    isrc = dto.isrc
+                    if isrc and isrc in seen_track_isrcs:
+                        continue
+                    key = f"{_normalize_name(dto.artist_name or '')}|{_normalize_name(dto.title)}"
+                    if key in seen_track_keys:
+                        continue
+                    if isrc:
+                        seen_track_isrcs.add(isrc)
+                    seen_track_keys.add(key)
+                    external_url = dto.external_urls.get("deezer", "")
+                    tracks.append(
+                        TrackSearchResult(
+                            id=dto.deezer_id or "",
+                            name=dto.title,
+                            artist_name=dto.artist_name or "Unknown",
+                            artist_id=dto.artist_deezer_id,
+                            album_name=dto.album_name,
+                            album_id=dto.album_deezer_id,
+                            duration_ms=dto.duration_ms or 0,
+                            popularity=dto.popularity or 0,
+                            preview_url=dto.preview_url,
+                            external_url=external_url,
+                            isrc=isrc,
+                            source="deezer",
+                        )
+                    )
+                    source_counts["deezer"] += 1
+                    deezer_added = True
+            except Exception as e:
+                logger.warning(f"Deezer track search failed: {e}")
+
+        if deezer_added and "deezer" not in sources_queried:
+            sources_queried.append("deezer")
+
+    async def search_spotify() -> None:
+        """Search Spotify for all types."""
+        nonlocal artists, albums, tracks, sources_queried
+        spotify_enabled = await settings.is_provider_enabled("spotify")
+        if not spotify_enabled:
+            return
+
+        spotify_added = False
+
+        # Artists
+        if spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+            try:
+                result = await spotify_plugin.search_artist(query, limit=limit)
+                for dto in result.items:
+                    norm_name = _normalize_name(dto.name)
+                    if norm_name not in seen_artist_names:
+                        seen_artist_names.add(norm_name)
+                        external_url = dto.external_urls.get("spotify", "")
+                        artists.append(
+                            ArtistSearchResult(
+                                id=dto.spotify_id or "",
+                                name=dto.name,
+                                popularity=dto.popularity or 0,
+                                followers=dto.followers or 0,
+                                genres=dto.genres or [],
+                                image_url=dto.image_url,
+                                external_url=external_url,
+                                source="spotify",
+                            )
+                        )
+                        source_counts["spotify"] += 1
+                        spotify_added = True
+            except Exception as e:
+                logger.warning(f"Spotify artist search failed: {e}")
+
+        # Albums
+        if spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+            try:
+                result = await spotify_plugin.search_album(query, limit=limit)
+                for dto in result.items:
+                    key = f"{_normalize_name(dto.artist_name or '')}|{_normalize_name(dto.title)}"
+                    if key not in seen_album_keys:
+                        seen_album_keys.add(key)
+                        external_url = dto.external_urls.get("spotify", "")
+                        albums.append(
+                            AlbumSearchResult(
+                                id=dto.spotify_id or "",
+                                name=dto.title,
+                                artist_name=dto.artist_name or "Unknown",
+                                artist_id=dto.artist_spotify_id,
+                                release_date=dto.release_date,
+                                album_type=dto.album_type,
+                                total_tracks=dto.total_tracks or 0,
+                                image_url=dto.artwork_url,
+                                external_url=external_url,
+                                source="spotify",
+                            )
+                        )
+                        source_counts["spotify"] += 1
+                        spotify_added = True
+            except Exception as e:
+                logger.warning(f"Spotify album search failed: {e}")
+
+        # Tracks
+        if spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+            try:
+                result = await spotify_plugin.search_track(query, limit=limit)
+                for dto in result.items:
+                    isrc = dto.isrc
+                    if isrc and isrc in seen_track_isrcs:
+                        continue
+                    key = f"{_normalize_name(dto.artist_name or '')}|{_normalize_name(dto.title)}"
+                    if key in seen_track_keys:
+                        continue
+                    if isrc:
+                        seen_track_isrcs.add(isrc)
+                    seen_track_keys.add(key)
+                    external_url = dto.external_urls.get("spotify", "")
+                    tracks.append(
+                        TrackSearchResult(
+                            id=dto.spotify_id or "",
+                            name=dto.title,
+                            artist_name=dto.artist_name or "Unknown",
+                            artist_id=dto.artist_spotify_id,
+                            album_name=dto.album_name,
+                            album_id=dto.album_spotify_id,
+                            duration_ms=dto.duration_ms or 0,
+                            popularity=dto.popularity or 0,
+                            preview_url=dto.preview_url,
+                            external_url=external_url,
+                            isrc=isrc,
+                            source="spotify",
+                        )
+                    )
+                    source_counts["spotify"] += 1
+                    spotify_added = True
+            except Exception as e:
+                logger.warning(f"Spotify track search failed: {e}")
+
+        if spotify_added and "spotify" not in sources_queried:
+            sources_queried.append("spotify")
+
+    # Run both searches in parallel
+    await asyncio.gather(search_deezer(), search_spotify())
+
+    # Error if no providers available
+    if not sources_queried:
+        raise HTTPException(
+            status_code=503,
+            detail="No search providers available. Enable Deezer or connect Spotify.",
+        )
+
+    # Sort by popularity
+    artists.sort(key=lambda x: x.popularity, reverse=True)
+    albums.sort(key=lambda x: x.total_tracks, reverse=True)
+    tracks.sort(key=lambda x: x.popularity, reverse=True)
+
+    return UnifiedSearchResponse(
+        artists=artists,
+        albums=albums,
+        tracks=tracks,
+        query=query,
+        sources_queried=sources_queried,
+        source_counts=source_counts,
+    )
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize name for deduplication. Lowercase, strip whitespace."""
+    return name.strip().lower()
+
+
+@router.get("/spotify/artists", response_model=UnifiedSearchResponse)
 async def search_spotify_artists(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
-) -> SpotifySearchResponse:
-    """Search for artists on Spotify.
+) -> UnifiedSearchResponse:
+    """Search for artists using Multi-Provider Aggregation (Spotify + Deezer).
 
-    Returns artists matching the query with images, genres, and popularity.
-    Use the returned artist_id for follow/unfollow operations.
+    Hey future me - this implements Multi-Service Aggregation Principle:
+    - Query Spotify (if authenticated) AND Deezer (no auth needed!)
+    - Aggregate results, deduplicate by normalized artist name
+    - Fallback: If Spotify not available, Deezer alone works fine
 
     Args:
         query: Search query (artist name)
-        limit: Maximum number of results (1-50)
-        spotify_plugin: SpotifyPlugin handles token management internally
+        limit: Maximum number of results per provider
 
     Returns:
-        List of matching artists with metadata
+        Unified list of artists from all providers with source tags
     """
-    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
-    if not await settings.is_provider_enabled("spotify"):
-        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    # can_use() checks capability + auth in one call
-    if not spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    artists: list[ArtistSearchResult] = []
+    seen_names: set[str] = set()
+    sources_queried: list[str] = []
+    source_counts: dict[str, int] = {}
 
-    try:
-        # search_artist returns PaginatedResponse[ArtistDTO]
-        result = await spotify_plugin.search_artist(query, limit=limit)
+    # 1. Deezer Search (NO AUTH NEEDED! Priority because always available)
+    deezer_enabled = await settings.is_provider_enabled("deezer")
+    if deezer_enabled and deezer_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+        try:
+            deezer_result = await deezer_plugin.search_artists(query, limit=limit)
+            sources_queried.append("deezer")
+            deezer_count = 0
+            for artist_dto in deezer_result.items:
+                norm_name = _normalize_name(artist_dto.name)
+                if norm_name not in seen_names:
+                    seen_names.add(norm_name)
+                    external_url = artist_dto.external_urls.get("deezer", "")
+                    artists.append(
+                        ArtistSearchResult(
+                            id=artist_dto.deezer_id or "",
+                            name=artist_dto.name,
+                            popularity=artist_dto.popularity or 0,
+                            followers=artist_dto.followers or 0,
+                            genres=artist_dto.genres or [],
+                            image_url=artist_dto.image_url,
+                            external_url=external_url,
+                            source="deezer",
+                        )
+                    )
+                    deezer_count += 1
+            source_counts["deezer"] = deezer_count
+            logger.debug(f"Deezer artist search: {deezer_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Deezer artist search failed (graceful fallback): {e}")
 
-        artists = []
-        for artist_dto in result.items:
-            # Get Spotify URL from external_urls dict
-            spotify_url = artist_dto.external_urls.get("spotify", "")
+    # 2. Spotify Search (requires auth)
+    spotify_enabled = await settings.is_provider_enabled("spotify")
+    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+        try:
+            spotify_result = await spotify_plugin.search_artist(query, limit=limit)
+            sources_queried.append("spotify")
+            spotify_count = 0
+            for artist_dto in spotify_result.items:
+                norm_name = _normalize_name(artist_dto.name)
+                if norm_name not in seen_names:
+                    seen_names.add(norm_name)
+                    external_url = artist_dto.external_urls.get("spotify", "")
+                    artists.append(
+                        ArtistSearchResult(
+                            id=artist_dto.spotify_id or "",
+                            name=artist_dto.name,
+                            popularity=artist_dto.popularity or 0,
+                            followers=artist_dto.followers or 0,
+                            genres=artist_dto.genres or [],
+                            image_url=artist_dto.image_url,
+                            external_url=external_url,
+                            source="spotify",
+                        )
+                    )
+                    spotify_count += 1
+            source_counts["spotify"] = spotify_count
+            logger.debug(f"Spotify artist search: {spotify_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Spotify artist search failed (graceful fallback): {e}")
 
-            artists.append(
-                SpotifyArtistResult(
-                    id=artist_dto.spotify_id or "",
-                    name=artist_dto.name,
-                    popularity=artist_dto.popularity or 0,
-                    followers=artist_dto.followers or 0,
-                    genres=artist_dto.genres or [],
-                    image_url=artist_dto.image_url,
-                    spotify_url=spotify_url,
-                )
-            )
-
-        return SpotifySearchResponse(artists=artists, query=query)
-
-    except Exception as e:
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-        logger.error(
-            LogMessages.sync_failed(
-                entity="Artist Search",
-                source="Spotify",
-                error=str(e),
-                hint="Check Spotify API status and authentication"
-            ),
-            exc_info=True
-        )
+    # 3. Error if NO providers available
+    if not sources_queried:
         raise HTTPException(
-            status_code=500,
-            detail=f"Spotify search failed: {str(e)}",
-        ) from e
+            status_code=503,
+            detail="No search providers available. Enable Deezer or connect Spotify.",
+        )
+
+    # Sort by popularity (higher first)
+    artists.sort(key=lambda x: x.popularity, reverse=True)
+
+    return UnifiedSearchResponse(
+        artists=artists,
+        query=query,
+        sources_queried=sources_queried,
+        source_counts=source_counts,
+    )
 
 
-@router.get("/spotify/tracks", response_model=SpotifySearchResponse)
+@router.get("/spotify/tracks", response_model=UnifiedSearchResponse)
 async def search_spotify_tracks(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
-) -> SpotifySearchResponse:
-    """Search for tracks on Spotify.
+) -> UnifiedSearchResponse:
+    """Search for tracks using Multi-Provider Aggregation (Spotify + Deezer).
 
-    Returns tracks matching the query with artist info, duration, and ISRC.
-    ISRC codes can be used to find the same track on Soulseek.
+    Hey future me - ISRC is the holy grail for deduplication here! Same track
+    from different providers will have the same ISRC. We use that for dedup,
+    then fall back to normalized (artist + title) for tracks without ISRC.
 
     Args:
-        query: Search query (track name, "artist - track", ISRC)
-        limit: Maximum number of results (1-50)
-        spotify_plugin: SpotifyPlugin handles token management internally
+        query: Search query (track name, "artist - track")
+        limit: Maximum number of results per provider
 
     Returns:
-        List of matching tracks with metadata
+        Unified list of tracks from all providers with source tags
     """
-    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
-    if not await settings.is_provider_enabled("spotify"):
-        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    if not spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    tracks: list[TrackSearchResult] = []
+    seen_isrcs: set[str] = set()
+    seen_keys: set[str] = set()  # Fallback: artist|title
+    sources_queried: list[str] = []
+    source_counts: dict[str, int] = {}
 
-    try:
-        # search_track returns PaginatedResponse[TrackDTO]
-        result = await spotify_plugin.search_track(query, limit=limit)
+    # 1. Deezer Search (NO AUTH NEEDED!)
+    deezer_enabled = await settings.is_provider_enabled("deezer")
+    if deezer_enabled and deezer_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+        try:
+            deezer_result = await deezer_plugin.search_tracks(query, limit=limit)
+            sources_queried.append("deezer")
+            deezer_count = 0
+            for track_dto in deezer_result.items:
+                # Dedup by ISRC first, then by artist|title
+                isrc = track_dto.isrc
+                if isrc and isrc in seen_isrcs:
+                    continue
+                norm_key = f"{_normalize_name(track_dto.artist_name or '')}|{_normalize_name(track_dto.title)}"
+                if norm_key in seen_keys:
+                    continue
+                if isrc:
+                    seen_isrcs.add(isrc)
+                seen_keys.add(norm_key)
 
-        tracks = []
-        for track_dto in result.items:
-            # Extract artist info from DTO
-            artist_name = track_dto.artist_name or "Unknown"
-            artist_id = track_dto.artist_spotify_id
-
-            # Get Spotify URL from external_urls dict
-            spotify_url = track_dto.external_urls.get("spotify", "")
-
-            tracks.append(
-                SpotifyTrackResult(
-                    id=track_dto.spotify_id or "",
-                    name=track_dto.title,
-                    artist_name=artist_name,
-                    artist_id=artist_id,
-                    album_name=track_dto.album_name,
-                    album_id=track_dto.album_spotify_id,
-                    duration_ms=track_dto.duration_ms or 0,
-                    popularity=track_dto.popularity or 0,
-                    preview_url=track_dto.preview_url,
-                    spotify_url=spotify_url,
-                    isrc=track_dto.isrc,
+                external_url = track_dto.external_urls.get("deezer", "")
+                tracks.append(
+                    TrackSearchResult(
+                        id=track_dto.deezer_id or "",
+                        name=track_dto.title,
+                        artist_name=track_dto.artist_name or "Unknown",
+                        artist_id=track_dto.artist_deezer_id,
+                        album_name=track_dto.album_name,
+                        album_id=track_dto.album_deezer_id,
+                        duration_ms=track_dto.duration_ms or 0,
+                        popularity=track_dto.popularity or 0,
+                        preview_url=track_dto.preview_url,
+                        external_url=external_url,
+                        isrc=isrc,
+                        source="deezer",
+                    )
                 )
-            )
+                deezer_count += 1
+            source_counts["deezer"] = deezer_count
+            logger.debug(f"Deezer track search: {deezer_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Deezer track search failed (graceful fallback): {e}")
 
-        return SpotifySearchResponse(tracks=tracks, query=query)
+    # 2. Spotify Search (requires auth)
+    spotify_enabled = await settings.is_provider_enabled("spotify")
+    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+        try:
+            spotify_result = await spotify_plugin.search_track(query, limit=limit)
+            sources_queried.append("spotify")
+            spotify_count = 0
+            for track_dto in spotify_result.items:
+                # Dedup by ISRC first, then by artist|title
+                isrc = track_dto.isrc
+                if isrc and isrc in seen_isrcs:
+                    continue
+                norm_key = f"{_normalize_name(track_dto.artist_name or '')}|{_normalize_name(track_dto.title)}"
+                if norm_key in seen_keys:
+                    continue
+                if isrc:
+                    seen_isrcs.add(isrc)
+                seen_keys.add(norm_key)
 
-    except Exception as e:
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-        logger.error(
-            LogMessages.sync_failed(
-                entity="Track Search",
-                source="Spotify",
-                error=str(e),
-                hint="Check Spotify API status and authentication"
-            ),
-            exc_info=True
-        )
+                external_url = track_dto.external_urls.get("spotify", "")
+                tracks.append(
+                    TrackSearchResult(
+                        id=track_dto.spotify_id or "",
+                        name=track_dto.title,
+                        artist_name=track_dto.artist_name or "Unknown",
+                        artist_id=track_dto.artist_spotify_id,
+                        album_name=track_dto.album_name,
+                        album_id=track_dto.album_spotify_id,
+                        duration_ms=track_dto.duration_ms or 0,
+                        popularity=track_dto.popularity or 0,
+                        preview_url=track_dto.preview_url,
+                        external_url=external_url,
+                        isrc=isrc,
+                        source="spotify",
+                    )
+                )
+                spotify_count += 1
+            source_counts["spotify"] = spotify_count
+            logger.debug(f"Spotify track search: {spotify_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Spotify track search failed (graceful fallback): {e}")
+
+    # 3. Error if NO providers available
+    if not sources_queried:
         raise HTTPException(
-            status_code=500,
-            detail=f"Spotify search failed: {str(e)}",
-        ) from e
+            status_code=503,
+            detail="No search providers available. Enable Deezer or connect Spotify.",
+        )
+
+    # Sort by popularity (higher first)
+    tracks.sort(key=lambda x: x.popularity, reverse=True)
+
+    return UnifiedSearchResponse(
+        tracks=tracks,
+        query=query,
+        sources_queried=sources_queried,
+        source_counts=source_counts,
+    )
 
 
-@router.get("/spotify/albums", response_model=SpotifySearchResponse)
+@router.get("/spotify/albums", response_model=UnifiedSearchResponse)
 async def search_spotify_albums(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
-) -> SpotifySearchResponse:
-    """Search for albums on Spotify.
+) -> UnifiedSearchResponse:
+    """Search for albums using Multi-Provider Aggregation (Spotify + Deezer).
 
-    Returns albums matching the query with artwork and track count.
-    Use album_id to fetch full track list for download.
+    Hey future me - Deduplication by normalized (artist + album title) since
+    there's no universal album ID across providers. Release dates can vary
+    slightly between providers, so we use title matching.
 
     Args:
         query: Search query (album name, "artist - album")
-        limit: Maximum number of results (1-50)
-        spotify_plugin: SpotifyPlugin handles token management internally
+        limit: Maximum number of results per provider
 
     Returns:
-        List of matching albums with metadata
+        Unified list of albums from all providers with source tags
     """
-    # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
-    if not await settings.is_provider_enabled("spotify"):
-        raise HTTPException(status_code=503, detail="Spotify provider is disabled")
-    if not spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
-        raise HTTPException(status_code=401, detail="Not authenticated with Spotify")
+    albums: list[AlbumSearchResult] = []
+    seen_keys: set[str] = set()  # artist|title
+    sources_queried: list[str] = []
+    source_counts: dict[str, int] = {}
 
-    try:
-        # search_album returns PaginatedResponse[AlbumDTO]
-        result = await spotify_plugin.search_album(query, limit=limit)
+    # 1. Deezer Search (NO AUTH NEEDED!)
+    deezer_enabled = await settings.is_provider_enabled("deezer")
+    if deezer_enabled and deezer_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+        try:
+            deezer_result = await deezer_plugin.search_albums(query, limit=limit)
+            sources_queried.append("deezer")
+            deezer_count = 0
+            for album_dto in deezer_result.items:
+                norm_key = f"{_normalize_name(album_dto.artist_name or '')}|{_normalize_name(album_dto.title)}"
+                if norm_key in seen_keys:
+                    continue
+                seen_keys.add(norm_key)
 
-        albums = []
-        for album_dto in result.items:
-            # Extract artist info from DTO
-            artist_name = album_dto.artist_name or "Unknown"
-            artist_id = album_dto.artist_spotify_id
-
-            # Get Spotify URL from external_urls dict
-            spotify_url = album_dto.external_urls.get("spotify", "")
-
-            albums.append(
-                SpotifyAlbumResult(
-                    id=album_dto.spotify_id or "",
-                    name=album_dto.title,
-                    artist_name=artist_name,
-                    artist_id=artist_id,
-                    release_date=album_dto.release_date,
-                    album_type=album_dto.album_type,
-                    total_tracks=album_dto.total_tracks or 0,
-                    image_url=album_dto.artwork_url,
-                    spotify_url=spotify_url,
+                external_url = album_dto.external_urls.get("deezer", "")
+                albums.append(
+                    AlbumSearchResult(
+                        id=album_dto.deezer_id or "",
+                        name=album_dto.title,
+                        artist_name=album_dto.artist_name or "Unknown",
+                        artist_id=album_dto.artist_deezer_id,
+                        release_date=album_dto.release_date,
+                        album_type=album_dto.album_type,
+                        total_tracks=album_dto.total_tracks or 0,
+                        image_url=album_dto.artwork_url,
+                        external_url=external_url,
+                        source="deezer",
+                    )
                 )
-            )
+                deezer_count += 1
+            source_counts["deezer"] = deezer_count
+            logger.debug(f"Deezer album search: {deezer_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Deezer album search failed (graceful fallback): {e}")
 
-        return SpotifySearchResponse(albums=albums, query=query)
+    # 2. Spotify Search (requires auth)
+    spotify_enabled = await settings.is_provider_enabled("spotify")
+    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+        try:
+            spotify_result = await spotify_plugin.search_album(query, limit=limit)
+            sources_queried.append("spotify")
+            spotify_count = 0
+            for album_dto in spotify_result.items:
+                norm_key = f"{_normalize_name(album_dto.artist_name or '')}|{_normalize_name(album_dto.title)}"
+                if norm_key in seen_keys:
+                    continue
+                seen_keys.add(norm_key)
 
-    except Exception as e:
-        logger.error(f"Spotify album search failed: {e}", exc_info=True)
+                external_url = album_dto.external_urls.get("spotify", "")
+                albums.append(
+                    AlbumSearchResult(
+                        id=album_dto.spotify_id or "",
+                        name=album_dto.title,
+                        artist_name=album_dto.artist_name or "Unknown",
+                        artist_id=album_dto.artist_spotify_id,
+                        release_date=album_dto.release_date,
+                        album_type=album_dto.album_type,
+                        total_tracks=album_dto.total_tracks or 0,
+                        image_url=album_dto.artwork_url,
+                        external_url=external_url,
+                        source="spotify",
+                    )
+                )
+                spotify_count += 1
+            source_counts["spotify"] = spotify_count
+            logger.debug(f"Spotify album search: {spotify_count} results for '{query}'")
+        except Exception as e:
+            logger.warning(f"Spotify album search failed (graceful fallback): {e}")
+
+    # 3. Error if NO providers available
+    if not sources_queried:
         raise HTTPException(
-            status_code=500,
-            detail=f"Spotify search failed: {str(e)}",
-        ) from e
+            status_code=503,
+            detail="No search providers available. Enable Deezer or connect Spotify.",
+        )
+
+    # Sort by total_tracks (albums with more content first)
+    albums.sort(key=lambda x: x.total_tracks, reverse=True)
+
+    return UnifiedSearchResponse(
+        albums=albums,
+        query=query,
+        sources_queried=sources_queried,
+        source_counts=source_counts,
+    )
 
 
 # =============================================================================
@@ -408,64 +853,104 @@ class SearchSuggestion(BaseModel):
 
     text: str = Field(..., description="Suggestion text")
     type: str = Field(..., description="artist, album, or track")
-    id: str | None = Field(None, description="Spotify ID if available")
+    id: str | None = Field(None, description="Provider ID if available")
+    source: str = Field("spotify", description="Source provider")
 
 
 @router.get("/suggestions", response_model=list[SearchSuggestion])
 async def get_search_suggestions(
     query: str = Query(..., min_length=2, description="Partial search query"),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[SearchSuggestion]:
-    """Get search autocomplete suggestions from Spotify.
+    """Get search autocomplete suggestions from all providers.
 
-    Returns quick suggestions for autocomplete dropdown. Combines
-    top artist, album, and track matches.
+    Hey future me - Multi-Provider Aggregation for autocomplete too!
+    Deezer needs no auth, so suggestions ALWAYS work even without Spotify.
+    We limit each provider to 3 artists + 5 tracks, deduplicate by name.
 
     Args:
         query: Partial search query (minimum 2 characters)
-        spotify_plugin: SpotifyPlugin handles token management internally
 
     Returns:
-        List of suggestions with type indicators
+        List of suggestions with type indicators and source tags
     """
-    # Provider + Auth checks using can_use() - return empty list gracefully
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     settings = AppSettingsService(session)
-    if not await settings.is_provider_enabled("spotify"):
-        return []
-    # can_use() checks capability + auth - graceful return if not available
-    if not spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
-        return []
+    suggestions: list[SearchSuggestion] = []
+    seen_texts: set[str] = set()
 
-    try:
-        suggestions: list[SearchSuggestion] = []
+    # 1. Deezer Suggestions (NO AUTH NEEDED!)
+    deezer_enabled = await settings.is_provider_enabled("deezer")
+    if deezer_enabled and deezer_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+        try:
+            # Artists from Deezer
+            deezer_artists = await deezer_plugin.search_artists(query, limit=3)
+            for artist_dto in deezer_artists.items[:3]:
+                norm_text = _normalize_name(artist_dto.name)
+                if norm_text not in seen_texts:
+                    seen_texts.add(norm_text)
+                    suggestions.append(
+                        SearchSuggestion(
+                            text=artist_dto.name,
+                            type="artist",
+                            id=artist_dto.deezer_id,
+                            source="deezer",
+                        )
+                    )
 
-        # Search artists (top 3)
-        artist_results = await spotify_plugin.search_artist(query, limit=3)
-        for artist_dto in artist_results.items[:3]:
-            suggestions.append(
-                SearchSuggestion(
-                    text=artist_dto.name,
-                    type="artist",
-                    id=artist_dto.spotify_id,
-                )
-            )
+            # Tracks from Deezer
+            deezer_tracks = await deezer_plugin.search_tracks(query, limit=5)
+            for track_dto in deezer_tracks.items[:5]:
+                artist_name = track_dto.artist_name or ""
+                text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
+                norm_text = _normalize_name(text)
+                if norm_text not in seen_texts:
+                    seen_texts.add(norm_text)
+                    suggestions.append(
+                        SearchSuggestion(
+                            text=text, type="track", id=track_dto.deezer_id, source="deezer"
+                        )
+                    )
+        except Exception as e:
+            logger.warning(f"Deezer suggestions failed (graceful fallback): {e}")
 
-        # Search tracks (top 5)
-        track_results = await spotify_plugin.search_track(query, limit=5)
-        for track_dto in track_results.items[:5]:
-            artist_name = track_dto.artist_name or ""
-            text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
-            suggestions.append(
-                SearchSuggestion(text=text, type="track", id=track_dto.spotify_id)
-            )
+    # 2. Spotify Suggestions (requires auth)
+    spotify_enabled = await settings.is_provider_enabled("spotify")
+    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+        try:
+            # Artists from Spotify
+            spotify_artists = await spotify_plugin.search_artist(query, limit=3)
+            for artist_dto in spotify_artists.items[:3]:
+                norm_text = _normalize_name(artist_dto.name)
+                if norm_text not in seen_texts:
+                    seen_texts.add(norm_text)
+                    suggestions.append(
+                        SearchSuggestion(
+                            text=artist_dto.name,
+                            type="artist",
+                            id=artist_dto.spotify_id,
+                            source="spotify",
+                        )
+                    )
 
-        return suggestions
+            # Tracks from Spotify
+            spotify_tracks = await spotify_plugin.search_track(query, limit=5)
+            for track_dto in spotify_tracks.items[:5]:
+                artist_name = track_dto.artist_name or ""
+                text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
+                norm_text = _normalize_name(text)
+                if norm_text not in seen_texts:
+                    seen_texts.add(norm_text)
+                    suggestions.append(
+                        SearchSuggestion(
+                            text=text, type="track", id=track_dto.spotify_id, source="spotify"
+                        )
+                    )
+        except Exception as e:
+            logger.warning(f"Spotify suggestions failed (graceful fallback): {e}")
 
-    except Exception as e:
-        logger.error(f"Search suggestions failed: {e}", exc_info=True)
-        # Return empty list on error (graceful degradation)
-        return []
+    return suggestions

@@ -1,7 +1,14 @@
-"""Discography service for detecting missing albums."""
+"""Discography service for detecting missing albums.
+
+Hey future me - Nach Table Consolidation (Nov 2025):
+- KEINE spotify_albums Tabelle mehr! Alles in soulspot_albums
+- "owned" = Alben mit file_path (downloaded) ODER source='local'
+- "known from spotify" = Alben mit source='spotify'
+- Vergleich basiert auf spotify_uri Matching
+"""
 
 import logging
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,11 +90,11 @@ class DiscographyService:
     # GOTCHA: Spotify returns compilations, live albums, singles - you might not WANT them all
     # Consider adding filter for album_type (album vs single vs compilation)
     #
-    # OPTIMIZATION (Nov 2025): Now uses pre-synced spotify_albums instead of API calls!
-    # The Artist Albums Background Sync keeps spotify_albums fresh. We compare:
-    # - spotify_albums (all known albums from Spotify) vs
-    # - soulspot_albums (local library / downloaded albums)
-    # No API call needed for most checks!
+    # NACH TABLE CONSOLIDATION (Nov 2025): 
+    # - Nutzt unified soulspot_albums Tabelle
+    # - "owned" = file_path IS NOT NULL oder source='local'
+    # - "known" = source='spotify' (alle bekannten Spotify-Alben)
+    # - Vergleich über spotify_uri matching
     async def check_discography(
         self,
         artist_id: ArtistId,
@@ -95,8 +102,8 @@ class DiscographyService:
     ) -> DiscographyInfo:
         """Check discography completeness for an artist.
 
-        Uses pre-synced spotify_albums data instead of API calls.
-        Compares known albums (from spotify_albums) with owned albums (soulspot_albums).
+        Uses unified soulspot_albums table after table consolidation.
+        Compares owned albums (downloaded) with known albums from Spotify.
 
         Args:
             artist_id: Artist ID (local soulspot_artists.id)
@@ -105,11 +112,6 @@ class DiscographyService:
         Returns:
             Discography information
         """
-        from soulspot.infrastructure.persistence.models import SpotifyAlbumModel
-        from soulspot.infrastructure.persistence.repositories import (
-            SpotifyBrowseRepository,
-        )
-
         # Get artist from database
         stmt = select(ArtistModel).where(ArtistModel.id == str(artist_id.value))
         result = await self.session.execute(stmt)
@@ -132,11 +134,13 @@ class DiscographyService:
                 missing_albums=[],
             )
 
-        # Get owned albums from local library (soulspot_albums)
-        stmt_albums = select(AlbumModel).where(
-            AlbumModel.artist_id == str(artist_id.value)
+        # Get owned albums (downloaded/local files) - these have file_path set
+        stmt_owned = select(AlbumModel).where(
+            AlbumModel.artist_id == str(artist_id.value),
+            # Album is "owned" if it has local files or was imported from local library
+            AlbumModel.source.in_(["local", "hybrid"]),
         )
-        result = await self.session.execute(stmt_albums)
+        result = await self.session.execute(stmt_owned)
         owned_albums = result.scalars().all()
         owned_spotify_uris = {
             album.spotify_uri for album in owned_albums if album.spotify_uri
@@ -162,13 +166,8 @@ class DiscographyService:
                 missing_albums=[],
             )
 
-        # Check if albums are synced for this artist
-        spotify_repo = SpotifyBrowseRepository(self.session)
-        sync_status = await spotify_repo.get_artist_albums_sync_status(
-            spotify_artist_id
-        )
-
-        if not sync_status["albums_synced"]:
+        # Check if albums are synced for this artist (albums_synced_at field)
+        if not artist.albums_synced_at:
             # Albums not synced yet - can't determine missing albums
             # The Background Sync will eventually sync them
             logger.info(
@@ -182,36 +181,36 @@ class DiscographyService:
                 missing_albums=[],  # Can't determine yet
             )
 
-        # Get all known albums from spotify_albums (pre-synced data - NO API CALL!)
-        stmt_spotify = select(SpotifyAlbumModel).where(
-            SpotifyAlbumModel.artist_id == spotify_artist_id
+        # Get all known albums from Spotify (source='spotify') for this artist
+        # Hey future me - nach Consolidation sind ALLE Alben in soulspot_albums!
+        stmt_spotify = select(AlbumModel).where(
+            AlbumModel.artist_id == str(artist_id.value),
+            AlbumModel.source == "spotify",  # Only Spotify-synced albums
         )
         result = await self.session.execute(stmt_spotify)
-        # Cast to help mypy understand the correct type
-        all_spotify_albums = cast(
-            list[SpotifyAlbumModel], list(result.scalars().all())
-        )
+        all_spotify_albums = list(result.scalars().all())
 
-        # Find missing albums (in spotify_albums but not in soulspot_albums)
+        # Find missing albums (in spotify-synced but not in owned/local)
         missing_albums = []
         for album in all_spotify_albums:
-            album_uri = f"spotify:album:{album.spotify_id}"
-            if album_uri not in owned_spotify_uris:
+            if album.spotify_uri not in owned_spotify_uris:
+                # Extract spotify_id from URI: "spotify:album:xxx" -> "xxx"
+                spotify_id = album.spotify_uri.split(":")[-1] if album.spotify_uri else album.id
                 missing_albums.append(
                     {
-                        "name": album.name,
-                        "spotify_uri": album_uri,
-                        "spotify_id": album.spotify_id,
+                        "name": album.title,
+                        "spotify_uri": album.spotify_uri,
+                        "spotify_id": spotify_id,
                         "release_date": album.release_date or "",
-                        "total_tracks": album.total_tracks,
+                        "total_tracks": album.total_tracks or 0,
                         "album_type": album.album_type,
-                        "image_url": album.image_url,
+                        "image_url": album.artwork_url,
                     }
                 )
 
         logger.info(
             f"Discography check for {artist.name}: "
-            f"{len(owned_albums)}/{len(all_spotify_albums)} albums (from local data)"
+            f"{len(owned_albums)}/{len(all_spotify_albums)} albums (from unified library)"
         )
 
         return DiscographyInfo(

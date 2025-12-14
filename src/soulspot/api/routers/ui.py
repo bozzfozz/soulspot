@@ -2085,9 +2085,11 @@ async def browse_new_releases_page(
 
     from sqlalchemy import select
 
+    # Hey future me - nach Table Consolidation nutzen wir die unified models!
+    # Spotify-Daten sind jetzt in soulspot_artists/albums mit source='spotify'
     from soulspot.infrastructure.persistence.models import (
-        SpotifyAlbumModel,
-        SpotifyArtistModel,
+        AlbumModel,
+        ArtistModel,
     )
 
     error: str | None = None
@@ -2156,7 +2158,9 @@ async def browse_new_releases_page(
         logger.debug(f"New Releases: Deezer skipped ({skip_reason})")
 
     # -------------------------------------------------------------------------
-    # 2. SPOTIFY: Releases from followed artists (from database)
+    # 2. SPOTIFY: Releases from followed artists (from unified library)
+    # Hey future me - nach Table Consolidation sind Spotify-Daten in soulspot_albums!
+    # Wir filtern nach source='spotify' und Alben von gefolgten Künstlern
     # -------------------------------------------------------------------------
     if spotify_enabled:
         try:
@@ -2170,12 +2174,16 @@ async def browse_new_releases_page(
             if include_compilations:
                 allowed_types.append("compilation")
 
+            # Hey future me - jetzt nutzen wir unified models!
+            # AlbumModel.source='spotify' UND artist hat spotify_uri (= followed artist)
             stmt = (
-                select(SpotifyAlbumModel, SpotifyArtistModel)
-                .join(SpotifyArtistModel, SpotifyAlbumModel.artist_id == SpotifyArtistModel.spotify_id)
-                .where(SpotifyAlbumModel.release_date >= cutoff_str)
-                .where(SpotifyAlbumModel.album_type.in_(allowed_types))
-                .order_by(SpotifyAlbumModel.release_date.desc())
+                select(AlbumModel, ArtistModel)
+                .join(ArtistModel, AlbumModel.artist_id == ArtistModel.id)
+                .where(AlbumModel.source == "spotify")  # Nur Spotify-synced albums
+                .where(AlbumModel.release_date >= cutoff_str)
+                .where(AlbumModel.album_type.in_(allowed_types))
+                .where(ArtistModel.spotify_uri.isnot(None))  # Nur artists mit Spotify URI
+                .order_by(AlbumModel.release_date.desc())
                 .limit(100)
             )
 
@@ -2183,27 +2191,30 @@ async def browse_new_releases_page(
             rows = result.all()
 
             for album, artist in rows:
-                key = normalize_key(artist.name, album.name)
+                key = normalize_key(artist.name, album.title)
                 if key not in seen_keys:
                     seen_keys.add(key)
+                    # Extract spotify_id from URI: "spotify:album:xxx" -> "xxx"
+                    spotify_album_id = album.spotify_uri.split(":")[-1] if album.spotify_uri else album.id
+                    spotify_artist_id = artist.spotify_uri.split(":")[-1] if artist.spotify_uri else artist.id
                     all_releases.append({
-                        "id": album.spotify_id,
-                        "name": album.name,
+                        "id": spotify_album_id,
+                        "name": album.title,
                         "artist_name": artist.name,
-                        "artist_id": artist.spotify_id,
-                        "artwork_url": album.image_url or album.image_path,
+                        "artist_id": spotify_artist_id,
+                        "artwork_url": album.artwork_url or album.image_path,
                         "release_date": album.release_date,
                         "album_type": album.album_type,
                         "total_tracks": album.total_tracks,
-                        "external_url": f"https://open.spotify.com/album/{album.spotify_id}",
+                        "external_url": f"https://open.spotify.com/album/{spotify_album_id}",
                         "source": "spotify",
                     })
                     source_counts["spotify"] += 1
 
-            logger.info(f"New Releases: Got {source_counts['spotify']} from Spotify DB (after dedup)")
+            logger.info(f"New Releases: Got {source_counts['spotify']} from Spotify unified library (after dedup)")
 
         except Exception as e:
-            logger.warning(f"New Releases: Spotify DB fetch failed: {e}")
+            logger.warning(f"New Releases: Spotify unified library fetch failed: {e}")
     else:
         logger.debug("New Releases: Spotify provider disabled, skipping")
 
