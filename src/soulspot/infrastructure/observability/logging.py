@@ -72,6 +72,80 @@ class CorrelationIdFilter(logging.Filter):
 # The getattr(record, "correlation_id", "") handles old log records before correlation_id was
 # added. Stack traces and exceptions are included IF present (record.exc_info/stack_info). The
 # formatTime/formatException/formatStack calls do the heavy lifting - don't reinvent those!
+class CompactExceptionFormatter(logging.Formatter):
+    """Formatter that shows compact exception chains without verbose Python traceback boilerplate.
+    
+    Hey future me - this removes the annoying "The above exception was the direct cause of the 
+    following exception" messages that clutter Docker logs. We show the FULL stack trace but 
+    format it more compactly. Each exception in the chain gets a clear separator with the 
+    exception type and message, followed by the relevant stack frames.
+    
+    Example output:
+    ERROR │ sync_worker:200 │ Sync cycle failed: All connection attempts failed
+    ╰─► httpx.ConnectError: All connection attempts failed
+        File "download_status_sync_worker.py", line 185, in _sync_cycle
+          slskd_downloads = await self._get_slskd_downloads()
+        File "slskd_client.py", line 246, in list_downloads
+          response = await client.get("/api/v0/transfers/downloads")
+    ╰─► httpcore.ConnectError: All connection attempts failed
+        File "httpcore/_async/connection.py", line 124, in _connect
+          stream = await self._network_backend.connect_tcp(**kwargs)
+    """
+    
+    def formatException(self, ei: tuple[type, BaseException, Any]) -> str:
+        """Format exception chain in a compact, readable way.
+        
+        Args:
+            ei: Exception info tuple (type, value, traceback)
+            
+        Returns:
+            Formatted exception string with compact chain representation
+        """
+        import traceback
+        
+        exc_type, exc_value, exc_tb = ei
+        if exc_value is None:
+            return ""
+        
+        lines: list[str] = []
+        
+        # Walk the exception chain (from root cause to final exception)
+        exceptions: list[BaseException] = []
+        current = exc_value
+        while current is not None:
+            exceptions.append(current)
+            # Follow __cause__ (explicit) or __context__ (implicit) chain
+            current = current.__cause__ or current.__context__
+        
+        # Reverse to show root cause first
+        exceptions.reverse()
+        
+        for i, exc in enumerate(exceptions):
+            # Exception header with type and message
+            exc_class = exc.__class__.__name__
+            exc_msg = str(exc)
+            
+            if i == 0:
+                # Root cause
+                lines.append(f"╰─► {exc_class}: {exc_msg}")
+            else:
+                # Chained exception
+                lines.append(f"╰─► {exc_class}: {exc_msg}")
+            
+            # Get traceback for this exception
+            if exc.__traceback__:
+                tb_lines = traceback.format_tb(exc.__traceback__)
+                # Format each stack frame more compactly
+                for tb_line in tb_lines:
+                    # Remove leading/trailing whitespace and newlines
+                    tb_line = tb_line.strip()
+                    if tb_line:
+                        # Indent stack frames
+                        lines.append(f"    {tb_line}")
+        
+        return "\n".join(lines)
+
+
 class CustomJsonFormatter(jsonlogger.JsonFormatter):  # type: ignore[name-defined,misc]
     """Custom JSON formatter with additional fields."""
 
@@ -157,13 +231,11 @@ def configure_logging(
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     else:
-        # Human-readable formatter for development/Docker logs
-        # Hey future me - ENHANCED format for better debugging in Docker!
-        # Shows: timestamp | level | module:line | correlation_id (short) | message
-        # Example: 09:33:37 │ ERROR │ spotify_sync:142 │ a3f8 │ Error syncing: ...
-        # The %(name)s gives full module path (soulspot.application.services.spotify_sync_service)
-        # We extract just the filename part for readability.
-        formatter = logging.Formatter(
+        # Human-readable formatter for development/Docker logs with compact exceptions
+        # Hey future me - Uses CompactExceptionFormatter to remove verbose Python traceback boilerplate!
+        # Shows: timestamp | level | module:line | message
+        # Exceptions are formatted compactly with ╰─► markers instead of "The above exception..."
+        formatter = CompactExceptionFormatter(
             fmt="%(asctime)s │ %(levelname)-7s │ %(name)s:%(lineno)d │ %(message)s",
             datefmt="%H:%M:%S",
         )

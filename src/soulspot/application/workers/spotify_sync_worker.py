@@ -115,8 +115,12 @@ class SpotifySyncWorker:
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
+        from soulspot.infrastructure.observability.log_messages import LogMessages
         logger.info(
-            f"Spotify sync worker started (checking every {self.check_interval_seconds}s)"
+            LogMessages.worker_started(
+                worker="Spotify Sync",
+                interval=self.check_interval_seconds
+            )
         )
 
     async def stop(self) -> None:

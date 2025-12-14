@@ -197,7 +197,18 @@ class DownloadStatusSyncWorker:
                 await session.commit()
 
         except Exception as e:
-            logger.error("Sync cycle failed: %s", e, exc_info=True)
+            # Use structured log message for better debugging
+            from soulspot.infrastructure.observability.log_messages import LogMessages
+            
+            logger.error(
+                LogMessages.connection_failed(
+                    service="slskd",
+                    target=f"{self._slskd_client._base_url}/api/v0/transfers/downloads" if hasattr(self._slskd_client, '_base_url') else "slskd API",
+                    error=str(e),
+                    hint="Check if slskd container is running: docker ps | grep slskd"
+                ),
+                exc_info=True
+            )
             self._last_sync_stats = stats
             raise  # Re-raise so start() can handle circuit breaker
 

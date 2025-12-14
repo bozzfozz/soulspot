@@ -173,7 +173,16 @@ async def sync_followed_artists(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync followed artists: {e}", exc_info=True)
+        from soulspot.infrastructure.observability.log_messages import LogMessages
+        logger.error(
+            LogMessages.sync_failed(
+                entity="Followed Artists",
+                source="Spotify",
+                error=str(e),
+                hint="Check Spotify authentication in Settings → Providers → Spotify"
+            ),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync followed artists: {str(e)}",

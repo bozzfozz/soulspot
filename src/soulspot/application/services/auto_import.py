@@ -130,12 +130,28 @@ class AutoImportService:
 
         # Validate directories exist
         if not self._download_path.exists():
-            logger.error("Download path does not exist: %s", self._download_path)
+            from soulspot.infrastructure.observability.log_messages import LogMessages
+            logger.error(
+                LogMessages.config_invalid(
+                    setting="Download Path",
+                    value=self._download_path,
+                    expected="Valid directory path",
+                    hint="Check docker-compose.yml volumes: /downloads should be mounted"
+                )
+            )
             self._running = False
             return
 
         if not self._music_path.exists():
-            logger.error("Music path does not exist: %s", self._music_path)
+            from soulspot.infrastructure.observability.log_messages import LogMessages
+            logger.error(
+                LogMessages.config_invalid(
+                    setting="Music Path",
+                    value=self._music_path,
+                    expected="Valid directory path",
+                    hint="Check docker-compose.yml volumes: /music should be mounted"
+                )
+            )
             self._running = False
             return
 

@@ -172,7 +172,16 @@ async def search_spotify_artists(
         return SpotifySearchResponse(artists=artists, query=query)
 
     except Exception as e:
-        logger.error(f"Spotify artist search failed: {e}", exc_info=True)
+        from soulspot.infrastructure.observability.log_messages import LogMessages
+        logger.error(
+            LogMessages.sync_failed(
+                entity="Artist Search",
+                source="Spotify",
+                error=str(e),
+                hint="Check Spotify API status and authentication"
+            ),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Spotify search failed: {str(e)}",
@@ -241,7 +250,16 @@ async def search_spotify_tracks(
         return SpotifySearchResponse(tracks=tracks, query=query)
 
     except Exception as e:
-        logger.error(f"Spotify track search failed: {e}", exc_info=True)
+        from soulspot.infrastructure.observability.log_messages import LogMessages
+        logger.error(
+            LogMessages.sync_failed(
+                entity="Track Search",
+                source="Spotify",
+                error=str(e),
+                hint="Check Spotify API status and authentication"
+            ),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Spotify search failed: {str(e)}",
@@ -364,7 +382,16 @@ async def search_soulseek(
         )
 
     except Exception as e:
-        logger.error(f"Soulseek search failed: {e}", exc_info=True)
+        from soulspot.infrastructure.observability.log_messages import LogMessages
+        logger.error(
+            LogMessages.connection_failed(
+                service="slskd",
+                target="Soulseek Search",
+                error=str(e),
+                hint="Check if slskd container is running: docker ps | grep slskd"
+            ),
+            exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Soulseek search failed: {str(e)}",

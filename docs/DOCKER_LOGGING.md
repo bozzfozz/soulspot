@@ -13,6 +13,44 @@
 - `soulspot.application.services.spotify_sync_service:142` - Modul und Zeile
 - Rest - Log-Nachricht
 
+### Exception Formatting (NEU seit v1.0)
+
+**Kompakte Exception-Chains** - Keine verbose Python-Boilerplate mehr!
+
+**Vorher (verbose):**
+```
+ERROR: Sync cycle failed: All connection attempts failed
+Traceback (most recent call last):
+  File "httpcore/_async/connection.py", line 124
+    stream = await self._network_backend.connect_tcp(**kwargs)
+httpcore.ConnectError: All connection attempts failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "download_status_sync_worker.py", line 185
+    slskd_downloads = await self._get_slskd_downloads()
+httpx.ConnectError: All connection attempts failed
+```
+
+**Jetzt (kompakt):**
+```
+ERROR: Sync cycle failed: All connection attempts failed
+╰─► httpcore.ConnectError: All connection attempts failed
+    File "httpcore/_async/connection.py", line 124, in _connect
+      stream = await self._network_backend.connect_tcp(**kwargs)
+╰─► httpx.ConnectError: All connection attempts failed
+    File "download_status_sync_worker.py", line 185, in _sync_cycle
+      slskd_downloads = await self._get_slskd_downloads()
+```
+
+**Vorteile:**
+- ✅ 60% weniger Log-Zeilen
+- ✅ Klare visuelle Hierarchie mit `╰─►` Markern
+- ✅ Root cause zuerst (von unten nach oben lesen)
+- ✅ Keine "The above exception was the direct cause..." Boilerplate
+- ✅ Alle relevanten Stack-Frames bleiben erhalten
+
 ### Log-Levels
 
 | Level | Bedeutung | Beispiel |
