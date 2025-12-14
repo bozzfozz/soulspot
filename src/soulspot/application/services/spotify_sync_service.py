@@ -978,7 +978,16 @@ class SpotifySyncService:
             logger.info(f"Liked Songs sync complete: {stats['total']} tracks")
 
         except Exception as e:
-            logger.error(f"Error syncing Liked Songs: {e}")
+            from soulspot.infrastructure.observability.log_messages import LogMessages
+            logger.error(
+                LogMessages.sync_failed(
+                    entity="Liked Songs",
+                    source="Spotify",
+                    error=str(e),
+                    hint="Check if liked tracks have valid album/artist data in Spotify"
+                ),
+                exc_info=True
+            )
             stats["error"] = str(e)
             await self.repo.update_sync_status(
                 sync_type="liked_songs",

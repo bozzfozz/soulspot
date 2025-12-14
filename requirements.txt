@@ -10,7 +10,7 @@ alembic>=1.14.0
 aiosqlite>=0.20.0
 
 # HTTP Client
-httpx>=0.28.0
+httpx[http2]>=0.28.0
 
 # Server-Sent Events (SSE)
 sse-starlette>=2.1.0

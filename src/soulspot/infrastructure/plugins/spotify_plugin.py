@@ -440,19 +440,30 @@ class SpotifyPlugin(IMusicServicePlugin):
 
         # Build album DTO if album info available
         # Hey future me - this is optional! Some track fetches don't include album context.
+        # CRITICAL: Album name can be None or empty from Spotify API! We need to handle this defensively.
         album_dto = None
         if album:
-            album_dto = AlbumDTO(
-                title=album.get("name", "Unknown Album"),
-                artist_name=artist_name,  # Use track's primary artist
-                source_service="spotify",
-                spotify_id=album.get("id"),
-                spotify_uri=album.get("uri"),
-                artwork_url=album.get("images", [{}])[0].get("url") if album.get("images") else None,
-                release_date=album.get("release_date"),
-                album_type=album.get("album_type", "album"),
-                total_tracks=album.get("total_tracks"),
-            )
+            # Get album name with defensive fallback
+            album_name_raw = album.get("name")
+            # Only create AlbumDTO if we have a valid album name (not None, not empty)
+            if album_name_raw and album_name_raw.strip():
+                album_dto = AlbumDTO(
+                    title=album_name_raw,
+                    artist_name=artist_name,  # Use track's primary artist
+                    source_service="spotify",
+                    spotify_id=album.get("id"),
+                    spotify_uri=album.get("uri"),
+                    artwork_url=album.get("images", [{}])[0].get("url") if album.get("images") else None,
+                    release_date=album.get("release_date"),
+                    album_type=album.get("album_type", "album"),
+                    total_tracks=album.get("total_tracks"),
+                )
+            else:
+                # Album data exists but has no valid title - skip album DTO creation
+                # This can happen with malformed Spotify API responses
+                logger.debug(
+                    f"Skipping album DTO for track {data.get('id')}: album has no valid title"
+                )
 
         return TrackDTO(
             title=data.get("name") or "Unknown Track",
