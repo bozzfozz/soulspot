@@ -2187,6 +2187,20 @@ class DownloadRepository(IDownloadRepository):
 
         return downloads
 
+    async def get_completed_track_ids(self) -> set[str]:
+        """Get set of track IDs for all completed downloads.
+        
+        Hey future me - this is for AutoImportService to filter which files to import!
+        Only files with completed downloads should be imported to prevent importing
+        random files that users didn't request. Returns raw string IDs for fast lookup.
+        """
+        stmt = select(DownloadModel.track_id).where(
+            DownloadModel.status == DownloadStatus.COMPLETED.value
+        )
+        result = await self.session.execute(stmt)
+        track_ids = result.scalars().all()
+        return set(track_ids)
+
 
 class ArtistWatchlistRepository(IArtistWatchlistRepository):
     """SQLAlchemy implementation of Artist Watchlist repository."""

@@ -189,7 +189,7 @@ async def sync_artist_songs(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync songs for artist {artist_id}: {e}")
+        logger.error(f"Failed to sync songs for artist {artist_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync songs: {str(e)}",
@@ -273,7 +273,7 @@ async def sync_all_artists_songs(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync all artists songs: {e}")
+        logger.error(f"Failed to sync all artists songs: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync songs: {str(e)}",
@@ -366,7 +366,7 @@ async def delete_artist_song(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to delete song {track_id}: {e}")
+        logger.error(f"Failed to delete song {track_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete song: {str(e)}",
@@ -417,7 +417,7 @@ async def delete_all_artist_songs(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to delete songs for artist {artist_id}: {e}")
+        logger.error(f"Failed to delete songs for artist {artist_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete songs: {str(e)}",

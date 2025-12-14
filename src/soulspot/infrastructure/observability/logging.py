@@ -157,13 +157,14 @@ def configure_logging(
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     else:
-        # Human-readable formatter for development
-        # Hey future me - shorter format! Removes the full module path.
-        # Before: soulspot.infrastructure.observability.middleware
-        # After:  middleware (just the module name)
-        # Also: correlation_id is shortened to 8 chars (first part of UUID)
+        # Human-readable formatter for development/Docker logs
+        # Hey future me - ENHANCED format for better debugging in Docker!
+        # Shows: timestamp | level | module:line | correlation_id (short) | message
+        # Example: 09:33:37 │ ERROR │ spotify_sync:142 │ a3f8 │ Error syncing: ...
+        # The %(name)s gives full module path (soulspot.application.services.spotify_sync_service)
+        # We extract just the filename part for readability.
         formatter = logging.Formatter(
-            fmt="%(asctime)s │ %(levelname)-5s │ %(message)s",
+            fmt="%(asctime)s │ %(levelname)-7s │ %(name)s:%(lineno)d │ %(message)s",
             datefmt="%H:%M:%S",
         )
 

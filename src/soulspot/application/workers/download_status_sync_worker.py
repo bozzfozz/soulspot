@@ -197,7 +197,7 @@ class DownloadStatusSyncWorker:
                 await session.commit()
 
         except Exception as e:
-            logger.error("Sync cycle failed: %s", e)
+            logger.error("Sync cycle failed: %s", e, exc_info=True)
             self._last_sync_stats = stats
             raise  # Re-raise so start() can handle circuit breaker
 

@@ -12,7 +12,12 @@ from soulspot.application.services.postprocessing.pipeline import (
 )
 from soulspot.config import Settings
 from soulspot.domain.entities import Track
-from soulspot.domain.ports import IAlbumRepository, IArtistRepository, ITrackRepository
+from soulspot.domain.ports import (
+    IAlbumRepository,
+    IArtistRepository,
+    IDownloadRepository,
+    ITrackRepository,
+)
 from soulspot.domain.value_objects import FilePath
 
 if TYPE_CHECKING:
@@ -42,6 +47,7 @@ class AutoImportService:
         track_repository: ITrackRepository,
         artist_repository: IArtistRepository,
         album_repository: IAlbumRepository,
+        download_repository: IDownloadRepository,
         poll_interval: int = 60,
         post_processing_pipeline: PostProcessingPipeline | None = None,
         spotify_plugin: "SpotifyPlugin | None" = None,
@@ -51,12 +57,17 @@ class AutoImportService:
 
         Hey future me - refactored to use SpotifyPlugin!
         The plugin handles token management internally, no more access_token juggling.
+        
+        CRITICAL ADDITION: download_repository parameter!
+        We now check if tracks have COMPLETED downloads before importing.
+        This prevents importing random files users didn't request!
 
         Args:
             settings: Application settings containing path configuration
             track_repository: Repository for track data
             artist_repository: Repository for artist data
             album_repository: Repository for album data
+            download_repository: Repository for download tracking (filters completed downloads)
             poll_interval: Seconds between directory scans (default: 60)
             post_processing_pipeline: Optional post-processing pipeline
             spotify_plugin: Optional SpotifyPlugin for artwork downloads (handles auth internally)
@@ -66,6 +77,7 @@ class AutoImportService:
         self._track_repository = track_repository
         self._artist_repository = artist_repository
         self._album_repository = album_repository
+        self._download_repository = download_repository
         self._poll_interval = poll_interval
         self._download_path = settings.storage.download_path
         self._music_path = settings.storage.music_path
@@ -157,10 +169,12 @@ class AutoImportService:
     # Yo this discovers and processes all audio files in downloads dir
     # WHY per-file exception handling? One corrupt file shouldn't stop processing others
     # WHY debug log for no files? Normal case, not an error - don't spam logs
+    # CRITICAL CHANGE: Now filters by completed downloads only!
+    # This prevents importing random files users didn't request through SoulSpot.
     # GOTCHA: This processes files sequentially - if you have 100 files, could take minutes
     # Consider parallel processing with asyncio.gather() but watch for race conditions on file moves
     async def _process_downloads(self) -> None:
-        """Process all files in the downloads directory."""
+        """Process all files in the downloads directory that have completed downloads."""
         try:
             # Get all audio files in downloads directory
             audio_files = self._get_audio_files(self._download_path)
@@ -169,13 +183,45 @@ class AutoImportService:
                 logger.debug("No audio files found in downloads directory")
                 return
 
-            logger.info("Found %d audio file(s) to process", len(audio_files))
+            # CRITICAL FILTER: Get track IDs with completed downloads
+            # Only these tracks should be imported!
+            completed_track_ids = await self._download_repository.get_completed_track_ids()
+            
+            if not completed_track_ids:
+                logger.debug("No completed downloads found, skipping import")
+                return
 
+            logger.info(
+                "Found %d audio file(s) to process (%d completed downloads tracked)",
+                len(audio_files),
+                len(completed_track_ids),
+            )
+
+            # Process each file, but only if it belongs to a completed download
             for file_path in audio_files:
                 try:
-                    await self._import_file(file_path)
+                    # Find associated track
+                    track = await self._find_track_for_file(file_path)
+                    
+                    # CRITICAL CHECK: Only import if track has completed download!
+                    if track and str(track.id.value) in completed_track_ids:
+                        await self._import_file(file_path, track)
+                    elif track:
+                        logger.debug(
+                            "Skipping file %s: track %s has no completed download",
+                            file_path.name,
+                            track.id.value,
+                        )
+                    else:
+                        logger.debug(
+                            "Skipping file %s: no matching track in database",
+                            file_path.name,
+                        )
                 except Exception as e:
-                    logger.exception("Error importing file %s: %s", file_path, e)
+                    logger.exception("Error importing file %s: %s", file_path, e, exc_info=True)
+
+        except Exception as e:
+            logger.exception("Error processing downloads: %s", e, exc_info=True)
 
         except Exception as e:
             logger.exception("Error processing downloads: %s", e)
@@ -248,28 +294,26 @@ class AutoImportService:
             logger.warning("Error checking file completeness for %s: %s", file_path, e)
             return False
 
-    async def _import_file(self, file_path: Path) -> None:
+    async def _import_file(self, file_path: Path, track: Track) -> None:
         """Import a single file to the music library.
 
         This method:
-        1. Finds the associated track in the database
-        2. Runs post-processing pipeline (if enabled)
-        3. Moves file to final destination (if post-processing didn't already)
+        1. Runs post-processing pipeline (if enabled)
+        2. Moves file to final destination (if post-processing didn't already)
+        
+        Hey future me - track is now passed as parameter (already matched by caller)!
+        This avoids duplicate track matching logic.
 
         Args:
             file_path: Path to file to import
+            track: Associated track entity (already validated to have completed download)
         """
         # Hey future me: The import flow - post-process then move (if needed)
         # WHY run post-processing first? It might rename/move the file to final destination
         # WHY check if still in downloads after? Post-processing might have moved it already
         # GOTCHA: We cleanup empty directories after move - don't leave "/downloads/Artist/Album/" clutter
         try:
-            # Try to find the associated track by file path
-            # We need to search for tracks that don't have a file_path yet
-            # or have a file_path matching this download location
-            track = await self._find_track_for_file(file_path)
-
-            if track and self._settings.postprocessing.enabled:
+            if self._settings.postprocessing.enabled:
                 # Run post-processing pipeline
                 logger.info("Running post-processing for: %s", file_path)
                 result = await self._pipeline.process(file_path, track)
@@ -320,15 +364,14 @@ class AutoImportService:
                 logger.info("Successfully imported: %s", dest_path)
 
                 # Update track with final path
-                if track:
-                    track.update_file_path(FilePath(dest_path))
-                    await self._track_repository.update(track)
+                track.update_file_path(FilePath(dest_path))
+                await self._track_repository.update(track)
 
                 # Clean up empty parent directories in downloads
                 self._cleanup_empty_dirs(file_path.parent)
 
         except Exception as e:
-            logger.exception("Error importing file %s: %s", file_path, e)
+            logger.exception("Error importing file %s: %s", file_path, e, exc_info=True)
             raise
 
     # Hey future me: Track matching using ID3 tags -> ISRC -> title/artist!

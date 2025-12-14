@@ -124,7 +124,7 @@ class LibraryEnrichmentWorker:
                 return stats
 
             except Exception as e:
-                logger.error(f"Enrichment job {job.id} failed: {e}")
+                logger.error(f"Enrichment job {job.id} failed: {e}", exc_info=True)
                 return {
                     "success": False,
                     "error": str(e),

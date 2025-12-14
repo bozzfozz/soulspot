@@ -105,7 +105,7 @@ class WatchlistWorker:
             try:
                 await self._check_watchlists()
             except Exception as e:
-                logger.error(f"Error in watchlist worker loop: {e}")
+                logger.error(f"Error in watchlist worker loop: {e}", exc_info=True)
 
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
@@ -370,7 +370,7 @@ class DiscographyWorker:
             try:
                 await self._check_discographies()
             except Exception as e:
-                logger.error(f"Error in discography worker loop: {e}")
+                logger.error(f"Error in discography worker loop: {e}", exc_info=True)
 
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
@@ -465,7 +465,8 @@ class DiscographyWorker:
 
                 except Exception as e:
                     logger.error(
-                        f"Error checking discography for artist {watchlist.artist_id}: {e}"
+                        f"Error checking discography for artist {watchlist.artist_id}: {e}",
+                        exc_info=True,
                     )
                     continue  # Continue with next artist on error
 
@@ -538,7 +539,7 @@ class QualityUpgradeWorker:
             try:
                 await self._identify_upgrades()
             except Exception as e:
-                logger.error(f"Error in quality upgrade worker loop: {e}")
+                logger.error(f"Error in quality upgrade worker loop: {e}", exc_info=True)
 
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
@@ -633,7 +634,7 @@ class QualityUpgradeWorker:
                             upgrade_candidates_found += 1
 
                 except Exception as e:
-                    logger.error(f"Error checking upgrade for track {track.id}: {e}")
+                    logger.error(f"Error checking upgrade for track {track.id}: {e}", exc_info=True)
                     continue  # Continue with next track on error
 
             logger.info(

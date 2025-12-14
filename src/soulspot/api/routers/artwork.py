@@ -54,7 +54,7 @@ async def serve_artwork(
             raise HTTPException(status_code=403, detail="Access denied")
 
     except Exception as e:
-        logger.error(f"Error resolving artwork path: {e}")
+        logger.error(f"Error resolving artwork path: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid path") from e
 
     # Check file exists

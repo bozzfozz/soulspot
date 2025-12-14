@@ -363,8 +363,10 @@ class LibraryScannerService:
                     if ext in AUDIO_EXTENSIONS:
                         audio_files.append(Path(root) / filename)
             except PermissionError as e:
+                from soulspot.infrastructure.observability.error_formatting import format_permission_error_message
                 skipped_dirs.append(root)
-                logger.warning(f"Permission denied: {root} - {e}")
+                msg = format_permission_error_message(e, "scan directory", root)
+                logger.warning(msg)
 
         logger.debug(
             f"Total files seen: {total_files_seen}, audio files: {len(audio_files)}"

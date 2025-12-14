@@ -221,7 +221,7 @@ class CleanupWorker:
                     freed_bytes += file_size
                     logger.info(f"Deleted: {file_path} ({file_size} bytes)")
                 except Exception as e:
-                    logger.error(f"Failed to delete {file_path}: {e}")
+                    logger.error(f"Failed to delete {file_path}: {e}", exc_info=True)
 
         # 5. Clean empty directories
         await self._clean_empty_directories()

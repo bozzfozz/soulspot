@@ -2175,7 +2175,7 @@ async def enrich_disambiguation(
         )
 
     except Exception as e:
-        logger.error(f"Disambiguation enrichment failed: {e}")
+        logger.error(f"Disambiguation enrichment failed: {e}", exc_info=True)
         return HTMLResponse(
             f'''<div class="musicbrainz-result" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-exclamation-triangle"></i>

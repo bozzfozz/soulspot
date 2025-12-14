@@ -173,7 +173,7 @@ async def sync_followed_artists(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync followed artists: {e}")
+        logger.error(f"Failed to sync followed artists: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync followed artists: {str(e)}",
@@ -409,7 +409,7 @@ async def follow_artist_on_spotify(
             message="Successfully followed artist on Spotify",
         )
     except Exception as e:
-        logger.error(f"Failed to follow artist {spotify_id}: {e}")
+        logger.error(f"Failed to follow artist {spotify_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to follow artist: {str(e)}",
@@ -469,7 +469,7 @@ async def unfollow_artist_on_spotify(
             message="Successfully unfollowed artist on Spotify",
         )
     except Exception as e:
-        logger.error(f"Failed to unfollow artist {spotify_id}: {e}")
+        logger.error(f"Failed to unfollow artist {spotify_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to unfollow artist: {str(e)}",
@@ -531,7 +531,7 @@ async def check_following_status(
 
         return FollowingStatusResponse(statuses=statuses)
     except Exception as e:
-        logger.error(f"Failed to check following status: {e}")
+        logger.error(f"Failed to check following status: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to check following status: {str(e)}",
@@ -658,7 +658,7 @@ async def get_related_artists(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get related artists for {spotify_id}: {e}")
+        logger.error(f"Failed to get related artists for {spotify_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get related artists: {str(e)}",

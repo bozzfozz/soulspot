@@ -125,7 +125,7 @@ async def sync_followed_artists(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to sync followed artists: {e}")
+        logger.error(f"Failed to sync followed artists: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Failed to sync followed artists: {e}"
         ) from e
@@ -161,7 +161,7 @@ async def bulk_create_watchlists(
                 )
                 created_count += 1
             except Exception as e:
-                logger.error(f"Failed to create watchlist for artist {artist_id_str}: {e}")
+                logger.error(f"Failed to create watchlist for artist {artist_id_str}: {e}", exc_info=True)
                 failed_count += 1
                 failed_artists.append(artist_id_str)
 
@@ -197,7 +197,7 @@ async def preview_followed_artists(
 
         return response
     except Exception as e:
-        logger.error(f"Failed to preview followed artists: {e}")
+        logger.error(f"Failed to preview followed artists: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail=f"Failed to preview followed artists: {e}"
         ) from e

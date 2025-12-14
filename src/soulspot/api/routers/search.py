@@ -172,7 +172,7 @@ async def search_spotify_artists(
         return SpotifySearchResponse(artists=artists, query=query)
 
     except Exception as e:
-        logger.error(f"Spotify artist search failed: {e}")
+        logger.error(f"Spotify artist search failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Spotify search failed: {str(e)}",
@@ -241,7 +241,7 @@ async def search_spotify_tracks(
         return SpotifySearchResponse(tracks=tracks, query=query)
 
     except Exception as e:
-        logger.error(f"Spotify track search failed: {e}")
+        logger.error(f"Spotify track search failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Spotify search failed: {str(e)}",
@@ -308,7 +308,7 @@ async def search_spotify_albums(
         return SpotifySearchResponse(albums=albums, query=query)
 
     except Exception as e:
-        logger.error(f"Spotify album search failed: {e}")
+        logger.error(f"Spotify album search failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Spotify search failed: {str(e)}",
@@ -364,7 +364,7 @@ async def search_soulseek(
         )
 
     except Exception as e:
-        logger.error(f"Soulseek search failed: {e}")
+        logger.error(f"Soulseek search failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Soulseek search failed: {str(e)}",
@@ -439,6 +439,6 @@ async def get_search_suggestions(
         return suggestions
 
     except Exception as e:
-        logger.error(f"Search suggestions failed: {e}")
+        logger.error(f"Search suggestions failed: {e}", exc_info=True)
         # Return empty list on error (graceful degradation)
         return []

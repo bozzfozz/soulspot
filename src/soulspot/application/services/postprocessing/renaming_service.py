@@ -484,6 +484,7 @@ class RenamingService:
         try:
             source_path.rename(dest_path)
         except OSError as e:
+            from soulspot.infrastructure.observability.error_formatting import format_oserror_message
             if e.errno == errno.EXDEV:
                 # Cross-filesystem move - fallback to copy+delete via shutil
                 logger.info(
@@ -494,7 +495,11 @@ class RenamingService:
                 )
                 shutil.move(str(source_path), str(dest_path))
             else:
-                # Re-raise other OS errors (permission denied, disk full, etc.)
+                # Re-raise with better error message
+                msg = format_oserror_message(
+                    e, "move/rename file", source_path, {"destination": str(dest_path)}
+                )
+                logger.error(msg, exc_info=True)
                 raise
         logger.info("Renamed file: %s -> %s", source_path, dest_path)
 

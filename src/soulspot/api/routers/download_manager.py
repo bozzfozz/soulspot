@@ -320,7 +320,7 @@ async def download_events(
         except asyncio.CancelledError:
             logger.debug("SSE connection cancelled")
         except Exception as e:
-            logger.error(f"SSE error: {e}")
+            logger.error(f"SSE error: {e}", exc_info=True)
 
     return EventSourceResponse(event_generator())
 

@@ -208,7 +208,7 @@ class DownloadMonitorWorker:
         try:
             all_downloads = await self._slskd_client.list_downloads()
         except Exception as e:
-            logger.error(f"Failed to fetch downloads from slskd: {e}")
+            logger.error(f"Failed to fetch downloads from slskd: {e}", exc_info=True)
             return
 
         # Create lookup map: download_id -> status
@@ -219,7 +219,7 @@ class DownloadMonitorWorker:
             try:
                 await self._update_job_status(job, download_map)
             except Exception as e:
-                logger.error(f"Error updating job {job.id}: {e}")
+                logger.error(f"Error updating job {job.id}: {e}", exc_info=True)
 
     async def _update_job_status(
         self, job: Any, download_map: dict[str, dict[str, Any]]
@@ -339,7 +339,7 @@ class DownloadMonitorWorker:
                 status=JobStatus.RUNNING, job_type=JobType.DOWNLOAD
             )
         except Exception as e:
-            logger.error(f"Failed to list jobs for stale check: {e}")
+            logger.error(f"Failed to list jobs for stale check: {e}", exc_info=True)
             return
 
         now = datetime.now(UTC)
@@ -383,7 +383,7 @@ class DownloadMonitorWorker:
                     await self._restart_stale_download(job)
 
             except Exception as e:
-                logger.error(f"Error checking job {job.id} for staleness: {e}")
+                logger.error(f"Error checking job {job.id} for staleness: {e}", exc_info=True)
                 continue
 
     async def _restart_stale_download(self, job: Any) -> None:
@@ -449,4 +449,4 @@ class DownloadMonitorWorker:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to restart stale download {job.id}: {e}")
+            logger.error(f"Failed to restart stale download {job.id}: {e}", exc_info=True)

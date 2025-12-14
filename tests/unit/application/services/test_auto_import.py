@@ -44,12 +44,15 @@ def auto_import_service(mock_settings: Settings) -> AutoImportService:
     mock_track_repo.update = AsyncMock()
     mock_artist_repo = Mock()
     mock_album_repo = Mock()
+    mock_download_repo = Mock()
+    mock_download_repo.get_completed_track_ids = AsyncMock(return_value=set())
 
     return AutoImportService(
         mock_settings,
         track_repository=mock_track_repo,
         artist_repository=mock_artist_repo,
         album_repository=mock_album_repo,
+        download_repository=mock_download_repo,
         poll_interval=1,
     )
 

@@ -462,6 +462,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             from soulspot.infrastructure.persistence.repositories import (
                 AlbumRepository,
                 ArtistRepository,
+                DownloadRepository,
             )
 
             # Create auto-import service using the worker session
@@ -470,6 +471,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 track_repository=track_repository,
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
+                download_repository=DownloadRepository(worker_session),  # NEW: Filter by completed downloads
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
                 spotify_plugin=automation_spotify_plugin,  # For Spotify artwork downloads
                 app_settings_service=app_settings_service,  # For dynamic naming templates

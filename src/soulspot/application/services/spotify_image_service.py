@@ -493,9 +493,14 @@ class SpotifyImageService:
             return ImageDownloadResult.ok(relative_path)
 
         except OSError as e:
+            from soulspot.infrastructure.observability.error_formatting import format_oserror_message
+            msg = format_oserror_message(
+                e, "save artist image", file_path, {"url": image_url, "size": f"{len(image_data)} bytes"}
+            )
+            logger.error(msg, exc_info=True)
             return ImageDownloadResult.error(
                 ImageDownloadErrorCode.DISK_WRITE_ERROR,
-                f"Failed to save image to disk: {str(e)}",
+                msg,
                 image_url,
             )
 
@@ -528,14 +533,19 @@ class SpotifyImageService:
 
             relative_path = self._get_relative_path("albums", spotify_id)
             logger.debug(
-                f"Saved album image: {relative_path} ({len(image_data)} bytes)"
+                f"Saved album image: {relative_path} ({len(image_data)} bytes}"
             )
             return ImageDownloadResult.ok(relative_path)
 
         except OSError as e:
+            from soulspot.infrastructure.observability.error_formatting import format_oserror_message
+            msg = format_oserror_message(
+                e, "save album image", file_path, {"url": image_url, "size": f"{len(image_data)} bytes"}
+            )
+            logger.error(msg, exc_info=True)
             return ImageDownloadResult.error(
                 ImageDownloadErrorCode.DISK_WRITE_ERROR,
-                f"Failed to save image to disk: {str(e)}",
+                msg,
                 image_url,
             )
 
