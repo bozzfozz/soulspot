@@ -185,7 +185,19 @@ class AutoImportService:
 
             # CRITICAL FILTER: Get track IDs with completed downloads
             # Only these tracks should be imported!
-            completed_track_ids = await self._download_repository.get_completed_track_ids()
+            # Hey future me - retry logic for concurrent session provisioning errors!
+            # This can happen at startup when multiple workers use the same session.
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    completed_track_ids = await self._download_repository.get_completed_track_ids()
+                    break
+                except Exception as e:
+                    if "provisioning a new connection" in str(e) and attempt < max_retries - 1:
+                        logger.debug("Session busy, retrying in 0.5s (attempt %d/%d)", attempt + 1, max_retries)
+                        await asyncio.sleep(0.5)
+                        continue
+                    raise
             
             if not completed_track_ids:
                 logger.debug("No completed downloads found, skipping import")

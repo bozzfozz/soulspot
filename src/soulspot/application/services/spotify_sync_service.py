@@ -409,7 +409,7 @@ class SpotifySyncService:
             await self.session.commit()
 
             stats["synced"] = True
-            logger.info(f"Synced {len(albums)} albums for artist {artist_id}")
+            logger.info(f"Synced {len(album_dtos)} albums for artist {artist_id}")
 
         except Exception as e:
             logger.error(f"Error syncing albums for artist {artist_id}: {e}")
@@ -846,7 +846,7 @@ class SpotifySyncService:
         spotify_uri = f"spotify:playlist:{spotify_id}"
         name = playlist_dto.name or "Unknown"
         description = playlist_dto.description or ""
-        cover_url = playlist_dto.artwork_url
+        cover_url = playlist_dto.cover_url
 
         # Download image if enabled
         cover_path = None
@@ -1154,12 +1154,20 @@ class SpotifySyncService:
                     continue
 
                 # Ensure artist exists (create minimal entry if not followed)
-                if album_dto.artists:
-                    primary_artist = album_dto.artists[0]
+                # AlbumDTO has artist_name and artist_spotify_id, not an artists list
+                if album_dto.artist_spotify_id and album_dto.artist_name:
+                    # Create a minimal ArtistDTO for the artist
+                    from soulspot.domain.dtos import ArtistDTO
+                    
+                    primary_artist = ArtistDTO(
+                        name=album_dto.artist_name,
+                        source_service=album_dto.source_service,
+                        spotify_id=album_dto.artist_spotify_id,
+                    )
                     await self._ensure_artist_exists_from_dto(primary_artist)
-                    artist_id = primary_artist.spotify_id
+                    artist_id = album_dto.artist_spotify_id
                 else:
-                    continue  # Skip albums without artists
+                    continue  # Skip albums without artist info
 
                 # Upsert album with is_saved=True
                 await self._upsert_saved_album_from_dto(

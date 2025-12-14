@@ -306,7 +306,7 @@ class SpotifyPlugin(IMusicServicePlugin):
                 image_url = images[0].get("url")
 
         return ArtistDTO(
-            name=data.get("name", "Unknown Artist"),
+            name=data.get("name") or "Unknown Artist",
             source_service="spotify",
             spotify_id=data.get("id"),
             spotify_uri=data.get("uri"),
@@ -328,7 +328,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         """
         # Extract artist name (first artist)
         artists = data.get("artists", [])
-        artist_name = artists[0].get("name", "Unknown Artist") if artists else "Unknown Artist"
+        artist_name = (artists[0].get("name") or "Unknown Artist") if artists else "Unknown Artist"
         artist_spotify_id = artists[0].get("id") if artists else None
 
         # Pick best artwork (first is usually highest quality)
@@ -358,7 +358,7 @@ class SpotifyPlugin(IMusicServicePlugin):
                 release_year = int(release_date[:4])
 
         album = AlbumDTO(
-            title=data.get("name", "Unknown Album"),
+            title=data.get("name") or "Unknown Album",
             artist_name=artist_name,
             source_service="spotify",
             spotify_id=data.get("id"),
@@ -402,7 +402,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         """
         # Extract primary artist
         artists = data.get("artists", [])
-        artist_name = artists[0].get("name", "Unknown Artist") if artists else "Unknown Artist"
+        artist_name = (artists[0].get("name") or "Unknown Artist") if artists else "Unknown Artist"
         artist_spotify_id = artists[0].get("id") if artists else None
 
         # Album info (from track or parent album_data)
@@ -420,9 +420,10 @@ class SpotifyPlugin(IMusicServicePlugin):
         additional_artists: list[ArtistDTO] = []
         if len(artists) > 1:
             for artist in artists[1:]:
+                artist_name_val = artist.get("name") or "Unknown Artist"
                 additional_artists.append(
                     ArtistDTO(
-                        name=artist.get("name", "Unknown Artist"),
+                        name=artist_name_val,
                         source_service="spotify",
                         spotify_id=artist.get("id"),
                         spotify_uri=artist.get("uri"),
@@ -455,7 +456,7 @@ class SpotifyPlugin(IMusicServicePlugin):
             )
 
         return TrackDTO(
-            title=data.get("name", "Unknown Track"),
+            title=data.get("name") or "Unknown Track",
             artist_name=artist_name,
             source_service="spotify",
             spotify_id=data.get("id"),
