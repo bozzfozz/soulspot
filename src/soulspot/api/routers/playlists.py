@@ -457,71 +457,26 @@ async def get_playlist(
 @router.get("/{playlist_id}/missing-tracks")
 async def get_missing_tracks(
     playlist_id: str,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
-    _track_repository: TrackRepository = Depends(get_track_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Get tracks that are in the playlist but not downloaded to the library.
 
     Args:
         playlist_id: Playlist ID
-        playlist_repository: Playlist repository
-        track_repository: Track repository
         session: Database session
 
     Returns:
         List of missing tracks
     """
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
+    # Hey future me - NOW uses PlaylistService! Clean Architecture + optimized query.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import TrackModel
+    service = PlaylistService(session)
 
     try:
-        playlist_id_obj = PlaylistId.from_string(playlist_id)
-        playlist = await playlist_repository.get_by_id(playlist_id_obj)
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Find tracks without file_path
-        missing_tracks = []
-        for track_id in playlist.track_ids:
-            stmt = (
-                select(TrackModel)
-                .where(TrackModel.id == str(track_id.value))
-                .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
-            )
-            result = await session.execute(stmt)
-            track_model = result.unique().scalar_one_or_none()
-
-            if track_model and not track_model.file_path:
-                missing_tracks.append(
-                    {
-                        "id": track_model.id,
-                        "title": track_model.title,
-                        "artist": track_model.artist.name
-                        if track_model.artist
-                        else "Unknown Artist",
-                        "album": track_model.album.title
-                        if track_model.album
-                        else "Unknown Album",
-                        "duration_ms": track_model.duration_ms,
-                        "spotify_uri": track_model.spotify_uri,
-                    }
-                )
-
-        return {
-            "playlist_id": str(playlist.id.value),
-            "playlist_name": playlist.name,
-            "missing_tracks": missing_tracks,
-            "missing_count": len(missing_tracks),
-            "total_tracks": len(playlist.track_ids),
-        }
+        return await service.get_missing_tracks(playlist_id)
     except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # Yo this is basically a "refresh from Spotify" endpoint. It extracts the Spotify ID from the
@@ -694,7 +649,6 @@ async def sync_all_playlists(
 @router.post("/{playlist_id}/download-missing")
 async def download_missing_tracks(
     playlist_id: str,
-    playlist_repository: PlaylistRepository = Depends(get_playlist_repository),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Download all missing tracks from a playlist.
@@ -707,52 +661,31 @@ async def download_missing_tracks(
 
     Args:
         playlist_id: Playlist ID
-        playlist_repository: Playlist repository
         session: Database session
 
     Returns:
         Download status with list of missing tracks
     """
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
+    # Hey future me - NOW uses PlaylistService! Clean Architecture.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import TrackModel
+    service = PlaylistService(session)
 
     try:
-        playlist_id_obj = PlaylistId.from_string(playlist_id)
-        playlist = await playlist_repository.get_by_id(playlist_id_obj)
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Find tracks without file_path
-        missing_track_ids = []
-        for track_id in playlist.track_ids:
-            stmt = (
-                select(TrackModel)
-                .where(TrackModel.id == str(track_id.value))
-                .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
-            )
-            result = await session.execute(stmt)
-            track_model = result.unique().scalar_one_or_none()
-
-            if track_model and not track_model.file_path:
-                missing_track_ids.append(str(track_id.value))
+        result = await service.get_missing_tracks(playlist_id)
+        # Extract just IDs for download queueing
+        missing_track_ids = [track["id"] for track in result["missing_tracks"]]
 
         return {
             "message": "Missing tracks identified",
-            "playlist_id": str(playlist.id.value),
-            "playlist_name": playlist.name,
-            "total_tracks": len(playlist.track_ids),
+            "playlist_id": result["playlist_id"],
+            "playlist_name": result["playlist_name"],
+            "total_tracks": result["total_tracks"],
             "missing_tracks": missing_track_ids,
-            "missing_count": len(missing_track_ids),
+            "missing_count": result["missing_count"],
         }
     except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=f"Invalid playlist ID: {str(e)}"
-        ) from e
-    except HTTPException:
-        raise
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to identify missing tracks: {str(e)}"
@@ -776,28 +709,15 @@ async def delete_playlist(
     Returns:
         Success message with deleted playlist info
     """
-    from sqlalchemy import delete, select
+    # Hey future me - NOW uses PlaylistService! Clean Architecture.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import PlaylistModel
+    service = PlaylistService(session)
 
     try:
-        # Get playlist first to return info
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await session.execute(stmt)
-        playlist = result.scalar_one_or_none()
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        playlist_name = playlist.name
-
-        # Delete playlist (cascade deletes playlist_tracks associations)
-        delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        await session.execute(delete_stmt)
-        await session.commit()
-
-        return {
-            "message": f"Playlist '{playlist_name}' deleted",
+        return await service.delete_playlist(playlist_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
             "playlist_id": playlist_id,
             "playlist_name": playlist_name,
         }
@@ -827,38 +747,16 @@ async def blacklist_playlist(
     Returns:
         Success message with updated playlist info
     """
-    from sqlalchemy import select, update
+    # Hey future me - NOW uses PlaylistService! Clean Architecture.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import PlaylistModel
+    service = PlaylistService(session)
 
     try:
-        # Get playlist to check it exists
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await session.execute(stmt)
-        playlist = result.scalar_one_or_none()
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        # Update is_blacklisted to True
-        update_stmt = (
-            update(PlaylistModel)
-            .where(PlaylistModel.id == playlist_id)
-            .values(is_blacklisted=True)
-        )
-        await session.execute(update_stmt)
-        await session.commit()
-
-        return {
-            "message": f"Playlist '{playlist.name}' blacklisted",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist.name,
-            "is_blacklisted": True,
-        }
-    except HTTPException:
-        raise
+        return await service.set_blacklist_status(playlist_id, blacklisted=True)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to blacklist playlist: {str(e)}"
         ) from e
@@ -878,36 +776,16 @@ async def unblacklist_playlist(
     Returns:
         Success message with updated playlist info
     """
-    from sqlalchemy import select, update
+    # Hey future me - NOW uses PlaylistService! Clean Architecture.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import PlaylistModel
+    service = PlaylistService(session)
 
     try:
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await session.execute(stmt)
-        playlist = result.scalar_one_or_none()
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        update_stmt = (
-            update(PlaylistModel)
-            .where(PlaylistModel.id == playlist_id)
-            .values(is_blacklisted=False)
-        )
-        await session.execute(update_stmt)
-        await session.commit()
-
-        return {
-            "message": f"Playlist '{playlist.name}' removed from blacklist",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist.name,
-            "is_blacklisted": False,
-        }
-    except HTTPException:
-        raise
+        return await service.set_blacklist_status(playlist_id, blacklisted=False)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to unblacklist playlist: {str(e)}"
         ) from e
@@ -931,23 +809,20 @@ async def delete_and_blacklist_playlist(
     Returns:
         Success message
     """
-    from sqlalchemy import select
+    # Hey future me - NOW uses PlaylistService! Clean Architecture.
+    from soulspot.application.services.playlist_service import PlaylistService
 
-    from soulspot.infrastructure.persistence.models import (
-        AppSettingsModel,
-        PlaylistModel,
-    )
+    service = PlaylistService(session)
 
     try:
-        # Get playlist info first
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await session.execute(stmt)
-        playlist = result.scalar_one_or_none()
-
-        if not playlist:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-
-        playlist_name = playlist.name
+        return await service.delete_and_blacklist(playlist_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete and blacklist playlist: {str(e)}",
+        ) from e
         spotify_uri = playlist.spotify_uri
 
         # If it has a Spotify URI, store it in the blacklist setting

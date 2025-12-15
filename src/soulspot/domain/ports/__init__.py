@@ -1205,6 +1205,141 @@ class ISessionRepository(ABC):
 
 
 # =============================================================================
+# ENRICHMENT CANDIDATE REPOSITORY INTERFACE
+# =============================================================================
+# Hey future me - IEnrichmentCandidateRepository manages potential Spotify matches!
+# When enriching local library entities, we may find multiple Spotify matches.
+# This repo stores all candidates for user review. User picks correct one via UI.
+# =============================================================================
+
+
+class IEnrichmentCandidateRepository(ABC):
+    """Repository interface for EnrichmentCandidate entities."""
+
+    @abstractmethod
+    async def add(self, candidate: Any) -> None:
+        """Add a new enrichment candidate."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, candidate_id: str) -> Any | None:
+        """Get a candidate by ID."""
+        pass
+
+    @abstractmethod
+    async def get_by_entity(
+        self, entity_type: str, entity_id: str
+    ) -> list[Any]:
+        """Get all candidates for a specific entity (artist/album)."""
+        pass
+
+    @abstractmethod
+    async def get_pending_for_entity(
+        self, entity_type: str, entity_id: str
+    ) -> list[Any]:
+        """Get unreviewed candidates for an entity (not selected/rejected)."""
+        pass
+
+    @abstractmethod
+    async def get_pending_count(self) -> int:
+        """Get count of candidates awaiting review."""
+        pass
+
+    @abstractmethod
+    async def update(self, candidate: Any) -> None:
+        """Update an existing candidate."""
+        pass
+
+    @abstractmethod
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a candidate by ID."""
+        pass
+
+    @abstractmethod
+    async def delete_for_entity(self, entity_type: str, entity_id: str) -> int:
+        """Delete all candidates for an entity. Returns count deleted."""
+        pass
+
+    @abstractmethod
+    async def mark_selected(self, candidate_id: str) -> None:
+        """Mark a candidate as selected (and reject others for same entity)."""
+        pass
+
+    @abstractmethod
+    async def mark_rejected(self, candidate_id: str) -> None:
+        """Mark a candidate as rejected."""
+        pass
+
+
+# =============================================================================
+# DUPLICATE CANDIDATE REPOSITORY INTERFACE
+# =============================================================================
+# Hey future me - IDuplicateCandidateRepository manages potential duplicate tracks!
+# DuplicateDetectorWorker finds tracks that might be duplicates and stores them here.
+# User reviews in UI and decides: keep one, keep both, or merge metadata.
+# =============================================================================
+
+
+class IDuplicateCandidateRepository(ABC):
+    """Repository interface for DuplicateCandidate entities."""
+
+    @abstractmethod
+    async def add(self, candidate: Any) -> None:
+        """Add a new duplicate candidate."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, candidate_id: str) -> Any | None:
+        """Get a candidate by ID."""
+        pass
+
+    @abstractmethod
+    async def exists(self, track_id_1: str, track_id_2: str) -> bool:
+        """Check if a duplicate pair already exists (in either order)."""
+        pass
+
+    @abstractmethod
+    async def list_pending(self, limit: int = 100) -> list[Any]:
+        """List pending duplicate candidates for review."""
+        pass
+
+    @abstractmethod
+    async def list_by_status(self, status: str, limit: int = 100) -> list[Any]:
+        """List candidates by status."""
+        pass
+
+    @abstractmethod
+    async def count_by_status(self) -> dict[str, int]:
+        """Get count of candidates per status."""
+        pass
+
+    @abstractmethod
+    async def update(self, candidate: Any) -> None:
+        """Update an existing candidate."""
+        pass
+
+    @abstractmethod
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a candidate by ID."""
+        pass
+
+    @abstractmethod
+    async def confirm(self, candidate_id: str) -> None:
+        """Mark candidate as confirmed duplicate."""
+        pass
+
+    @abstractmethod
+    async def dismiss(self, candidate_id: str) -> None:
+        """Mark candidate as dismissed (not a duplicate)."""
+        pass
+
+    @abstractmethod
+    async def resolve(self, candidate_id: str, action: str) -> None:
+        """Resolve a duplicate with specific action (keep_first, keep_second, etc.)."""
+        pass
+
+
+# =============================================================================
 # MULTI-SERVICE CLIENT INTERFACES (Future: Deezer, Tidal)
 # =============================================================================
 # Hey future me - these are STUB interfaces for future Deezer/Tidal integration!

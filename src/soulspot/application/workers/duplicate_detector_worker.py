@@ -632,38 +632,39 @@ class DuplicateDetectorWorker:
             similarity_score: Similarity score 0.0-1.0
             match_type: Detection method (metadata-hash, fingerprint, etc)
         """
-        from sqlalchemy import insert
+        # Hey future me - NOW we use DuplicateCandidateRepository! Clean Architecture.
+        from uuid import uuid4
 
-        from soulspot.infrastructure.persistence.models import DuplicateCandidateModel
+        from soulspot.domain.entities import (
+            DuplicateCandidate,
+            DuplicateCandidateStatus,
+            DuplicateMatchType,
+        )
+        from soulspot.infrastructure.persistence.repositories import (
+            DuplicateCandidateRepository,
+        )
+
+        repo = DuplicateCandidateRepository(session)
 
         # Ensure consistent ordering (smaller ID first)
         if track_id_1 > track_id_2:
             track_id_1, track_id_2 = track_id_2, track_id_1
 
         # Check if this pair already exists
-        from sqlalchemy import and_, select
-
-        existing = await session.execute(
-            select(DuplicateCandidateModel).where(
-                and_(
-                    DuplicateCandidateModel.track_id_1 == track_id_1,
-                    DuplicateCandidateModel.track_id_2 == track_id_2,
-                )
-            )
-        )
-        if existing.scalar_one_or_none():
+        if await repo.exists(track_id_1, track_id_2):
             return  # Already exists
 
-        # Insert new candidate
-        # Note: DB stores similarity as 0-100 int, we use 0.0-1.0 float
-        stmt = insert(DuplicateCandidateModel).values(
+        # Create candidate entity
+        # Note: similarity_score is 0.0-1.0, but entity expects 0-100 int
+        candidate = DuplicateCandidate(
+            id=str(uuid4()),
             track_id_1=track_id_1,
             track_id_2=track_id_2,
             similarity_score=int(similarity_score * 100),  # Convert to 0-100
-            match_type=match_type,
-            status="pending",
+            match_type=DuplicateMatchType(match_type),
+            status=DuplicateCandidateStatus.PENDING,
         )
-        await session.execute(stmt)
+        await repo.add(candidate)
 
     async def trigger_scan_now(self) -> str:
         """Manually trigger a duplicate scan.

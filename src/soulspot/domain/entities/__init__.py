@@ -835,6 +835,127 @@ class QualityUpgradeCandidate:
         self.updated_at = datetime.now(UTC)
 
 
+# Hey future me - EnrichmentCandidate tracks potential Spotify matches for local library entities!
+# When enriching local artists/albums, we may find multiple Spotify matches (e.g., "Queen" could be
+# the legendary UK rock band OR some random tribute band). We store all candidates here for user review.
+# User picks the correct one via UI, we apply that match. Never auto-match ambiguous entities!
+class EnrichmentEntityType(str, Enum):
+    """Type of entity being enriched."""
+
+    ARTIST = "artist"
+    ALBUM = "album"
+
+
+@dataclass
+class EnrichmentCandidate:
+    """Potential Spotify match for a local library entity.
+
+    Stores candidates when enrichment finds multiple possible matches
+    so users can review and select the correct one.
+    """
+
+    id: str
+    entity_type: EnrichmentEntityType
+    entity_id: str  # FK to soulspot_artists or soulspot_albums (polymorphic)
+    spotify_uri: str  # spotify:artist:XXXXX or spotify:album:XXXXX
+    spotify_name: str  # Name from Spotify (for display in UI)
+    spotify_image_url: str | None = None  # Image URL from Spotify (for preview)
+    confidence_score: float = 0.0  # 0.0-1.0 (higher = better match)
+    is_selected: bool = False  # User selected this candidate as correct
+    is_rejected: bool = False  # User explicitly rejected this candidate
+    extra_info: dict | None = None  # Additional info (genres, followers, etc.)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate enrichment candidate data."""
+        if self.confidence_score < 0.0 or self.confidence_score > 1.0:
+            raise ValueError("Confidence score must be between 0.0 and 1.0")
+
+    def select(self) -> None:
+        """Mark this candidate as the selected match."""
+        self.is_selected = True
+        self.is_rejected = False
+        self.updated_at = datetime.now(UTC)
+
+    def reject(self) -> None:
+        """Mark this candidate as rejected."""
+        self.is_selected = False
+        self.is_rejected = True
+        self.updated_at = datetime.now(UTC)
+
+
+# Hey future me - DuplicateCandidateStatus tracks the review status of potential duplicates!
+# The worker finds candidates, user reviews them, and decides what to do.
+class DuplicateCandidateStatus(str, Enum):
+    """Status of a duplicate candidate review."""
+
+    PENDING = "pending"  # Awaiting user review
+    CONFIRMED = "confirmed"  # User confirmed these are duplicates
+    DISMISSED = "dismissed"  # User dismissed (not duplicates)
+    AUTO_RESOLVED = "auto_resolved"  # System auto-resolved
+
+
+class DuplicateMatchType(str, Enum):
+    """How the duplicate was detected."""
+
+    METADATA = "metadata"  # Same artist+title, similar duration
+    FINGERPRINT = "fingerprint"  # Audio fingerprint match (future)
+
+
+class DuplicateResolutionAction(str, Enum):
+    """What user did to resolve the duplicate."""
+
+    KEEP_FIRST = "keep_first"  # Keep track 1, delete track 2
+    KEEP_SECOND = "keep_second"  # Keep track 2, delete track 1
+    KEEP_BOTH = "keep_both"  # Keep both (not actually duplicates)
+    MERGED = "merged"  # Merged metadata from both
+
+
+@dataclass
+class DuplicateCandidate:
+    """Potential duplicate track pair for review.
+
+    DuplicateDetectorWorker populates these. Users review in UI
+    and decide what to do (keep one, keep both, merge metadata, etc.).
+    """
+
+    id: str
+    track_id_1: str  # FK to soulspot_tracks
+    track_id_2: str  # FK to soulspot_tracks
+    similarity_score: int  # 0-100 (100 = definitely same track)
+    match_type: DuplicateMatchType = DuplicateMatchType.METADATA
+    status: DuplicateCandidateStatus = DuplicateCandidateStatus.PENDING
+    match_details: str | None = None  # JSON with match details
+    resolution_action: DuplicateResolutionAction | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    reviewed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Validate duplicate candidate data."""
+        if self.similarity_score < 0 or self.similarity_score > 100:
+            raise ValueError("Similarity score must be between 0 and 100")
+        # Ensure track_id_1 < track_id_2 to avoid duplicate pairs (A,B) and (B,A)
+        if self.track_id_1 >= self.track_id_2:
+            raise ValueError("track_id_1 must be less than track_id_2")
+
+    def confirm(self) -> None:
+        """Confirm these tracks are duplicates."""
+        self.status = DuplicateCandidateStatus.CONFIRMED
+        self.reviewed_at = datetime.now(UTC)
+
+    def dismiss(self) -> None:
+        """Dismiss - these are not duplicates."""
+        self.status = DuplicateCandidateStatus.DISMISSED
+        self.reviewed_at = datetime.now(UTC)
+
+    def resolve(self, action: DuplicateResolutionAction) -> None:
+        """Resolve with a specific action."""
+        self.status = DuplicateCandidateStatus.CONFIRMED
+        self.resolution_action = action
+        self.reviewed_at = datetime.now(UTC)
+
+
 # Import download manager entities for re-export
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
@@ -859,6 +980,13 @@ __all__ = [
     "FilterRule",
     "AutomationRule",
     "QualityUpgradeCandidate",
+    # NEW: Enrichment and Duplicate entities
+    "EnrichmentCandidate",
+    "EnrichmentEntityType",
+    "DuplicateCandidate",
+    "DuplicateCandidateStatus",
+    "DuplicateMatchType",
+    "DuplicateResolutionAction",
     # Download Manager entities
     "DownloadProgress",
     "DownloadProvider",
@@ -878,4 +1006,5 @@ __all__ = [
     "AutomationTrigger",
     "AutomationAction",
     "ProviderMode",
+    "ArtistSource",
 ]

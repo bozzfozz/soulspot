@@ -230,6 +230,13 @@ class LocalLibraryEnrichmentService:
         # Repositories
         self._artist_repo = ArtistRepository(session)
         self._album_repo = AlbumRepository(session)
+        # Hey future me - EnrichmentCandidateRepository manages ambiguous matches!
+        # Import moved to top of file to avoid circular imports
+        from soulspot.infrastructure.persistence.repositories import (
+            EnrichmentCandidateRepository,
+        )
+
+        self._enrichment_candidate_repo = EnrichmentCandidateRepository(session)
 
         # Services
         self._settings_service = AppSettingsService(session)
@@ -1365,30 +1372,30 @@ class LocalLibraryEnrichmentService:
 
         Args:
             artist: Artist entity
-            candidates: List of EnrichmentCandidate
+            candidates: List of EnrichmentCandidate (service DTO)
 
         Returns:
             Number of candidates stored
         """
-        from soulspot.infrastructure.persistence.models import EnrichmentCandidateModel
+        # Hey future me - EnrichmentCandidate (service DTO) gets converted to domain entity!
+        from soulspot.domain.entities import (
+            EnrichmentCandidate as EnrichmentCandidateEntity,
+        )
+        from soulspot.domain.entities import EnrichmentEntityType
 
         stored = 0
         for candidate in candidates[:5]:  # Store top 5 max
-            model = EnrichmentCandidateModel(
+            entity = EnrichmentCandidateEntity(
                 id=str(uuid4()),
-                entity_type="artist",
+                entity_type=EnrichmentEntityType.ARTIST,
                 entity_id=str(artist.id.value),
                 spotify_uri=candidate.spotify_uri,
                 spotify_name=candidate.spotify_name,
                 spotify_image_url=candidate.spotify_image_url,
                 confidence_score=candidate.confidence_score,
                 extra_info=candidate.extra_info,
-                is_selected=False,
-                is_rejected=False,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
             )
-            self._session.add(model)
+            await self._enrichment_candidate_repo.add(entity)
             stored += 1
 
         logger.debug(f"Stored {stored} candidates for artist '{artist.name}'")
@@ -2536,25 +2543,25 @@ class LocalLibraryEnrichmentService:
         candidates: list[EnrichmentCandidate],
     ) -> int:
         """Store album candidates for user review."""
-        from soulspot.infrastructure.persistence.models import EnrichmentCandidateModel
+        # Hey future me - same pattern as _store_artist_candidates()!
+        from soulspot.domain.entities import (
+            EnrichmentCandidate as EnrichmentCandidateEntity,
+        )
+        from soulspot.domain.entities import EnrichmentEntityType
 
         stored = 0
         for candidate in candidates[:5]:
-            model = EnrichmentCandidateModel(
+            entity = EnrichmentCandidateEntity(
                 id=str(uuid4()),
-                entity_type="album",
+                entity_type=EnrichmentEntityType.ALBUM,
                 entity_id=str(album.id.value),
                 spotify_uri=candidate.spotify_uri,
                 spotify_name=candidate.spotify_name,
                 spotify_image_url=candidate.spotify_image_url,
                 confidence_score=candidate.confidence_score,
                 extra_info=candidate.extra_info,
-                is_selected=False,
-                is_rejected=False,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
             )
-            self._session.add(model)
+            await self._enrichment_candidate_repo.add(entity)
             stored += 1
 
         logger.debug(f"Stored {stored} candidates for album '{album.title}'")
@@ -2570,20 +2577,11 @@ class LocalLibraryEnrichmentService:
         Returns:
             Dict with unenriched counts and pending candidates
         """
-        from sqlalchemy import func
-
-        from soulspot.infrastructure.persistence.models import EnrichmentCandidateModel
-
         artists_unenriched = await self._artist_repo.count_unenriched()
         albums_unenriched = await self._album_repo.count_unenriched()
 
-        # Count pending candidates
-        stmt = select(func.count(EnrichmentCandidateModel.id)).where(
-            EnrichmentCandidateModel.is_selected == False,  # noqa: E712
-            EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
-        )
-        result = await self._session.execute(stmt)
-        pending_candidates = result.scalar() or 0
+        # Count pending candidates via Repository
+        pending_candidates = await self._enrichment_candidate_repo.get_pending_count()
 
         return {
             "artists_unenriched": artists_unenriched,

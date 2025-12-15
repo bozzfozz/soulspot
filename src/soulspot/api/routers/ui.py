@@ -894,32 +894,28 @@ async def library_stats_partial(
 
     Hey future me - this endpoint returns the stats cards HTML for refresh!
     Used by HTMX to update stats without full page reload after scans.
+    NOW uses StatsService! Clean Architecture.
     """
     from sqlalchemy import func, select
 
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
-        TrackModel,
-    )
+    from soulspot.application.services.stats_service import StatsService
+    from soulspot.infrastructure.persistence.models import TrackModel
 
-    # Hey future me - After Unified Library (2025-12), we count ALL entities in DB!
-    # Artists/Albums/Tracks show TOTAL count, "Local Files" shows tracks with file_path.
-    
-    # Count ALL tracks in DB
-    total_tracks = (await session.execute(select(func.count(TrackModel.id)))).scalar() or 0
-    
-    # Count tracks WITH local files
-    tracks_with_files = (await session.execute(
-        select(func.count(TrackModel.id)).where(TrackModel.file_path.isnot(None))
-    )).scalar() or 0
-    
-    # Count ALL artists in DB
-    total_artists = (await session.execute(select(func.count(ArtistModel.id)))).scalar() or 0
-    
-    # Count ALL albums in DB
-    total_albums = (await session.execute(select(func.count(AlbumModel.id)))).scalar() or 0
+    stats_service = StatsService(session)
 
+    # Basic counts via StatsService
+    total_tracks = await stats_service.get_total_tracks()
+    total_artists = await stats_service.get_total_artists()
+    total_albums = await stats_service.get_total_albums()
+
+    # Tracks with local files (custom query - not in StatsService yet)
+    tracks_with_files = (
+        await session.execute(
+            select(func.count(TrackModel.id)).where(TrackModel.file_path.isnot(None))
+        )
+    ).scalar() or 0
+
+    # Broken tracks (custom query - not in StatsService yet)
     broken_stmt = select(func.count(TrackModel.id)).where(
         TrackModel.file_path.isnot(None),
         TrackModel.is_broken == True,  # noqa: E712

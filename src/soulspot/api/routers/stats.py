@@ -74,65 +74,26 @@ async def get_stats_with_trends(
     Returns:
         Current stats and optional trend data
     """
-    from soulspot.infrastructure.persistence.models import (
-        DownloadModel,
-        PlaylistModel,
-        PlaylistTrackModel,
-        TrackModel,
-    )
+    # Hey future me - NOW fully uses StatsService! Clean Architecture.
+    from soulspot.application.services.stats_service import StatsService
+    from soulspot.infrastructure.persistence.models import DownloadModel, PlaylistModel
     from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
+
+    stats_service = StatsService(db)
 
     now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday_start = today_start - timedelta(days=1)
     week_ago = now - timedelta(days=7)
 
-    # === Current Counts ===
-
-    # Playlists
-    playlists_stmt = select(func.count(PlaylistModel.id))
-    playlists_result = await db.execute(playlists_stmt)
-    playlist_count = playlists_result.scalar() or 0
-
-    # Total tracks in playlists
-    total_tracks_stmt = select(func.count(func.distinct(PlaylistTrackModel.track_id)))
-    total_tracks_result = await db.execute(total_tracks_stmt)
-    total_tracks = total_tracks_result.scalar() or 0
-
-    # Downloaded tracks
-    tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
-    )
-    tracks_result = await db.execute(tracks_with_files_stmt)
-    tracks_downloaded = tracks_result.scalar() or 0
-
-    # Completed downloads
-    completed_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "completed"
-    )
-    completed_result = await db.execute(completed_stmt)
-    completed_downloads = completed_result.scalar() or 0
-
-    # Failed downloads (need attention!)
-    failed_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "failed"
-    )
-    failed_result = await db.execute(failed_stmt)
-    failed_downloads = failed_result.scalar() or 0
-
-    # Queue size (pending + queued + downloading)
-    queue_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status.in_(["pending", "queued", "downloading"])
-    )
-    queue_result = await db.execute(queue_stmt)
-    queue_size = queue_result.scalar() or 0
-
-    # Active downloads
-    active_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "downloading"
-    )
-    active_result = await db.execute(active_stmt)
-    active_downloads = active_result.scalar() or 0
+    # === Current Counts via StatsService ===
+    playlist_count = await stats_service.get_total_playlists()
+    total_tracks = await stats_service.get_distinct_playlist_tracks_count()
+    tracks_downloaded = await stats_service.get_tracks_with_files()
+    completed_downloads = await stats_service.get_completed_downloads_count()
+    failed_downloads = await stats_service.get_failed_downloads_count()
+    queue_size = await stats_service.get_queue_size()
+    active_downloads = await stats_service.get_active_downloads_count()
 
     # Spotify stats
     spotify_repo = SpotifyBrowseRepository(db)
@@ -300,37 +261,16 @@ async def get_quick_stats(
     Returns:
         Current download stats
     """
-    from soulspot.infrastructure.persistence.models import DownloadModel
+    # Hey future me - NOW uses StatsService! Clean Architecture.
+    from soulspot.application.services.stats_service import StatsService
 
+    stats_service = StatsService(db)
     now = datetime.now(UTC)
 
-    # Completed
-    completed_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "completed"
-    )
-    completed_result = await db.execute(completed_stmt)
-    completed = completed_result.scalar() or 0
-
-    # Failed
-    failed_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "failed"
-    )
-    failed_result = await db.execute(failed_stmt)
-    failed = failed_result.scalar() or 0
-
-    # Queue
-    queue_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status.in_(["pending", "queued", "downloading"])
-    )
-    queue_result = await db.execute(queue_stmt)
-    queue_size = queue_result.scalar() or 0
-
-    # Active
-    active_stmt = select(func.count(DownloadModel.id)).where(
-        DownloadModel.status == "downloading"
-    )
-    active_result = await db.execute(active_stmt)
-    active = active_result.scalar() or 0
+    completed = await stats_service.get_completed_downloads_count()
+    failed = await stats_service.get_failed_downloads_count()
+    queue_size = await stats_service.get_queue_size()
+    active = await stats_service.get_active_downloads_count()
 
     return QuickStats(
         downloads_completed=completed,

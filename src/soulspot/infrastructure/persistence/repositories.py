@@ -3233,6 +3233,482 @@ class QualityUpgradeCandidateRepository(IQualityUpgradeCandidateRepository):
         ]
 
 
+# =============================================================================
+# ENRICHMENT CANDIDATE REPOSITORY
+# =============================================================================
+# Hey future me - EnrichmentCandidateRepository stores potential Spotify matches!
+# When enriching local artists/albums, we may find multiple Spotify matches.
+# This repo stores all candidates for user review. User picks correct one via UI.
+# =============================================================================
+
+
+class EnrichmentCandidateRepository:
+    """SQLAlchemy implementation of Enrichment Candidate repository.
+
+    Manages potential Spotify matches for local library entities (artists/albums).
+    Users review candidates in UI and select the correct match.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, candidate: Any) -> None:
+        """Add a new enrichment candidate."""
+        from soulspot.domain.entities import EnrichmentCandidate
+
+        from .models import EnrichmentCandidateModel
+
+        model = EnrichmentCandidateModel(
+            id=candidate.id,
+            entity_type=candidate.entity_type.value,
+            entity_id=candidate.entity_id,
+            spotify_uri=candidate.spotify_uri,
+            spotify_name=candidate.spotify_name,
+            spotify_image_url=candidate.spotify_image_url,
+            confidence_score=candidate.confidence_score,
+            is_selected=candidate.is_selected,
+            is_rejected=candidate.is_rejected,
+            extra_info=candidate.extra_info,
+            created_at=candidate.created_at,
+            updated_at=candidate.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, candidate_id: str) -> Any | None:
+        """Get an enrichment candidate by ID."""
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
+        from .models import EnrichmentCandidateModel
+
+        stmt = select(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return EnrichmentCandidate(
+            id=model.id,
+            entity_type=EnrichmentEntityType(model.entity_type),
+            entity_id=model.entity_id,
+            spotify_uri=model.spotify_uri,
+            spotify_name=model.spotify_name,
+            spotify_image_url=model.spotify_image_url,
+            confidence_score=model.confidence_score,
+            is_selected=model.is_selected,
+            is_rejected=model.is_rejected,
+            extra_info=model.extra_info,
+            created_at=ensure_utc_aware(model.created_at),
+            updated_at=ensure_utc_aware(model.updated_at),
+        )
+
+    async def get_by_entity(self, entity_type: str, entity_id: str) -> list[Any]:
+        """Get all candidates for a specific entity (artist/album)."""
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
+        from .models import EnrichmentCandidateModel
+
+        stmt = (
+            select(EnrichmentCandidateModel)
+            .where(
+                EnrichmentCandidateModel.entity_type == entity_type,
+                EnrichmentCandidateModel.entity_id == entity_id,
+            )
+            .order_by(EnrichmentCandidateModel.confidence_score.desc())
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            EnrichmentCandidate(
+                id=model.id,
+                entity_type=EnrichmentEntityType(model.entity_type),
+                entity_id=model.entity_id,
+                spotify_uri=model.spotify_uri,
+                spotify_name=model.spotify_name,
+                spotify_image_url=model.spotify_image_url,
+                confidence_score=model.confidence_score,
+                is_selected=model.is_selected,
+                is_rejected=model.is_rejected,
+                extra_info=model.extra_info,
+                created_at=ensure_utc_aware(model.created_at),
+                updated_at=ensure_utc_aware(model.updated_at),
+            )
+            for model in models
+        ]
+
+    async def get_pending_for_entity(
+        self, entity_type: str, entity_id: str
+    ) -> list[Any]:
+        """Get unreviewed candidates for an entity (not selected/rejected)."""
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
+        from .models import EnrichmentCandidateModel
+
+        stmt = (
+            select(EnrichmentCandidateModel)
+            .where(
+                EnrichmentCandidateModel.entity_type == entity_type,
+                EnrichmentCandidateModel.entity_id == entity_id,
+                EnrichmentCandidateModel.is_selected == False,  # noqa: E712
+                EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
+            )
+            .order_by(EnrichmentCandidateModel.confidence_score.desc())
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            EnrichmentCandidate(
+                id=model.id,
+                entity_type=EnrichmentEntityType(model.entity_type),
+                entity_id=model.entity_id,
+                spotify_uri=model.spotify_uri,
+                spotify_name=model.spotify_name,
+                spotify_image_url=model.spotify_image_url,
+                confidence_score=model.confidence_score,
+                is_selected=model.is_selected,
+                is_rejected=model.is_rejected,
+                extra_info=model.extra_info,
+                created_at=ensure_utc_aware(model.created_at),
+                updated_at=ensure_utc_aware(model.updated_at),
+            )
+            for model in models
+        ]
+
+    async def get_pending_count(self) -> int:
+        """Get count of candidates awaiting review."""
+        from .models import EnrichmentCandidateModel
+
+        stmt = select(func.count(EnrichmentCandidateModel.id)).where(
+            EnrichmentCandidateModel.is_selected == False,  # noqa: E712
+            EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def update(self, candidate: Any) -> None:
+        """Update an existing candidate."""
+        from .models import EnrichmentCandidateModel
+
+        stmt = select(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.id == candidate.id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("EnrichmentCandidate", candidate.id)
+
+        model.is_selected = candidate.is_selected
+        model.is_rejected = candidate.is_rejected
+        model.confidence_score = candidate.confidence_score
+        model.extra_info = candidate.extra_info
+        model.updated_at = candidate.updated_at
+
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a candidate by ID."""
+        from .models import EnrichmentCandidateModel
+
+        stmt = delete(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("EnrichmentCandidate", candidate_id)
+
+    async def delete_for_entity(self, entity_type: str, entity_id: str) -> int:
+        """Delete all candidates for an entity. Returns count deleted."""
+        from .models import EnrichmentCandidateModel
+
+        stmt = delete(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.entity_type == entity_type,
+            EnrichmentCandidateModel.entity_id == entity_id,
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined, no-any-return]
+
+    async def mark_selected(self, candidate_id: str) -> None:
+        """Mark a candidate as selected (and reject others for same entity)."""
+        from .models import EnrichmentCandidateModel
+
+        # First, get the candidate to find entity info
+        stmt = select(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        candidate = result.scalar_one_or_none()
+
+        if not candidate:
+            raise EntityNotFoundException("EnrichmentCandidate", candidate_id)
+
+        # Reject all other candidates for same entity
+        reject_stmt = (
+            update(EnrichmentCandidateModel)
+            .where(
+                EnrichmentCandidateModel.entity_type == candidate.entity_type,
+                EnrichmentCandidateModel.entity_id == candidate.entity_id,
+                EnrichmentCandidateModel.id != candidate_id,
+            )
+            .values(is_rejected=True, updated_at=datetime.now(UTC))
+        )
+        await self.session.execute(reject_stmt)
+
+        # Mark this candidate as selected
+        candidate.is_selected = True
+        candidate.is_rejected = False
+        candidate.updated_at = datetime.now(UTC)
+
+    async def mark_rejected(self, candidate_id: str) -> None:
+        """Mark a candidate as rejected."""
+        from .models import EnrichmentCandidateModel
+
+        stmt = (
+            update(EnrichmentCandidateModel)
+            .where(EnrichmentCandidateModel.id == candidate_id)
+            .values(is_rejected=True, updated_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("EnrichmentCandidate", candidate_id)
+
+
+# =============================================================================
+# DUPLICATE CANDIDATE REPOSITORY
+# =============================================================================
+# Hey future me - DuplicateCandidateRepository stores potential duplicate track pairs!
+# DuplicateDetectorWorker finds tracks that might be duplicates and stores them here.
+# User reviews in UI and decides: keep one, keep both, or merge metadata.
+# =============================================================================
+
+
+class DuplicateCandidateRepository:
+    """SQLAlchemy implementation of Duplicate Candidate repository.
+
+    Manages potential duplicate track pairs found by DuplicateDetectorWorker.
+    Users review candidates in UI and decide resolution action.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with session."""
+        self.session = session
+
+    async def add(self, candidate: Any) -> None:
+        """Add a new duplicate candidate."""
+        from soulspot.domain.entities import DuplicateCandidate
+
+        from .models import DuplicateCandidateModel
+
+        model = DuplicateCandidateModel(
+            id=candidate.id,
+            track_id_1=candidate.track_id_1,
+            track_id_2=candidate.track_id_2,
+            similarity_score=candidate.similarity_score,
+            match_type=candidate.match_type.value,
+            status=candidate.status.value,
+            match_details=candidate.match_details,
+            resolution_action=(
+                candidate.resolution_action.value
+                if candidate.resolution_action
+                else None
+            ),
+            created_at=candidate.created_at,
+            reviewed_at=candidate.reviewed_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, candidate_id: str) -> Any | None:
+        """Get a duplicate candidate by ID."""
+        from soulspot.domain.entities import (
+            DuplicateCandidate,
+            DuplicateCandidateStatus,
+            DuplicateMatchType,
+            DuplicateResolutionAction,
+        )
+
+        from .models import DuplicateCandidateModel
+
+        stmt = select(DuplicateCandidateModel).where(
+            DuplicateCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return DuplicateCandidate(
+            id=model.id,
+            track_id_1=model.track_id_1,
+            track_id_2=model.track_id_2,
+            similarity_score=model.similarity_score,
+            match_type=DuplicateMatchType(model.match_type),
+            status=DuplicateCandidateStatus(model.status),
+            match_details=model.match_details,
+            resolution_action=(
+                DuplicateResolutionAction(model.resolution_action)
+                if model.resolution_action
+                else None
+            ),
+            created_at=ensure_utc_aware(model.created_at),
+            reviewed_at=(
+                ensure_utc_aware(model.reviewed_at) if model.reviewed_at else None
+            ),
+        )
+
+    async def exists(self, track_id_1: str, track_id_2: str) -> bool:
+        """Check if a duplicate pair already exists (in either order)."""
+        from .models import DuplicateCandidateModel
+
+        # Ensure track_id_1 < track_id_2 for consistent lookups
+        id1, id2 = (track_id_1, track_id_2) if track_id_1 < track_id_2 else (track_id_2, track_id_1)
+
+        stmt = select(func.count(DuplicateCandidateModel.id)).where(
+            DuplicateCandidateModel.track_id_1 == id1,
+            DuplicateCandidateModel.track_id_2 == id2,
+        )
+        result = await self.session.execute(stmt)
+        return (result.scalar() or 0) > 0
+
+    async def list_pending(self, limit: int = 100) -> list[Any]:
+        """List pending duplicate candidates for review."""
+        return await self.list_by_status("pending", limit)
+
+    async def list_by_status(self, status: str, limit: int = 100) -> list[Any]:
+        """List candidates by status."""
+        from soulspot.domain.entities import (
+            DuplicateCandidate,
+            DuplicateCandidateStatus,
+            DuplicateMatchType,
+            DuplicateResolutionAction,
+        )
+
+        from .models import DuplicateCandidateModel
+
+        stmt = (
+            select(DuplicateCandidateModel)
+            .where(DuplicateCandidateModel.status == status)
+            .order_by(DuplicateCandidateModel.similarity_score.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            DuplicateCandidate(
+                id=model.id,
+                track_id_1=model.track_id_1,
+                track_id_2=model.track_id_2,
+                similarity_score=model.similarity_score,
+                match_type=DuplicateMatchType(model.match_type),
+                status=DuplicateCandidateStatus(model.status),
+                match_details=model.match_details,
+                resolution_action=(
+                    DuplicateResolutionAction(model.resolution_action)
+                    if model.resolution_action
+                    else None
+                ),
+                created_at=ensure_utc_aware(model.created_at),
+                reviewed_at=(
+                    ensure_utc_aware(model.reviewed_at) if model.reviewed_at else None
+                ),
+            )
+            for model in models
+        ]
+
+    async def count_by_status(self) -> dict[str, int]:
+        """Get count of candidates per status."""
+        from .models import DuplicateCandidateModel
+
+        stmt = select(
+            DuplicateCandidateModel.status,
+            func.count(DuplicateCandidateModel.id),
+        ).group_by(DuplicateCandidateModel.status)
+        result = await self.session.execute(stmt)
+        rows = result.all()
+
+        counts = {"pending": 0, "confirmed": 0, "dismissed": 0, "auto_resolved": 0}
+        for status, count in rows:
+            counts[status] = count
+        return counts
+
+    async def update(self, candidate: Any) -> None:
+        """Update an existing candidate."""
+        from .models import DuplicateCandidateModel
+
+        stmt = select(DuplicateCandidateModel).where(
+            DuplicateCandidateModel.id == candidate.id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise EntityNotFoundException("DuplicateCandidate", candidate.id)
+
+        model.status = candidate.status.value
+        model.resolution_action = (
+            candidate.resolution_action.value if candidate.resolution_action else None
+        )
+        model.reviewed_at = candidate.reviewed_at
+
+    async def delete(self, candidate_id: str) -> None:
+        """Delete a candidate by ID."""
+        from .models import DuplicateCandidateModel
+
+        stmt = delete(DuplicateCandidateModel).where(
+            DuplicateCandidateModel.id == candidate_id
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("DuplicateCandidate", candidate_id)
+
+    async def confirm(self, candidate_id: str) -> None:
+        """Mark candidate as confirmed duplicate."""
+        from .models import DuplicateCandidateModel
+
+        stmt = (
+            update(DuplicateCandidateModel)
+            .where(DuplicateCandidateModel.id == candidate_id)
+            .values(status="confirmed", reviewed_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("DuplicateCandidate", candidate_id)
+
+    async def dismiss(self, candidate_id: str) -> None:
+        """Mark candidate as dismissed (not a duplicate)."""
+        from .models import DuplicateCandidateModel
+
+        stmt = (
+            update(DuplicateCandidateModel)
+            .where(DuplicateCandidateModel.id == candidate_id)
+            .values(status="dismissed", reviewed_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("DuplicateCandidate", candidate_id)
+
+    async def resolve(self, candidate_id: str, action: str) -> None:
+        """Resolve a duplicate with specific action (keep_first, keep_second, etc.)."""
+        from .models import DuplicateCandidateModel
+
+        stmt = (
+            update(DuplicateCandidateModel)
+            .where(DuplicateCandidateModel.id == candidate_id)
+            .values(
+                status="confirmed",
+                resolution_action=action,
+                reviewed_at=datetime.now(UTC),
+            )
+        )
+        result = await self.session.execute(stmt)
+        if result.rowcount == 0:  # type: ignore[attr-defined]
+            raise EntityNotFoundException("DuplicateCandidate", candidate_id)
+
+
 # Hey future me, SessionRepository is THE fix for the Docker restart auth bug! It persists
 # sessions to SQLite instead of keeping them in-memory. Each method maps Session dataclass
 # (application layer) to SpotifySessionModel (ORM). The get() method refreshes last_accessed_at on

@@ -248,45 +248,16 @@ async def get_library_stats(
     Returns:
         Library statistics
     """
-    from sqlalchemy import func, select
+    # Hey future me - NOW uses StatsService! Clean Architecture.
+    from soulspot.application.services.stats_service import StatsService
 
-    from soulspot.infrastructure.persistence.models import (
-        FileDuplicateModel,
-        TrackModel,
-    )
+    stats_service = StatsService(session)
 
-    # Count total tracks
-    total_tracks_stmt = select(func.count(TrackModel.id))
-    total_tracks_result = await session.execute(total_tracks_stmt)
-    total_tracks = total_tracks_result.scalar() or 0
-
-    # Count tracks with files
-    tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
-    )
-    tracks_with_files_result = await session.execute(tracks_with_files_stmt)
-    tracks_with_files = tracks_with_files_result.scalar() or 0
-
-    # Count broken files
-    broken_files_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.is_broken == True  # noqa: E712
-    )
-    broken_files_result = await session.execute(broken_files_stmt)
-    broken_files = broken_files_result.scalar() or 0
-
-    # Count duplicate groups
-    duplicates_stmt = select(func.count(FileDuplicateModel.id)).where(
-        FileDuplicateModel.resolved == False  # noqa: E712
-    )
-    duplicates_result = await session.execute(duplicates_stmt)
-    duplicate_groups = duplicates_result.scalar() or 0
-
-    # Total file size
-    total_size_stmt = select(func.sum(TrackModel.file_size)).where(
-        TrackModel.file_size.isnot(None)
-    )
-    total_size_result = await session.execute(total_size_stmt)
-    total_size = total_size_result.scalar() or 0
+    total_tracks = await stats_service.get_total_tracks()
+    tracks_with_files = await stats_service.get_tracks_with_files()
+    broken_files = await stats_service.get_broken_files_count()
+    duplicate_groups = await stats_service.get_unresolved_duplicates_count()
+    total_size = await stats_service.get_total_file_size()
 
     return {
         "total_tracks": total_tracks,
@@ -862,91 +833,13 @@ async def clear_local_library(
     Returns:
         Statistics about deleted entities
     """
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
-        TrackModel,
+    # Hey future me - NOW uses LibraryCleanupService! Clean Architecture.
+    from soulspot.application.services.library_cleanup_service import (
+        LibraryCleanupService,
     )
 
-    stats = {
-        "deleted_tracks": 0,
-        "deleted_albums": 0,
-        "deleted_artists": 0,
-    }
-
-    logger.info(
-        "🗑️ Library Clear Started\n"
-        "├─ Operation: Clear local library\n"
-        "└─ Target: All tracks with file_path + orphaned albums/artists"
-    )
-
-    # Step 1: Delete all tracks that have a file_path (local imports)
-    # Tracks without file_path are from Spotify sync and should be kept
-    count_stmt = select(func.count(TrackModel.id)).where(
-        TrackModel.file_path.isnot(None)
-    )
-    count_result = await session.execute(count_stmt)
-    stats["deleted_tracks"] = count_result.scalar() or 0
-
-    if stats["deleted_tracks"] > 0:
-        delete_tracks_stmt = delete(TrackModel).where(TrackModel.file_path.isnot(None))
-        await session.execute(delete_tracks_stmt)
-        logger.info(
-            f"🗑️ Local Tracks Deleted\n"
-            f"└─ Count: {stats['deleted_tracks']} tracks"
-        )
-
-    # Step 2: Delete orphaned albums (albums with no remaining tracks)
-    orphan_albums_stmt = (
-        select(AlbumModel.id)
-        .outerjoin(TrackModel, AlbumModel.id == TrackModel.album_id)
-        .group_by(AlbumModel.id)
-        .having(func.count(TrackModel.id) == 0)
-    )
-    orphan_albums_result = await session.execute(orphan_albums_stmt)
-    orphan_album_ids = [row[0] for row in orphan_albums_result.all()]
-
-    if orphan_album_ids:
-        stats["deleted_albums"] = len(orphan_album_ids)
-        delete_albums_stmt = delete(AlbumModel).where(
-            AlbumModel.id.in_(orphan_album_ids)
-        )
-        await session.execute(delete_albums_stmt)
-        logger.info(
-            f"🗑️ Orphaned Albums Deleted\n"
-            f"└─ Count: {stats['deleted_albums']} albums"
-        )
-
-    # Step 3: Delete orphaned artists (artists with no tracks AND no albums)
-    orphan_artists_stmt = (
-        select(ArtistModel.id)
-        .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
-        .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
-        .group_by(ArtistModel.id)
-        .having((func.count(TrackModel.id) == 0) & (func.count(AlbumModel.id) == 0))
-    )
-    orphan_artists_result = await session.execute(orphan_artists_stmt)
-    orphan_artist_ids = [row[0] for row in orphan_artists_result.all()]
-
-    if orphan_artist_ids:
-        stats["deleted_artists"] = len(orphan_artist_ids)
-        delete_artists_stmt = delete(ArtistModel).where(
-            ArtistModel.id.in_(orphan_artist_ids)
-        )
-        await session.execute(delete_artists_stmt)
-        logger.info(
-            f"🗑️ Orphaned Artists Deleted\n"
-            f"└─ Count: {stats['deleted_artists']} artists"
-        )
-
-    await session.commit()
-
-    logger.info(
-        f"✅ Library Clear Completed\n"
-        f"├─ Tracks: {stats['deleted_tracks']}\n"
-        f"├─ Albums: {stats['deleted_albums']}\n"
-        f"└─ Artists: {stats['deleted_artists']}"
-    )
+    service = LibraryCleanupService(session)
+    stats = await service.clear_local_library()
 
     return {
         "success": True,
@@ -1016,89 +909,39 @@ async def list_duplicate_candidates(
     Returns:
         List of duplicate candidates with statistics
     """
-    from sqlalchemy import func, select
-    from sqlalchemy.orm import joinedload
+    # Hey future me - NOW uses DuplicateService! Clean Architecture.
+    from soulspot.application.services.duplicate_service import DuplicateService
 
-    from soulspot.infrastructure.persistence.models import (
-        DuplicateCandidateModel,
-        TrackModel,
-    )
+    service = DuplicateService(db)
+    result = await service.list_candidates(status, limit, offset)
 
-    # Build query
-    query = select(DuplicateCandidateModel)
-    if status:
-        query = query.where(DuplicateCandidateModel.status == status)
-    query = query.order_by(DuplicateCandidateModel.similarity_score.desc())
-    query = query.offset(offset).limit(limit)
-
-    result = await db.execute(query)
-    models = result.scalars().all()
-
-    # Get counts
-    count_query = select(
-        func.count()
-        .filter(DuplicateCandidateModel.status == "pending")
-        .label("pending"),
-        func.count()
-        .filter(DuplicateCandidateModel.status == "confirmed")
-        .label("confirmed"),
-        func.count()
-        .filter(DuplicateCandidateModel.status == "dismissed")
-        .label("dismissed"),
-        func.count().label("total"),
-    ).select_from(DuplicateCandidateModel)
-    count_result = await db.execute(count_query)
-    counts = count_result.one()
-
-    # Load track details for each candidate
-    candidates = []
-    for model in models:
-        # Get track 1 with artist relationship loaded
-        track_1_query = (
-            select(TrackModel)
-            .where(TrackModel.id == model.track_id_1)
-            .options(joinedload(TrackModel.artist))
+    # Convert to response format
+    candidates = [
+        DuplicateCandidate(
+            id=c["id"],
+            track_1_id=c["track_1"]["id"],
+            track_1_title=c["track_1"]["title"],
+            track_1_artist=c["track_1"]["artist"],
+            track_1_file_path=c["track_1"]["file_path"],
+            track_2_id=c["track_2"]["id"],
+            track_2_title=c["track_2"]["title"],
+            track_2_artist=c["track_2"]["artist"],
+            track_2_file_path=c["track_2"]["file_path"],
+            similarity_score=c["similarity_score"],
+            match_type=c["match_type"],
+            status=c["status"],
+            created_at=c["created_at"],
         )
-        track_1_result = await db.execute(track_1_query)
-        track_1 = track_1_result.unique().scalar_one_or_none()
+        for c in result["candidates"]
+    ]
 
-        # Get track 2 with artist relationship loaded
-        track_2_query = (
-            select(TrackModel)
-            .where(TrackModel.id == model.track_id_2)
-            .options(joinedload(TrackModel.artist))
-        )
-        track_2_result = await db.execute(track_2_query)
-        track_2 = track_2_result.unique().scalar_one_or_none()
-
-        candidates.append(
-            DuplicateCandidate(
-                id=model.id,
-                track_1_id=model.track_id_1,
-                track_1_title=track_1.title if track_1 else "Unknown",
-                track_1_artist=track_1.artist.name
-                if track_1 and track_1.artist
-                else "Unknown",
-                track_1_file_path=track_1.file_path if track_1 else None,
-                track_2_id=model.track_id_2,
-                track_2_title=track_2.title if track_2 else "Unknown",
-                track_2_artist=track_2.artist.name
-                if track_2 and track_2.artist
-                else "Unknown",
-                track_2_file_path=track_2.file_path if track_2 else None,
-                similarity_score=model.similarity_score,
-                match_type=model.match_type,
-                status=model.status,
-                created_at=model.created_at.isoformat(),
-            )
-        )
-
+    counts = result["counts"]
     return DuplicateCandidatesResponse(
         candidates=candidates,
-        total=counts.total,
-        pending_count=counts.pending,
-        confirmed_count=counts.confirmed,
-        dismissed_count=counts.dismissed,
+        total=result["total"],
+        pending_count=counts["pending"],
+        confirmed_count=counts["confirmed"],
+        dismissed_count=counts["dismissed"],
     )
 
 
@@ -1121,107 +964,21 @@ async def resolve_duplicate(
     Returns:
         Resolution result
     """
-    from datetime import UTC, datetime
+    # Hey future me - NOW uses DuplicateService! Clean Architecture.
+    from soulspot.application.services.duplicate_service import DuplicateService
 
-    from soulspot.infrastructure.persistence.models import DuplicateCandidateModel
+    service = DuplicateService(db)
 
-    # Get candidate
-    candidate = await db.get(DuplicateCandidateModel, candidate_id)
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    action = request.action.lower()
-    deleted_track_id: str | None = None
-
-    if action == "dismiss":
-        candidate.status = "dismissed"
-        candidate.resolution_action = "dismissed"
-    elif action == "keep_both":
-        candidate.status = "dismissed"
-        candidate.resolution_action = "keep_both"
-    elif action == "keep_first":
-        candidate.status = "confirmed"
-        candidate.resolution_action = "keep_first"
-        # Hey future me - delete track 2, keep track 1! We soft-delete by clearing file_path
-        # and marking track as deleted. Hard delete would break foreign key references.
-        # The actual file gets deleted via orphan cleanup worker later.
-        deleted_track_id = candidate.track_id_2
-        from soulspot.infrastructure.persistence.models import TrackModel
-
-        track_to_delete = await db.get(TrackModel, candidate.track_id_2)
-        if track_to_delete and track_to_delete.file_path:
-            import os
-
-            try:
-                if os.path.exists(track_to_delete.file_path):
-                    os.remove(track_to_delete.file_path)
-                    logger.info(
-                        LogMessages.file_imported(
-                            path=track_to_delete.file_path,
-                            track_name="<duplicate>",
-                            artist="<various>"
-                        ).format().replace("File Imported", "Duplicate File Deleted (Track 2)")
-                    )
-            except OSError as e:
-                logger.warning(
-                    LogMessages.file_operation_failed(
-                        operation="delete",
-                        path=track_to_delete.file_path,
-                        reason=str(e),
-                        hint="File may already be deleted or locked by another process"
-                    ).format(),
-                    exc_info=e
-                )
-            track_to_delete.file_path = None  # Mark as deleted
-    elif action == "keep_second":
-        candidate.status = "confirmed"
-        candidate.resolution_action = "keep_second"
-        # Hey future me - delete track 1, keep track 2! Same soft-delete strategy.
-        deleted_track_id = candidate.track_id_1
-        from soulspot.infrastructure.persistence.models import TrackModel
-
-        track_to_delete = await db.get(TrackModel, candidate.track_id_1)
-        if track_to_delete and track_to_delete.file_path:
-            import os
-
-            try:
-                if os.path.exists(track_to_delete.file_path):
-                    os.remove(track_to_delete.file_path)
-                    logger.info(
-                        LogMessages.file_imported(
-                            path=track_to_delete.file_path,
-                            track_name="<duplicate>",
-                            artist="<various>"
-                        ).format().replace("File Imported", "Duplicate File Deleted (Track 1)")
-                    )
-            except OSError as e:
-                logger.warning(
-                    LogMessages.file_operation_failed(
-                        operation="delete",
-                        path=track_to_delete.file_path,
-                        reason=str(e),
-                        hint="File may already be deleted or locked by another process"
-                    ).format(),
-                    exc_info=e
-                )
-            track_to_delete.file_path = None  # Mark as deleted
-    else:
-        raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
-
-    candidate.reviewed_at = datetime.now(UTC)
-    await db.commit()
-
-    response = {
-        "candidate_id": candidate_id,
-        "action": action,
-        "status": candidate.status,
-        "message": f"Duplicate resolved with action: {action}",
-    }
-    if deleted_track_id:
-        response["deleted_track_id"] = deleted_track_id
-        response["message"] += f" (deleted track: {deleted_track_id})"
-
-    return response
+    try:
+        result = await service.resolve_candidate(candidate_id, request.action)
+        return {
+            "candidate_id": candidate_id,
+            "action": request.action,
+            "message": f"Duplicate resolved with action: {request.action}",
+            "deleted_track_id": result.get("deleted_track_id"),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e) else 400, detail=str(e))
 
 
 # Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.
@@ -1746,57 +1503,14 @@ async def get_enrichment_status(
     - is_running: True if enrichment job is currently running
     - last_job_completed: True if last job succeeded, False if failed, None if no jobs
     """
-    from sqlalchemy import func, select
-
+    # Hey future me - NOW uses EnrichmentService! Clean Architecture.
+    from soulspot.application.services.enrichment_service import EnrichmentService
     from soulspot.application.workers.job_queue import JobStatus, JobType
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
-        EnrichmentCandidateModel,
-        TrackModel,
-    )
 
-    # Count unenriched artists (with local tracks)
-    has_local_artist_tracks = (
-        select(TrackModel.id)
-        .where(TrackModel.artist_id == ArtistModel.id)
-        .where(TrackModel.file_path.isnot(None))
-        .exists()
-    )
-    artists_stmt = (
-        select(func.count(ArtistModel.id))
-        .where(ArtistModel.spotify_uri.is_(None))
-        .where(has_local_artist_tracks)
-    )
-    artists_result = await db.execute(artists_stmt)
-    artists_unenriched = artists_result.scalar() or 0
+    service = EnrichmentService(db)
+    status_dto = await service.get_enrichment_status()
 
-    # Count unenriched albums (with local tracks)
-    has_local_album_tracks = (
-        select(TrackModel.id)
-        .where(TrackModel.album_id == AlbumModel.id)
-        .where(TrackModel.file_path.isnot(None))
-        .exists()
-    )
-    albums_stmt = (
-        select(func.count(AlbumModel.id))
-        .where(AlbumModel.spotify_uri.is_(None))
-        .where(has_local_album_tracks)
-    )
-    albums_result = await db.execute(albums_stmt)
-    albums_unenriched = albums_result.scalar() or 0
-
-    # Count pending candidates
-    candidates_stmt = select(func.count(EnrichmentCandidateModel.id)).where(
-        EnrichmentCandidateModel.is_selected == False,  # noqa: E712
-        EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
-    )
-    candidates_result = await db.execute(candidates_stmt)
-    pending_candidates = candidates_result.scalar() or 0
-
-    # Hey future me - check if an enrichment job is currently running!
-    # This prevents the UI from showing "Complete!" while job is still in progress
-    # AND stops polling when job fails (not just when unenriched=0)
+    # Check job queue status
     is_running = False
     last_job_completed: bool | None = None
 
@@ -1815,10 +1529,10 @@ async def get_enrichment_status(
             last_job_completed = False
 
     return EnrichmentStatusResponse(
-        artists_unenriched=artists_unenriched,
-        albums_unenriched=albums_unenriched,
-        pending_candidates=pending_candidates,
-        is_enrichment_needed=(artists_unenriched + albums_unenriched) > 0,
+        artists_unenriched=status_dto.artists_unenriched,
+        albums_unenriched=status_dto.albums_unenriched,
+        pending_candidates=status_dto.pending_candidates,
+        is_enrichment_needed=status_dto.is_enrichment_needed,
         is_running=is_running,
         last_job_completed=last_job_completed,
     )
@@ -1913,72 +1627,31 @@ async def get_enrichment_candidates(
     Returns candidates where multiple Spotify matches were found
     and user needs to select the correct one.
     """
-    from sqlalchemy import func, select
+    # Hey future me - NOW uses EnrichmentService! Clean Architecture.
+    from soulspot.application.services.enrichment_service import EnrichmentService
 
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
-        EnrichmentCandidateModel,
+    service = EnrichmentService(db)
+    dtos, total = await service.list_candidates(
+        entity_type=entity_type,
+        limit=limit,
+        offset=offset,
     )
 
-    # Build query for pending candidates
-    stmt = (
-        select(EnrichmentCandidateModel)
-        .where(EnrichmentCandidateModel.is_selected == False)  # noqa: E712
-        .where(EnrichmentCandidateModel.is_rejected == False)  # noqa: E712
-        .order_by(EnrichmentCandidateModel.confidence_score.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-
-    if entity_type:
-        stmt = stmt.where(EnrichmentCandidateModel.entity_type == entity_type)
-
-    result = await db.execute(stmt)
-    candidates = result.scalars().all()
-
-    # Count total
-    count_stmt = select(func.count(EnrichmentCandidateModel.id)).where(
-        EnrichmentCandidateModel.is_selected == False,  # noqa: E712
-        EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
-    )
-    if entity_type:
-        count_stmt = count_stmt.where(
-            EnrichmentCandidateModel.entity_type == entity_type
+    # Convert DTOs to response models
+    response_candidates = [
+        EnrichmentCandidateResponse(
+            id=dto.id,
+            entity_type=dto.entity_type,
+            entity_id=dto.entity_id,
+            entity_name=dto.entity_name,
+            spotify_uri=dto.spotify_uri,
+            spotify_name=dto.spotify_name,
+            spotify_image_url=dto.spotify_image_url,
+            confidence_score=dto.confidence_score,
+            extra_info=dto.extra_info,
         )
-
-    count_result = await db.execute(count_stmt)
-    total = count_result.scalar() or 0
-
-    # Get entity names for display
-    response_candidates = []
-    for candidate in candidates:
-        # Get entity name
-        if candidate.entity_type == "artist":
-            entity_stmt = select(ArtistModel.name).where(
-                ArtistModel.id == candidate.entity_id
-            )
-        else:
-            entity_stmt = select(AlbumModel.title).where(
-                AlbumModel.id == candidate.entity_id
-            )
-
-        entity_result = await db.execute(entity_stmt)
-        entity_name = entity_result.scalar() or "Unknown"
-
-        response_candidates.append(
-            EnrichmentCandidateResponse(
-                id=candidate.id,
-                entity_type=candidate.entity_type,
-                entity_id=candidate.entity_id,
-                entity_name=entity_name,
-                spotify_uri=candidate.spotify_uri,
-                spotify_name=candidate.spotify_name,
-                spotify_image_url=candidate.spotify_image_url,
-                confidence_score=candidate.confidence_score,
-                extra_info=candidate.extra_info or {},
-            )
-        )
+        for dto in dtos
+    ]
 
     return EnrichmentCandidatesListResponse(
         candidates=response_candidates,
@@ -2006,121 +1679,25 @@ async def apply_enrichment_candidate(
     only exist if Spotify enrichment ran (which checks is_provider_enabled).
     But we still check before downloading images in case settings changed.
     """
-    from datetime import UTC, datetime
-
-    from sqlalchemy import select, update
-
-    from soulspot.application.services.app_settings_service import AppSettingsService
+    # Hey future me - NOW uses EnrichmentService! Clean Architecture.
+    from soulspot.application.services.enrichment_service import EnrichmentService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
-        EnrichmentCandidateModel,
-    )
 
-    # Get candidate
-    stmt = select(EnrichmentCandidateModel).where(
-        EnrichmentCandidateModel.id == candidate_id
-    )
-    result = await db.execute(stmt)
-    candidate = result.scalar_one_or_none()
-
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    if candidate.is_selected or candidate.is_rejected:
-        raise HTTPException(status_code=400, detail="Candidate already processed")
-
-    # Check if Spotify provider is enabled for image download
-    app_settings = AppSettingsService(db)
-    spotify_enabled = await app_settings.is_provider_enabled("spotify")
-
-    # Update entity with Spotify data
+    service = EnrichmentService(db)
     image_service = SpotifyImageService(settings)
-    image_downloaded = False
 
-    if candidate.entity_type == "artist":
-        artist_stmt = select(ArtistModel).where(ArtistModel.id == candidate.entity_id)
-        artist_result = await db.execute(artist_stmt)
-        artist_model = artist_result.scalar_one_or_none()
-
-        if artist_model:
-            artist_model.spotify_uri = candidate.spotify_uri
-            artist_model.image_url = candidate.spotify_image_url
-            artist_model.updated_at = datetime.now(UTC)
-
-            # Download image only if Spotify provider is enabled
-            if candidate.spotify_image_url and spotify_enabled:
-                try:
-                    spotify_id = candidate.spotify_uri.split(":")[-1]
-                    await image_service.download_artist_image(
-                        spotify_id, candidate.spotify_image_url
-                    )
-                    image_downloaded = True
-                except Exception as e:
-                    logger.warning(
-                        LogMessages.download_failed(
-                            download_id=spotify_id,
-                            track_name="<artist image>",
-                            reason="Failed to download artist image from Spotify",
-                            hint="Check network connectivity and Spotify API status"
-                        ).format(),
-                        exc_info=e
-                    )
-
-    else:  # album
-        album_stmt = select(AlbumModel).where(AlbumModel.id == candidate.entity_id)
-        album_result = await db.execute(album_stmt)
-        album_model = album_result.scalar_one_or_none()
-
-        if album_model:
-            album_model.spotify_uri = candidate.spotify_uri
-            album_model.artwork_url = candidate.spotify_image_url
-            album_model.updated_at = datetime.now(UTC)
-
-            # Download image only if Spotify provider is enabled
-            if candidate.spotify_image_url and spotify_enabled:
-                try:
-                    spotify_id = candidate.spotify_uri.split(":")[-1]
-                    local_path = await image_service.download_album_image(
-                        spotify_id, candidate.spotify_image_url
-                    )
-                    album_model.artwork_path = str(local_path)
-                    image_downloaded = True
-                except Exception as e:
-                    logger.warning(
-                        LogMessages.download_failed(
-                            download_id=spotify_id,
-                            track_name="<album artwork>",
-                            reason="Failed to download album image from Spotify",
-                            hint="Check network connectivity and Spotify API status"
-                        ).format(),
-                        exc_info=e
-                    )
-
-    # Mark candidate as selected
-    candidate.is_selected = True
-    candidate.updated_at = datetime.now(UTC)
-
-    # Reject other candidates for same entity
-    reject_stmt = (
-        update(EnrichmentCandidateModel)
-        .where(EnrichmentCandidateModel.entity_type == candidate.entity_type)
-        .where(EnrichmentCandidateModel.entity_id == candidate.entity_id)
-        .where(EnrichmentCandidateModel.id != candidate_id)
-        .where(EnrichmentCandidateModel.is_selected == False)  # noqa: E712
-        .values(is_rejected=True, updated_at=datetime.now(UTC))
-    )
-    await db.execute(reject_stmt)
-
-    await db.commit()
-
-    return {
-        "success": True,
-        "message": f"Applied enrichment for {candidate.entity_type}",
-        "spotify_uri": candidate.spotify_uri,
-        "image_downloaded": image_downloaded,
-    }
+    try:
+        result = await service.apply_candidate(candidate_id, image_service)
+        return {
+            "success": True,
+            "message": result["message"],
+            "spotify_uri": result["spotify_uri"],
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=404 if "not found" in str(e) else 400,
+            detail=str(e),
+        )
 
 
 @router.post(
@@ -2135,27 +1712,20 @@ async def reject_enrichment_candidate(
 
     Use this when the suggested Spotify match is incorrect.
     """
-    from datetime import UTC, datetime
-
-    from sqlalchemy import select
-
-    from soulspot.infrastructure.persistence.models import EnrichmentCandidateModel
-
-    stmt = select(EnrichmentCandidateModel).where(
-        EnrichmentCandidateModel.id == candidate_id
+    # Hey future me - NOW uses EnrichmentCandidateRepository! Clean Architecture.
+    from soulspot.infrastructure.persistence.repositories import (
+        EnrichmentCandidateRepository,
     )
-    result = await db.execute(stmt)
-    candidate = result.scalar_one_or_none()
 
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    repo = EnrichmentCandidateRepository(db)
 
-    if candidate.is_selected or candidate.is_rejected:
-        raise HTTPException(status_code=400, detail="Candidate already processed")
-
-    candidate.is_rejected = True
-    candidate.updated_at = datetime.now(UTC)
-    await db.commit()
+    try:
+        await repo.mark_rejected(candidate_id)
+        await db.commit()
+    except Exception as e:
+        if "not found" in str(e).lower():
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "success": True,
