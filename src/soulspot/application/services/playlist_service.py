@@ -5,17 +5,21 @@ that were scattered in playlists.py routes. Includes missing track
 detection, deletion, and blacklist management.
 """
 
+import logging
 from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from soulspot.domain.exceptions import EntityNotFoundError
 from soulspot.infrastructure.persistence.models import (
     AppSettingsModel,
     PlaylistModel,
     TrackModel,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PlaylistService:
@@ -50,7 +54,13 @@ class PlaylistService:
         playlist = playlist_result.scalar_one_or_none()
 
         if not playlist:
-            raise ValueError("Playlist not found")
+            raise EntityNotFoundError(f"Playlist {playlist_id} not found")
+
+        logger.info(
+            f"🔍 Check Missing Tracks\n"
+            f"├─ Playlist: {playlist.name}\n"
+            f"└─ Playlist ID: {playlist_id}"
+        )
 
         # Get all tracks for playlist (optimized with JOIN)
         from soulspot.infrastructure.persistence.models import PlaylistTrackModel
@@ -102,6 +112,8 @@ class PlaylistService:
         Hey future me - CASCADE deletes playlist_tracks automatically.
         Tracks themselves are NOT deleted.
 
+        CRITICAL: Includes transaction rollback on errors!
+
         Args:
             playlist_id: Playlist UUID
 
@@ -111,26 +123,37 @@ class PlaylistService:
         Raises:
             ValueError: If playlist not found
         """
-        # Get playlist name before deletion
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await self._session.execute(stmt)
-        playlist = result.scalar_one_or_none()
+        try:
+            # Get playlist name before deletion
+            stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+            result = await self._session.execute(stmt)
+            playlist = result.scalar_one_or_none()
 
-        if not playlist:
-            raise ValueError("Playlist not found")
+            if not playlist:
+                raise EntityNotFoundError(f"Playlist {playlist_id} not found")
 
-        playlist_name = playlist.name
+            playlist_name = playlist.name
 
-        # Delete playlist
-        delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        await self._session.execute(delete_stmt)
-        await self._session.commit()
+            logger.info(
+                f"🗑️ Delete Playlist\n"
+                f"├─ Playlist: {playlist_name}\n"
+                f"└─ Playlist ID: {playlist_id}"
+            )
 
-        return {
-            "message": f"Playlist '{playlist_name}' deleted",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist_name,
-        }
+            # Delete playlist
+            delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
+            await self._session.execute(delete_stmt)
+            await self._session.commit()
+
+            return {
+                "message": f"Playlist '{playlist_name}' deleted",
+                "playlist_id": playlist_id,
+                "playlist_name": playlist_name,
+            }
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to delete playlist {playlist_id}: {e}")
+            raise
 
     async def set_blacklist_status(
         self, playlist_id: str, blacklisted: bool
@@ -138,6 +161,8 @@ class PlaylistService:
         """Set playlist blacklist status.
 
         Hey future me - blacklisted playlists are excluded from sync.
+
+        CRITICAL: Includes transaction rollback on errors!
 
         Args:
             playlist_id: Playlist UUID
@@ -149,36 +174,50 @@ class PlaylistService:
         Raises:
             ValueError: If playlist not found
         """
-        # Get playlist
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await self._session.execute(stmt)
-        playlist = result.scalar_one_or_none()
+        try:
+            # Get playlist
+            stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+            result = await self._session.execute(stmt)
+            playlist = result.scalar_one_or_none()
 
-        if not playlist:
-            raise ValueError("Playlist not found")
+            if not playlist:
+                raise EntityNotFoundError(f"Playlist {playlist_id} not found")
 
-        # Update blacklist status
-        update_stmt = (
-            update(PlaylistModel)
-            .where(PlaylistModel.id == playlist_id)
-            .values(is_blacklisted=blacklisted)
-        )
-        await self._session.execute(update_stmt)
-        await self._session.commit()
+            logger.info(
+                f"⛔ Set Blacklist Status\n"
+                f"├─ Playlist: {playlist.name}\n"
+                f"├─ Status: {'blacklisted' if blacklisted else 'unblacklisted'}\n"
+                f"└─ Playlist ID: {playlist_id}"
+            )
 
-        action = "blacklisted" if blacklisted else "removed from blacklist"
-        return {
-            "message": f"Playlist '{playlist.name}' {action}",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist.name,
-            "is_blacklisted": blacklisted,
-        }
+            # Update blacklist status
+            update_stmt = (
+                update(PlaylistModel)
+                .where(PlaylistModel.id == playlist_id)
+                .values(is_blacklisted=blacklisted)
+            )
+            await self._session.execute(update_stmt)
+            await self._session.commit()
+
+            action = "blacklisted" if blacklisted else "removed from blacklist"
+            return {
+                "message": f"Playlist '{playlist.name}' {action}",
+                "playlist_id": playlist_id,
+                "playlist_name": playlist.name,
+                "is_blacklisted": blacklisted,
+            }
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to set blacklist status for playlist {playlist_id}: {e}")
+            raise
 
     async def delete_and_blacklist(self, playlist_id: str) -> dict[str, Any]:
         """Delete playlist and add Spotify URI to blacklist.
 
         Hey future me - prevents re-import during sync.
         Stores Spotify URI in app_settings.
+
+        CRITICAL: Includes transaction rollback on errors!
 
         Args:
             playlist_id: Playlist UUID
@@ -189,46 +228,58 @@ class PlaylistService:
         Raises:
             ValueError: If playlist not found
         """
-        # Get playlist info
-        stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        result = await self._session.execute(stmt)
-        playlist = result.scalar_one_or_none()
+        try:
+            # Get playlist info
+            stmt = select(PlaylistModel).where(PlaylistModel.id == playlist_id)
+            result = await self._session.execute(stmt)
+            playlist = result.scalar_one_or_none()
 
-        if not playlist:
-            raise ValueError("Playlist not found")
+            if not playlist:
+                raise EntityNotFoundError(f"Playlist {playlist_id} not found")
 
-        playlist_name = playlist.name
-        spotify_uri = playlist.spotify_uri
+            playlist_name = playlist.name
+            spotify_uri = playlist.spotify_uri
 
-        # Get current blacklist from app_settings
-        settings_stmt = select(AppSettingsModel).where(
-            AppSettingsModel.key == "playlist_blacklist"
-        )
-        settings_result = await self._session.execute(settings_stmt)
-        settings = settings_result.scalar_one_or_none()
-
-        if settings:
-            # Add to existing blacklist
-            blacklist = settings.value.get("uris", [])
-            if spotify_uri and spotify_uri not in blacklist:
-                blacklist.append(spotify_uri)
-                settings.value = {"uris": blacklist}
-        else:
-            # Create new blacklist entry
-            settings = AppSettingsModel(
-                key="playlist_blacklist",
-                value={"uris": [spotify_uri] if spotify_uri else []},
+            logger.info(
+                f"⛔🗑️ Delete & Blacklist Playlist\n"
+                f"├─ Playlist: {playlist_name}\n"
+                f"├─ Spotify URI: {spotify_uri}\n"
+                f"└─ Playlist ID: {playlist_id}"
             )
-            self._session.add(settings)
 
-        # Delete playlist
-        delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
-        await self._session.execute(delete_stmt)
-        await self._session.commit()
+            # Get current blacklist from app_settings
+            settings_stmt = select(AppSettingsModel).where(
+                AppSettingsModel.key == "playlist_blacklist"
+            )
+            settings_result = await self._session.execute(settings_stmt)
+            settings = settings_result.scalar_one_or_none()
 
-        return {
-            "message": f"Playlist '{playlist_name}' deleted and blacklisted",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist_name,
-            "spotify_uri": spotify_uri,
-        }
+            if settings:
+                # Add to existing blacklist
+                blacklist = settings.value.get("uris", [])
+                if spotify_uri and spotify_uri not in blacklist:
+                    blacklist.append(spotify_uri)
+                    settings.value = {"uris": blacklist}
+            else:
+                # Create new blacklist entry
+                settings = AppSettingsModel(
+                    key="playlist_blacklist",
+                    value={"uris": [spotify_uri] if spotify_uri else []},
+                )
+                self._session.add(settings)
+
+            # Delete playlist
+            delete_stmt = delete(PlaylistModel).where(PlaylistModel.id == playlist_id)
+            await self._session.execute(delete_stmt)
+            await self._session.commit()
+
+            return {
+                "message": f"Playlist '{playlist_name}' deleted and blacklisted",
+                "playlist_id": playlist_id,
+                "playlist_name": playlist_name,
+                "spotify_uri": spotify_uri,
+            }
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to delete and blacklist playlist {playlist_id}: {e}")
+            raise

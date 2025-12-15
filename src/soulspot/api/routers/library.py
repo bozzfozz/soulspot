@@ -966,6 +966,7 @@ async def resolve_duplicate(
     """
     # Hey future me - NOW uses DuplicateService! Clean Architecture.
     from soulspot.application.services.duplicate_service import DuplicateService
+    from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
     service = DuplicateService(db)
 
@@ -977,8 +978,10 @@ async def resolve_duplicate(
             "message": f"Duplicate resolved with action: {request.action}",
             "deleted_track_id": result.get("deleted_track_id"),
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404 if "not found" in str(e) else 400, detail=str(e))
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.
@@ -1682,6 +1685,7 @@ async def apply_enrichment_candidate(
     # Hey future me - NOW uses EnrichmentService! Clean Architecture.
     from soulspot.application.services.enrichment_service import EnrichmentService
     from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
     service = EnrichmentService(db)
     image_service = SpotifyImageService(settings)
@@ -1693,11 +1697,10 @@ async def apply_enrichment_candidate(
             "message": result["message"],
             "spotify_uri": result["spotify_uri"],
         }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=404 if "not found" in str(e) else 400,
-            detail=str(e),
-        )
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidOperationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post(

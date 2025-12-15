@@ -470,12 +470,13 @@ async def get_missing_tracks(
     """
     # Hey future me - NOW uses PlaylistService! Clean Architecture + optimized query.
     from soulspot.application.services.playlist_service import PlaylistService
+    from soulspot.domain.exceptions import EntityNotFoundError
 
     service = PlaylistService(session)
 
     try:
         return await service.get_missing_tracks(playlist_id)
-    except ValueError as e:
+    except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
@@ -711,12 +712,13 @@ async def delete_playlist(
     """
     # Hey future me - NOW uses PlaylistService! Clean Architecture.
     from soulspot.application.services.playlist_service import PlaylistService
+    from soulspot.domain.exceptions import EntityNotFoundError
 
     service = PlaylistService(session)
 
     try:
         return await service.delete_playlist(playlist_id)
-    except ValueError as e:
+    except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
             "playlist_id": playlist_id,
             "playlist_name": playlist_name,
@@ -749,12 +751,13 @@ async def blacklist_playlist(
     """
     # Hey future me - NOW uses PlaylistService! Clean Architecture.
     from soulspot.application.services.playlist_service import PlaylistService
+    from soulspot.domain.exceptions import EntityNotFoundError
 
     service = PlaylistService(session)
 
     try:
         return await service.set_blacklist_status(playlist_id, blacklisted=True)
-    except ValueError as e:
+    except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
@@ -778,12 +781,13 @@ async def unblacklist_playlist(
     """
     # Hey future me - NOW uses PlaylistService! Clean Architecture.
     from soulspot.application.services.playlist_service import PlaylistService
+    from soulspot.domain.exceptions import EntityNotFoundError
 
     service = PlaylistService(session)
 
     try:
         return await service.set_blacklist_status(playlist_id, blacklisted=False)
-    except ValueError as e:
+    except EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(
@@ -811,12 +815,14 @@ async def delete_and_blacklist_playlist(
     """
     # Hey future me - NOW uses PlaylistService! Clean Architecture.
     from soulspot.application.services.playlist_service import PlaylistService
+    from soulspot.domain.exceptions import EntityNotFoundError
 
     service = PlaylistService(session)
 
     try:
         return await service.delete_and_blacklist(playlist_id)
-    except ValueError as e:
+    except EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(

@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import EnrichmentCandidate
+from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 from soulspot.domain.ports import IEnrichmentCandidateRepository
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
@@ -228,6 +229,8 @@ class EnrichmentService:
         Hey future me - marks candidate as selected, updates entity with Spotify URI/image,
         rejects other candidates for same entity. Uses repository + Models pragmatically.
 
+        CRITICAL: Includes transaction rollback on errors to prevent DB corruption!
+
         Args:
             candidate_id: Candidate UUID
             spotify_image_service: Service for downloading Spotify images
@@ -238,73 +241,94 @@ class EnrichmentService:
         Raises:
             ValueError: If candidate not found or already processed
         """
-        # Get candidate
-        candidate = await self._repo.get_by_id(candidate_id)
-        if not candidate:
-            raise ValueError("Candidate not found")
-
-        if candidate.is_selected or candidate.is_rejected:
-            raise ValueError("Candidate already processed")
-
-        # Update entity with Spotify metadata (pragmatic Model access)
-        entity_updated = False
-        if candidate.entity_type.value == "artist":
-            artist = await self._session.get(ArtistModel, str(candidate.entity_id))
-            if artist:
-                artist.spotify_uri = candidate.spotify_uri
-
-                # Download image if URL provided
-                if candidate.spotify_image_url:
-                    image_path = await spotify_image_service.download_artist_image(
-                        str(artist.id),
-                        candidate.spotify_image_url,
-                    )
-                    if image_path:
-                        artist.image_url = image_path
-
-                entity_updated = True
-        else:  # album
-            album = await self._session.get(AlbumModel, str(candidate.entity_id))
-            if album:
-                album.spotify_uri = candidate.spotify_uri
-
-                # Download image if URL provided
-                if candidate.spotify_image_url:
-                    image_path = await spotify_image_service.download_album_artwork(
-                        str(album.id),
-                        candidate.spotify_image_url,
-                    )
-                    if image_path:
-                        album.artwork_url = image_path
-
-                entity_updated = True
-
-        if not entity_updated:
-            raise ValueError(
-                f"Entity {candidate.entity_type.value} {candidate.entity_id} not found"
+        try:
+            logger.info(
+                f"🎯 Apply Enrichment Candidate\n"
+                f"└─ Candidate ID: {candidate_id}"
             )
 
-        # Mark candidate as selected (via repository)
-        selected_candidate = await self._repo.mark_selected(candidate_id)
+            # Get candidate
+            candidate = await self._repo.get_by_id(candidate_id)
+            if not candidate:
+                raise EntityNotFoundError(f"Enrichment candidate {candidate_id} not found")
 
-        # Reject other candidates for same entity
-        await self._repo.reject_other_candidates(
-            str(selected_candidate.entity_id),
-            selected_candidate.entity_type.value,
-            candidate_id,
-        )
+            if candidate.is_selected or candidate.is_rejected:
+                raise InvalidOperationError(
+                    f"Candidate {candidate_id} already processed (selected={candidate.is_selected}, rejected={candidate.is_rejected})"
+                )
 
-        await self._session.commit()
+            # Update entity with Spotify metadata (pragmatic Model access)
+            entity_updated = False
+            if candidate.entity_type.value == "artist":
+                artist = await self._session.get(ArtistModel, str(candidate.entity_id))
+                if artist:
+                    artist.spotify_uri = candidate.spotify_uri
 
-        return {
-            "entity_type": selected_candidate.entity_type.value,
-            "entity_id": str(selected_candidate.entity_id),
-            "spotify_uri": selected_candidate.spotify_uri,
-            "message": "Candidate applied successfully",
-        }
+                    # Download image if URL provided
+                    if candidate.spotify_image_url:
+                        image_path = await spotify_image_service.download_artist_image(
+                            str(artist.id),
+                            candidate.spotify_image_url,
+                        )
+                        if image_path:
+                            artist.image_url = image_path
+
+                    entity_updated = True
+            else:  # album
+                album = await self._session.get(AlbumModel, str(candidate.entity_id))
+                if album:
+                    album.spotify_uri = candidate.spotify_uri
+
+                    # Download image if URL provided
+                    if candidate.spotify_image_url:
+                        image_path = await spotify_image_service.download_album_artwork(
+                            str(album.id),
+                            candidate.spotify_image_url,
+                        )
+                        if image_path:
+                            album.artwork_url = image_path
+
+                    entity_updated = True
+
+            if not entity_updated:
+                raise EntityNotFoundError(
+                    f"{candidate.entity_type.value.capitalize()} {candidate.entity_id} not found"
+                )
+
+            logger.info(
+                f"✅ Enrichment Applied\n"
+                f"├─ Entity: {candidate.entity_type.value} '{entity_name}'\n"
+                f"├─ Candidate ID: {candidate_id}\n"
+                f"└─ Spotify URI: {selected_candidate.spotify_uri}"
+            )
+
+            # Mark candidate as selected (via repository)
+            selected_candidate = await self._repo.mark_selected(candidate_id)
+
+            # Reject other candidates for same entity
+            await self._repo.reject_other_candidates(
+                str(selected_candidate.entity_id),
+                selected_candidate.entity_type.value,
+                candidate_id,
+            )
+
+            await self._session.commit()
+
+            return {
+                "entity_type": selected_candidate.entity_type.value,
+                "entity_id": str(selected_candidate.entity_id),
+                "spotify_uri": selected_candidate.spotify_uri,
+                "message": "Candidate applied successfully",
+            }
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to apply enrichment candidate {candidate_id}: {e}")
+            raise
 
     async def reject_candidate(self, candidate_id: str) -> dict[str, Any]:
         """Reject an enrichment candidate.
+
+        CRITICAL: Includes transaction rollback on errors!
 
         Args:
             candidate_id: Candidate UUID
@@ -315,11 +339,16 @@ class EnrichmentService:
         Raises:
             ValueError: If candidate not found
         """
-        candidate = await self._repo.mark_rejected(candidate_id)
-        await self._session.commit()
+        try:
+            candidate = await self._repo.mark_rejected(candidate_id)
+            await self._session.commit()
 
-        return {
-            "entity_type": candidate.entity_type.value,
-            "entity_id": str(candidate.entity_id),
-            "message": "Candidate rejected successfully",
-        }
+            return {
+                "entity_type": candidate.entity_type.value,
+                "entity_id": str(candidate.entity_id),
+                "message": "Candidate rejected successfully",
+            }
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Failed to reject enrichment candidate {candidate_id}: {e}")
+            raise
