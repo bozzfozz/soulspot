@@ -586,8 +586,18 @@ class DeezerClient:
         Hey future me - Deezer returns different fields for search vs direct get.
         Search returns basic info, direct get returns full details.
         This handles both gracefully.
+        
+        CRITICAL: Chart albums often MISS release_date! We use "1900-01-01" as fallback
+        to avoid None dates breaking the UI. The get_browse_new_releases method will
+        try to enrich these via detail API.
         """
         artist_data = data.get("artist", {})
+        
+        # Fallback for missing release_date (common in chart albums)
+        release_date = data.get("release_date")
+        if not release_date:
+            release_date = "1900-01-01"  # Sentinel value for "unknown date"
+            logger.debug(f"Album {data.get('title')} missing release_date, using fallback")
 
         return DeezerAlbum(
             id=data["id"],
@@ -598,7 +608,7 @@ class DeezerClient:
             cover_medium=data.get("cover_medium"),
             cover_big=data.get("cover_big"),
             cover_xl=data.get("cover_xl"),
-            release_date=data.get("release_date"),
+            release_date=release_date,
             nb_tracks=data.get("nb_tracks", 0),
             duration=data.get("duration", 0),
             record_type=data.get("record_type"),  # album, ep, single, compile
@@ -1589,6 +1599,9 @@ class DeezerClient:
         Hey future me - this is the MAIN fallback for Spotify's Browse/New Releases!
         Combines editorial releases and chart albums for a good mix.
         No OAuth needed, works for any user!
+        
+        CRITICAL FIX: Chart albums often miss release_date! We enrich them via
+        detail API (album.id -> /album/{id}) to get the real date.
 
         Args:
             limit: Maximum albums to return
@@ -1605,6 +1618,7 @@ class DeezerClient:
             # Deduplicate by album ID
             seen_ids: set[int] = set()
             albums = []
+            enriched_count = 0
 
             for album in editorial + charts:
                 if album.id not in seen_ids:
@@ -1613,6 +1627,19 @@ class DeezerClient:
                     # Filter compilations if requested
                     if not include_compilations and album.record_type == "compile":
                         continue
+                    
+                    # CRITICAL FIX: Enrich albums with fallback date (1900-01-01)
+                    # by fetching full details from /album/{id}
+                    if album.release_date == "1900-01-01":
+                        try:
+                            enriched = await self.get_album(album.id)
+                            if enriched and enriched.release_date != "1900-01-01":
+                                album = enriched  # Use enriched version
+                                enriched_count += 1
+                                logger.debug(f"Enriched album {album.title} with date {album.release_date}")
+                        except Exception as enrich_err:
+                            logger.warning(f"Failed to enrich album {album.id}: {enrich_err}")
+                            # Continue with fallback date
 
                     albums.append({
                         "deezer_id": album.id,
@@ -1632,6 +1659,8 @@ class DeezerClient:
 
                     if len(albums) >= limit:
                         break
+            
+            logger.info(f"Deezer new releases: {len(albums)} total, {enriched_count} enriched with dates")
 
             return {
                 "success": True,

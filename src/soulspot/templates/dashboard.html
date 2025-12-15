@@ -136,7 +136,9 @@
                 <div class="release-name" title="{{ release.name }}">{{ release.name }}</div>
                 <div class="release-artist">{{ release.artist_name }}</div>
                 <div class="release-meta">
+                    {% if release.release_date and release.release_date != '1900-01-01' %}
                     <span class="release-date">{{ release.release_date }}</span>
+                    {% endif %}
                     {% if release.total_tracks > 0 %}
                     <span class="release-tracks">{{ release.total_tracks }} tracks</span>
                     {% endif %}

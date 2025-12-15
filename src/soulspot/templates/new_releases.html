@@ -113,7 +113,7 @@
                 <h3 class="album-title" title="{{ album.name }}">{{ album.name }}</h3>
                 <p class="album-artist" title="{{ album.artist_name }}">{{ album.artist_name }}</p>
                 <div class="album-meta">
-                    {% if album.release_date %}
+                    {% if album.release_date and album.release_date != '1900-01-01' %}
                     <span class="release-date"><i class="bi bi-calendar3"></i> {{ album.release_date[:10] if album.release_date|length > 10 else album.release_date }}</span>
                     {% endif %}
                     {% if album.total_tracks %}
@@ -179,7 +179,7 @@
             <h3 class="album-title" title="{{ album.name }}">{{ album.name }}</h3>
             <p class="album-artist" title="{{ album.artist_name }}">{{ album.artist_name }}</p>
             <div class="album-meta">
-                {% if album.release_date %}
+                {% if album.release_date and album.release_date != '1900-01-01' %}
                 <span class="release-date"><i class="bi bi-calendar3"></i> {{ album.release_date[:10] if album.release_date|length > 10 else album.release_date }}</span>
                 {% endif %}
                 {% if album.total_tracks %}
