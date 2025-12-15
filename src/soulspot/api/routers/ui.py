@@ -2303,29 +2303,215 @@ async def browse_new_releases_page(
     )
 
 
+@router.get("/browse/charts", response_class=HTMLResponse)
+async def browse_charts_page(
+    request: Request,
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
+    session: AsyncSession = Depends(get_db_session),
+    chart_type: str = Query(default="tracks", description="Type: tracks, albums, artists"),
+    limit: int = Query(default=50, ge=10, le=100, description="Number of items"),
+) -> Any:
+    """Browse Charts from MULTIPLE SOURCES.
+
+    Hey future me - dieser Route zeigt aggregierte Charts von allen Providern!
+    Aktuell hauptsächlich Deezer (FREE - keine Auth nötig!).
+    
+    Architecture:
+        Route → ChartsService
+                     ↓
+        [DeezerPlugin] (free charts API)
+                     ↓
+        ChartsResult → Template
+
+    Deezer advantage: NO AUTH NEEDED for charts!
+    Top 100 tracks, albums, artists available for free.
+    """
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.charts_service import ChartsService
+
+    settings = AppSettingsService(session)
+    error: str | None = None
+    items: list[dict[str, Any]] = []
+    source_counts: dict[str, int] = {}
+
+    # Check which providers are enabled
+    enabled_providers: list[str] = []
+    if await settings.is_provider_enabled("deezer"):
+        enabled_providers.append("deezer")
+    # Note: Spotify charts would require playlist access (future enhancement)
+
+    if not enabled_providers:
+        return templates.TemplateResponse(
+            request,
+            "charts.html",
+            context={
+                "items": [],
+                "chart_type": chart_type,
+                "total_count": 0,
+                "source_counts": {},
+                "error": "No chart providers enabled. Enable Deezer in Settings.",
+            },
+        )
+
+    service = ChartsService(
+        deezer_plugin=deezer_plugin,
+    )
+
+    try:
+        if chart_type == "tracks":
+            result = await service.get_chart_tracks(
+                limit=limit,
+                enabled_providers=enabled_providers,
+            )
+            source_counts = result.source_counts
+            for track in result.tracks:
+                duration_sec = track.duration_ms // 1000
+                duration_min = duration_sec // 60
+                duration_sec_rem = duration_sec % 60
+                items.append({
+                    "id": track.deezer_id or track.spotify_id or "",
+                    "name": track.title,
+                    "artist_name": track.artist_name,
+                    "album_name": track.album_name or "",
+                    "image_url": track.image_url,
+                    "preview_url": track.preview_url,
+                    "duration_str": f"{duration_min}:{duration_sec_rem:02d}",
+                    "position": track.chart_position,
+                    "source": track.source_service,
+                    "external_url": track.external_urls.get(track.source_service, ""),
+                })
+            for provider, err in result.errors.items():
+                logger.warning(f"Charts tracks: {provider} error: {err}")
+
+        elif chart_type == "albums":
+            result = await service.get_chart_albums(
+                limit=limit,
+                enabled_providers=enabled_providers,
+            )
+            source_counts = result.source_counts
+            for album in result.albums:
+                items.append({
+                    "id": album.deezer_id or album.spotify_id or "",
+                    "name": album.title,
+                    "artist_name": album.artist_name,
+                    "image_url": album.image_url,
+                    "release_date": album.release_date,
+                    "total_tracks": album.total_tracks,
+                    "position": album.chart_position,
+                    "source": album.source_service,
+                    "external_url": album.external_urls.get(album.source_service, ""),
+                })
+            for provider, err in result.errors.items():
+                logger.warning(f"Charts albums: {provider} error: {err}")
+
+        elif chart_type == "artists":
+            result = await service.get_chart_artists(
+                limit=limit,
+                enabled_providers=enabled_providers,
+            )
+            source_counts = result.source_counts
+            for artist in result.artists:
+                items.append({
+                    "id": artist.deezer_id or artist.spotify_id or "",
+                    "name": artist.name,
+                    "image_url": artist.image_url,
+                    "genres": artist.genres[:3] if artist.genres else [],
+                    "position": artist.chart_position,
+                    "source": artist.source_service,
+                    "external_url": artist.external_urls.get(artist.source_service, ""),
+                })
+            for provider, err in result.errors.items():
+                logger.warning(f"Charts artists: {provider} error: {err}")
+
+        elif chart_type == "editorial":
+            result = await service.get_editorial_picks(
+                limit=limit,
+                enabled_providers=enabled_providers,
+            )
+            source_counts = result.source_counts
+            for album in result.albums:
+                items.append({
+                    "id": album.deezer_id or album.spotify_id or "",
+                    "name": album.title,
+                    "artist_name": album.artist_name,
+                    "image_url": album.image_url,
+                    "release_date": album.release_date,
+                    "total_tracks": album.total_tracks,
+                    "source": album.source_service,
+                    "external_url": album.external_urls.get(album.source_service, ""),
+                })
+            for provider, err in result.errors.items():
+                logger.warning(f"Editorial: {provider} error: {err}")
+
+        else:
+            error = f"Unknown chart type: {chart_type}"
+
+    except Exception as e:
+        logger.error(f"Charts fetch failed: {e}")
+        error = f"Failed to fetch charts: {e}"
+
+    if not items and not error:
+        error = "No chart data available."
+
+    logger.info(
+        f"Charts page ({chart_type}): {len(items)} items "
+        f"(Deezer: {source_counts.get('deezer', 0)})"
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "charts.html",
+        context={
+            "items": items,
+            "chart_type": chart_type,
+            "total_count": len(items),
+            "source_counts": source_counts,
+            "limit": limit,
+            "error": error,
+        },
+    )
+
+
 @router.get("/spotify/discover", response_class=HTMLResponse)
 async def spotify_discover_page(
     request: Request,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Discover Similar Artists page.
+    """Discover Similar Artists page - MULTI-PROVIDER!
 
-    Hey future me - this is the REAL discovery page! Shows artists similar to your favorites.
-    Fetches related artists from SpotifyPlugin for your followed artists and aggregates
-    the suggestions, filtering out ones you already follow.
-    SpotifyPlugin handles auth internally - no more manual token passing!
-    Uses can_use() for elegant capability checking.
+    Hey future me - REFACTORED to use DiscoverService for Multi-Provider discovery!
+    Now aggregates related artists from BOTH Spotify AND Deezer.
+    
+    Architecture:
+        Route → DiscoverService
+                     ↓
+        [SpotifyPlugin, DeezerPlugin] (parallel fetch)
+                     ↓
+        Aggregate & Deduplicate by name
+                     ↓
+        DiscoverResult → Template
+
+    Deezer advantage: NO AUTH NEEDED for related artists!
+    Falls back to Deezer if Spotify unavailable.
     """
     import random
 
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.domain.ports.plugin import PluginCapability
+    from soulspot.application.services.discover_service import DiscoverService
 
-    # Provider + Auth checks using can_use() - checks both capability support AND auth
     settings = AppSettingsService(session)
-    if not await settings.is_provider_enabled("spotify"):
+    
+    # Check which providers are enabled
+    enabled_providers: list[str] = []
+    if await settings.is_provider_enabled("spotify"):
+        enabled_providers.append("spotify")
+    if await settings.is_provider_enabled("deezer"):
+        enabled_providers.append("deezer")
+    
+    if not enabled_providers:
         return templates.TemplateResponse(
             request,
             "spotify_discover.html",
@@ -2333,20 +2519,8 @@ async def spotify_discover_page(
                 "discoveries": [],
                 "based_on_count": 0,
                 "total_discoveries": 0,
-                "error": "Spotify provider is disabled. Enable it in Settings to discover artists.",
-            },
-        )
-
-    # can_use() checks: 1) capability supported 2) is_authenticated if required
-    if not spotify_plugin.can_use(PluginCapability.GET_RELATED_ARTISTS):
-        return templates.TemplateResponse(
-            request,
-            "spotify_discover.html",
-            context={
-                "discoveries": [],
-                "based_on_count": 0,
-                "total_discoveries": 0,
-                "error": "Not authenticated with Spotify. Connect your account in Settings.",
+                "source_counts": {},
+                "error": "No music providers enabled. Enable Spotify or Deezer in Settings.",
             },
         )
 
@@ -2363,6 +2537,7 @@ async def spotify_discover_page(
                 "discoveries": [],
                 "based_on_count": 0,
                 "total_discoveries": 0,
+                "source_counts": {},
                 "error": "No followed artists found. Sync your Spotify artists first in Settings!",
             },
         )
@@ -2372,67 +2547,78 @@ async def spotify_discover_page(
     sample_artists = random.sample(artists, sample_size)
 
     logger.info(
-        f"Discover page: Sampling {sample_size} artists for related lookup: "
+        f"Discover page (Multi-Provider): Sampling {sample_size} artists: "
         f"{[a.name for a in sample_artists]}"
     )
 
-    # Get followed artist IDs for filtering
-    followed_ids = {a.spotify_id for a in artists}
+    # Get followed artist IDs/names for filtering
+    followed_ids = {a.spotify_id for a in artists if a.spotify_id}
+    followed_names = {a.name.lower().strip() for a in artists if a.name}
 
-    # Aggregate similar artists from sampled followed artists
+    # Use DiscoverService for Multi-Provider discovery!
+    service = DiscoverService(
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
+
     discoveries: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     error: str | None = None
-    api_errors: int = 0
+    source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
 
     for artist in sample_artists:
-        if not artist.spotify_id:
-            logger.warning(f"Artist {artist.name} has no spotify_id, skipping")
-            continue
         try:
-            # SpotifyPlugin returns list[ArtistDTO] - clean DTO access!
-            related_dtos = await spotify_plugin.get_related_artists(artist.spotify_id)
-            logger.debug(f"Got {len(related_dtos)} related artists for {artist.name}")
-            for r in related_dtos:
-                rid = r.spotify_id
-                # Skip if already following or already in discoveries
-                if rid and rid not in followed_ids and rid not in seen_ids:
-                    seen_ids.add(rid)
-                    discoveries.append(
-                        {
-                            "spotify_id": rid,
-                            "name": r.name,
-                            "image_url": r.image_url,
-                            "genres": (r.genres or [])[:3],
-                            "popularity": r.popularity or 0,
-                            "based_on": artist.name,
-                        }
-                    )
+            result = await service.discover_similar_artists(
+                seed_artist_name=artist.name,
+                seed_artist_spotify_id=artist.spotify_id,
+                limit=20,
+                enabled_providers=enabled_providers,
+            )
+            
+            # Aggregate source counts
+            for src, count in result.source_counts.items():
+                source_counts[src] = source_counts.get(src, 0) + count
+            
+            for discovered in result.artists:
+                # Skip if already following
+                d_name_norm = discovered.name.lower().strip()
+                if d_name_norm in followed_names:
+                    continue
+                if discovered.spotify_id and discovered.spotify_id in followed_ids:
+                    continue
+                
+                # Skip duplicates in this batch
+                key = discovered.spotify_id or discovered.deezer_id or d_name_norm
+                if key in seen_ids:
+                    continue
+                seen_ids.add(key)
+                
+                discoveries.append({
+                    "spotify_id": discovered.spotify_id,
+                    "deezer_id": discovered.deezer_id,
+                    "name": discovered.name,
+                    "image_url": discovered.image_url,
+                    "genres": (discovered.genres or [])[:3],
+                    "popularity": discovered.popularity or 0,
+                    "based_on": artist.name,
+                    "source": discovered.source_service,
+                })
+            
+            # Log provider errors
+            for provider, err in result.errors.items():
+                logger.debug(f"Discover: {provider} error for {artist.name}: {err}")
+                
         except Exception as e:
-            api_errors += 1
-            # Hey future me - Spotify returns 404 for some artists (no related data available).
-            # This is normal - not all artists have related artist data in Spotify's database.
-            # Log as DEBUG for 404s (expected), WARNING for other errors (unexpected).
-            error_str = str(e)
-            if "404" in error_str:
-                logger.debug(
-                    f"No related artists available for {artist.name} "
-                    "(Spotify has no data for this artist)"
-                )
-            else:
-                logger.warning(f"Failed to get related artists for {artist.name}: {e}")
+            logger.warning(f"Discovery failed for {artist.name}: {e}")
             continue
 
-    # Log summary at INFO level only if there were discoveries or errors worth noting
-    if discoveries or api_errors > sample_size // 2:
-        logger.info(
-            f"Discover page: Found {len(discoveries)} unique discoveries, "
-            f"{api_errors} API calls skipped (no data available)"
-        )
+    logger.info(
+        f"Discover page: Found {len(discoveries)} unique discoveries "
+        f"(Spotify: {source_counts.get('spotify', 0)}, Deezer: {source_counts.get('deezer', 0)})"
+    )
 
-    # If all API calls failed, show error
-    if api_errors == sample_size and not discoveries:
-        error = "Could not fetch recommendations. Please check your Spotify connection."
+    if not discoveries:
+        error = "Could not find recommendations. Try syncing more artists first."
 
     # Sort by popularity (most popular first)
     discoveries.sort(key=lambda x: x["popularity"], reverse=True)
@@ -2447,6 +2633,7 @@ async def spotify_discover_page(
             "discoveries": discoveries,
             "based_on_count": sample_size,
             "total_discoveries": len(discoveries),
+            "source_counts": source_counts,
             "error": error,
         },
     )

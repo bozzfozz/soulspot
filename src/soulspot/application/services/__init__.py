@@ -2,6 +2,13 @@
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.auto_import import AutoImportService
+from soulspot.application.services.charts_service import (
+    ChartAlbum,
+    ChartArtist,
+    ChartsResult,
+    ChartsService,
+    ChartTrack,
+)
 from soulspot.application.services.compilation_analyzer_service import (
     AlbumAnalysisResult,
     CompilationAnalyzerService,
@@ -11,6 +18,11 @@ from soulspot.application.services.credentials_service import (
     DeezerCredentials,
     SlskdCredentials,
     SpotifyCredentials,
+)
+from soulspot.application.services.discover_service import (
+    DiscoveredArtist,
+    DiscoverResult,
+    DiscoverService,
 )
 from soulspot.application.services.new_releases_service import (
     NewReleasesResult,
@@ -37,9 +49,17 @@ __all__ = [
     "AppSettingsService",
     "AuthUrlResult",
     "AutoImportService",
+    "ChartAlbum",
+    "ChartArtist",
+    "ChartsResult",
+    "ChartsService",
+    "ChartTrack",
     "CompilationAnalyzerService",
     "CredentialsService",
     "DeezerCredentials",
+    "DiscoveredArtist",
+    "DiscoverResult",
+    "DiscoverService",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "NewReleasesResult",

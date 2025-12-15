@@ -1,12 +1,18 @@
 """Spotify Image Service - Download and manage Spotify artwork locally.
 
 Hey future me - this service handles LOCAL STORAGE of Spotify images!
+REFACTORED Nov 2025: Now with MULTI-PROVIDER support (Deezer fallback)!
 
 Why local storage?
 1. Offline access - Images work without Spotify connection
 2. Fast loading - No CDN latency, images served from disk
 3. URL change detection - Compare image_url vs stored; re-download if changed
 4. Cleanup on delete - Remove images when entity is removed from DB
+
+MULTI-PROVIDER FALLBACK (Nov 2025):
+- Primary: Spotify CDN (if URL available)
+- Fallback: Deezer CDN (NO AUTH NEEDED - just search by name!)
+- Fallback 2: CoverArtArchive (for albums with MusicBrainz ID)
 
 Image sizes (per user specification):
 - Artists: 300x300px (profile images, smaller is fine)
@@ -745,3 +751,290 @@ class SpotifyImageService:
             )
 
         return deleted
+
+    # =========================================================================
+    # MULTI-PROVIDER FALLBACK METHODS (Nov 2025)
+    # Hey future me - these methods try Spotify first, then fall back to Deezer!
+    # Deezer CDN is FREE (no auth needed), perfect for when Spotify URLs fail.
+    # =========================================================================
+
+    async def download_artist_image_with_fallback(
+        self,
+        spotify_id: str,
+        artist_name: str,
+        spotify_image_url: str | None = None,
+        deezer_plugin: "DeezerPlugin | None" = None,
+    ) -> ImageDownloadResult:
+        """Download artist image with Deezer fallback.
+
+        Hey future me - dieser Methode nutzt MULTI-PROVIDER für Bilder!
+        Fallback-Kette: Spotify URL → Deezer (nach Name suchen) → Fail
+
+        Deezer advantage: NO AUTH NEEDED for artist search!
+
+        Args:
+            spotify_id: Spotify artist ID (for file naming)
+            artist_name: Artist name (for Deezer search fallback)
+            spotify_image_url: Spotify CDN URL (optional)
+            deezer_plugin: DeezerPlugin instance for fallback (optional)
+
+        Returns:
+            ImageDownloadResult with success/failure details
+        """
+        # 1. Try Spotify URL first
+        if spotify_image_url:
+            result = await self.download_artist_image_with_result(
+                spotify_id, spotify_image_url
+            )
+            if result.success:
+                return result
+            logger.debug(
+                f"Spotify image failed for {artist_name}, trying Deezer fallback: "
+                f"{result.error_message}"
+            )
+
+        # 2. Try Deezer fallback (NO AUTH NEEDED!)
+        if deezer_plugin and artist_name:
+            try:
+                deezer_url = await self._get_deezer_artist_image_url(
+                    deezer_plugin, artist_name
+                )
+                if deezer_url:
+                    target_size = IMAGE_SIZES["artists"]
+                    image_data, dl_result = await self._download_and_process_image_with_result(
+                        deezer_url, target_size
+                    )
+
+                    if image_data and dl_result.success:
+                        # Save with Spotify ID (our primary key)
+                        try:
+                            file_path = self._get_image_path("artists", spotify_id)
+                            await asyncio.to_thread(file_path.write_bytes, image_data)
+                            relative_path = self._get_relative_path("artists", spotify_id)
+                            logger.info(
+                                f"Saved artist image from Deezer fallback: "
+                                f"{artist_name} → {relative_path}"
+                            )
+                            return ImageDownloadResult.ok(relative_path)
+                        except OSError as e:
+                            logger.error(f"Failed to save Deezer artist image: {e}")
+
+            except Exception as e:
+                logger.debug(f"Deezer artist image fallback failed: {e}")
+
+        # All sources failed
+        return ImageDownloadResult.error(
+            ImageDownloadErrorCode.NO_URL,
+            f"No image found for artist '{artist_name}' from Spotify or Deezer",
+            spotify_image_url,
+        )
+
+    async def download_album_image_with_fallback(
+        self,
+        spotify_id: str,
+        album_title: str,
+        artist_name: str,
+        spotify_image_url: str | None = None,
+        deezer_plugin: "DeezerPlugin | None" = None,
+        musicbrainz_id: str | None = None,
+    ) -> ImageDownloadResult:
+        """Download album image with Deezer and CoverArtArchive fallback.
+
+        Hey future me - dieser Methode nutzt MULTI-PROVIDER für Album-Cover!
+        Fallback-Kette: Spotify URL → Deezer (search) → CoverArtArchive → Fail
+
+        Args:
+            spotify_id: Spotify album ID (for file naming)
+            album_title: Album title (for Deezer search)
+            artist_name: Artist name (for Deezer search)
+            spotify_image_url: Spotify CDN URL (optional)
+            deezer_plugin: DeezerPlugin instance for fallback (optional)
+            musicbrainz_id: MusicBrainz release ID for CoverArtArchive (optional)
+
+        Returns:
+            ImageDownloadResult with success/failure details
+        """
+        # 1. Try Spotify URL first
+        if spotify_image_url:
+            result = await self.download_album_image_with_result(
+                spotify_id, spotify_image_url
+            )
+            if result.success:
+                return result
+            logger.debug(
+                f"Spotify album image failed for '{album_title}', trying fallbacks: "
+                f"{result.error_message}"
+            )
+
+        # 2. Try Deezer fallback (NO AUTH NEEDED!)
+        if deezer_plugin and album_title and artist_name:
+            try:
+                deezer_url = await self._get_deezer_album_image_url(
+                    deezer_plugin, album_title, artist_name
+                )
+                if deezer_url:
+                    target_size = IMAGE_SIZES["albums"]
+                    image_data, dl_result = await self._download_and_process_image_with_result(
+                        deezer_url, target_size
+                    )
+
+                    if image_data and dl_result.success:
+                        try:
+                            file_path = self._get_image_path("albums", spotify_id)
+                            await asyncio.to_thread(file_path.write_bytes, image_data)
+                            relative_path = self._get_relative_path("albums", spotify_id)
+                            logger.info(
+                                f"Saved album image from Deezer fallback: "
+                                f"'{album_title}' by {artist_name} → {relative_path}"
+                            )
+                            return ImageDownloadResult.ok(relative_path)
+                        except OSError as e:
+                            logger.error(f"Failed to save Deezer album image: {e}")
+
+            except Exception as e:
+                logger.debug(f"Deezer album image fallback failed: {e}")
+
+        # 3. Try CoverArtArchive fallback (if we have MusicBrainz ID)
+        if musicbrainz_id:
+            try:
+                caa_url = f"https://coverartarchive.org/release/{musicbrainz_id}/front"
+                target_size = IMAGE_SIZES["albums"]
+                image_data, dl_result = await self._download_and_process_image_with_result(
+                    caa_url, target_size
+                )
+
+                if image_data and dl_result.success:
+                    try:
+                        file_path = self._get_image_path("albums", spotify_id)
+                        await asyncio.to_thread(file_path.write_bytes, image_data)
+                        relative_path = self._get_relative_path("albums", spotify_id)
+                        logger.info(
+                            f"Saved album image from CoverArtArchive fallback: "
+                            f"'{album_title}' → {relative_path}"
+                        )
+                        return ImageDownloadResult.ok(relative_path)
+                    except OSError as e:
+                        logger.error(f"Failed to save CoverArtArchive album image: {e}")
+
+            except Exception as e:
+                logger.debug(f"CoverArtArchive fallback failed: {e}")
+
+        # All sources failed
+        return ImageDownloadResult.error(
+            ImageDownloadErrorCode.NO_URL,
+            f"No image found for album '{album_title}' from Spotify, Deezer, or CoverArtArchive",
+            spotify_image_url,
+        )
+
+    async def _get_deezer_artist_image_url(
+        self,
+        deezer_plugin: "DeezerPlugin",
+        artist_name: str,
+    ) -> str | None:
+        """Search Deezer for an artist and get their image URL.
+
+        Hey future me - Deezer search is FREE, no auth needed!
+        We search by name and take the first matching result's picture.
+
+        Args:
+            deezer_plugin: DeezerPlugin instance
+            artist_name: Artist name to search for
+
+        Returns:
+            Deezer CDN image URL or None
+        """
+        try:
+            search_result = await deezer_plugin.search_artists(
+                query=artist_name, limit=3
+            )
+
+            if not search_result.items:
+                logger.debug(f"No Deezer artist found for '{artist_name}'")
+                return None
+
+            # Take the first match
+            artist_dto = search_result.items[0]
+
+            # ArtistDTO has image_url from Deezer
+            if artist_dto.image_url:
+                logger.debug(
+                    f"Found Deezer image for '{artist_name}': {artist_dto.image_url[:50]}..."
+                )
+                return artist_dto.image_url
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Deezer artist search failed for '{artist_name}': {e}")
+            return None
+
+    async def _get_deezer_album_image_url(
+        self,
+        deezer_plugin: "DeezerPlugin",
+        album_title: str,
+        artist_name: str,
+    ) -> str | None:
+        """Search Deezer for an album and get its cover URL.
+
+        Hey future me - Deezer album search is FREE, no auth needed!
+        Search query combines artist + album for better matching.
+
+        Args:
+            deezer_plugin: DeezerPlugin instance
+            album_title: Album title to search for
+            artist_name: Artist name for better matching
+
+        Returns:
+            Deezer CDN cover URL or None
+        """
+        try:
+            # Combine artist and album for better search
+            search_query = f"{artist_name} {album_title}"
+            search_result = await deezer_plugin.search_albums(
+                query=search_query, limit=5
+            )
+
+            if not search_result.items:
+                logger.debug(f"No Deezer album found for '{album_title}' by {artist_name}")
+                return None
+
+            # Find best match (prefer exact title match)
+            best_match = None
+            album_title_lower = album_title.lower().strip()
+            artist_name_lower = artist_name.lower().strip()
+
+            for album_dto in search_result.items:
+                if (
+                    album_dto.title.lower().strip() == album_title_lower
+                    and album_dto.artist_name
+                    and album_dto.artist_name.lower().strip() == artist_name_lower
+                ):
+                    best_match = album_dto
+                    break
+
+            # Fallback to first result if no exact match
+            if not best_match:
+                best_match = search_result.items[0]
+
+            # AlbumDTO has artwork_url from Deezer
+            if best_match.artwork_url:
+                logger.debug(
+                    f"Found Deezer cover for '{album_title}': "
+                    f"{best_match.artwork_url[:50]}..."
+                )
+                return best_match.artwork_url
+
+            return None
+
+        except Exception as e:
+            logger.debug(
+                f"Deezer album search failed for '{album_title}' by {artist_name}: {e}"
+            )
+            return None
+
+
+# Type hint for optional Deezer plugin
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
