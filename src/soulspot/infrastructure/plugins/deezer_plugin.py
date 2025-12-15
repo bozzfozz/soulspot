@@ -1301,7 +1301,7 @@ class DeezerPlugin(IMusicServicePlugin):
         """
         try:
             deezer_tracks = await self._client.get_chart_tracks(limit=limit)
-            return [self._convert_track_to_dto(track) for track in deezer_tracks]
+            return [self._convert_track(track) for track in deezer_tracks]
         except Exception as e:
             logger.error(f"DeezerPlugin: get_chart_tracks failed: {e}")
             return []

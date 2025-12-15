@@ -2552,7 +2552,10 @@ async def spotify_discover_page(
     )
 
     # Get followed artist IDs/names for filtering
-    followed_ids = {a.spotify_id for a in artists if a.spotify_id}
+    # Extract Spotify ID from URI (format: spotify:artist:ID)
+    followed_ids = {
+        uri.split(":")[-1] for a in artists if (uri := a.spotify_uri)
+    }
     followed_names = {a.name.lower().strip() for a in artists if a.name}
 
     # Use DiscoverService for Multi-Provider discovery!
