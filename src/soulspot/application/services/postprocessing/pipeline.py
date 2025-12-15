@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soulspot.application.services.postprocessing.artwork_service import ArtworkService
+from soulspot.application.services.postprocessing.metadata_service import MetadataService
 from soulspot.application.services.postprocessing.id3_tagging_service import (
     ID3TaggingService,
 )
@@ -20,6 +20,7 @@ from soulspot.domain.ports import IAlbumRepository, IArtistRepository
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -65,27 +66,29 @@ class PostProcessingPipeline:
         settings: Settings,
         artist_repository: IArtistRepository,
         album_repository: IAlbumRepository,
-        artwork_service: ArtworkService | None = None,
+        metadata_service: MetadataService | None = None,
         lyrics_service: LyricsService | None = None,
         id3_tagging_service: ID3TaggingService | None = None,
         renaming_service: RenamingService | None = None,
         spotify_plugin: "SpotifyPlugin | None" = None,
+        deezer_plugin: "DeezerPlugin | None" = None,
         app_settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize post-processing pipeline.
 
-        Hey future me - refactored to use SpotifyPlugin instead of raw SpotifyClient!
-        The plugin handles token management internally, no more access_token juggling.
+        Hey future me - refactored to use MetadataService with Multi-Provider!
+        Now with Deezer fallback für Artwork-Download.
 
         Args:
             settings: Application settings
             artist_repository: Repository for artist data
             album_repository: Repository for album data
-            artwork_service: Optional artwork service (created if not provided)
+            metadata_service: Optional metadata service for artwork (created if not provided)
             lyrics_service: Optional lyrics service (created if not provided)
             id3_tagging_service: Optional ID3 tagging service (created if not provided)
             renaming_service: Optional renaming service (created if not provided)
-            spotify_plugin: Optional SpotifyPlugin for artwork downloads (handles auth internally)
+            spotify_plugin: Optional SpotifyPlugin for artwork downloads
+            deezer_plugin: Optional DeezerPlugin for artwork fallback (NO AUTH!)
             app_settings_service: Optional app settings service for dynamic naming templates
         """
         self._settings = settings
@@ -93,10 +96,13 @@ class PostProcessingPipeline:
         self._album_repository = album_repository
         self._app_settings_service = app_settings_service
         self._spotify_plugin = spotify_plugin
+        self._deezer_plugin = deezer_plugin
 
-        # Initialize services
-        self._artwork_service = artwork_service or ArtworkService(
-            settings, spotify_plugin=spotify_plugin
+        # Initialize services - now using MetadataService with Multi-Provider
+        self._metadata_service = metadata_service or MetadataService(
+            settings, 
+            spotify_plugin=spotify_plugin,
+            deezer_plugin=deezer_plugin,
         )
         self._lyrics_service = lyrics_service or LyricsService(settings)
         self._id3_tagging_service = id3_tagging_service or ID3TaggingService(settings)
@@ -166,7 +172,7 @@ class PostProcessingPipeline:
             artwork_data = None
             if self._settings.postprocessing.artwork_enabled:
                 try:
-                    artwork_data = await self._artwork_service.download_artwork(
+                    artwork_data = await self._metadata_service.download_artwork(
                         track, album
                     )
                     if artwork_data:

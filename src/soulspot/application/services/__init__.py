@@ -37,10 +37,11 @@ from soulspot.application.services.spotify_auth_service import (
     SpotifyAuthService,
     TokenResult,
 )
-from soulspot.application.services.spotify_image_service import (
+from soulspot.application.services.artwork_service import (
+    ArtworkService,
     ImageDownloadErrorCode,
     ImageDownloadResult,
-    SpotifyImageService,
+    SpotifyImageService,  # Deprecated alias for ArtworkService
 )
 from soulspot.application.services.token_manager import TokenManager
 
@@ -70,7 +71,8 @@ __all__ = [
     "SlskdCredentials",
     "SpotifyAuthService",
     "SpotifyCredentials",
-    "SpotifyImageService",
+    "ArtworkService",
+    "SpotifyImageService",  # Deprecated alias
     "TokenManager",
     "TokenResult",
 ]

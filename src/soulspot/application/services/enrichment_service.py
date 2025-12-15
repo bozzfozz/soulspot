@@ -222,7 +222,7 @@ class EnrichmentService:
     async def apply_candidate(
         self,
         candidate_id: str,
-        spotify_image_service: Any,  # SpotifyImageService - avoid circular import
+        spotify_image_service: Any,  # ArtworkService - avoid circular import
     ) -> dict[str, Any]:
         """Apply a user-selected enrichment candidate.
 
@@ -233,7 +233,7 @@ class EnrichmentService:
 
         Args:
             candidate_id: Candidate UUID
-            spotify_image_service: Service for downloading Spotify images
+            spotify_image_service: ArtworkService for downloading images
 
         Returns:
             Result dictionary with entity_type, entity_id, spotify_uri

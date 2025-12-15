@@ -1684,11 +1684,11 @@ async def apply_enrichment_candidate(
     """
     # Hey future me - NOW uses EnrichmentService! Clean Architecture.
     from soulspot.application.services.enrichment_service import EnrichmentService
-    from soulspot.application.services.spotify_image_service import SpotifyImageService
+    from soulspot.application.services.artwork_service import ArtworkService
     from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
     service = EnrichmentService(db)
-    image_service = SpotifyImageService(settings)
+    image_service = ArtworkService(settings)
 
     try:
         result = await service.apply_candidate(candidate_id, image_service)
