@@ -102,8 +102,13 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
 # After migration complete, .env fallback will be removed.
 # All credentials (Spotify, slskd, Deezer) should be accessed through this service.
 # Use this in endpoint params like: "credentials: CredentialsService = Depends(get_credentials_service)"
+#
+# CRITICAL (Jan 2025 fix): We MUST pass fallback_settings to enable ENV var fallback!
+# Without it, DB-only mode is used, and users with .env configs get "missing client_id" errors.
+# The fallback kicks in when DB values are empty/default.
 async def get_credentials_service(
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> CredentialsService:
     """Get CredentialsService for database-first credential access.
 
@@ -112,11 +117,12 @@ async def get_credentials_service(
 
     Args:
         session: Database session for app_settings access
+        settings: Application settings for .env fallback
 
     Returns:
         CredentialsService instance ready for credential lookups
     """
-    return CredentialsService(session)
+    return CredentialsService(session, fallback_settings=settings)
 
 
 # Yo, creates NEW SpotifyClient on EVERY request! Not cached/singleton. This is fine because

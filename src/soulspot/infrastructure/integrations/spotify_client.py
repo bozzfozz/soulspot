@@ -102,11 +102,21 @@ class SpotifyClient(ISpotifyClient):
             Authorization URL
 
         Raises:
-            ValueError: If redirect_uri is not configured
+            ValueError: If client_id or redirect_uri is not configured
         """
-        # Hey future me, ALWAYS validate redirect_uri is set before building auth URL!
-        # Empty redirect_uri causes cryptic Spotify errors. Better to fail fast here
-        # with a clear message than let user hit Spotify's error page.
+        # Hey future me, ALWAYS validate credentials are set before building auth URL!
+        # Empty values cause cryptic Spotify errors. Better to fail fast here with
+        # a clear message than let user hit Spotify's confusing error page.
+        #
+        # Jan 2025: Added client_id check! Users were getting "missing required parameter
+        # client_id" from Spotify with no context. Now we catch it early with helpful message.
+        if not self.settings.client_id or not self.settings.client_id.strip():
+            raise ValueError(
+                "SPOTIFY_CLIENT_ID is not configured. "
+                "Configure it via Settings UI > Services > Spotify, "
+                "or set SPOTIFY_CLIENT_ID in your environment/docker-compose.yml. "
+                "Get credentials at https://developer.spotify.com/dashboard"
+            )
         if not self.settings.redirect_uri or not self.settings.redirect_uri.strip():
             raise ValueError(
                 "SPOTIFY_REDIRECT_URI is not configured. "
