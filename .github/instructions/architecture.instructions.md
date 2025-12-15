@@ -23,6 +23,8 @@ Dieses Dokument verhindert die häufigsten Fehler:
 - `docs/architecture/TRANSACTION_PATTERNS.md` - Wer committet wann
 - `docs/architecture/API_RESPONSE_FORMATS.md` - Standardisierte API-Responses
 - `docs/architecture/NAMING_CONVENTIONS.md` - Benennungsregeln für alles
+- `docs/architecture/WORKER_PATTERNS.md` - Background Worker Lifecycle
+- `docs/architecture/AUTH_PATTERNS.md` - OAuth & Session Management
 
 ---
 
