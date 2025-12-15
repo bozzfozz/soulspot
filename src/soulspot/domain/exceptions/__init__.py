@@ -90,3 +90,27 @@ class TokenRefreshException(DomainException):
         # Hey - 400 with invalid_grant means refresh token is dead
         # 401/403 mean access denied (user revoked, etc.)
         return self.error_code == "invalid_grant" or self.http_status in (400, 401, 403)
+
+
+# =============================================================================
+# DEPRECATED ALIASES (Dec 2025)
+# Hey future me - these are for backward compatibility with old exception names!
+# The codebase used to have domain/exceptions.py with these names.
+# Now we have domain/exceptions/__init__.py with better naming conventions.
+# TODO: Migrate all code to use new names and remove these aliases!
+# =============================================================================
+
+EntityNotFoundError = EntityNotFoundException
+InvalidOperationError = InvalidStateException
+
+
+class OperationFailedError(DomainException):
+    """Operation failed due to external dependency or system error.
+    
+    DEPRECATED: Use DomainException or a more specific exception instead.
+    This is kept for backward compatibility with old code.
+    
+    Raised when an operation fails due to file system errors, network
+    errors, or other external factors.
+    """
+    pass

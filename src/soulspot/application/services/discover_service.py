@@ -512,6 +512,40 @@ class DiscoverService:
         
         return result
 
+    # =============================================================================
+    # ALIAS FOR BACKWARD COMPATIBILITY (Dec 2025)
+    # Hey future me - this method was expected by ui.py but didn't exist!
+    # It's just an alias for get_related_artists with different parameter names.
+    # =============================================================================
+    
+    async def discover_similar_artists(
+        self,
+        seed_artist_name: str,
+        seed_artist_spotify_id: str | None = None,
+        limit: int = 20,
+        enabled_providers: list[str] | None = None,
+    ) -> DiscoverResult:
+        """Discover artists similar to a seed artist.
+        
+        Hey future me - this is an alias for get_related_artists()!
+        The ui.py route expects this method name and parameter structure.
+        
+        Args:
+            seed_artist_name: Name of the seed artist
+            seed_artist_spotify_id: Optional Spotify ID of the seed artist
+            limit: Max artists to return
+            enabled_providers: List of providers to use (["spotify", "deezer"])
+            
+        Returns:
+            DiscoverResult with similar artists
+        """
+        return await self.get_related_artists(
+            spotify_id=seed_artist_spotify_id,
+            artist_name=seed_artist_name,
+            limit=limit,
+            enabled_providers=enabled_providers,
+        )
+
 
 # Export
 __all__ = ["DiscoverService", "DiscoverResult", "DiscoveredArtist"]
