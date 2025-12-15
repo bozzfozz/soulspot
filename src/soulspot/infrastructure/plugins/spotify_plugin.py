@@ -1356,6 +1356,110 @@ class SpotifyPlugin(IMusicServicePlugin):
             else None,
         )
 
+    # =========================================================================
+    # NEW RELEASES (Multi-Provider Feature)
+    # =========================================================================
+
+    async def get_new_releases(
+        self,
+        days: int = 90,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> list[AlbumDTO]:
+        """Get new album releases from followed artists.
+
+        Hey future me - DAS ist die Plugin-Methode für Multi-Provider New Releases!
+        Holt followed artists + deren recent albums innerhalb des Zeitraums.
+
+        WICHTIG: Spotify API hat keinen direkten "New Releases für followed artists"!
+        Wir müssen: 1) Followed artists holen, 2) Für jeden recent albums holen.
+
+        Das kann VIELE API-Calls sein (50 artists = 50 API calls)!
+        Nutze das NICHT synchron - background sync oder caching bevorzugen!
+
+        Args:
+            days: Look back period (default 90 days)
+            include_singles: Include singles/EPs in results
+            include_compilations: Include compilation albums
+
+        Returns:
+            List of AlbumDTOs from followed artists within timeframe
+
+        Raises:
+            PluginError: If API calls fail
+        """
+        from datetime import datetime, timedelta, UTC
+
+        token = self._ensure_token()
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+        # Build album type filter (Spotify album_type values)
+        allowed_types = ["album"]
+        if include_singles:
+            allowed_types.extend(["single", "ep"])
+        if include_compilations:
+            allowed_types.append("compilation")
+
+        try:
+            # Step 1: Get all followed artists (paginated)
+            all_artists = []
+            after = None
+            while True:
+                result = await self.get_followed_artists(limit=50, after=after)
+                all_artists.extend(result.items)
+                if result.next_offset is None:
+                    break
+                after = result.next_offset
+
+            logger.info(f"SpotifyPlugin: Fetching new releases for {len(all_artists)} followed artists")
+
+            # Step 2: Get recent albums for each artist
+            all_albums: list[AlbumDTO] = []
+            seen_ids: set[str] = set()
+
+            for artist in all_artists:
+                if not artist.spotify_id:
+                    continue
+
+                try:
+                    # Get artist albums with allowed types
+                    albums = await self.get_artist_albums(
+                        artist_id=artist.spotify_id,
+                        include_groups=allowed_types,
+                        limit=20,  # Max 20 recent albums per artist
+                    )
+
+                    # Filter by release date
+                    for album in albums:
+                        # Skip duplicates (same album from multiple artists)
+                        if album.spotify_id and album.spotify_id in seen_ids:
+                            continue
+
+                        # Check release date
+                        if album.release_date and album.release_date >= cutoff_str:
+                            if album.spotify_id:
+                                seen_ids.add(album.spotify_id)
+                            all_albums.append(album)
+
+                except Exception as e:
+                    # Log error but continue with other artists
+                    logger.warning(f"SpotifyPlugin: Failed to get albums for artist {artist.spotify_id}: {e}")
+                    continue
+
+            # Sort by release date (newest first)
+            all_albums.sort(key=lambda a: a.release_date or "1900-01-01", reverse=True)
+
+            logger.info(f"SpotifyPlugin: Found {len(all_albums)} new releases from Spotify")
+            return all_albums
+
+        except Exception as e:
+            raise PluginError(
+                message=f"Failed to get new releases from Spotify: {e!s}",
+                service=ServiceType.SPOTIFY,
+                original_error=e,
+            ) from e
+
 
 # Export
 __all__ = ["SpotifyPlugin"]

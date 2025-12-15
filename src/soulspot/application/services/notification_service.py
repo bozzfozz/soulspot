@@ -452,6 +452,73 @@ class NotificationService:
             },
         )
 
+    async def send_new_releases_detected_notification(
+        self,
+        new_albums: list[dict[str, str]],
+        total_count: int,
+        source_counts: dict[str, int] | None = None,
+    ) -> bool:
+        """Send notification about new releases detected.
+
+        Hey future me - this is for BATCH notifications when the worker finds new albums!
+        Instead of spamming one notification per album, we send a summary.
+
+        Args:
+            new_albums: List of dicts with 'artist_name', 'album_name', 'release_date'
+            total_count: Total number of new albums detected
+            source_counts: Albums per source (spotify: 5, deezer: 3, etc.)
+
+        Returns:
+            True if notification was sent successfully
+        """
+        if total_count == 0:
+            return True  # Nothing to notify
+
+        # Build message based on count
+        if total_count == 1:
+            album = new_albums[0]
+            title = f"New Release: {album['artist_name']}"
+            message = f"{album['artist_name']} - {album['album_name']}"
+            if album.get('release_date'):
+                message += f" (Released: {album['release_date']})"
+        elif total_count <= 5:
+            title = f"{total_count} New Releases Detected"
+            # List all albums
+            album_lines = [
+                f"• {a['artist_name']} - {a['album_name']}"
+                for a in new_albums[:5]
+            ]
+            message = "\n".join(album_lines)
+        else:
+            title = f"{total_count} New Releases Detected"
+            # Show first 3 and count
+            album_lines = [
+                f"• {a['artist_name']} - {a['album_name']}"
+                for a in new_albums[:3]
+            ]
+            album_lines.append(f"...and {total_count - 3} more")
+            message = "\n".join(album_lines)
+
+        # Add source breakdown if available
+        if source_counts:
+            sources = ", ".join(
+                f"{source}: {count}" for source, count in source_counts.items() if count > 0
+            )
+            if sources:
+                message += f"\n\nSources: {sources}"
+
+        return await self.send_notification(
+            notification_type=NotificationType.NEW_RELEASE,
+            title=title,
+            message=message,
+            priority=NotificationPriority.NORMAL,
+            data={
+                "total_count": total_count,
+                "source_counts": source_counts or {},
+                "albums": new_albums[:10],  # Limit data size
+            },
+        )
+
     async def send_system_error_notification(
         self, error_type: str, error_message: str, context: dict[str, Any] | None = None
     ) -> bool:

@@ -1,13 +1,13 @@
 # Browse API
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-01-16
+> **Version:** 2.0  
+> **Last Updated:** 2025-12-15
 
 ---
 
 ## Overview
 
-The Browse API provides endpoints for discovering new music without requiring Spotify authentication. It uses the **DeezerPlugin** to offer new releases, charts, and genre browsing.
+The Browse API provides endpoints for discovering new music from **your library artists only**. It aggregates new releases from both Deezer and Spotify, filtering them to show only albums from artists you already follow or have in your library.
 
 ---
 
@@ -16,23 +16,25 @@ The Browse API provides endpoints for discovering new music without requiring Sp
 ```
 Route (/browse/new-releases)
     ↓
-DeezerPlugin (dependency injection)
+Load Library Artists (ArtistModel)
     ↓
-DeezerClient (HTTP calls)
+DeezerPlugin + SpotifyPlugin (dependency injection)
     ↓
-Deezer Public API (no OAuth!)
+Filter by artist_name matching
+    ↓
+Deduplicate + Sort by date
 ```
 
 ---
 
 ## Key Features
 
-- **No authentication required** - Works for all users immediately
-- **Plugin architecture** - Uses DeezerPlugin for clean separation
-- **Multiple sources** - Aggregates from Deezer editorial + charts
-- **New releases** - Fresh album releases from around the world
-- **Compilation filtering** - Option to exclude compilation albums
-- **Future extensibility** - Can add Spotify when user is authenticated
+- **Library-filtered** - Only shows releases from artists in your library
+- **Multi-service aggregation** - Combines Deezer + Spotify sources
+- **Deduplication** - Same album from multiple services shown once
+- **Source badges** - Shows which service provided each release
+- **No spam** - No random global releases, only your followed artists
+- **Date filtering** - Configurable lookback period (7-365 days)
 
 ---
 
@@ -40,39 +42,53 @@ Deezer Public API (no OAuth!)
 
 ### GET `/browse/new-releases`
 
-Fetch new album releases from Deezer (no auth required).
+Fetch new album releases **from your library artists only**. Aggregates releases from Deezer + Spotify, filtering to show only albums from artists in your library.
 
 #### Query Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | integer | 50 | Number of releases to fetch (10-100) |
+| `days` | integer | 90 | Days to look back (7-365) |
 | `include_compilations` | boolean | true | Include compilation albums |
+| `include_singles` | boolean | true | Include singles/EPs |
 
 #### Response
 
 Returns HTML page with album grid. Each album includes:
 - Album cover artwork
 - Title and artist name
-- Release date
+- Release date (hidden if unknown)
 - Track count
-- Record type (album, single, EP, compilation)
-- Explicit content indicator
-- Link to Deezer
+- Album type (album, single, EP, compilation)
+- Source badge (deezer/spotify)
+- External link
 
 #### Example Request
 
 ```http
-GET /browse/new-releases?limit=50&include_compilations=false
+GET /browse/new-releases?days=90&include_singles=true&include_compilations=false
 ```
 
-#### Data Source
+#### Data Sources
 
-Uses `DeezerClient.get_browse_new_releases()` which combines:
-1. **Editorial Releases** - Curated picks from Deezer's editorial team
-2. **Chart Albums** - Top charting albums globally
+**Step 1: Load Library Artists**
+- Queries `soulspot_artists` table for all artist names
+- Creates normalized set for case-insensitive matching
 
-Results are deduplicated and sorted by relevance.
+**Step 2: Fetch from Deezer**
+- Uses `DeezerClient.get_browse_new_releases()` (editorial + charts)
+- **Filters** to only show albums where `artist_name` matches library artists
+- Enriches missing `release_date` via detail API
+
+**Step 3: Fetch from Spotify**
+- Queries `soulspot_albums` table with `source='spotify'`
+- Joins with `soulspot_artists` where `spotify_uri IS NOT NULL`
+- Already library-filtered by design
+
+**Step 4: Deduplicate & Sort**
+- Combines both sources
+- Deduplicates by normalized `artist_name::album_title` key
+- Sorts by `release_date` descending (newest first)
 
 ---
 
@@ -82,21 +98,23 @@ Each album in the response contains:
 
 ```json
 {
-  "deezer_id": 123456789,
-  "title": "Album Title",
+  "id": "123456789",
+  "name": "Album Title",
   "artist_name": "Artist Name",
-  "artist_id": 987654,
+  "artist_id": "987654",
+  "artwork_url": "https://...",
   "release_date": "2025-01-15",
+  "album_type": "album",
   "total_tracks": 12,
-  "record_type": "album",
-  "cover_small": "https://...",
-  "cover_medium": "https://...",
-  "cover_big": "https://...",
-  "cover_xl": "https://...",
-  "link": "https://www.deezer.com/album/123456789",
-  "explicit": false
+  "external_url": "https://www.deezer.com/album/123456789",
+  "source": "deezer"
 }
 ```
+
+**Notes:**
+- `release_date` = `"1900-01-01"` is hidden in UI (fallback for missing dates)
+- `source` = `"deezer"` or `"spotify"` (shown as badge in UI)
+- `id` is service-specific (Deezer ID or Spotify ID)
 
 ---
 
@@ -113,32 +131,60 @@ Each album in the response contains:
 
 ## Error Handling
 
-If the Deezer API is unavailable, the page displays an error message:
+If service fetch fails, the page shows partial results from working services:
 
 ```html
 <div class="alert alert-warning">
-    <i class="bi bi-exclamation-triangle"></i> Failed to fetch new releases: [error message]
+    <i class="bi bi-exclamation-triangle"></i> Some sources failed: [error message]
 </div>
 ```
+
+Graceful degradation:
+- ✅ Deezer fails → Show Spotify releases only
+- ✅ Spotify fails → Show Deezer releases only
+- ✅ Both fail → Show empty state with error message
+- ✅ No library artists → Shows empty (intentional)
 
 ---
 
 ## Rate Limits
 
-Deezer API rate limits:
-- **No authentication required**
+**Deezer API:**
 - **50 requests per 5 seconds** per IP
-- The client includes automatic rate limiting
+- No authentication required for browse
+
+**Spotify:**
+- Uses local database (no API calls during page load)
+- Already synced via background worker
+
+---
+
+## Implementation Notes
+
+**Why library filtering?**
+- Prevents spam from random global releases
+- Users only see relevant new music
+- Respects user's music taste (curated library)
+
+**Why 200 limit for Deezer?**
+- Fetches more releases to compensate for filtering
+- Most will be filtered out (not in library)
+- Ensures enough results after filtering
+
+**Name matching:**
+- Case-insensitive and trimmed: `"Artist Name"` → `"artist name"`
+- Works across all services (Spotify, Deezer, local)
+- Simple but effective for 95% of cases
 
 ---
 
 ## Future Enhancements
 
 Planned additions:
-1. **Spotify New Releases** - When user is authenticated with Spotify
+1. ~~**Spotify New Releases**~~ ✅ Already implemented!
 2. **Genre filtering** - Browse by specific genre
 3. **Regional charts** - Country-specific new releases
-4. **Personalized recommendations** - Based on listening history
+4. **Fuzzy name matching** - Better artist matching across services
 5. **Download queue integration** - One-click add to download queue
 
 ---

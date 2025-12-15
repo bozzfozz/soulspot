@@ -218,6 +218,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.spotify_sync_worker = spotify_sync_worker
         logger.info("Spotify sync worker started (checks every 60s)")
 
+        # =================================================================
+        # Start New Releases Sync Worker (caches new releases from all providers)
+        # =================================================================
+        # Hey future me - dieser Worker cached New Releases im Hintergrund!
+        # Das vermeidet langsame API-Calls bei jedem Page Load.
+        # Er respektiert app_settings für enable/disable und Intervall.
+        # Runs after token_refresh_worker so Spotify tokens are fresh.
+        from soulspot.application.workers.new_releases_sync_worker import (
+            NewReleasesSyncWorker,
+        )
+
+        new_releases_sync_worker = NewReleasesSyncWorker(
+            db=db,
+            token_manager=db_token_manager,
+            settings=settings,
+            check_interval_seconds=60,  # Check every minute if sync is due
+        )
+        await new_releases_sync_worker.start()
+        app.state.new_releases_sync_worker = new_releases_sync_worker
+        logger.info("New Releases sync worker started (syncs every 30min by default)")
+
         # Initialize job queue with configured max concurrent downloads
         from soulspot.application.workers.download_worker import DownloadWorker
         from soulspot.application.workers.job_queue import JobQueue
@@ -648,6 +669,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Spotify sync worker stopped")
             except Exception as e:
                 logger.exception("Error stopping Spotify sync worker: %s", e)
+
+        # Stop New Releases sync worker
+        if hasattr(app.state, "new_releases_sync_worker"):
+            try:
+                logger.info("Stopping New Releases sync worker...")
+                await app.state.new_releases_sync_worker.stop()
+                logger.info("New Releases sync worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping New Releases sync worker: %s", e)
 
         # Stop token refresh worker
         if token_refresh_worker is not None:

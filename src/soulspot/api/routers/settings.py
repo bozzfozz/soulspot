@@ -1016,6 +1016,105 @@ async def get_spotify_sync_worker_status(
 
 
 # =====================================================
+# New Releases Sync Worker Status
+# =====================================================
+
+
+class NewReleasesCacheStatus(BaseModel):
+    """Cache status for new releases."""
+    
+    is_valid: bool = Field(description="Whether cache contains valid data")
+    is_fresh: bool = Field(description="Whether cache is still fresh (not expired)")
+    age_seconds: int | None = Field(description="How old the cache is in seconds")
+    album_count: int = Field(description="Number of albums in cache")
+    source_counts: dict[str, int] = Field(description="Albums per source")
+    errors: list[str] = Field(description="Errors from last sync")
+
+
+class NewReleasesSyncWorkerStatus(BaseModel):
+    """Status information for the New Releases sync worker."""
+    
+    running: bool = Field(description="Whether the worker is currently running")
+    check_interval_seconds: int = Field(description="How often the worker checks for due syncs")
+    last_sync: str | None = Field(description="Last sync time ISO format")
+    cache: NewReleasesCacheStatus = Field(description="Cache status")
+    stats: dict[str, Any] = Field(description="Sync statistics")
+
+
+# Hey future me – dieser Endpoint gibt den Status des NewReleasesSyncWorkers zurück.
+# Zeigt Cache-Status und wann der letzte Sync war. Nützlich für Monitoring!
+@router.get("/new-releases/worker-status")
+async def get_new_releases_worker_status(
+    request: Request,
+) -> NewReleasesSyncWorkerStatus:
+    """Get the status of the New Releases sync background worker.
+    
+    Returns information about:
+    - Whether the worker is running
+    - Cache status (fresh, age, album count)
+    - Last sync time
+    - Sync statistics
+    
+    Returns:
+        Worker status information
+    """
+    if not hasattr(request.app.state, "new_releases_sync_worker"):
+        raise HTTPException(
+            status_code=503,
+            detail="New Releases sync worker not initialized",
+        )
+    
+    worker = request.app.state.new_releases_sync_worker
+    status = worker.get_status()
+    
+    return NewReleasesSyncWorkerStatus(
+        running=status["running"],
+        check_interval_seconds=status["check_interval_seconds"],
+        last_sync=status["last_sync"],
+        cache=NewReleasesCacheStatus(**status["cache"]),
+        stats=status["stats"],
+    )
+
+
+# Hey future me – dieser Endpoint triggert einen sofortigen Sync!
+# Nützlich für "Refresh" Button in der UI.
+@router.post("/new-releases/force-sync")
+async def force_new_releases_sync(
+    request: Request,
+) -> dict[str, Any]:
+    """Force an immediate New Releases sync, bypassing cooldown.
+    
+    Use this for "Refresh" button in the UI to get fresh data.
+    Returns the sync result with album count and source breakdown.
+    
+    Returns:
+        Sync result summary
+    """
+    if not hasattr(request.app.state, "new_releases_sync_worker"):
+        raise HTTPException(
+            status_code=503,
+            detail="New Releases sync worker not initialized",
+        )
+    
+    worker = request.app.state.new_releases_sync_worker
+    result = await worker.force_sync()
+    
+    if result is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Sync failed - check logs for details",
+        )
+    
+    return {
+        "success": True,
+        "album_count": len(result.albums),
+        "source_counts": result.source_counts,
+        "total_before_dedup": result.total_before_dedup,
+        "errors": result.errors,
+    }
+
+
+# =====================================================
 # Automation Settings Endpoints
 # =====================================================
 

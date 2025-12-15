@@ -12,6 +12,10 @@ from soulspot.application.services.credentials_service import (
     SlskdCredentials,
     SpotifyCredentials,
 )
+from soulspot.application.services.new_releases_service import (
+    NewReleasesResult,
+    NewReleasesService,
+)
 from soulspot.application.services.provider_mapping_service import (
     ProviderMappingService,
 )
@@ -38,6 +42,8 @@ __all__ = [
     "DeezerCredentials",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
+    "NewReleasesResult",
+    "NewReleasesService",
     "ProviderMappingService",
     "Session",
     "SessionStore",

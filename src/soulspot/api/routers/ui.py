@@ -2108,192 +2108,159 @@ async def browse_new_releases_page(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
+    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     days: int = Query(default=90, ge=7, le=365, description="Days to look back"),
     include_compilations: bool = Query(default=True, description="Include compilations"),
     include_singles: bool = Query(default=True, description="Include singles"),
+    force_refresh: bool = Query(default=False, description="Force refresh from API"),
 ) -> Any:
-    """New Releases from MULTIPLE SOURCES - combines Deezer + Spotify releases.
+    """New Releases from MULTIPLE SOURCES with background caching.
 
-    Hey future me - this aggregates releases from ALL music services!
-    1. Deezer: Global new releases (editorial + charts) - NO AUTH NEEDED
-    2. Spotify: Releases from YOUR followed artists (from DB)
+    Hey future me - REFACTORED to use NewReleasesSyncWorker cache!
+    Background worker syncs every 30 minutes and caches results.
+    UI reads from cache for fast response. Manual refresh available via button.
 
-    We deduplicate by artist_name + album_title (normalized) to avoid
-    showing the same album twice from different sources.
-
-    The source badge on each album shows where it came from.
-    Users get the best of both worlds:
-    - Discovery of popular new releases (Deezer)
-    - Personal releases from followed artists (Spotify)
+    Architecture:
+        Route → Check Cache → [Fresh? Return cached] OR [Stale? Fetch live]
+                      ↓
+            NewReleasesSyncWorker (background sync)
+                      ↓
+            Cached AlbumDTOs → Template
 
     Args:
         request: FastAPI request
-        session: Database session for Spotify data
-        deezer_plugin: DeezerPlugin for global releases
+        session: Database session (for settings check)
+        deezer_plugin: DeezerPlugin instance (fallback if cache miss)
+        spotify_plugin: SpotifyPlugin instance (fallback if cache miss)
         days: How many days back to look for releases (default 90)
         include_compilations: Include compilation albums
         include_singles: Include singles/EPs
+        force_refresh: Force refresh from API (bypass cache)
 
     Returns:
         HTML page with combined new releases from all sources
     """
     from datetime import datetime, timedelta
+    from collections import defaultdict
 
-    from sqlalchemy import select
-
-    # Hey future me - nach Table Consolidation nutzen wir die unified models!
-    # Spotify-Daten sind jetzt in soulspot_artists/albums mit source='spotify'
-    from soulspot.infrastructure.persistence.models import (
-        AlbumModel,
-        ArtistModel,
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.new_releases_service import (
+        NewReleasesResult,
+        NewReleasesService,
     )
 
     error: str | None = None
     all_releases: list[dict[str, Any]] = []
-    seen_keys: set[str] = set()  # For deduplication
-    source_counts: dict[str, int] = {"deezer": 0, "spotify": 0}  # Track contributions
+    cache_info: dict[str, Any] = {}
+    result: NewReleasesResult | None = None
 
-    def normalize_key(artist: str, album: str) -> str:
-        """Create normalized key for deduplication."""
-        return f"{artist.lower().strip()}::{album.lower().strip()}"
-
-    # Check provider availability via AppSettingsService
-    from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.domain.ports.plugin import PluginCapability
-
+    # Check which providers are enabled
     settings_service = AppSettingsService(session)
-    deezer_enabled = await settings_service.is_provider_enabled("deezer")
-    spotify_enabled = await settings_service.is_provider_enabled("spotify")
+    enabled_providers: list[str] = []
+    if await settings_service.is_provider_enabled("deezer"):
+        enabled_providers.append("deezer")
+    if await settings_service.is_provider_enabled("spotify"):
+        enabled_providers.append("spotify")
 
     # -------------------------------------------------------------------------
-    # 1. DEEZER: Global New Releases (no auth required! - uses can_use())
+    # TRY TO USE CACHED DATA FROM BACKGROUND WORKER
     # -------------------------------------------------------------------------
-    # Use can_use() which checks: 1) capability supported 2) auth available if needed
-    # For Deezer BROWSE_NEW_RELEASES, no auth is needed (returns True without token)
-    if deezer_enabled and deezer_plugin.can_use(PluginCapability.BROWSE_NEW_RELEASES):
-        try:
-            deezer_result = await deezer_plugin.get_browse_new_releases(
-                limit=50,
-                include_compilations=include_compilations,
-            )
-
-            if deezer_result.get("success") and deezer_result.get("albums"):
-                for album in deezer_result["albums"]:
-                    # Filter singles if not wanted
-                    record_type = album.get("record_type", "album")
-                    if not include_singles and record_type in ("single", "ep"):
-                        continue
-
-                    key = normalize_key(
-                        album.get("artist_name", ""),
-                        album.get("title", ""),
-                    )
-                    if key not in seen_keys:
-                        seen_keys.add(key)
-                        all_releases.append({
-                            "id": album.get("deezer_id") or album.get("id"),
-                            "name": album.get("title"),
-                            "artist_name": album.get("artist_name"),
-                            "artist_id": album.get("artist_id"),
-                            "artwork_url": album.get("cover_big") or album.get("cover_medium"),
-                        "release_date": album.get("release_date"),
-                        "album_type": record_type,
-                        "total_tracks": album.get("total_tracks") or album.get("nb_tracks"),
-                        "external_url": album.get("link") or f"https://www.deezer.com/album/{album.get('id')}",
-                        "source": "deezer",
-                    })
-                    source_counts["deezer"] += 1
-
-            logger.info(f"New Releases: Got {source_counts['deezer']} from Deezer (using can_use)")
-
-        except Exception as e:
-            logger.warning(f"New Releases: Deezer fetch failed: {e}")
+    # Hey future me - der Worker cached im Hintergrund alle 30 min!
+    # Hier lesen wir aus dem Cache für schnelle Response.
+    # force_refresh=True oder cache stale → fetch live.
+    worker = getattr(request.app.state, "new_releases_sync_worker", None)
+    
+    if worker and not force_refresh:
+        cache = worker.get_cached_releases()
+        if cache.is_fresh():
+            # Use cached data!
+            result = cache.result
+            cache_info = {
+                "source": "cache",
+                "age_seconds": cache.get_age_seconds(),
+                "cached_at": cache.cached_at.isoformat() if cache.cached_at else None,
+            }
+            logger.debug(f"New Releases: Using cached data ({cache_info['age_seconds']}s old)")
+        else:
+            logger.debug("New Releases: Cache stale or invalid, fetching live")
+            cache_info = {"source": "live", "reason": "cache_stale"}
     else:
-        # Log why skipped: provider disabled or capability not available
-        skip_reason = "provider disabled" if not deezer_enabled else "capability not available"
-        logger.debug(f"New Releases: Deezer skipped ({skip_reason})")
+        if force_refresh:
+            logger.info("New Releases: Force refresh requested")
+            cache_info = {"source": "live", "reason": "force_refresh"}
+        else:
+            logger.debug("New Releases: No worker available, fetching live")
+            cache_info = {"source": "live", "reason": "no_worker"}
 
     # -------------------------------------------------------------------------
-    # 2. SPOTIFY: Releases from followed artists (from unified library)
-    # Hey future me - nach Table Consolidation sind Spotify-Daten in soulspot_albums!
-    # Wir filtern nach source='spotify' und Alben von gefolgten Künstlern
+    # FETCH LIVE IF NO CACHE OR FORCE REFRESH
     # -------------------------------------------------------------------------
-    if spotify_enabled:
-        try:
-            cutoff_date = datetime.now(UTC) - timedelta(days=days)
-            cutoff_str = cutoff_date.strftime("%Y-%m-%d")
-
-            # Build album type filter
-            allowed_types = ["album"]
-            if include_singles:
-                allowed_types.extend(["single", "ep"])
-            if include_compilations:
-                allowed_types.append("compilation")
-
-            # Hey future me - jetzt nutzen wir unified models!
-            # AlbumModel.source='spotify' UND artist hat spotify_uri (= followed artist)
-            stmt = (
-                select(AlbumModel, ArtistModel)
-                .join(ArtistModel, AlbumModel.artist_id == ArtistModel.id)
-                .where(AlbumModel.source == "spotify")  # Nur Spotify-synced albums
-                .where(AlbumModel.release_date >= cutoff_str)
-                .where(AlbumModel.album_type.in_(allowed_types))
-                .where(ArtistModel.spotify_uri.isnot(None))  # Nur artists mit Spotify URI
-                .order_by(AlbumModel.release_date.desc())
-                .limit(100)
+    if result is None:
+        # Try force sync via worker first (updates cache)
+        if worker and force_refresh:
+            result = await worker.force_sync()
+            if result:
+                cache_info["source"] = "force_synced"
+        
+        # Fallback: fetch directly via service
+        if result is None:
+            service = NewReleasesService(
+                spotify_plugin=spotify_plugin,
+                deezer_plugin=deezer_plugin,
             )
-
-            result = await session.execute(stmt)
-            rows = result.all()
-
-            for album, artist in rows:
-                key = normalize_key(artist.name, album.title)
-                if key not in seen_keys:
-                    seen_keys.add(key)
-                    # Extract spotify_id from URI: "spotify:album:xxx" -> "xxx"
-                    spotify_album_id = album.spotify_uri.split(":")[-1] if album.spotify_uri else album.id
-                    spotify_artist_id = artist.spotify_uri.split(":")[-1] if artist.spotify_uri else artist.id
-                    all_releases.append({
-                        "id": spotify_album_id,
-                        "name": album.title,
-                        "artist_name": artist.name,
-                        "artist_id": spotify_artist_id,
-                        "artwork_url": album.artwork_url or album.image_path,
-                        "release_date": album.release_date,
-                        "album_type": album.primary_type,
-                        "total_tracks": album.total_tracks,
-                        "external_url": f"https://open.spotify.com/album/{spotify_album_id}",
-                        "source": "spotify",
-                    })
-                    source_counts["spotify"] += 1
-
-            logger.info(f"New Releases: Got {source_counts['spotify']} from Spotify unified library (after dedup)")
-
-        except Exception as e:
-            logger.warning(f"New Releases: Spotify unified library fetch failed: {e}")
-    else:
-        logger.debug("New Releases: Spotify provider disabled, skipping")
+            try:
+                result = await service.get_all_new_releases(
+                    days=days,
+                    include_singles=include_singles,
+                    include_compilations=include_compilations,
+                    enabled_providers=enabled_providers,
+                )
+            except Exception as e:
+                logger.error(f"New Releases: Service failed: {e}")
+                error = f"Failed to fetch new releases: {e}"
+                result = None
 
     # -------------------------------------------------------------------------
-    # 3. SORT BY RELEASE DATE (newest first)
+    # CONVERT RESULT TO TEMPLATE FORMAT
     # -------------------------------------------------------------------------
-    def parse_date(release: dict) -> str:
-        """Get sortable date string, default to old date if missing."""
-        date = release.get("release_date") or "1900-01-01"
-        # Handle YYYY, YYYY-MM, YYYY-MM-DD formats
-        if len(date) == 4:
-            return f"{date}-12-31"
-        elif len(date) == 7:
-            return f"{date}-28"
-        return date[:10]
+    source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
+    
+    if result:
+        source_counts = result.source_counts
+        
+        # Convert AlbumDTOs to template-friendly dicts
+        for album in result.albums:
+            # Build external URL based on source
+            if album.source_service == "spotify" and album.spotify_id:
+                external_url = f"https://open.spotify.com/album/{album.spotify_id}"
+                album_id = album.spotify_id
+            elif album.source_service == "deezer" and album.deezer_id:
+                external_url = f"https://www.deezer.com/album/{album.deezer_id}"
+                album_id = album.deezer_id
+            else:
+                external_url = album.external_urls.get(album.source_service, "") if album.external_urls else ""
+                album_id = album.deezer_id or album.spotify_id or ""
 
-    all_releases.sort(key=lambda r: parse_date(r), reverse=True)
+            all_releases.append({
+                "id": album_id,
+                "name": album.title,
+                "artist_name": album.artist_name,
+                "artist_id": album.artist_deezer_id or album.artist_spotify_id or "",
+                "artwork_url": album.artwork_url,
+                "release_date": album.release_date,
+                "album_type": album.album_type or "album",
+                "total_tracks": album.total_tracks,
+                "external_url": external_url,
+                "source": album.source_service,
+            })
+
+        # Log any errors from sync
+        for provider, err in result.errors.items():
+            logger.warning(f"New Releases: {provider} error: {err}")
 
     # -------------------------------------------------------------------------
-    # 4. GROUP BY WEEK for better display
+    # GROUP BY WEEK for better display
     # -------------------------------------------------------------------------
-    from collections import defaultdict
-
     releases_by_week: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for release in all_releases:
         date_str = release.get("release_date")
@@ -2315,8 +2282,6 @@ async def browse_new_releases_page(
         else:
             releases_by_week["Unknown Date"].append(release)
 
-    # source_counts already tracked above during aggregation
-
     if not all_releases:
         error = "No new releases found. Try syncing your Spotify artists first!"
 
@@ -2331,8 +2296,9 @@ async def browse_new_releases_page(
             "days": days,
             "include_compilations": include_compilations,
             "include_singles": include_singles,
-            "source": f"Deezer ({source_counts['deezer']}) + Spotify ({source_counts['spotify']})",
+            "source": f"Deezer ({source_counts.get('deezer', 0)}) + Spotify ({source_counts.get('spotify', 0)})",
             "error": error,
+            "cache_info": cache_info,  # NEW: Show cache status in UI
         },
     )
 
