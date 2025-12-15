@@ -719,14 +719,8 @@ async def delete_playlist(
     try:
         return await service.delete_playlist(playlist_id)
     except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-            "playlist_id": playlist_id,
-            "playlist_name": playlist_name,
-        }
-    except HTTPException:
-        raise
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        await session.rollback()
         raise HTTPException(
             status_code=500, detail=f"Failed to delete playlist: {str(e)}"
         ) from e
@@ -822,61 +816,10 @@ async def delete_and_blacklist_playlist(
     try:
         return await service.delete_and_blacklist(playlist_id)
     except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete and blacklist playlist: {str(e)}",
         ) from e
-        spotify_uri = playlist.spotify_uri
 
-        # If it has a Spotify URI, store it in the blacklist setting
-        if spotify_uri:
-            # Get current blacklist from app_settings
-            blacklist_key = "spotify.playlist_blacklist"
-            setting_stmt = select(AppSettingsModel).where(
-                AppSettingsModel.key == blacklist_key
-            )
-            setting_result = await session.execute(setting_stmt)
-            setting = setting_result.scalar_one_or_none()
-
-            if setting:
-                # Append to existing list
-                import json
-
-                current_list = json.loads(setting.value) if setting.value else []
-                if spotify_uri not in current_list:
-                    current_list.append(spotify_uri)
-                setting.value = json.dumps(current_list)
-            else:
-                # Create new setting
-                import json
-
-                new_setting = AppSettingsModel(
-                    key=blacklist_key,
-                    value=json.dumps([spotify_uri]),
-                    value_type="json",
-                    category="spotify",
-                    description="List of blacklisted Spotify playlist URIs",
-                )
-                session.add(new_setting)
-
-        # Delete the playlist
-        await session.delete(playlist)
-        await session.commit()
-
-        return {
-            "message": f"Playlist '{playlist_name}' deleted and blacklisted",
-            "playlist_id": playlist_id,
-            "playlist_name": playlist_name,
-            "spotify_uri": spotify_uri,
-            "blacklisted": bool(spotify_uri),
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete and blacklist playlist: {str(e)}"
-        ) from e
