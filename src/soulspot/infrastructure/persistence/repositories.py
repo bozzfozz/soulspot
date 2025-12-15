@@ -3390,6 +3390,89 @@ class EnrichmentCandidateRepository:
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
+    async def count_pending(self, entity_type: str | None = None) -> int:
+        """Count pending candidates (optionally filtered by entity type).
+
+        Hey future me - this is used by enrichment status endpoint.
+        Counts candidates that haven't been selected or rejected yet.
+
+        Args:
+            entity_type: Optional filter by 'artist' or 'album'
+
+        Returns:
+            Count of pending candidates
+        """
+        from .models import EnrichmentCandidateModel
+
+        stmt = select(func.count(EnrichmentCandidateModel.id)).where(
+            EnrichmentCandidateModel.is_selected == False,  # noqa: E712
+            EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
+        )
+
+        if entity_type:
+            stmt = stmt.where(EnrichmentCandidateModel.entity_type == entity_type)
+
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def list_pending(
+        self,
+        entity_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[Any]:
+        """List pending candidates with pagination.
+
+        Hey future me - returns candidates awaiting user review.
+        Sorted by confidence score (highest first).
+
+        Args:
+            entity_type: Optional filter by 'artist' or 'album'
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of EnrichmentCandidate domain entities
+        """
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
+        from .models import EnrichmentCandidateModel
+
+        stmt = (
+            select(EnrichmentCandidateModel)
+            .where(
+                EnrichmentCandidateModel.is_selected == False,  # noqa: E712
+                EnrichmentCandidateModel.is_rejected == False,  # noqa: E712
+            )
+            .order_by(EnrichmentCandidateModel.confidence_score.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        if entity_type:
+            stmt = stmt.where(EnrichmentCandidateModel.entity_type == entity_type)
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [
+            EnrichmentCandidate(
+                id=model.id,
+                entity_type=EnrichmentEntityType(model.entity_type),
+                entity_id=model.entity_id,
+                spotify_uri=model.spotify_uri,
+                spotify_name=model.spotify_name,
+                spotify_image_url=model.spotify_image_url,
+                confidence_score=model.confidence_score,
+                is_selected=model.is_selected,
+                is_rejected=model.is_rejected,
+                extra_info=model.extra_info,
+                created_at=ensure_utc_aware(model.created_at),
+                updated_at=ensure_utc_aware(model.updated_at),
+            )
+            for model in models
+        ]
+
     async def update(self, candidate: Any) -> None:
         """Update an existing candidate."""
         from .models import EnrichmentCandidateModel
@@ -3431,8 +3514,18 @@ class EnrichmentCandidateRepository:
         result = await self.session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined, no-any-return]
 
-    async def mark_selected(self, candidate_id: str) -> None:
-        """Mark a candidate as selected (and reject others for same entity)."""
+    async def mark_selected(self, candidate_id: str) -> Any:
+        """Mark a candidate as selected (and reject others for same entity).
+        
+        Hey future me - this does TWO things atomically:
+        1. Marks the chosen candidate as selected
+        2. Rejects all other candidates for the same entity
+        
+        Returns:
+            The selected EnrichmentCandidate domain entity
+        """
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
         from .models import EnrichmentCandidateModel
 
         # First, get the candidate to find entity info
@@ -3440,17 +3533,17 @@ class EnrichmentCandidateRepository:
             EnrichmentCandidateModel.id == candidate_id
         )
         result = await self.session.execute(stmt)
-        candidate = result.scalar_one_or_none()
+        model = result.scalar_one_or_none()
 
-        if not candidate:
+        if not model:
             raise EntityNotFoundException("EnrichmentCandidate", candidate_id)
 
         # Reject all other candidates for same entity
         reject_stmt = (
             update(EnrichmentCandidateModel)
             .where(
-                EnrichmentCandidateModel.entity_type == candidate.entity_type,
-                EnrichmentCandidateModel.entity_id == candidate.entity_id,
+                EnrichmentCandidateModel.entity_type == model.entity_type,
+                EnrichmentCandidateModel.entity_id == model.entity_id,
                 EnrichmentCandidateModel.id != candidate_id,
             )
             .values(is_rejected=True, updated_at=datetime.now(UTC))
@@ -3458,22 +3551,67 @@ class EnrichmentCandidateRepository:
         await self.session.execute(reject_stmt)
 
         # Mark this candidate as selected
-        candidate.is_selected = True
-        candidate.is_rejected = False
-        candidate.updated_at = datetime.now(UTC)
+        model.is_selected = True
+        model.is_rejected = False
+        model.updated_at = datetime.now(UTC)
 
-    async def mark_rejected(self, candidate_id: str) -> None:
-        """Mark a candidate as rejected."""
+        # Return domain entity
+        return EnrichmentCandidate(
+            id=model.id,
+            entity_type=EnrichmentEntityType(model.entity_type),
+            entity_id=model.entity_id,
+            spotify_uri=model.spotify_uri,
+            spotify_name=model.spotify_name,
+            spotify_image_url=model.spotify_image_url,
+            confidence_score=model.confidence_score,
+            is_selected=model.is_selected,
+            is_rejected=model.is_rejected,
+            extra_info=model.extra_info,
+            created_at=ensure_utc_aware(model.created_at),
+            updated_at=ensure_utc_aware(model.updated_at),
+        )
+
+    async def mark_rejected(self, candidate_id: str) -> Any:
+        """Mark a candidate as rejected.
+        
+        Hey future me - marks candidate as rejected (user dismissed this match).
+        
+        Returns:
+            The rejected EnrichmentCandidate domain entity
+        """
+        from soulspot.domain.entities import EnrichmentCandidate, EnrichmentEntityType
+
         from .models import EnrichmentCandidateModel
 
-        stmt = (
-            update(EnrichmentCandidateModel)
-            .where(EnrichmentCandidateModel.id == candidate_id)
-            .values(is_rejected=True, updated_at=datetime.now(UTC))
+        # Get the candidate first
+        stmt = select(EnrichmentCandidateModel).where(
+            EnrichmentCandidateModel.id == candidate_id
         )
         result = await self.session.execute(stmt)
-        if result.rowcount == 0:  # type: ignore[attr-defined]
+        model = result.scalar_one_or_none()
+
+        if not model:
             raise EntityNotFoundException("EnrichmentCandidate", candidate_id)
+
+        # Mark as rejected
+        model.is_rejected = True
+        model.updated_at = datetime.now(UTC)
+
+        # Return domain entity
+        return EnrichmentCandidate(
+            id=model.id,
+            entity_type=EnrichmentEntityType(model.entity_type),
+            entity_id=model.entity_id,
+            spotify_uri=model.spotify_uri,
+            spotify_name=model.spotify_name,
+            spotify_image_url=model.spotify_image_url,
+            confidence_score=model.confidence_score,
+            is_selected=model.is_selected,
+            is_rejected=model.is_rejected,
+            extra_info=model.extra_info,
+            created_at=ensure_utc_aware(model.created_at),
+            updated_at=ensure_utc_aware(model.updated_at),
+        )
 
 
 # =============================================================================

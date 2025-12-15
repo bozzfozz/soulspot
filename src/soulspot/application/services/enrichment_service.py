@@ -302,15 +302,8 @@ class EnrichmentService:
                 f"└─ Spotify URI: {selected_candidate.spotify_uri}"
             )
 
-            # Mark candidate as selected (via repository)
+            # Mark candidate as selected (also rejects others for same entity)
             selected_candidate = await self._repo.mark_selected(candidate_id)
-
-            # Reject other candidates for same entity
-            await self._repo.reject_other_candidates(
-                str(selected_candidate.entity_id),
-                selected_candidate.entity_type.value,
-                candidate_id,
-            )
 
             await self._session.commit()
 

@@ -24,7 +24,8 @@ Public API (NO AUTH needed!):
 - get_artist(), get_artist_albums(), get_artist_top_tracks()
 - get_album(), get_album_tracks()
 - get_track(), get_tracks(), get_several_*()
-- get_browse_new_releases(), get_editorial_releases(), get_chart_albums()
+- get_browse_new_releases(), get_editorial_releases()
+- get_chart_tracks(), get_chart_albums(), get_chart_artists()
 - get_genres(), get_playlist(), get_playlist_tracks()
 
 OAuth (requires auth):
@@ -1286,6 +1287,25 @@ class DeezerPlugin(IMusicServicePlugin):
             logger.error(f"DeezerPlugin: get_editorial_releases failed: {e}")
             return []
 
+    async def get_chart_tracks(self, limit: int = 50) -> list[TrackDTO]:
+        """Get top chart tracks.
+
+        Hey future me – das sind die aktuellen Chart-Tracks.
+        Keine Auth nötig! Gut für "What's hot" Features.
+
+        Args:
+            limit: Maximum tracks to return
+
+        Returns:
+            List of TrackDTO objects
+        """
+        try:
+            deezer_tracks = await self._client.get_chart_tracks(limit=limit)
+            return [self._convert_track_to_dto(track) for track in deezer_tracks]
+        except Exception as e:
+            logger.error(f"DeezerPlugin: get_chart_tracks failed: {e}")
+            return []
+
     async def get_chart_albums(self, limit: int = 50) -> list[AlbumDTO]:
         """Get top chart albums.
 
@@ -1303,6 +1323,25 @@ class DeezerPlugin(IMusicServicePlugin):
             return [self._convert_album_to_dto(album) for album in deezer_albums]
         except Exception as e:
             logger.error(f"DeezerPlugin: get_chart_albums failed: {e}")
+            return []
+
+    async def get_chart_artists(self, limit: int = 50) -> list[ArtistDTO]:
+        """Get top chart artists.
+
+        Hey future me – das sind die aktuellen Chart-Artists.
+        Keine Auth nötig! Gut für "What's hot" Features.
+
+        Args:
+            limit: Maximum artists to return
+
+        Returns:
+            List of ArtistDTO objects
+        """
+        try:
+            deezer_artists = await self._client.get_chart_artists(limit=limit)
+            return [self._convert_artist_to_dto(artist) for artist in deezer_artists]
+        except Exception as e:
+            logger.error(f"DeezerPlugin: get_chart_artists failed: {e}")
             return []
 
     async def get_genres(self) -> list[dict[str, Any]]:

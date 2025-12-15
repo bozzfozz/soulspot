@@ -398,23 +398,22 @@ class ChartsService:
             return []
         
         try:
-            # Use the client's chart method
-            deezer_tracks = await self._deezer._client.get_chart_tracks(limit)
+            track_dtos = await self._deezer.get_chart_tracks(limit)
             
             result: list[tuple[ChartTrack, str]] = []
-            for position, track in enumerate(deezer_tracks, 1):
+            for position, dto in enumerate(track_dtos, 1):
                 chart_track = ChartTrack(
-                    title=track.title,
-                    artist_name=track.artist_name or "Unknown",
-                    album_name=track.album_name,
-                    deezer_id=str(track.id) if track.id else None,
-                    isrc=track.isrc,
-                    duration_ms=(track.duration or 0) * 1000,
-                    preview_url=track.preview_url,
-                    image_url=track.album_cover_url,
+                    title=dto.title,
+                    artist_name=dto.artist_name or "Unknown",
+                    album_name=dto.album_name,
+                    deezer_id=dto.deezer_id,
+                    isrc=dto.isrc,
+                    duration_ms=dto.duration_ms,
+                    preview_url=dto.preview_url,
+                    image_url=dto.artwork_url,
                     source_service="deezer",
                     chart_position=position,
-                    external_urls={"deezer": f"https://www.deezer.com/track/{track.id}"},
+                    external_urls=dto.external_urls or {},
                 )
                 result.append((chart_track, "deezer"))
             
@@ -466,18 +465,17 @@ class ChartsService:
             return []
         
         try:
-            # Use the client's chart method
-            deezer_artists = await self._deezer._client.get_chart_artists(limit)
+            artist_dtos = await self._deezer.get_chart_artists(limit)
             
             result: list[tuple[ChartArtist, str]] = []
-            for position, artist in enumerate(deezer_artists, 1):
+            for position, dto in enumerate(artist_dtos, 1):
                 chart_artist = ChartArtist(
-                    name=artist.name,
-                    deezer_id=str(artist.id) if artist.id else None,
-                    image_url=artist.picture_url,
+                    name=dto.name,
+                    deezer_id=dto.deezer_id,
+                    image_url=dto.image_url,
                     source_service="deezer",
                     chart_position=position,
-                    external_urls={"deezer": f"https://www.deezer.com/artist/{artist.id}"},
+                    external_urls=dto.external_urls or {},
                 )
                 result.append((chart_artist, "deezer"))
             
