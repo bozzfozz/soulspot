@@ -143,6 +143,20 @@ class ArtistModel(Base):
         "TrackModel", back_populates="artist", cascade="all, delete-orphan"
     )
 
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri for backward compatibility.
+        
+        Hey future me - Workers and old code expect spotify_id!
+        This property bridges Model (spotify_uri) with legacy code (spotify_id).
+        URI format: "spotify:artist:3TV0qLgjEYM0STMlmI05U3"
+        Returns: "3TV0qLgjEYM0STMlmI05U3"
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.split(":")[-1]
+
+
     __table_args__ = (
         Index("ix_artists_name_lower", func.lower(name)),
         Index("ix_soulspot_artists_last_synced", "last_synced_at"),
@@ -226,6 +240,18 @@ class AlbumModel(Base):
     tracks: Mapped[list["TrackModel"]] = relationship(
         "TrackModel", back_populates="album", cascade="all, delete-orphan"
     )
+
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri for backward compatibility.
+        
+        Hey future me - same pattern as ArtistModel.spotify_id!
+        URI format: "spotify:album:6DEjYFkNZh67HP7R9PSZvv"
+        Returns: "6DEjYFkNZh67HP7R9PSZvv"
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.split(":")[-1]
 
     # Hey future me - helper property to check if this is a compilation
     @property
