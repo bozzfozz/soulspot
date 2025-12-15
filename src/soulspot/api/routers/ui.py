@@ -420,7 +420,7 @@ async def playlist_detail(
             )
 
         # Batch fetch all tracks with artist/album in ONE query via PlaylistTrackModel
-        # Hey future me - this avoids the N+1 problem! We join playlist_tracks → tracks → artist/album
+        # Hey future me - this avoids the N+1 problem! We join playlist_tracks -> tracks -> artist/album
         stmt = (
             select(TrackModel)
             .join(PlaylistTrackModel, PlaylistTrackModel.track_id == TrackModel.id)
@@ -1097,11 +1097,10 @@ async def library_artists(
     NO PAGINATION - shows all artists on one page (pagination only for download queue).
 
     Filter by source param:
-    - ?source=local → Only artists from local file scans (with or without Spotify)
-    - ?source=spotify → Only artists followed on Spotify (with or without local files)
-    - ?source=hybrid → Only artists that exist in BOTH local + Spotify
-    - ?source=all OR no param → Show ALL artists (default unified view)
-    """
+    - ?source=local -> Only artists from local file scans (with or without Spotify)
+    - ?source=spotify -> Only artists followed on Spotify (with or without local files)
+    - ?source=hybrid -> Only artists that exist in BOTH local + Spotify
+    - ?source=all OR no param -> Show ALL artists (default unified view)
     """
     from sqlalchemy import func, select
 
@@ -1176,7 +1175,7 @@ async def library_artists(
     elif source == "hybrid":
         # Only artists in BOTH sources
         stmt = stmt.where(ArtistModel.source == "hybrid")
-    # else: source == "all" or None → Show ALL artists (no filter)
+    # else: source == "all" or None -> Show ALL artists (no filter)
 
     # Get total count for display (no pagination, so just count)
     count_stmt = select(func.count(ArtistModel.id))
@@ -1557,13 +1556,13 @@ async def library_artist_detail(
 
     Hey future me - UNIFIED Music Manager view!
     Shows ALL albums for this artist (LOCAL + SPOTIFY):
-    - Albums with local files → Show tracks
-    - Spotify albums (no local files yet) → Show album card with download button
+    - Albums with local files -> Show tracks
+    - Spotify albums (no local files yet) -> Show album card with download button
 
     This works for all source types:
-    - LOCAL artists → Show albums from file scans
-    - SPOTIFY artists → Show albums from Spotify API sync
-    - HYBRID artists → Show ALL albums (merged)
+    - LOCAL artists -> Show albums from file scans
+    - SPOTIFY artists -> Show albums from Spotify API sync
+    - HYBRID artists -> Show ALL albums (merged)
     """
     from urllib.parse import unquote
 
@@ -2018,8 +2017,8 @@ async def library_incomplete_albums_page(request: Request) -> Any:
 # Hey future me - these routes are for browsing SPOTIFY data (followed artists, their albums,
 # tracks). Data comes from spotify_* tables (separate from local library!). Auto-sync happens
 # on page load with cooldown to avoid hammering Spotify API. No "Sync" button needed!
-# The flow: /spotify/artists → auto-sync → show grid → click artist → /spotify/artists/{id}
-# → auto-sync albums → show albums → click album → /spotify/artists/{a}/albums/{b} → show tracks
+# The flow: /spotify/artists -> auto-sync -> show grid -> click artist -> /spotify/artists/{id}
+# -> auto-sync albums -> show albums -> click album -> /spotify/artists/{a}/albums/{b} -> show tracks
 # =============================================================================
 
 
@@ -2038,7 +2037,7 @@ async def spotify_artists_page(
 
     Hey future me - IMPORTANT: Sync FIRST, then load from DB!
     This ensures freshly synced data is visible immediately without refresh.
-    The flow is: Sync (if needed/cooldown) → Commit → Load from DB → Render.
+    The flow is: Sync (if needed/cooldown) -> Commit -> Load from DB -> Render.
     """
     artists = []
     sync_stats = None
