@@ -35,6 +35,11 @@ class ArtistDTO:
     name: str
     source_service: str  # "spotify", "deezer", "tidal", "musicbrainz"
 
+    # Hey future me – internal_id is SET BY ProviderMappingService, not by plugins!
+    # It contains the SoulSpot internal UUID if this entity exists in our database.
+    # Plugins leave this as None, the mapper fills it in after DB lookup.
+    internal_id: str | None = None  # SoulSpot internal UUID (set by mapper)
+
     # Service-specific IDs (Plugin setzt nur das eigene)
     spotify_id: str | None = None  # Spotify artist ID (ohne "spotify:artist:" Prefix)
     spotify_uri: str | None = None  # Full URI "spotify:artist:xxx"
@@ -76,6 +81,10 @@ class AlbumDTO:
     title: str
     artist_name: str  # Artist name (for display/matching)
     source_service: str  # "spotify", "deezer", "tidal", "musicbrainz"
+
+    # Hey future me – internal_id is SET BY ProviderMappingService, not by plugins!
+    internal_id: str | None = None  # SoulSpot internal UUID (set by mapper)
+    artist_internal_id: str | None = None  # Artist's internal UUID (set by mapper)
 
     # Service-specific IDs
     spotify_id: str | None = None
@@ -138,6 +147,13 @@ class TrackDTO:
     title: str
     artist_name: str  # Primary artist name
     source_service: str  # "spotify", "deezer", "tidal"
+
+    # Internal SoulSpot UUIDs - populated by ProviderMappingService after lookup/creation
+    # Hey future me - diese Felder werden NICHT von Plugins gesetzt!
+    # Der ProviderMappingService mappt die service-spezifischen IDs auf interne UUIDs.
+    internal_id: str | None = None  # SoulSpot Track UUID
+    internal_artist_id: str | None = None  # SoulSpot Artist UUID (primary artist)
+    internal_album_id: str | None = None  # SoulSpot Album UUID
 
     # Service-specific IDs
     spotify_id: str | None = None

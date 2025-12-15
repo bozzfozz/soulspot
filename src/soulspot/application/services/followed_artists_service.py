@@ -96,16 +96,26 @@ class FollowedArtistsService:
 
         Hey future me - refactored to use SpotifyPlugin WITH Deezer fallback!
         The plugin handles token management internally, no more access_token juggling.
+        
+        PROVIDER MAPPING SERVICE (Nov 2025):
+        Wir nutzen jetzt den zentralen ProviderMappingService für ID-Mapping.
+        Statt manuell ArtistId.generate() zu machen, nutzt der MappingService
+        konsistente Lookup-Logik und erstellt IDs nur wenn nötig.
 
         Args:
             session: Database session for Artist repository
             spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
             deezer_plugin: Optional DeezerPlugin for fallback artist albums (NO AUTH!)
         """
+        from soulspot.application.services.provider_mapping_service import (
+            ProviderMappingService,
+        )
+
         self.session = session
         self.artist_repo = ArtistRepository(session)
         self.spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
+        self._mapping_service = ProviderMappingService(session)
 
     # Hey future me, this is the MAIN method! REFACTORED to use SpotifyPlugin!
     # It fetches ALL followed artists from Spotify (handling pagination automatically via
@@ -425,13 +435,20 @@ class FollowedArtistsService:
     # MULTI-PROVIDER (Nov 2025):
     # Now handles both Spotify and Deezer DTOs. The source parameter determines
     # which provider the artist came from. Deduplication works across providers.
+    #
+    # REFACTORED (Nov 2025):
+    # Now uses ProviderMappingService for ID lookup. The mapping service does:
+    # 1. Lookup by spotify_uri, deezer_id, or name
+    # 2. Create new artist if not found
+    # Business logic (source upgrade, metadata merge) stays HERE.
     async def _process_artist_dto(
         self, artist_dto: "ArtistDTO", source: str = "spotify"
     ) -> tuple[Artist, bool]:
         """Process a single artist from SpotifyPlugin or DeezerPlugin (ArtistDTO).
 
-        Hey future me - refactored for MULTI-PROVIDER support!
-        Now handles DTOs from Spotify AND Deezer.
+        Hey future me - REFACTORED to use ProviderMappingService!
+        The mapping service handles ID lookup and creation.
+        This method handles the business logic: source upgrade, metadata merge.
 
         Args:
             artist_dto: ArtistDTO from plugin
@@ -449,118 +466,71 @@ class FollowedArtistsService:
         if source == "spotify":
             if not artist_dto.spotify_id or not artist_dto.name:
                 raise ValueError("Invalid Spotify artist DTO: missing spotify_id or name")
-            spotify_uri = SpotifyUri.from_string(
-                artist_dto.spotify_uri or f"spotify:artist:{artist_dto.spotify_id}"
-            )
-            deezer_id = None
         elif source == "deezer":
             if not artist_dto.deezer_id or not artist_dto.name:
                 raise ValueError("Invalid Deezer artist DTO: missing deezer_id or name")
-            spotify_uri = None
-            deezer_id = artist_dto.deezer_id
         else:
             raise ValueError(f"Unknown source: {source}")
 
-        # Hey future me - ArtistDTO already has image_url extracted by plugin!
-        image_url = artist_dto.image_url
-        name = artist_dto.name
-        genres = artist_dto.genres or []
+        # STEP 1: Use ProviderMappingService to lookup/create
+        # This handles: spotify_uri lookup, deezer_id lookup, name fallback, creation
+        internal_id, was_created = await self._mapping_service.get_or_create_artist(
+            artist_dto, source=source
+        )
 
-        # Hey future me - DEDUPLICATION LOGIC for unified Music Manager!
-        # We check MULTIPLE ways to find existing artists:
-        # 1. By spotify_uri (if from Spotify)
-        # 2. By deezer_id (if from Deezer)
-        # 3. By name (fallback for local artists or cross-provider match)
-        existing_artist = None
+        # STEP 2: Get the full Artist entity
+        artist = await self.artist_repo.get(ArtistId(internal_id))
+        if not artist:
+            # Should not happen, but handle gracefully
+            raise ValueError(f"Artist not found after create: {internal_id}")
 
-        if source == "spotify" and spotify_uri:
-            existing_artist = await self.artist_repo.get_by_spotify_uri(spotify_uri)
-        elif source == "deezer" and deezer_id:
-            existing_artist = await self.artist_repo.get_by_deezer_id(deezer_id)
-
-        # Fallback: Check by name if service-specific ID didn't match
-        if not existing_artist:
-            existing_artist = await self.artist_repo.get_by_name(name)
-            if existing_artist:
-                logger.info(
-                    f"Found existing artist by name match: '{name}' "
-                    f"(source: {source}, merging into existing)"
-                )
-
-        if existing_artist:
-            # Update existing artist (name, genres, image_url, source, IDs might have changed)
+        # STEP 3: Business Logic - Update existing artist if not newly created
+        if not was_created:
             needs_update = False
+            name = artist_dto.name
+            genres = artist_dto.genres or []
+            image_url = artist_dto.image_url
 
             # Add service-specific ID if missing (merge across providers)
-            if source == "spotify" and spotify_uri and not existing_artist.spotify_uri:
-                existing_artist.spotify_uri = spotify_uri
-                needs_update = True
-                logger.info(f"Added spotify_uri to artist '{name}'")
-            elif source == "deezer" and deezer_id and not existing_artist.deezer_id:
-                existing_artist.deezer_id = deezer_id
-                needs_update = True
-                logger.info(f"Added deezer_id to artist '{name}'")
+            if source == "spotify" and artist_dto.spotify_uri:
+                spotify_uri = SpotifyUri.from_string(
+                    artist_dto.spotify_uri or f"spotify:artist:{artist_dto.spotify_id}"
+                )
+                if not artist.spotify_uri:
+                    artist.spotify_uri = spotify_uri
+                    needs_update = True
+                    logger.info(f"Added spotify_uri to artist '{name}'")
+            elif source == "deezer" and artist_dto.deezer_id:
+                if not artist.deezer_id:
+                    artist.deezer_id = artist_dto.deezer_id
+                    needs_update = True
+                    logger.info(f"Added deezer_id to artist '{name}'")
 
-            if existing_artist.name != name:
-                existing_artist.update_name(name)
+            if artist.name != name:
+                artist.update_name(name)
                 needs_update = True
-            if existing_artist.genres != genres and genres:
-                existing_artist.genres = genres
-                existing_artist.metadata_sources["genres"] = source
+            if artist.genres != genres and genres:
+                artist.genres = genres
+                artist.metadata_sources["genres"] = source
                 needs_update = True
-            if existing_artist.image_url != image_url and image_url:
-                existing_artist.image_url = image_url
-                existing_artist.metadata_sources["image_url"] = source
+            if artist.image_url != image_url and image_url:
+                artist.image_url = image_url
+                artist.metadata_sources["image_url"] = source
                 needs_update = True
 
             # Hey future me - UPGRADE source if artist was local-only!
-            # If artist was found in local file scan (source='local') and is now
-            # followed on Spotify/Deezer, upgrade to source='hybrid'.
-            if existing_artist.source == ArtistSource.LOCAL:
-                existing_artist.source = ArtistSource.HYBRID
+            if artist.source == ArtistSource.LOCAL:
+                artist.source = ArtistSource.HYBRID
                 needs_update = True
                 logger.info(
                     f"Upgraded artist '{name}' from LOCAL to HYBRID (local + {source})"
                 )
-            # If artist was Spotify-only and now also on Deezer (or vice versa), stay as-is
-            # (both are "external provider" sources, no need to change)
 
             if needs_update:
-                await self.artist_repo.update(existing_artist)
+                await self.artist_repo.update(artist)
                 logger.debug(f"Updated artist: {name} (source: {source})")
-            return existing_artist, False  # Not created, was updated
 
-        # Create new artist entity with source from parameter
-        artist_source = ArtistSource.SPOTIFY if source == "spotify" else ArtistSource.DEEZER
-
-        # Hey future me - Artist entity doesn't have DEEZER source enum yet!
-        # For now, we use SPOTIFY for both external providers (they're both "streaming service follows").
-        # TODO: Add ArtistSource.DEEZER to entities if we need to distinguish.
-        if source == "deezer":
-            # Deezer artists get SPOTIFY source (external streaming service)
-            # because we don't have a DEEZER enum value yet
-            artist_source = ArtistSource.SPOTIFY
-
-        new_artist = Artist(
-            id=ArtistId.generate(),
-            name=name,
-            source=artist_source,
-            spotify_uri=spotify_uri,
-            deezer_id=deezer_id,
-            image_url=image_url,
-            genres=genres,
-            metadata_sources={
-                "name": source,
-                "genres": source,
-                "image_url": source,
-            },
-        )
-
-        await self.artist_repo.add(new_artist)
-        id_info = artist_dto.spotify_id if source == "spotify" else artist_dto.deezer_id
-        logger.info(f"Created new followed artist: {name} ({source}_id: {id_info})")
-
-        return new_artist, True  # Was created
+        return artist, was_created
 
     async def sync_artist_albums(
         self, artist_id: str,
@@ -592,7 +562,6 @@ class FollowedArtistsService:
         """
         from soulspot.domain.entities import Album
         from soulspot.domain.ports.plugin import PluginCapability
-        from soulspot.domain.value_objects import AlbumId
         from soulspot.infrastructure.persistence.repositories import AlbumRepository
 
         stats: dict[str, int | str] = {"total": 0, "added": 0, "skipped": 0, "source": "none"}
@@ -717,22 +686,22 @@ class FollowedArtistsService:
                 )
                 continue
 
-            # Create new album in unified table (using DTO fields!)
-            new_album = Album(
-                id=AlbumId.generate(),
-                title=album_dto.title,
-                artist_id=artist.id,
-                release_year=album_dto.release_year,
-                spotify_uri=spotify_uri,
-                artwork_url=album_dto.artwork_url,
+            # Create new album using ProviderMappingService
+            # Hey future me - REFACTORED to use central ID generation
+            album_id, was_created = await self._mapping_service.get_or_create_album(
+                album_dto,
+                artist_internal_id=str(artist.id.value),
+                source=source,
             )
-
-            await album_repo.add(new_album)
-            stats["added"] += 1
-            logger.debug(
-                f"Added album: {album_dto.title} ({album_dto.release_year}) "
-                f"source={source}"
-            )
+            
+            if was_created:
+                stats["added"] += 1
+                logger.debug(
+                    f"Added album: {album_dto.title} ({album_dto.release_year}) "
+                    f"source={source}"
+                )
+            else:
+                stats["skipped"] += 1
 
         logger.info(
             f"Synced {stats['added']} new albums for {artist.name} "

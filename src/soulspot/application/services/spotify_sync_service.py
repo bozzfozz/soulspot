@@ -96,12 +96,20 @@ class SpotifySyncService:
             settings_service: Optional settings service for sync config
             deezer_plugin: Optional DeezerPlugin for fallback artist albums (NO AUTH!)
         """
+        # Hey future me - ProviderMappingService zentralisiert das ID-Mapping!
+        # Statt überall SpotifyUri.from_string() + ArtistId.generate() zu machen,
+        # nutzen wir jetzt den MappingService für einheitliche UUID-Vergabe.
+        from soulspot.application.services.provider_mapping_service import (
+            ProviderMappingService,
+        )
+
         self.repo = SpotifyBrowseRepository(session)
         self.spotify_plugin = spotify_plugin
         self.session = session
         self._image_service = image_service
         self._settings_service = settings_service
         self._deezer_plugin = deezer_plugin
+        self._mapping_service = ProviderMappingService(session)
 
     # =========================================================================
     # FOLLOWED ARTISTS SYNC
@@ -382,21 +390,22 @@ class SpotifySyncService:
             follower_count=follower_count,
         )
 
-    # Hey future me - UNIFIED LIBRARY SYNC!
-    # After syncing followed artists to spotify_artists table, we ALSO sync to
-    # soulspot_artists (the unified library) with source='spotify' or 'hybrid'.
-    # This makes followed artists appear in /library/artists page!
+    # Hey future me - UNIFIED LIBRARY SYNC mit ProviderMappingService!
+    # Statt manuell SpotifyUri.from_string() + ArtistId.generate() zu machen,
+    # nutzen wir jetzt den zentralen MappingService für konsistente UUID-Vergabe.
+    # Das DTO bekommt die internal_id gesetzt und wir können sie direkt nutzen.
     async def _sync_to_unified_library(
         self, artist_dtos: list[Any], removed_ids: set[str] | None = None
     ) -> dict[str, int]:
         """Sync followed artists to unified library (soulspot_artists).
 
-        Hey future me - this is the BRIDGE between spotify_artists and soulspot_artists!
-        After syncing to spotify_artists, we also update the unified library so
-        Spotify followed artists appear on /library/artists page with source='spotify'.
+        Hey future me - REFACTORED to use ProviderMappingService!
+        Der MappingService kümmert sich um:
+        1. Lookup existierender Artists (by spotify_id, name, oder isrc)
+        2. Erstellen neuer Artists mit UUID falls nicht vorhanden
+        3. Setzen von dto.internal_id mit der SoulSpot UUID
 
-        If an artist already exists in the library (from file scan with source='local'),
-        we upgrade their source to 'hybrid' (has both local files AND Spotify follow).
+        Wir nutzen dann diese internal_id statt manuell IDs zu generieren.
 
         Args:
             artist_dtos: List of ArtistDTOs from Spotify that were synced
@@ -405,7 +414,7 @@ class SpotifySyncService:
         Returns:
             Dict with counts: created, updated, downgraded
         """
-        from soulspot.domain.entities import Artist, ArtistSource
+        from soulspot.domain.entities import ArtistSource
         from soulspot.domain.value_objects import ArtistId, SpotifyUri
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
@@ -416,12 +425,19 @@ class SpotifySyncService:
             if not dto.spotify_id or not dto.name:
                 continue
 
+            # ZENTRAL: ProviderMappingService mappt DTO auf interne UUID
+            # Erstellt Artist falls nicht vorhanden und setzt dto.internal_id
+            mapped_dto = await self._mapping_service.map_artist_dto(dto)
+
             spotify_uri = SpotifyUri.from_string(
                 dto.spotify_uri or f"spotify:artist:{dto.spotify_id}"
             )
 
-            # Check if artist already exists in unified library
-            existing = await artist_repo.get_by_spotify_uri(spotify_uri)
+            # Nutze internal_id um existierenden Artist zu holen
+            if mapped_dto.internal_id:
+                existing = await artist_repo.get(ArtistId(mapped_dto.internal_id))
+            else:
+                existing = await artist_repo.get_by_spotify_uri(spotify_uri)
 
             if existing:
                 # Artist exists - check if we need to update source or metadata
@@ -447,31 +463,14 @@ class SpotifySyncService:
                     await artist_repo.update(existing)
                     stats["updated"] += 1
             else:
-                # Artist doesn't exist - check by name (might be local without spotify_uri)
-                existing_by_name = await artist_repo.get_by_name(dto.name)
-
-                if existing_by_name:
-                    # Found by name - this is likely a local artist, link and upgrade
-                    existing_by_name.spotify_uri = spotify_uri
-                    existing_by_name.source = ArtistSource.HYBRID
-                    if dto.image_url:
-                        existing_by_name.image_url = dto.image_url
-                    if dto.genres:
-                        existing_by_name.genres = dto.genres
-                    await artist_repo.update(existing_by_name)
-                    stats["updated"] += 1
-                else:
-                    # Completely new artist - create with source='spotify'
-                    new_artist = Artist(
-                        id=ArtistId.generate(),
-                        name=dto.name,
-                        source=ArtistSource.SPOTIFY,
-                        spotify_uri=spotify_uri,
-                        image_url=dto.image_url,
-                        genres=dto.genres or [],
-                    )
-                    await artist_repo.add(new_artist)
-                    stats["created"] += 1
+                # Artist wurde bereits vom MappingService erstellt
+                # Wir müssen nur noch source auf SPOTIFY setzen
+                if mapped_dto.internal_id:
+                    new_artist = await artist_repo.get(ArtistId(mapped_dto.internal_id))
+                    if new_artist and new_artist.source != ArtistSource.SPOTIFY:
+                        new_artist.source = ArtistSource.SPOTIFY
+                        await artist_repo.update(new_artist)
+                stats["created"] += 1
 
         # Handle unfollowed artists - downgrade from 'spotify'/'hybrid' if needed
         if removed_ids:

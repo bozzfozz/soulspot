@@ -85,6 +85,13 @@ class ArtistSongsService:
         self.track_repo = TrackRepository(session)
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
+        
+        # Hey future me - ProviderMappingService for centralized ID management!
+        # Used for track creation from DTOs (Spotify/Deezer).
+        from soulspot.application.services.provider_mapping_service import (
+            ProviderMappingService,
+        )
+        self._mapping_service = ProviderMappingService(session)
 
     @property
     def spotify_plugin(self) -> "SpotifyPlugin":
@@ -466,21 +473,20 @@ class ArtistSongsService:
 
             return existing_track, False, is_single
 
-        # Create new track entity - store WITHOUT album association
-        # so these show up as "singles" in our DB
-        new_track = Track(
-            id=TrackId.generate(),
-            title=track_dto.title,
-            artist_id=artist_id,
-            album_id=None,  # Store as single (no album)
-            duration_ms=track_dto.duration_ms,
-            track_number=track_dto.track_number,
-            disc_number=track_dto.disc_number or 1,
-            spotify_uri=spotify_uri,
-            isrc=isrc,
+        # Create new track using ProviderMappingService (centralized ID management)
+        # Hey future me - REFACTORED! The mapping service handles get-or-create logic
+        track_id, was_created = await self._mapping_service.get_or_create_track(
+            track_dto,
+            artist_internal_id=str(artist_id.value),
+            album_internal_id=None,  # Store as single (no album)
+            source="spotify" if track_dto.spotify_id else "deezer",
         )
 
-        await self.track_repo.add(new_track)
+        # Get the created track entity
+        new_track = await self.track_repo.get(TrackId(track_id))
+        if not new_track:
+            raise ValueError(f"Track not found after creation: {track_id}")
+
         logger.info(f"Created new track: {track_dto.title}")
 
         return new_track, True, is_single
