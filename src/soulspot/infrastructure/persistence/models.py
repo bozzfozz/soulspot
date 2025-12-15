@@ -356,6 +356,18 @@ class TrackModel(Base):
         uselist=False,
     )
 
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri for backward compatibility.
+        
+        Hey future me - same pattern as ArtistModel.spotify_id!
+        URI format: "spotify:track:5UqCQaDshqbIk3pkhy4Pjg"
+        Returns: "5UqCQaDshqbIk3pkhy4Pjg"
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.split(":")[-1]
+
     __table_args__ = (
         Index("ix_tracks_title_artist", "title", "artist_id"),
         Index("ix_soulspot_tracks_source", "source"),

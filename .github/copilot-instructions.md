@@ -47,6 +47,26 @@ API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
 
 **Key Insight:** Strict layered architecture. Domain layer is dependency-free (no ORM, no HTTP). Infrastructure implements Domain ports. Never call infrastructure directly from routes.
 
+## 1.1 🚨 KRITISCH: Architecture Instructions
+
+**BEVOR du Code schreibst, lies:**
+- `.github/instructions/architecture.instructions.md` - Layer-Regeln, Datenfluss, Attribut-Naming
+- `docs/architecture/DATA_LAYER_PATTERNS.md` - Code-Beispiele für häufige Operationen
+
+**Die häufigsten Fehler:**
+- ❌ `spotify_id` in Domain Entities (verwende `spotify_uri`!)
+- ❌ Routes rufen Clients direkt auf (verwende Services!)
+- ❌ Plugins geben raw dicts zurück (konvertiere zu DTOs!)
+- ❌ Neue Repo-Methode ohne Interface-Update (Port vergessen!)
+
+**Quick Rule:**
+```
+Entity.spotify_uri  → "spotify:artist:ID" (voller URI)
+DTO.spotify_id      → "ID" (nur die ID)
+Model.spotify_uri   → DB Column (voller URI)
+Model.spotify_id    → @property (extrahiert ID aus URI)
+```
+
 ## 2. Recommended dev environment
 
 - **Prefer:** `poetry` (project declares `pyproject.toml`). Use `poetry install --with dev` to get dev tools (mypy, ruff, pytest).
