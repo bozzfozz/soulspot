@@ -1,5 +1,8 @@
 # Repository Cleanup Analysis - Root Files & Scripts
 
+> ⚠️ **ARCHIVED (January 2025)** - Cleanup completed, all deprecated files deleted.  
+> This document is kept for historical reference.
+
 **Generated:** 9. Dezember 2025 (Task #19)  
 **Updated:** 9. Dezember 2025 (Task #20 - Final Results)  
 **Completed:** 9. Dezember 2025 (All deprecated files deleted)  

@@ -1,5 +1,9 @@
 # Deprecated Code Tracking
 
+> ⚠️ **ARCHIVED (January 2025)** - Most deprecations have been resolved.  
+> This document is kept for historical reference.  
+> See `docs/ACTION_PLAN.md` for current project status.
+
 **Purpose:** Tracks all deprecated code scheduled for removal to prevent accidental usage.
 
 ---

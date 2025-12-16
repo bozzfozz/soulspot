@@ -1,5 +1,8 @@
 # Documentation Redundancy Analysis
 
+> ⚠️ **ARCHIVED (January 2025)** - Analysis completed, actions executed.  
+> This document is kept for historical reference of the v1.0 → v2.0 migration.
+
 **Generated:** 9. Dezember 2025  
 **Purpose:** Identify duplicate/outdated documentation for deprecation
 

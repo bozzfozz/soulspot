@@ -1,7 +1,7 @@
 # SoulSpot Feature Documentation
 
-> **Version:** 1.1  
-> **Last Updated:** 2025-11-28
+> **Version:** 2.0  
+> **Last Updated:** 2025-01-06
 
 ---
 
@@ -15,7 +15,8 @@ Diese Dokumentation beschreibt alle implementierten Features von SoulSpot. Jedes
 
 | Feature | Beschreibung | Status |
 |---------|--------------|--------|
-| [Spotify Sync](./spotify-sync.md) | Auto-Sync von Artists, Playlists, Liked Songs, Albums + Bilderspeicherung | ⭐ **NEU** |
+| [Authentication](./authentication.md) | OAuth-Integration für Spotify & Deezer, Session Management | ⭐ **NEU** |
+| [Spotify Sync](./spotify-sync.md) | Auto-Sync von Artists, Playlists, Liked Songs, Albums + Bilderspeicherung | ✅ Implementiert |
 | [Playlist Management](./playlist-management.md) | Import, Sync und Export von Spotify-Playlists | ✅ Implementiert |
 | [Download Management](./download-management.md) | Download-Queue, Priorisierung und Batch-Downloads | ✅ Implementiert |
 | [Metadata Enrichment](./metadata-enrichment.md) | Multi-Source Metadaten-Anreicherung (Spotify, MusicBrainz, Last.fm) | ✅ Implementiert |
@@ -28,6 +29,7 @@ Diese Dokumentation beschreibt alle implementierten Features von SoulSpot. Jedes
 | [Auto-Import](./auto-import.md) | Automatischer Import von Downloads → Musikbibliothek | ✅ Implementiert |
 | [Batch Operations](./batch-operations.md) | Generisches Batching für API-Calls (Rate-Limit-Optimierung) | ✅ Implementiert |
 | [Compilation Analysis](./compilation-analysis.md) | Post-Scan Compilation-Erkennung via Track Artist Diversity | ✅ Implementiert |
+| [Deezer Integration](./deezer-integration.md) | Deezer Browse, Search und User-Features | ✅ Implementiert |
 | [Notifications](./notifications.md) | Notification-System (aktuell: Stub / Logging-Only) | 🚧 Stub
 
 ---

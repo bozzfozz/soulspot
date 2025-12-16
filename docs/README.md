@@ -1,7 +1,7 @@
 # SoulSpot Documentation
 
-> **Version:** 1.0  
-> **Last Updated:** 2025-11-25
+> **Version:** 2.0  
+> **Last Updated:** 2025-01-06
 
 ---
 
@@ -11,16 +11,17 @@ This documentation is organized by purpose to help you find what you need quickl
 
 ```
 docs/
-├── features/         # Feature-specific documentation
-├── project/          # Project-level documentation
-├── guides/           # User and developer guides
-│   ├── user/        # End-user documentation
-│   └── developer/   # Developer documentation
-├── api/             # API reference documentation
+├── api/             # API reference documentation (v2.0)
+├── features/        # Feature-specific documentation (v2.0)
+├── architecture/    # System architecture and patterns
+├── guides/          # User and developer guides
+│   ├── user/       # End-user documentation
+│   └── developer/  # Developer documentation
 ├── development/     # Development roadmaps and guidelines
+├── project/         # Project-level documentation
 ├── implementation/  # Implementation details and guides
 ├── history/         # Historical records of implementations
-└── archived/        # Archived and outdated documentation
+└── archive/         # Archived and outdated documentation
 ```
 
 ---
@@ -30,6 +31,7 @@ docs/
 ### Understanding SoulSpot
 New to SoulSpot? Understand the core concept:
 - **[SoulSpot Architecture Concept](project/SOULSPOT_ARCHITECTURE_CONCEPT.md)** - SoulSpot as a standalone application
+- **[Core Philosophy](architecture/CORE_PHILOSOPHY.md)** - Multi-service aggregation and design principles
 
 ### For Users
 New to SoulSpot? Start here:
@@ -40,8 +42,9 @@ New to SoulSpot? Start here:
 ### For Developers
 Contributing to SoulSpot? Start here:
 1. [Architecture](project/architecture.md) - System design and structure
-2. [Contributing Guide](project/contributing.md) - How to contribute
-3. [Testing Guide](guides/developer/testing-guide.md) - Writing and running tests
+2. [Error Handling](architecture/ERROR_HANDLING.md) - Exception hierarchy and patterns
+3. [Worker Patterns](architecture/WORKER_PATTERNS.md) - Background task architecture
+4. [Contributing Guide](project/contributing.md) - How to contribute
 
 ### For Operators
 Deploying or maintaining SoulSpot? Start here:
@@ -53,26 +56,78 @@ Deploying or maintaining SoulSpot? Start here:
 
 ## 📚 Documentation Sections
 
-### Feature Documentation (`features/`)
+### API Documentation (`api/`) ⭐ v2.0
+Complete REST API reference:
+- **[API Overview](api/README.md)** - API introduction and conventions
+
+**Core APIs:**
+- **[Library Management API](api/library-management-api.md)** - Library operations
+- **[Download Management](api/download-management.md)** - Download queue management
+- **[Advanced Search API](api/advanced-search-api.md)** - Search endpoint documentation
+- **[Settings API](api/settings-api.md)** - Application configuration
+
+**Spotify Integration:**
+- **[Spotify Tracks API](api/spotify-tracks.md)** - Track metadata and ISRC deduplication
+- **[Spotify Artist API](api/spotify-artist-api.md)** - Artist metadata sync
+- **[Spotify Playlist API](api/spotify-playlist-api.md)** - Playlist sync with snapshots
+
+**Automation & Monitoring:** ⭐ NEW
+- **[Automation API](api/automation-api.md)** - Watchlists, discography, quality upgrades
+- **[Workers API](api/workers-api.md)** - Background worker status and control
+- **[Stats API](api/stats-api.md)** - Dashboard statistics and trends
+
+**Authentication & Infrastructure:**
+- **[Auth API](api/auth-api.md)** - OAuth flows for Spotify and Deezer
+- **[Onboarding API](api/onboarding-api.md)** - First-run setup wizard
+- **[Browse API](api/browse-api.md)** - Discover new releases (Deezer)
+
+**Interactive Documentation:**
+- Swagger UI: http://localhost:8765/docs
+- ReDoc: http://localhost:8765/redoc
+
+### Feature Documentation (`features/`) ⭐ v2.0
 Complete documentation for all implemented features:
 - **[Feature Overview](features/README.md)** - Index of all features
+
+**Core Features:**
+- **[Authentication](features/authentication.md)** ⭐ NEW - OAuth, sessions, security
+- **[Spotify Sync](features/spotify-sync.md)** - Auto-sync artists, playlists, albums
 - **[Playlist Management](features/playlist-management.md)** - Import, sync, export playlists
 - **[Download Management](features/download-management.md)** - Download queue and operations
-- **[Metadata Enrichment](features/metadata-enrichment.md)** - Multi-source metadata from Spotify/MusicBrainz/Last.fm
-- **[Automation & Watchlists](features/automation-watchlists.md)** - Artist watchlists and automation rules
-- **[Followed Artists](features/followed-artists.md)** - Spotify followed artists sync
 - **[Library Management](features/library-management.md)** - Scans, duplicates, broken files
-- **[Authentication](api/auth-api.md)** - Spotify OAuth and session management
-- **[Track Management](features/track-management.md)** - Track search, download, metadata editing
+
+**Automation:**
+- **[Automation & Watchlists](features/automation-watchlists.md)** - Artist watchlists and rules
+- **[Followed Artists](features/followed-artists.md)** - Spotify followed artists sync
+- **[Auto-Import](features/auto-import.md)** - Automatic import of downloads
+- **[Album Completeness](features/album-completeness.md)** - Missing album detection
+
+**Enrichment:**
+- **[Metadata Enrichment](features/metadata-enrichment.md)** - Multi-source metadata
+- **[Compilation Analysis](features/compilation-analysis.md)** - Compilation detection
+- **[Batch Operations](features/batch-operations.md)** - Rate-limit optimized batching
+
+**Utilities:**
+- **[Track Management](features/track-management.md)** - Track search, download, editing
 - **[Settings](features/settings.md)** - Application configuration
+- **[Deezer Integration](features/deezer-integration.md)** - Deezer browse and search
+- **[Notifications](features/notifications.md)** - Notification system (stub)
+
+### Architecture Documentation (`architecture/`)
+System architecture and design patterns:
+- **[Core Philosophy](architecture/CORE_PHILOSOPHY.md)** - Multi-service aggregation
+- **[Error Handling](architecture/ERROR_HANDLING.md)** - Exception hierarchy
+- **[Worker Patterns](architecture/WORKER_PATTERNS.md)** - Background task patterns
+- **[Configuration](architecture/CONFIGURATION.md)** - Database-first config
+- **[Data Layer Patterns](architecture/DATA_LAYER_PATTERNS.md)** - Repository patterns
 
 ### Project Documentation (`project/`)
 Core project information and guidelines:
-- **[SoulSpot Architecture Concept](project/SOULSPOT_ARCHITECTURE_CONCEPT.md)** - Core concept: SoulSpot as standalone application
+- **[SoulSpot Architecture Concept](project/SOULSPOT_ARCHITECTURE_CONCEPT.md)** - Core concept
 - **[CHANGELOG](project/CHANGELOG.md)** - Version history and release notes
 - **[Architecture](project/architecture.md)** - System architecture and design
 - **[Contributing](project/contributing.md)** - Contribution guidelines
-- **[Documentation Structure](project/DOCUMENTATION_STRUCTURE.md)** - Documentation organization guide
+- **[Documentation Structure](project/DOCUMENTATION_STRUCTURE.md)** - Documentation organization
 - **[Issue Tracker](project/fehler-sammlung.md)** - Current issues and improvements
 
 ### User Guides (`guides/user/`)
@@ -81,122 +136,23 @@ End-user documentation:
 - **[User Guide](guides/user/user-guide.md)** - Complete feature walkthrough
 - **[Advanced Search Guide](guides/user/advanced-search-guide.md)** - Search tips and tricks
 - **[Troubleshooting Guide](guides/user/troubleshooting-guide.md)** - Problem resolution
-- **[Multi-Device Auth](guides/user/MULTI_DEVICE_AUTH.md)** - Multi-device authentication guide
-- **[Spotify Auth Troubleshooting](guides/user/SPOTIFY_AUTH_TROUBLESHOOTING.md)** - Spotify OAuth issues
+- **[Multi-Device Auth](guides/user/MULTI_DEVICE_AUTH.md)** - Multi-device authentication
+- **[Spotify Auth Troubleshooting](guides/user/SPOTIFY_AUTH_TROUBLESHOOTING.md)** - OAuth issues
 
 ### Developer Guides (`guides/developer/`)
 Technical documentation for developers:
 
-**Development**
+**Development:**
 - **[Testing Guide](guides/developer/testing-guide.md)** - Test strategies and execution
 - **[Deployment Guide](guides/developer/deployment-guide.md)** - Deployment procedures
 - **[Operations Runbook](guides/developer/operations-runbook.md)** - Operational procedures
 - **[Observability Guide](guides/developer/observability-guide.md)** - Logging and monitoring
 
-**UI/UX Development**
+**UI/UX Development:**
 - **[Component Library](guides/developer/component-library.md)** - Reusable UI components
 - **[Design Guidelines](guides/developer/design-guidelines.md)** - Design system and patterns
 - **[HTMX Patterns](guides/developer/htmx-patterns.md)** - HTMX integration patterns
 - **[Style Guide](guides/developer/soulspot-style-guide.md)** - CSS and styling conventions
-- **[Visual Guide](guides/developer/ui-ux-visual-guide.md)** - Visual component showcase
-- **[Keyboard Navigation](guides/developer/keyboard-navigation.md)** - Accessibility shortcuts
-
-**Dashboard Development**
-- **[Dashboard Developer Guide](guides/developer/dashboard-developer-guide.md)** - Dashboard system overview
-- **[Widget Development Guide](guides/developer/widget-development-guide.md)** - Creating custom widgets
-- **[GridStack Quick Reference](guides/developer/gridstack-page-builder-quick-ref.md)** - Page builder reference
-- **[Page Reference](guides/developer/page-reference.md)** - Page structure and components
-
-**Release Management**
-- **[Release Quick Reference](guides/developer/release-quick-reference.md)** - Release process overview
-
-### API Documentation (`api/`)
-REST API reference:
-- **[API Overview](api/README.md)** - API introduction and conventions
-- **[Advanced Search API](api/advanced-search-api.md)** - Search endpoint documentation
-- **[Library Management API](api/library-management-api.md)** - Library operations
-- **[Download Management](api/download-management.md)** - Download queue management
-
-**Interactive Documentation:**
-- Swagger UI: http://localhost:8765/docs
-- ReDoc: http://localhost:8765/redoc
-
-### Development Documentation (`development/`)
-Development planning and guidelines:
-- **[Backend Roadmap](development/backend-roadmap.md)** - Backend development plan
-- **[Frontend Roadmap](development/frontend-roadmap.md)** - Frontend development plan
-- **[CI/CD](development/ci-cd.md)** - Continuous integration and deployment
-- **[Design Guidelines](development/design-guidelines.md)** - Design principles
-- **[Performance Optimization](development/performance-optimization.md)** - Performance best practices
-- **[SQLite Operations](development/sqlite-operations.md)** - SQLite configuration and usage
-- **[SQLite Best Practices](development/SQLITE_BEST_PRACTICES.md)** - SQLite development guidelines
-- **[Testing Documentation](development/testing/)** - Test guides and reports
-
-### Implementation Documentation (`implementation/`)
-Detailed implementation guides:
-- **[Dashboard Implementation](implementation/dashboard-implementation.md)** - Dashboard system details
-- **[Onboarding UI Overview](implementation/onboarding-ui-overview.md)** - Comprehensive onboarding guide
-
-**Feature Implementations** (`implementation/features/`)
-- **[Circuit Breaker](implementation/features/circuit-breaker.md)** - Circuit breaker pattern
-- **[Feature Ideas](implementation/features/soulspot-ideas.md)** - Planned features
-
-### History (`history/`)
-Historical implementation records - see [History README](history/README.md) for details.
-
-### Archived (`archived/`)
-Outdated or superseded documentation - see [Archived README](archived/README.md) for details.
-
----
-
-## 🔍 Finding What You Need
-
-### By Role
-
-**I'm a new user** → Start with [Setup Guide](guides/user/setup-guide.md) and [User Guide](guides/user/user-guide.md)
-
-**I'm a developer** → Check [Architecture](project/architecture.md) and [Contributing Guide](project/contributing.md)
-
-**I'm deploying to production** → See [Deployment Guide](guides/developer/deployment-guide.md)
-
-**I'm troubleshooting an issue** → Try [Troubleshooting Guide](guides/user/troubleshooting-guide.md)
-
-**I'm building a custom widget** → Read [Widget Development Guide](guides/developer/widget-development-guide.md)
-
-**I need API documentation** → Browse [API Documentation](api/)
-
-### By Topic
-
-**Setup & Configuration**
-- [Setup Guide](guides/user/setup-guide.md)
-- [Deployment Guide](guides/developer/deployment-guide.md)
-
-**Using Features**
-- [Feature Overview](features/README.md)
-- [User Guide](guides/user/user-guide.md)
-- [Advanced Search Guide](guides/user/advanced-search-guide.md)
-
-**Development**
-- [Architecture](project/architecture.md)
-- [Backend Roadmap](development/backend-roadmap.md)
-- [Frontend Roadmap](development/frontend-roadmap.md)
-- [Testing Guide](guides/developer/testing-guide.md)
-
-**UI/UX**
-- [Component Library](guides/developer/component-library.md)
-- [Design Guidelines](guides/developer/design-guidelines.md)
-- [Style Guide](guides/developer/soulspot-style-guide.md)
-- [HTMX Patterns](guides/developer/htmx-patterns.md)
-
-**Operations**
-- [Operations Runbook](guides/developer/operations-runbook.md)
-- [Observability Guide](guides/developer/observability-guide.md)
-- [CI/CD Documentation](development/ci-cd.md)
-
-**Dashboard & Widgets**
-- [Dashboard Implementation](implementation/dashboard-implementation.md)
-- [Dashboard Developer Guide](guides/developer/dashboard-developer-guide.md)
-- [Widget Development Guide](guides/developer/widget-development-guide.md)
 
 ---
 

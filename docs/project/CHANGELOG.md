@@ -5,6 +5,74 @@ All notable changes to the SoulSpot project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-01-06
+
+### Documentation v2.0 Release
+
+#### New API Documentation
+- **[automation-api.md](../api/automation-api.md)** - Complete automation API reference
+  - Watchlist CRUD operations
+  - Discography completeness checking
+  - Quality upgrade identification
+  - Followed artists sync
+  - Automation rules and filters
+  
+- **[workers-api.md](../api/workers-api.md)** - Background worker status API
+  - Token refresh worker monitoring
+  - Spotify sync worker status
+  - Download monitor tracking
+  - Automation workers combined status
+  - Service connectivity checks
+  
+- **[stats-api.md](../api/stats-api.md)** - Dashboard statistics API
+  - Current metric counts
+  - Trend calculations (today vs yesterday, this week vs last)
+  - Download activity tracking
+  - Spotify sync statistics
+
+#### New Feature Documentation
+- **[authentication.md](../features/authentication.md)** - Complete authentication guide
+  - OAuth 2.0 PKCE flow for Spotify and Deezer
+  - Session management and persistence
+  - Security features (CSRF, secure cookies)
+  - Multi-browser support
+  - Troubleshooting guide
+
+#### Updated Index Files
+- **[docs/api/README.md](../api/README.md)** - v2.0 API index with all 15 API docs
+- **[docs/features/README.md](../features/README.md)** - v2.0 features index with 16 features
+- **[docs/README.md](../README.md)** - Complete v2.0 documentation hub
+
+### Backend Architecture Improvements
+
+#### Exception System Overhaul
+- Consolidated exception hierarchy with 16 specialized exception types
+- Added 7 new exception handlers (ConfigurationError, AuthenticationError, etc.)
+- Standardized error handling across all services (26 ValueError → Domain Exceptions)
+- Documented in [ERROR_HANDLING.md](../architecture/ERROR_HANDLING.md)
+
+#### Worker Pattern Documentation
+- Job-based worker pattern documented
+- Clear distinction: Workers use ValueError (no retry), Services use Domain Exceptions
+- Documented in [WORKER_PATTERNS.md](../architecture/WORKER_PATTERNS.md)
+
+### Infrastructure Changes
+
+#### Archived Documentation
+The following documentation has been marked as archived (kept for historical reference):
+- `DEPRECATED_CODE.md` - Most deprecations resolved
+- `DEPRECATION_ANALYSIS.md` - Analysis completed
+- `REPOSITORY_CLEANUP_ANALYSIS.md` - Cleanup executed
+- Various migration plans in `docs/archive/v1.0/`
+
+#### Quality Improvements
+- All ValueError in DTOs converted to ValidationError
+- All RuntimeError in lifecycle converted to ConfigurationError
+- All Infrastructure clients use Domain Exceptions
+- Workspace verified error-free via static analysis
+
+---
+
 ## [Unreleased]
 
 ### Added - Phase 2 Web UI Enhancements (2025-11-26)

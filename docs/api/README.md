@@ -1,90 +1,101 @@
 # API Documentation
 
-> **Version:** 1.1  
-> **Last Updated:** 2025-11-28
+> **Version:** 2.0  
+> **Last Updated:** 2025-01-06
 
 ---
 
 ## Overview
 
-This directory contains API documentation for SoulSpot version 1.0.
+This directory contains comprehensive API documentation for SoulSpot v2.0.
 
 ---
 
-## Available APIs
-
-### [Advanced Search API](advanced-search-api.md)
-Advanced search capabilities for tracks, albums, and artists with filtering, sorting, and pagination.
-
-**Key Features:**
-- Multi-field search queries
-- Filter by metadata (genre, year, format, bitrate)
-- Sort by relevance, date, popularity
-- Pagination support
-- Autocomplete suggestions
+## Core APIs
 
 ### [Library Management API](library-management-api.md)
 Manage your music library including scanning, organizing, and metadata management.
 
-**Key Features:**
-- Library scanning and indexing
-- Metadata editing and enrichment
-- Duplicate detection
-- File organization
-- Bulk operations
-
 ### [Download Management](download-management.md)
 Control and monitor download operations from the Soulseek network.
 
-**Key Features:**
-- Queue management
-- Download prioritization
-- Progress tracking
-- Retry logic
-- Bandwidth controls
+### [Advanced Search API](advanced-search-api.md)
+Advanced search capabilities with filtering, sorting, and pagination.
+
+### [Settings API](settings-api.md)
+Application settings and configuration management.
+
+---
+
+## Spotify Integration
 
 ### [Spotify Tracks API](spotify-tracks.md)
-Integration with Spotify Web API for track/song data management.
-
-**Key Features:**
-- Track metadata fetching and storage
-- Audio features integration
-- ISRC-based deduplication
-- Batch sync strategies
-- Field mappings and schema recommendations
-
-### [Browse API](browse-api.md)
-Discover new music releases without requiring authentication.
-
-**Key Features:**
-- No authentication required (uses Deezer)
-- New album releases from around the world
-- Editorial + chart album aggregation
-- Compilation filtering
-- Multiple source support (Deezer, future: Spotify)
+Track metadata fetching, ISRC-based deduplication, batch sync strategies.
 
 ### [Spotify Artist API](spotify-artist-api.md)
-Integration with Spotify Web API for artist metadata synchronization.
-
-**Key Features:**
-- Artist metadata sync from Spotify
-- Field mapping and data model documentation
-- Authentication flows (Client Credentials, PKCE)
-- Rate limiting and exponential backoff
-- On-demand and periodic sync strategies
-- Database schema reference
+Artist metadata sync, authentication flows, rate limiting.
 
 ### [Spotify Playlist API](spotify-playlist-api.md)
-Integration with Spotify Web API for playlist metadata and track synchronization.
+Playlist sync with snapshot_id-based change detection.
+
+---
+
+## Automation & Monitoring
+
+### [Automation API](automation-api.md) ⭐ NEW
+Watchlists, discography tracking, quality upgrades, followed artists, automation rules.
 
 **Key Features:**
-- Playlist metadata fetching and storage
-- Playlist items/tracks with position and added_by info
-- snapshot_id-based change detection for incremental sync
-- Local track and unavailable track handling
-- Collaborative playlist support
-- DB schema design for playlists and playlist_items tables
-- Sync strategies (initial, incremental, on-demand)
+- Artist watchlist management
+- Discography completeness checking
+- Quality upgrade identification
+- Followed artists sync
+- Bulk operations
+
+### [Workers API](workers-api.md) ⭐ NEW
+Background worker monitoring and status.
+
+**Key Features:**
+- Token refresh worker status
+- Spotify sync worker status
+- Download monitor status
+- Automation workers status
+- Service connectivity checks
+
+### [Stats API](stats-api.md) ⭐ NEW
+Dashboard statistics and trend data.
+
+**Key Features:**
+- Current counts for all metrics
+- Trend indicators (↑/↓)
+- Download activity tracking
+- Spotify sync statistics
+
+---
+
+## Discovery & Browse
+
+### [Browse API](browse-api.md)
+Discover new music releases without authentication (uses Deezer).
+
+### [Compilations API](compilations-api.md)
+Compilation detection and filtering.
+
+### [Metadata API](metadata-api.md)
+Multi-source metadata enrichment.
+
+---
+
+## Authentication & Infrastructure
+
+### [Auth API](auth-api.md)
+OAuth flows for Spotify and Deezer.
+
+### [Onboarding API](onboarding-api.md)
+First-run setup and configuration wizard.
+
+### [Infrastructure API](infrastructure-api.md)
+Health checks, logs, and system status.
 
 ---
 
