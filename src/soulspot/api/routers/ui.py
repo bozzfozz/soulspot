@@ -1620,7 +1620,7 @@ async def library_artist_detail(
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
             )
-            from soulspot.infrastructure.persistence.database import (
+            from soulspot.application.services.token_manager import (
                 DatabaseTokenManager,
             )
             from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
