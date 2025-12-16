@@ -27,7 +27,7 @@ WHY:
 
 DATABASE CHANGES:
 - Rename soulspot_artists.image_url → artwork_url
-- Rename soulspot_playlists.cover_url → artwork_url
+- Rename playlists.cover_url → artwork_url
 - (Album already uses artwork_url - no change needed)
 
 This migration is SAFE - just column renaming, no data loss.
@@ -104,20 +104,20 @@ def upgrade() -> None:
     # Clean up again before second table (in case first batch left temps)
     _cleanup_orphaned_tables(connection)
     
-    # Rename soulspot_playlists.cover_url → artwork_url (if needed)
-    if _column_exists(connection, "soulspot_playlists", "cover_url"):
-        print("Renaming soulspot_playlists.cover_url → artwork_url")
-        with op.batch_alter_table("soulspot_playlists") as batch_op:
+    # Rename playlists.cover_url → artwork_url (if needed)
+    if _column_exists(connection, "playlists", "cover_url"):
+        print("Renaming playlists.cover_url → artwork_url")
+        with op.batch_alter_table("playlists") as batch_op:
             batch_op.alter_column(
                 "cover_url",
                 new_column_name="artwork_url",
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
-    elif _column_exists(connection, "soulspot_playlists", "artwork_url"):
-        print("Column soulspot_playlists.artwork_url already exists - skipping rename")
+    elif _column_exists(connection, "playlists", "artwork_url"):
+        print("Column playlists.artwork_url already exists - skipping rename")
     else:
-        print("WARNING: Neither cover_url nor artwork_url found in soulspot_playlists")
+        print("WARNING: Neither cover_url nor artwork_url found in playlists")
 
 
 def downgrade() -> None:
@@ -147,18 +147,18 @@ def downgrade() -> None:
     # Clean up again before second table
     _cleanup_orphaned_tables(connection)
     
-    # Revert soulspot_playlists.artwork_url → cover_url (if needed)
-    if _column_exists(connection, "soulspot_playlists", "artwork_url"):
-        print("Reverting soulspot_playlists.artwork_url → cover_url")
-        with op.batch_alter_table("soulspot_playlists") as batch_op:
+    # Revert playlists.artwork_url → cover_url (if needed)
+    if _column_exists(connection, "playlists", "artwork_url"):
+        print("Reverting playlists.artwork_url → cover_url")
+        with op.batch_alter_table("playlists") as batch_op:
             batch_op.alter_column(
                 "artwork_url",
                 new_column_name="cover_url",
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
-    elif _column_exists(connection, "soulspot_playlists", "cover_url"):
-        print("Column soulspot_playlists.cover_url already exists - skipping revert")
+    elif _column_exists(connection, "playlists", "cover_url"):
+        print("Column playlists.cover_url already exists - skipping revert")
     else:
-        print("WARNING: Neither artwork_url nor cover_url found in soulspot_playlists")
+        print("WARNING: Neither artwork_url nor cover_url found in playlists")
 
