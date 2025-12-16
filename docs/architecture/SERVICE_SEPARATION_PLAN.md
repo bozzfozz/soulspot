@@ -195,33 +195,51 @@ src/soulspot/application/services/
 | `sync_liked_songs`/`sync_saved_tracks` | ✅ OAuth | ✅ OAuth |
 | `sync_charts()` | ❌ keine API | ✅ NO AUTH! |
 
-### Phase 3: ProviderSyncOrchestrator erstellen (MEDIUM RISK)
-**Status:** TODO
+### Phase 3: ProviderSyncOrchestrator erstellen (MEDIUM RISK) ✅ DONE
+**Status:** COMPLETED (Dec 2025)
 
 **Ziel:** Multi-Provider Fallback-Logik zentralisieren
 
-1. **Erstelle** `provider_sync_orchestrator.py`
-2. **Verschiebe** Multi-Provider Logik aus SpotifySyncService
-3. **Implementiere** `sync_artist_albums()` mit Spotify → Deezer Fallback
-4. **Update** alle Routes die Multi-Provider Sync brauchen
+**Erledigte Schritte:**
+1. ✅ **Erstellt** `provider_sync_orchestrator.py` mit allen Methoden:
+   - `sync_artist_albums()` - Spotify primary, Deezer fallback
+   - `sync_new_releases()` - Deezer primary (NO AUTH!), Spotify secondary
+   - `sync_artist_top_tracks()` - Spotify primary, Deezer fallback
+   - `sync_related_artists()` - Discovery feature
+   - `sync_charts()` - Deezer only (Spotify has no public charts API)
+   - `sync_album_tracks()` - Spotify primary, Deezer fallback
+2. ✅ **AggregatedSyncResult** dataclass für Multi-Provider Stats
+3. ✅ **Exportiert** in `services/__init__.py`
+4. ✅ **Dependency** `get_provider_sync_orchestrator()` in `dependencies.py`
 
-**Dateien:**
+**Dateien geändert:**
 - CREATE: `src/soulspot/application/services/provider_sync_orchestrator.py`
-- MODIFY: `src/soulspot/application/services/spotify_sync_service.py` (entfernen)
-- MODIFY: `src/soulspot/api/dependencies.py`
+- MODIFY: `src/soulspot/application/services/__init__.py` (Export hinzugefügt)
+- MODIFY: `src/soulspot/api/dependencies.py` (DI für ProviderSyncOrchestrator)
 
-### Phase 4: SpotifySyncService aufräumen (HIGH RISK)
+### Phase 4: SpotifySyncService aufräumen (HIGH RISK) ✅ DONE
+**Status:** COMPLETED (Dec 2025)
+
 **Ziel:** SpotifySyncService auf Spotify OAuth-Sync reduzieren
 
-1. **Entferne** ViewModels (bereits in Phase 1 verschoben)
-2. **Entferne** Multi-Provider Logik (bereits in Phase 3 verschoben)
-3. **Behalte** NUR Spotify OAuth-basierte Methoden:
-   - `sync_followed_artists()`
-   - `sync_user_playlists()`
-   - `sync_liked_songs()`
-   - `sync_saved_albums()`
+**Erledigte Schritte:**
+1. ✅ **Entfernt** `get_album_detail_view()` (~100 Zeilen) → LibraryViewService
+2. ✅ **Entfernt** `_fetch_artist_albums_from_deezer()` (~60 Zeilen) → DeezerSyncService
+3. ✅ **Entfernt** Deezer Fallback-Logik in `_fetch_artist_albums()` (~20 Zeilen)
+4. ✅ **Entfernt** `deezer_plugin` Parameter aus Constructor und Dependencies
 
-**Ergebnis:** SpotifySyncService von 1839 → ~500 Zeilen
+**Ergebnis:** SpotifySyncService von 2075 → 1892 Zeilen (~9% Reduktion)
+
+**Behalte** Spotify OAuth-basierte Methoden:
+- `sync_followed_artists()`
+- `sync_user_playlists()`
+- `sync_liked_songs()`
+- `sync_saved_albums()`
+- `sync_artist_albums()` (Spotify only now)
+- `sync_album_tracks()` (Spotify only now)
+- `sync_new_releases()` (Spotify only now)
+- `sync_artist_top_tracks()` (Spotify only now)
+- `sync_related_artists()` (Spotify only now)
 
 ---
 

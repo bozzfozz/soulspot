@@ -834,16 +834,13 @@ async def get_spotify_sync_service(
         client=spotify_client,
         access_token=access_token,
     )
-    
-    # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
-    # Hey future me - Deezer artist albums work without OAuth!
-    # This enables browsing artist discographies even if Spotify auth fails.
-    deezer_plugin = DeezerPlugin()
+
+    # NOTE (Dec 2025): Deezer fallback removed from SpotifySyncService!
+    # Use DeezerSyncService for Deezer operations instead.
 
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,
-        deezer_plugin=deezer_plugin,
     )
 
 
@@ -925,12 +922,10 @@ async def get_library_view_service(
                 client=spotify_client,
                 access_token=access_token,
             )
-            deezer_plugin = DeezerPlugin()
             
             spotify_sync = SpotifySyncService(
                 session=session,
                 spotify_plugin=spotify_plugin,
-                deezer_plugin=deezer_plugin,
             )
     except Exception as e:
         # No auth or error - graceful degradation (show cached data)
@@ -1013,4 +1008,77 @@ async def get_deezer_sync_service(
     yield DeezerSyncService(
         session=session,
         deezer_plugin=deezer_plugin,
+    )
+
+
+# Hey future me - ProviderSyncOrchestrator ist der MULTI-PROVIDER Service!
+# Das ist Phase 3 des Service Separation Plans.
+# Zentralisiert Provider-Fallback-Logik (Spotify → Deezer).
+async def get_provider_sync_orchestrator(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> AsyncGenerator:
+    """Get provider sync orchestrator for multi-provider operations.
+    
+    Hey future me - das ist der ORCHESTRATOR für Multi-Provider Sync!
+    
+    Features:
+    - sync_artist_albums() - Spotify first, Deezer fallback
+    - sync_new_releases() - Deezer first (NO AUTH!), then Spotify
+    - sync_artist_top_tracks() - Spotify first, Deezer fallback
+    - sync_related_artists() - Discovery feature
+    - sync_charts() - Deezer only (Spotify has no public charts API)
+    
+    Args:
+        request: FastAPI request (for token access)
+        session: Database session
+
+    Yields:
+        ProviderSyncOrchestrator instance
+    """
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.application.services.provider_sync_orchestrator import (
+        ProviderSyncOrchestrator,
+    )
+    from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+    settings = get_settings()
+    
+    # Deezer is ALWAYS available (NO AUTH NEEDED!)
+    deezer_plugin = DeezerPlugin()
+    deezer_sync = DeezerSyncService(
+        session=session,
+        deezer_plugin=deezer_plugin,
+    )
+    
+    # Spotify is OPTIONAL (needs OAuth)
+    spotify_sync: SpotifySyncService | None = None
+    try:
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+        access_token = await db_token_manager.get_token_for_background()
+        
+        if access_token:
+            spotify_client = SpotifyClient(settings.spotify)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client,
+                access_token=access_token,
+            )
+            spotify_sync = SpotifySyncService(
+                session=session,
+                spotify_plugin=spotify_plugin,
+            )
+    except Exception as e:
+        logger.debug(f"No Spotify auth for ProviderSyncOrchestrator: {e}")
+    
+    settings_service = AppSettingsService(session)
+    
+    yield ProviderSyncOrchestrator(
+        session=session,
+        spotify_sync=spotify_sync,
+        deezer_sync=deezer_sync,
+        settings_service=settings_service,
     )

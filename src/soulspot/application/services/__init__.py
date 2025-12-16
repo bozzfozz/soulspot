@@ -33,6 +33,10 @@ from soulspot.application.services.new_releases_service import (
 from soulspot.application.services.provider_mapping_service import (
     ProviderMappingService,
 )
+from soulspot.application.services.provider_sync_orchestrator import (
+    AggregatedSyncResult,
+    ProviderSyncOrchestrator,
+)
 from soulspot.application.services.session_store import Session, SessionStore
 from soulspot.application.services.spotify_auth_service import (
     AuthUrlResult,
@@ -48,6 +52,7 @@ from soulspot.application.services.artwork_service import (
 from soulspot.application.services.token_manager import TokenManager
 
 __all__ = [
+    "AggregatedSyncResult",
     "AlbumAnalysisResult",
     "AppSettingsService",
     "AuthUrlResult",
@@ -70,6 +75,7 @@ __all__ = [
     "NewReleasesResult",
     "NewReleasesService",
     "ProviderMappingService",
+    "ProviderSyncOrchestrator",
     "Session",
     "SessionStore",
     "SlskdCredentials",

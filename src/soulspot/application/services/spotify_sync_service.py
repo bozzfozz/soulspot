@@ -1,10 +1,11 @@
 # Hey future me - REFACTORED to use SpotifyPlugin instead of raw SpotifyClient!
 # The plugin handles token management internally, no more access_token parameter juggling.
 # This service handles AUTO-SYNC of Spotify data to our database!
-# The key difference from FollowedArtistsService: this syncs to SEPARATE tables
-# (spotify_artists, spotify_albums, spotify_tracks) NOT the local library tables.
-# It also has DIFF-SYNC logic: compares Spotify with DB and removes unfollowed artists.
-# Auto-sync triggers on page load with cooldown (no button needed).
+#
+# REFACTORED (Dec 2025):
+# - Removed get_album_detail_view() → Use LibraryViewService instead!
+# - Removed Deezer fallback → Use DeezerSyncService for Deezer operations!
+# - This service is now PURE SPOTIFY sync only
 #
 # What syncs where:
 # - Followed Artists → spotify_artists table (auto-sync every 5 min)
@@ -13,16 +14,9 @@
 # - Liked Songs → playlists table (special playlist with is_liked_songs=True)
 # - Saved Albums → spotify_albums table (is_saved=True flag)
 #
-# UNIFIED LIBRARY SYNC (Nov 2025):
-# - After syncing followed artists to spotify_artists table
-# - We ALSO sync them to soulspot_artists with source='spotify' or 'hybrid'
-# - This makes followed artists appear in /library/artists page!
-# - No more duplicate data - single source of truth in unified library
-#
-# Image Download:
-# - When download_images setting is True, we download and store images locally
-# - Stored in artwork/spotify/{artists|albums|playlists}/{id}.webp
-# - The _path columns store the relative path, _url columns keep the CDN URL
+# For ViewModels: Use LibraryViewService.get_album_detail_view()
+# For Deezer: Use DeezerSyncService
+# For Multi-Provider: Use ProviderSyncOrchestrator (Phase 3)
 """Service for automatic Spotify data synchronization with diff logic."""
 
 import logging
@@ -37,7 +31,6 @@ from soulspot.infrastructure.persistence.repositories import SpotifyBrowseReposi
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.artwork_service import ArtworkService
-    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -76,25 +69,21 @@ class SpotifySyncService:
         spotify_plugin: "SpotifyPlugin",
         image_service: "ArtworkService | None" = None,
         settings_service: "AppSettingsService | None" = None,
-        deezer_plugin: "DeezerPlugin | None" = None,
     ) -> None:
         """Initialize sync service.
 
-        Hey future me - refactored to use SpotifyPlugin with Deezer fallback!
+        Hey future me - refactored to use SpotifyPlugin!
         The plugin handles token management internally, no more access_token juggling.
         
-        MULTI-PROVIDER SUPPORT (Nov 2025):
-        - Spotify is the PRIMARY source for artists/albums (requires OAuth)
-        - Deezer is FALLBACK for artist albums (NO AUTH NEEDED!)
-        - When Spotify fails or isn't authenticated, try Deezer
-        - This ensures users can browse artist albums even without Spotify OAuth!
+        NOTE (Dec 2025): Deezer fallback removed!
+        - Use DeezerSyncService for Deezer operations
+        - Use ProviderSyncOrchestrator for multi-provider aggregation (Phase 3)
 
         Args:
             session: Database session
             spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
             image_service: Optional image service for downloading images
             settings_service: Optional settings service for sync config
-            deezer_plugin: Optional DeezerPlugin for fallback artist albums (NO AUTH!)
         """
         # Hey future me - ProviderMappingService zentralisiert das ID-Mapping!
         # Statt überall SpotifyUri.from_string() + ArtistId.generate() zu machen,
@@ -108,7 +97,6 @@ class SpotifySyncService:
         self.session = session
         self._image_service = image_service
         self._settings_service = settings_service
-        self._deezer_plugin = deezer_plugin
         self._mapping_service = ProviderMappingService(session)
 
     # =========================================================================
@@ -632,90 +620,17 @@ class SpotifySyncService:
                 "Will try Deezer fallback."
             )
 
-        # 2. Fallback to Deezer (NO AUTH NEEDED!)
-        if not albums and self._deezer_plugin:
-            try:
-                deezer_albums = await self._fetch_artist_albums_from_deezer(
-                    artist_id, artist_name
-                )
-                if deezer_albums:
-                    albums = deezer_albums
-                    source_used = "deezer"
-                    logger.info(
-                        f"Fetched {len(albums)} albums from Deezer fallback "
-                        f"for artist {artist_name or artist_id}"
-                    )
-            except Exception as e:
-                logger.warning(f"Deezer fallback also failed: {e}")
+        # NOTE: Deezer fallback removed (Dec 2025) - use DeezerSyncService directly!
+        # For multi-provider aggregation, use ProviderSyncOrchestrator (Phase 3)
 
         if not albums:
             logger.warning(
-                f"No albums found for artist {artist_id} from any provider"
+                f"No albums found for artist {artist_id} from Spotify"
             )
         else:
             logger.debug(f"Artist albums source: {source_used}")
 
         return albums
-
-    async def _fetch_artist_albums_from_deezer(
-        self, spotify_artist_id: str, artist_name: str | None = None
-    ) -> list[Any]:
-        """Fetch artist albums from Deezer as fallback.
-
-        Hey future me - Deezer uses different artist IDs!
-        We can't use Spotify artist ID directly. Strategy:
-        1. If we have artist_name, search Deezer for that artist
-        2. Get the first matching artist's Deezer ID
-        3. Fetch albums using Deezer artist ID
-        
-        This is FUZZY matching but works for most mainstream artists.
-        Edge case: Artists with same name (there are multiple "Aurora"s)
-
-        Args:
-            spotify_artist_id: Spotify artist ID (for logging only)
-            artist_name: Artist name to search on Deezer
-
-        Returns:
-            list[AlbumDTO] from Deezer
-        """
-        if not self._deezer_plugin or not artist_name:
-            return []
-
-        try:
-            # Search for artist on Deezer by name
-            search_result = await self._deezer_plugin.search_artists(
-                query=artist_name, limit=5
-            )
-
-            if not search_result.items:
-                logger.debug(f"No Deezer artist found for '{artist_name}'")
-                return []
-
-            # Take the first (best) match
-            # Hey future me - could improve with fuzzy name matching
-            deezer_artist = search_result.items[0]
-            deezer_artist_id = deezer_artist.deezer_id
-
-            if not deezer_artist_id:
-                logger.debug(f"Deezer artist has no ID for '{artist_name}'")
-                return []
-
-            logger.debug(
-                f"Mapped Spotify artist {spotify_artist_id} ({artist_name}) "
-                f"to Deezer artist {deezer_artist_id} ({deezer_artist.name})"
-            )
-
-            # Fetch albums from Deezer (NO AUTH NEEDED!)
-            albums_response = await self._deezer_plugin.get_artist_albums(
-                artist_id=deezer_artist_id,
-                limit=50,
-            )
-
-            return albums_response.items if albums_response.items else []
-
-        except Exception as e:
-            logger.warning(f"Deezer artist albums lookup failed: {e}")
-            return []
 
     async def _upsert_album_from_dto(self, album_dto: Any, artist_id: str) -> None:
         """Insert or update an album in DB from AlbumDTO (Spotify or Deezer).
@@ -1153,106 +1068,8 @@ class SpotifySyncService:
             album_id=album_id, limit=limit, offset=offset
         )
 
-    async def get_album_detail_view(
-        self, artist_id: str, album_id: str
-    ) -> "AlbumDetailView | None":
-        """Get album detail as a ViewModel for template rendering.
-        
-        Hey future me - das ist die RICHTIGE Methode nach Architecture Standard!
-        Routes rufen DIESE Methode auf und bekommen ein fertiges ViewModel zurück.
-        Die Route muss NICHTS über Models oder DB-Attribute wissen.
-        
-        Flow:
-        1. Get artist from DB (for breadcrumb)
-        2. Get album from DB
-        3. Auto-sync tracks from Spotify (with cooldown)
-        4. Get tracks from DB
-        5. Convert everything to AlbumDetailView
-        
-        Args:
-            artist_id: Spotify artist ID
-            album_id: Spotify album ID
-            
-        Returns:
-            AlbumDetailView or None if album not found
-        """
-        from soulspot.domain.dtos import AlbumDetailView, TrackView
-        
-        # Get artist (optional - für Breadcrumb)
-        artist_model = await self.repo.get_artist_by_id(artist_id)
-        artist_spotify_id = artist_model.spotify_id if artist_model else None
-        artist_name = artist_model.name if artist_model else None
-        
-        # Get album
-        album_model = await self.repo.get_album_by_id(album_id)
-        if not album_model:
-            return None
-        
-        # Auto-sync tracks (with error handling)
-        synced = False
-        sync_error = None
-        try:
-            sync_result = await self.sync_album_tracks(album_id)
-            synced = sync_result.get("synced", False)
-            if sync_result.get("error"):
-                sync_error = sync_result["error"]
-        except Exception as e:
-            sync_error = str(e)
-            logger.warning(f"Track sync failed for album {album_id}: {e}")
-        
-        # Get tracks from DB
-        track_models = await self.repo.get_tracks_by_album(album_id, limit=100)
-        
-        # Convert tracks to TrackView
-        track_views: list[TrackView] = []
-        total_duration_ms = 0
-        
-        for track in track_models:
-            duration_ms = track.duration_ms or 0
-            total_duration_ms += duration_ms
-            
-            # Format duration as "M:SS"
-            duration_sec = duration_ms // 1000
-            duration_min = duration_sec // 60
-            duration_sec_rem = duration_sec % 60
-            duration_str = f"{duration_min}:{duration_sec_rem:02d}"
-            
-            track_views.append(TrackView(
-                spotify_id=track.spotify_id,
-                name=track.title,  # Model has "title", ViewModel has "name"
-                track_number=track.track_number or 1,
-                disc_number=track.disc_number or 1,
-                duration_ms=duration_ms,
-                duration_str=duration_str,
-                explicit=track.explicit or False,
-                preview_url=track.preview_url,
-                isrc=track.isrc,
-                is_downloaded=False,  # TODO: Check if linked to local track
-            ))
-        
-        # Sort by disc, then track number
-        track_views.sort(key=lambda t: (t.disc_number, t.track_number))
-        
-        # Calculate total duration string
-        total_min = total_duration_ms // 60000
-        total_sec = (total_duration_ms % 60000) // 1000
-        total_duration_str = f"{total_min} min {total_sec} sec"
-        
-        return AlbumDetailView(
-            spotify_id=album_model.spotify_id,
-            name=album_model.name,
-            image_url=album_model.image_url,
-            release_date=album_model.release_date,
-            album_type=album_model.album_type or "album",
-            total_tracks=album_model.total_tracks or len(track_views),
-            artist_spotify_id=artist_spotify_id,
-            artist_name=artist_name,
-            tracks=track_views,
-            track_count=len(track_views),
-            total_duration_str=total_duration_str,
-            synced=synced,
-            sync_error=sync_error,
-        )
+    # NOTE: get_album_detail_view() moved to LibraryViewService (Dec 2025)
+    # Use LibraryViewService.get_album_detail_view() for ViewModels!
 
     async def get_sync_status(self, sync_type: str) -> Any | None:
         """Get sync status for display."""
