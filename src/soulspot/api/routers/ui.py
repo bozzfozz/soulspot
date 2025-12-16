@@ -17,6 +17,7 @@ from soulspot.api.dependencies import (
     get_download_repository,
     get_job_queue,
     get_library_scanner_service,
+    get_library_view_service,
     get_playlist_repository,
     get_spotify_browse_repository,
     get_spotify_plugin,
@@ -25,6 +26,7 @@ from soulspot.api.dependencies import (
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
+from soulspot.application.services.library_view_service import LibraryViewService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.domain.entities import DownloadStatus
@@ -2827,24 +2829,28 @@ async def spotify_album_detail_page(
     request: Request,
     artist_id: str,
     album_id: str,
-    sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
+    view_service: LibraryViewService = Depends(get_library_view_service),
 ) -> Any:
     """Spotify album detail page with tracks.
 
-    Hey future me - REFACTORED nach Architecture Standard!
-    Route ruft EINE Service-Methode auf und bekommt ein ViewModel zurück.
-    KEINE Model-Details in der Route - Service macht die Konvertierung.
+    Hey future me - REFACTORED nach Architecture Standard Phase 1!
+    Route nutzt jetzt LibraryViewService statt SpotifySyncService.
+    
+    Warum LibraryViewService?
+    - Single Responsibility: ViewModels ≠ Sync Logic
+    - SpotifySyncService war God Class (1839 Zeilen!)
+    - Graceful Degradation: Wenn kein Spotify Auth, zeigt cached Daten
     
     Flow:
-    1. Route ruft sync_service.get_album_detail_view()
-    2. Service holt Daten aus DB + synct Tracks
+    1. Route ruft view_service.get_album_detail_view()
+    2. Service holt Daten aus DB + synct Tracks (wenn authenticated)
     3. Service konvertiert zu AlbumDetailView (ViewModel)
     4. Route gibt ViewModel an Template
     
     Die Route weiß NICHT, ob TrackModel "title" oder "name" hat!
     """
     # Get ViewModel from service - Route knows NOTHING about Models!
-    album_view = await sync_service.get_album_detail_view(artist_id, album_id)
+    album_view = await view_service.get_album_detail_view(artist_id, album_id)
     
     if not album_view:
         return templates.TemplateResponse(

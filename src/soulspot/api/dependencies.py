@@ -871,6 +871,77 @@ async def get_library_scanner_service(
     yield LibraryScannerService(session=session, settings=settings)
 
 
+# Hey future me - LibraryViewService liefert ViewModels für Templates!
+# Das ist der NEUE Service nach Clean Architecture (Phase 1 Refactoring).
+# Routes rufen diesen Service auf und bekommen fertige ViewModels zurück.
+# Die Route muss NICHTS über Models wissen (z.B. ob es "title" oder "name" heißt)!
+#
+# Optionaler SpotifySyncService für Sync-on-demand:
+# - Wenn spotify_sync vorhanden: Auto-sync tracks on page load
+# - Wenn nicht vorhanden: Zeigt nur cached Daten (graceful degradation)
+async def get_library_view_service(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> AsyncGenerator:
+    """Get Library View Service for template ViewModels.
+    
+    Hey future me - das ist Phase 1 des Service Separation Plans!
+    ViewModels wurden aus SpotifySyncService extrahiert.
+    
+    Dieser Service:
+    1. Holt Daten aus DB via Repositories
+    2. Triggert Sync-on-demand (optional, wenn SpotifyPlugin auth hat)
+    3. Konvertiert Models zu ViewModels
+    4. Gibt ViewModels an Routes zurück
+    
+    Routes wissen NICHTS über Models - nur ViewModels!
+
+    Args:
+        request: FastAPI request for app state access
+        session: Database session
+        settings: Application settings
+
+    Yields:
+        LibraryViewService instance
+    """
+    from soulspot.application.services.library_view_service import LibraryViewService
+    from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+    
+    # Try to create SpotifySyncService for sync-on-demand (optional)
+    spotify_sync: SpotifySyncService | None = None
+    
+    try:
+        # Get token for SpotifyPlugin (may not be authenticated)
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+        access_token = await db_token_manager.get_token_for_background()
+        
+        if access_token:
+            # User is authenticated - create sync service for sync-on-demand
+            spotify_client = SpotifyClient(settings.spotify)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client,
+                access_token=access_token,
+            )
+            deezer_plugin = DeezerPlugin()
+            
+            spotify_sync = SpotifySyncService(
+                session=session,
+                spotify_plugin=spotify_plugin,
+                deezer_plugin=deezer_plugin,
+            )
+    except Exception as e:
+        # No auth or error - graceful degradation (show cached data)
+        logger.debug(f"No Spotify auth for LibraryViewService: {e}")
+    
+    yield LibraryViewService(
+        session=session,
+        spotify_sync=spotify_sync,
+    )
+
+
 # Hey future me - DeezerClient is stateless and doesn't need OAuth!
 # Perfect for browse/discovery features when user isn't logged into Spotify.
 # Creates a new client per request (cheap - just httpx setup).
@@ -910,3 +981,36 @@ def get_deezer_plugin() -> "DeezerPlugin":
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
     return DeezerPlugin()
+
+
+# Hey future me - DeezerSyncService synct Deezer-Daten zur DB!
+# Das ist Phase 2 des Service Separation Plans.
+# KEINE OAuth nötig für Charts, New Releases, Artist Albums!
+async def get_deezer_sync_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> AsyncGenerator:
+    """Get Deezer sync service for syncing Deezer data to database.
+    
+    Hey future me - das ist der DEEZER Sync Service nach Clean Architecture!
+    Braucht KEINE OAuth für die meisten Operationen!
+    
+    Features:
+    - sync_charts() - Top Tracks/Albums/Artists zu DB
+    - sync_new_releases() - Neuerscheinungen zu DB
+    - sync_artist_albums() - Artist Discographie (Fallback für Spotify!)
+    
+    Args:
+        session: Database session
+
+    Yields:
+        DeezerSyncService instance
+    """
+    from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+    
+    deezer_plugin = DeezerPlugin()
+    
+    yield DeezerSyncService(
+        session=session,
+        deezer_plugin=deezer_plugin,
+    )

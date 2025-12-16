@@ -19,11 +19,13 @@ from soulspot.application.services.credentials_service import (
     SlskdCredentials,
     SpotifyCredentials,
 )
+from soulspot.application.services.deezer_sync_service import DeezerSyncService
 from soulspot.application.services.discover_service import (
     DiscoveredArtist,
     DiscoverResult,
     DiscoverService,
 )
+from soulspot.application.services.library_view_service import LibraryViewService
 from soulspot.application.services.new_releases_service import (
     NewReleasesResult,
     NewReleasesService,
@@ -58,11 +60,13 @@ __all__ = [
     "CompilationAnalyzerService",
     "CredentialsService",
     "DeezerCredentials",
+    "DeezerSyncService",
     "DiscoveredArtist",
     "DiscoverResult",
     "DiscoverService",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
+    "LibraryViewService",
     "NewReleasesResult",
     "NewReleasesService",
     "ProviderMappingService",

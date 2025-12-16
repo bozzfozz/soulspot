@@ -771,6 +771,242 @@ class SpotifySyncService:
         )
 
     # =========================================================================
+    # ARTIST TOP TRACKS SYNC (für Konsistenz mit DeezerSyncService)
+    # =========================================================================
+
+    async def sync_artist_top_tracks(
+        self,
+        artist_id: str,
+        market: str = "DE",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Sync top tracks for a specific artist from Spotify.
+        
+        Hey future me - das ist die KONSISTENTE Methode wie DeezerSyncService!
+        BRAUCHT Spotify OAuth um Top Tracks zu holen.
+        
+        Args:
+            artist_id: Spotify artist ID
+            market: Market code (default: DE)
+            force: Skip cooldown check
+            
+        Returns:
+            Sync result with counts
+        """
+        cache_key = f"artist_top_tracks_{artist_id}"
+        stats: dict[str, Any] = {
+            "synced": False,
+            "tracks_synced": 0,
+            "error": None,
+            "skipped_cooldown": False,
+        }
+        
+        # Check cooldown (use TRACKS_SYNC_COOLDOWN for consistency)
+        sync_status = await self.repo.get_sync_status(cache_key)
+        if not force and sync_status:
+            last_sync = sync_status.last_sync_at
+            if last_sync:
+                last_sync = ensure_utc_aware(last_sync)
+                elapsed = (datetime.now(UTC) - last_sync).total_seconds() / 60
+                if elapsed < self.TRACKS_SYNC_COOLDOWN:
+                    stats["skipped_cooldown"] = True
+                    return stats
+        
+        try:
+            # Get top tracks from Spotify
+            tracks = await self.spotify_plugin.get_artist_top_tracks(
+                artist_id, market=market
+            )
+            
+            for track_dto in tracks:
+                try:
+                    # Save track to DB
+                    await self.repo.upsert_track(
+                        spotify_id=track_dto.spotify_id or "",
+                        album_id=track_dto.album_id or "",
+                        name=track_dto.name,
+                        duration_ms=track_dto.duration_ms,
+                        track_number=track_dto.track_number or 1,
+                        disc_number=track_dto.disc_number or 1,
+                        explicit=track_dto.explicit,
+                        preview_url=track_dto.preview_url,
+                        isrc=track_dto.isrc,
+                    )
+                    stats["tracks_synced"] += 1
+                except Exception as e:
+                    logger.warning(f"Failed to save track {track_dto.name}: {e}")
+            
+            # Update sync status
+            await self.repo.update_sync_status(cache_key)
+            await self._session.commit()
+            
+            stats["synced"] = True
+            logger.info(
+                f"SpotifySyncService: Artist {artist_id} top tracks synced - "
+                f"{stats['tracks_synced']} tracks"
+            )
+            
+        except Exception as e:
+            logger.error(f"SpotifySyncService: Artist top tracks sync failed: {e}")
+            stats["error"] = str(e)
+        
+        return stats
+
+    # =========================================================================
+    # RELATED ARTISTS SYNC (Discovery Feature!)
+    # =========================================================================
+
+    async def sync_related_artists(
+        self,
+        artist_id: str,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Sync related artists for a specific artist from Spotify.
+        
+        Hey future me - das ist ein DISCOVERY Feature!
+        Holt ähnliche Künstler und speichert sie als "related" in DB.
+        BRAUCHT Spotify OAuth.
+        
+        Use Case:
+        - "Artists You Might Like" auf Artist-Detail-Seite
+        - Discovery Recommendations
+        - "Fans Also Like" Section
+        
+        Args:
+            artist_id: Spotify artist ID
+            force: Skip cooldown check
+            
+        Returns:
+            Sync result with counts
+        """
+        cache_key = f"related_artists_{artist_id}"
+        stats: dict[str, Any] = {
+            "synced": False,
+            "artists_synced": 0,
+            "error": None,
+            "skipped_cooldown": False,
+        }
+        
+        # Check cooldown
+        sync_status = await self.repo.get_sync_status(cache_key)
+        if not force and sync_status:
+            last_sync = sync_status.last_sync_at
+            if last_sync:
+                last_sync = ensure_utc_aware(last_sync)
+                elapsed = (datetime.now(UTC) - last_sync).total_seconds() / 60
+                if elapsed < self.ARTISTS_SYNC_COOLDOWN:
+                    stats["skipped_cooldown"] = True
+                    return stats
+        
+        try:
+            # Get related artists from Spotify
+            related_artists = await self.spotify_plugin.get_related_artists(artist_id)
+            
+            for artist_dto in related_artists:
+                try:
+                    # Save artist to DB
+                    await self.repo.upsert_artist(
+                        spotify_id=artist_dto.spotify_id or "",
+                        name=artist_dto.name,
+                        image_url=artist_dto.image_url,
+                    )
+                    stats["artists_synced"] += 1
+                except Exception as e:
+                    logger.warning(f"Failed to save related artist {artist_dto.name}: {e}")
+            
+            # TODO: Store the relationship (artist_id -> related_artist_id)
+            # This requires a new table: artist_relations
+            # For now, we just cache the related artists in DB
+            
+            # Update sync status
+            await self.repo.update_sync_status(cache_key)
+            await self._session.commit()
+            
+            stats["synced"] = True
+            logger.info(
+                f"SpotifySyncService: Related artists for {artist_id} synced - "
+                f"{stats['artists_synced']} artists"
+            )
+            
+        except Exception as e:
+            logger.error(f"SpotifySyncService: Related artists sync failed: {e}")
+            stats["error"] = str(e)
+        
+        return stats
+
+    # =========================================================================
+    # NEW RELEASES SYNC
+    # =========================================================================
+
+    async def sync_new_releases(
+        self,
+        limit: int = 50,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Sync Spotify new releases to database.
+        
+        Hey future me - das ist die KONSISTENTE Methode wie DeezerSyncService!
+        BRAUCHT Spotify OAuth um New Releases zu holen.
+        
+        Args:
+            limit: Max albums to sync
+            force: Skip cooldown check
+            
+        Returns:
+            Sync result with counts
+        """
+        stats: dict[str, Any] = {
+            "synced": False,
+            "albums_synced": 0,
+            "error": None,
+            "skipped_cooldown": False,
+        }
+        
+        # Check cooldown
+        sync_status = await self.repo.get_sync_status("new_releases")
+        if not force and sync_status:
+            last_sync = sync_status.last_sync_at
+            if last_sync:
+                last_sync = ensure_utc_aware(last_sync)
+                elapsed = (datetime.now(UTC) - last_sync).total_seconds() / 60
+                if elapsed < self.ALBUMS_SYNC_COOLDOWN:
+                    stats["skipped_cooldown"] = True
+                    return stats
+        
+        try:
+            # Get new releases from Spotify
+            albums = await self.spotify_plugin.get_new_releases(limit=limit)
+            
+            for album_dto in albums:
+                try:
+                    # Save album to DB
+                    await self.repo.upsert_album(
+                        spotify_id=album_dto.spotify_id or "",
+                        artist_id=album_dto.artist_id or "",
+                        name=album_dto.title,
+                        image_url=album_dto.image_url,
+                        release_date=album_dto.release_date,
+                        album_type=album_dto.album_type or "album",
+                        total_tracks=album_dto.total_tracks,
+                    )
+                    stats["albums_synced"] += 1
+                except Exception as e:
+                    logger.warning(f"Failed to save album {album_dto.title}: {e}")
+            
+            # Update sync status
+            await self.repo.update_sync_status("new_releases")
+            await self._session.commit()
+            
+            stats["synced"] = True
+            logger.info(f"SpotifySyncService: New releases synced - {stats['albums_synced']} albums")
+            
+        except Exception as e:
+            logger.error(f"SpotifySyncService: New releases sync failed: {e}")
+            stats["error"] = str(e)
+        
+        return stats
+
+    # =========================================================================
     # ALBUM TRACKS SYNC
     # =========================================================================
 
