@@ -20,6 +20,7 @@ from soulspot.api.dependencies import (
     get_playlist_repository,
     get_spotify_browse_repository,
     get_spotify_plugin,
+    get_spotify_plugin_optional,
     get_spotify_sync_service,
     get_track_repository,
 )
@@ -2122,7 +2123,7 @@ async def browse_new_releases_page(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     days: int = Query(default=90, ge=7, le=365, description="Days to look back"),
     include_compilations: bool = Query(default=True, description="Include compilations"),
     include_singles: bool = Query(default=True, description="Include singles"),
@@ -2133,6 +2134,10 @@ async def browse_new_releases_page(
     Hey future me - REFACTORED to use NewReleasesSyncWorker cache!
     Background worker syncs every 30 minutes and caches results.
     UI reads from cache for fast response. Manual refresh available via button.
+    
+    MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
+    Uses get_spotify_plugin_optional → returns None if not authenticated.
+    Falls back to Deezer (NO AUTH NEEDED) for new releases.
 
     Architecture:
         Route → Check Cache → [Fresh? Return cached] OR [Stale? Fetch live]
@@ -2490,7 +2495,7 @@ async def browse_charts_page(
 async def spotify_discover_page(
     request: Request,
     sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
@@ -2498,6 +2503,10 @@ async def spotify_discover_page(
 
     Hey future me - REFACTORED to use DiscoverService for Multi-Provider discovery!
     Now aggregates related artists from BOTH Spotify AND Deezer.
+    
+    MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
+    Uses get_spotify_plugin_optional → returns None if not authenticated.
+    Falls back to Deezer (NO AUTH NEEDED) for artist discovery.
     
     Architecture:
         Route → DiscoverService

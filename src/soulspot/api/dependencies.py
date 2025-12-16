@@ -249,6 +249,55 @@ async def get_spotify_plugin(
         ) from e
 
 
+# Hey future me - MULTI-SERVICE PATTERN: Optional Spotify Plugin!
+# Use this instead of get_spotify_plugin when you want FALLBACK to other services.
+# Returns None if user is not logged in to Spotify, instead of raising HTTPException.
+# Routes should check if spotify_plugin is None and use Deezer fallback!
+async def get_spotify_plugin_optional(
+    request: Request,
+    credentials_service: CredentialsService = Depends(get_credentials_service),
+) -> "SpotifyPlugin | None":
+    """Get SpotifyPlugin instance, or None if not authenticated.
+
+    MULTI-SERVICE PATTERN: This dependency returns None instead of raising HTTPException
+    when the user is not authenticated with Spotify. Use this for routes that should
+    work with Deezer fallback when Spotify is unavailable.
+
+    Args:
+        request: FastAPI request for app state access
+        credentials_service: Service for DB-first credential access
+
+    Returns:
+        SpotifyPlugin instance if authenticated, None otherwise
+    """
+    from soulspot.config.settings import SpotifySettings
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+    try:
+        spotify_creds = await credentials_service.get_spotify_credentials()
+        spotify_settings = SpotifySettings(
+            client_id=spotify_creds.client_id,
+            client_secret=spotify_creds.client_secret,
+            redirect_uri=spotify_creds.redirect_uri,
+        )
+        spotify_client = SpotifyClient(spotify_settings)
+        db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+
+        access_token = await db_token_manager.get_token_for_background()
+        if not access_token:
+            # MULTI-SERVICE: No exception, just return None
+            logger.debug("No Spotify token available - returning None for optional plugin")
+            return None
+
+        return SpotifyPlugin(
+            client=spotify_client,
+            access_token=access_token,
+        )
+    except Exception as e:
+        logger.debug(f"Spotify plugin unavailable (optional): {e}")
+        return None
+
+
 # Hey future me, this is a helper to parse Bearer tokens consistently! We extract this logic
 # because it's used by get_session_id dependency (for every auth'd request). The logic is: if string
 # starts with "bearer " (case-insensitive), strip it and return the rest. Otherwise return the whole
