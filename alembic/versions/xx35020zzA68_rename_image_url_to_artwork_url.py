@@ -89,7 +89,12 @@ def upgrade() -> None:
     # Rename soulspot_artists.image_url → artwork_url (if needed)
     if _column_exists(connection, "soulspot_artists", "image_url"):
         print("Renaming soulspot_artists.image_url → artwork_url")
-        with op.batch_alter_table("soulspot_artists") as batch_op:
+        # For SQLite, we need to use batch mode with recreate strategy
+        with op.batch_alter_table(
+            "soulspot_artists",
+            schema=None,
+            recreate="always"
+        ) as batch_op:
             batch_op.alter_column(
                 "image_url",
                 new_column_name="artwork_url",
@@ -99,7 +104,12 @@ def upgrade() -> None:
     elif _column_exists(connection, "soulspot_artists", "artwork_url"):
         print("Column soulspot_artists.artwork_url already exists - skipping rename")
     else:
-        print("WARNING: Neither image_url nor artwork_url found in soulspot_artists")
+        # If neither exists, create artwork_url column
+        print("WARNING: Neither image_url nor artwork_url found - creating artwork_url")
+        op.add_column(
+            "soulspot_artists",
+            sa.Column("artwork_url", sa.String(512), nullable=True),
+        )
     
     # Clean up again before second table (in case first batch left temps)
     _cleanup_orphaned_tables(connection)
@@ -107,7 +117,12 @@ def upgrade() -> None:
     # Rename playlists.cover_url → artwork_url (if needed)
     if _column_exists(connection, "playlists", "cover_url"):
         print("Renaming playlists.cover_url → artwork_url")
-        with op.batch_alter_table("playlists") as batch_op:
+        # For SQLite, we need to use batch mode with recreate strategy
+        with op.batch_alter_table(
+            "playlists",
+            schema=None,
+            recreate="always"
+        ) as batch_op:
             batch_op.alter_column(
                 "cover_url",
                 new_column_name="artwork_url",
@@ -117,7 +132,12 @@ def upgrade() -> None:
     elif _column_exists(connection, "playlists", "artwork_url"):
         print("Column playlists.artwork_url already exists - skipping rename")
     else:
-        print("WARNING: Neither cover_url nor artwork_url found in playlists")
+        # If neither exists, create artwork_url column
+        print("WARNING: Neither cover_url nor artwork_url found - creating artwork_url")
+        op.add_column(
+            "playlists",
+            sa.Column("artwork_url", sa.String(512), nullable=True),
+        )
 
 
 def downgrade() -> None:
@@ -132,7 +152,11 @@ def downgrade() -> None:
     # Revert soulspot_artists.artwork_url → image_url (if needed)
     if _column_exists(connection, "soulspot_artists", "artwork_url"):
         print("Reverting soulspot_artists.artwork_url → image_url")
-        with op.batch_alter_table("soulspot_artists") as batch_op:
+        with op.batch_alter_table(
+            "soulspot_artists",
+            schema=None,
+            recreate="always"
+        ) as batch_op:
             batch_op.alter_column(
                 "artwork_url",
                 new_column_name="image_url",
@@ -150,7 +174,11 @@ def downgrade() -> None:
     # Revert playlists.artwork_url → cover_url (if needed)
     if _column_exists(connection, "playlists", "artwork_url"):
         print("Reverting playlists.artwork_url → cover_url")
-        with op.batch_alter_table("playlists") as batch_op:
+        with op.batch_alter_table(
+            "playlists",
+            schema=None,
+            recreate="always"
+        ) as batch_op:
             batch_op.alter_column(
                 "artwork_url",
                 new_column_name="cover_url",
