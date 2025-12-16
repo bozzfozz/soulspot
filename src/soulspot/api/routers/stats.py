@@ -63,7 +63,7 @@ class StatsWithTrends(BaseModel):
 # wenn keine historischen Daten vorhanden sind, werden trends=None zurückgegeben.
 @router.get("/trends")
 async def get_stats_with_trends(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> StatsWithTrends:
     """Get dashboard statistics with trend indicators.
 
@@ -79,7 +79,7 @@ async def get_stats_with_trends(
     from soulspot.infrastructure.persistence.models import DownloadModel, PlaylistModel
     from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
-    stats_service = StatsService(db)
+    stats_service = StatsService(session)
 
     now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -96,7 +96,7 @@ async def get_stats_with_trends(
     active_downloads = await stats_service.get_active_downloads_count()
 
     # Spotify stats
-    spotify_repo = SpotifyBrowseRepository(db)
+    spotify_repo = SpotifyBrowseRepository(session)
     spotify_artists = await spotify_repo.count_artists()
     spotify_albums = await spotify_repo.count_albums()
     spotify_tracks = await spotify_repo.count_tracks()
@@ -113,7 +113,7 @@ async def get_stats_with_trends(
         DownloadModel.status == "completed",
         DownloadModel.completed_at >= today_start,
     )
-    completed_today_result = await db.execute(completed_today_stmt)
+    completed_today_result = await session.execute(completed_today_stmt)
     completed_today = completed_today_result.scalar() or 0
 
     completed_yesterday_stmt = select(func.count(DownloadModel.id)).where(
@@ -121,7 +121,7 @@ async def get_stats_with_trends(
         DownloadModel.completed_at >= yesterday_start,
         DownloadModel.completed_at < today_start,
     )
-    completed_yesterday_result = await db.execute(completed_yesterday_stmt)
+    completed_yesterday_result = await session.execute(completed_yesterday_stmt)
     completed_yesterday = completed_yesterday_result.scalar() or 0
 
     trends["downloads_today"] = _calculate_trend(
@@ -135,7 +135,7 @@ async def get_stats_with_trends(
         DownloadModel.status == "completed",
         DownloadModel.completed_at >= week_ago,
     )
-    this_week_result = await db.execute(completed_this_week_stmt)
+    this_week_result = await session.execute(completed_this_week_stmt)
     completed_this_week = this_week_result.scalar() or 0
 
     completed_last_week_stmt = select(func.count(DownloadModel.id)).where(
@@ -143,7 +143,7 @@ async def get_stats_with_trends(
         DownloadModel.completed_at >= two_weeks_ago,
         DownloadModel.completed_at < week_ago,
     )
-    last_week_result = await db.execute(completed_last_week_stmt)
+    last_week_result = await session.execute(completed_last_week_stmt)
     completed_last_week = last_week_result.scalar() or 0
 
     trends["downloads_week"] = _calculate_trend(
@@ -154,7 +154,7 @@ async def get_stats_with_trends(
     new_playlists_stmt = select(func.count(PlaylistModel.id)).where(
         PlaylistModel.created_at >= week_ago
     )
-    new_playlists_result = await db.execute(new_playlists_stmt)
+    new_playlists_result = await session.execute(new_playlists_stmt)
     new_playlists = new_playlists_result.scalar() or 0
 
     # We don't have "last week" playlist count easily, so just show new this week
@@ -251,7 +251,7 @@ class QuickStats(BaseModel):
 # Zahlen, keine Trends (die ändern sich nicht so schnell).
 @router.get("/quick")
 async def get_quick_stats(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> QuickStats:
     """Get minimal stats for quick polling.
 
@@ -264,7 +264,7 @@ async def get_quick_stats(
     # Hey future me - NOW uses StatsService! Clean Architecture.
     from soulspot.application.services.stats_service import StatsService
 
-    stats_service = StatsService(db)
+    stats_service = StatsService(session)
     now = datetime.now(UTC)
 
     completed = await stats_service.get_completed_downloads_count()

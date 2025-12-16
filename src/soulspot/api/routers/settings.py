@@ -123,7 +123,7 @@ class AllSettings(BaseModel):
 # UPDATE 2: Integration settings (Spotify, slskd) now ALSO read from DB first via CredentialsService!
 @router.get("/")
 async def get_all_settings(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> AllSettings:
     """Get all current settings.
@@ -137,7 +137,7 @@ async def get_all_settings(
         All application settings grouped by category
     """
     settings = get_settings()
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # General settings from DB (with env fallback) - allows runtime log level changes!
     general_summary = await settings_service.get_general_settings_summary(
@@ -198,7 +198,7 @@ async def get_all_settings(
 @router.post("/")
 async def update_settings(
     settings_update: AllSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> dict[str, Any]:
     """Update application settings.
@@ -218,7 +218,7 @@ async def update_settings(
     Raises:
         HTTPException: If settings validation fails
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Persist General settings to DB - log_level changes apply immediately!
     try:
@@ -300,7 +300,7 @@ async def update_settings(
         category="download",
     )
 
-    await db.commit()
+    await session.commit()
 
     logger.info(
         "Settings updated: log_level=%s, debug=%s",
@@ -325,7 +325,7 @@ async def update_settings(
 @router.post("/reset")
 async def reset_settings(
     category: str | None = None,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Reset settings to defaults by deleting from database.
 
@@ -345,9 +345,9 @@ async def reset_settings(
     from soulspot.application.services.app_settings_service import AppSettingsService
 
     try:
-        settings_service = AppSettingsService(db)
+        settings_service = AppSettingsService(session)
         deleted_count = await settings_service.reset_all(category=category)
-        await db.commit()
+        await session.commit()
 
         return {
             "message": f"Reset {deleted_count} settings to defaults",
@@ -356,7 +356,7 @@ async def reset_settings(
             "note": "Some settings may require application restart to take effect",
         }
     except Exception as e:
-        await db.rollback()
+        await session.rollback()
         logger.exception("Failed to reset settings: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -512,7 +512,7 @@ class SpotifySyncSettingsResponse(BaseModel):
 
 @router.get("/spotify-sync")
 async def get_spotify_sync_settings(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifySyncSettingsResponse:
     """Get Spotify sync settings.
 
@@ -522,7 +522,7 @@ async def get_spotify_sync_settings(
     Returns:
         Current Spotify sync settings and image statistics
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     summary = await settings_service.get_spotify_settings_summary()
 
     # Get image stats if possible
@@ -562,7 +562,7 @@ async def get_spotify_sync_settings(
 @router.put("/spotify-sync")
 async def update_spotify_sync_settings(
     settings_update: SpotifySyncSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifySyncSettings:
     """Update Spotify sync settings.
 
@@ -574,7 +574,7 @@ async def update_spotify_sync_settings(
     Returns:
         Updated settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Update each setting
     await settings_service.set(
@@ -651,7 +651,7 @@ async def update_spotify_sync_settings(
         category="spotify",
     )
 
-    await db.commit()
+    await session.commit()
 
     return settings_update
 
@@ -659,7 +659,7 @@ async def update_spotify_sync_settings(
 @router.post("/spotify-sync/toggle/{setting_name}")
 async def toggle_spotify_sync_setting(
     setting_name: str,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Toggle a boolean Spotify sync setting.
 
@@ -691,7 +691,7 @@ async def toggle_spotify_sync_setting(
             detail=f"Unknown setting: {setting_name}. Valid settings: {list(key_mapping.keys())}",
         )
 
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Get current value and toggle
     current_value = await settings_service.get_bool(setting_key, default=True)
@@ -703,7 +703,7 @@ async def toggle_spotify_sync_setting(
         value_type="boolean",
         category="spotify",
     )
-    await db.commit()
+    await session.commit()
 
     return {
         "setting": setting_name,
@@ -767,7 +767,7 @@ class SpotifyDbStats(BaseModel):
 
 @router.get("/spotify-sync/db-stats")
 async def get_spotify_db_stats(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SpotifyDbStats:
     """Get database statistics for Spotify-synced entities.
 
@@ -789,10 +789,10 @@ async def get_spotify_db_stats(
     )
 
     # Count local entities with Spotify URIs
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
-    track_repo = TrackRepository(db)
-    playlist_repo = PlaylistRepository(db)
+    artist_repo = ArtistRepository(session)
+    album_repo = AlbumRepository(session)
+    track_repo = TrackRepository(session)
+    playlist_repo = PlaylistRepository(session)
 
     local_artists_count = await artist_repo.count_with_spotify_uri()
     local_albums_count = await album_repo.count_with_spotify_uri()
@@ -800,7 +800,7 @@ async def get_spotify_db_stats(
     local_playlists_count = await playlist_repo.count_by_source("spotify")
 
     # Count Spotify browse data (from auto-sync)
-    spotify_repo = SpotifyBrowseRepository(db)
+    spotify_repo = SpotifyBrowseRepository(session)
     spotify_artists_count = await spotify_repo.count_artists()
     spotify_albums_count = await spotify_repo.count_albums()
     spotify_tracks_count = await spotify_repo.count_tracks()
@@ -852,7 +852,7 @@ class SyncTriggerResponse(BaseModel):
 async def trigger_manual_sync(
     sync_type: str,
     request: Request,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> SyncTriggerResponse:
     """Trigger a manual Spotify sync.
 
@@ -881,7 +881,7 @@ async def trigger_manual_sync(
     app_settings = get_settings()
 
     # Get token from database using repository
-    token_repo = SpotifyTokenRepository(db)
+    token_repo = SpotifyTokenRepository(session)
     token = await token_repo.get_active_token()
 
     if not token:
@@ -901,10 +901,10 @@ async def trigger_manual_sync(
     )
 
     image_service = ArtworkService(app_settings)
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     sync_service = SpotifySyncService(
-        session=db,
+        session=session,
         spotify_plugin=spotify_plugin,
         image_service=image_service,
         settings_service=settings_service,
@@ -951,7 +951,7 @@ async def trigger_manual_sync(
             )
             message = f"Full sync complete: {artists_count} artists, {playlists_count} playlists, {albums_count} albums"
 
-        await db.commit()
+        await session.commit()
 
         return SyncTriggerResponse(
             success=True,
@@ -960,7 +960,7 @@ async def trigger_manual_sync(
         )
 
     except Exception as e:
-        await db.rollback()
+        await session.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"Sync failed: {str(e)}",
@@ -1182,7 +1182,7 @@ class AutomationSettingsResponse(BaseModel):
 @router.get("/automation")
 async def get_automation_settings(
     request: Request,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AutomationSettingsResponse:
     """Get automation settings.
 
@@ -1192,7 +1192,7 @@ async def get_automation_settings(
     Returns:
         Current automation settings and worker status
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     summary = await settings_service.get_automation_settings_summary()
 
     # Get worker status if available
@@ -1211,7 +1211,7 @@ async def get_automation_settings(
 @router.put("/automation")
 async def update_automation_settings(
     settings_update: AutomationSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> AutomationSettings:
     """Update automation settings.
 
@@ -1223,7 +1223,7 @@ async def update_automation_settings(
     Returns:
         Updated settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Update each setting
     await settings_service.set(
@@ -1287,7 +1287,7 @@ async def update_automation_settings(
         category="automation",
     )
 
-    await db.commit()
+    await session.commit()
 
     return settings_update
 
@@ -1297,7 +1297,7 @@ async def update_automation_settings(
 @router.patch("/automation")
 async def patch_automation_setting(
     setting_update: dict[str, Any],
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Update a single automation setting.
 
@@ -1307,7 +1307,7 @@ async def patch_automation_setting(
     Returns:
         Success message with updated value
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Map setting names to their types
     setting_types = {
@@ -1334,7 +1334,7 @@ async def patch_automation_setting(
             )
             updated[key] = value
 
-    await db.commit()
+    await session.commit()
 
     return {"message": "Setting updated", "updated": updated}
 
@@ -1452,7 +1452,7 @@ class NamingPreviewResponse(BaseModel):
 
 @router.get("/naming")
 async def get_naming_settings(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> NamingSettings:
     """Get library naming settings.
 
@@ -1462,7 +1462,7 @@ async def get_naming_settings(
     Returns:
         Current naming settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     summary = await settings_service.get_naming_settings_summary()
 
     return NamingSettings(**summary)
@@ -1471,7 +1471,7 @@ async def get_naming_settings(
 @router.put("/naming")
 async def update_naming_settings(
     settings_update: NamingSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> NamingSettings:
     """Update library naming settings.
 
@@ -1484,7 +1484,7 @@ async def update_naming_settings(
     Returns:
         Updated settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Validate templates before saving
     for template_field in [
@@ -1565,7 +1565,7 @@ async def update_naming_settings(
         category="naming",
     )
 
-    await db.commit()
+    await session.commit()
 
     return settings_update
 
@@ -1573,7 +1573,7 @@ async def update_naming_settings(
 @router.post("/naming/validate")
 async def validate_naming_template(
     request: NamingValidationRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> NamingValidationResponse:
     """Validate a naming template.
 
@@ -1586,7 +1586,7 @@ async def validate_naming_template(
     Returns:
         Validation result with invalid variables if any
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     is_valid, invalid_vars = settings_service.validate_naming_template(request.template)
 
     # Generate preview if valid
@@ -1808,7 +1808,7 @@ class LibraryEnrichmentSettings(BaseModel):
 
 @router.get("/library/enrichment")
 async def get_library_enrichment_settings(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> LibraryEnrichmentSettings:
     """Get library enrichment settings.
 
@@ -1817,7 +1817,7 @@ async def get_library_enrichment_settings(
     Returns:
         Current enrichment settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     enrichment_enabled = await settings_service.is_library_auto_enrichment_enabled()
     duplicate_enabled = await settings_service.is_duplicate_detection_enabled()
     search_limit = await settings_service.get_enrichment_search_limit()
@@ -1838,7 +1838,7 @@ async def get_library_enrichment_settings(
 @router.put("/library/enrichment")
 async def update_library_enrichment_settings(
     settings_update: LibraryEnrichmentSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> LibraryEnrichmentSettings:
     """Update library enrichment settings.
 
@@ -1850,7 +1850,7 @@ async def update_library_enrichment_settings(
     Returns:
         Updated settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     await settings_service.set(
         "library.auto_enrichment_enabled",
@@ -1891,7 +1891,7 @@ async def update_library_enrichment_settings(
         category="library",
     )
 
-    await db.commit()
+    await session.commit()
 
     return settings_update
 
@@ -1952,7 +1952,7 @@ _MODE_NAME_TO_INT = {"off": 0, "basic": 1, "pro": 2}
 
 @router.get("/providers")
 async def get_provider_settings(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> ProviderModeSettings:
     """Get provider mode settings for all external services.
 
@@ -1961,7 +1961,7 @@ async def get_provider_settings(
     Returns:
         Dict with provider names as keys, mode values (0-2) as values.
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
     modes = await settings_service.get_all_provider_modes()
 
     # Convert mode names to integers for API response
@@ -1977,7 +1977,7 @@ async def get_provider_settings(
 @router.put("/providers")
 async def update_provider_settings(
     settings_update: ProviderModeSettings,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> ProviderModeSettings:
     """Update provider mode settings.
 
@@ -1989,7 +1989,7 @@ async def update_provider_settings(
     Returns:
         Updated settings
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Convert integer values to mode names and save
     modes_to_save = {
@@ -2001,7 +2001,7 @@ async def update_provider_settings(
     }
 
     await settings_service.set_all_provider_modes(modes_to_save)
-    await db.commit()
+    await session.commit()
 
     logger.info(f"Updated provider modes: {modes_to_save}")
 

@@ -83,7 +83,7 @@ class DiscographyService:
         Args:
             session: Database session
         """
-        self.session = session
+        self._session = session
 
     # Hey future me: Discography completeness check - finds which albums are missing from an artist's catalog
     # WHY check this? User downloads 3 Pink Floyd albums, but they have 15 studio albums - which 12 are missing?
@@ -114,7 +114,7 @@ class DiscographyService:
         """
         # Get artist from database
         stmt = select(ArtistModel).where(ArtistModel.id == str(artist_id.value))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         artist = result.scalar_one_or_none()
 
         if not artist:
@@ -140,7 +140,7 @@ class DiscographyService:
             # Album is "owned" if it has local files or was imported from local library
             AlbumModel.source.in_(["local", "hybrid"]),
         )
-        result = await self.session.execute(stmt_owned)
+        result = await self._session.execute(stmt_owned)
         owned_albums = result.scalars().all()
         owned_spotify_uris = {
             album.spotify_uri for album in owned_albums if album.spotify_uri
@@ -187,7 +187,7 @@ class DiscographyService:
             AlbumModel.artist_id == str(artist_id.value),
             AlbumModel.source == "spotify",  # Only Spotify-synced albums
         )
-        result = await self.session.execute(stmt_spotify)
+        result = await self._session.execute(stmt_spotify)
         all_spotify_albums = list(result.scalars().all())
 
         # Find missing albums (in spotify-synced but not in owned/local)
@@ -240,7 +240,7 @@ class DiscographyService:
         """
         # Get all artists from database
         stmt = select(ArtistModel).limit(limit)
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         artists = result.scalars().all()
 
         discography_infos = []

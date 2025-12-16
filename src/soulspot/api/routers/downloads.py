@@ -276,7 +276,7 @@ class AlbumDownloadResponse(BaseModel):
 @router.post("/album")
 async def create_album_download(
     request: AlbumDownloadRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     job_queue: JobQueue = Depends(get_job_queue),
     track_repository: TrackRepository = Depends(get_track_repository),
 ) -> AlbumDownloadResponse:
@@ -359,7 +359,7 @@ async def create_album_download(
 
     # Create and execute use case
     use_case = QueueAlbumDownloadsUseCase(
-        session=db,
+        session=session,
         job_queue=job_queue,
         track_repository=track_repository,
         spotify_plugin=spotify_plugin,

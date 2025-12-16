@@ -121,7 +121,7 @@ class FollowedArtistsService:
             ProviderMappingService,
         )
 
-        self.session = session
+        self._session = session
         self.artist_repo = ArtistRepository(session)
         self.spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
@@ -656,7 +656,7 @@ class FollowedArtistsService:
             return stats  # type: ignore[return-value]
 
         stats["source"] = source
-        album_repo = AlbumRepository(self.session)
+        album_repo = AlbumRepository(self._session)
 
         # Track seen albums by normalized key to avoid duplicates
         # Hey future me - CROSS-SERVICE DEDUPLICATION!

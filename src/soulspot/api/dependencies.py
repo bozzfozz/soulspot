@@ -15,6 +15,9 @@ from soulspot.application.services.token_manager import TokenManager
 from soulspot.domain.exceptions import TokenRefreshException
 
 if TYPE_CHECKING:
+    from soulspot.application.services.deezer_auth_service import (
+        DeezerAuthService,
+    )
     from soulspot.application.services.spotify_auth_service import (
         SpotifyAuthService,
     )
@@ -182,6 +185,41 @@ async def get_spotify_auth_service(
         redirect_uri=spotify_creds.redirect_uri,
     )
     return SpotifyAuthService(spotify_settings)
+
+
+# Hey future me - DeezerAuthService wraps all Deezer OAuth operations!
+# Unlike Spotify:
+# - NO PKCE (simpler OAuth 2.0 flow)
+# - NO refresh_token (Deezer tokens are long-lived ~90 days)
+# - Public API doesn't need auth at all (charts, releases)
+# Only needed for user-specific operations (favorites, playlists)
+async def get_deezer_auth_service(
+    credentials_service: CredentialsService = Depends(get_credentials_service),
+) -> "DeezerAuthService":
+    """Get DeezerAuthService for OAuth operations.
+
+    Creates a DeezerAuthService that handles Deezer OAuth:
+    - Auth URL generation (simple OAuth 2.0, no PKCE)
+    - Authorization code exchange
+    - NO token refresh (Deezer tokens are long-lived)
+
+    Credentials are loaded from database via CredentialsService with .env fallback.
+
+    Returns:
+        DeezerAuthService instance
+    """
+    from soulspot.application.services.deezer_auth_service import DeezerAuthService
+    from soulspot.infrastructure.integrations.deezer_client import DeezerOAuthConfig
+
+    deezer_creds = await credentials_service.get_deezer_credentials()
+
+    oauth_config = DeezerOAuthConfig(
+        app_id=deezer_creds.app_id,
+        secret=deezer_creds.secret,
+        redirect_uri=deezer_creds.redirect_uri,
+    )
+
+    return DeezerAuthService(oauth_config)
 
 
 # Hey future me - SpotifyPlugin dependency! The plugin wraps SpotifyClient and handles token

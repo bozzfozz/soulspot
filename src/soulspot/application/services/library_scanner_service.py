@@ -80,7 +80,7 @@ class LibraryScannerService:
             session: Database session
             settings: Application settings (for music_path)
         """
-        self.session = session
+        self._session = session
         self.settings = settings
         self.artist_repo = ArtistRepository(session)
         self.album_repo = AlbumRepository(session)

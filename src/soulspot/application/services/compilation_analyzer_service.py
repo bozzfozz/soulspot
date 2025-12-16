@@ -106,7 +106,7 @@ class CompilationAnalyzerService:
             session: Database session for queries and updates.
             musicbrainz_client: Optional MusicBrainz client for Phase 3 verification.
         """
-        self.session = session
+        self._session = session
         self.musicbrainz_client = musicbrainz_client
 
     async def analyze_album(self, album_id: str) -> AlbumAnalysisResult | None:
@@ -126,7 +126,7 @@ class CompilationAnalyzerService:
             .outerjoin(ArtistModel, AlbumModel.artist_id == ArtistModel.id)
             .where(AlbumModel.id == album_id)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         row = result.first()
 
         if not row:
@@ -142,7 +142,7 @@ class CompilationAnalyzerService:
             .join(TrackModel, TrackModel.artist_id == ArtistModel.id)
             .where(TrackModel.album_id == album_id)
         )
-        track_artists_result = await self.session.execute(track_artists_stmt)
+        track_artists_result = await self._session.execute(track_artists_stmt)
         track_artists = [row[0] for row in track_artists_result.all()]
 
         # Current compilation status
@@ -185,7 +185,7 @@ class CompilationAnalyzerService:
                 .where(AlbumModel.id == album_id)
                 .values(secondary_types=new_secondary_types)
             )
-            await self.session.execute(update_stmt)
+            await self._session.execute(update_stmt)
 
             logger.info(
                 f"Album '{album.title}' compilation status changed: "
@@ -248,7 +248,7 @@ class CompilationAnalyzerService:
                 )
             )
 
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         album_ids = [row[0] for row in result.all()]
 
         logger.info(f"Analyzing {len(album_ids)} albums for compilation status")
@@ -264,7 +264,7 @@ class CompilationAnalyzerService:
                     changed_count += 1
 
         # Commit all changes
-        await self.session.commit()
+        await self._session.commit()
 
         logger.info(
             f"Compilation analysis complete: {len(results)} albums analyzed, "
@@ -281,7 +281,7 @@ class CompilationAnalyzerService:
         """
         # Total albums
         total_stmt = select(func.count(AlbumModel.id))
-        total_result = await self.session.execute(total_stmt)
+        total_result = await self._session.execute(total_stmt)
         total_albums = total_result.scalar() or 0
 
         # Albums marked as compilation
@@ -289,7 +289,7 @@ class CompilationAnalyzerService:
         compilation_stmt = select(func.count(AlbumModel.id)).where(
             AlbumModel.secondary_types.contains([SecondaryAlbumType.COMPILATION.value])
         )
-        compilation_result = await self.session.execute(compilation_stmt)
+        compilation_result = await self._session.execute(compilation_stmt)
         compilation_albums = compilation_result.scalar() or 0
 
         # Albums with "Various Artists" album_artist
@@ -298,7 +298,7 @@ class CompilationAnalyzerService:
                 ["various artists", "various", "va", "v.a."]
             )
         )
-        va_result = await self.session.execute(va_stmt)
+        va_result = await self._session.execute(va_stmt)
         va_albums = va_result.scalar() or 0
 
         return {
@@ -357,7 +357,7 @@ class CompilationAnalyzerService:
             .outerjoin(ArtistModel, AlbumModel.artist_id == ArtistModel.id)
             .where(AlbumModel.id == album_id)
         )
-        db_result = await self.session.execute(stmt)
+        db_result = await self._session.execute(stmt)
         row = db_result.first()
 
         if not row:
@@ -407,8 +407,8 @@ class CompilationAnalyzerService:
                         ],  # Store MBID for future reference
                     )
                 )
-                await self.session.execute(update_stmt)
-                await self.session.commit()
+                await self._session.execute(update_stmt)
+                await self._session.commit()
 
                 result["updated"] = True
                 logger.info(
@@ -472,7 +472,7 @@ class CompilationAnalyzerService:
             )
         )
 
-        db_result = await self.session.execute(stmt)
+        db_result = await self._session.execute(stmt)
         candidate_albums = db_result.all()
 
         # Step 2 & 3: Calculate diversity and filter to borderline range
@@ -484,7 +484,7 @@ class CompilationAnalyzerService:
             unique_artists_stmt = select(
                 func.count(func.distinct(TrackModel.artist_id))
             ).where(TrackModel.album_id == album_id)
-            unique_result = await self.session.execute(unique_artists_stmt)
+            unique_result = await self._session.execute(unique_artists_stmt)
             unique_count = unique_result.scalar() or 0
 
             # Calculate diversity ratio
@@ -559,7 +559,7 @@ class CompilationAnalyzerService:
         """
         # Get album
         stmt = select(AlbumModel).where(AlbumModel.id == album_id)
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         album = result.scalar_one_or_none()
 
         if not album:
@@ -592,8 +592,8 @@ class CompilationAnalyzerService:
             .where(AlbumModel.id == album_id)
             .values(secondary_types=new_secondary_types)
         )
-        await self.session.execute(update_stmt)
-        await self.session.commit()
+        await self._session.execute(update_stmt)
+        await self._session.commit()
 
         logger.info(
             f"Album '{album.title}' compilation status manually set: "

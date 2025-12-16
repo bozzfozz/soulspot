@@ -7,6 +7,7 @@ from soulspot.application.workers.automation_workers import (
     WatchlistWorker,
 )
 from soulspot.application.workers.cleanup_worker import CleanupWorker
+from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
 from soulspot.application.workers.download_monitor_worker import DownloadMonitorWorker
 from soulspot.application.workers.download_status_sync_worker import (
     DownloadStatusSyncWorker,
@@ -35,6 +36,7 @@ __all__ = [
     "JobStatus",
     "JobType",
     # Core Workers
+    "DeezerSyncWorker",
     "DownloadWorker",
     "DownloadMonitorWorker",
     "MetadataWorker",

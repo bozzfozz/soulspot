@@ -94,7 +94,7 @@ class SpotifySyncService:
 
         self.repo = SpotifyBrowseRepository(session)
         self.spotify_plugin = spotify_plugin
-        self.session = session
+        self._session = session
         self._image_service = image_service
         self._settings_service = settings_service
         self._mapping_service = ProviderMappingService(session)
@@ -175,7 +175,7 @@ class SpotifySyncService:
                 sync_type="followed_artists",
                 status="running",
             )
-            await self.session.commit()
+            await self._session.commit()
 
             # Fetch all followed artists from Spotify
             spotify_artists = await self._fetch_all_followed_artists()
@@ -267,7 +267,7 @@ class SpotifySyncService:
                 cooldown_minutes=self.ARTISTS_SYNC_COOLDOWN,
             )
 
-            await self.session.commit()
+            await self._session.commit()
             stats["synced"] = True
 
             logger.info(
@@ -283,7 +283,7 @@ class SpotifySyncService:
                 status="error",
                 error_message=str(e),
             )
-            await self.session.commit()
+            await self._session.commit()
 
         return stats
 
@@ -407,7 +407,7 @@ class SpotifySyncService:
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
         stats = {"created": 0, "updated": 0, "downgraded": 0}
-        artist_repo = ArtistRepository(self.session)
+        artist_repo = ArtistRepository(self._session)
 
         for dto in artist_dtos:
             if not dto.spotify_id or not dto.name:
@@ -554,7 +554,7 @@ class SpotifySyncService:
 
             # Mark albums as synced
             await self.repo.set_albums_synced(artist_id)
-            await self.session.commit()
+            await self._session.commit()
 
             stats["synced"] = True
             logger.info(
@@ -988,7 +988,7 @@ class SpotifySyncService:
 
             # Mark tracks as synced
             await self.repo.set_tracks_synced(album_id)
-            await self.session.commit()
+            await self._session.commit()
 
             stats["synced"] = True
             logger.info(f"Synced {len(track_dtos)} tracks for album {album_id}")
@@ -1153,7 +1153,7 @@ class SpotifySyncService:
                 sync_type="user_playlists",
                 status="running",
             )
-            await self.session.commit()
+            await self._session.commit()
 
             # Fetch all playlists from Spotify
             spotify_playlists = await self._fetch_all_user_playlists()
@@ -1220,7 +1220,7 @@ class SpotifySyncService:
                 cooldown_minutes=self.PLAYLISTS_SYNC_COOLDOWN,
             )
 
-            await self.session.commit()
+            await self._session.commit()
             stats["synced"] = True
 
             logger.info(
@@ -1236,7 +1236,7 @@ class SpotifySyncService:
                 status="error",
                 error_message=str(e),
             )
-            await self.session.commit()
+            await self._session.commit()
 
         return stats
 
@@ -1402,7 +1402,7 @@ class SpotifySyncService:
                 sync_type="liked_songs",
                 status="running",
             )
-            await self.session.commit()
+            await self._session.commit()
 
             # Fetch all liked songs from Spotify
             liked_tracks = await self._fetch_all_liked_songs()
@@ -1428,7 +1428,7 @@ class SpotifySyncService:
                 cooldown_minutes=self.PLAYLISTS_SYNC_COOLDOWN,
             )
 
-            await self.session.commit()
+            await self._session.commit()
             stats["synced"] = True
 
             logger.info(f"Liked Songs sync complete: {stats['total']} tracks")
@@ -1450,7 +1450,7 @@ class SpotifySyncService:
                 status="error",
                 error_message=str(e),
             )
-            await self.session.commit()
+            await self._session.commit()
 
         return stats
 
@@ -1589,7 +1589,7 @@ class SpotifySyncService:
                 sync_type="saved_albums",
                 status="running",
             )
-            await self.session.commit()
+            await self._session.commit()
 
             # Fetch all saved albums from Spotify
             saved_albums = await self._fetch_all_saved_albums()
@@ -1656,7 +1656,7 @@ class SpotifySyncService:
                 cooldown_minutes=self.ALBUMS_SYNC_COOLDOWN,
             )
 
-            await self.session.commit()
+            await self._session.commit()
             stats["synced"] = True
 
             logger.info(
@@ -1672,7 +1672,7 @@ class SpotifySyncService:
                 status="error",
                 error_message=str(e),
             )
-            await self.session.commit()
+            await self._session.commit()
 
         return stats
 

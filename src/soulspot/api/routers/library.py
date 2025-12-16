@@ -896,7 +896,7 @@ async def list_duplicate_candidates(
     ),
     limit: int = Query(50, description="Max candidates to return"),
     offset: int = Query(0, description="Offset for pagination"),
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> DuplicateCandidatesResponse:
     """List duplicate track candidates for review.
 
@@ -904,7 +904,7 @@ async def list_duplicate_candidates(
         status: Optional status filter
         limit: Maximum candidates to return
         offset: Pagination offset
-        db: Database session
+        session: Database session
 
     Returns:
         List of duplicate candidates with statistics
@@ -912,7 +912,7 @@ async def list_duplicate_candidates(
     # Hey future me - NOW uses DuplicateService! Clean Architecture.
     from soulspot.application.services.duplicate_service import DuplicateService
 
-    service = DuplicateService(db)
+    service = DuplicateService(session)
     result = await service.list_candidates(status, limit, offset)
 
     # Convert to response format
@@ -952,14 +952,14 @@ async def list_duplicate_candidates(
 async def resolve_duplicate(
     candidate_id: str,
     request: ResolveDuplicateRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Resolve a duplicate candidate.
 
     Args:
         candidate_id: Candidate ID
         request: Resolution action
-        db: Database session
+        session: Database session
 
     Returns:
         Resolution result
@@ -968,7 +968,7 @@ async def resolve_duplicate(
     from soulspot.application.services.duplicate_service import DuplicateService
     from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
-    service = DuplicateService(db)
+    service = DuplicateService(session)
 
     try:
         result = await service.resolve_candidate(candidate_id, request.action)
@@ -1100,7 +1100,7 @@ def _track_model_to_entity(track_model: Any) -> Any:
 @router.post("/batch-rename/preview", response_model=BatchRenamePreviewResponse)
 async def preview_batch_rename(
     request: BatchRenamePreviewRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> BatchRenamePreviewResponse:
     """Preview batch rename operation.
@@ -1112,7 +1112,7 @@ async def preview_batch_rename(
 
     Args:
         request: Preview request with limit
-        db: Database session
+        session: Database session
         settings: Application settings
 
     Returns:
@@ -1131,7 +1131,7 @@ async def preview_batch_rename(
     )
 
     # Initialize services
-    app_settings_service = AppSettingsService(db)
+    app_settings_service = AppSettingsService(session)
     renaming_service = RenamingService(settings)
     renaming_service.set_app_settings_service(app_settings_service)
 
@@ -1150,11 +1150,11 @@ async def preview_batch_rename(
     stmt = (
         select(TrackModel).where(TrackModel.file_path.isnot(None)).limit(request.limit)
     )
-    result = await db.execute(stmt)
+    result = await session.execute(stmt)
     tracks = result.scalars().all()
 
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
+    artist_repo = ArtistRepository(session)
+    album_repo = AlbumRepository(session)
 
     preview_items: list[BatchRenamePreviewItem] = []
     files_to_rename = 0
@@ -1226,7 +1226,7 @@ async def preview_batch_rename(
 @router.post("/batch-rename", response_model=BatchRenameResponse)
 async def execute_batch_rename(
     request: BatchRenameRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> BatchRenameResponse:
     """Execute batch rename operation.
@@ -1244,7 +1244,7 @@ async def execute_batch_rename(
 
     Args:
         request: Rename request with dry_run flag
-        db: Database session
+        session: Database session
         settings: Application settings
 
     Returns:
@@ -1264,7 +1264,7 @@ async def execute_batch_rename(
     )
 
     # Initialize services
-    app_settings_service = AppSettingsService(db)
+    app_settings_service = AppSettingsService(session)
     renaming_service = RenamingService(settings)
     renaming_service.set_app_settings_service(app_settings_service)
 
@@ -1286,11 +1286,11 @@ async def execute_batch_rename(
     if request.limit:
         stmt = stmt.limit(request.limit)
 
-    result = await db.execute(stmt)
+    result = await session.execute(stmt)
     tracks = result.scalars().all()
 
-    artist_repo = ArtistRepository(db)
-    album_repo = AlbumRepository(db)
+    artist_repo = ArtistRepository(session)
+    album_repo = AlbumRepository(session)
 
     results: list[BatchRenameResult] = []
     successful = 0
@@ -1389,7 +1389,7 @@ async def execute_batch_rename(
 
                 # Update track in database
                 track_model.file_path = str(new_path)
-                await db.commit()
+                await session.commit()
 
                 results.append(
                     BatchRenameResult(
@@ -1402,7 +1402,7 @@ async def execute_batch_rename(
                 )
                 successful += 1
             except Exception as e:
-                await db.rollback()
+                await session.rollback()
                 results.append(
                     BatchRenameResult(
                         track_id=str(track_model.id),
@@ -1494,7 +1494,7 @@ class ApplyCandidateRequest(BaseModel):
     summary="Get library enrichment status",
 )
 async def get_enrichment_status(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> EnrichmentStatusResponse:
     """Get current status of library enrichment.
@@ -1510,7 +1510,7 @@ async def get_enrichment_status(
     from soulspot.application.services.enrichment_service import EnrichmentService
     from soulspot.application.workers.job_queue import JobStatus, JobType
 
-    service = EnrichmentService(db)
+    service = EnrichmentService(session)
     status_dto = await service.get_enrichment_status()
 
     # Check job queue status
@@ -1573,7 +1573,7 @@ async def trigger_enrichment(
     summary="Repair missing artwork for enriched artists",
 )
 async def repair_missing_artwork(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -1588,7 +1588,7 @@ async def repair_missing_artwork(
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
-    app_settings = AppSettingsService(db)
+    app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
         raise HTTPException(
             status_code=503,
@@ -1605,7 +1605,7 @@ async def repair_missing_artwork(
     )
 
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=spotify_plugin,
         settings=settings,
     )
@@ -1623,7 +1623,7 @@ async def get_enrichment_candidates(
     entity_type: str | None = Query(None, description="Filter by 'artist' or 'album'"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> EnrichmentCandidatesListResponse:
     """Get pending enrichment candidates for user review.
 
@@ -1633,7 +1633,7 @@ async def get_enrichment_candidates(
     # Hey future me - NOW uses EnrichmentService! Clean Architecture.
     from soulspot.application.services.enrichment_service import EnrichmentService
 
-    service = EnrichmentService(db)
+    service = EnrichmentService(session)
     dtos, total = await service.list_candidates(
         entity_type=entity_type,
         limit=limit,
@@ -1668,7 +1668,7 @@ async def get_enrichment_candidates(
 )
 async def apply_enrichment_candidate(
     candidate_id: str,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Apply a user-selected enrichment candidate.
@@ -1687,7 +1687,7 @@ async def apply_enrichment_candidate(
     from soulspot.application.services.artwork_service import ArtworkService
     from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
-    service = EnrichmentService(db)
+    service = EnrichmentService(session)
     image_service = ArtworkService(settings)
 
     try:
@@ -1709,7 +1709,7 @@ async def apply_enrichment_candidate(
 )
 async def reject_enrichment_candidate(
     candidate_id: str,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Reject an enrichment candidate.
 
@@ -1720,11 +1720,11 @@ async def reject_enrichment_candidate(
         EnrichmentCandidateRepository,
     )
 
-    repo = EnrichmentCandidateRepository(db)
+    repo = EnrichmentCandidateRepository(session)
 
     try:
         await repo.mark_rejected(candidate_id)
-        await db.commit()
+        await session.commit()
     except Exception as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=404, detail="Candidate not found")
@@ -1749,7 +1749,7 @@ class DisambiguationEnrichmentRequest(BaseModel):
 @router.post("/enrich-disambiguation")
 async def enrich_disambiguation(
     request: DisambiguationEnrichmentRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Enrich artists and albums with MusicBrainz disambiguation data.
@@ -1771,7 +1771,7 @@ async def enrich_disambiguation(
     )
 
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=None,
         settings=settings,
     )

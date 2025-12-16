@@ -34,7 +34,7 @@ class QualityUpgradeService:
         Args:
             session: Database session
         """
-        self.session = session
+        self._session = session
 
     # Hey future me: Improvement score calculation - quantifies how much better the new file would be
     # Scoring: 40% bitrate improvement + 60% format improvement
@@ -121,7 +121,7 @@ class QualityUpgradeService:
             )
             .limit(limit)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         tracks = result.scalars().all()
 
         candidates = []
@@ -205,7 +205,7 @@ class QualityUpgradeService:
             created_at=candidate.created_at,
             updated_at=candidate.updated_at,
         )
-        self.session.add(model)
+        self._session.add(model)
 
         logger.info(f"Created quality upgrade candidate for track {track_id}")
         return candidate
@@ -231,7 +231,7 @@ class QualityUpgradeService:
             .order_by(QualityUpgradeCandidateModel.improvement_score.desc())
             .limit(limit)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         models = result.scalars().all()
 
         return [
@@ -263,7 +263,7 @@ class QualityUpgradeService:
         stmt = select(QualityUpgradeCandidateModel).where(
             QualityUpgradeCandidateModel.id == candidate_id
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         model = result.scalar_one_or_none()
 
         if model:
@@ -304,7 +304,7 @@ class QualityUpgradeService:
 
         # Get the specific track
         stmt = select(TrackModel).where(TrackModel.id == str(track_id.value))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         track = result.scalar_one_or_none()
 
         if not track:

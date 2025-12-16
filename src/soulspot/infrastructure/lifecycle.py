@@ -220,6 +220,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Spotify sync worker started (checks every 60s)")
 
         # =================================================================
+        # Start Deezer Sync Worker (automatic background syncing for Deezer)
+        # =================================================================
+        # Hey future me - this worker syncs Deezer data (charts, releases, user data)!
+        # Unlike Spotify, Deezer has public APIs that don't need auth (charts, releases).
+        # User data (favorites, playlists) needs auth from deezer_sessions table.
+        # Runs slightly offset from Spotify worker (35s delay) to spread load.
+        from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
+
+        deezer_sync_worker = DeezerSyncWorker(
+            db=db,
+            settings=settings,
+            check_interval_seconds=60,  # Check every minute if syncs are due
+        )
+        await deezer_sync_worker.start()
+        app.state.deezer_sync_worker = deezer_sync_worker
+        logger.info("Deezer sync worker started (checks every 60s)")
+
+        # =================================================================
         # Start New Releases Sync Worker (caches new releases from all providers)
         # =================================================================
         # Hey future me - dieser Worker cached New Releases im Hintergrund!
@@ -670,6 +688,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Spotify sync worker stopped")
             except Exception as e:
                 logger.exception("Error stopping Spotify sync worker: %s", e)
+
+        # Stop Deezer sync worker
+        if hasattr(app.state, "deezer_sync_worker"):
+            try:
+                logger.info("Stopping Deezer sync worker...")
+                await app.state.deezer_sync_worker.stop()
+                logger.info("Deezer sync worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping Deezer sync worker: %s", e)
 
         # Stop New Releases sync worker
         if hasattr(app.state, "new_releases_sync_worker"):

@@ -78,7 +78,7 @@ class ProviderSyncOrchestrator:
             deezer_sync: DeezerSyncService (optional, but usually available)
             settings_service: For checking provider modes (off/basic/pro)
         """
-        self.session = session
+        self._session = session
         self._spotify_sync = spotify_sync
         self._deezer_sync = deezer_sync
         self._settings_service = settings_service

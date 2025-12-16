@@ -49,6 +49,7 @@ from soulspot.domain.value_objects import (
 from .models import (
     AlbumModel,
     ArtistModel,
+    DeezerSessionModel,
     DownloadModel,
     PlaylistModel,
     PlaylistTrackModel,
@@ -4057,6 +4058,175 @@ class SessionRepository(ISessionRepository):
             created_at=model.created_at,
             last_accessed_at=model.last_accessed_at,
         )
+
+
+# Hey future me - DeezerSessionRepository ist das Pendant zu SessionRepository für Deezer!
+# Hauptunterschiede:
+# - Kein refresh_token (Deezer Tokens sind langlebig ~90 Tage)
+# - Kein code_verifier (Deezer nutzt kein PKCE)
+# - Hat deezer_user_id/deezer_username für User-Info
+# Die Session-ID ist DIESELBE wie bei Spotify (aus dem Browser Cookie)!
+class DeezerSessionRepository:
+    """Repository for Deezer session persistence.
+
+    Similar to SessionRepository (Spotify) but:
+    - No refresh_token (Deezer tokens are long-lived)
+    - No code_verifier (Deezer doesn't use PKCE)
+    - Has Deezer-specific user info (user_id, username)
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize repository with database session."""
+        self.session = session
+
+    async def create(self, session_id: str, access_token: str | None = None,
+                     deezer_user_id: str | None = None, 
+                     deezer_username: str | None = None,
+                     oauth_state: str | None = None) -> DeezerSessionModel:
+        """Create a new Deezer session.
+
+        Args:
+            session_id: Browser session ID (same as Spotify session_id)
+            access_token: Deezer access token (if authenticated)
+            deezer_user_id: Deezer user ID
+            deezer_username: Deezer username
+            oauth_state: OAuth state for CSRF protection
+
+        Returns:
+            Created DeezerSessionModel
+        """
+        model = DeezerSessionModel(
+            session_id=session_id,
+            access_token=access_token,
+            deezer_user_id=deezer_user_id,
+            deezer_username=deezer_username,
+            oauth_state=oauth_state,
+            created_at=datetime.now(UTC),
+            last_accessed_at=datetime.now(UTC),
+        )
+        self.session.add(model)
+        return model
+
+    async def get(self, session_id: str) -> DeezerSessionModel | None:
+        """Get Deezer session by ID and update last accessed time.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            DeezerSessionModel or None if not found
+        """
+        stmt = select(DeezerSessionModel).where(
+            DeezerSessionModel.session_id == session_id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        # Update last_accessed_at (sliding expiration)
+        model.last_accessed_at = datetime.now(UTC)
+        return model
+
+    async def get_all_active(self) -> list[DeezerSessionModel]:
+        """Get all Deezer sessions with valid access tokens.
+
+        Hey future me - this is for background workers that need to sync
+        user data across all authenticated users. Returns only sessions
+        that have an access_token set.
+
+        Returns:
+            List of DeezerSessionModel with tokens
+        """
+        stmt = select(DeezerSessionModel).where(
+            DeezerSessionModel.access_token.isnot(None)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def update(self, session_id: str, **kwargs: Any) -> DeezerSessionModel | None:
+        """Update Deezer session fields.
+
+        Args:
+            session_id: Session identifier
+            **kwargs: Fields to update (access_token, deezer_user_id, etc.)
+
+        Returns:
+            Updated model or None if not found
+        """
+        stmt = select(DeezerSessionModel).where(
+            DeezerSessionModel.session_id == session_id
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        for key, value in kwargs.items():
+            if hasattr(model, key):
+                setattr(model, key, value)
+
+        model.last_accessed_at = datetime.now(UTC)
+        return model
+
+    async def delete(self, session_id: str) -> bool:
+        """Delete Deezer session from database.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            True if deleted, False if not found
+        """
+        stmt = delete(DeezerSessionModel).where(
+            DeezerSessionModel.session_id == session_id
+        )
+        result = await self.session.execute(stmt)
+        rowcount = cast(int, result.rowcount)
+        return bool(rowcount > 0)
+
+    async def cleanup_expired(self, timeout_days: int = 90) -> int:
+        """Delete expired Deezer sessions.
+
+        Hey future me - Deezer tokens are LONG-LIVED (~90 days), so we use
+        days instead of seconds for timeout. Default: 90 days.
+
+        Args:
+            timeout_days: Session timeout in days
+
+        Returns:
+            Number of sessions deleted
+        """
+        cutoff_time = datetime.now(UTC) - timedelta(days=timeout_days)
+        stmt = delete(DeezerSessionModel).where(
+            DeezerSessionModel.last_accessed_at < cutoff_time
+        )
+        result = await self.session.execute(stmt)
+        rowcount = cast(int, result.rowcount)
+        return int(rowcount or 0)
+
+    async def get_by_oauth_state(self, state: str) -> DeezerSessionModel | None:
+        """Get Deezer session by OAuth state parameter.
+
+        Used during OAuth callback to find the session that initiated auth.
+
+        Args:
+            state: OAuth state value
+
+        Returns:
+            DeezerSessionModel or None if not found
+        """
+        stmt = select(DeezerSessionModel).where(
+            DeezerSessionModel.oauth_state == state
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model:
+            model.last_accessed_at = datetime.now(UTC)
+        return model
 
 
 # =============================================================================

@@ -31,7 +31,7 @@ class MergeRequest(BaseModel):
     summary="Find duplicate artists",
 )
 async def find_duplicate_artists(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Find potential duplicate artists by normalized name matching.
@@ -43,7 +43,7 @@ async def find_duplicate_artists(
     """
     # Hey future me - spotify_plugin=None weil wir nur lokale DB-Operationen machen!
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=None,
         settings=settings,
     )
@@ -63,7 +63,7 @@ async def find_duplicate_artists(
 )
 async def merge_duplicate_artists(
     request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Merge multiple artists into one.
@@ -76,7 +76,7 @@ async def merge_duplicate_artists(
         merge_ids: List of artist IDs to merge into keep artist
     """
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=None,
         settings=settings,
     )
@@ -96,7 +96,7 @@ async def merge_duplicate_artists(
     summary="Find duplicate albums",
 )
 async def find_duplicate_albums(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Find potential duplicate albums by normalized name + artist matching.
@@ -104,7 +104,7 @@ async def find_duplicate_albums(
     Returns groups of albums that might be duplicates.
     """
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=None,
         settings=settings,
     )
@@ -124,7 +124,7 @@ async def find_duplicate_albums(
 )
 async def merge_duplicate_albums(
     request: MergeRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Merge multiple albums into one.
@@ -133,7 +133,7 @@ async def merge_duplicate_albums(
     The merge_ids albums will be deleted after transfer.
     """
     service = LocalLibraryEnrichmentService(
-        session=db,
+        session=session,
         spotify_plugin=None,
         settings=settings,
     )

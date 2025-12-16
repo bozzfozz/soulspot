@@ -45,7 +45,7 @@ class DuplicateService:
         Args:
             session: Database session
         """
-        self.session = session
+        self._session = session
 
     async def list_candidates(
         self,
@@ -73,7 +73,7 @@ class DuplicateService:
             DuplicateCandidateRepository,
         )
 
-        repo = DuplicateCandidateRepository(self.session)
+        repo = DuplicateCandidateRepository(self._session)
 
         # Get candidates via repository
         if status:
@@ -99,7 +99,7 @@ class DuplicateService:
             .where(TrackModel.id.in_(track_ids))
             .options(joinedload(TrackModel.artist))
         )
-        tracks_result = await self.session.execute(tracks_query)
+        tracks_result = await self._session.execute(tracks_query)
         tracks_map = {track.id: track for track in tracks_result.unique().scalars().all()}
 
         # Build candidates list using pre-loaded tracks (no more queries!)
@@ -188,7 +188,7 @@ class DuplicateService:
             DuplicateCandidateRepository,
         )
 
-        repo = DuplicateCandidateRepository(self.session)
+        repo = DuplicateCandidateRepository(self._session)
 
         try:
             logger.info(
@@ -228,7 +228,7 @@ class DuplicateService:
                     f"Valid actions: dismiss, keep_both, keep_first, keep_second"
                 )
 
-            await self.session.commit()
+            await self._session.commit()
 
             logger.info(
                 f"✅ Duplicate Resolved\n"
@@ -243,7 +243,7 @@ class DuplicateService:
                 "deleted_track_id": deleted_track_id,
             }
         except Exception as e:
-            await self.session.rollback()
+            await self._session.rollback()
             logger.error(f"Failed to resolve duplicate candidate {candidate_id}: {e}")
             raise
 
@@ -259,7 +259,7 @@ class DuplicateService:
 
         from soulspot.infrastructure.persistence.models import TrackModel
 
-        track = await self.session.get(TrackModel, track_id)
+        track = await self._session.get(TrackModel, track_id)
         if not track or not track.file_path:
             return
 
@@ -298,5 +298,5 @@ class DuplicateService:
             DuplicateCandidateRepository,
         )
 
-        repo = DuplicateCandidateRepository(self.session)
+        repo = DuplicateCandidateRepository(self._session)
         return await repo.count_by_status()

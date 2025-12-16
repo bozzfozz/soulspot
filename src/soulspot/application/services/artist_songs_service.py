@@ -85,7 +85,7 @@ class ArtistSongsService:
             spotify_plugin: SpotifyPlugin for API calls (optional, only needed for sync)
             deezer_plugin: Optional DeezerPlugin for fallback top tracks (NO AUTH!)
         """
-        self.session = session
+        self._session = session
         self.artist_repo = ArtistRepository(session)
         self.track_repo = TrackRepository(session)
         self._spotify_plugin = spotify_plugin

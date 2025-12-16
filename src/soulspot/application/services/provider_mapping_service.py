@@ -73,7 +73,7 @@ class ProviderMappingService:
         weil dieser Service ein "Helper" ist, kein Full-Service mit eigener DI.
         Die Session wird durchgereicht, das ist der wichtige Teil.
         """
-        self.session = session
+        self._session = session
         self._artist_repo = ArtistRepository(session)
         self._album_repo = AlbumRepository(session)
         self._track_repo = TrackRepository(session)

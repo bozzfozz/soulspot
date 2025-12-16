@@ -9,7 +9,7 @@ from soulspot.infrastructure.integrations.deezer_client import (
     DeezerClient,
     DeezerOAuthConfig,
 )
-from soulspot.infrastructure.integrations.deezer_oauth_client import DeezerOAuthClient
+# NOTE (Dec 2025): DeezerOAuthClient REMOVED - was a stub, DeezerClient has OAuth methods!
 from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient
 from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
@@ -22,7 +22,6 @@ __all__ = [
     "CoverArtArchiveClient",
     "CoverArtRelease",
     "DeezerClient",
-    "DeezerOAuthClient",
     "DeezerOAuthConfig",
     "HttpClientPool",
     "SlskdClient",
@@ -31,4 +30,3 @@ __all__ = [
     "MusicBrainzClient",
     "LastfmClient",
 ]
-

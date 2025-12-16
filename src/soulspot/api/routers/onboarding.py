@@ -66,7 +66,7 @@ class SlskdTestResponse(BaseModel):
 # - User es übersprungen hat (skipped=true)
 @router.get("/status")
 async def get_onboarding_status(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
     credentials_service: CredentialsService = Depends(get_credentials_service),
 ) -> OnboardingStatus:
     """Get current onboarding status.
@@ -79,10 +79,10 @@ async def get_onboarding_status(
     """
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
 
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Check Spotify connection (via stored token)
-    token_repo = SpotifyTokenRepository(db)
+    token_repo = SpotifyTokenRepository(session)
     token = await token_repo.get_active_token()
     spotify_connected = token is not None and token.access_token is not None
 
@@ -128,7 +128,7 @@ async def get_onboarding_status(
 @router.post("/complete")
 async def complete_onboarding(
     request: OnboardingComplete,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Mark onboarding as complete.
 
@@ -141,7 +141,7 @@ async def complete_onboarding(
     Returns:
         Success message
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     await settings_service.set(
         "onboarding.completed",
@@ -158,7 +158,7 @@ async def complete_onboarding(
             category="onboarding",
         )
 
-    await db.commit()
+    await session.commit()
 
     logger.info("Onboarding completed (skipped=%s)", request.skipped)
 
@@ -173,7 +173,7 @@ async def complete_onboarding(
 # Wird aufgerufen wenn User "Nicht jetzt" klickt.
 @router.post("/skip")
 async def skip_onboarding(
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Skip onboarding for now.
 
@@ -183,7 +183,7 @@ async def skip_onboarding(
     Returns:
         Success message
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     await settings_service.set(
         "onboarding.skipped",
@@ -192,7 +192,7 @@ async def skip_onboarding(
         category="onboarding",
     )
 
-    await db.commit()
+    await session.commit()
 
     return {
         "success": True,
@@ -307,7 +307,7 @@ async def test_slskd_connection(
 @router.post("/save-slskd")
 async def save_slskd_credentials(
     request: SlskdTestRequest,
-    db: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     """Save Soulseek (slskd) credentials to database.
 
@@ -320,7 +320,7 @@ async def save_slskd_credentials(
     Returns:
         Success message
     """
-    settings_service = AppSettingsService(db)
+    settings_service = AppSettingsService(session)
 
     # Save each setting
     await settings_service.set(
@@ -349,7 +349,7 @@ async def save_slskd_credentials(
             category="slskd",
         )
 
-    await db.commit()
+    await session.commit()
 
     logger.info("Soulseek credentials saved via onboarding")
 

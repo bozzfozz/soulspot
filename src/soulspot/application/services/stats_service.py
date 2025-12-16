@@ -35,7 +35,7 @@ class StatsService:
         Args:
             session: Database session
         """
-        self.session = session
+        self._session = session
 
     # =========================================================================
     # BASIC COUNTS
@@ -46,7 +46,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         stmt = select(func.count(TrackModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_total_artists(self) -> int:
@@ -54,7 +54,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import ArtistModel
 
         stmt = select(func.count(ArtistModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_total_albums(self) -> int:
@@ -62,7 +62,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import AlbumModel
 
         stmt = select(func.count(AlbumModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_total_playlists(self) -> int:
@@ -70,7 +70,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import PlaylistModel
 
         stmt = select(func.count(PlaylistModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     # =========================================================================
@@ -91,7 +91,7 @@ class StatsService:
             func.count(DownloadModel.id),
         ).group_by(DownloadModel.status)
 
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         rows = result.all()
 
         counts = {
@@ -111,7 +111,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import DownloadModel
 
         stmt = select(func.count(DownloadModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_completed_downloads_count(self) -> int:
@@ -121,7 +121,7 @@ class StatsService:
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status == "completed"
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_pending_downloads_count(self) -> int:
@@ -131,7 +131,7 @@ class StatsService:
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status == "pending"
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_failed_downloads_count(self) -> int:
@@ -141,7 +141,7 @@ class StatsService:
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status == "failed"
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     # =========================================================================
@@ -155,7 +155,7 @@ class StatsService:
         stmt = select(func.count(ArtistModel.id)).where(
             ArtistModel.spotify_uri.is_(None)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_unenriched_albums_count(self) -> int:
@@ -163,7 +163,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import AlbumModel
 
         stmt = select(func.count(AlbumModel.id)).where(AlbumModel.spotify_uri.is_(None))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_pending_enrichment_candidates_count(self) -> int:
@@ -172,7 +172,7 @@ class StatsService:
             EnrichmentCandidateRepository,
         )
 
-        repo = EnrichmentCandidateRepository(self.session)
+        repo = EnrichmentCandidateRepository(self._session)
         return await repo.get_pending_count()
 
     # =========================================================================
@@ -190,7 +190,7 @@ class StatsService:
             DuplicateCandidateRepository,
         )
 
-        repo = DuplicateCandidateRepository(self.session)
+        repo = DuplicateCandidateRepository(self._session)
         return await repo.count_by_status()
 
     async def get_unresolved_duplicates_count(self) -> int:
@@ -204,7 +204,7 @@ class StatsService:
         stmt = select(func.count(FileDuplicateModel.id)).where(
             FileDuplicateModel.resolved == False  # noqa: E712
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     # =========================================================================
@@ -216,7 +216,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         stmt = select(func.count(TrackModel.id)).where(TrackModel.file_path.isnot(None))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_broken_files_count(self) -> int:
@@ -226,7 +226,7 @@ class StatsService:
         stmt = select(func.count(TrackModel.id)).where(
             TrackModel.is_broken == True  # noqa: E712
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_total_file_size(self) -> int:
@@ -236,7 +236,7 @@ class StatsService:
         stmt = select(func.sum(TrackModel.file_size)).where(
             TrackModel.file_size.isnot(None)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_distinct_playlist_tracks_count(self) -> int:
@@ -244,7 +244,7 @@ class StatsService:
         from soulspot.infrastructure.persistence.models import PlaylistTrackModel
 
         stmt = select(func.count(func.distinct(PlaylistTrackModel.track_id)))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_queue_size(self) -> int:
@@ -254,7 +254,7 @@ class StatsService:
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status.in_(["pending", "queued", "downloading"])
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def get_active_downloads_count(self) -> int:
@@ -264,7 +264,7 @@ class StatsService:
         stmt = select(func.count(DownloadModel.id)).where(
             DownloadModel.status == "downloading"
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     # =========================================================================
