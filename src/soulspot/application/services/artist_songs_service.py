@@ -488,7 +488,7 @@ class ArtistSongsService:
         )
 
         # Get the created track entity
-        new_track = await self.track_repo.get(TrackId(track_id))
+        new_track = await self.track_repo.get_by_id(TrackId(track_id))
         if not new_track:
             raise EntityNotFoundError(f"Track not found after creation: {track_id}")
 

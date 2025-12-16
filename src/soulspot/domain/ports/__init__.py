@@ -56,6 +56,11 @@ class IArtistRepository(ABC):
         pass
 
     @abstractmethod
+    async def get(self, artist_id: str) -> Artist | None:
+        """Get an artist by string ID (convenience wrapper for get_by_id)."""
+        pass
+
+    @abstractmethod
     async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
         pass

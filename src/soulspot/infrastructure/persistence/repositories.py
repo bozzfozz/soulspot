@@ -131,6 +131,15 @@ class ArtistRepository(IArtistRepository):
         if result.rowcount == 0:  # type: ignore[attr-defined]  # type: ignore[attr-defined]
             raise EntityNotFoundException("Artist", artist_id.value)
 
+    # Hey future me, this get() is a convenience wrapper that accepts a raw string ID and converts
+    # it to ArtistId value object before calling get_by_id(). This is needed because some services
+    # (like FollowedArtistsService.sync_artist_albums) work with string IDs directly. Without this,
+    # you'd get AttributeError: 'ArtistRepository' has no attribute 'get' - super confusing!
+    # The pattern: Service has string → get() wraps to ArtistId → get_by_id() does actual DB lookup.
+    async def get(self, artist_id: str) -> Artist | None:
+        """Get an artist by string ID (convenience wrapper for get_by_id)."""
+        return await self.get_by_id(ArtistId.from_string(artist_id))
+
     # Listen up, get_by_id fetches from DB and converts ORM model back to domain entity. Returns None
     # if not found (not an error!). The scalar_one_or_none() is important - it returns ONE row or None,
     # raising if multiple rows match (shouldn't happen with unique ID but defensive). We reconstruct

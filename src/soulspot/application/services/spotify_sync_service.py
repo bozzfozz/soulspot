@@ -435,7 +435,7 @@ class SpotifySyncService:
 
             # Nutze internal_id um existierenden Artist zu holen
             if mapped_dto.internal_id:
-                existing = await artist_repo.get(ArtistId(mapped_dto.internal_id))
+                existing = await artist_repo.get_by_id(ArtistId(mapped_dto.internal_id))
             else:
                 existing = await artist_repo.get_by_spotify_uri(spotify_uri)
 
@@ -466,7 +466,7 @@ class SpotifySyncService:
                 # Artist wurde bereits vom MappingService erstellt
                 # Wir müssen nur noch source auf SPOTIFY setzen
                 if mapped_dto.internal_id:
-                    new_artist = await artist_repo.get(ArtistId(mapped_dto.internal_id))
+                    new_artist = await artist_repo.get_by_id(ArtistId(mapped_dto.internal_id))
                     if new_artist and new_artist.source != ArtistSource.SPOTIFY:
                         new_artist.source = ArtistSource.SPOTIFY
                         await artist_repo.update(new_artist)

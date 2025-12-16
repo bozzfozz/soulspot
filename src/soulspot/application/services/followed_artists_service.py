@@ -90,13 +90,20 @@ class FollowedArtistsService:
     def __init__(
         self,
         session: AsyncSession,
-        spotify_plugin: "SpotifyPlugin",
+        spotify_plugin: "SpotifyPlugin | None" = None,
         deezer_plugin: "DeezerPlugin | None" = None,
     ) -> None:
         """Initialize followed artists service.
 
         Hey future me - refactored to use SpotifyPlugin WITH Deezer fallback!
         The plugin handles token management internally, no more access_token juggling.
+        
+        MULTI-SERVICE PATTERN (Dec 2025):
+        Both plugins are now OPTIONAL! The service works with:
+        - BOTH plugins: Full capability (Spotify primary, Deezer fallback)
+        - Spotify only: Standard Spotify-only mode
+        - Deezer only: Public API mode (no OAuth needed!)
+        - Neither: Will fail on sync operations (but constructor succeeds)
         
         PROVIDER MAPPING SERVICE (Nov 2025):
         Wir nutzen jetzt den zentralen ProviderMappingService für ID-Mapping.
@@ -105,7 +112,7 @@ class FollowedArtistsService:
 
         Args:
             session: Database session for Artist repository
-            spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
+            spotify_plugin: Optional SpotifyPlugin for API calls (handles auth internally)
             deezer_plugin: Optional DeezerPlugin for fallback artist albums (NO AUTH!)
         """
         from soulspot.application.services.provider_mapping_service import (
@@ -131,13 +138,24 @@ class FollowedArtistsService:
 
         Hey future me - refactored to use SpotifyPlugin!
         No more access_token parameter - plugin handles auth internally.
+        
+        IMPORTANT: This method REQUIRES spotify_plugin to be set!
+        If you need album sync without Spotify, use sync_artist_albums() 
+        which falls back to Deezer.
 
         Returns:
             Tuple of (list of Artist entities, sync statistics dict)
 
         Raises:
             PluginError: If Spotify API request fails
+            ValidationError: If spotify_plugin is not configured
         """
+        # Hey future me - early validation! sync_followed_artists needs Spotify OAuth
+        if not self.spotify_plugin:
+            raise ValidationError(
+                "Spotify plugin required for followed artists sync. "
+                "Use sync_artist_albums() for album-only sync via Deezer."
+            )
 
         all_artists: list[Artist] = []
         after_cursor: str | None = None
@@ -253,8 +271,9 @@ class FollowedArtistsService:
             "total_errors": 0,
         }
 
-        # 1. Sync from Spotify (if authenticated)
-        if self.spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
+        # 1. Sync from Spotify (if plugin available AND authenticated)
+        # Hey future me - spotify_plugin can be None if user isn't logged in!
+        if self.spotify_plugin and self.spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
             try:
                 spotify_artists, spotify_stats = await self.sync_followed_artists()
                 aggregate_stats["providers"]["spotify"] = spotify_stats
@@ -480,7 +499,7 @@ class FollowedArtistsService:
         )
 
         # STEP 2: Get the full Artist entity
-        artist = await self.artist_repo.get(ArtistId(internal_id))
+        artist = await self.artist_repo.get_by_id(ArtistId(internal_id))
         if not artist:
             # Should not happen, but handle gracefully
             raise EntityNotFoundError(f"Artist not found after create: {internal_id}")
@@ -588,8 +607,9 @@ class FollowedArtistsService:
         albums_dtos = []
         source = "none"
 
-        # 1. Try Spotify first (if we have spotify_uri AND auth)
-        if spotify_artist_id:
+        # 1. Try Spotify first (if we have spotify_plugin, spotify_uri AND auth)
+        # Hey future me - spotify_plugin can be None if user isn't logged in!
+        if spotify_artist_id and self.spotify_plugin:
             try:
                 if self.spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS):
                     response = await self.spotify_plugin.get_artist_albums(
@@ -776,13 +796,22 @@ class FollowedArtistsService:
         Hey future me - refactored to use SpotifyPlugin!
         No more access_token param - plugin handles auth internally.
         Returns ArtistDTOs instead of raw Spotify JSON.
+        
+        IMPORTANT: Requires spotify_plugin to be configured!
 
         Args:
             limit: Max artists to fetch (1-50)
 
         Returns:
             List of ArtistDTOs from Spotify
+            
+        Raises:
+            ValidationError: If spotify_plugin is not configured
         """
+        if not self.spotify_plugin:
+            raise ValidationError(
+                "Spotify plugin required for preview_followed_artists"
+            )
 
         response = await self.spotify_plugin.get_followed_artists(
             limit=min(limit, 50),

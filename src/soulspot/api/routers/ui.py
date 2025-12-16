@@ -1602,13 +1602,16 @@ async def library_artist_detail(
     albums_result = await session.execute(albums_stmt)
     album_models = albums_result.scalars().all()
 
-    # Hey future me - AUTO-SYNC Spotify albums if artist has none yet!
-    # If artist is from Spotify (source='spotify' or 'hybrid') and has NO albums in DB,
-    # fetch albums from Spotify API on-demand. This ensures Spotify followed artists
-    # show their discography immediately without manual sync button.
-    if not album_models and artist_model.source in ["spotify", "hybrid"] and artist_model.spotify_uri:
+    # Hey future me - AUTO-SYNC albums using MULTI-SERVICE PATTERN!
+    # If artist has NO albums in DB, fetch from available services:
+    # 1. Try Spotify (if authenticated + artist has spotify_uri)
+    # 2. Fallback to Deezer (NO AUTH NEEDED - public API)
+    # 
+    # This enables album browsing EVEN WITHOUT Spotify login!
+    # Deezer can fetch albums by artist name for any artist.
+    if not album_models:
         try:
-            # Get Spotify plugin and token
+            # MULTI-SERVICE PATTERN: Try available services
             from soulspot.application.services.followed_artists_service import (
                 FollowedArtistsService,
             )
@@ -1619,34 +1622,45 @@ async def library_artist_detail(
             from soulspot.infrastructure.persistence.database import (
                 DatabaseTokenManager,
             )
+            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
+            # 1. Try to get Spotify token (optional - service works without it)
+            spotify_plugin = None
+            access_token = None
             if hasattr(request.app.state, "db_token_manager"):
                 db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
                 access_token = await db_token_manager.get_token_for_background()
 
-                if access_token:
-                    # Use FollowedArtistsService with SpotifyPlugin + Deezer fallback
-                    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-                    
-                    app_settings = get_settings()
-                    spotify_client = SpotifyClient(app_settings.spotify)
-                    spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-                    deezer_plugin = DeezerPlugin()  # NO AUTH NEEDED!
-                    followed_service = FollowedArtistsService(
-                        session, spotify_plugin, deezer_plugin=deezer_plugin
-                    )
+            if access_token:
+                app_settings = get_settings()
+                spotify_client = SpotifyClient(app_settings.spotify)
+                spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+                logger.debug(f"Spotify plugin available for album sync of {artist_model.name}")
+            else:
+                logger.debug(f"No Spotify token - using Deezer only for {artist_model.name}")
 
-                    # Sync albums for this artist (albums, singles, EPs, compilations)
-                    # No access_token param - plugin has it!
-                    await followed_service.sync_artist_albums(artist_model.id)
-                    await session.commit()  # Commit new albums
+            # 2. Deezer is ALWAYS available (no auth needed!)
+            deezer_plugin = DeezerPlugin()
 
-                    # Re-query albums after sync
-                    albums_result = await session.execute(albums_stmt)
-                    album_models = albums_result.scalars().all()
+            # 3. Create service with available plugins (spotify_plugin can be None!)
+            followed_service = FollowedArtistsService(
+                session, 
+                spotify_plugin=spotify_plugin,  # May be None - service handles this
+                deezer_plugin=deezer_plugin,    # Always available
+            )
+
+            # Sync albums using available services
+            # Service will try Spotify if available, fall back to Deezer
+            await followed_service.sync_artist_albums(artist_model.id)
+            await session.commit()  # Commit new albums
+
+            # Re-query albums after sync
+            albums_result = await session.execute(albums_stmt)
+            album_models = albums_result.scalars().all()
         except Exception as e:
-            logger.warning(f"Failed to auto-sync Spotify albums for {artist_model.name}: {e}")
+            logger.warning(f"Failed to auto-sync albums for {artist_model.name}: {e}")
+            # Continue anyway - show empty albums list
             # Continue anyway - show empty albums list
 
     # Step 3: Get tracks for these albums (for LOCAL/HYBRID artists)
