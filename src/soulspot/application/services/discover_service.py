@@ -358,7 +358,7 @@ class DiscoverService:
                     name=dto.name,
                     spotify_id=dto.spotify_id,
                     deezer_id=None,
-                    image_url=dto.image_url,
+                    image_url=dto.artwork_url,
                     genres=dto.genres or [],
                     popularity=dto.popularity or 0,
                     source_service="spotify",
@@ -395,7 +395,7 @@ class DiscoverService:
                     name=dto.name,
                     spotify_id=None,
                     deezer_id=dto.deezer_id,
-                    image_url=dto.image_url,
+                    image_url=dto.artwork_url,
                     genres=dto.genres or [],
                     popularity=dto.popularity or 0,
                     source_service="deezer",
@@ -461,8 +461,8 @@ class DiscoverService:
                     existing.spotify_id = artist.spotify_id
                 if not existing.deezer_id and artist.deezer_id:
                     existing.deezer_id = artist.deezer_id
-                if not existing.image_url and artist.image_url:
-                    existing.image_url = artist.image_url
+                if not existing.artwork_url and artist.artwork_url:
+                    existing.artwork_url = artist.artwork_url
                 if not existing.genres and artist.genres:
                     existing.genres = artist.genres
                 # Merge external_urls
@@ -500,8 +500,8 @@ class DiscoverService:
                     existing.spotify_id = artist.spotify_id
                 if not existing.deezer_id and artist.deezer_id:
                     existing.deezer_id = artist.deezer_id
-                if not existing.image_url and artist.image_url:
-                    existing.image_url = artist.image_url
+                if not existing.artwork_url and artist.artwork_url:
+                    existing.artwork_url = artist.artwork_url
                 existing.external_urls.update(artist.external_urls)
         
         # Sort by frequency (recommendations count) then popularity

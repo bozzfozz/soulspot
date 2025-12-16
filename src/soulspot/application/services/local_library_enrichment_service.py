@@ -753,11 +753,11 @@ class LocalLibraryEnrichmentService:
                     artist_id=spotify_id,
                 )
 
-                if not artist_dto.image_url:
+                if not artist_dto.artwork_url:
                     logger.debug(f"No images available for artist {artist.name}")
                     continue
 
-                image_url = artist_dto.image_url
+                artwork_url = artist_dto.artwork_url
 
                 # Download artwork
                 local_path = await self._image_service.download_artist_image(
@@ -774,7 +774,7 @@ class LocalLibraryEnrichmentService:
                 model = result.scalar_one_or_none()
 
                 if model:
-                    model.image_url = image_url
+                    model.artwork_url = artwork_url
                     model.image_path = str(local_path) if local_path else None
                     model.updated_at = datetime.now(UTC)
                     stats["repaired"] += 1
@@ -830,12 +830,12 @@ class LocalLibraryEnrichmentService:
             if model.spotify_uri:
                 name_lower = model.name.lower().strip()
                 # spotify_uri ist bereits die vollständige URI (spotify:artist:xxx)
-                lookup[name_lower] = (model.spotify_uri, model.image_url, model.image_path)
+                lookup[name_lower] = (model.spotify_uri, model.artwork_url, model.image_path)
                 # Also store under normalized name (without DJ/The/MC prefixes)
                 # This allows "DJ Paul Elstak" (local) to match "Paul Elstak" (Spotify)
                 name_normalized = normalize_artist_name(model.name)
                 if name_normalized != name_lower:
-                    lookup[name_normalized] = (model.spotify_uri, model.image_url, model.image_path)
+                    lookup[name_normalized] = (model.spotify_uri, model.artwork_url, model.image_path)
 
         return lookup
 
@@ -1162,7 +1162,7 @@ class LocalLibraryEnrichmentService:
             sp_popularity = (sp_artist.popularity or 0) / 100.0  # Normalize to 0-1
             sp_followers = sp_artist.followers or 0
             sp_genres = sp_artist.genres or []
-            sp_image_url = sp_artist.image_url
+            sp_artwork_url = sp_artist.artwork_url
 
             # Normalize Spotify name for comparison
             sp_normalized = normalize_artist_name(sp_name)
@@ -1252,9 +1252,9 @@ class LocalLibraryEnrichmentService:
                 result = await self._session.execute(stmt)
                 model = result.scalar_one()
 
-                # Copy image_url and image_path from existing artist
-                if existing_with_uri.image_url and not model.image_url:
-                    model.image_url = existing_with_uri.image_url
+                # Copy artwork_url and image_path from existing artist
+                if existing_with_uri.artwork_url and not model.artwork_url:
+                    model.artwork_url = existing_with_uri.artwork_url
                 if (
                     hasattr(existing_with_uri, "image_path")
                     and existing_with_uri.image_path
@@ -1283,7 +1283,7 @@ class LocalLibraryEnrichmentService:
             model = result.scalar_one()
 
             model.spotify_uri = candidate.spotify_uri
-            model.image_url = candidate.spotify_image_url
+            model.artwork_url = candidate.spotify_image_url
 
             # Update genres if we have them and artist doesn't
             if candidate.extra_info.get("genres") and not model.genres:
@@ -2651,7 +2651,7 @@ class LocalLibraryEnrichmentService:
                     "id": a.id,
                     "name": a.name,
                     "spotify_uri": a.spotify_uri,
-                    "image_url": a.image_url,
+                    "artwork_url": a.artwork_url,
                     "track_count": track_counts.get(a.id, 0),
                     "has_spotify": a.spotify_uri is not None,
                 })
@@ -2733,13 +2733,13 @@ class LocalLibraryEnrichmentService:
             "merged_artists": [a.name for a in merge_artists],
         }
 
-        # Transfer image_url if keep artist doesn't have one
-        if not keep_artist.image_url:
+        # Transfer artwork_url if keep artist doesn't have one
+        if not keep_artist.artwork_url:
             for ma in merge_artists:
-                if ma.image_url:
-                    keep_artist.image_url = ma.image_url
+                if ma.artwork_url:
+                    keep_artist.artwork_url = ma.artwork_url
                     logger.debug(
-                        f"Transferred image_url from '{ma.name}' to '{keep_artist.name}'"
+                        f"Transferred artwork_url from '{ma.name}' to '{keep_artist.name}'"
                     )
                     break
 

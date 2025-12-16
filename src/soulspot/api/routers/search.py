@@ -211,7 +211,7 @@ async def unified_search(
                                 popularity=dto.popularity or 0,
                                 followers=dto.followers or 0,
                                 genres=dto.genres or [],
-                                image_url=dto.image_url,
+                                image_url=dto.artwork_url,
                                 external_url=external_url,
                                 source="deezer",
                             )
@@ -313,7 +313,7 @@ async def unified_search(
                                 popularity=dto.popularity or 0,
                                 followers=dto.followers or 0,
                                 genres=dto.genres or [],
-                                image_url=dto.image_url,
+                                image_url=dto.artwork_url,
                                 external_url=external_url,
                                 source="spotify",
                             )
@@ -470,7 +470,7 @@ async def search_spotify_artists(
                             popularity=artist_dto.popularity or 0,
                             followers=artist_dto.followers or 0,
                             genres=artist_dto.genres or [],
-                            image_url=artist_dto.image_url,
+                            image_url=artist_dto.artwork_url,
                             external_url=external_url,
                             source="deezer",
                         )
@@ -500,7 +500,7 @@ async def search_spotify_artists(
                             popularity=artist_dto.popularity or 0,
                             followers=artist_dto.followers or 0,
                             genres=artist_dto.genres or [],
-                            image_url=artist_dto.image_url,
+                            image_url=artist_dto.artwork_url,
                             external_url=external_url,
                             source="spotify",
                         )

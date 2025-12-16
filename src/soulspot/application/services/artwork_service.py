@@ -969,12 +969,12 @@ class ArtworkService:
             # Take the first match
             artist_dto = search_result.items[0]
 
-            # ArtistDTO has image_url from Deezer
-            if artist_dto.image_url:
+            # ArtistDTO has artwork_url from Deezer
+            if artist_dto.artwork_url:
                 logger.debug(
-                    f"Found Deezer image for '{artist_name}': {artist_dto.image_url[:50]}..."
+                    f"Found Deezer image for '{artist_name}': {artist_dto.artwork_url[:50]}..."
                 )
-                return artist_dto.image_url
+                return artist_dto.artwork_url
 
             return None
 

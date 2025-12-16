@@ -51,7 +51,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChartTrack:
-    """A track from charts with metadata from multiple sources."""
+    """A track from charts with metadata from multiple sources.
+    
+    Hey future me - follows TrackDTO naming conventions!
+    Uses `artwork_url` (not `image_url`) for consistency with AlbumDTO.
+    """
     
     title: str
     artist_name: str
@@ -61,7 +65,7 @@ class ChartTrack:
     isrc: str | None = None
     duration_ms: int = 0
     preview_url: str | None = None
-    image_url: str | None = None
+    artwork_url: str | None = None  # Album artwork (consistent with AlbumDTO)
     popularity: int = 0
     source_service: str = "unknown"
     chart_position: int | None = None
@@ -70,7 +74,11 @@ class ChartTrack:
 
 @dataclass
 class ChartAlbum:
-    """An album from charts with metadata from multiple sources."""
+    """An album from charts with metadata from multiple sources.
+    
+    Hey future me - follows AlbumDTO naming conventions!
+    Uses `artwork_url` (not `image_url`) for cover art.
+    """
     
     title: str
     artist_name: str
@@ -79,7 +87,7 @@ class ChartAlbum:
     upc: str | None = None
     release_date: str | None = None
     total_tracks: int = 0
-    image_url: str | None = None
+    artwork_url: str | None = None  # Consistent with AlbumDTO
     source_service: str = "unknown"
     chart_position: int | None = None
     external_urls: dict[str, str] = field(default_factory=dict)
@@ -410,7 +418,7 @@ class ChartsService:
                     isrc=dto.isrc,
                     duration_ms=dto.duration_ms,
                     preview_url=dto.preview_url,
-                    image_url=dto.artwork_url,
+                    artwork_url=dto.artwork_url,
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -443,7 +451,7 @@ class ChartsService:
                     upc=dto.upc,
                     release_date=dto.release_date,
                     total_tracks=dto.total_tracks or 0,
-                    image_url=dto.artwork_url,
+                    artwork_url=dto.artwork_url,
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -472,7 +480,7 @@ class ChartsService:
                 chart_artist = ChartArtist(
                     name=dto.name,
                     deezer_id=dto.deezer_id,
-                    image_url=dto.image_url,
+                    artwork_url=dto.artwork_url,
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -505,7 +513,7 @@ class ChartsService:
                     upc=dto.upc,
                     release_date=dto.release_date,
                     total_tracks=dto.total_tracks or 0,
-                    image_url=dto.artwork_url,
+                    artwork_url=dto.artwork_url,
                     source_service="deezer",
                     external_urls=dto.external_urls or {},
                 )

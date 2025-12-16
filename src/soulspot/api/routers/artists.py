@@ -91,7 +91,7 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
         source=artist.source.value,  # Convert enum to string: 'local', 'spotify', 'hybrid'
         spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
         musicbrainz_id=artist.musicbrainz_id,
-        image_url=artist.image_url,
+        image_url=artist.artwork_url,
         genres=artist.genres or [],
         created_at=artist.created_at.isoformat(),
         updated_at=artist.updated_at.isoformat(),
@@ -714,7 +714,7 @@ async def get_related_artists(
                 RelatedArtistResponse(
                     spotify_id=artist_dto.spotify_id or "",
                     name=artist_dto.name,
-                    image_url=artist_dto.image_url,
+                    image_url=artist_dto.artwork_url,
                     genres=artist_dto.genres[:3] if artist_dto.genres else [],
                     popularity=artist_dto.popularity or 0,
                     is_following=following_statuses.get(artist_dto.spotify_id or "", False),

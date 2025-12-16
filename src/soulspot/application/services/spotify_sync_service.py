@@ -347,20 +347,20 @@ class SpotifySyncService:
 
         name = artist_dto.name or "Unknown"
         genres = artist_dto.genres or []
-        image_url = artist_dto.image_url  # Plugin already selects best image
+        artwork_url = artist_dto.artwork_url  # Plugin already selects best image
         popularity = artist_dto.popularity
         follower_count = artist_dto.followers
 
         # Download image if enabled
         image_path = None
-        if download_images and image_url and self._image_service:
+        if download_images and artwork_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_artist_by_id(spotify_id)
-            existing_url = existing.image_url if existing else None
+            existing_url = existing.artwork_url if existing else None
             existing_path = existing.image_path if existing else None
 
             if await self._image_service.should_redownload(
-                existing_url, image_url, existing_path
+                existing_url, artwork_url, existing_path
             ):
                 image_path = await self._image_service.download_artist_image(
                     spotify_id, image_url
@@ -440,8 +440,8 @@ class SpotifySyncService:
                     pass
 
                 # Update metadata from Spotify if available
-                if dto.image_url and existing.image_url != dto.image_url:
-                    existing.image_url = dto.image_url
+                if dto.artwork_url and existing.artwork_url != dto.artwork_url:
+                    existing.artwork_url = dto.artwork_url
                     needs_update = True
                 if dto.genres and existing.genres != dto.genres:
                     existing.genres = dto.genres
@@ -739,7 +739,7 @@ class SpotifySyncService:
                     await self.repo.upsert_track(
                         spotify_id=track_dto.spotify_id or "",
                         album_id=track_dto.album_id or "",
-                        name=track_dto.name,
+                        name=track_dto.title,
                         duration_ms=track_dto.duration_ms,
                         track_number=track_dto.track_number or 1,
                         disc_number=track_dto.disc_number or 1,
@@ -749,7 +749,7 @@ class SpotifySyncService:
                     )
                     stats["tracks_synced"] += 1
                 except Exception as e:
-                    logger.warning(f"Failed to save track {track_dto.name}: {e}")
+                    logger.warning(f"Failed to save track {track_dto.title}: {e}")
             
             # Update sync status
             await self.repo.update_sync_status(cache_key)
@@ -823,7 +823,7 @@ class SpotifySyncService:
                     await self.repo.upsert_artist(
                         spotify_id=artist_dto.spotify_id or "",
                         name=artist_dto.name,
-                        image_url=artist_dto.image_url,
+                        image_url=artist_dto.artwork_url,
                     )
                     stats["artists_synced"] += 1
                 except Exception as e:
@@ -899,7 +899,7 @@ class SpotifySyncService:
                         spotify_id=album_dto.spotify_id or "",
                         artist_id=album_dto.artist_id or "",
                         name=album_dto.title,
-                        image_url=album_dto.image_url,
+                        image_url=album_dto.artwork_url,
                         release_date=album_dto.release_date,
                         album_type=album_dto.album_type or "album",
                         total_tracks=album_dto.total_tracks,
@@ -1302,21 +1302,21 @@ class SpotifySyncService:
         spotify_uri = f"spotify:playlist:{spotify_id}"
         name = playlist_dto.name or "Unknown"
         description = playlist_dto.description or ""
-        cover_url = playlist_dto.cover_url
+        artwork_url = playlist_dto.artwork_url
 
         # Download image if enabled
         cover_path = None
-        if download_images and cover_url and self._image_service:
+        if download_images and artwork_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_playlist_by_uri(spotify_uri)
-            existing_url = existing.cover_url if existing else None
+            existing_url = existing.artwork_url if existing else None
             existing_path = existing.cover_path if existing else None
 
             if await self._image_service.should_redownload(
-                existing_url, cover_url, existing_path
+                existing_url, artwork_url, existing_path
             ):
                 cover_path = await self._image_service.download_playlist_image(
-                    spotify_id, cover_url
+                    spotify_id, artwork_url
                 )
             elif existing_path:
                 cover_path = existing_path  # Keep existing path
@@ -1740,7 +1740,7 @@ class SpotifySyncService:
         await self.repo.upsert_artist(
             spotify_id=spotify_id,
             name=name,
-            image_url=artist_dto.image_url,
+            image_url=artist_dto.artwork_url,
             genres=artist_dto.genres or [],
             popularity=artist_dto.popularity,
             follower_count=artist_dto.followers,

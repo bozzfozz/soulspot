@@ -154,7 +154,7 @@ class DeezerSyncService:
                     await self._save_track_from_dto(track_dto, is_chart=True)
                     result["tracks_synced"] += 1
                 except Exception as e:
-                    result["errors"].append(f"Track {track_dto.name}: {e}")
+                    result["errors"].append(f"Track {track_dto.title}: {e}")
             
             # Sync chart albums
             chart_albums = await self._plugin.get_chart_albums(limit=limit)
@@ -354,7 +354,7 @@ class DeezerSyncService:
                     await self._save_track_from_dto(track_dto, is_top_track=True)
                     result["tracks_synced"] += 1
                 except Exception as e:
-                    result["errors"].append(f"Track {track_dto.name}: {e}")
+                    result["errors"].append(f"Track {track_dto.title}: {e}")
             
             await self._session.commit()
             
@@ -463,7 +463,7 @@ class DeezerSyncService:
         if existing:
             # Update existing
             existing.name = artist_dto.name
-            existing.image_url = artist_dto.image_url or existing.image_url
+            existing.artwork_url = artist_dto.artwork_url or existing.artwork_url
             if is_chart:
                 existing.is_chart = True
             if is_related:
@@ -473,7 +473,7 @@ class DeezerSyncService:
             new_artist = ArtistModel(
                 name=artist_dto.name,
                 deezer_id=artist_dto.deezer_id,
-                image_url=artist_dto.image_url,
+                artwork_url=artist_dto.artwork_url,
                 source="deezer",
                 is_chart=is_chart,
                 is_related=is_related,
@@ -500,7 +500,7 @@ class DeezerSyncService:
         if existing:
             # Update existing
             existing.name = album_dto.title
-            existing.artwork_url = album_dto.image_url or existing.artwork_url
+            existing.artwork_url = album_dto.artwork_url or existing.artwork_url
             if is_chart:
                 existing.is_chart = True
             if is_new_release:
@@ -512,7 +512,7 @@ class DeezerSyncService:
             new_album = AlbumModel(
                 name=album_dto.title,
                 deezer_id=album_dto.deezer_id,
-                artwork_url=album_dto.image_url,
+                artwork_url=album_dto.artwork_url,
                 release_date=album_dto.release_date,
                 album_type=album_dto.album_type or "album",
                 total_tracks=album_dto.total_tracks,
@@ -547,7 +547,7 @@ class DeezerSyncService:
         
         if existing:
             # Update existing
-            existing.title = track_dto.name
+            existing.title = track_dto.title
             existing.deezer_id = track_dto.deezer_id or existing.deezer_id
             existing.isrc = track_dto.isrc or existing.isrc
             if is_chart:
@@ -559,7 +559,7 @@ class DeezerSyncService:
         else:
             # Create new
             new_track = TrackModel(
-                title=track_dto.name,
+                title=track_dto.title,
                 deezer_id=track_dto.deezer_id,
                 duration_ms=track_dto.duration_ms,
                 isrc=track_dto.isrc,
@@ -773,7 +773,7 @@ class DeezerSyncService:
             name=playlist_dto.name,
             description=playlist_dto.description,
             deezer_id=playlist_dto.deezer_id,
-            image_url=playlist_dto.image_url,
+            artwork_url=playlist_dto.artwork_url,
             owner=playlist_dto.owner_name,
             track_count=playlist_dto.total_tracks,
             source="DEEZER",
@@ -826,7 +826,7 @@ class DeezerSyncService:
                     await self._save_track_from_dto(track_dto, is_saved=True)
                     result["tracks_synced"] += 1
                 except Exception as e:
-                    result["errors"].append(f"Track {track_dto.name}: {e}")
+                    result["errors"].append(f"Track {track_dto.title}: {e}")
             
             await self._session.commit()
             self._mark_synced("saved_tracks")
@@ -885,7 +885,7 @@ class DeezerSyncService:
                     await self._save_track_from_dto(track_dto)
                     result["tracks_synced"] += 1
                 except Exception as e:
-                    result["errors"].append(f"Track {track_dto.name}: {e}")
+                    result["errors"].append(f"Track {track_dto.title}: {e}")
             
             await self._session.commit()
             self._mark_synced(cache_key)

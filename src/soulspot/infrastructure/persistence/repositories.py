@@ -93,7 +93,7 @@ class ArtistRepository(IArtistRepository):
             source=artist.source.value,  # Store as string: 'local', 'spotify', 'hybrid'
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
-            image_url=artist.image_url,
+            artwork_url=artist.artwork_url,
             deezer_id=artist.deezer_id,
             tidal_id=artist.tidal_id,
             disambiguation=artist.disambiguation,
@@ -117,7 +117,7 @@ class ArtistRepository(IArtistRepository):
         model.source = artist.source.value  # Update source (local/spotify/hybrid)
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
-        model.image_url = artist.image_url
+        model.artwork_url = artist.artwork_url
         model.deezer_id = artist.deezer_id
         model.tidal_id = artist.tidal_id
         model.disambiguation = artist.disambiguation
@@ -167,7 +167,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -193,7 +193,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -219,7 +219,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -256,7 +256,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -282,7 +282,7 @@ class ArtistRepository(IArtistRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
-                image_url=model.image_url,
+                artwork_url=model.artwork_url,
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -362,7 +362,7 @@ class ArtistRepository(IArtistRepository):
                     source=ArtistSource(model.source),  # Include source field
                     spotify_uri=None,
                     musicbrainz_id=model.musicbrainz_id,
-                    image_url=model.image_url,
+                    artwork_url=model.artwork_url,
                     disambiguation=model.disambiguation,
                     genres=json.loads(model.genres) if model.genres else [],
                     tags=json.loads(model.tags) if model.tags else [],
@@ -471,7 +471,7 @@ class ArtistRepository(IArtistRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
-                image_url=model.image_url,
+                artwork_url=model.artwork_url,
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -517,7 +517,7 @@ class ArtistRepository(IArtistRepository):
         stmt = (
             select(ArtistModel)
             .where(ArtistModel.spotify_uri.isnot(None))  # Has Spotify link
-            .where(ArtistModel.image_url.is_(None))  # But no artwork
+            .where(ArtistModel.artwork_url.is_(None))  # But no artwork
             .order_by(ArtistModel.name)
             .limit(limit)
         )
@@ -532,7 +532,7 @@ class ArtistRepository(IArtistRepository):
                 source=ArtistSource(model.source),  # Include source field
                 spotify_uri=SpotifyUri(model.spotify_uri) if model.spotify_uri else None,
                 musicbrainz_id=model.musicbrainz_id,
-                image_url=model.image_url,
+                artwork_url=model.artwork_url,
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -577,7 +577,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             deezer_id=model.deezer_id,
             tidal_id=model.tidal_id,
             disambiguation=model.disambiguation,
@@ -614,7 +614,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            image_url=model.image_url,
+            artwork_url=model.artwork_url,
             deezer_id=model.deezer_id,
             tidal_id=model.tidal_id,
             disambiguation=model.disambiguation,
@@ -1730,7 +1730,7 @@ class PlaylistRepository(IPlaylistRepository):
             description=playlist.description,
             source=playlist.source.value,
             spotify_uri=str(playlist.spotify_uri) if playlist.spotify_uri else None,
-            cover_url=playlist.cover_url,
+            artwork_url=playlist.artwork_url,
             created_at=playlist.created_at,
             updated_at=playlist.updated_at,
         )
@@ -1758,7 +1758,7 @@ class PlaylistRepository(IPlaylistRepository):
         model.description = playlist.description
         model.source = playlist.source.value
         model.spotify_uri = str(playlist.spotify_uri) if playlist.spotify_uri else None
-        model.cover_url = playlist.cover_url
+        model.artwork_url = playlist.artwork_url
         model.updated_at = playlist.updated_at
 
         # Update playlist tracks - delete old and add new
@@ -1815,7 +1815,7 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
-            cover_url=model.cover_url,  # Spotify playlist cover image
+            artwork_url=model.artwork_url,  # Spotify playlist cover image
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -1854,7 +1854,7 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
-            cover_url=model.cover_url,  # Spotify playlist cover image
+            artwork_url=model.artwork_url,  # Spotify playlist cover image
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -1929,7 +1929,7 @@ class PlaylistRepository(IPlaylistRepository):
                     spotify_uri=SpotifyUri.from_string(model.spotify_uri)
                     if model.spotify_uri
                     else None,
-                    cover_url=model.cover_url,
+                    artwork_url=model.artwork_url,
                     track_ids=track_ids,
                     created_at=model.created_at,
                     updated_at=model.updated_at,
@@ -4448,7 +4448,7 @@ class ProviderBrowseRepository:
         if model:
             # Update existing
             model.name = name
-            model.image_url = image_url
+            model.artwork_url = image_url
             if image_path is not None:
                 model.image_path = image_path
             model.genres = genres_json
@@ -5107,7 +5107,7 @@ class ProviderBrowseRepository:
         if model:
             model.name = name
             model.description = description
-            model.cover_url = cover_url
+            model.artwork_url = cover_url
             if cover_path is not None:
                 model.cover_path = cover_path
             model.updated_at = now

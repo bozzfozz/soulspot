@@ -76,7 +76,7 @@ class ProviderMode(str, Enum):
 # metadata_sources dict tracks which fields came from which APIs (e.g., {"name": "spotify", "genres":
 # "musicbrainz"}). genres and tags are lists (not sets!) to preserve order. created_at/updated_at
 # default to UTC now - ALWAYS use UTC in domain, convert to local time in presentation layer only!
-# Hey future me - image_url stores the artist's profile picture from Spotify! Spotify returns an array
+# Hey future me - artwork_url stores the artist's profile picture from Spotify! Spotify returns an array
 # of images in different sizes (640x640, 320x320, 160x160). We pick the medium-sized one (usually 320px)
 # for display in the followed artists UI. This field is nullable because not all artists have images
 # (especially indie/underground artists). The URL points to Spotify's CDN - it's stable and cacheable.
@@ -95,7 +95,7 @@ class Artist:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
-    image_url: str | None = None
+    artwork_url: str | None = None
     # Hey future me - multi-service IDs for cross-service artist deduplication!
     # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
     # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
@@ -325,7 +325,7 @@ class Playlist:
     description: str | None = None
     source: PlaylistSource = PlaylistSource.MANUAL
     spotify_uri: SpotifyUri | None = None
-    cover_url: str | None = None
+    artwork_url: str | None = None
     track_ids: list[TrackId] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))

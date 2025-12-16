@@ -143,8 +143,8 @@ class LibraryViewService:
         
         return AlbumDetailView(
             spotify_id=album_model.spotify_id,
-            name=album_model.name,
-            image_url=album_model.artwork_url,
+            title=album_model.name,
+            artwork_url=album_model.artwork_url,
             release_date=album_model.release_date,
             album_type=album_model.album_type or "album",
             total_tracks=album_model.total_tracks or len(track_views),
@@ -179,7 +179,7 @@ class LibraryViewService:
             
             track_views.append(TrackView(
                 spotify_id=track.spotify_id,
-                name=track.title,  # Model has "title", ViewModel has "name"
+                title=track.title,  # Model has "title", ViewModel uses "title" (standardized)
                 track_number=track.track_number or 1,
                 disc_number=track.disc_number or 1,
                 duration_ms=duration_ms,

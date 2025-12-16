@@ -338,7 +338,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 source_service="deezer",
                 deezer_id=str(user_data.get("id", "")),
                 email=user_data.get("email"),
-                image_url=user_data.get("picture_big") or user_data.get("picture"),
+                artwork_url=user_data.get("picture_big") or user_data.get("picture"),
                 external_urls={"deezer": user_data.get("link", "")},
             )
         except Exception as e:
@@ -555,7 +555,7 @@ class DeezerPlugin(IMusicServicePlugin):
                     name=artist.get("name", "Unknown"),
                     source_service="deezer",
                     deezer_id=str(artist.get("id", "")),
-                    image_url=artist.get("picture_big") or artist.get("picture_medium"),
+                    artwork_url=artist.get("picture_big") or artist.get("picture_medium"),
                     genres=[],
                     followers=artist.get("nb_fan"),
                     external_urls={"deezer": artist.get("link", "")},
@@ -975,7 +975,7 @@ class DeezerPlugin(IMusicServicePlugin):
                 source_service="deezer",
                 deezer_id=str(data.get("id", "")),
                 description=data.get("description"),
-                cover_url=data.get("picture_big") or data.get("picture_medium"),
+                artwork_url=data.get("picture_big") or data.get("picture_medium"),
                 owner_id=str(data.get("creator", {}).get("id", "")),
                 owner_name=data.get("creator", {}).get("name"),
                 total_tracks=data.get("nb_tracks", 0),
@@ -1072,7 +1072,7 @@ class DeezerPlugin(IMusicServicePlugin):
                     source_service="deezer",
                     deezer_id=str(pl.get("id", "")),
                     description=pl.get("description"),
-                    cover_url=pl.get("picture_big") or pl.get("picture_medium"),
+                    artwork_url=pl.get("picture_big") or pl.get("picture_medium"),
                     owner_id=str(pl.get("creator", {}).get("id", "")),
                     owner_name=pl.get("creator", {}).get("name"),
                     total_tracks=pl.get("nb_tracks", 0),
@@ -1381,7 +1381,7 @@ class DeezerPlugin(IMusicServicePlugin):
             deezer_id=str(deezer_artist.id),
             genres=[],  # Deezer doesn't return genres on artist object
             popularity=None,
-            image_url=deezer_artist.picture_big or deezer_artist.picture_medium,
+            artwork_url=deezer_artist.picture_big or deezer_artist.picture_medium,
             followers=deezer_artist.nb_fan,
             external_urls={"deezer": deezer_artist.link or ""},
         )

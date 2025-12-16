@@ -172,7 +172,7 @@ class ProviderMappingService:
             deezer_id=dto.deezer_id,
             tidal_id=dto.tidal_id,
             musicbrainz_id=dto.musicbrainz_id,
-            image_url=dto.image_url,
+            artwork_url=dto.artwork_url,
             genres=dto.genres or [],
             tags=dto.tags or [],
             disambiguation=dto.disambiguation,

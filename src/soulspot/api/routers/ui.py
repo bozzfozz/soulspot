@@ -136,7 +136,7 @@ async def index(
             "name": p.name,
             "description": p.description,
             "track_count": p.track_count(),
-            "cover_url": p.cover_url,
+            "cover_url": p.artwork_url,
             "downloaded_count": 0,
         }
         for p in playlists_list[:6]
@@ -264,7 +264,7 @@ async def playlists(
     pending_tracks = total_tracks - downloaded_tracks
 
     # Convert to template-friendly format
-    # Hey future me - cover_url is essential for the grid view!
+    # Hey future me - cover_url field in API response is for template compatibility!\n    # It gets its value from playlist.artwork_url (Entity field).
     # Without it, all playlists show placeholder images even though covers exist.
     playlists_data = [
         {
@@ -273,7 +273,7 @@ async def playlists(
             "description": playlist.description,
             "track_count": len(playlist.track_ids),
             "source": playlist.source.value,
-            "cover_url": playlist.cover_url,
+            "cover_url": playlist.artwork_url,
             "created_at": playlist.created_at.isoformat(),
         }
         for playlist in playlists_list
@@ -386,7 +386,7 @@ async def import_playlist(request: Request) -> Any:
 
 # Listen, this renders the full playlist detail page with ALL tracks! Uses batch query with
 # joinedload to avoid N+1 queries - we fetch all tracks with artist/album in ONE query.
-# The cover_url comes from Playlist entity for Spotify playlists (extracted during sync).
+# The cover_url API field comes from Playlist.artwork_url entity field for Spotify playlists.
 # Returns error.html template for 404/400 - nice UX pattern. This builds entire playlist
 # data in memory before passing to template - could be huge for 1000+ track playlists!
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
@@ -462,7 +462,7 @@ async def playlist_detail(
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
-            "cover_url": playlist.cover_url,  # Spotify playlist cover image
+            "cover_url": playlist.artwork_url,  # Spotify playlist cover image
         }
 
         return templates.TemplateResponse(
@@ -1213,7 +1213,7 @@ async def library_artists(
             "local_tracks": local_tracks or 0,  # Only tracks with file_path
             "total_albums": total_albums or 0,  # ALL albums
             "local_albums": local_albums or 0,  # Only albums with local tracks
-            "image_url": artist.image_url,  # Spotify CDN URL or None
+            "image_url": artist.artwork_url,  # Spotify CDN URL or None
             "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
         for artist, total_tracks, local_tracks, total_albums, local_albums in rows
@@ -1723,7 +1723,7 @@ async def library_artist_detail(
         "tracks": tracks_data,
         "track_count": len(tracks_data),
         "album_count": len(albums),
-        "image_url": artist_model.image_url,  # Spotify CDN URL or None
+        "image_url": artist_model.artwork_url,  # Spotify CDN URL or None
         "genres": artist_model.genres,  # Spotify genres
     }
 
@@ -2098,7 +2098,7 @@ async def spotify_artists_page(
                 {
                     "spotify_id": artist.spotify_id,
                     "name": artist.name,
-                    "image_url": artist.image_url,
+                    "image_url": artist.artwork_url,
                     "genres": genres[:3],  # Max 3 genres for display
                     "genres_count": len(genres),
                     "popularity": artist.popularity,
@@ -2394,7 +2394,7 @@ async def browse_charts_page(
                     "name": track.title,
                     "artist_name": track.artist_name,
                     "album_name": track.album_name or "",
-                    "image_url": track.image_url,
+                    "image_url": track.artwork_url,
                     "preview_url": track.preview_url,
                     "duration_str": f"{duration_min}:{duration_sec_rem:02d}",
                     "position": track.chart_position,
@@ -2415,7 +2415,7 @@ async def browse_charts_page(
                     "id": album.deezer_id or album.spotify_id or "",
                     "name": album.title,
                     "artist_name": album.artist_name,
-                    "image_url": album.image_url,
+                    "image_url": album.artwork_url,
                     "release_date": album.release_date,
                     "total_tracks": album.total_tracks,
                     "position": album.chart_position,
@@ -2435,7 +2435,7 @@ async def browse_charts_page(
                 items.append({
                     "id": artist.deezer_id or artist.spotify_id or "",
                     "name": artist.name,
-                    "image_url": artist.image_url,
+                    "image_url": artist.artwork_url,
                     "genres": artist.genres[:3] if artist.genres else [],
                     "position": artist.chart_position,
                     "source": artist.source_service,
@@ -2455,7 +2455,7 @@ async def browse_charts_page(
                     "id": album.deezer_id or album.spotify_id or "",
                     "name": album.title,
                     "artist_name": album.artist_name,
-                    "image_url": album.image_url,
+                    "image_url": album.artwork_url,
                     "release_date": album.release_date,
                     "total_tracks": album.total_tracks,
                     "source": album.source_service,
@@ -2625,7 +2625,7 @@ async def spotify_discover_page(
                     "spotify_id": discovered.spotify_id,
                     "deezer_id": discovered.deezer_id,
                     "name": discovered.name,
-                    "image_url": discovered.image_url,
+                    "image_url": discovered.artwork_url,
                     "genres": (discovered.genres or [])[:3],
                     "popularity": discovered.popularity or 0,
                     "based_on": artist.name,
@@ -2716,7 +2716,7 @@ async def spotify_artist_detail_page(
         artist = {
             "spotify_id": artist_model.spotify_id,
             "name": artist_model.name,
-            "image_url": artist_model.image_url,
+            "image_url": artist_model.artwork_url,
             "genres": genres,
             "popularity": artist_model.popularity,
             "follower_count": artist_model.follower_count,
@@ -2891,8 +2891,8 @@ async def spotify_album_detail_page(
             } if album_view.artist_name else None,
             "album": {
                 "spotify_id": album_view.spotify_id,
-                "name": album_view.name,
-                "image_url": album_view.image_url,
+                "name": album_view.title,
+                "image_url": album_view.artwork_url,
                 "release_date": album_view.release_date,
                 "album_type": album_view.album_type,
                 "total_tracks": album_view.total_tracks,

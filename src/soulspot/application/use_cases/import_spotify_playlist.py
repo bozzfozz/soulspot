@@ -120,7 +120,7 @@ class ImportSpotifyPlaylistUseCase(
             spotify_playlist = {
                 "name": playlist_dto.name,
                 "description": playlist_dto.description,
-                "images": [{"url": playlist_dto.image_url}] if playlist_dto.image_url else [],
+                "images": [{"url": playlist_dto.artwork_url}] if playlist_dto.artwork_url else [],
                 "tracks": {
                     "items": [
                         {
@@ -178,7 +178,7 @@ class ImportSpotifyPlaylistUseCase(
             # Update existing playlist
             existing_playlist.name = playlist.name
             existing_playlist.description = playlist.description
-            existing_playlist.cover_url = cover_url
+            existing_playlist.artwork_url = cover_url
             existing_playlist.updated_at = datetime.now(UTC)
             await self._playlist_repository.update(existing_playlist)
             playlist = existing_playlist
@@ -419,7 +419,7 @@ class ImportSpotifyPlaylistUseCase(
                     id=ArtistId.generate(),
                     name=artist_dto.name,
                     spotify_uri=SpotifyUri(f"spotify:artist:{artist_dto.spotify_id}"),
-                    image_url=artist_dto.image_url,
+                    artwork_url=artist_dto.artwork_url,
                     genres=artist_dto.genres,
                     metadata_sources={"name": "spotify"},
                     created_at=datetime.now(UTC),

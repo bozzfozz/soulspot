@@ -48,7 +48,7 @@ class ArtistDTO:
     musicbrainz_id: str | None = None
 
     # Metadata (Optional - nicht jeder Service hat alles)
-    image_url: str | None = None
+    artwork_url: str | None = None  # Artist image/photo URL
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     disambiguation: str | None = None  # MusicBrainz disambiguation
@@ -199,6 +199,7 @@ class TrackDTO:
     # Optional metadata
     genres: list[str] = field(default_factory=list)
     preview_url: str | None = None  # 30-second preview URL
+    artwork_url: str | None = None  # Track/Single cover art URL
 
     # External URLs
     external_urls: dict[str, str] = field(default_factory=dict)
@@ -237,7 +238,7 @@ class PlaylistDTO:
 
     # Playlist metadata
     description: str | None = None
-    cover_url: str | None = None
+    artwork_url: str | None = None  # Playlist cover art URL
     is_public: bool = True
     is_collaborative: bool = False
     total_tracks: int | None = None
@@ -308,7 +309,7 @@ class UserProfileDTO:
 
     email: str | None = None
     country: str | None = None
-    image_url: str | None = None
+    artwork_url: str | None = None  # User profile picture URL
     product: str | None = None  # "free", "premium", etc.
 
     # External URLs
@@ -351,10 +352,13 @@ class TrackView:
     
     Hey future me - das ist die "View" Version eines Tracks!
     Alle Felder sind template-ready (formatierte Dauer, etc.)
-    Routes müssen NICHT wissen, ob Model "title" oder "name" hat.
+    
+    IMPORTANT: ViewModels follow DTO naming conventions for consistency:
+    - Use `title` (not `name`) to match TrackDTO
+    - Use `artwork_url` (not `image_url`) for album art
     """
     spotify_id: str | None
-    name: str  # Template erwartet "name", nicht "title"
+    title: str  # Consistent with TrackDTO
     track_number: int
     disc_number: int
     duration_ms: int
@@ -372,11 +376,16 @@ class AlbumDetailView:
     Hey future me - das ist ein ViewModel für die Album-Detail-Seite!
     Enthält alles was das Template braucht, vorformatiert und ready-to-use.
     Routes rufen Service auf und bekommen dieses ViewModel zurück.
+    
+    NAMING CONVENTION: ViewModels use DTO field names for consistency:
+    - `title` for albums (matches AlbumDTO)
+    - `artwork_url` for cover art (matches AlbumDTO)
+    - `name` only for legacy compatibility where absolutely necessary
     """
     # Album info
     spotify_id: str | None
-    name: str
-    image_url: str | None
+    title: str  # Consistent with AlbumDTO
+    artwork_url: str | None  # Consistent with AlbumDTO
     release_date: str | None
     album_type: str
     total_tracks: int
