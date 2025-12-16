@@ -917,6 +917,107 @@ class SpotifySyncService:
             album_id=album_id, limit=limit, offset=offset
         )
 
+    async def get_album_detail_view(
+        self, artist_id: str, album_id: str
+    ) -> "AlbumDetailView | None":
+        """Get album detail as a ViewModel for template rendering.
+        
+        Hey future me - das ist die RICHTIGE Methode nach Architecture Standard!
+        Routes rufen DIESE Methode auf und bekommen ein fertiges ViewModel zurück.
+        Die Route muss NICHTS über Models oder DB-Attribute wissen.
+        
+        Flow:
+        1. Get artist from DB (for breadcrumb)
+        2. Get album from DB
+        3. Auto-sync tracks from Spotify (with cooldown)
+        4. Get tracks from DB
+        5. Convert everything to AlbumDetailView
+        
+        Args:
+            artist_id: Spotify artist ID
+            album_id: Spotify album ID
+            
+        Returns:
+            AlbumDetailView or None if album not found
+        """
+        from soulspot.domain.dtos import AlbumDetailView, TrackView
+        
+        # Get artist (optional - für Breadcrumb)
+        artist_model = await self.repo.get_artist_by_id(artist_id)
+        artist_spotify_id = artist_model.spotify_id if artist_model else None
+        artist_name = artist_model.name if artist_model else None
+        
+        # Get album
+        album_model = await self.repo.get_album_by_id(album_id)
+        if not album_model:
+            return None
+        
+        # Auto-sync tracks (with error handling)
+        synced = False
+        sync_error = None
+        try:
+            sync_result = await self.sync_album_tracks(album_id)
+            synced = sync_result.get("synced", False)
+            if sync_result.get("error"):
+                sync_error = sync_result["error"]
+        except Exception as e:
+            sync_error = str(e)
+            logger.warning(f"Track sync failed for album {album_id}: {e}")
+        
+        # Get tracks from DB
+        track_models = await self.repo.get_tracks_by_album(album_id, limit=100)
+        
+        # Convert tracks to TrackView
+        track_views: list[TrackView] = []
+        total_duration_ms = 0
+        
+        for track in track_models:
+            duration_ms = track.duration_ms or 0
+            total_duration_ms += duration_ms
+            
+            # Format duration as "M:SS"
+            duration_sec = duration_ms // 1000
+            duration_min = duration_sec // 60
+            duration_sec_rem = duration_sec % 60
+            duration_str = f"{duration_min}:{duration_sec_rem:02d}"
+            
+            track_views.append(TrackView(
+                spotify_id=track.spotify_id,
+                name=track.title,  # Model has "title", ViewModel has "name"
+                track_number=track.track_number or 1,
+                disc_number=track.disc_number or 1,
+                duration_ms=duration_ms,
+                duration_str=duration_str,
+                explicit=track.explicit or False,
+                preview_url=track.preview_url,
+                isrc=track.isrc,
+                is_downloaded=False,  # TODO: Check if linked to local track
+            ))
+        
+        # Sort by disc, then track number
+        track_views.sort(key=lambda t: (t.disc_number, t.track_number))
+        
+        # Calculate total duration string
+        total_min = total_duration_ms // 60000
+        total_sec = (total_duration_ms % 60000) // 1000
+        total_duration_str = f"{total_min} min {total_sec} sec"
+        
+        return AlbumDetailView(
+            spotify_id=album_model.spotify_id,
+            name=album_model.name,
+            image_url=album_model.image_url,
+            release_date=album_model.release_date,
+            album_type=album_model.album_type or "album",
+            total_tracks=album_model.total_tracks or len(track_views),
+            artist_spotify_id=artist_spotify_id,
+            artist_name=artist_name,
+            tracks=track_views,
+            track_count=len(track_views),
+            total_duration_str=total_duration_str,
+            synced=synced,
+            sync_error=sync_error,
+        )
+
     async def get_sync_status(self, sync_type: str) -> Any | None:
         """Get sync status for display."""
         return await self.repo.get_sync_status(sync_type)

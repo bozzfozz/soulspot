@@ -2831,109 +2831,71 @@ async def spotify_album_detail_page(
 ) -> Any:
     """Spotify album detail page with tracks.
 
-    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
-    Auto-syncs album's tracks from Spotify on page load (with cooldown).
-    Shows album info and track list with download buttons.
-
-    SpotifyPlugin handles auth internally - no more manual token fetching!
+    Hey future me - REFACTORED nach Architecture Standard!
+    Route ruft EINE Service-Methode auf und bekommt ein ViewModel zurück.
+    KEINE Model-Details in der Route - Service macht die Konvertierung.
+    
+    Flow:
+    1. Route ruft sync_service.get_album_detail_view()
+    2. Service holt Daten aus DB + synct Tracks
+    3. Service konvertiert zu AlbumDetailView (ViewModel)
+    4. Route gibt ViewModel an Template
+    
+    Die Route weiß NICHT, ob TrackModel "title" oder "name" hat!
     """
-    artist = None
-    album = None
-    tracks = []
-    sync_stats = None
-    error = None
-
-    try:
-        # Get artist from DB
-        artist_model = await sync_service.get_artist(artist_id)
-        if artist_model:
-            artist = {
-                "spotify_id": artist_model.spotify_id,
-                "name": artist_model.name,
-            }
-
-        # Get album from DB
-        album_model = await sync_service.get_album(album_id)
-
-        if not album_model:
-            return templates.TemplateResponse(
-                request,
-                "error.html",
-                context={
-                    "error_code": 404,
-                    "error_message": f"Album {album_id} nicht gefunden",
-                },
-                status_code=404,
-            )
-
-        album = {
-            "spotify_id": album_model.spotify_id,
-            "name": album_model.name,
-            "image_url": album_model.image_url,
-            "release_date": album_model.release_date,
-            "album_type": album_model.album_type,
-            "total_tracks": album_model.total_tracks,
+    # Get ViewModel from service - Route knows NOTHING about Models!
+    album_view = await sync_service.get_album_detail_view(artist_id, album_id)
+    
+    if not album_view:
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            context={
+                "error_code": 404,
+                "error_message": f"Album {album_id} nicht gefunden",
+            },
+            status_code=404,
+        )
+    
+    # Convert ViewModel to template context
+    # Hey future me - wir müssen TrackView zu dict konvertieren für Jinja2
+    tracks_for_template = [
+        {
+            "spotify_id": t.spotify_id,
+            "name": t.name,
+            "track_number": t.track_number,
+            "disc_number": t.disc_number,
+            "duration_ms": t.duration_ms,
+            "duration_str": t.duration_str,
+            "explicit": t.explicit,
+            "preview_url": t.preview_url,
+            "isrc": t.isrc,
+            "is_downloaded": t.is_downloaded,
         }
-
-        # Hey future me - SpotifyPlugin handles auth internally!
-        # No more "if access_token:" checks needed.
-        # Auto-sync tracks (respects cooldown)
-        try:
-            sync_stats = await sync_service.sync_album_tracks(album_id)
-        except Exception as sync_error:
-            # Sync failed but we can still show cached data
-            logger.warning(f"Track sync failed (showing cached): {sync_error}")
-
-        # Get tracks from DB
-        track_models = await sync_service.get_album_tracks(album_id, limit=100)
-
-        for track in track_models:
-            # Format duration
-            duration_sec = track.duration_ms // 1000
-            duration_min = duration_sec // 60
-            duration_sec_rem = duration_sec % 60
-            duration_str = f"{duration_min}:{duration_sec_rem:02d}"
-
-            tracks.append(
-                {
-                    "spotify_id": track.spotify_id,
-                    "name": track.name,
-                    "track_number": track.track_number,
-                    "disc_number": track.disc_number,
-                    "duration_ms": track.duration_ms,
-                    "duration_str": duration_str,
-                    "explicit": track.explicit,
-                    "preview_url": track.preview_url,
-                    "isrc": track.isrc,
-                    "local_track_id": track.local_track_id,
-                    "is_downloaded": track.local_track_id is not None,
-                }
-            )
-
-        # Sort by disc number, then track number
-        tracks.sort(key=lambda t: (t["disc_number"], t["track_number"]))
-
-        # Calculate total duration
-        total_ms = sum(t["duration_ms"] for t in tracks)
-        total_min = total_ms // 60000
-        total_sec = (total_ms % 60000) // 1000
-
-    except Exception as e:
-        error = str(e)
-        total_min = 0
-        total_sec = 0
-
+        for t in album_view.tracks
+    ]
+    
     return templates.TemplateResponse(
         request,
         "spotify_album_detail.html",
         context={
-            "artist": artist,
-            "album": album,
-            "tracks": tracks,
-            "sync_stats": sync_stats,
-            "error": error,
-            "track_count": len(tracks),
-            "total_duration": f"{total_min} min {total_sec} sec",
+            "artist": {
+                "spotify_id": album_view.artist_spotify_id,
+                "name": album_view.artist_name,
+            } if album_view.artist_name else None,
+            "album": {
+                "spotify_id": album_view.spotify_id,
+                "name": album_view.name,
+                "image_url": album_view.image_url,
+                "release_date": album_view.release_date,
+                "album_type": album_view.album_type,
+                "total_tracks": album_view.total_tracks,
+            },
+            "tracks": tracks_for_template,
+            "sync_stats": {"synced": album_view.synced} if album_view.synced else None,
+            "error": album_view.sync_error,
+            "track_count": album_view.track_count,
+            "total_duration": album_view.total_duration_str,
         },
     )
 

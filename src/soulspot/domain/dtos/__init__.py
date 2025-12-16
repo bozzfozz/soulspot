@@ -337,6 +337,66 @@ class PaginatedResponse[T]:
         return self.next_offset is not None
 
 
+# ============================================================================
+# VIEW MODELS - For Template Rendering
+# ============================================================================
+# Hey future me - ViewModels sind für Templates!
+# Sie enthalten vorformatierte Daten, die das Template direkt anzeigen kann.
+# Routes sollen KEINE Model-Details kennen - Services konvertieren zu ViewModels.
+
+
+@dataclass
+class TrackView:
+    """Track data formatted for template display.
+    
+    Hey future me - das ist die "View" Version eines Tracks!
+    Alle Felder sind template-ready (formatierte Dauer, etc.)
+    Routes müssen NICHT wissen, ob Model "title" oder "name" hat.
+    """
+    spotify_id: str | None
+    name: str  # Template erwartet "name", nicht "title"
+    track_number: int
+    disc_number: int
+    duration_ms: int
+    duration_str: str  # Vorformatiert: "3:45"
+    explicit: bool
+    preview_url: str | None
+    isrc: str | None
+    is_downloaded: bool
+
+
+@dataclass
+class AlbumDetailView:
+    """Album detail page view model.
+    
+    Hey future me - das ist ein ViewModel für die Album-Detail-Seite!
+    Enthält alles was das Template braucht, vorformatiert und ready-to-use.
+    Routes rufen Service auf und bekommen dieses ViewModel zurück.
+    """
+    # Album info
+    spotify_id: str | None
+    name: str
+    image_url: str | None
+    release_date: str | None
+    album_type: str
+    total_tracks: int
+    
+    # Artist info (optional, kann None sein)
+    artist_spotify_id: str | None
+    artist_name: str | None
+    
+    # Tracks (vorformatiert für Template)
+    tracks: list[TrackView]
+    
+    # Aggregate data
+    track_count: int
+    total_duration_str: str  # "45 min 32 sec"
+    
+    # Sync status
+    synced: bool = False
+    sync_error: str | None = None
+
+
 # Export all DTOs
 __all__ = [
     "ArtistDTO",
@@ -346,4 +406,7 @@ __all__ = [
     "SearchResultDTO",
     "UserProfileDTO",
     "PaginatedResponse",
+    # ViewModels
+    "TrackView",
+    "AlbumDetailView",
 ]
