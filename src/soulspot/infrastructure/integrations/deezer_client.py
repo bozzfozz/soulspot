@@ -5,7 +5,7 @@ Unlike Spotify/Tidal which require OAuth, Deezer lets us just hit their API dire
 This makes it perfect as a fallback for artwork enrichment, especially for Various Artists
 compilations where Spotify matching fails.
 
-Rate limits: 50 requests per 5 seconds (per IP). We handle this with a simple async sleep.
+Rate limits: 50 requests per 5 seconds (per IP). We use the centralized RateLimiter.
 
 Key features:
 - Album search and details (with artwork URLs up to 1000x1000!)
@@ -22,7 +22,6 @@ When to use Deezer:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -31,6 +30,7 @@ from urllib.parse import urlencode
 import httpx
 
 from soulspot.domain.exceptions import ConfigurationError
+from soulspot.infrastructure.rate_limiter import get_deezer_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +133,6 @@ class DeezerClient:
     AUTHORIZE_URL = "https://connect.deezer.com/oauth/auth.php"
     TOKEN_URL = "https://connect.deezer.com/oauth/access_token.php"  # nosec B105 - public API endpoint
 
-    # Hey future me - Deezer is lenient but let's be respectful. 50/5s limit.
-    # We add 100ms between requests to be safe and not trigger IP bans.
-    RATE_LIMIT_DELAY = 0.1  # 100ms between requests
-
     def __init__(
         self,
         oauth_config: DeezerOAuthConfig | None = None,
@@ -150,8 +146,6 @@ class DeezerClient:
         """
         self._oauth_config = oauth_config
         self._client: httpx.AsyncClient | None = None
-        self._last_request_time: float = 0.0
-        self._rate_limit_lock = asyncio.Lock()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -173,6 +167,78 @@ class DeezerClient:
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    # Hey future me - CENTRALIZED API REQUEST with Rate Limiting!
+    # All Deezer API calls go through here to respect rate limits.
+    # Deezer is more lenient (50 req/5 sec) but we're still responsible.
+    async def _api_request(
+        self,
+        method: str,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        access_token: str | None = None,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """Make rate-limited API request with automatic retry on 429.
+        
+        Hey future me - ALL Deezer API calls should use this method!
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: API endpoint path (e.g., "/search/track")
+            params: Query parameters
+            access_token: OAuth access token (only for user-authenticated endpoints)
+            max_retries: Max retries on 429 (default 3)
+            
+        Returns:
+            httpx.Response object
+        """
+        client = await self._get_client()
+        rate_limiter = get_deezer_limiter()
+        
+        # Add access_token to params if provided
+        request_params = params.copy() if params else {}
+        if access_token:
+            request_params["access_token"] = access_token
+        
+        for attempt in range(max_retries + 1):
+            # Wait for rate limiter token
+            async with rate_limiter:
+                response = await client.request(
+                    method=method,
+                    url=endpoint,
+                    params=request_params if request_params else None,
+                )
+            
+            # Check for rate limit (Deezer returns error in JSON)
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    # Deezer returns {"error": {"type": "DataException", "code": 4}} for rate limit
+                    if isinstance(data, dict) and "error" in data:
+                        error_code = data.get("error", {}).get("code", 0)
+                        if error_code == 4:  # Rate limit error
+                            if attempt >= max_retries:
+                                logger.error(
+                                    f"Deezer API rate limited after {max_retries} retries: {endpoint}"
+                                )
+                                return response
+                            
+                            # Wait with backoff
+                            wait_time = await rate_limiter.handle_rate_limit_response()
+                            logger.warning(
+                                f"Deezer rate limit (attempt {attempt + 1}/{max_retries}): "
+                                f"Waited {wait_time:.1f}s, retrying {endpoint}"
+                            )
+                            continue
+                except Exception:
+                    pass
+            
+            # Success or other error - don't retry
+            return response
+        
+        # Should not reach here
+        return response
 
     # =========================================================================
     # OAUTH METHODS (optional - public API works without auth!)
@@ -313,8 +379,10 @@ class DeezerClient:
         Raises:
             httpx.HTTPError: If the request fails or token is invalid
         """
-        response = await self._rate_limited_request(
-            "GET", "/user/me", params={"access_token": access_token}
+        response = await self._api_request(
+            method="GET",
+            endpoint="/user/me",
+            access_token=access_token,
         )
         response.raise_for_status()
         return dict(response.json())
@@ -335,14 +403,14 @@ class DeezerClient:
         Returns:
             Paginated list of favorite tracks
         """
-        response = await self._rate_limited_request(
-            "GET",
-            "/user/me/tracks",
+        response = await self._api_request(
+            method="GET",
+            endpoint="/user/me/tracks",
             params={
-                "access_token": access_token,
                 "limit": limit,
                 "index": index,
             },
+            access_token=access_token,
         )
         response.raise_for_status()
         return dict(response.json())
@@ -360,14 +428,14 @@ class DeezerClient:
         Returns:
             Paginated list of saved albums
         """
-        response = await self._rate_limited_request(
-            "GET",
-            "/user/me/albums",
+        response = await self._api_request(
+            method="GET",
+            endpoint="/user/me/albums",
             params={
-                "access_token": access_token,
                 "limit": limit,
                 "index": index,
             },
+            access_token=access_token,
         )
         response.raise_for_status()
         return dict(response.json())
@@ -385,14 +453,14 @@ class DeezerClient:
         Returns:
             Paginated list of followed artists
         """
-        response = await self._rate_limited_request(
-            "GET",
-            "/user/me/artists",
+        response = await self._api_request(
+            method="GET",
+            endpoint="/user/me/artists",
             params={
-                "access_token": access_token,
                 "limit": limit,
                 "index": index,
             },
+            access_token=access_token,
         )
         response.raise_for_status()
         return dict(response.json())
@@ -410,72 +478,17 @@ class DeezerClient:
         Returns:
             Paginated list of user's playlists
         """
-        response = await self._rate_limited_request(
-            "GET",
-            "/user/me/playlists",
+        response = await self._api_request(
+            method="GET",
+            endpoint="/user/me/playlists",
             params={
-                "access_token": access_token,
                 "limit": limit,
                 "index": index,
             },
+            access_token=access_token,
         )
         response.raise_for_status()
         return dict(response.json())
-
-    # =========================================================================
-    # RATE-LIMITED REQUESTS
-    # =========================================================================
-
-    async def _rate_limit(self) -> None:
-        """Apply rate limiting without making a request.
-
-        Hey future me - use this before making manual HTTP requests with _get_client().
-        For standard requests, use _rate_limited_request() instead which combines both.
-
-        This ensures we don't exceed Deezer's 50 req/5s limit.
-        """
-        async with self._rate_limit_lock:
-            current_time = asyncio.get_event_loop().time()
-            time_since_last = current_time - self._last_request_time
-
-            if time_since_last < self.RATE_LIMIT_DELAY:
-                await asyncio.sleep(self.RATE_LIMIT_DELAY - time_since_last)
-
-            self._last_request_time = asyncio.get_event_loop().time()
-
-    async def _rate_limited_request(
-        self, method: str, url: str, **kwargs: Any
-    ) -> httpx.Response:
-        """Make a rate-limited request to Deezer API.
-
-        Hey future me - simple rate limiting: 100ms between requests.
-        Deezer is more lenient than MusicBrainz (50/5s vs 1/1s) but
-        let's not push our luck.
-
-        Args:
-            method: HTTP method
-            url: Request URL (relative to base URL)
-            **kwargs: Additional request parameters
-
-        Returns:
-            HTTP response
-
-        Raises:
-            httpx.HTTPError: If the request fails
-        """
-        async with self._rate_limit_lock:
-            current_time = asyncio.get_event_loop().time()
-            time_since_last = current_time - self._last_request_time
-
-            if time_since_last < self.RATE_LIMIT_DELAY:
-                await asyncio.sleep(self.RATE_LIMIT_DELAY - time_since_last)
-
-            client = await self._get_client()
-            response = await client.request(method, url, **kwargs)
-
-            self._last_request_time = asyncio.get_event_loop().time()
-
-            return response
 
     # =========================================================================
     # ALBUM METHODS
@@ -500,9 +513,9 @@ class DeezerClient:
             httpx.HTTPError: If the request fails
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                "/search/album",
+            response = await self._api_request(
+                method="GET",
+                endpoint="/search/album",
                 params={"q": query, "limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -534,9 +547,9 @@ class DeezerClient:
             DeezerAlbum or None if not found
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/album/{album_id}",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/album/{album_id}",
             )
             response.raise_for_status()
             data = response.json()
@@ -565,9 +578,9 @@ class DeezerClient:
             List of DeezerTrack objects
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/album/{album_id}/tracks",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/album/{album_id}/tracks",
             )
             response.raise_for_status()
             data = response.json()
@@ -636,9 +649,9 @@ class DeezerClient:
             List of DeezerArtist objects
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                "/search/artist",
+            response = await self._api_request(
+                method="GET",
+                endpoint="/search/artist",
                 params={"q": query, "limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -664,9 +677,9 @@ class DeezerClient:
             DeezerArtist or None if not found
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/artist/{artist_id}",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/artist/{artist_id}",
             )
             response.raise_for_status()
             data = response.json()
@@ -695,9 +708,9 @@ class DeezerClient:
             List of DeezerAlbum objects
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/artist/{artist_id}/albums",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/artist/{artist_id}/albums",
                 params={"limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -729,9 +742,9 @@ class DeezerClient:
             List of DeezerTrack objects sorted by popularity
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/artist/{artist_id}/top",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/artist/{artist_id}/top",
                 params={"limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -781,9 +794,9 @@ class DeezerClient:
             List of DeezerTrack objects
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                "/search/track",
+            response = await self._api_request(
+                method="GET",
+                endpoint="/search/track",
                 params={"q": query, "limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -809,9 +822,9 @@ class DeezerClient:
             DeezerTrack or None if not found
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/track/{track_id}",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/track/{track_id}",
             )
             response.raise_for_status()
             data = response.json()
@@ -841,9 +854,9 @@ class DeezerClient:
             DeezerTrack or None if not found
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/track/isrc:{isrc}",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/track/isrc:{isrc}",
             )
             response.raise_for_status()
             data = response.json()
@@ -978,9 +991,9 @@ class DeezerClient:
             List of related DeezerArtist objects
         """
         try:
-            response = await self._rate_limited_request(
-                "GET",
-                f"/artist/{artist_id}/related",
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/artist/{artist_id}/related",
                 params={"limit": min(limit, 100)},
             )
             response.raise_for_status()
@@ -1223,11 +1236,11 @@ class DeezerClient:
             DeezerAlbum if found, None otherwise
         """
         try:
-            await self._rate_limit()
-
             # Deezer uses /album/upc:{upc} endpoint
-            client = await self._get_client()
-            response = await client.get(f"/album/upc:{upc}")
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/album/upc:{upc}",
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1321,10 +1334,11 @@ class DeezerClient:
             List of top chart tracks
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/chart/0/tracks?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/chart/0/tracks",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1351,10 +1365,11 @@ class DeezerClient:
             List of top chart albums
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/chart/0/albums?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/chart/0/albums",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1381,10 +1396,11 @@ class DeezerClient:
             List of top chart artists
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/chart/0/artists?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/chart/0/artists",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1418,11 +1434,12 @@ class DeezerClient:
             List of new release albums
         """
         try:
-            await self._rate_limit()
-
             # /editorial/0/releases gives new releases from editorial team
-            client = await self._get_client()
-            response = await client.get(f"/editorial/0/releases?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/editorial/0/releases",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1451,10 +1468,11 @@ class DeezerClient:
             List of selected albums
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/editorial/0/selection?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/editorial/0/selection",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1486,10 +1504,10 @@ class DeezerClient:
             List of genre dicts with id, name, picture URLs
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get("/genre")
+            response = await self._api_request(
+                method="GET",
+                endpoint="/genre",
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1525,10 +1543,11 @@ class DeezerClient:
             List of artists in that genre
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/genre/{genre_id}/artists?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/genre/{genre_id}/artists",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -1560,10 +1579,11 @@ class DeezerClient:
             List of radio station info dicts
         """
         try:
-            await self._rate_limit()
-
-            client = await self._get_client()
-            response = await client.get(f"/genre/{genre_id}/radios?limit={limit}")
+            response = await self._api_request(
+                method="GET",
+                endpoint=f"/genre/{genre_id}/radios",
+                params={"limit": limit},
+            )
             response.raise_for_status()
             data = response.json()
 

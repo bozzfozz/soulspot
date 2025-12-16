@@ -378,9 +378,9 @@ class ArtistSongsService:
     # Checks if it already exists (by spotify_uri OR ISRC OR title+artist), then creates or updates.
     # Returns (track, was_created, is_single) - is_single helps with stats.
     #
-    # MULTI-PROVIDER DEDUPLICATION (Nov 2025):
-    # Deezer tracks have different IDs than Spotify! We use "deezer:track:123" prefix.
-    # Check order: 1) Spotify URI 2) ISRC 3) Title+Artist (case-insensitive)
+    # MULTI-PROVIDER DEDUPLICATION (Nov 2025, Fixed Dec 2025):
+    # SpotifyUri is ONLY for Spotify! Don't create "deezer:track:xxx" - SpotifyUri validates prefix!
+    # Check order: 1) Spotify URI (if Spotify track) 2) ISRC 3) Title+Artist (case-insensitive)
     async def _process_track_dto(
         self, track_dto: "TrackDTO", artist_id: ArtistId, source: str = "spotify"
     ) -> tuple[Track | None, bool, bool]:
@@ -416,14 +416,17 @@ class ArtistSongsService:
             )
             return None, False, False
 
-        # Build URI with source prefix for cross-provider tracking
-        # Spotify: "spotify:track:xxx", Deezer: "deezer:track:xxx"
-        if source == "deezer" and track_dto.deezer_id:
-            uri_string = f"deezer:track:{track_dto.deezer_id}"
-        else:
-            uri_string = track_dto.spotify_uri or f"spotify:track:{track_dto.spotify_id}"
+        # Hey future me - SpotifyUri is ONLY for Spotify! Don't create "deezer:track:xxx" URIs,
+        # the SpotifyUri value object validates "spotify:" prefix and will reject them!
+        # For Deezer tracks, skip URI-based dedup and rely on ISRC + title/artist.
+        spotify_uri: SpotifyUri | None = None
         
-        spotify_uri = SpotifyUri.from_string(uri_string)
+        if track_dto.spotify_id:
+            # Spotify track - create proper SpotifyUri
+            spotify_uri = SpotifyUri.from_string(
+                track_dto.spotify_uri or f"spotify:track:{track_dto.spotify_id}"
+            )
+        # For Deezer tracks: NO SpotifyUri - use ISRC/title dedup only
 
         # Check if this is a single - no album reference means standalone single
         is_single = track_dto.album_spotify_id is None and track_dto.album_deezer_id is None
@@ -434,8 +437,9 @@ class ArtistSongsService:
         # MULTI-PROVIDER DEDUPLICATION: Check in order of reliability
         existing_track = None
         
-        # 1. Check by URI (exact match for same provider)
-        existing_track = await self.track_repo.get_by_spotify_uri(spotify_uri)
+        # 1. Check by URI (exact match for same provider) - ONLY for Spotify tracks!
+        if spotify_uri:
+            existing_track = await self.track_repo.get_by_spotify_uri(spotify_uri)
         
         # 2. Check by ISRC (cross-provider dedup via global identifier)
         if not existing_track and isrc:

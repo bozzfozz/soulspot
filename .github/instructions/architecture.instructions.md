@@ -319,7 +319,137 @@ class ArtistModel(Base):
 
 ---
 
-## 5. HÄUFIGE FEHLER UND FIXES
+## 5. RATE LIMITER SYSTEM (PFLICHT für externe APIs!)
+
+### 5.1 Warum zentralisiertes Rate Limiting?
+
+Externe APIs (Spotify, Deezer, MusicBrainz) haben Rate Limits:
+- **Spotify:** ~180 requests/minute (3 req/sec)
+- **Deezer:** ~50 requests/5 seconds (10 req/sec)
+- **MusicBrainz:** 1 request/second (strikt!)
+
+**Ohne Rate Limiting:** 429 Too Many Requests → Blockierung → Schlechte UX
+
+### 5.2 Der zentrale RateLimiter
+
+**Ort:** `src/soulspot/infrastructure/rate_limiter.py`
+
+```python
+from soulspot.infrastructure.rate_limiter import (
+    get_spotify_limiter,
+    get_deezer_limiter,
+    get_musicbrainz_limiter,
+)
+
+# Singleton-Pattern - ein Limiter pro Service
+spotify_limiter = get_spotify_limiter()
+deezer_limiter = get_deezer_limiter()
+```
+
+### 5.3 Wie Clients den RateLimiter nutzen
+
+```python
+# ✅ RICHTIG: _api_request Methode mit Rate Limiting
+class SpotifyClient:
+    async def _api_request(
+        self,
+        method: str,
+        url: str,
+        access_token: str,
+        params: dict | None = None,
+    ) -> httpx.Response:
+        """Rate-limited API request with automatic 429 retry."""
+        rate_limiter = get_spotify_limiter()
+        
+        for attempt in range(3):  # Max 3 retries
+            async with rate_limiter:  # ← Wartet auf Token
+                response = await client.request(...)
+            
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                await rate_limiter.handle_rate_limit_response(retry_after)
+                continue
+            
+            return response
+
+    # ALLE API-Methoden nutzen _api_request:
+    async def get_artist(self, artist_id: str, access_token: str) -> dict:
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}",
+            access_token=access_token,
+        )
+        return response.json()
+```
+
+### 5.4 Token Bucket Algorithmus
+
+```
+┌────────────────────────────────────────────────────┐
+│              Token Bucket Pattern                   │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  Bucket: [●●●●●●●●●●] (10 tokens, refill 2/sec)   │
+│                                                    │
+│  Request 1: [●●●●●●●●●○] - Token consumed          │
+│  Request 2: [●●●●●●●●○○] - Token consumed          │
+│  ...                                               │
+│  Request 10: [○○○○○○○○○○] - Bucket EMPTY!         │
+│                                                    │
+│  → Warten bis Tokens nachfüllen (500ms = 1 Token) │
+│                                                    │
+│  [●○○○○○○○○○] - 1 Token nachgefüllt               │
+│  Request 11 kann weitermachen                      │
+└────────────────────────────────────────────────────┘
+```
+
+### 5.5 Exponential Backoff bei 429
+
+```python
+# Automatisches Backoff bei 429 Errors
+# 1. Versuch: Warte 1 Sekunde
+# 2. Versuch: Warte 2 Sekunden
+# 3. Versuch: Warte 4 Sekunden
+# Nach Erfolg: Reset auf 1 Sekunde
+
+await rate_limiter.handle_rate_limit_response(retry_after=5)
+# → Wartet 5 Sekunden (oder adaptiv wenn kein retry_after)
+# → Erhöht internen Backoff-Zähler
+```
+
+### 5.6 Rate Limiter REGELN
+
+| Regel | Erklärung |
+|-------|-----------|
+| **Clients MÜSSEN `_api_request` nutzen** | Nie direktes `client.get()` für API-Calls |
+| **Ein Limiter pro Service** | Singleton via `get_spotify_limiter()` etc. |
+| **Immer Retry-After respektieren** | Header aus 429-Response hat Priorität |
+| **Max 3 Retries** | Verhindert infinite loops |
+| **Nach Erfolg: Reset Backoff** | `rate_limiter.reset_backoff()` automatisch |
+
+### 5.7 Neue API-Methode hinzufügen (Beispiel)
+
+```python
+# ✅ RICHTIG: Neue Methode nutzt _api_request
+async def get_new_endpoint(self, id: str, access_token: str) -> dict:
+    response = await self._api_request(
+        method="GET",
+        url=f"{self.API_BASE_URL}/new-endpoint/{id}",
+        access_token=access_token,
+    )
+    response.raise_for_status()
+    return response.json()
+
+# ❌ FALSCH: Direkter HTTP-Call ohne Rate Limiting!
+async def get_new_endpoint(self, id: str, access_token: str) -> dict:
+    client = await self._get_client()
+    response = await client.get(f"{self.API_BASE_URL}/new-endpoint/{id}")
+    return response.json()
+```
+
+---
+
+## 6. HÄUFIGE FEHLER UND FIXES
 
 ### ❌ Fehler 1: Route ruft Client direkt auf
 
@@ -389,7 +519,7 @@ class Artist:
 
 ---
 
-## 6. CHECKLISTE VOR JEDEM COMMIT
+## 7. CHECKLISTE VOR JEDEM COMMIT
 
 **Vor jedem Code-Commit prüfe:**
 
@@ -401,10 +531,11 @@ class Artist:
 - [ ] **Models** haben `spotify_uri` Column + `spotify_id` @property
 - [ ] Neue Repository-Methoden auch im Interface (Port) hinzugefügt?
 - [ ] Keine direkten SQLAlchemy-Imports in Domain-Layer?
+- [ ] **API-Calls nutzen `_api_request()` mit Rate Limiting?**
 
 ---
 
-## 7. QUICK REFERENCE - WO FINDE ICH WAS?
+## 8. QUICK REFERENCE - WO FINDE ICH WAS?
 
 | Was brauchst du? | Wo liegt es? |
 |------------------|--------------|
@@ -418,10 +549,11 @@ class Artist:
 | Entities (Domain Objects) | `src/soulspot/domain/entities/` |
 | DTOs (Transfer Objects) | `src/soulspot/domain/dtos/` |
 | Ports (Interfaces) | `src/soulspot/domain/ports/` |
+| **Rate Limiter** | `src/soulspot/infrastructure/rate_limiter.py` |
 
 ---
 
-## 8. DIAGRAMM: VOLLSTÄNDIGER REQUEST-FLOW
+## 9. DIAGRAMM: VOLLSTÄNDIGER REQUEST-FLOW
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐

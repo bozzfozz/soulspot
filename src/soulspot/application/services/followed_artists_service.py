@@ -16,7 +16,9 @@ DEDUPLICATION STRATEGY:
 - Artists are deduplicated by:
   1. Service-specific ID (spotify_uri, deezer_id)
   2. Name (case-insensitive fallback)
-- Albums are deduplicated by: URI (spotify:album:xxx OR deezer:album:xxx)
+- Albums are deduplicated by:
+  1. SpotifyUri (for Spotify albums ONLY - SpotifyUri validates "spotify:" prefix!)
+  2. title + artist_name (cross-service, case-insensitive)
 - Cross-service deduplication by: normalized(artist_name + title)
 - This prevents duplicates when same artist/album comes from different providers
 """
@@ -626,14 +628,19 @@ class FollowedArtistsService:
                 )
 
         # 2. Fallback to Deezer (NO AUTH NEEDED!)
+        # Hey future me - SMART LOOKUP! Pass the stored deezer_id if we have it,
+        # so we don't need to search by name every time. This is the "Übersetzer"!
         if not albums_dtos and self._deezer_plugin and artist.name:
             try:
-                albums_dtos = await self._fetch_albums_from_deezer(artist.name)
+                albums_dtos = await self._fetch_albums_from_deezer(
+                    artist_name=artist.name,
+                    deezer_artist_id=artist.deezer_id,  # Pass stored ID!
+                )
                 if albums_dtos:
                     source = "deezer"
                     logger.info(
                         f"Fetched {len(albums_dtos)} albums from Deezer fallback "
-                        f"for {artist.name}"
+                        f"for {artist.name} (deezer_id={artist.deezer_id})"
                     )
             except Exception as e:
                 logger.warning(f"Deezer fallback also failed for {artist.name}: {e}")
@@ -677,22 +684,22 @@ class FollowedArtistsService:
                 continue
             seen_keys.add(norm_key)
 
-            # Handle both Spotify and Deezer IDs
+            # Handle Spotify vs Deezer albums differently
+            # Hey future me - Deezer albums DON'T have Spotify URIs!
+            # SpotifyUri validates "spotify:" prefix, so we can't create pseudo-URIs.
+            spotify_uri: SpotifyUri | None = None
+            
             if album_dto.spotify_id:
+                # Spotify album - create proper SpotifyUri
                 spotify_uri = SpotifyUri.from_string(
                     album_dto.spotify_uri or f"spotify:album:{album_dto.spotify_id}"
                 )
-            else:
-                # Deezer album - create a pseudo-URI for deduplication
-                spotify_uri = SpotifyUri.from_string(
-                    f"deezer:album:{album_dto.deezer_id or 'unknown'}"
-                )
-
-            # Check if album already exists (by URI)
-            existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
-            if existing_album:
-                stats["skipped"] += 1
-                continue
+                # Check if album already exists by Spotify URI
+                existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
+                if existing_album:
+                    stats["skipped"] += 1
+                    continue
+            # For Deezer albums: NO SpotifyUri, skip URI-based dedup check
             
             # Additional check: Search by title + artist to catch cross-service duplicates
             # Hey future me - this catches albums that exist with different source URI
@@ -730,19 +737,24 @@ class FollowedArtistsService:
         )
         return stats  # type: ignore[return-value]
 
-    async def _fetch_albums_from_deezer(self, artist_name: str) -> list:
+    async def _fetch_albums_from_deezer(
+        self, 
+        artist_name: str,
+        deezer_artist_id: str | None = None,
+    ) -> list:
         """Fetch artist albums from Deezer as fallback.
 
         Hey future me - Deezer uses different artist IDs!
         Strategy:
-        1. Search Deezer for the artist by name
-        2. Get the first (best) match's Deezer ID
-        3. Fetch albums using Deezer artist ID
+        1. If we HAVE deezer_id → use it directly (FASTER, MORE ACCURATE!)
+        2. If NO deezer_id → Search Deezer for the artist by name (fallback)
+        3. Fetch albums using the resolved Deezer artist ID
         
         NO AUTH NEEDED for any of this!
 
         Args:
-            artist_name: Artist name to search on Deezer
+            artist_name: Artist name to search on Deezer (fallback)
+            deezer_artist_id: Deezer artist ID if we have it (preferred!)
 
         Returns:
             list[AlbumDTO] from Deezer
@@ -751,30 +763,41 @@ class FollowedArtistsService:
             return []
 
         try:
-            # Search for artist on Deezer
-            search_result = await self._deezer_plugin.search_artists(
-                query=artist_name, limit=5
-            )
+            # SMART LOOKUP: Use stored deezer_id if available!
+            # Hey future me - this is the "Übersetzer" - we TRANSLATE our stored ID
+            # to the correct Deezer API call, instead of searching by name every time!
+            resolved_deezer_id = deezer_artist_id
+            
+            if not resolved_deezer_id:
+                # Fallback: Search for artist on Deezer by name
+                logger.debug(f"No Deezer ID stored for '{artist_name}', searching...")
+                search_result = await self._deezer_plugin.search_artists(
+                    query=artist_name, limit=5
+                )
 
-            if not search_result.items:
-                logger.debug(f"No Deezer artist found for '{artist_name}'")
-                return []
+                if not search_result.items:
+                    logger.debug(f"No Deezer artist found for '{artist_name}'")
+                    return []
 
-            # Take the first match (usually best result)
-            deezer_artist = search_result.items[0]
-            deezer_artist_id = deezer_artist.deezer_id
+                # Take the first match (usually best result)
+                deezer_artist = search_result.items[0]
+                resolved_deezer_id = deezer_artist.deezer_id
 
-            if not deezer_artist_id:
-                return []
+                if not resolved_deezer_id:
+                    return []
 
-            logger.debug(
-                f"Mapped artist '{artist_name}' to Deezer ID {deezer_artist_id} "
-                f"({deezer_artist.name})"
-            )
+                logger.debug(
+                    f"Mapped artist '{artist_name}' to Deezer ID {resolved_deezer_id} "
+                    f"({deezer_artist.name})"
+                )
+            else:
+                logger.debug(
+                    f"Using stored Deezer ID {resolved_deezer_id} for '{artist_name}'"
+                )
 
             # Fetch albums from Deezer (NO AUTH NEEDED!)
             albums_response = await self._deezer_plugin.get_artist_albums(
-                artist_id=deezer_artist_id,
+                artist_id=resolved_deezer_id,
                 limit=50,
             )
 

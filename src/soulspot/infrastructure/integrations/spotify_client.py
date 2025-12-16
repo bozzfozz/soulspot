@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import logging
 import secrets
 from typing import Any, cast
 from urllib.parse import urlencode
@@ -11,6 +12,9 @@ import httpx
 from soulspot.config.settings import SpotifySettings
 from soulspot.domain.exceptions import ConfigurationError
 from soulspot.domain.ports import ISpotifyClient
+from soulspot.infrastructure.rate_limiter import get_spotify_limiter
+
+logger = logging.getLogger(__name__)
 
 
 class SpotifyClient(ISpotifyClient):
@@ -50,6 +54,80 @@ class SpotifyClient(ISpotifyClient):
         if self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    # Hey future me - CENTRALIZED API REQUEST with Rate Limiting!
+    # All API calls go through here to respect Spotify's rate limits.
+    # Features:
+    # - Token Bucket rate limiting (prevents 429s)
+    # - Automatic retry with exponential backoff on 429
+    # - Respects Retry-After header from Spotify
+    # - Max 3 retries to prevent infinite loops
+    async def _api_request(
+        self,
+        method: str,
+        url: str,
+        access_token: str,
+        params: dict[str, Any] | None = None,
+        max_retries: int = 3,
+    ) -> httpx.Response:
+        """Make rate-limited API request with automatic retry on 429.
+        
+        Hey future me - ALL Spotify API calls should use this method!
+        It handles rate limiting and retries automatically.
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            url: Full URL to request
+            access_token: OAuth access token
+            params: Query parameters
+            max_retries: Max retries on 429 (default 3)
+            
+        Returns:
+            httpx.Response object
+            
+        Raises:
+            httpx.HTTPStatusError: On non-retryable HTTP errors
+        """
+        client = await self._get_client()
+        rate_limiter = get_spotify_limiter()
+        
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        for attempt in range(max_retries + 1):
+            # Wait for rate limiter token
+            async with rate_limiter:
+                response = await client.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    headers=headers,
+                )
+            
+            # Check for rate limit
+            if response.status_code == 429:
+                if attempt >= max_retries:
+                    logger.error(
+                        f"Spotify API rate limited after {max_retries} retries: {url}"
+                    )
+                    response.raise_for_status()
+                
+                # Get Retry-After header (seconds to wait)
+                retry_after_str = response.headers.get("Retry-After")
+                retry_after = int(retry_after_str) if retry_after_str else None
+                
+                # Wait with adaptive backoff
+                wait_time = await rate_limiter.handle_rate_limit_response(retry_after)
+                logger.warning(
+                    f"Spotify 429 Rate Limit (attempt {attempt + 1}/{max_retries}): "
+                    f"Waited {wait_time:.1f}s, retrying {url}"
+                )
+                continue
+            
+            # Success or other error - don't retry
+            return response
+        
+        # Should not reach here, but just in case
+        return response
 
     # Yo future me, PKCE is that OAuth security dance Spotify requires. This generates a
     # random 32-byte code verifier. We strip the "=" padding because OAuth specs say so.
@@ -301,11 +379,11 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
-        response = await client.get(
-            f"{self.API_BASE_URL}/playlists/{playlist_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
+        # Hey future me - now uses _api_request for rate limiting!
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/playlists/{playlist_id}",
+            access_token=access_token,
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -338,14 +416,13 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         # Clamp limit to Spotify's max of 50
         limit = min(limit, 50)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/me/playlists",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me/playlists",
+            access_token=access_token,
             params={"limit": limit, "offset": offset},
         )
         response.raise_for_status()
@@ -368,11 +445,10 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
-        response = await client.get(
-            f"{self.API_BASE_URL}/tracks/{track_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/tracks/{track_id}",
+            access_token=access_token,
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -399,18 +475,17 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         params: dict[str, str | int] = {
             "q": query,
             "type": "track",
             "limit": limit,
         }
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/search",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/search",
+            access_token=access_token,
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -435,11 +510,10 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
-        response = await client.get(
-            f"{self.API_BASE_URL}/artists/{artist_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}",
+            access_token=access_token,
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -468,18 +542,17 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         # Spotify API accepts comma-separated IDs, max 50
         if len(artist_ids) > 50:
             artist_ids = artist_ids[:50]
 
         ids_param = ",".join(artist_ids)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/artists",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists",
+            access_token=access_token,
             params={"ids": ids_param},
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
@@ -513,17 +586,16 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         params: dict[str, str | int] = {
             "include_groups": "album,single,compilation",
             "limit": limit,
         }
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/artists/{artist_id}/albums",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}/albums",
+            access_token=access_token,
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
@@ -558,8 +630,6 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails (403 if missing user-follow-read scope)
         """
-        client = await self._get_client()
-
         # Clamp limit to Spotify's max of 50
         limit = min(limit, 50)
 
@@ -571,9 +641,10 @@ class SpotifyClient(ISpotifyClient):
         if after:
             params["after"] = after
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/me/following",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me/following",
+            access_token=access_token,
             params=params,
         )
         response.raise_for_status()
@@ -602,12 +673,11 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
-        response = await client.get(
-            f"{self.API_BASE_URL}/artists/{artist_id}/top-tracks",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}/top-tracks",
+            access_token=access_token,
             params={"market": market},
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
@@ -633,11 +703,10 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
-        response = await client.get(
-            f"{self.API_BASE_URL}/albums/{album_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/albums/{album_id}",
+            access_token=access_token,
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -664,8 +733,6 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         # Return empty list early if no IDs provided - avoids API error with empty ids param
         if not album_ids:
             return []
@@ -676,10 +743,11 @@ class SpotifyClient(ISpotifyClient):
 
         ids_param = ",".join(album_ids)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/albums",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/albums",
+            access_token=access_token,
             params={"ids": ids_param},
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
@@ -712,15 +780,14 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         # Clamp limit to Spotify's max of 50
         limit = min(limit, 50)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/albums/{album_id}/tracks",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/albums/{album_id}/tracks",
+            access_token=access_token,
             params={"limit": limit, "offset": offset},
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -746,10 +813,10 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-        response = await client.get(
-            f"{self.API_BASE_URL}/artists/{artist_id}/related-artists",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}/related-artists",
+            access_token=access_token,
         )
         response.raise_for_status()
         result = cast(dict[str, Any], response.json())
@@ -777,16 +844,16 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
         params: dict[str, str | int] = {
             "q": query,
             "type": "artist",
             "limit": limit,
         }
-        response = await client.get(
-            f"{self.API_BASE_URL}/search",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/search",
+            access_token=access_token,
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -819,16 +886,16 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
         params: dict[str, str | int] = {
             "q": query,
             "type": "album",
             "limit": limit,
         }
-        response = await client.get(
-            f"{self.API_BASE_URL}/search",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/search",
+            access_token=access_token,
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
@@ -919,15 +986,14 @@ class SpotifyClient(ISpotifyClient):
         Raises:
             httpx.HTTPError: If the request fails
         """
-        client = await self._get_client()
-
         # Spotify accepts max 50 IDs per request
         artist_ids = artist_ids[:50]
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/me/following/contains",
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me/following/contains",
+            access_token=access_token,
             params={"type": "artist", "ids": ",".join(artist_ids)},
-            headers={"Authorization": f"Bearer {access_token}"},
         )
         response.raise_for_status()
         return cast(list[bool], response.json())
@@ -970,13 +1036,12 @@ class SpotifyClient(ISpotifyClient):
         Note:
             Requires "user-library-read" scope in OAuth flow.
         """
-        client = await self._get_client()
-
         limit = min(limit, 50)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/me/tracks",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me/tracks",
+            access_token=access_token,
             params={"limit": limit, "offset": offset},
         )
         response.raise_for_status()
@@ -1010,13 +1075,12 @@ class SpotifyClient(ISpotifyClient):
         Note:
             Requires "user-library-read" scope in OAuth flow.
         """
-        client = await self._get_client()
-
         limit = min(limit, 50)
 
-        response = await client.get(
-            f"{self.API_BASE_URL}/me/albums",
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me/albums",
+            access_token=access_token,
             params={"limit": limit, "offset": offset},
         )
         response.raise_for_status()
