@@ -23,7 +23,7 @@ Deduplication Strategy:
 3. Source tracking - welcher Provider lieferte zuerst
 """
 
-from soulspot.domain.exceptions import ExternalServiceErrorfrom __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from soulspot.domain.dtos import AlbumDTO
+from soulspot.domain.exceptions import ExternalServiceError
 from soulspot.domain.ports.plugin import PluginCapability
 
 if TYPE_CHECKING:
