@@ -1339,7 +1339,7 @@ class DeezerPlugin(IMusicServicePlugin):
         """
         try:
             deezer_artists = await self._client.get_chart_artists(limit=limit)
-            return [self._convert_artist_to_dto(artist) for artist in deezer_artists]
+            return [self._convert_artist(artist) for artist in deezer_artists]
         except Exception as e:
             logger.error(f"DeezerPlugin: get_chart_artists failed: {e}")
             return []
