@@ -1045,12 +1045,3 @@ class ArtworkService:
                 f"Deezer album search failed for '{album_title}' by {artist_name}: {e}"
             )
             return None
-
-
-# =============================================================================
-# DEPRECATED ALIAS (Jan 2025)
-# Hey future me - SpotifyImageService is now ArtworkService!
-# This alias allows existing code to keep working during transition.
-# Remove this after all imports have been updated.
-# =============================================================================
-SpotifyImageService = ArtworkService
