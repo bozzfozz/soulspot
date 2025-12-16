@@ -30,6 +30,8 @@ from urllib.parse import urlencode
 
 import httpx
 
+from soulspot.domain.exceptions import ConfigurationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -183,15 +185,15 @@ class DeezerClient:
         Public API methods should NOT call this.
 
         Raises:
-            ValueError: If oauth_config is missing or incomplete
+            ConfigurationError: If oauth_config is missing or incomplete
         """
         if self._oauth_config is None:
-            raise ValueError(
+            raise ConfigurationError(
                 "DeezerClient was created without oauth_config. "
                 "Pass DeezerOAuthConfig to constructor for OAuth features."
             )
         if not self._oauth_config.app_id or not self._oauth_config.secret:
-            raise ValueError(
+            raise ConfigurationError(
                 "Deezer OAuth is not configured. "
                 "Set deezer.app_id and deezer.secret in Settings."
             )

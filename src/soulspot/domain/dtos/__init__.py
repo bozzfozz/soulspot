@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-
+from soulspot.domain.exceptions import ValidationError
 # Hey future me – ArtistDTO ist das Standard-Format für Künstler aus ALLEN Services!
 # Spotify, Deezer, Tidal – alle müssen dieses Format zurückgeben.
 # Optional fields erlauben partielle Daten (nicht jede API hat alle Infos).
@@ -62,9 +62,9 @@ class ArtistDTO:
     def __post_init__(self) -> None:
         """Validate essential fields."""
         if not self.name or not self.name.strip():
-            raise ValueError("Artist name cannot be empty")
+            raise ValidationError("Artist name cannot be empty")
         if not self.source_service:
-            raise ValueError("source_service must be specified")
+            raise ValidationError("source_service must be specified")
 
 
 # Hey future me – AlbumDTO ist das Standard-Format für Alben aus ALLEN Services!
@@ -126,11 +126,11 @@ class AlbumDTO:
     def __post_init__(self) -> None:
         """Validate essential fields."""
         if not self.title or not self.title.strip():
-            raise ValueError("Album title cannot be empty")
+            raise ValidationError("Album title cannot be empty")
         if not self.artist_name or not self.artist_name.strip():
-            raise ValueError("Artist name cannot be empty")
+            raise ValidationError("Artist name cannot be empty")
         if not self.source_service:
-            raise ValueError("source_service must be specified")
+            raise ValidationError("source_service must be specified")
 
 
 # Hey future me – TrackDTO ist das Standard-Format für Tracks aus ALLEN Services!
@@ -206,13 +206,13 @@ class TrackDTO:
     def __post_init__(self) -> None:
         """Validate essential fields."""
         if not self.title or not self.title.strip():
-            raise ValueError("Track title cannot be empty")
+            raise ValidationError("Track title cannot be empty")
         if not self.artist_name or not self.artist_name.strip():
-            raise ValueError("Artist name cannot be empty")
+            raise ValidationError("Artist name cannot be empty")
         if not self.source_service:
-            raise ValueError("source_service must be specified")
+            raise ValidationError("source_service must be specified")
         if self.duration_ms < 0:
-            raise ValueError("Duration cannot be negative")
+            raise ValidationError("Duration cannot be negative")
 
 
 # Hey future me – PlaylistDTO ist das Standard-Format für Playlists aus ALLEN Services!
@@ -258,9 +258,9 @@ class PlaylistDTO:
     def __post_init__(self) -> None:
         """Validate essential fields."""
         if not self.name or not self.name.strip():
-            raise ValueError("Playlist name cannot be empty")
+            raise ValidationError("Playlist name cannot be empty")
         if not self.source_service:
-            raise ValueError("source_service must be specified")
+            raise ValidationError("source_service must be specified")
 
 
 # Hey future me – SearchResultDTO ist Container für Suchergebnisse mit allen Typen!

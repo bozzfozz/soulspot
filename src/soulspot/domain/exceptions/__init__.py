@@ -114,3 +114,170 @@ class OperationFailedError(DomainException):
     errors, or other external factors.
     """
     pass
+
+
+# =============================================================================
+# New Exception Classes (Dec 2025)
+# These provide more specific error semantics with clear HTTP status mappings.
+# =============================================================================
+
+
+class BusinessRuleViolation(DomainException):
+    """A business rule was violated.
+
+    Raised when an operation violates business logic constraints
+    (e.g., duplicate names, invalid state transitions, conflicting operations).
+
+    HTTP Status: 400
+
+    Example:
+        raise BusinessRuleViolation("Cannot merge artist with itself")
+        raise BusinessRuleViolation("keep_id cannot be in merge_ids")
+    """
+
+    pass
+
+
+class ValidationError(DomainException):
+    """Input validation failed.
+
+    Raised when input data fails validation rules (missing fields,
+    invalid formats, out-of-range values).
+
+    HTTP Status: 422
+
+    Example:
+        raise ValidationError("Invalid Spotify artist DTO: missing spotify_id")
+        raise ValidationError("Invalid quality profile: high-quality")
+    """
+
+    pass
+
+
+class ConfigurationError(DomainException):
+    """Application misconfiguration.
+
+    Raised when required configuration is missing or invalid.
+
+    HTTP Status: 503 (Service Unavailable)
+
+    Example:
+        raise ConfigurationError("Spotify credentials not configured")
+        raise ConfigurationError("session_scope not provided")
+    """
+
+    pass
+
+
+class AuthenticationError(DomainException):
+    """User is not authenticated or token expired.
+
+    Raised when authentication is required but not provided or invalid.
+
+    HTTP Status: 401
+
+    Example:
+        raise AuthenticationError("No token found for user")
+        raise AuthenticationError("Token expired - please re-authenticate")
+    """
+
+    pass
+
+
+class AuthorizationError(DomainException):
+    """User is authenticated but not authorized for this action.
+
+    Raised when user lacks permissions for the requested operation.
+
+    HTTP Status: 403
+
+    Example:
+        raise AuthorizationError("File path is not in allowed directories")
+    """
+
+    pass
+
+
+class ExternalServiceError(DomainException):
+    """External service (Spotify, Deezer, etc.) returned an error.
+
+    Raised when an external API call fails.
+
+    HTTP Status: 502 (Bad Gateway)
+
+    Example:
+        raise ExternalServiceError("Spotify API error: 503 Service Unavailable")
+    """
+
+    pass
+
+
+class RateLimitExceededError(DomainException):
+    """External service rate limit was exceeded.
+
+    Raised when an API returns 429 Too Many Requests.
+
+    HTTP Status: 429
+
+    Example:
+        raise RateLimitExceededError("Spotify rate limit exceeded - retry after 30s")
+    """
+
+    pass
+
+
+class DuplicateEntityError(DuplicateEntityException):
+    """Alias for DuplicateEntityException with standardized naming.
+    
+    HTTP Status: 409 (Conflict)
+    """
+    
+    pass
+
+
+class PluginError(DomainException):
+    """Plugin operation failed.
+
+    Raised when a plugin (Spotify, Deezer, etc.) fails to perform an operation.
+
+    HTTP Status: 500
+
+    Example:
+        raise PluginError("Spotify plugin failed to authenticate")
+    """
+
+    pass
+
+
+# =============================================================================
+# Public API - All exceptions that can be imported
+# =============================================================================
+__all__ = [
+    # Base
+    "DomainException",
+    # Entity exceptions
+    "EntityNotFoundException",
+    "EntityNotFoundError",  # Alias
+    "DuplicateEntityException",
+    "DuplicateEntityError",  # Alias
+    # Validation exceptions
+    "ValidationException",
+    "ValidationError",
+    # State exceptions
+    "InvalidStateException",
+    "InvalidOperationError",  # Alias (deprecated)
+    # Business logic
+    "BusinessRuleViolation",
+    # External service exceptions
+    "ExternalServiceError",
+    "RateLimitExceededError",
+    # Auth exceptions
+    "AuthenticationError",
+    "AuthorizationError",
+    "TokenRefreshException",
+    # Configuration
+    "ConfigurationError",
+    # Generic
+    "OperationFailedError",  # Deprecated
+    "PluginError",
+]

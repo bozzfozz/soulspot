@@ -29,6 +29,8 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.domain.exceptions import ValidationError
+
 from soulspot.infrastructure.persistence.models import AppSettingsModel
 
 logger = logging.getLogger(__name__)
@@ -520,7 +522,7 @@ class AppSettingsService:
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         level_upper = level.upper()
         if level_upper not in valid_levels:
-            raise ValueError(
+            raise ValidationError(
                 f"Invalid log level: {level}. Must be one of {valid_levels}"
             )
 

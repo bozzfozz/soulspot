@@ -7,6 +7,8 @@ malicious path traversal attempts (e.g., ../../etc/passwd).
 import logging
 from pathlib import Path
 
+from soulspot.domain.exceptions import AuthorizationError, ValidationError
+
 logger = logging.getLogger(__name__)
 
 # Allowed file extensions for audio files
@@ -59,7 +61,7 @@ class PathValidator:
             The validated path as a Path object
 
         Raises:
-            ValueError: If the path is outside the base directory or invalid
+            AuthorizationError: If the path is outside the base directory or invalid
         """
         # Convert to Path objects
         path_obj = Path(path)
@@ -72,7 +74,7 @@ class PathValidator:
                 base_dir_obj = base_dir_obj.resolve()
             except (OSError, RuntimeError) as e:
                 logger.warning("Failed to resolve path %s: %s", path, e)
-                raise ValueError(f"Invalid path: {path}") from e
+                raise AuthorizationError(f"Invalid path: {path}") from e
 
         # Check if path is within base directory
         try:
@@ -83,7 +85,7 @@ class PathValidator:
                     path_obj,
                     base_dir_obj,
                 )
-                raise ValueError(
+                raise AuthorizationError(
                     f"Path {path_obj} is outside allowed directory {base_dir_obj}"
                 )
         except AttributeError:
@@ -96,7 +98,7 @@ class PathValidator:
                     path_obj,
                     base_dir_obj,
                 )
-                raise ValueError(
+                raise AuthorizationError(
                     f"Path {path_obj} is outside allowed directory {base_dir_obj}"
                 ) from e
 
@@ -124,7 +126,7 @@ class PathValidator:
             The validated path as a Path object
 
         Raises:
-            ValueError: If the file extension is not allowed
+            ValidationError: If the file extension is not allowed
         """
         path_obj = Path(path)
 
@@ -137,7 +139,7 @@ class PathValidator:
                     path_obj,
                     allowed_extensions,
                 )
-                raise ValueError(
+                raise ValidationError(
                     f"File extension {extension} is not allowed. "
                     f"Allowed extensions: {', '.join(sorted(allowed_extensions))}"
                 )
@@ -243,7 +245,8 @@ def validate_safe_path(
         The validated path as a Path object
 
     Raises:
-        ValueError: If the path is invalid
+        AuthorizationError: If the path is outside allowed directory
+        ValidationError: If the file extension is not allowed
 
     Example:
         >>> from pathlib import Path
@@ -251,11 +254,11 @@ def validate_safe_path(
         >>> # This is safe
         >>> validate_safe_path("album/track.mp3", base, allowed_extensions={".mp3"})
         PosixPath('/mnt/music/album/track.mp3')
-        >>> # This would raise ValueError (path traversal)
+        >>> # This would raise AuthorizationError (path traversal)
         >>> validate_safe_path("../../etc/passwd", base)
         Traceback (most recent call last):
         ...
-        ValueError: Path ... is outside allowed directory ...
+        AuthorizationError: Path ... is outside allowed directory ...
     """
     # Validate path is within base directory
     validated_path = PathValidator.validate_path_within_base(

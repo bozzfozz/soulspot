@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 
 from soulspot.config.settings import SlskdSettings
+from soulspot.domain.exceptions import ConfigurationError, ValidationError
 from soulspot.domain.ports import ISlskdClient
 
 
@@ -24,19 +25,19 @@ class SlskdClient(ISlskdClient):
             settings: slskd configuration settings
 
         Raises:
-            ValueError: If URL is missing or doesn't have http:// or https:// protocol
+            ConfigurationError: If URL is missing or doesn't have http:// or https:// protocol
         """
         self.settings = settings
 
         # Validate URL has protocol before httpx tries to use it
         url = settings.url.strip()
         if not url:
-            raise ValueError(
+            raise ConfigurationError(
                 "slskd URL is empty. Please configure slskd.url in Settings or "
                 "set SLSKD_URL environment variable."
             )
         if not url.startswith(("http://", "https://")):
-            raise ValueError(
+            raise ConfigurationError(
                 f"slskd URL '{url}' is missing http:// or https:// protocol. "
                 "Please use a valid URL like 'http://localhost:5030'"
             )
@@ -188,10 +189,10 @@ class SlskdClient(ISlskdClient):
 
         Raises:
             httpx.HTTPError: If the request fails
-            ValueError: If download_id format is invalid
+            ValidationError: If download_id format is invalid
         """
         if "/" not in download_id:
-            raise ValueError("Invalid download_id format. Expected: username/filename")
+            raise ValidationError("Invalid download_id format. Expected: username/filename")
 
         username, filename = download_id.split("/", 1)
         client = await self._get_client()
@@ -279,10 +280,10 @@ class SlskdClient(ISlskdClient):
 
         Raises:
             httpx.HTTPError: If the request fails
-            ValueError: If download_id format is invalid
+            ValidationError: If download_id format is invalid
         """
         if "/" not in download_id:
-            raise ValueError("Invalid download_id format. Expected: username/filename")
+            raise ValidationError("Invalid download_id format. Expected: username/filename")
 
         username, filename = download_id.split("/", 1)
         client = await self._get_client()

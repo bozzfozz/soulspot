@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from soulspot.domain.exceptions import TokenRefreshException
+from soulspot.domain.exceptions import (
+    AuthenticationError,
+    ConfigurationError,
+    TokenRefreshException,
+)
 from soulspot.domain.ports import ISpotifyClient
 
 if TYPE_CHECKING:
@@ -260,10 +264,10 @@ class TokenManager:
         """
         token_info = self._tokens.get(user_id)
         if not token_info:
-            raise ValueError(f"No token found for user: {user_id}")
+            raise AuthenticationError(f"No token found for user: {user_id}")
 
         if not token_info.refresh_token:
-            raise ValueError(f"No refresh token available for user: {user_id}")
+            raise AuthenticationError(f"No refresh token available for user: {user_id}")
 
         # Refresh the token
         token_response = await self._spotify_client.refresh_token(
@@ -415,7 +419,7 @@ class DatabaseTokenManager:
                 "Migrate to session_scope for better connection handling."
             )
         else:
-            raise ValueError("Either session_scope or get_db_session must be provided")
+            raise ConfigurationError("Either session_scope or get_db_session must be provided")
 
     # Hey future me - THIS is the main method for background workers! Returns access_token string
     # if valid token exists, None otherwise. Workers should check for None and skip work gracefully.
@@ -490,7 +494,7 @@ class DatabaseTokenManager:
         # Hey future me - using context manager pattern ensures proper connection cleanup!
         if not self._session_scope:
             logger.error("No session_scope configured for DatabaseTokenManager")
-            raise RuntimeError("session_scope not configured")
+            raise ConfigurationError("session_scope not configured")
 
         async with self._session_scope() as db_session:
             try:

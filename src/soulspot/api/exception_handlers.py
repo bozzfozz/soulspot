@@ -14,10 +14,19 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from soulspot.domain.exceptions import (
+    # Old exception names (kept for backwards compatibility)
     DuplicateEntityException,
     EntityNotFoundException,
     InvalidStateException,
     ValidationException,
+    # New exception names (Dec 2025)
+    AuthenticationError,
+    AuthorizationError,
+    BusinessRuleViolation,
+    ConfigurationError,
+    ExternalServiceError,
+    RateLimitExceededError,
+    ValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -244,4 +253,121 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
+        )
+
+    # =========================================================================
+    # New Exception Handlers (Dec 2025)
+    # These provide proper HTTP status codes for the new domain exceptions.
+    # =========================================================================
+
+    @app.exception_handler(BusinessRuleViolation)
+    async def business_rule_violation_handler(
+        request: Request, exc: BusinessRuleViolation
+    ) -> JSONResponse:
+        """Handle business rule violations with 400 Bad Request."""
+        logger.warning(
+            "Business rule violation at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(
+        request: Request, exc: ValidationError
+    ) -> JSONResponse:
+        """Handle validation errors with 422 Unprocessable Entity."""
+        logger.warning(
+            "Validation error at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(ConfigurationError)
+    async def configuration_error_handler(
+        request: Request, exc: ConfigurationError
+    ) -> JSONResponse:
+        """Handle configuration errors with 503 Service Unavailable."""
+        logger.error(
+            "Configuration error at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(AuthenticationError)
+    async def authentication_error_handler(
+        request: Request, exc: AuthenticationError
+    ) -> JSONResponse:
+        """Handle authentication errors with 401 Unauthorized."""
+        logger.warning(
+            "Authentication error at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(AuthorizationError)
+    async def authorization_error_handler(
+        request: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        """Handle authorization errors with 403 Forbidden."""
+        logger.warning(
+            "Authorization error at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(ExternalServiceError)
+    async def external_service_error_handler(
+        request: Request, exc: ExternalServiceError
+    ) -> JSONResponse:
+        """Handle external service errors with 502 Bad Gateway."""
+        logger.error(
+            "External service error at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"detail": exc.message},
+        )
+
+    @app.exception_handler(RateLimitExceededError)
+    async def rate_limit_exceeded_handler(
+        request: Request, exc: RateLimitExceededError
+    ) -> JSONResponse:
+        """Handle rate limit errors with 429 Too Many Requests."""
+        logger.warning(
+            "Rate limit exceeded at %s: %s",
+            request.url.path,
+            exc.message,
+            extra={"path": request.url.path, "error": exc.message},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": exc.message},
         )

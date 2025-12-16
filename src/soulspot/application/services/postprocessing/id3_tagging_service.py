@@ -17,6 +17,7 @@ from mutagen.mp3 import MP3
 
 from soulspot.config import Settings
 from soulspot.domain.entities import Album, Artist, Track
+from soulspot.domain.exceptions import AuthorizationError
 from soulspot.infrastructure.security import PathValidator
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise ValueError(f"File path {file_path} is not in allowed directories")
+            raise AuthorizationError(f"File path {file_path} is not in allowed directories")
 
         # Use validated path for all subsequent operations
         file_path = validated_path
@@ -377,7 +378,7 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise ValueError(f"File path {file_path} is not in allowed directories")
+            raise AuthorizationError(f"File path {file_path} is not in allowed directories")
 
         # Use validated path
         file_path = validated_path

@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import httpx
 
 from soulspot.config.settings import SpotifySettings
+from soulspot.domain.exceptions import ConfigurationError
 from soulspot.domain.ports import ISpotifyClient
 
 
@@ -102,7 +103,7 @@ class SpotifyClient(ISpotifyClient):
             Authorization URL
 
         Raises:
-            ValueError: If client_id or redirect_uri is not configured
+            ConfigurationError: If client_id or redirect_uri is not configured
         """
         # Hey future me, ALWAYS validate credentials are set before building auth URL!
         # Empty values cause cryptic Spotify errors. Better to fail fast here with
@@ -111,14 +112,14 @@ class SpotifyClient(ISpotifyClient):
         # Jan 2025: Added client_id check! Users were getting "missing required parameter
         # client_id" from Spotify with no context. Now we catch it early with helpful message.
         if not self.settings.client_id or not self.settings.client_id.strip():
-            raise ValueError(
+            raise ConfigurationError(
                 "SPOTIFY_CLIENT_ID is not configured. "
                 "Configure it via Settings UI > Services > Spotify, "
                 "or set SPOTIFY_CLIENT_ID in your environment/docker-compose.yml. "
                 "Get credentials at https://developer.spotify.com/dashboard"
             )
         if not self.settings.redirect_uri or not self.settings.redirect_uri.strip():
-            raise ValueError(
+            raise ConfigurationError(
                 "SPOTIFY_REDIRECT_URI is not configured. "
                 "Set it in .env to match your callback URL "
                 "(e.g., http://localhost:8000/api/auth/callback)"

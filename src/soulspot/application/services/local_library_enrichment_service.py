@@ -44,6 +44,7 @@ from soulspot.application.services.app_settings_service import AppSettingsServic
 from soulspot.application.services.artwork_service import ArtworkService
 from soulspot.domain.dtos import AlbumDTO, ArtistDTO
 from soulspot.domain.entities import Album, Artist
+from soulspot.domain.exceptions import BusinessRuleViolation, EntityNotFoundError
 from soulspot.infrastructure.integrations.coverartarchive_client import (
     CoverArtArchiveClient,
 )
@@ -2702,10 +2703,10 @@ class LocalLibraryEnrichmentService:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         if keep_id in merge_ids:
-            raise ValueError("keep_id cannot be in merge_ids")
+            raise BusinessRuleViolation("keep_id cannot be in merge_ids")
 
         if not merge_ids:
-            raise ValueError("merge_ids cannot be empty")
+            raise BusinessRuleViolation("merge_ids cannot be empty")
 
         # Verify all artists exist
         keep_stmt = select(ArtistModel).where(ArtistModel.id == keep_id)
@@ -2713,7 +2714,7 @@ class LocalLibraryEnrichmentService:
         keep_artist = keep_result.scalar_one_or_none()
 
         if not keep_artist:
-            raise ValueError(f"Keep artist {keep_id} not found")
+            raise EntityNotFoundError(f"Keep artist {keep_id} not found")
 
         merge_stmt = select(ArtistModel).where(ArtistModel.id.in_(merge_ids))
         merge_result = await self._session.execute(merge_stmt)
@@ -2722,7 +2723,7 @@ class LocalLibraryEnrichmentService:
         if len(merge_artists) != len(merge_ids):
             found_ids = {a.id for a in merge_artists}
             missing = set(merge_ids) - found_ids
-            raise ValueError(f"Merge artists not found: {missing}")
+            raise EntityNotFoundError(f"Merge artists not found: {missing}")
 
         stats = {
             "tracks_moved": 0,
@@ -2888,10 +2889,10 @@ class LocalLibraryEnrichmentService:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         if keep_id in merge_ids:
-            raise ValueError("keep_id cannot be in merge_ids")
+            raise BusinessRuleViolation("keep_id cannot be in merge_ids")
 
         if not merge_ids:
-            raise ValueError("merge_ids cannot be empty")
+            raise BusinessRuleViolation("merge_ids cannot be empty")
 
         # Verify albums exist
         keep_stmt = select(AlbumModel).where(AlbumModel.id == keep_id)
@@ -2899,7 +2900,7 @@ class LocalLibraryEnrichmentService:
         keep_album = keep_result.scalar_one_or_none()
 
         if not keep_album:
-            raise ValueError(f"Keep album {keep_id} not found")
+            raise EntityNotFoundError(f"Keep album {keep_id} not found")
 
         merge_stmt = select(AlbumModel).where(AlbumModel.id.in_(merge_ids))
         merge_result = await self._session.execute(merge_stmt)
@@ -2908,7 +2909,7 @@ class LocalLibraryEnrichmentService:
         if len(merge_albums) != len(merge_ids):
             found_ids = {a.id for a in merge_albums}
             missing = set(merge_ids) - found_ids
-            raise ValueError(f"Merge albums not found: {missing}")
+            raise EntityNotFoundError(f"Merge albums not found: {missing}")
 
         stats = {
             "tracks_moved": 0,

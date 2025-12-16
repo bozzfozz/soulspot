@@ -33,6 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.infrastructure.observability.log_messages import LogMessages
 
 from soulspot.domain.entities import Track
+from soulspot.domain.exceptions import (
+    ConfigurationError,
+    EntityNotFoundError,
+    BusinessRuleViolation,
+)
 from soulspot.domain.value_objects import ArtistId, SpotifyUri, TrackId
 from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
@@ -104,7 +109,7 @@ class ArtistSongsService:
             ValueError: If spotify_plugin was not provided during initialization
         """
         if self._spotify_plugin is None:
-            raise ValueError(
+            raise ConfigurationError(
                 "SpotifyPlugin is required for this operation. "
                 "Initialize ArtistSongsService with spotify_plugin parameter."
             )
@@ -154,7 +159,7 @@ class ArtistSongsService:
         # Verify artist exists in our DB
         artist = await self.artist_repo.get_by_id(artist_id)
         if not artist:
-            raise ValueError(f"Artist not found: {artist_id.value}")
+            raise EntityNotFoundError(f"Artist not found: {artist_id.value}")
 
         # Extract Spotify artist ID from URI if available
         spotify_artist_id = None
@@ -485,7 +490,7 @@ class ArtistSongsService:
         # Get the created track entity
         new_track = await self.track_repo.get(TrackId(track_id))
         if not new_track:
-            raise ValueError(f"Track not found after creation: {track_id}")
+            raise EntityNotFoundError(f"Track not found after creation: {track_id}")
 
         logger.info(f"Created new track: {track_dto.title}")
 
@@ -522,10 +527,10 @@ class ArtistSongsService:
         track = await self.track_repo.get_by_id(track_id)
 
         if not track:
-            raise ValueError(f"Track not found: {track_id.value}")
+            raise EntityNotFoundError(f"Track not found: {track_id.value}")
 
         if track.artist_id != artist_id:
-            raise ValueError(
+            raise BusinessRuleViolation(
                 f"Track {track_id.value} does not belong to artist {artist_id.value}"
             )
 

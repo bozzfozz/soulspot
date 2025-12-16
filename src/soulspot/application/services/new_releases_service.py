@@ -23,7 +23,7 @@ Deduplication Strategy:
 3. Source tracking - welcher Provider lieferte zuerst
 """
 
-from __future__ import annotations
+from soulspot.domain.exceptions import ExternalServiceErrorfrom __future__ import annotations
 
 import asyncio
 import logging
@@ -217,7 +217,7 @@ class NewReleasesService:
         )
         
         if not result.get("success"):
-            raise Exception(result.get("error", "Unknown Deezer error"))
+            raise ExternalServiceError(f"Deezer API error: {result.get('error', 'Unknown Deezer error')}")
         
         albums: list[AlbumDTO] = []
         for album_data in result.get("albums", []):

@@ -486,6 +486,8 @@ class MyWorker:
 
 ## 12. Checkliste für neue Worker
 
+### Standalone Loop Worker (Periodic Tasks)
+
 - [ ] Erbt von keiner Base-Klasse (Composition over Inheritance)
 - [ ] Hat `__init__`, `start()`, `stop()`, `_run_loop()`, `_do_work()`, `get_status()`
 - [ ] `start()` und `stop()` sind idempotent
@@ -498,13 +500,187 @@ class MyWorker:
 - [ ] Respektiert App Settings für enable/disable
 - [ ] Hat Circuit Breaker wenn externe Services aufgerufen werden
 
+### Job-Based Worker (Event-Triggered Tasks)
+
+- [ ] Erbt von keiner Base-Klasse
+- [ ] Hat `__init__`, `register()`, `_handle_*()`, `enqueue_*()` (public API)
+- [ ] Handler wirft ValueError für bad data (no retry)
+- [ ] Handler wirft Exception für transient errors (triggers retry)
+- [ ] Session per job execution (via `db.session_scope()`)
+- [ ] Registered in `lifecycle.py` via `worker.register()` BEFORE `job_queue.start()`
+- [ ] JobQueue stored on `app.state` für Status-Abfrage
+- [ ] Uses JobQueue's built-in retry/priority/concurrency
+
+### Wann welches Pattern wählen?
+
+| Situation | Pattern |
+|-----------|---------|
+| Alle X Minuten prüfen (sync, cleanup) | Standalone Loop |
+| User-Aktion verarbeiten (download, scan) | Job-Based |
+| Retry/Persistence wichtig | Job-Based |
+| Unabhängige Arbeit | Standalone Loop |
+
 ---
 
-## 13. Zusammenfassung
+## 13. Job-Based Worker Pattern (Alternative)
+
+Für Worker die **Jobs aus einer Queue verarbeiten** statt periodisch zu laufen:
+
+```python
+class JobBasedWorker:
+    """Worker that processes jobs from JobQueue.
+    
+    This pattern is used when:
+    - Work is triggered by external events (user requests, scan completion)
+    - Jobs should be persisted and retried on failure
+    - Concurrency is managed by the JobQueue, not the worker
+    
+    Examples: DownloadWorker, MetadataWorker, LibraryScanWorker
+    """
+    
+    def __init__(
+        self,
+        job_queue: JobQueue,
+        other_deps...,
+    ) -> None:
+        """Initialize with dependencies.
+        
+        NOTE: No start/stop methods - lifecycle is managed by JobQueue!
+        """
+        self._job_queue = job_queue
+        # Store other dependencies
+        # Optionally create use_case instance
+    
+    def register(self) -> None:
+        """Register job handlers with queue.
+        
+        Call AFTER app is fully initialized!
+        This tells JobQueue: "when JobType.X arrives, call my handler"
+        """
+        self._job_queue.register_handler(
+            JobType.MY_JOB_TYPE,
+            self._handle_my_job
+        )
+    
+    async def _handle_my_job(self, job: Job) -> dict[str, Any]:
+        """Handle a single job.
+        
+        Called by JobQueue when job is ready to process.
+        
+        Args:
+            job: The job with payload to process
+            
+        Returns:
+            Result dict (stored in job.result)
+            
+        Raises:
+            Exception: Triggers retry if max_retries not reached
+            ValueError: Marks job as FAILED (no retry for bad data)
+        """
+        # Extract and validate payload
+        required_param = job.payload.get("required_param")
+        if not required_param:
+            raise ValueError("Missing required_param in job payload")
+        
+        # Execute work (usually via use case)
+        result = await self._do_actual_work(required_param)
+        
+        # Check for errors
+        if result.error_message:
+            raise Exception(result.error_message)  # Triggers retry
+        
+        return {
+            "status": "completed",
+            "processed": result.count,
+        }
+    
+    async def enqueue_job(
+        self,
+        param: str,
+        max_retries: int = 3,
+        priority: int = 0,
+    ) -> str:
+        """Public API to queue a job.
+        
+        Called by routes/services to queue work.
+        Returns job_id for tracking.
+        """
+        return await self._job_queue.enqueue(
+            job_type=JobType.MY_JOB_TYPE,
+            payload={"required_param": param},
+            max_retries=max_retries,
+            priority=priority,
+        )
+```
+
+### Unterschiede zwischen Patterns
+
+| Aspekt | Standalone Loop Worker | Job-Based Worker |
+|--------|------------------------|------------------|
+| Lifecycle | Eigene `start()`/`stop()` | Von JobQueue verwaltet |
+| Trigger | Periodisch (Intervall) | Event-basiert (Job enqueued) |
+| Retry | Manuell implementiert | JobQueue built-in |
+| Concurrency | Eigener Task | JobQueue `max_concurrent` |
+| Status | `get_status()` auf Worker | `job_queue.get_stats()` |
+| Beispiele | CleanupWorker, SpotifySyncWorker | DownloadWorker, MetadataWorker |
+
+### Wann welches Pattern?
+
+**Standalone Loop Worker verwenden wenn:**
+- Arbeit periodisch passieren muss (alle X Minuten)
+- Keine externe Queue/Persistence nötig
+- Worker unabhängig von anderen Components
+
+**Job-Based Worker verwenden wenn:**
+- Arbeit durch User-Aktionen getriggert wird
+- Jobs retried/tracked werden sollen
+- Mehrere Worker-Types dieselbe Queue teilen
+
+### Job-Based Worker Registration in Lifecycle
+
+```python
+# lifecycle.py - Job-based worker registration
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # === SETUP ===
+    
+    # 1. Create JobQueue first
+    job_queue = JobQueue(max_concurrent_jobs=3)
+    
+    # 2. Create job-based workers
+    download_worker = DownloadWorker(
+        job_queue=job_queue,
+        slskd_client=slskd_client,
+        track_repository=track_repo,
+        download_repository=download_repo,
+    )
+    
+    # 3. Register handlers (tells queue which handler for which job type)
+    download_worker.register()
+    
+    # 4. Start the JobQueue (starts worker loops)
+    await job_queue.start(num_workers=3)
+    
+    # 5. Store on app.state
+    app.state.job_queue = job_queue
+    app.state.download_worker = download_worker
+    
+    yield
+    
+    # === SHUTDOWN ===
+    
+    # Stop JobQueue (all job-based workers stop automatically)
+    await job_queue.stop()
+```
+
+---
+
+## 14. Zusammenfassung
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      WORKER LIFECYCLE                            │
+│                  STANDALONE LOOP WORKER                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  __init__()    │ Store dependencies, init state                 │
 │  start()       │ Create asyncio.Task, idempotent                │
@@ -512,6 +688,16 @@ class MyWorker:
 │  _do_work()    │ Actual work, may raise exceptions              │
 │  stop()        │ Cancel task, cleanup, idempotent               │
 │  get_status()  │ Return dict for monitoring/UI                  │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   JOB-BASED WORKER                               │
+├─────────────────────────────────────────────────────────────────┤
+│  __init__()    │ Store dependencies, create use_case            │
+│  register()    │ Register handler with JobQueue                 │
+│  _handle_*()   │ Process single job from queue                  │
+│  enqueue_*()   │ Public API to queue new jobs                   │
+│                │ Lifecycle managed by JobQueue.start()/stop()   │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐

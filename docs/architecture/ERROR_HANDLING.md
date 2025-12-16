@@ -27,48 +27,61 @@ Services werfen Domain Exceptions → Routes fangen und mappen zu HTTP
 ## 2. Exception-Hierarchie
 
 ```
-src/soulspot/domain/exceptions.py  ← EINZIGE QUELLE FÜR EXCEPTIONS
+src/soulspot/domain/exceptions/__init__.py  ← EINZIGE QUELLE FÜR EXCEPTIONS
 ```
 
 ```python
 # Base Exception - nie direkt werfen
-class SoulSpotError(Exception):
-    """Base exception for all SoulSpot errors."""
-    pass
+class DomainException(Exception):
+    """Base exception for all domain errors."""
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 # Entity existiert nicht (→ HTTP 404)
-class EntityNotFoundError(SoulSpotError):
+class EntityNotFoundException(DomainException):
     """Entity was not found in database or external service."""
-    pass
+    def __init__(self, entity_type: str, entity_id: Any) -> None:
+        super().__init__(f"{entity_type} with id {entity_id} not found")
+        self.entity_type = entity_type
+        self.entity_id = entity_id
 
-# Business-Regel verletzt (→ HTTP 400 oder 409)
-class BusinessRuleViolation(SoulSpotError):
+# Alias für konsistente Namensgebung
+EntityNotFoundError = EntityNotFoundException
+
+# Business-Regel verletzt (→ HTTP 400)
+class BusinessRuleViolation(DomainException):
     """A business rule was violated."""
     pass
 
-# Externe Service-Fehler (→ HTTP 502 oder 503)
-class ExternalServiceError(SoulSpotError):
+# Externe Service-Fehler (→ HTTP 502)
+class ExternalServiceError(DomainException):
     """External service (Spotify, Deezer, etc.) returned an error."""
     pass
 
 # Authentifizierung fehlgeschlagen (→ HTTP 401)
-class AuthenticationError(SoulSpotError):
+class AuthenticationError(DomainException):
     """User is not authenticated or token expired."""
     pass
 
 # Autorisierung fehlgeschlagen (→ HTTP 403)
-class AuthorizationError(SoulSpotError):
+class AuthorizationError(DomainException):
     """User is authenticated but not authorized for this action."""
     pass
 
 # Validierungsfehler (→ HTTP 422)
-class ValidationError(SoulSpotError):
+class ValidationError(DomainException):
     """Input validation failed."""
     pass
 
 # Rate Limit erreicht (→ HTTP 429)
-class RateLimitExceededError(SoulSpotError):
+class RateLimitExceededError(DomainException):
     """External service rate limit was exceeded."""
+    pass
+
+# Konfigurationsfehler (→ HTTP 503)
+class ConfigurationError(DomainException):
+    """Application misconfiguration."""
     pass
 ```
 
@@ -78,13 +91,15 @@ class RateLimitExceededError(SoulSpotError):
 
 | Domain Exception | HTTP Status | Wann verwenden |
 |------------------|-------------|----------------|
-| `EntityNotFoundError` | 404 | Artist/Track/Playlist nicht gefunden |
+| `EntityNotFoundException` / `EntityNotFoundError` | 404 | Artist/Track/Playlist nicht gefunden |
 | `BusinessRuleViolation` | 400 | Ungültige Operation (z.B. doppelte Playlist) |
 | `ExternalServiceError` | 502 | Spotify/Deezer API-Fehler |
 | `AuthenticationError` | 401 | Nicht eingeloggt, Token abgelaufen |
 | `AuthorizationError` | 403 | Eingeloggt aber keine Berechtigung |
-| `ValidationError` | 422 | Ungültige Eingabedaten |
+| `ValidationException` / `ValidationError` | 422 | Ungültige Eingabedaten |
 | `RateLimitExceededError` | 429 | API-Limit erreicht |
+| `ConfigurationError` | 503 | App-Konfiguration fehlt/ungültig |
+| `DuplicateEntityException` | 409 | Entity existiert bereits |
 | Unerwartete Exception | 500 | Alles andere (Bugs) |
 
 ---

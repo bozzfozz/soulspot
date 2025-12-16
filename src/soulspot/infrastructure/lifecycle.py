@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 
 from soulspot.config import Settings, get_settings
+from soulspot.domain.exceptions import ConfigurationError
 from soulspot.infrastructure.observability import configure_logging
 from soulspot.infrastructure.persistence import Database
 
@@ -47,7 +48,7 @@ def _validate_sqlite_path(settings: Settings) -> None:
             db_path.parent.mkdir(parents=True, exist_ok=True)
             logger.debug("Ensured SQLite parent directory exists: %s", db_path.parent)
     except Exception as exc:  # pragma: no cover - safety log
-        raise RuntimeError(
+        raise ConfigurationError(
             f"Unable to create SQLite database directory '{db_path.parent}': {exc}. "
             "Ensure the directory path is valid and has write permissions. "
             "Update DATABASE_URL or adjust directory permissions."
@@ -64,7 +65,7 @@ def _validate_sqlite_path(settings: Settings) -> None:
             db_path.parent,
         )
     except Exception as exc:  # pragma: no cover - safety log
-        raise RuntimeError(
+        raise ConfigurationError(
             f"Unable to write files in database directory '{db_path.parent}': {exc}. "
             "SQLite requires write permissions to create database and journal files. "
             "Ensure the directory is fully writable. "

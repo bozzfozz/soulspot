@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.infrastructure.observability.log_messages import LogMessages
 
 from soulspot.domain.entities import Artist
+from soulspot.domain.exceptions import EntityNotFoundError, ValidationError
 from soulspot.domain.value_objects import ArtistId, SpotifyUri
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
@@ -465,12 +466,12 @@ class FollowedArtistsService:
         # Validate based on source
         if source == "spotify":
             if not artist_dto.spotify_id or not artist_dto.name:
-                raise ValueError("Invalid Spotify artist DTO: missing spotify_id or name")
+                raise ValidationError("Invalid Spotify artist DTO: missing spotify_id or name")
         elif source == "deezer":
             if not artist_dto.deezer_id or not artist_dto.name:
-                raise ValueError("Invalid Deezer artist DTO: missing deezer_id or name")
+                raise ValidationError("Invalid Deezer artist DTO: missing deezer_id or name")
         else:
-            raise ValueError(f"Unknown source: {source}")
+            raise ValidationError(f"Unknown source: {source}")
 
         # STEP 1: Use ProviderMappingService to lookup/create
         # This handles: spotify_uri lookup, deezer_id lookup, name fallback, creation
@@ -482,7 +483,7 @@ class FollowedArtistsService:
         artist = await self.artist_repo.get(ArtistId(internal_id))
         if not artist:
             # Should not happen, but handle gracefully
-            raise ValueError(f"Artist not found after create: {internal_id}")
+            raise EntityNotFoundError(f"Artist not found after create: {internal_id}")
 
         # STEP 3: Business Logic - Update existing artist if not newly created
         if not was_created:

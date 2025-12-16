@@ -15,6 +15,8 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+from soulspot.domain.exceptions import ConfigurationError
+
 T = TypeVar("T")
 R = TypeVar("R")
 
@@ -196,7 +198,7 @@ class BatchProcessor[T, R]:
             return BatchResult()
 
         if not self._processor_func:
-            raise ValueError("No processor function configured")
+            raise ConfigurationError("No processor function configured")
 
         batch = self._pending[: self._batch_size]
         self._pending = self._pending[self._batch_size :]

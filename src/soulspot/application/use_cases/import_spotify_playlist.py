@@ -148,7 +148,8 @@ class ImportSpotifyPlaylistUseCase(
                 },
             }
         except Exception as e:
-            raise ValueError(f"Failed to fetch playlist from Spotify: {e}") from e
+            from soulspot.domain.exceptions import ExternalServiceError
+            raise ExternalServiceError(f"Failed to fetch playlist from Spotify: {e}") from e
 
         # 2. Create or update playlist entity
         playlist_id = PlaylistId.generate()

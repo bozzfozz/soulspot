@@ -5176,7 +5176,7 @@ class ProviderBrowseRepository:
 
         spotify_id = track_data.get("id")
         if not spotify_id:
-            raise ValueError("Track data missing 'id' field")
+            raise ValidationException("Track data missing 'id' field")
 
         # Check if track exists (by spotify_uri)
         spotify_uri = f"spotify:track:{spotify_id}"

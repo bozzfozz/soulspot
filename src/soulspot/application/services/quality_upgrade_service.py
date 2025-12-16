@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import QualityUpgradeCandidate
+from soulspot.domain.exceptions import ValidationError
 from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.persistence.models import (
     QualityUpgradeCandidateModel,
@@ -103,7 +104,7 @@ class QualityUpgradeService:
             List of upgrade candidates
         """
         if quality_profile not in self.QUALITY_PROFILES:
-            raise ValueError(f"Invalid quality profile: {quality_profile}")
+            raise ValidationError(f"Invalid quality profile: {quality_profile}")
 
         target_profile = self.QUALITY_PROFILES[quality_profile]
         target_bitrate: int = target_profile["min_bitrate"]  # type: ignore[assignment]

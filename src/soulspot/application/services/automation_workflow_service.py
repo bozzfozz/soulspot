@@ -11,6 +11,7 @@ from soulspot.domain.entities import (
     AutomationRule,
     AutomationTrigger,
 )
+from soulspot.domain.exceptions import BusinessRuleViolation
 from soulspot.domain.value_objects import AutomationRuleId
 from soulspot.infrastructure.persistence.repositories import AutomationRuleRepository
 
@@ -227,7 +228,7 @@ class AutomationWorkflowService:
         elif rule.action == AutomationAction.ADD_TO_QUEUE:
             return await self._action_add_to_queue(rule, context)
         else:
-            raise ValueError(f"Unknown action: {rule.action}")
+            raise BusinessRuleViolation(f"Unknown action: {rule.action}")
 
     # Hey future me, the STUB implementation for search-and-download action! This logs what WOULD happen but doesn't
     # actually trigger downloads yet. In production, this would: 1) Create Track entities for items, 2) Add download
