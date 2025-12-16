@@ -840,7 +840,7 @@ class SpotifySyncService:
             await self.session.commit()
 
             stats["synced"] = True
-            logger.info(f"Synced {len(tracks)} tracks for album {album_id}")
+            logger.info(f"Synced {len(track_dtos)} tracks for album {album_id}")
 
         except Exception as e:
             logger.error(f"Error syncing tracks for album {album_id}: {e}")
