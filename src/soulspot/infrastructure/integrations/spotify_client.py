@@ -105,15 +105,23 @@ class SpotifyClient(ISpotifyClient):
             
             # Check for rate limit
             if response.status_code == 429:
-                if attempt >= max_retries:
-                    logger.error(
-                        f"Spotify API rate limited after {max_retries} retries: {url}"
-                    )
-                    response.raise_for_status()
-                
                 # Get Retry-After header (seconds to wait)
                 retry_after_str = response.headers.get("Retry-After")
                 retry_after = int(retry_after_str) if retry_after_str else None
+                
+                if attempt >= max_retries:
+                    # Hey future me - we include retry_after in the error message!
+                    # This allows the worker to extract it and set appropriate cooldown.
+                    error_msg = (
+                        f"Spotify API rate limited (429) after {max_retries} retries. "
+                        f"URL: {url}. Retry-After: {retry_after or 'not provided'} seconds."
+                    )
+                    logger.error(error_msg)
+                    raise httpx.HTTPStatusError(
+                        error_msg,
+                        request=response.request,
+                        response=response,
+                    )
                 
                 # Wait with adaptive backoff
                 wait_time = await rate_limiter.handle_rate_limit_response(retry_after)

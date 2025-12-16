@@ -500,7 +500,7 @@ class DeezerSyncService:
         if existing:
             # Update existing
             existing.name = album_dto.title
-            existing.image_url = album_dto.image_url or existing.image_url
+            existing.artwork_url = album_dto.image_url or existing.artwork_url
             if is_chart:
                 existing.is_chart = True
             if is_new_release:
@@ -512,7 +512,7 @@ class DeezerSyncService:
             new_album = AlbumModel(
                 name=album_dto.title,
                 deezer_id=album_dto.deezer_id,
-                image_url=album_dto.image_url,
+                artwork_url=album_dto.image_url,
                 release_date=album_dto.release_date,
                 album_type=album_dto.album_type or "album",
                 total_tracks=album_dto.total_tracks,

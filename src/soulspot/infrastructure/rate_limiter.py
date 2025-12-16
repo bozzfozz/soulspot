@@ -48,10 +48,15 @@ class RateLimiterConfig:
     Hey future me – die Standard-Werte sind für Spotify optimiert!
     Spotify hat ungefähr: 180 requests / minute = 3 req/sec
     Wir sind konservativ mit 2 req/sec um Puffer zu haben.
+    
+    WICHTIG: max_backoff_seconds muss HOCH genug sein!
+    Spotify kann Retry-After von 5+ Minuten senden (besonders bei heavy usage).
+    Wenn wir das auf 60s cappen, ignorieren wir den Header und bekommen
+    sofort wieder 429 → infinite loop!
     """
     max_tokens: int = 10  # Bucket size
     refill_rate: float = 2.0  # Tokens per second
-    max_backoff_seconds: float = 60.0  # Max wait on 429
+    max_backoff_seconds: float = 600.0  # Max wait on 429 (10 minutes! Spotify can send long waits)
     initial_backoff_seconds: float = 1.0  # First 429 wait
     backoff_multiplier: float = 2.0  # Exponential backoff factor
 
@@ -92,11 +97,15 @@ class RateLimiter:
         - Ungefähr 180 requests / minute = 3 req/sec
         - Aber: Burst erlaubt (kurze Spitzen)
         - Konservativ: 2 req/sec sustained, 10 burst
+        
+        WICHTIG: max_backoff ist jetzt 600s (10 Minuten)!
+        Spotify kann lange Retry-After Header senden (5+ Minuten).
+        Wir müssen diese respektieren, sonst infinite 429 loop!
         """
         limiter = cls(config=RateLimiterConfig(
             max_tokens=10,  # Burst capacity
             refill_rate=2.0,  # Sustained rate
-            max_backoff_seconds=60.0,
+            max_backoff_seconds=600.0,  # 10 minutes - respect long Retry-After headers!
             initial_backoff_seconds=1.0,
         ))
         limiter._name = "spotify"

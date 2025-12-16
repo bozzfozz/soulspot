@@ -1785,7 +1785,7 @@ class SpotifySyncService:
         if download_images and image_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_album_by_id(spotify_id)
-            existing_url = existing.image_url if existing else None
+            existing_url = existing.artwork_url if existing else None
             existing_path = existing.image_path if existing else None
 
             if await self._image_service.should_redownload(

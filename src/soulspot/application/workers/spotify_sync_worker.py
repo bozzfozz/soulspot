@@ -89,6 +89,14 @@ class SpotifySyncWorker:
             "artist_albums": None,  # Gradual background album sync
         }
 
+        # Hey future me - RATE LIMIT COOLDOWN!
+        # Wenn wir einen 429 Error bekommen, setzen wir diesen Timestamp.
+        # Alle Syncs werden dann bis zu diesem Zeitpunkt pausiert.
+        # Das verhindert den "infinite 429 loop" bei heavy rate limiting.
+        # Backoff: 5 min → 10 min → 20 min (exponentiell, max 60 min)
+        self._rate_limit_until: datetime | None = None
+        self._rate_limit_backoff_minutes: int = 5  # Initial backoff
+
         # Track sync stats for monitoring
         self._sync_stats: dict[str, dict[str, Any]] = {
             "artists": {"count": 0, "last_result": None, "last_error": None},
@@ -102,6 +110,74 @@ class SpotifySyncWorker:
                 "pending": 0,
             },
         }
+
+    def _is_rate_limited(self) -> bool:
+        """Check if we're currently in rate limit cooldown.
+        
+        Hey future me - diese Methode prüft ob wir noch im Rate Limit Cooldown sind.
+        Wenn ja, sollten KEINE Syncs ausgeführt werden!
+        """
+        if self._rate_limit_until is None:
+            return False
+        
+        now = datetime.now(UTC)
+        if now >= self._rate_limit_until:
+            # Cooldown expired - reset
+            self._rate_limit_until = None
+            self._rate_limit_backoff_minutes = 5  # Reset backoff
+            logger.info("Spotify rate limit cooldown expired, resuming syncs")
+            return False
+        
+        # Still in cooldown
+        remaining = self._rate_limit_until - now
+        logger.debug(
+            f"Rate limited for {remaining.total_seconds():.0f}s more "
+            f"(until {self._rate_limit_until.isoformat()})"
+        )
+        return True
+
+    def _set_rate_limit_cooldown(self, retry_after_seconds: int | None = None) -> None:
+        """Set rate limit cooldown after receiving 429.
+        
+        Hey future me - EXPONENTIELLES BACKOFF!
+        5 min → 10 min → 20 min → 40 min → 60 min (max)
+        
+        Wenn Spotify Retry-After header sendet, nutze das als Minimum.
+        """
+        now = datetime.now(UTC)
+        
+        # Use retry_after if provided, otherwise use backoff
+        if retry_after_seconds and retry_after_seconds > 0:
+            # Spotify told us how long to wait
+            cooldown_seconds = max(retry_after_seconds, self._rate_limit_backoff_minutes * 60)
+        else:
+            # Use exponential backoff
+            cooldown_seconds = self._rate_limit_backoff_minutes * 60
+        
+        self._rate_limit_until = now + timedelta(seconds=cooldown_seconds)
+        
+        # Increase backoff for next time (exponential, max 60 min)
+        self._rate_limit_backoff_minutes = min(
+            self._rate_limit_backoff_minutes * 2,
+            60  # Max 60 minutes
+        )
+        
+        logger.warning(
+            f"Spotify rate limited! Pausing all syncs for {cooldown_seconds}s "
+            f"(until {self._rate_limit_until.isoformat()}). "
+            f"Next backoff will be {self._rate_limit_backoff_minutes} minutes."
+        )
+
+    def _reset_rate_limit_on_success(self) -> None:
+        """Reset rate limit backoff after successful sync.
+        
+        Hey future me - nach einem erfolgreichen Sync setzen wir den Backoff zurück.
+        Das bedeutet: Wenn wir einmal rate limited werden und dann wieder
+        erfolgreich syncen, startet der nächste Backoff wieder bei 5 Minuten.
+        """
+        if self._rate_limit_backoff_minutes > 5:
+            logger.info("Successful sync - resetting rate limit backoff to 5 minutes")
+            self._rate_limit_backoff_minutes = 5
 
     async def start(self) -> None:
         """Start the Spotify sync worker.
@@ -179,7 +255,16 @@ class SpotifySyncWorker:
 
         UPDATE (Nov 2025): Now uses session_scope context manager instead of
         async generator to fix "GC cleaning up non-checked-in connection" errors.
+        
+        UPDATE (Dez 2025): Added rate limit cooldown check!
+        If we're rate limited, we skip ALL syncs until cooldown expires.
         """
+        # Hey future me - RATE LIMIT CHECK FIRST!
+        # If we're in cooldown, don't even try to sync.
+        if self._is_rate_limited():
+            logger.debug("Skipping sync cycle - rate limited")
+            return
+
         # Get a fresh DB session for this cycle using session_scope context manager
         # Hey future me - using session_scope ensures proper connection cleanup!
         async with self.db.session_scope() as session:
@@ -274,9 +359,28 @@ class SpotifySyncWorker:
 
                 # Commit any changes
                 await session.commit()
+                
+                # Hey future me - successful sync cycle means we're not rate limited!
+                # Reset the backoff so next rate limit starts at 5 minutes again.
+                self._reset_rate_limit_on_success()
 
             except Exception as e:
-                logger.error(f"Error in sync cycle: {e}", exc_info=True)
+                # Check if this is a rate limit error
+                error_str = str(e).lower()
+                if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
+                    # Extract retry-after if present in the error message
+                    retry_after = None
+                    if "retry after" in error_str or "retry-after" in error_str:
+                        # Try to extract number from error message
+                        import re
+                        match = re.search(r'retry[- ]?after[:\s]*(\d+)', error_str)
+                        if match:
+                            retry_after = int(match.group(1))
+                    
+                    # Set rate limit cooldown
+                    self._set_rate_limit_cooldown(retry_after)
+                else:
+                    logger.error(f"Error in sync cycle: {e}", exc_info=True)
                 await session.rollback()
 
     def _is_sync_due(

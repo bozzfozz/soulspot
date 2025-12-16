@@ -21,8 +21,8 @@ from soulspot.application.services.credentials_service import (
 )
 from soulspot.application.services.deezer_auth_service import (
     DeezerAuthService,
-    AuthUrlResult as DeezerAuthUrlResult,
-    TokenResult as DeezerTokenResult,
+    DeezerAuthUrlResult,
+    DeezerTokenResult,
 )
 from soulspot.application.services.deezer_sync_service import DeezerSyncService
 from soulspot.application.services.discover_service import (

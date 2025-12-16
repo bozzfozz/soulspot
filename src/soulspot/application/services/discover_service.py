@@ -346,7 +346,11 @@ class DiscoverService:
             return []
         
         try:
-            related_dtos = await self._spotify.get_related_artists(artist_id, limit)
+            # Hey future me - Spotify's get_related_artists doesn't take limit param!
+            # It always returns up to 20 artists. We slice after.
+            related_dtos = await self._spotify.get_related_artists(artist_id)
+            if limit:
+                related_dtos = related_dtos[:limit]
             
             result: list[tuple[DiscoveredArtist, str]] = []
             for dto in related_dtos:

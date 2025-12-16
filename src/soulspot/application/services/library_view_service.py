@@ -144,7 +144,7 @@ class LibraryViewService:
         return AlbumDetailView(
             spotify_id=album_model.spotify_id,
             name=album_model.name,
-            image_url=album_model.image_url,
+            image_url=album_model.artwork_url,
             release_date=album_model.release_date,
             album_type=album_model.album_type or "album",
             total_tracks=album_model.total_tracks or len(track_views),
