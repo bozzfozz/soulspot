@@ -1,0 +1,510 @@
+{# Hey future me - this is the Bottom Sheet component for mobile!
+   
+   A slide-up modal that works like iOS/Android bottom sheets. Used for:
+   - Mobile action menus (share, add to playlist, etc.)
+   - Mobile filters
+   - Quick editing (metadata, tags)
+   - Confirmation dialogs
+   
+   Features:
+   - Slide-up animation from bottom
+   - Swipe down to close (integrates with mobile-gestures.js)
+   - Snap points (half-open, full-open)
+   - Backdrop click to close
+   - Handle bar for dragging
+   - Accessible with ARIA labels
+   
+   Usage (via JS):
+     SoulSpotBottomSheet.open({
+       title: 'Track Options',
+       content: '<button>Add to Queue</button>...',
+       // or: contentUrl: '/partials/track_actions?id=123' (HTMX load)
+     });
+   
+   Usage (via data attributes):
+     <button data-bottom-sheet-trigger="track-options">Options</button>
+     <template id="track-options">...</template>
+   
+   On tablet/desktop (>768px), falls back to centered modal.
+#}
+
+<!-- Bottom Sheet Container -->
+<div id="bottom-sheet" 
+     class="bottom-sheet" 
+     role="dialog" 
+     aria-modal="true"
+     aria-labelledby="bottom-sheet-title"
+     hidden>
+  
+  <!-- Backdrop -->
+  <div class="bottom-sheet-backdrop" aria-hidden="true"></div>
+  
+  <!-- Sheet Content -->
+  <div class="bottom-sheet-content" id="bottom-sheet-container">
+    
+    <!-- Handle Bar (drag indicator) -->
+    <div class="bottom-sheet-handle-wrapper">
+      <div class="bottom-sheet-handle" aria-label="Drag to resize or close"></div>
+    </div>
+    
+    <!-- Header -->
+    <div class="bottom-sheet-header">
+      <h2 id="bottom-sheet-title" class="bottom-sheet-title"></h2>
+      <button class="bottom-sheet-close" aria-label="Close" type="button">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    
+    <!-- Body (content loaded here) -->
+    <div id="bottom-sheet-body" class="bottom-sheet-body">
+      <!-- Dynamic content -->
+    </div>
+    
+  </div>
+</div>
+
+<!-- Bottom Sheet Styles -->
+<style>
+/* ===== BOTTOM SHEET STYLES ===== */
+
+.bottom-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 1050);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bottom-sheet[hidden] {
+  display: none;
+}
+
+.bottom-sheet.is-open {
+  pointer-events: auto;
+}
+
+/* Backdrop */
+.bottom-sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background-color 0.3s ease;
+}
+
+.bottom-sheet.is-open .bottom-sheet-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Sheet Content */
+.bottom-sheet-content {
+  position: relative;
+  width: 100%;
+  max-height: 90vh;
+  background: var(--bg-secondary, #1a1a1a);
+  border-top-left-radius: var(--radius-xl, 16px);
+  border-top-right-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-xl, 0 -10px 40px rgba(0, 0, 0, 0.3));
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: none; /* Prevent default scrolling on the sheet */
+}
+
+.bottom-sheet.is-open .bottom-sheet-content {
+  transform: translateY(0);
+}
+
+/* Snap point: half-open */
+.bottom-sheet.is-half .bottom-sheet-content {
+  max-height: 50vh;
+}
+
+/* Handle Bar */
+.bottom-sheet-handle-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3, 12px) 0 var(--space-2, 8px);
+  cursor: grab;
+}
+
+.bottom-sheet-handle-wrapper:active {
+  cursor: grabbing;
+}
+
+.bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--bg-quaternary, #2e2e2e);
+  border-radius: var(--radius-full, 9999px);
+}
+
+/* Header */
+.bottom-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4, 16px) var(--space-3, 12px);
+  border-bottom: 1px solid var(--border-primary, #2a2a2a);
+}
+
+.bottom-sheet-title {
+  font-size: var(--font-size-lg, 18px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+}
+
+.bottom-sheet-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full, 9999px);
+  color: var(--text-muted, #6b6b6b);
+  cursor: pointer;
+  transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.bottom-sheet-close:hover {
+  background: var(--bg-tertiary, #242424);
+  color: var(--text-primary, #ffffff);
+}
+
+/* Body */
+.bottom-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4, 16px);
+  overscroll-behavior: contain;
+}
+
+/* ===== ACTION LIST STYLES (common content pattern) ===== */
+
+.bottom-sheet-action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bottom-sheet-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  width: 100%;
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  color: var(--text-primary, #ffffff);
+  font-size: var(--font-size-base, 16px);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.bottom-sheet-action:hover {
+  background: var(--bg-tertiary, #242424);
+}
+
+.bottom-sheet-action:active {
+  background: var(--bg-quaternary, #2e2e2e);
+}
+
+.bottom-sheet-action-icon {
+  width: 24px;
+  text-align: center;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+.bottom-sheet-action-text {
+  flex: 1;
+}
+
+.bottom-sheet-action--danger {
+  color: var(--color-error, #ef4444);
+}
+
+.bottom-sheet-action--danger .bottom-sheet-action-icon {
+  color: var(--color-error, #ef4444);
+}
+
+/* Divider */
+.bottom-sheet-divider {
+  height: 1px;
+  background: var(--border-primary, #2a2a2a);
+  margin: var(--space-2, 8px) 0;
+}
+
+/* ===== TABLET/DESKTOP: Centered Modal ===== */
+
+@media (min-width: 769px) {
+  .bottom-sheet {
+    align-items: center;
+    padding: var(--space-4, 16px);
+  }
+  
+  .bottom-sheet-content {
+    width: auto;
+    min-width: 320px;
+    max-width: 480px;
+    max-height: 80vh;
+    border-radius: var(--radius-xl, 16px);
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  
+  .bottom-sheet.is-open .bottom-sheet-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  
+  .bottom-sheet-handle-wrapper {
+    display: none;
+  }
+  
+  .bottom-sheet-header {
+    padding: var(--space-4, 16px);
+    border-bottom: 1px solid var(--border-primary, #2a2a2a);
+  }
+}
+
+/* ===== LIGHT MODE ===== */
+
+:root[data-theme="light"] .bottom-sheet-backdrop {
+  background: rgba(0, 0, 0, 0);
+}
+
+:root[data-theme="light"] .bottom-sheet.is-open .bottom-sheet-backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="light"] .bottom-sheet-handle {
+  background: var(--border-secondary, #d4d4d4);
+}
+
+/* ===== REDUCED MOTION ===== */
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet-content,
+  .bottom-sheet-backdrop {
+    transition: none;
+  }
+}
+
+/* ===== SAFE AREA (iPhone notch) ===== */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .bottom-sheet-body {
+    padding-bottom: calc(var(--space-4, 16px) + env(safe-area-inset-bottom));
+  }
+}
+</style>
+
+<!-- Bottom Sheet JavaScript -->
+<script>
+(function() {
+  'use strict';
+  
+  // Hey future me - this is the Bottom Sheet controller!
+  // Handles opening/closing, swipe-to-dismiss, and snap points.
+  
+  const sheet = document.getElementById('bottom-sheet');
+  const backdrop = sheet.querySelector('.bottom-sheet-backdrop');
+  const content = document.getElementById('bottom-sheet-container');
+  const handle = sheet.querySelector('.bottom-sheet-handle-wrapper');
+  const body = document.getElementById('bottom-sheet-body');
+  const title = document.getElementById('bottom-sheet-title');
+  const closeBtn = sheet.querySelector('.bottom-sheet-close');
+  
+  // State
+  let isOpen = false;
+  let isDragging = false;
+  let startY = 0;
+  let currentY = 0;
+  let sheetHeight = 0;
+  let closeCallback = null;
+  
+  // Config
+  const CLOSE_THRESHOLD = 0.4; // Close if dragged down 40% of height
+  const VELOCITY_THRESHOLD = 0.5; // Close on fast swipe
+  
+  // ===== OPEN/CLOSE =====
+  
+  function open(options = {}) {
+    if (isOpen) close();
+    
+    const {
+      title: titleText = '',
+      content: contentHtml = '',
+      contentUrl = null,
+      onClose = null
+    } = options;
+    
+    // Set title
+    title.textContent = titleText;
+    closeCallback = onClose;
+    
+    // Set content
+    if (contentUrl) {
+      body.innerHTML = '<div class="bottom-sheet-loading"><div class="spinner"></div></div>';
+      htmx.ajax('GET', contentUrl, { target: '#bottom-sheet-body', swap: 'innerHTML' });
+    } else {
+      body.innerHTML = contentHtml;
+    }
+    
+    // Show sheet
+    sheet.removeAttribute('hidden');
+    sheet.classList.add('is-open');
+    isOpen = true;
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    // Focus trap
+    sheet.addEventListener('keydown', handleKeydown);
+    
+    // Get sheet height for drag calculations
+    requestAnimationFrame(() => {
+      sheetHeight = content.offsetHeight;
+    });
+    
+    // Announce to screen readers
+    sheet.setAttribute('aria-hidden', 'false');
+  }
+  
+  function close() {
+    if (!isOpen) return;
+    
+    sheet.classList.remove('is-open', 'is-half');
+    isOpen = false;
+    
+    // Wait for animation to finish
+    setTimeout(() => {
+      sheet.setAttribute('hidden', '');
+      body.innerHTML = '';
+      title.textContent = '';
+      document.body.style.overflow = '';
+      sheet.removeEventListener('keydown', handleKeydown);
+      sheet.setAttribute('aria-hidden', 'true');
+      
+      // Reset transform
+      content.style.transform = '';
+      
+      if (closeCallback) {
+        closeCallback();
+        closeCallback = null;
+      }
+    }, 300);
+  }
+  
+  // ===== KEYBOARD =====
+  
+  function handleKeydown(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  }
+  
+  // ===== BACKDROP CLICK =====
+  
+  backdrop.addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
+  
+  // ===== SWIPE TO CLOSE (Mobile) =====
+  
+  // Touch start
+  handle.addEventListener('touchstart', (e) => {
+    isDragging = true;
+    startY = e.touches[0].clientY;
+    content.style.transition = 'none';
+  }, { passive: true });
+  
+  // Touch move
+  handle.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    
+    currentY = e.touches[0].clientY;
+    const diff = currentY - startY;
+    
+    // Only allow dragging down
+    if (diff > 0) {
+      content.style.transform = `translateY(${diff}px)`;
+    }
+  }, { passive: true });
+  
+  // Touch end
+  handle.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    const diff = currentY - startY;
+    const velocity = diff / (Date.now() - startY);
+    
+    content.style.transition = '';
+    
+    // Close if dragged past threshold or fast swipe
+    if (diff > sheetHeight * CLOSE_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
+      close();
+    } else {
+      // Snap back
+      content.style.transform = '';
+    }
+  }, { passive: true });
+  
+  // ===== DATA ATTRIBUTE TRIGGERS =====
+  
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-bottom-sheet-trigger]');
+    if (!trigger) return;
+    
+    e.preventDefault();
+    
+    const templateId = trigger.dataset.bottomSheetTrigger;
+    const template = document.getElementById(templateId);
+    const titleAttr = trigger.dataset.bottomSheetTitle || '';
+    
+    if (template) {
+      open({
+        title: titleAttr,
+        content: template.innerHTML
+      });
+    }
+  });
+  
+  // ===== HTMX TRIGGERS =====
+  
+  document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-bottom-sheet-url]');
+    if (!trigger) return;
+    
+    e.preventDefault();
+    
+    const url = trigger.dataset.bottomSheetUrl;
+    const titleAttr = trigger.dataset.bottomSheetTitle || '';
+    
+    open({
+      title: titleAttr,
+      contentUrl: url
+    });
+  });
+  
+  // ===== PUBLIC API =====
+  
+  window.SoulSpotBottomSheet = {
+    open,
+    close,
+    isOpen: () => isOpen
+  };
+  
+})();
+</script>

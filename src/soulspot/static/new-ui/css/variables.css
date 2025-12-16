@@ -152,6 +152,19 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  
+  /* ===== GLASSMORPHISM ===== */
+  /* Hey future me - use these for modals, overlays, floating elements!
+     Apply both --glass-bg AND backdrop-filter for the full effect.
+     --glass-backdrop is the blur value for backdrop-filter. */
+  --glass-bg: rgba(15, 15, 15, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-backdrop: blur(12px);
+  
+  /* ===== SCROLLBAR ===== */
+  --scrollbar-track: var(--bg-secondary);
+  --scrollbar-thumb: var(--bg-quaternary);
+  --scrollbar-thumb-hover: var(--border-secondary);
 }
 
 /* ===== LIGHT MODE THEME ===== */
@@ -201,6 +214,11 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+
+  /* Glassmorphism - Light Theme */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --glass-backdrop: blur(12px);
 
   /* Scrollbar - Light */
   --scrollbar-track: #f5f5f5;

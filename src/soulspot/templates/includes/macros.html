@@ -47,3 +47,277 @@
     </div>
 </div>
 {% endmacro %}
+
+{# ===== MEDIA CARD COMPONENT =====
+   Hey future me - this is THE go-to card for albums, artists, playlists, tracks!
+   Generic name, works for any media type. Supports:
+   - Image with lazy loading
+   - Title + subtitle
+   - Play button overlay
+   - Status badge (downloaded, streaming)
+   - Action buttons (optional)
+   - Animations (blur-fade-in with stagger)
+   
+   Usage:
+     {{ macros.media_card(
+         title="Dark Side of the Moon",
+         subtitle="Pink Floyd",
+         image="/images/album.jpg",
+         href="/library/albums/pink-floyd-dark-side",
+         type="album",  # album|artist|playlist|track
+         status="downloaded",  # downloaded|streaming|null
+         play_url="/api/queue/add?album_id=123"
+     ) }}
+#}
+{% macro media_card(title, subtitle=None, image=None, href=None, type='album', status=None, play_url=None, delay=0, actions=[]) %}
+<article class="media-card blur-fade-in" style="--delay: {{ delay }}" {% if href %}role="link" tabindex="0"{% endif %}>
+    {# Image Section #}
+    <div class="media-card-image {% if type == 'artist' %}media-card-image--circular{% endif %}">
+        {% if image %}
+        <img src="{{ image }}" 
+             alt="{{ title }}" 
+             loading="lazy" 
+             class="media-card-img"
+             onerror="this.src='/static/images/placeholder-{{ type }}.svg'">
+        {% else %}
+        <div class="media-card-placeholder">
+            {% if type == 'album' %}<i class="bi bi-disc"></i>
+            {% elif type == 'artist' %}<i class="bi bi-person"></i>
+            {% elif type == 'playlist' %}<i class="bi bi-list-ul"></i>
+            {% elif type == 'track' %}<i class="bi bi-music-note"></i>
+            {% else %}<i class="bi bi-image"></i>{% endif %}
+        </div>
+        {% endif %}
+        
+        {# Play Button Overlay #}
+        {% if play_url %}
+        <div class="media-card-overlay">
+            <button class="media-card-play" 
+                    hx-post="{{ play_url }}"
+                    hx-swap="none"
+                    aria-label="Play {{ title }}">
+                <i class="bi bi-play-fill"></i>
+            </button>
+        </div>
+        {% endif %}
+        
+        {# Status Badge #}
+        {% if status %}
+        <span class="media-card-status badge badge-{{ 'success' if status == 'downloaded' else 'info' }}">
+            <i class="bi bi-{{ 'check-circle' if status == 'downloaded' else 'cloud' }}"></i>
+        </span>
+        {% endif %}
+    </div>
+    
+    {# Content Section #}
+    <div class="media-card-content">
+        {% if href %}
+        <a href="{{ href }}" class="media-card-title" title="{{ title }}">{{ title }}</a>
+        {% else %}
+        <h3 class="media-card-title" title="{{ title }}">{{ title }}</h3>
+        {% endif %}
+        
+        {% if subtitle %}
+        <p class="media-card-subtitle">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    
+    {# Actions (optional bottom buttons) #}
+    {% if actions %}
+    <div class="media-card-actions">
+        {% for action in actions %}
+        <button class="btn btn-{{ action.variant or 'ghost' }} btn-sm"
+                {% if action.htmx_post %}hx-post="{{ action.htmx_post }}" hx-swap="none"{% endif %}
+                {% if action.htmx_get %}hx-get="{{ action.htmx_get }}"{% endif %}
+                aria-label="{{ action.label }}">
+            <i class="bi {{ action.icon }}"></i>
+        </button>
+        {% endfor %}
+    </div>
+    {% endif %}
+</article>
+{% endmacro %}
+
+{# ===== MEDIA GRID COMPONENT =====
+   Responsive grid container for media cards.
+   Automatically adjusts columns based on viewport.
+   
+   Usage:
+     {% call macros.media_grid(columns=5) %}
+       {{ macros.media_card(...) }}
+       {{ macros.media_card(...) }}
+     {% endcall %}
+#}
+{% macro media_grid(columns=5, gap='md') %}
+<div class="media-grid media-grid--{{ columns }}col" style="--gap: var(--space-{% if gap == 'sm' %}3{% elif gap == 'lg' %}6{% else %}4{% endif %});">
+    {{ caller() }}
+</div>
+{% endmacro %}
+
+{# ===== SECTION HEADER =====
+   Section title with optional "View All" link.
+   Used above grids of cards.
+   
+   Usage:
+     {{ macros.section_header("New Releases", view_all_url="/browse/new-releases") }}
+#}
+{% macro section_header(title, subtitle=None, view_all_url=None, view_all_text="View All") %}
+<div class="section-header">
+    <div class="section-header-content">
+        <h2 class="section-header-title">{{ title }}</h2>
+        {% if subtitle %}
+        <p class="section-header-subtitle">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    {% if view_all_url %}
+    <a href="{{ view_all_url }}" class="section-header-link">
+        {{ view_all_text }} <i class="bi bi-chevron-right"></i>
+    </a>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# ===== TRACK ROW COMPONENT =====
+   Compact horizontal row for track lists (playlist detail, album detail).
+   Shows: #, image, title, artist, duration, actions.
+   
+   Usage:
+     {{ macros.track_row(
+         number=1,
+         title="Comfortably Numb",
+         artist="Pink Floyd",
+         duration="6:23",
+         album="The Wall",
+         image="/images/track.jpg",
+         play_url="/api/queue/add?track_id=123",
+         download_url="/api/download/track/123",
+         is_downloaded=true
+     ) }}
+#}
+{% macro track_row(number, title, artist=None, duration=None, album=None, image=None, play_url=None, download_url=None, is_downloaded=false, is_playing=false) %}
+<div class="track-row {% if is_playing %}track-row--playing{% endif %}">
+    {# Track Number / Play Icon #}
+    <div class="track-row-number">
+        {% if is_playing %}
+        <i class="bi bi-soundwave"></i>
+        {% else %}
+        <span class="track-number">{{ number }}</span>
+        {% if play_url %}
+        <button class="track-play" hx-post="{{ play_url }}" hx-swap="none" aria-label="Play {{ title }}">
+            <i class="bi bi-play-fill"></i>
+        </button>
+        {% endif %}
+        {% endif %}
+    </div>
+    
+    {# Image (optional) #}
+    {% if image %}
+    <div class="track-row-image">
+        <img src="{{ image }}" alt="" loading="lazy">
+    </div>
+    {% endif %}
+    
+    {# Title & Artist #}
+    <div class="track-row-info">
+        <span class="track-row-title">{{ title }}</span>
+        {% if artist %}
+        <span class="track-row-artist">{{ artist }}</span>
+        {% endif %}
+    </div>
+    
+    {# Album (optional, hidden on mobile) #}
+    {% if album %}
+    <div class="track-row-album">{{ album }}</div>
+    {% endif %}
+    
+    {# Status Badge #}
+    {% if is_downloaded %}
+    <span class="track-row-status">
+        <i class="bi bi-check-circle text-success" title="Downloaded"></i>
+    </span>
+    {% endif %}
+    
+    {# Duration #}
+    {% if duration %}
+    <div class="track-row-duration">{{ duration }}</div>
+    {% endif %}
+    
+    {# Actions #}
+    <div class="track-row-actions">
+        {% if download_url and not is_downloaded %}
+        <button class="btn-icon" hx-post="{{ download_url }}" hx-swap="none" title="Download">
+            <i class="bi bi-download"></i>
+        </button>
+        {% endif %}
+        <button class="btn-icon" title="More options" 
+                data-bottom-sheet-url="/partials/track-actions?title={{ title|urlencode }}"
+                data-bottom-sheet-title="{{ title }}">
+            <i class="bi bi-three-dots"></i>
+        </button>
+    </div>
+</div>
+{% endmacro %}
+
+{# ===== TAB NAVIGATION =====
+   Horizontal tabs for switching views.
+   
+   Usage:
+     {{ macros.tabs([
+         {'id': 'tracks', 'label': 'Tracks', 'active': true},
+         {'id': 'albums', 'label': 'Albums'},
+         {'id': 'artists', 'label': 'Artists'}
+     ]) }}
+     
+     <div id="tab-tracks" class="tab-pane active">...</div>
+     <div id="tab-albums" class="tab-pane">...</div>
+#}
+{% macro tabs(items, id_prefix='tab') %}
+<div class="tabs" role="tablist">
+    {% for item in items %}
+    <button class="tab {% if item.active %}tab--active{% endif %}"
+            id="{{ id_prefix }}-{{ item.id }}-tab"
+            role="tab"
+            aria-selected="{{ 'true' if item.active else 'false' }}"
+            aria-controls="{{ id_prefix }}-{{ item.id }}"
+            data-tab-target="#{{ id_prefix }}-{{ item.id }}">
+        {% if item.icon %}<i class="bi {{ item.icon }}"></i>{% endif %}
+        {{ item.label }}
+        {% if item.count is defined %}
+        <span class="tab-count">{{ item.count }}</span>
+        {% endif %}
+    </button>
+    {% endfor %}
+</div>
+{% endmacro %}
+
+{# ===== LOADING SKELETON =====
+   Placeholder skeleton for loading states.
+   
+   Usage:
+     {{ macros.skeleton_card() }}
+     {{ macros.skeleton_row() }}
+     {{ macros.skeleton_text(width='60%') }}
+#}
+{% macro skeleton_card() %}
+<div class="media-card skeleton">
+    <div class="skeleton-image"></div>
+    <div class="skeleton-text" style="width: 80%;"></div>
+    <div class="skeleton-text" style="width: 50%;"></div>
+</div>
+{% endmacro %}
+
+{% macro skeleton_row() %}
+<div class="track-row skeleton">
+    <div class="skeleton-circle" style="width: 24px; height: 24px;"></div>
+    <div class="skeleton-image" style="width: 40px; height: 40px;"></div>
+    <div style="flex: 1;">
+        <div class="skeleton-text" style="width: 60%;"></div>
+        <div class="skeleton-text" style="width: 40%; height: 12px;"></div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro skeleton_text(width='100%', height='16px') %}
+<div class="skeleton-text" style="width: {{ width }}; height: {{ height }};"></div>
+{% endmacro %}
+

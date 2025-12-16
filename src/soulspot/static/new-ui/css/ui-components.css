@@ -482,3 +482,423 @@
     color: white;
 }
 
+
+/* ===== MEDIA CARD COMPONENT ===== 
+   Hey future me - generic card for albums/artists/playlists/tracks.
+   Used with media_card() macro from macros.html */
+
+.media-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.media-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.media-card-image {
+    position: relative;
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.media-card-image--circular {
+    border-radius: 50%;
+    margin: var(--space-4);
+    margin-bottom: 0;
+}
+
+.media-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-card-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: var(--text-muted);
+}
+
+.media-card-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.media-card:hover .media-card-overlay {
+    opacity: 1;
+}
+
+.media-card-play {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    transform: scale(0.8);
+    transition: transform var(--transition-fast);
+}
+
+.media-card:hover .media-card-play {
+    transform: scale(1);
+}
+
+.media-card-play:hover {
+    background: var(--accent-hover);
+}
+
+.media-card-status {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+}
+
+.media-card-content {
+    padding: var(--space-3);
+}
+
+.media-card-title {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.media-card-title:hover {
+    color: var(--accent-primary);
+}
+
+.media-card-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: var(--space-1) 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-card-actions {
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* ===== MEDIA GRID ===== */
+
+.media-grid {
+    display: grid;
+    gap: var(--gap, var(--space-4));
+}
+
+.media-grid--5col { grid-template-columns: repeat(5, 1fr); }
+.media-grid--4col { grid-template-columns: repeat(4, 1fr); }
+.media-grid--3col { grid-template-columns: repeat(3, 1fr); }
+.media-grid--2col { grid-template-columns: repeat(2, 1fr); }
+
+@media (max-width: 1200px) {
+    .media-grid--5col { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (max-width: 992px) {
+    .media-grid--5col,
+    .media-grid--4col { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .media-grid--5col,
+    .media-grid--4col,
+    .media-grid--3col { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+    .media-grid--5col,
+    .media-grid--4col,
+    .media-grid--3col,
+    .media-grid--2col { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ===== SECTION HEADER ===== */
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.section-header-title {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.section-header-subtitle {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin: var(--space-1) 0 0;
+}
+
+.section-header-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-size-sm);
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.section-header-link:hover {
+    text-decoration: underline;
+}
+
+/* ===== TRACK ROW ===== */
+
+.track-row {
+    display: grid;
+    grid-template-columns: 40px 40px 1fr auto auto auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    transition: background var(--transition-fast);
+}
+
+.track-row:hover {
+    background: var(--bg-tertiary);
+}
+
+.track-row--playing {
+    background: var(--accent-subtle);
+}
+
+.track-row-number {
+    position: relative;
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.track-row:hover .track-number,
+.track-row--playing .track-number {
+    display: none;
+}
+
+.track-play {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.track-row:hover .track-play {
+    display: block;
+}
+
+.track-row-image {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-tertiary);
+}
+
+.track-row-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.track-row-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.track-row-title {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-row-artist {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-row-album {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.track-row-status {
+    font-size: var(--font-size-sm);
+}
+
+.track-row-duration {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.track-row-actions {
+    display: flex;
+    gap: var(--space-1);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.track-row:hover .track-row-actions {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .track-row {
+        grid-template-columns: 32px 40px 1fr auto;
+    }
+    
+    .track-row-album {
+        display: none;
+    }
+    
+    .track-row-actions {
+        opacity: 1;
+    }
+}
+
+/* ===== TABS ===== */
+
+.tabs {
+    display: flex;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--border-primary);
+    margin-bottom: var(--space-4);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.tab:hover {
+    color: var(--text-primary);
+}
+
+.tab--active {
+    color: var(--accent-primary);
+    border-bottom-color: var(--accent-primary);
+}
+
+.tab-count {
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+}
+
+.tab--active .tab-count {
+    background: var(--accent-subtle);
+    color: var(--accent-primary);
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* ===== SKELETON LOADING ===== */
+
+.skeleton {
+    pointer-events: none;
+}
+
+.skeleton-image {
+    aspect-ratio: 1;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+}
+
+.skeleton-text {
+    height: 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-top: var(--space-2);
+}
+
+.skeleton-circle {
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+}
+
+.skeleton-image,
+.skeleton-text,
+.skeleton-circle {
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton-image::after,
+.skeleton-text::after,
+.skeleton-circle::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    animation: shimmer 2s infinite;
+}

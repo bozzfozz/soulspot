@@ -1,0 +1,243 @@
+{# Hey future me - Quick theme toggle button for sidebar/header!
+   Works independently of settings page. Uses same localStorage key "theme".
+   Three states: dark (default) → light → auto → dark...
+   
+   Animation: Icon morphs between moon/sun/circle-half.
+   Tooltip shows current theme name.
+   
+   Keyboard: Enter/Space to toggle
+   A11Y: aria-label announces current theme
+   
+   This component syncs with settings.html - both use localStorage "theme"
+   and applyTheme() logic. Changes here reflect there and vice versa.
+#}
+
+<button class="theme-toggle" 
+        id="theme-toggle-btn"
+        type="button"
+        role="switch"
+        aria-checked="false"
+        aria-label="Toggle theme (currently dark)"
+        title="Toggle theme">
+    <i class="bi bi-moon theme-icon" id="theme-icon"></i>
+</button>
+
+<style>
+/* ===== THEME TOGGLE BUTTON ===== */
+/* Hey future me - compact toggle for sidebar footer!
+   Uses CSS transitions for smooth icon morphing.
+   Three states: dark (moon), light (sun), auto (circle-half).
+   Hover scales up, active scales down for tactile feedback. */
+
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.theme-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    transform: scale(1.05);
+}
+
+.theme-toggle:active {
+    transform: scale(0.95);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.theme-toggle .theme-icon {
+    font-size: 1.125rem;
+    transition: transform 0.3s ease, opacity 0.2s ease;
+}
+
+/* Rotation animation on theme change */
+.theme-toggle.rotating .theme-icon {
+    transform: rotate(360deg);
+}
+
+/* Tooltip styles */
+.theme-toggle::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 50%;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-quaternary);
+    color: var(--text-primary);
+    font-size: var(--font-size-xs);
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+    z-index: 100;
+}
+
+.theme-toggle:hover::after,
+.theme-toggle:focus-visible::after {
+    opacity: 1;
+}
+
+/* Sidebar footer layout adjustment */
+.sidebar-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+}
+
+/* Dark theme icon colors */
+.theme-toggle[data-theme="dark"] .theme-icon {
+    color: #f59e0b; /* Amber for moon */
+}
+
+.theme-toggle[data-theme="light"] .theme-icon {
+    color: #fbbf24; /* Yellow for sun */
+}
+
+.theme-toggle[data-theme="auto"] .theme-icon {
+    color: var(--accent-primary);
+}
+
+/* Reduced motion: no rotation animation */
+@media (prefers-reduced-motion: reduce) {
+    .theme-toggle .theme-icon {
+        transition: none;
+    }
+    .theme-toggle.rotating .theme-icon {
+        transform: none;
+    }
+}
+</style>
+
+<script>
+/* Hey future me - Theme toggle logic!
+   Cycles: dark → light → auto → dark
+   Syncs with settings.html via localStorage.
+   
+   applyThemeToggle() handles:
+   1. Update DOM (data-theme on html)
+   2. Update localStorage
+   3. Update button icon & aria-label
+   4. Update meta theme-color for PWA
+   5. Listen for system preference changes (auto mode)
+*/
+(function() {
+    const btn = document.getElementById('theme-toggle-btn');
+    const icon = document.getElementById('theme-icon');
+    const themeOrder = ['dark', 'light', 'auto'];
+    
+    // Icon class map
+    const iconMap = {
+        dark: 'bi-moon',
+        light: 'bi-sun',
+        auto: 'bi-circle-half'
+    };
+    
+    // Label map for a11y
+    const labelMap = {
+        dark: 'Toggle theme (currently dark)',
+        light: 'Toggle theme (currently light)',
+        auto: 'Toggle theme (currently auto)'
+    };
+    
+    // Initialize button state from current theme
+    function initThemeToggle() {
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        updateButtonUI(currentTheme);
+    }
+    
+    // Update button UI (icon, aria, tooltip)
+    function updateButtonUI(theme) {
+        // Update icon
+        icon.className = `bi ${iconMap[theme]} theme-icon`;
+        
+        // Update aria-label
+        btn.setAttribute('aria-label', labelMap[theme]);
+        
+        // Update tooltip
+        btn.setAttribute('data-tooltip', theme.charAt(0).toUpperCase() + theme.slice(1));
+        
+        // Update data attribute for styling
+        btn.setAttribute('data-theme', theme);
+        
+        // Update aria-checked (light = checked)
+        btn.setAttribute('aria-checked', theme === 'light' ? 'true' : 'false');
+    }
+    
+    // Apply theme to document (shared logic with settings.html)
+    function applyTheme(theme) {
+        localStorage.setItem('theme', theme);
+        
+        let appliedTheme = theme;
+        if (theme === 'auto') {
+            appliedTheme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        
+        document.documentElement.setAttribute('data-theme', appliedTheme);
+        
+        // Update meta theme-color for PWA
+        const metaTheme = document.querySelector('meta[name="theme-color"]');
+        if (metaTheme) {
+            metaTheme.content = appliedTheme === 'light' ? '#ffffff' : '#0f0f0f';
+        }
+        
+        // Update button UI
+        updateButtonUI(theme);
+    }
+    
+    // Cycle to next theme
+    function cycleTheme() {
+        const currentTheme = localStorage.getItem('theme') || 'dark';
+        const currentIndex = themeOrder.indexOf(currentTheme);
+        const nextIndex = (currentIndex + 1) % themeOrder.length;
+        const nextTheme = themeOrder[nextIndex];
+        
+        // Add rotation animation
+        btn.classList.add('rotating');
+        setTimeout(() => btn.classList.remove('rotating'), 300);
+        
+        applyTheme(nextTheme);
+    }
+    
+    // Event listeners
+    btn.addEventListener('click', cycleTheme);
+    btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            cycleTheme();
+        }
+    });
+    
+    // Listen for system preference changes (when in auto mode)
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+        if (localStorage.getItem('theme') === 'auto') {
+            const newTheme = e.matches ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            
+            const metaTheme = document.querySelector('meta[name="theme-color"]');
+            if (metaTheme) {
+                metaTheme.content = newTheme === 'light' ? '#ffffff' : '#0f0f0f';
+            }
+        }
+    });
+    
+    // Initialize on load
+    initThemeToggle();
+})();
+</script>

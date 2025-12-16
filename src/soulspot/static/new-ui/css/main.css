@@ -2,6 +2,7 @@
 
 /* Import all CSS files */
 @import url('variables.css');
+@import url('animations.css');
 @import url('components.css');
 @import url('ui-components.css');
 

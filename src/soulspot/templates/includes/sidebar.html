@@ -146,11 +146,13 @@
         </div>
     </nav>
 
-    <!-- Sidebar Footer: Worker Status Indicator -->
-    {# Hey future me - dieser Footer zeigt den Status der Background-Worker!
+    <!-- Sidebar Footer: Worker Status + Theme Toggle -->
+    {# Hey future me - dieser Footer zeigt den Status der Background-Worker + Theme Toggle!
        Ein einzelnes Spotify-Icon zeigt den kombinierten Status aller Worker.
        Bei Hover erscheint ein Tooltip mit Details (letzter Sync, etc).
        Klick navigiert zu den Settings.
+       
+       Theme Toggle: Zykelt dark → light → auto → dark
        
        Animation:
        - Idle: sanftes Pulsieren (grün)
@@ -160,6 +162,7 @@
        Auf Mobile: Touch auf Container öffnet Tooltip (via :focus-within)
     #}
     <div class="sidebar-footer">
+        <!-- Worker Status -->
         <div class="worker-status"
              hx-get="/api/workers/status/html"
              hx-trigger="load, every 10s"
@@ -171,5 +174,8 @@
                 </a>
             </div>
         </div>
+        
+        <!-- Theme Toggle -->
+        {% include "includes/_theme_switcher.html" %}
     </div>
 </aside>

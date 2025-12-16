@@ -1,0 +1,708 @@
+{# Hey future me - this is the Command Palette component (Cmd+K / Ctrl+K)!
+   Works like Spotlight on macOS or VS Code's Command Palette.
+   
+   Features:
+   - Fuzzy search via /ui/search/quick endpoint
+   - Keyboard navigation (↑↓ to navigate, Enter to select, Esc to close)
+   - Recent searches stored in localStorage
+   - Accessible with proper ARIA labels and focus trap
+   
+   Integration:
+   - Include this file in base.html before closing </body>
+   - Requires: fuzzy-search.js (for client-side filtering)
+   - API: GET /ui/search/quick?q=... returns HTML partial
+   
+   Usage:
+   - Press Cmd+K (Mac) or Ctrl+K (Windows/Linux) to open
+   - Type to search tracks, artists, albums, playlists
+   - Use ↑↓ to navigate results, Enter to select
+#}
+
+<!-- Command Palette Modal -->
+<div id="command-palette" 
+     class="command-palette" 
+     role="dialog" 
+     aria-modal="true" 
+     aria-labelledby="command-palette-title"
+     aria-describedby="command-palette-desc"
+     hidden>
+  
+  <!-- Backdrop -->
+  <div class="command-palette-backdrop" aria-hidden="true"></div>
+  
+  <!-- Container -->
+  <div class="command-palette-container">
+    
+    <!-- Header -->
+    <div class="command-palette-header">
+      <i class="bi bi-search command-palette-icon" aria-hidden="true"></i>
+      <input 
+        type="text" 
+        id="command-palette-input"
+        class="command-palette-input" 
+        placeholder="Search tracks, artists, albums, playlists..."
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        aria-label="Search"
+        aria-autocomplete="list"
+        aria-controls="command-results"
+        aria-describedby="command-palette-desc"
+      >
+      <span id="command-palette-title" class="sr-only">Quick Search</span>
+      <span id="command-palette-desc" class="sr-only">Type to search, use arrow keys to navigate, press Enter to select</span>
+      <kbd class="command-palette-hint" aria-hidden="true">ESC</kbd>
+    </div>
+    
+    <!-- Content Area -->
+    <div class="command-palette-content">
+      
+      <!-- Recent Searches (shown when input is empty) -->
+      <div id="command-recent" class="command-palette-section">
+        <h3 class="command-section-title">
+          <i class="bi bi-clock-history" aria-hidden="true"></i>
+          Recent Searches
+        </h3>
+        <ul id="command-recent-list" class="command-list" role="listbox">
+          <!-- Populated by JS -->
+        </ul>
+      </div>
+      
+      <!-- Search Results -->
+      <div id="command-results" 
+           class="command-palette-results" 
+           role="listbox"
+           aria-label="Search results">
+        <!-- HTMX-loaded results from /ui/search/quick -->
+      </div>
+      
+      <!-- Empty State -->
+      <div id="command-empty" class="command-palette-empty" hidden>
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <p>No results found</p>
+        <span class="text-muted">Try a different search term</span>
+      </div>
+      
+      <!-- Loading State -->
+      <div id="command-loading" class="command-palette-loading" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <span>Searching...</span>
+      </div>
+    </div>
+    
+    <!-- Footer with Keyboard Hints -->
+    <div class="command-palette-footer">
+      <div class="command-hint">
+        <kbd>↑</kbd><kbd>↓</kbd>
+        <span>Navigate</span>
+      </div>
+      <div class="command-hint">
+        <kbd>Enter</kbd>
+        <span>Select</span>
+      </div>
+      <div class="command-hint">
+        <kbd>Esc</kbd>
+        <span>Close</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Command Palette Styles -->
+<style>
+/* ===== COMMAND PALETTE STYLES ===== */
+
+.command-palette {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 1050);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+
+.command-palette[hidden] {
+  display: none;
+}
+
+/* Backdrop */
+.command-palette-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Container */
+.command-palette-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  max-height: 60vh;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid var(--border-primary, #2a2a2a);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.6));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: command-palette-enter 0.15s ease-out;
+}
+
+@keyframes command-palette-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Header */
+.command-palette-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px);
+  border-bottom: 1px solid var(--border-primary, #2a2a2a);
+}
+
+.command-palette-icon {
+  font-size: var(--font-size-xl, 20px);
+  color: var(--text-muted, #6b6b6b);
+}
+
+.command-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-lg, 18px);
+  color: var(--text-primary, #ffffff);
+}
+
+.command-palette-input::placeholder {
+  color: var(--text-muted, #6b6b6b);
+}
+
+.command-palette-hint {
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  background: var(--bg-tertiary, #242424);
+  border-radius: var(--radius-sm, 4px);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted, #6b6b6b);
+  font-family: inherit;
+}
+
+/* Content */
+.command-palette-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2, 8px);
+}
+
+/* Section Title */
+.command-section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-muted, #6b6b6b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Result List */
+.command-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  transition: background-color var(--transition-fast, 150ms ease);
+}
+
+.command-item:hover,
+.command-item[aria-selected="true"] {
+  background: var(--bg-tertiary, #242424);
+}
+
+.command-item[aria-selected="true"] {
+  outline: 2px solid var(--accent-primary, #fe4155);
+  outline-offset: -2px;
+}
+
+.command-item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-quaternary, #2e2e2e);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg, 18px);
+  color: var(--text-secondary, #a0a0a0);
+  flex-shrink: 0;
+}
+
+.command-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.command-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-item-title {
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--text-primary, #ffffff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-item-subtitle {
+  font-size: var(--font-size-sm, 14px);
+  color: var(--text-muted, #6b6b6b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-item-type {
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  background: var(--bg-quaternary, #2e2e2e);
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-secondary, #a0a0a0);
+  text-transform: capitalize;
+}
+
+/* Empty State */
+.command-palette-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8, 32px);
+  text-align: center;
+}
+
+.command-palette-empty i {
+  font-size: 48px;
+  color: var(--text-muted, #6b6b6b);
+  margin-bottom: var(--space-4, 16px);
+}
+
+.command-palette-empty p {
+  color: var(--text-secondary, #a0a0a0);
+  margin: 0;
+}
+
+/* Loading State */
+.command-palette-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-6, 24px);
+  color: var(--text-muted, #6b6b6b);
+}
+
+/* Footer */
+.command-palette-footer {
+  display: flex;
+  gap: var(--space-6, 24px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-top: 1px solid var(--border-primary, #2a2a2a);
+  background: var(--bg-tertiary, #242424);
+}
+
+.command-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted, #6b6b6b);
+}
+
+.command-hint kbd {
+  padding: 2px 6px;
+  background: var(--bg-quaternary, #2e2e2e);
+  border-radius: var(--radius-sm, 4px);
+  font-family: inherit;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .command-palette {
+    padding: var(--space-4, 16px);
+    padding-top: var(--space-4, 16px);
+  }
+  
+  .command-palette-container {
+    max-height: 80vh;
+    border-radius: var(--radius-lg, 12px);
+  }
+  
+  .command-palette-footer {
+    display: none;
+  }
+}
+
+/* Light Mode */
+:root[data-theme="light"] .command-palette-backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .command-palette-container {
+    animation: none;
+  }
+}
+</style>
+
+<!-- Command Palette JavaScript -->
+<script>
+(function() {
+  'use strict';
+  
+  // Hey future me - this is the Command Palette controller!
+  // Handles keyboard shortcuts, focus management, and HTMX integration.
+  
+  const palette = document.getElementById('command-palette');
+  const input = document.getElementById('command-palette-input');
+  const results = document.getElementById('command-results');
+  const recentSection = document.getElementById('command-recent');
+  const recentList = document.getElementById('command-recent-list');
+  const emptyState = document.getElementById('command-empty');
+  const loadingState = document.getElementById('command-loading');
+  
+  // State
+  let isOpen = false;
+  let selectedIndex = -1;
+  let debounceTimer = null;
+  const RECENT_SEARCHES_KEY = 'soulspot_recent_searches';
+  const MAX_RECENT = 5;
+  
+  // ===== OPEN/CLOSE =====
+  
+  function open() {
+    if (isOpen) return;
+    isOpen = true;
+    
+    palette.removeAttribute('hidden');
+    input.value = '';
+    input.focus();
+    selectedIndex = -1;
+    
+    // Show recent searches
+    showRecent();
+    hideResults();
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+    
+    // Trap focus
+    palette.addEventListener('keydown', handleKeydown);
+  }
+  
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    
+    palette.setAttribute('hidden', '');
+    document.body.style.overflow = '';
+    
+    palette.removeEventListener('keydown', handleKeydown);
+  }
+  
+  // ===== RECENT SEARCHES =====
+  
+  function getRecentSearches() {
+    try {
+      return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+  
+  function addRecentSearch(query) {
+    if (!query || query.trim().length < 2) return;
+    
+    let recent = getRecentSearches();
+    recent = recent.filter(r => r.query !== query);
+    recent.unshift({ query: query, timestamp: Date.now() });
+    recent = recent.slice(0, MAX_RECENT);
+    
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent));
+  }
+  
+  function showRecent() {
+    const recent = getRecentSearches();
+    
+    if (recent.length === 0) {
+      recentSection.hidden = true;
+      return;
+    }
+    
+    recentSection.hidden = false;
+    recentList.innerHTML = recent.map((item, index) => `
+      <li class="command-item" 
+          role="option" 
+          data-query="${escapeHtml(item.query)}"
+          tabindex="-1">
+        <div class="command-item-icon">
+          <i class="bi bi-clock-history"></i>
+        </div>
+        <div class="command-item-content">
+          <div class="command-item-title">${escapeHtml(item.query)}</div>
+        </div>
+      </li>
+    `).join('');
+    
+    // Add click handlers
+    recentList.querySelectorAll('.command-item').forEach(item => {
+      item.addEventListener('click', () => {
+        input.value = item.dataset.query;
+        search(item.dataset.query);
+      });
+    });
+  }
+  
+  // ===== SEARCH =====
+  
+  function search(query) {
+    if (!query || query.trim().length < 2) {
+      showRecent();
+      hideResults();
+      return;
+    }
+    
+    recentSection.hidden = true;
+    emptyState.hidden = true;
+    loadingState.hidden = false;
+    results.innerHTML = '';
+    
+    // HTMX request to search endpoint
+    htmx.ajax('GET', `/ui/search/quick?q=${encodeURIComponent(query)}`, {
+      target: '#command-results',
+      swap: 'innerHTML'
+    }).then(() => {
+      loadingState.hidden = true;
+      
+      // Check if results are empty
+      const items = results.querySelectorAll('.command-item');
+      if (items.length === 0) {
+        emptyState.hidden = false;
+      } else {
+        emptyState.hidden = true;
+        selectedIndex = -1;
+        
+        // Add click handlers and keyboard navigation
+        items.forEach((item, index) => {
+          item.setAttribute('role', 'option');
+          item.setAttribute('tabindex', '-1');
+          
+          item.addEventListener('click', () => {
+            selectItem(item);
+          });
+        });
+      }
+    }).catch(() => {
+      loadingState.hidden = true;
+      emptyState.hidden = false;
+    });
+  }
+  
+  function hideResults() {
+    results.innerHTML = '';
+    emptyState.hidden = true;
+    loadingState.hidden = true;
+  }
+  
+  // ===== KEYBOARD NAVIGATION =====
+  
+  function handleKeydown(e) {
+    const items = getAllItems();
+    
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        close();
+        break;
+        
+      case 'ArrowDown':
+        e.preventDefault();
+        navigate(1, items);
+        break;
+        
+      case 'ArrowUp':
+        e.preventDefault();
+        navigate(-1, items);
+        break;
+        
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && items[selectedIndex]) {
+          selectItem(items[selectedIndex]);
+        } else if (input.value.trim()) {
+          // Search on Enter if nothing selected
+          search(input.value.trim());
+        }
+        break;
+        
+      case 'Tab':
+        // Trap focus within palette
+        e.preventDefault();
+        if (items.length > 0) {
+          navigate(e.shiftKey ? -1 : 1, items);
+        }
+        break;
+    }
+  }
+  
+  function getAllItems() {
+    return Array.from(palette.querySelectorAll('.command-item'));
+  }
+  
+  function navigate(direction, items) {
+    if (items.length === 0) return;
+    
+    // Clear previous selection
+    items.forEach(item => item.removeAttribute('aria-selected'));
+    
+    // Calculate new index
+    selectedIndex += direction;
+    if (selectedIndex < 0) selectedIndex = items.length - 1;
+    if (selectedIndex >= items.length) selectedIndex = 0;
+    
+    // Set new selection
+    const selected = items[selectedIndex];
+    selected.setAttribute('aria-selected', 'true');
+    selected.scrollIntoView({ block: 'nearest' });
+    
+    // Update aria-activedescendant
+    input.setAttribute('aria-activedescendant', selected.id || '');
+  }
+  
+  function selectItem(item) {
+    // Check if it's a recent search item
+    if (item.dataset.query) {
+      input.value = item.dataset.query;
+      search(item.dataset.query);
+      return;
+    }
+    
+    // Check for href attribute
+    const href = item.dataset.href || item.querySelector('a')?.href;
+    if (href) {
+      addRecentSearch(input.value);
+      window.location.href = href;
+      return;
+    }
+    
+    // Check for HTMX attributes
+    if (item.hasAttribute('hx-get') || item.hasAttribute('hx-post')) {
+      addRecentSearch(input.value);
+      htmx.trigger(item, 'click');
+      close();
+    }
+  }
+  
+  // ===== INPUT HANDLING =====
+  
+  input.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    const query = e.target.value.trim();
+    
+    if (query.length < 2) {
+      showRecent();
+      hideResults();
+      return;
+    }
+    
+    debounceTimer = setTimeout(() => {
+      search(query);
+    }, 150); // 150ms debounce
+  });
+  
+  // ===== BACKDROP CLICK =====
+  
+  palette.querySelector('.command-palette-backdrop').addEventListener('click', close);
+  
+  // ===== GLOBAL KEYBOARD SHORTCUT =====
+  
+  document.addEventListener('keydown', (e) => {
+    // Cmd+K (Mac) or Ctrl+K (Windows/Linux)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      if (isOpen) {
+        close();
+      } else {
+        open();
+      }
+    }
+    
+    // Also support "/" to open search (common pattern)
+    if (e.key === '/' && !isOpen && !isInputFocused()) {
+      e.preventDefault();
+      open();
+    }
+  });
+  
+  function isInputFocused() {
+    const active = document.activeElement;
+    return active && (
+      active.tagName === 'INPUT' || 
+      active.tagName === 'TEXTAREA' || 
+      active.isContentEditable
+    );
+  }
+  
+  // ===== UTILITIES =====
+  
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+  
+  // Expose for external use
+  window.SoulSpotCommandPalette = { open, close };
+  
+})();
+</script>

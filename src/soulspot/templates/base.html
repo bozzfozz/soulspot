@@ -102,6 +102,13 @@
     <!-- Legacy JS for backwards compatibility with HTMX partials -->
     <script src="/static/js/sse-client.js"></script>
     <script src="/static/js/notifications.js"></script>
+    <script src="/static/js/focus-trap.js"></script>
+
+    <!-- Command Palette (Cmd+K / Ctrl+K) -->
+    {% include "includes/_command_palette.html" %}
+
+    <!-- Bottom Sheet (Mobile Action Sheets) -->
+    {% include "includes/_bottom_sheet.html" %}
 
     {% block extra_scripts %}{% endblock %}
 </body>
