@@ -1425,22 +1425,19 @@ class DeezerPlugin(IMusicServicePlugin):
             Standard TrackDTO
         """
         return TrackDTO(
-            id=str(deezer_track.id),
-            name=deezer_track.title,
+            title=deezer_track.title,
             artist_name=deezer_track.artist_name,
-            artist_id=str(deezer_track.artist_id) if deezer_track.artist_id else None,
+            source_service="deezer",
+            deezer_id=str(deezer_track.id),
+            artist_deezer_id=str(deezer_track.artist_id) if deezer_track.artist_id else None,
             album_name=deezer_track.album_title,
-            album_id=str(deezer_track.album_id) if deezer_track.album_id else None,
+            album_deezer_id=str(deezer_track.album_id) if deezer_track.album_id else None,
             duration_ms=deezer_track.duration * 1000,  # Convert seconds to ms
             track_number=deezer_track.track_position,
-            disc_number=deezer_track.disk_number,
+            disc_number=deezer_track.disk_number or 1,
             isrc=deezer_track.isrc,  # GOLD for cross-service matching!
             explicit=deezer_track.explicit_lyrics,
-            service=ServiceType.DEEZER,
-            extra={
-                "deezer_id": deezer_track.id,
-                "preview_url": deezer_track.preview,
-            },
+            preview_url=deezer_track.preview,
         )
 
     # Legacy alias for backwards compatibility

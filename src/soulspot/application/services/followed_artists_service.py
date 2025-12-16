@@ -677,25 +677,21 @@ class FollowedArtistsService:
                 continue
             seen_keys.add(norm_key)
 
-            # Handle both Spotify and Deezer IDs
+            # Check if album already exists - handle Spotify and Deezer differently
+            # Hey future me - Deezer albums don't have spotify_uri, so we skip URI-based lookup for them
+            existing_album = None
             if album_dto.spotify_id:
+                # Spotify album - check by Spotify URI
                 spotify_uri = SpotifyUri.from_string(
                     album_dto.spotify_uri or f"spotify:album:{album_dto.spotify_id}"
                 )
-            else:
-                # Deezer album - create a pseudo-URI for deduplication
-                spotify_uri = SpotifyUri.from_string(
-                    f"deezer:album:{album_dto.deezer_id or 'unknown'}"
-                )
-
-            # Check if album already exists (by URI)
-            existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
-            if existing_album:
-                stats["skipped"] += 1
-                continue
+                existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
+                if existing_album:
+                    stats["skipped"] += 1
+                    continue
             
-            # Additional check: Search by title + artist to catch cross-service duplicates
-            # Hey future me - this catches albums that exist with different source URI
+            # Always check by title + artist (catches both Spotify and Deezer duplicates)
+            # Hey future me - this catches albums that exist with different source URI or from different services
             existing_by_title = await album_repo.get_by_title_and_artist(
                 title=album_dto.title,
                 artist_id=artist.id,
