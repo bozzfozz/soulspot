@@ -90,12 +90,13 @@ def upgrade() -> None:
     if _column_exists(connection, "soulspot_artists", "image_url"):
         print("Renaming soulspot_artists.image_url → artwork_url")
         
-        # CRITICAL: Drop expression-based index BEFORE batch_alter_table
-        # SQLite can't automatically copy expression-based indexes during table recreation
-        print("Dropping ix_soulspot_artists_name_lower index (will recreate after)")
-        connection.execute(sa.text(
-            "DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"
-        ))
+        # CRITICAL: Drop ALL indexes BEFORE batch_alter_table
+        # SQLite batch_alter_table(recreate="always") drops ALL indexes during table recreation
+        # We must manually drop/recreate them, especially expression-based indexes
+        print("Dropping all soulspot_artists indexes (will recreate after)")
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_name"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_spotify_uri"))
         connection.commit()
         
         # For SQLite, we need to use batch mode with recreate strategy
@@ -111,11 +112,19 @@ def upgrade() -> None:
                 existing_nullable=True,
             )
         
-        # CRITICAL: Recreate expression-based index AFTER batch_alter_table
-        print("Recreating ix_soulspot_artists_name_lower index")
+        # CRITICAL: Recreate ALL indexes AFTER batch_alter_table
+        print("Recreating all soulspot_artists indexes")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name "
+            "ON soulspot_artists (name)"
+        ))
         connection.execute(sa.text(
             "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name_lower "
             "ON soulspot_artists (lower(name))"
+        ))
+        connection.execute(sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_soulspot_artists_spotify_uri "
+            "ON soulspot_artists (spotify_uri)"
         ))
         connection.commit()
         
@@ -135,6 +144,15 @@ def upgrade() -> None:
     # Rename playlists.cover_url → artwork_url (if needed)
     if _column_exists(connection, "playlists", "cover_url"):
         print("Renaming playlists.cover_url → artwork_url")
+        
+        # CRITICAL: Drop ALL indexes BEFORE batch_alter_table
+        # SQLite batch_alter_table(recreate="always") drops ALL indexes during table recreation
+        print("Dropping all playlists indexes (will recreate after)")
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_name"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_spotify_uri"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_is_blacklisted"))
+        connection.commit()
+        
         # For SQLite, we need to use batch mode with recreate strategy
         with op.batch_alter_table(
             "playlists",
@@ -147,6 +165,22 @@ def upgrade() -> None:
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
+        
+        # CRITICAL: Recreate ALL indexes AFTER batch_alter_table
+        print("Recreating all playlists indexes")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_playlists_name "
+            "ON playlists (name)"
+        ))
+        connection.execute(sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_playlists_spotify_uri "
+            "ON playlists (spotify_uri)"
+        ))
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_playlists_is_blacklisted "
+            "ON playlists (is_blacklisted)"
+        ))
+        connection.commit()
     elif _column_exists(connection, "playlists", "artwork_url"):
         print("Column playlists.artwork_url already exists - skipping rename")
     else:
@@ -171,11 +205,11 @@ def downgrade() -> None:
     if _column_exists(connection, "soulspot_artists", "artwork_url"):
         print("Reverting soulspot_artists.artwork_url → image_url")
         
-        # CRITICAL: Drop expression-based index BEFORE batch_alter_table
-        print("Dropping ix_soulspot_artists_name_lower index (will recreate after)")
-        connection.execute(sa.text(
-            "DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"
-        ))
+        # CRITICAL: Drop ALL indexes BEFORE batch_alter_table
+        print("Dropping all soulspot_artists indexes (will recreate after)")
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_name"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_soulspot_artists_spotify_uri"))
         connection.commit()
         
         with op.batch_alter_table(
@@ -190,11 +224,19 @@ def downgrade() -> None:
                 existing_nullable=True,
             )
         
-        # CRITICAL: Recreate expression-based index AFTER batch_alter_table
-        print("Recreating ix_soulspot_artists_name_lower index")
+        # CRITICAL: Recreate ALL indexes AFTER batch_alter_table
+        print("Recreating all soulspot_artists indexes")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name "
+            "ON soulspot_artists (name)"
+        ))
         connection.execute(sa.text(
             "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name_lower "
             "ON soulspot_artists (lower(name))"
+        ))
+        connection.execute(sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_soulspot_artists_spotify_uri "
+            "ON soulspot_artists (spotify_uri)"
         ))
         connection.commit()
         
@@ -209,6 +251,14 @@ def downgrade() -> None:
     # Revert playlists.artwork_url → cover_url (if needed)
     if _column_exists(connection, "playlists", "artwork_url"):
         print("Reverting playlists.artwork_url → cover_url")
+        
+        # CRITICAL: Drop ALL indexes BEFORE batch_alter_table
+        print("Dropping all playlists indexes (will recreate after)")
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_name"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_spotify_uri"))
+        connection.execute(sa.text("DROP INDEX IF EXISTS ix_playlists_is_blacklisted"))
+        connection.commit()
+        
         with op.batch_alter_table(
             "playlists",
             schema=None,
@@ -220,6 +270,22 @@ def downgrade() -> None:
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
+        
+        # CRITICAL: Recreate ALL indexes AFTER batch_alter_table
+        print("Recreating all playlists indexes")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_playlists_name "
+            "ON playlists (name)"
+        ))
+        connection.execute(sa.text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_playlists_spotify_uri "
+            "ON playlists (spotify_uri)"
+        ))
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_playlists_is_blacklisted "
+            "ON playlists (is_blacklisted)"
+        ))
+        connection.commit()
     elif _column_exists(connection, "playlists", "cover_url"):
         print("Column playlists.cover_url already exists - skipping revert")
     else:
