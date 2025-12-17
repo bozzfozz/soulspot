@@ -51,6 +51,9 @@ API (FastAPI) → Application (Services, Use Cases) → Domain (Entities, Ports)
 
 **BEVOR du Code schreibst, lies:**
 - `.github/instructions/architecture.instructions.md` - Layer-Regeln, Datenfluss, Attribut-Naming
+- `.github/instructions/naming-conventions.instructions.md` - Funktions-/Parameter-/Konstruktor-Naming
+- `.github/instructions/python.instructions.md` - Python-Coding-Konventionen
+- `.github/instructions/tasksync_v4.instructions.md` - TaskSync Session-Management
 - `docs/architecture/DATA_LAYER_PATTERNS.md` - Code-Beispiele für häufige Operationen
 
 **Die häufigsten Fehler:**
@@ -541,7 +544,7 @@ bandit -r src/
 
 ## 16. TaskSync V5 – Terminal-Based Session Management
 
-**When TaskSync is active** (detected by `tasksync.instructions.md` being loaded):
+**When TaskSync is active** (detected by `.github/instructions/tasksync_v4.instructions.md` being loaded):
 
 ### Core Behavior
 1. **Keep Session Alive** – Do NOT end conversation between tasks
