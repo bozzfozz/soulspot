@@ -1808,15 +1808,26 @@ async def library_album_detail(
     result = await session.execute(stmt)
     track_models = result.unique().scalars().all()
 
+    # If no tracks found, show empty album with sync prompt instead of 404
+    # (Album exists in DB but tracks not synced yet)
     if not track_models:
+        # Return album page with empty tracks and sync prompt
+        album_data = {
+            "id": str(album_model.id),
+            "title": album_title,
+            "artist": artist_name,
+            "artist_slug": artist_name,
+            "tracks": [],
+            "year": album_model.release_year if hasattr(album_model, "release_year") else None,
+            "total_duration_ms": 0,
+            "artwork_url": album_model.artwork_url if hasattr(album_model, "artwork_url") else None,
+            "is_compilation": "compilation" in (album_model.secondary_types or []),
+            "needs_sync": True,  # Flag to show "Sync required" message
+            "source": album_model.source,
+            "spotify_uri": album_model.spotify_uri,
+        }
         return templates.TemplateResponse(
-            request,
-            "error.html",
-            context={
-                "error_code": 404,
-                "error_message": f"Album '{album_title}' by '{artist_name}' not found",
-            },
-            status_code=404,
+            request, "library_album_detail.html", context={"album": album_data}
         )
 
     # Convert tracks to template format

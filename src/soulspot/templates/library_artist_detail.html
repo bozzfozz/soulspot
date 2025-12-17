@@ -76,7 +76,7 @@
                 {% else %}
                 <i class="bi bi-disc"></i>
                 {% endif %}
-                {# Album type badge #}
+                {# Album type badge - show for all types (single/EP/album/compilation) #}
                 {% set is_compilation = "compilation" in (album.secondary_types or []) %}
                 {% if is_compilation %}
                 <span class="album-type-badge album-type-compilation">Compilation</span>
@@ -84,6 +84,8 @@
                 <span class="album-type-badge album-type-ep">EP</span>
                 {% elif album.primary_type == 'single' %}
                 <span class="album-type-badge album-type-single">Single</span>
+                {% elif album.primary_type == 'album' %}
+                <span class="album-type-badge album-type-album">Album</span>
                 {% endif %}
             </div>
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
@@ -183,6 +185,11 @@
     /* EP - purple */
     .album-type-ep {
         background: rgba(139, 92, 246, 0.85);
+        color: white;
+    }
+    /* Album - green */
+    .album-type-album {
+        background: rgba(34, 197, 94, 0.85);
         color: white;
     }
     /* Compilation - amber/orange */

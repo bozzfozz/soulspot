@@ -107,33 +107,46 @@ class ReDownloadRequest(BaseModel):
 @router.post("/scan")
 async def start_library_scan(
     request: ScanRequest,
-    session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
+    job_queue: JobQueue = Depends(get_job_queue),
 ) -> dict[str, Any]:
-    """Start a library scan.
+    """Start a library scan (DEPRECATED - use /library/import/scan instead).
+    
+    This endpoint is deprecated and redirects to the new JobQueue-based scan.
+    Use POST /library/import/scan for new integrations!
 
     Args:
-        request: Scan request with path
-        session: Database session
-        settings: Application settings
+        request: Scan request with path (IGNORED - always scans configured music_path)
+        job_queue: Job queue for background processing
 
     Returns:
-        Scan information with ID
+        Job information (NEW: returns job_id instead of scan_id for consistency)
     """
+    logger.warning(
+        "DEPRECATED: /library/scan endpoint called. Use /library/import/scan instead!"
+    )
+    
     try:
-        use_case = ScanLibraryUseCase(session, settings)
-        scan = await use_case.execute(request.scan_path)
+        # Queue the scan job using new JobQueue system
+        job_id = await job_queue.enqueue(
+            job_type=JobType.LIBRARY_SCAN,
+            payload={
+                "incremental": None,  # Auto-detect
+                "defer_cleanup": True,
+            },
+            max_retries=1,
+            priority=5,
+        )
 
         return {
-            "scan_id": scan.id,
-            "status": scan.status.value,
-            "scan_path": scan.scan_path,
-            "total_files": scan.total_files,
-            "message": "Library scan started",
+            "scan_id": job_id,  # Backward compatibility (actually job_id)
+            "job_id": job_id,  # New field for clarity
+            "status": "pending",
+            "scan_path": str(request.scan_path) if request.scan_path else "auto",
+            "total_files": 0,  # Will be calculated during scan
+            "message": "Library scan started (using new JobQueue backend)",
+            "_deprecated": True,
+            "_use_instead": "/api/library/import/scan",
         }
-    except ValueError as e:
-        # Path validation errors
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to start library scan: {str(e)}"
@@ -143,21 +156,51 @@ async def start_library_scan(
 @router.get("/scan/{scan_id}")
 async def get_scan_status(
     scan_id: str,
-    session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
+    job_queue: JobQueue = Depends(get_job_queue),
 ) -> ScanResponse:
-    """Get library scan status.
+    """Get library scan status (DEPRECATED - use /library/import/status/{job_id} instead).
+    
+    This endpoint is deprecated and redirects to the new JobQueue-based status.
+    Use GET /library/import/status/{job_id} for new integrations!
 
     Args:
-        scan_id: Scan ID
-        session: Database session
-        settings: Application settings
+        scan_id: Scan/Job ID (accepts both old scan_id and new job_id)
+        job_queue: Job queue for background processing
 
     Returns:
-        Scan status and progress
+        Scan status and progress (adapted to old format for backward compatibility)
     """
-    use_case = ScanLibraryUseCase(session, settings)
-    scan = await use_case.get_scan_status(scan_id)
+    logger.warning(
+        "DEPRECATED: /library/scan/{scan_id} endpoint called. "
+        "Use /library/import/status/{job_id} instead!"
+    )
+    
+    try:
+        # Try to get job from queue (scan_id is actually job_id now)
+        job = await job_queue.get_job(scan_id)
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Scan/Job not found")
+        
+        result = job.result or {}
+        stats = result.get("stats", {})
+        
+        return ScanResponse(
+            scan_id=scan_id,
+            status=job.status,
+            scan_path="auto",  # Not tracked in new system
+            total_files=stats.get("scanned", 0),
+            scanned_files=stats.get("imported", 0),
+            broken_files=stats.get("errors", 0),
+            duplicate_files=0,  # Not tracked in library scan
+            progress_percent=result.get("progress", 0.0) * 100,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get scan status: {str(e)}"
+        ) from e
 
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")

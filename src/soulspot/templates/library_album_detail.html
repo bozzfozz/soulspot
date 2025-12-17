@@ -365,6 +365,40 @@
         </table>
     </div>
     {% else %}
+    {# No tracks - show sync prompt if album needs sync, otherwise show generic empty state #}
+    {% if album.needs_sync %}
+    <div class="empty-state" style="padding: var(--space-12);">
+        <div style="max-width: 500px; margin: 0 auto; text-align: center;">
+            <i class="bi bi-cloud-download" style="font-size: 4rem; color: var(--text-muted); margin-bottom: var(--space-4);"></i>
+            <h3 style="margin-bottom: var(--space-2);">Tracks Not Synced Yet</h3>
+            <p style="color: var(--text-muted); margin-bottom: var(--space-4);">
+                This album is in your library but track metadata hasn't been synced from 
+                {% if album.source == 'spotify' %}Spotify{% elif album.source == 'deezer' %}Deezer{% else %}the provider{% endif %}.
+            </p>
+            {% if album.source == 'spotify' and album.spotify_uri %}
+            <button class="btn btn-primary"
+                    hx-post="/api/spotify/sync/album-tracks"
+                    hx-vals='{"album_id": "{{ album.spotify_uri.split(':')[-1] }}"}'
+                    hx-swap="none"
+                    hx-on::after-request="if(event.detail.successful) { SoulSpot.toast('Album sync started', 'success'); setTimeout(() => location.reload(), 2000); }">
+                <i class="bi bi-cloud-download"></i>
+                Sync Tracks from Spotify
+            </button>
+            {% elif album.source == 'deezer' %}
+            <button class="btn btn-primary"
+                    onclick="SoulSpot.toast('Deezer album sync not yet implemented', 'warning')">
+                <i class="bi bi-cloud-download"></i>
+                Sync Tracks from Deezer
+            </button>
+            {% else %}
+            <p style="color: var(--text-warning);">
+                <i class="bi bi-exclamation-triangle"></i>
+                Unknown source - cannot auto-sync. Check your sync settings.
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
     <div class="empty-state" style="padding: var(--space-12);">
         <div class="empty-icon">
             <i class="bi bi-music-note"></i>
@@ -372,6 +406,7 @@
         <h3>No tracks found</h3>
         <p>This album does not have any tracks in your library.</p>
     </div>
+    {% endif %}
     {% endif %}
 </div>
 

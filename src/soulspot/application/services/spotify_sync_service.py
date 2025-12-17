@@ -636,6 +636,8 @@ class SpotifySyncService:
         """Insert or update an album in DB from AlbumDTO (Spotify or Deezer).
 
         Hey future me - supports BOTH Spotify AND Deezer albums!
+        NOW ALSO SYNCS TRACKS automatically if AlbumDTO contains them!
+        This prevents the "no tracks" problem where albums load but tracks don't.
         
         DEDUPLICATION STRATEGY:
         - For Spotify albums: Use spotify_id as unique identifier
@@ -684,6 +686,19 @@ class SpotifySyncService:
             album_type=album_type,
             total_tracks=total_tracks,
         )
+        
+        # NEW: Auto-sync tracks if AlbumDTO contains them!
+        # This prevents the "album loaded but no tracks" problem.
+        if hasattr(album_dto, 'tracks') and album_dto.tracks:
+            logger.debug(f"Auto-syncing {len(album_dto.tracks)} tracks for album {unique_id}")
+            for track_dto in album_dto.tracks:
+                try:
+                    await self._upsert_track_from_dto(track_dto, unique_id)
+                except Exception as e:
+                    logger.warning(f"Failed to sync track from album {unique_id}: {e}")
+            
+            # Mark tracks as synced (prevent re-sync cooldown)
+            await self.repo.set_tracks_synced(unique_id)
 
     # =========================================================================
     # ARTIST TOP TRACKS SYNC (für Konsistenz mit DeezerSyncService)
