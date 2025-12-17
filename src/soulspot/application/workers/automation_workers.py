@@ -30,24 +30,23 @@ class WatchlistWorker:
     # UI shows warning banner when token invalid → user re-authenticates → worker resumes.
     # The token_manager is injected via set_token_manager() after worker construction.
     # REFACTORED (Dec 2025): Now uses SpotifyPlugin instead of SpotifyClient!
+    # FIX (Dec 2025): Changed to session_factory to prevent concurrent session errors
     def __init__(
         self,
-        session: AsyncSession,
+        session_factory: Any,  # async_sessionmaker[AsyncSession]
         spotify_plugin: SpotifyPlugin,
         check_interval_seconds: int = 3600,  # Default: 1 hour
     ) -> None:
         """Initialize watchlist worker.
 
         Args:
-            session: Database session
+            session_factory: Factory for creating database sessions
             spotify_plugin: SpotifyPlugin for fetching releases (handles token via set_token)
             check_interval_seconds: How often to check watchlists
         """
-        self.session = session
+        self.session_factory = session_factory
         self.spotify_plugin = spotify_plugin
         self.check_interval_seconds = check_interval_seconds
-        self.watchlist_service = WatchlistService(session, spotify_plugin)
-        self.workflow_service = AutomationWorkflowService(session)
         self._running = False
         self._task: asyncio.Task | None = None
         # Hey - token_manager is set via set_token_manager() after construction
@@ -129,144 +128,151 @@ class WatchlistWorker:
     # 6. Process new releases as before
     #
     # TOKEN HANDLING: SpotifyPlugin.set_token() is called with token from token_manager!
+    # FIX (Dec 2025): Creates new session scope to prevent concurrent session errors
     async def _check_watchlists(self) -> None:
         """Check all due watchlists for new releases using pre-synced album data."""
-        try:
-            # Import repositories here to avoid circular deps
-            from soulspot.infrastructure.persistence.repositories import (
-                ArtistRepository,
-                SpotifyBrowseRepository,
-            )
-
-            # Get access token and set on SpotifyPlugin
-            access_token = None
-            if self._token_manager:
-                access_token = await self._token_manager.get_token_for_background()
-
-            if not access_token:
-                logger.warning(
-                    "No valid Spotify token available - skipping watchlist check. "
-                    "User needs to re-authenticate via UI."
+        # Create new session for this operation
+        async with self.session_factory() as session:
+            try:
+                # Import repositories here to avoid circular deps
+                from soulspot.infrastructure.persistence.repositories import (
+                    ArtistRepository,
+                    SpotifyBrowseRepository,
                 )
-                return
 
-            # Set token on SpotifyPlugin before any API calls!
-            self.spotify_plugin.set_token(access_token)
+                # Get access token and set on SpotifyPlugin
+                access_token = None
+                if self._token_manager:
+                    access_token = await self._token_manager.get_token_for_background()
 
-            # Get watchlists that need checking
-            watchlists = await self.watchlist_service.list_due_for_check(limit=100)
-
-            if not watchlists:
-                logger.debug("No watchlists due for checking")
-                return
-
-            logger.info(f"Checking {len(watchlists)} watchlists for new releases")
-
-            # Set up repositories
-            artist_repo = ArtistRepository(self.session)
-            spotify_repo = SpotifyBrowseRepository(self.session)
-
-            for watchlist in watchlists:
-                try:
-                    logger.debug(f"Checking watchlist for artist {watchlist.artist_id}")
-
-                    # Step 1: Get local artist to find spotify_uri
-                    local_artist = await artist_repo.get_by_id(watchlist.artist_id)
-                    if not local_artist:
-                        logger.warning(
-                            f"Local artist {watchlist.artist_id} not found, skipping"
-                        )
-                        continue
-
-                    if not local_artist.spotify_uri:
-                        logger.warning(
-                            f"Artist {local_artist.name} has no Spotify URI, skipping"
-                        )
-                        continue
-
-                    # Extract Spotify ID from URI (spotify:artist:XXXXX)
-                    spotify_artist_id = str(local_artist.spotify_uri).split(":")[-1]
-
-                    # Step 2: Check if albums are synced for this artist
-                    sync_status = await spotify_repo.get_artist_albums_sync_status(
-                        spotify_artist_id
+                if not access_token:
+                    logger.warning(
+                        "No valid Spotify token available - skipping watchlist check. "
+                        "User needs to re-authenticate via UI."
                     )
+                    return
 
-                    if not sync_status["albums_synced"]:
-                        # Albums not synced yet - trigger sync and skip this check
-                        # The Background Sync will catch up, we'll find new releases next cycle
-                        logger.info(
-                            f"Albums not yet synced for {local_artist.name}, "
-                            "will be handled by background sync"
-                        )
-                        # Just update last_checked_at so we don't spam logs
-                        watchlist.update_check(releases_found=0, downloads_triggered=0)
-                        await self.watchlist_service.repository.update(watchlist)
-                        await self.session.commit()
-                        continue
+                # Set token on SpotifyPlugin before any API calls!
+                self.spotify_plugin.set_token(access_token)
 
-                    # Step 3: Get new albums since last check from LOCAL data
-                    # Hey future me - this is the KEY optimization! No API call here!
-                    new_album_models = await spotify_repo.get_new_albums_since(
-                        artist_id=spotify_artist_id,
-                        since_date=watchlist.last_checked_at,
-                    )
+                # Create services with this session
+                watchlist_service = WatchlistService(session, self.spotify_plugin)
+                workflow_service = AutomationWorkflowService(session)
 
-                    # Convert to the expected format
-                    new_releases: list[dict[str, Any]] = []
-                    for album in new_album_models:
-                        new_releases.append(
-                            {
-                                "album_id": album.spotify_uri,
-                                "album_name": album.title,
-                                "album_type": album.primary_type,
-                                "release_date": album.release_date,
-                                "total_tracks": album.total_tracks,
-                                "images": [{"url": album.artwork_url}]
-                                if album.artwork_url
-                                else [],
-                            }
-                        )
+                # Get watchlists that need checking
+                watchlists = await watchlist_service.list_due_for_check(limit=100)
 
-                    logger.info(
-                        f"Found {len(new_releases)} new releases for {local_artist.name} "
-                        f"(total albums in DB: {sync_status['album_count']})"
-                    )
+                if not watchlists:
+                    logger.debug("No watchlists due for checking")
+                    return
 
-                    # Trigger automation workflows for new releases if auto_download is enabled
-                    downloads_triggered = 0
-                    if new_releases and watchlist.auto_download:
-                        for release in new_releases:
-                            context = {
-                                "artist_id": str(watchlist.artist_id.value),
-                                "watchlist_id": str(watchlist.id.value),
-                                "release_info": release,
-                                "quality_profile": watchlist.quality_profile,
-                            }
-                            # Trigger the automation workflow
-                            await self.workflow_service.trigger_workflow(
-                                trigger=AutomationTrigger.NEW_RELEASE,
-                                context=context,
+                logger.info(f"Checking {len(watchlists)} watchlists for new releases")
+
+                # Set up repositories with this session
+                artist_repo = ArtistRepository(session)
+                spotify_repo = SpotifyBrowseRepository(session)
+
+                for watchlist in watchlists:
+                    try:
+                        logger.debug(f"Checking watchlist for artist {watchlist.artist_id}")
+
+                        # Step 1: Get local artist to find spotify_uri
+                        local_artist = await artist_repo.get_by_id(watchlist.artist_id)
+                        if not local_artist:
+                            logger.warning(
+                                f"Local artist {watchlist.artist_id} not found, skipping"
                             )
-                            downloads_triggered += 1
+                            continue
 
-                    # Update check time and stats
-                    watchlist.update_check(
-                        releases_found=len(new_releases),
-                        downloads_triggered=downloads_triggered,
-                    )
-                    await self.watchlist_service.repository.update(watchlist)
-                    await self.session.commit()
+                        if not local_artist.spotify_uri:
+                            logger.warning(
+                                f"Artist {local_artist.name} has no Spotify URI, skipping"
+                            )
+                            continue
 
-                except Exception as e:
-                    logger.error(
-                        f"Error checking watchlist {watchlist.id}: {e}",
-                        exc_info=True,
-                    )
-                    await self.session.rollback()
+                        # Extract Spotify ID from URI (spotify:artist:XXXXX)
+                        spotify_artist_id = str(local_artist.spotify_uri).split(":")[-1]
 
-        except Exception as e:
-            logger.error(f"Error in watchlist checking: {e}", exc_info=True)
+                        # Step 2: Check if albums are synced for this artist
+                        sync_status = await spotify_repo.get_artist_albums_sync_status(
+                            spotify_artist_id
+                        )
+
+                        if not sync_status["albums_synced"]:
+                            # Albums not synced yet - trigger sync and skip this check
+                            # The Background Sync will catch up, we'll find new releases next cycle
+                            logger.info(
+                                f"Albums not yet synced for {local_artist.name}, "
+                                "will be handled by background sync"
+                            )
+                            # Just update last_checked_at so we don't spam logs
+                            watchlist.update_check(releases_found=0, downloads_triggered=0)
+                            await watchlist_service.repository.update(watchlist)
+                            await session.commit()
+                            continue
+
+                        # Step 3: Get new albums since last check from LOCAL data
+                        # Hey future me - this is the KEY optimization! No API call here!
+                        new_album_models = await spotify_repo.get_new_albums_since(
+                            artist_id=spotify_artist_id,
+                            since_date=watchlist.last_checked_at,
+                        )
+
+                        # Convert to the expected format
+                        new_releases: list[dict[str, Any]] = []
+                        for album in new_album_models:
+                            new_releases.append(
+                                {
+                                    "album_id": album.spotify_uri,
+                                    "album_name": album.title,
+                                    "album_type": album.primary_type,
+                                    "release_date": album.release_date,
+                                    "total_tracks": album.total_tracks,
+                                    "images": [{"url": album.artwork_url}]
+                                    if album.artwork_url
+                                    else [],
+                                }
+                            )
+
+                        logger.info(
+                            f"Found {len(new_releases)} new releases for {local_artist.name} "
+                            f"(total albums in DB: {sync_status['album_count']})"
+                        )
+
+                        # Trigger automation workflows for new releases if auto_download is enabled
+                        downloads_triggered = 0
+                        if new_releases and watchlist.auto_download:
+                            for release in new_releases:
+                                context = {
+                                    "artist_id": str(watchlist.artist_id.value),
+                                    "watchlist_id": str(watchlist.id.value),
+                                    "release_info": release,
+                                    "quality_profile": watchlist.quality_profile,
+                                }
+                                # Trigger the automation workflow
+                                await workflow_service.trigger_workflow(
+                                    trigger=AutomationTrigger.NEW_RELEASE,
+                                    context=context,
+                                )
+                                downloads_triggered += 1
+
+                        # Update check time and stats
+                        watchlist.update_check(
+                            releases_found=len(new_releases),
+                            downloads_triggered=downloads_triggered,
+                        )
+                        await watchlist_service.repository.update(watchlist)
+                        await session.commit()
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error checking watchlist {watchlist.id}: {e}",
+                            exc_info=True,
+                        )
+                        await session.rollback()
+
+            except Exception as e:
+                logger.error(f"Error in watchlist checking: {e}\", exc_info=True)
 
     async def _trigger_automation(
         self, watchlist: Any, new_releases: list[dict[str, Any]]
@@ -303,21 +309,20 @@ class DiscographyWorker:
     # TOKEN HANDLING (2025 update):
     # Uses DatabaseTokenManager.get_token_for_background() - same pattern as WatchlistWorker.
     # Graceful degradation: skips work when token invalid, resumes after user re-authenticates.
+    # FIX (Dec 2025): Changed to session_factory to prevent concurrent session errors
     def __init__(
         self,
-        session: AsyncSession,
+        session_factory: Any,  # async_sessionmaker[AsyncSession]
         check_interval_seconds: int = 86400,  # Default: 24 hours
     ) -> None:
         """Initialize discography worker.
 
         Args:
-            session: Database session
+            session_factory: Factory for creating database sessions
             check_interval_seconds: How often to check discography
         """
-        self.session = session
+        self.session_factory = session_factory
         self.check_interval_seconds = check_interval_seconds
-        self.discography_service = DiscographyService(session)
-        self.workflow_service = AutomationWorkflowService(session)
         self._running = False
         self._task: asyncio.Task | None = None
         # Hey - token_manager is set via set_token_manager() after construction
@@ -400,31 +405,37 @@ class DiscographyWorker:
         3. Compare with local library to identify missing albums
         4. Trigger automation workflows for missing albums if auto_download enabled
         """
-        try:
-            logger.info("Checking artist discographies")
+        # Create new session for this operation
+        async with self.session_factory() as session:
+            try:
+                logger.info("Checking artist discographies")
 
-            # Hey - get access token from DatabaseTokenManager FIRST!
-            # If no token, skip entire cycle (graceful degradation)
-            access_token = None
-            if self._token_manager:
-                access_token = await self._token_manager.get_token_for_background()
+                # Hey - get access token from DatabaseTokenManager FIRST!
+                # If no token, skip entire cycle (graceful degradation)
+                access_token = None
+                if self._token_manager:
+                    access_token = await self._token_manager.get_token_for_background()
 
-            if not access_token:
-                # Token invalid or missing - skip this cycle gracefully
-                # UI warning banner shows "Spotify-Verbindung unterbrochen"
-                logger.warning(
-                    "No valid Spotify token available - skipping discography check. "
-                    "User needs to re-authenticate via UI."
+                if not access_token:
+                    # Token invalid or missing - skip this cycle gracefully
+                    # UI warning banner shows "Spotify-Verbindung unterbrochen"
+                    logger.warning(
+                        "No valid Spotify token available - skipping discography check. "
+                        "User needs to re-authenticate via UI."
+                    )
+                    return
+
+                # Hey - import repository here to avoid circular deps
+                from soulspot.infrastructure.persistence.repositories import (
+                    ArtistWatchlistRepository,
                 )
-                return
 
-            # Hey - import repository here to avoid circular deps
-            from soulspot.infrastructure.persistence.repositories import (
-                ArtistWatchlistRepository,
-            )
+                # Create services with this session
+                discography_service = DiscographyService(session)
+                workflow_service = AutomationWorkflowService(session)
 
-            # Get watchlist repository instance
-            watchlist_repo = ArtistWatchlistRepository(self.session)
+                # Get watchlist repository instance
+                watchlist_repo = ArtistWatchlistRepository(session)
 
             # Get all active watchlists
             active_watchlists = await watchlist_repo.list_active(limit=100)
@@ -449,7 +460,7 @@ class DiscographyWorker:
                     # Token is refreshed automatically by TokenRefreshWorker.
 
                     # Check discography using service
-                    discography_info = await self.discography_service.check_discography(
+                    discography_info = await discography_service.check_discography(
                         artist_id=watchlist.artist_id, access_token=access_token
                     )
 
@@ -462,7 +473,7 @@ class DiscographyWorker:
 
                         # Hey - trigger automation workflow for missing albums
                         # The workflow service handles creating downloads, applying filters, etc
-                        await self.workflow_service.trigger_workflow(
+                        await workflow_service.trigger_workflow(
                             trigger=AutomationTrigger.MISSING_ALBUM,
                             context={
                                 "artist_id": str(watchlist.artist_id.value),
@@ -478,8 +489,8 @@ class DiscographyWorker:
                     )
                     continue  # Continue with next artist on error
 
-        except Exception as e:
-            logger.error(f"Error in discography checking: {e}", exc_info=True)
+            except Exception as e:
+                logger.error(f"Error in discography checking: {e}", exc_info=True)
 
 
 class QualityUpgradeWorker:
@@ -489,21 +500,20 @@ class QualityUpgradeWorker:
     # WHY 24h check interval? Quality of existing files doesn't change, new sources might appear gradually
     # This scans LOCAL library (not external APIs) so less rate-limit concerns than other workers
     # GOTCHA: Comparing quality is subjective - bitrate alone doesn't tell full story (lossy vs lossless)
+    # FIX (Dec 2025): Changed to session_factory to prevent concurrent session errors
     def __init__(
         self,
-        session: AsyncSession,
+        session_factory: Any,  # async_sessionmaker[AsyncSession]
         check_interval_seconds: int = 86400,  # Default: 24 hours
     ) -> None:
         """Initialize quality upgrade worker.
 
         Args:
-            session: Database session
+            session_factory: Factory for creating database sessions
             check_interval_seconds: How often to check for upgrades
         """
-        self.session = session
+        self.session_factory = session_factory
         self.check_interval_seconds = check_interval_seconds
-        self.quality_service = QualityUpgradeService(session)
-        self.workflow_service = AutomationWorkflowService(session)
         self._running = False
         self._task: asyncio.Task | None = None
 
@@ -570,13 +580,19 @@ class QualityUpgradeWorker:
         4. Create upgrade candidates for tracks meeting threshold
         5. Trigger automation workflows for approved upgrades
         """
-        try:
-            logger.info("Identifying quality upgrade opportunities")
+        # Create new session for this operation
+        async with self.session_factory() as session:
+            try:
+                logger.info("Identifying quality upgrade opportunities")
 
-            # Hey - import repository to get tracks
-            from soulspot.infrastructure.persistence.repositories import TrackRepository
+                # Hey - import repository to get tracks
+                from soulspot.infrastructure.persistence.repositories import TrackRepository
 
-            track_repo = TrackRepository(self.session)
+                # Create services with this session
+                quality_service = QualityUpgradeService(session)
+                workflow_service = AutomationWorkflowService(session)
+
+                track_repo = TrackRepository(session)
 
             # Get all tracks from library (paginated to avoid memory issues)
             # In production, might want to add filters like "bitrate < 320" or "format = mp3"
@@ -604,7 +620,7 @@ class QualityUpgradeWorker:
                     # Hey - method will be implemented in QualityUpgradeService later
                     # For now, skip if method doesn't exist yet (graceful degradation)
                     if not hasattr(
-                        self.quality_service, "identify_upgrade_opportunities"
+                        quality_service, "identify_upgrade_opportunities"
                     ):
                         logger.debug(
                             "Quality upgrade identification not yet implemented - skipping"
@@ -612,7 +628,7 @@ class QualityUpgradeWorker:
                         continue
 
                     candidates = (
-                        await self.quality_service.identify_upgrade_opportunities(
+                        await quality_service.identify_upgrade_opportunities(
                             track_id=track.id
                         )
                     )
@@ -634,7 +650,7 @@ class QualityUpgradeWorker:
 
                             # Trigger automation workflow for quality upgrade
                             # Hey - quality upgrade automation will be completed with real search logic
-                            await self.workflow_service.trigger_workflow(
+                            await workflow_service.trigger_workflow(
                                 trigger=AutomationTrigger.QUALITY_UPGRADE,
                                 context={
                                     "track_id": str(track.id.value),
@@ -649,12 +665,12 @@ class QualityUpgradeWorker:
                     logger.error(f"Error checking upgrade for track {track.id}: {e}", exc_info=True)
                     continue  # Continue with next track on error
 
-            logger.info(
-                f"Quality upgrade scan complete - found {upgrade_candidates_found} candidates"
-            )
+                logger.info(
+                    f"Quality upgrade scan complete - found {upgrade_candidates_found} candidates"
+                )
 
-        except Exception as e:
-            logger.error(f"Error in quality upgrade identification: {e}", exc_info=True)
+            except Exception as e:
+                logger.error(f"Error in quality upgrade identification: {e}", exc_info=True)
 
 
 class AutomationWorkerManager:
@@ -672,9 +688,10 @@ class AutomationWorkerManager:
     # QualityUpgradeWorker doesn't need it (scans local library, no Spotify API calls).
     #
     # REFACTORED (Dec 2025): Uses SpotifyPlugin instead of SpotifyClient!
+    # FIX (Dec 2025): Changed to session_factory to prevent concurrent session errors
     def __init__(
         self,
-        session: AsyncSession,
+        session_factory: Any,  # async_sessionmaker[AsyncSession]
         spotify_plugin: SpotifyPlugin,
         watchlist_interval: int = 3600,
         discography_interval: int = 86400,
@@ -684,7 +701,7 @@ class AutomationWorkerManager:
         """Initialize automation worker manager.
 
         Args:
-            session: Database session
+            session_factory: Factory for creating database sessions
             spotify_plugin: SpotifyPlugin for API calls (token set via set_token before operations)
             watchlist_interval: Watchlist check interval in seconds
             discography_interval: Discography check interval in seconds
@@ -692,13 +709,13 @@ class AutomationWorkerManager:
             token_manager: Database-backed token manager for Spotify access
         """
         self.watchlist_worker = WatchlistWorker(
-            session, spotify_plugin, watchlist_interval
+            session_factory, spotify_plugin, watchlist_interval
         )
         # DiscographyWorker no longer needs SpotifyClient - uses LOCAL data!
         self.discography_worker = DiscographyWorker(
-            session, discography_interval
+            session_factory, discography_interval
         )
-        self.quality_worker = QualityUpgradeWorker(session, quality_interval)
+        self.quality_worker = QualityUpgradeWorker(session_factory, quality_interval)
 
         # Hey - inject token_manager into workers that need Spotify access!
         # This is the critical connection between token storage and background work.

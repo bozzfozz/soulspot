@@ -518,7 +518,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
             automation_manager = AutomationWorkerManager(
-                session=worker_session,
+                session_factory=db.get_session_factory(),
                 spotify_plugin=automation_spotify_plugin,
                 token_manager=db_token_manager,
                 watchlist_interval=3600,  # 1 hour
