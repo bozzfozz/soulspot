@@ -7,6 +7,9 @@ from uuid import UUID, uuid4
 
 from soulspot.domain.exceptions import ValidationException
 
+# ImageRef - Standard-Struktur für alle Bilder (artist.image, album.cover, etc.)
+from soulspot.domain.value_objects.image_ref import ImageRef
+
 # Album type exports
 from soulspot.domain.value_objects.album_types import (
     DIVERSITY_THRESHOLD,

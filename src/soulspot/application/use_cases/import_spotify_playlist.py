@@ -117,10 +117,13 @@ class ImportSpotifyPlaylistUseCase(
         try:
             # Plugin returns PlaylistDTO - convert to dict for backward compat
             playlist_dto = await self._spotify_plugin.get_playlist(request.playlist_id)
+            # Hey future me - DTOs nutzen jetzt ImageRef!
+            # PlaylistDTO.cover.url statt .artwork_url
+            # AlbumDTO.cover.url statt .artwork_url
             spotify_playlist = {
                 "name": playlist_dto.name,
                 "description": playlist_dto.description,
-                "images": [{"url": playlist_dto.artwork_url}] if playlist_dto.artwork_url else [],
+                "images": [{"url": playlist_dto.cover.url}] if playlist_dto.cover.url else [],
                 "tracks": {
                     "items": [
                         {
@@ -138,7 +141,7 @@ class ImportSpotifyPlaylistUseCase(
                                 "album": {
                                     "name": t.album.title if t.album else None,
                                     "uri": f"spotify:album:{t.album.spotify_id}" if t.album else None,
-                                    "images": [{"url": t.album.artwork_url}] if t.album and t.album.artwork_url else [],
+                                    "images": [{"url": t.album.cover.url}] if t.album and t.album.cover.url else [],
                                     "release_date": t.album.release_date if t.album else None,
                                 } if t.album else None,
                             }
@@ -159,13 +162,15 @@ class ImportSpotifyPlaylistUseCase(
         if spotify_playlist.get("images") and len(spotify_playlist["images"]) > 0:
             cover_url = spotify_playlist["images"][0].get("url")
 
+        # Hey future me - Playlist.cover ist jetzt ImageRef!
+        from soulspot.domain.value_objects import ImageRef
         playlist = Playlist(
             id=playlist_id,
             name=spotify_playlist["name"],
             description=spotify_playlist.get("description"),
             source=PlaylistSource.SPOTIFY,
             spotify_uri=SpotifyUri(f"spotify:playlist:{request.playlist_id}"),
-            cover_url=cover_url,
+            cover=ImageRef(url=cover_url),  # ImageRef statt cover_url
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
@@ -178,7 +183,8 @@ class ImportSpotifyPlaylistUseCase(
             # Update existing playlist
             existing_playlist.name = playlist.name
             existing_playlist.description = playlist.description
-            existing_playlist.artwork_url = cover_url
+            # Hey future me - Playlist.cover ist ImageRef!
+            existing_playlist.cover = ImageRef(url=cover_url)
             existing_playlist.updated_at = datetime.now(UTC)
             await self._playlist_repository.update(existing_playlist)
             playlist = existing_playlist
@@ -415,11 +421,12 @@ class ImportSpotifyPlaylistUseCase(
                 artist_dto = await self._spotify_plugin.get_artist(artist_id)
 
                 # Convert DTO to Artist entity
+                # Hey future me - ArtistDTO.image und Artist.image sind beide ImageRef!
                 artist = Artist(
                     id=ArtistId.generate(),
                     name=artist_dto.name,
                     spotify_uri=SpotifyUri(f"spotify:artist:{artist_dto.spotify_id}"),
-                    artwork_url=artist_dto.artwork_url,
+                    image=artist_dto.image,  # ImageRef direkt übernehmen
                     genres=artist_dto.genres,
                     metadata_sources={"name": "spotify"},
                     created_at=datetime.now(UTC),

@@ -969,12 +969,12 @@ class ArtworkService:
             # Take the first match
             artist_dto = search_result.items[0]
 
-            # ArtistDTO has artwork_url from Deezer
-            if artist_dto.artwork_url:
+            # ArtistDTO.image is ImageRef with .url property
+            if artist_dto.image.url:
                 logger.debug(
-                    f"Found Deezer image for '{artist_name}': {artist_dto.artwork_url[:50]}..."
+                    f"Found Deezer image for '{artist_name}': {artist_dto.image.url[:50]}..."
                 )
-                return artist_dto.artwork_url
+                return artist_dto.image.url
 
             return None
 
@@ -1030,13 +1030,13 @@ class ArtworkService:
             if not best_match:
                 best_match = search_result.items[0]
 
-            # AlbumDTO has artwork_url from Deezer
-            if best_match.artwork_url:
+            # AlbumDTO.cover is ImageRef with .url property
+            if best_match.cover.url:
                 logger.debug(
                     f"Found Deezer cover for '{album_title}': "
-                    f"{best_match.artwork_url[:50]}..."
+                    f"{best_match.cover.url[:50]}..."
                 )
-                return best_match.artwork_url
+                return best_match.cover.url
 
             return None
 

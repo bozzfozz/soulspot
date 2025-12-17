@@ -172,12 +172,11 @@ class ProviderMappingService:
             deezer_id=dto.deezer_id,
             tidal_id=dto.tidal_id,
             musicbrainz_id=dto.musicbrainz_id,
-            artwork_url=dto.artwork_url,
+            # DTO.image is now ImageRef, Entity.image is also ImageRef
+            image=dto.image,
             genres=dto.genres or [],
             tags=dto.tags or [],
             disambiguation=dto.disambiguation,
-            popularity=dto.popularity,
-            followers=dto.followers,
         )
 
         await self._artist_repo.add(new_artist)
@@ -286,7 +285,8 @@ class ProviderMappingService:
             deezer_id=dto.deezer_id,
             tidal_id=dto.tidal_id,
             musicbrainz_id=dto.musicbrainz_id,
-            artwork_url=dto.artwork_url,
+            # DTO.cover is now ImageRef, Entity.cover is also ImageRef
+            cover=dto.cover,
             release_date=dto.release_date,
             release_year=dto.release_year,
             primary_type=dto.album_type or "album",

@@ -136,7 +136,7 @@ async def index(
             "name": p.name,
             "description": p.description,
             "track_count": p.track_count(),
-            "cover_url": p.artwork_url,
+            "cover_url": p.cover.url if p.cover else None,
             "downloaded_count": 0,
         }
         for p in playlists_list[:6]
@@ -167,8 +167,8 @@ async def index(
         if track_model:
             if track_model.artist:
                 artist_name = track_model.artist.name
-            if track_model.album and track_model.album.artwork_url:
-                album_art_url = track_model.album.artwork_url
+            if track_model.album and track_model.album.cover_url:
+                album_art_url = track_model.album.cover_url
 
         recent_activity.append(
             {
@@ -205,7 +205,7 @@ async def index(
             "name": album.title,
             "artist_name": artist_name,
             "artist_id": album.artist_id,
-            "image_url": album.artwork_url,
+            "image_url": album.cover_url,
             "release_date": album.release_date,
             "album_type": album.primary_type,
             "total_tracks": album.total_tracks,
@@ -264,7 +264,8 @@ async def playlists(
     pending_tracks = total_tracks - downloaded_tracks
 
     # Convert to template-friendly format
-    # Hey future me - cover_url field in API response is for template compatibility!\n    # It gets its value from playlist.artwork_url (Entity field).
+    # Hey future me - cover_url field in API response is for template compatibility!
+    # It gets its value from playlist.cover.url (ImageRef value object).
     # Without it, all playlists show placeholder images even though covers exist.
     playlists_data = [
         {
@@ -273,7 +274,7 @@ async def playlists(
             "description": playlist.description,
             "track_count": len(playlist.track_ids),
             "source": playlist.source.value,
-            "cover_url": playlist.artwork_url,
+            "cover_url": playlist.cover.url if playlist.cover else None,
             "created_at": playlist.created_at.isoformat(),
         }
         for playlist in playlists_list
@@ -386,7 +387,7 @@ async def import_playlist(request: Request) -> Any:
 
 # Listen, this renders the full playlist detail page with ALL tracks! Uses batch query with
 # joinedload to avoid N+1 queries - we fetch all tracks with artist/album in ONE query.
-# The cover_url API field comes from Playlist.artwork_url entity field for Spotify playlists.
+# The cover_url API field comes from Playlist.cover.url (ImageRef) for Spotify playlists.
 # Returns error.html template for 404/400 - nice UX pattern. This builds entire playlist
 # data in memory before passing to template - could be huge for 1000+ track playlists!
 @router.get("/playlists/{playlist_id}", response_class=HTMLResponse)
@@ -435,7 +436,7 @@ async def playlist_detail(
         track_models = result.unique().scalars().all()
 
         # Convert ORM models to template-friendly dicts
-        # Hey future me - album_art comes from the Album's artwork_url!
+        # Hey future me - album_art comes from the Album's cover_url!
         # We eager-load the album relationship and grab its cover image.
         tracks = [
             {
@@ -443,7 +444,7 @@ async def playlist_detail(
                 "title": track.title,
                 "artist": track.artist.name if track.artist else "Unknown Artist",
                 "album": track.album.title if track.album else "Unknown Album",
-                "album_art": track.album.artwork_url if track.album else None,
+                "album_art": track.album.cover_url if track.album else None,
                 "duration_ms": track.duration_ms,
                 "spotify_uri": track.spotify_uri,
                 "file_path": track.file_path,
@@ -462,7 +463,7 @@ async def playlist_detail(
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
-            "cover_url": playlist.artwork_url,  # Spotify playlist cover image
+            "cover_url": playlist.cover.url if playlist.cover else None,  # Spotify playlist cover image (ImageRef)
         }
 
         return templates.TemplateResponse(
@@ -580,7 +581,7 @@ async def _get_downloads_data(
             "title": track.title if track else f"Track {dl.track_id[:8]}",
             "artist": track.artist.name if track and track.artist else "Unknown Artist",
             "album": track.album.title if track and track.album else "Unknown Album",
-            "album_art": track.album.artwork_url if track and track.album and hasattr(track.album, "artwork_url") else None,
+            "album_art": track.album.cover_url if track and track.album and hasattr(track.album, "cover_url") else None,
         })
 
     return {
@@ -1213,7 +1214,7 @@ async def library_artists(
             "local_tracks": local_tracks or 0,  # Only tracks with file_path
             "total_albums": total_albums or 0,  # ALL albums
             "local_albums": local_albums or 0,  # Only albums with local tracks
-            "image_url": artist.artwork_url,  # Spotify CDN URL or None
+            "image_url": artist.image_url,  # Spotify CDN URL or None
             "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
         for artist, total_tracks, local_tracks, total_albums, local_albums in rows
@@ -1354,8 +1355,8 @@ async def library_albums(
             "total_tracks": total_tracks or 0,  # ALL tracks
             "local_tracks": local_tracks or 0,  # Only tracks with file_path
             "year": album.release_year,
-            "artwork_url": album.artwork_url,  # Spotify CDN URL or None
-            "artwork_path": album.artwork_path,  # Local file path or None
+            "artwork_url": album.cover_url,  # Spotify CDN URL or None
+            "artwork_path": album.cover_path,  # Local file path or None
             "is_compilation": "compilation" in (album.secondary_types or []),
             "primary_type": album.primary_type or "album",
             "secondary_types": album.secondary_types or [],
@@ -1440,8 +1441,8 @@ async def library_compilations(
             "artist": album.artist.name if album.artist else "Unknown Artist",
             "track_count": track_count or 0,
             "year": album.release_year,
-            "artwork_url": album.artwork_url,
-            "artwork_path": album.artwork_path,
+            "artwork_url": album.cover_url,
+            "artwork_path": album.cover_path,
             "primary_type": album.primary_type,
             "secondary_types": album.secondary_types or [],
         }
@@ -1684,7 +1685,7 @@ async def library_artist_detail(
             "title": album.title,
             "track_count": 0,  # Will be updated from tracks
             "year": album.release_year,
-            "artwork_url": album.artwork_url if hasattr(album, "artwork_url") else None,
+            "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
             "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
             "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
             "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
@@ -1725,7 +1726,7 @@ async def library_artist_detail(
         "tracks": tracks_data,
         "track_count": len(tracks_data),
         "album_count": len(albums),
-        "image_url": artist_model.artwork_url,  # Spotify CDN URL or None
+        "image_url": artist_model.image_url,  # Spotify CDN URL or None
         "genres": artist_model.genres,  # Spotify genres
     }
 
@@ -1820,7 +1821,7 @@ async def library_album_detail(
             "tracks": [],
             "year": album_model.release_year if hasattr(album_model, "release_year") else None,
             "total_duration_ms": 0,
-            "artwork_url": album_model.artwork_url if hasattr(album_model, "artwork_url") else None,
+            "artwork_url": album_model.cover_url if hasattr(album_model, "cover_url") else None,
             "is_compilation": "compilation" in (album_model.secondary_types or []),
             "needs_sync": True,  # Flag to show "Sync required" message
             "source": album_model.source,
@@ -1867,12 +1868,12 @@ async def library_album_detail(
         else None
     )
 
-    # Hey future me – get artwork_url from album model for Spotify CDN cover
+    # Hey future me – get cover_url from album model for Spotify CDN cover
     artwork_url = (
-        track_models[0].album.artwork_url
+        track_models[0].album.cover_url
         if track_models
         and track_models[0].album
-        and hasattr(track_models[0].album, "artwork_url")
+        and hasattr(track_models[0].album, "cover_url")
         else None
     )
 

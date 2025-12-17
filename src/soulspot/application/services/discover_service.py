@@ -358,7 +358,8 @@ class DiscoverService:
                     name=dto.name,
                     spotify_id=dto.spotify_id,
                     deezer_id=None,
-                    image_url=dto.artwork_url,
+                    # Hey future me - ArtistDTO.image ist ImageRef!
+                    image_url=dto.image.url,
                     genres=dto.genres or [],
                     popularity=dto.popularity or 0,
                     source_service="spotify",
@@ -395,7 +396,8 @@ class DiscoverService:
                     name=dto.name,
                     spotify_id=None,
                     deezer_id=dto.deezer_id,
-                    image_url=dto.artwork_url,
+                    # Hey future me - ArtistDTO.image ist ImageRef!
+                    image_url=dto.image.url,
                     genres=dto.genres or [],
                     popularity=dto.popularity or 0,
                     source_service="deezer",

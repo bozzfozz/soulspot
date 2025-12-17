@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.domain.value_objects import ImageRef
 from soulspot.infrastructure.persistence.models import ensure_utc_aware
 from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
@@ -347,20 +348,22 @@ class SpotifySyncService:
 
         name = artist_dto.name or "Unknown"
         genres = artist_dto.genres or []
-        artwork_url = artist_dto.artwork_url  # Plugin already selects best image
+        # Hey future me - ArtistDTO.image ist jetzt ein ImageRef!
+        # Zugriff auf URL via .image.url statt .artwork_url
+        image_url = artist_dto.image.url  # Plugin already selects best image
         popularity = artist_dto.popularity
         follower_count = artist_dto.followers
 
         # Download image if enabled
         image_path = None
-        if download_images and artwork_url and self._image_service:
+        if download_images and image_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_artist_by_id(spotify_id)
-            existing_url = existing.artwork_url if existing else None
+            existing_url = existing.image_url if existing else None  # Model uses image_url
             existing_path = existing.image_path if existing else None
 
             if await self._image_service.should_redownload(
-                existing_url, artwork_url, existing_path
+                existing_url, image_url, existing_path
             ):
                 image_path = await self._image_service.download_artist_image(
                     spotify_id, image_url
@@ -440,8 +443,10 @@ class SpotifySyncService:
                     pass
 
                 # Update metadata from Spotify if available
-                if dto.artwork_url and existing.artwork_url != dto.artwork_url:
-                    existing.artwork_url = dto.artwork_url
+                # Hey future me - DTO und Entity nutzen beide ImageRef!
+                # dto.image.url und existing.image.url für Zugriff
+                if dto.image.url and existing.image.url != dto.image.url:
+                    existing.image = ImageRef(url=dto.image.url, path=existing.image.path)
                     needs_update = True
                 if dto.genres and existing.genres != dto.genres:
                     existing.genres = dto.genres
@@ -669,7 +674,8 @@ class SpotifySyncService:
             return
 
         name = album_dto.title or "Unknown"
-        image_url = album_dto.artwork_url
+        # Hey future me - AlbumDTO.cover ist jetzt ImageRef!
+        image_url = album_dto.cover.url
         release_date = album_dto.release_date
         # AlbumDTO doesn't have release_date_precision, default to 'day'
         release_date_precision = "day" if release_date else None
@@ -835,10 +841,11 @@ class SpotifySyncService:
             for artist_dto in related_artists:
                 try:
                     # Save artist to DB
+                    # Hey future me - ArtistDTO.image ist jetzt ImageRef!
                     await self.repo.upsert_artist(
                         spotify_id=artist_dto.spotify_id or "",
                         name=artist_dto.name,
-                        image_url=artist_dto.artwork_url,
+                        image_url=artist_dto.image.url,
                     )
                     stats["artists_synced"] += 1
                 except Exception as e:
@@ -910,11 +917,12 @@ class SpotifySyncService:
             for album_dto in albums:
                 try:
                     # Save album to DB
+                    # Hey future me - AlbumDTO.cover ist jetzt ImageRef!
                     await self.repo.upsert_album(
                         spotify_id=album_dto.spotify_id or "",
                         artist_id=album_dto.artist_id or "",
                         name=album_dto.title,
-                        image_url=album_dto.artwork_url,
+                        image_url=album_dto.cover.url,
                         release_date=album_dto.release_date,
                         album_type=album_dto.album_type or "album",
                         total_tracks=album_dto.total_tracks,
@@ -1297,7 +1305,7 @@ class SpotifySyncService:
         """Insert or update a Spotify playlist in DB from PlaylistDTO.
 
         Hey future me - DTO version of _upsert_playlist!
-        PlaylistDTO has spotify_id, artwork_url (not images array).
+        PlaylistDTO.cover ist jetzt ImageRef! Zugriff via .cover.url
 
         Args:
             playlist_dto: PlaylistDTO from SpotifyPlugin
@@ -1317,21 +1325,23 @@ class SpotifySyncService:
         spotify_uri = f"spotify:playlist:{spotify_id}"
         name = playlist_dto.name or "Unknown"
         description = playlist_dto.description or ""
-        artwork_url = playlist_dto.artwork_url
+        # Hey future me - PlaylistDTO.cover ist ImageRef!
+        cover_url = playlist_dto.cover.url
 
         # Download image if enabled
         cover_path = None
-        if download_images and artwork_url and self._image_service:
+        if download_images and cover_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_playlist_by_uri(spotify_uri)
-            existing_url = existing.artwork_url if existing else None
+            # Model uses cover_url (DB column)
+            existing_url = existing.cover_url if existing else None
             existing_path = existing.cover_path if existing else None
 
             if await self._image_service.should_redownload(
-                existing_url, artwork_url, existing_path
+                existing_url, cover_url, existing_path
             ):
                 cover_path = await self._image_service.download_playlist_image(
-                    spotify_id, artwork_url
+                    spotify_id, cover_url
                 )
             elif existing_path:
                 cover_path = existing_path  # Keep existing path
@@ -1340,7 +1350,7 @@ class SpotifySyncService:
             spotify_uri=spotify_uri,
             name=name,
             description=description,
-            cover_url=artwork_url,  # FIXED: Was undefined cover_url
+            cover_url=cover_url,
             cover_path=cover_path,
             source="SPOTIFY",
         )
@@ -1518,8 +1528,9 @@ class SpotifySyncService:
                     track_dict["album"] = {
                         "id": track_dto.album.spotify_id,
                         "name": track_dto.album.title,
-                        "images": [{"url": track_dto.album.artwork_url}]
-                        if track_dto.album.artwork_url
+                        # Hey future me - AlbumDTO.cover ist ImageRef!
+                        "images": [{"url": track_dto.album.cover.url}]
+                        if track_dto.album.cover.url
                         else [],
                     }
                 all_tracks.append(track_dict)
@@ -1752,10 +1763,11 @@ class SpotifySyncService:
 
         # Create minimal artist entry
         name = artist_dto.name or "Unknown"
+        # Hey future me - ArtistDTO.image ist ImageRef!
         await self.repo.upsert_artist(
             spotify_id=spotify_id,
             name=name,
-            image_url=artist_dto.artwork_url,
+            image_url=artist_dto.image.url,
             genres=artist_dto.genres or [],
             popularity=artist_dto.popularity,
             follower_count=artist_dto.followers,
@@ -1771,7 +1783,7 @@ class SpotifySyncService:
         """Insert or update a saved album in DB from AlbumDTO with is_saved=True.
 
         Hey future me - DTO version of _upsert_saved_album!
-        AlbumDTO has artwork_url directly.
+        AlbumDTO.cover ist jetzt ImageRef! Zugriff via .cover.url
 
         Args:
             album_dto: AlbumDTO from SpotifyPlugin
@@ -1789,7 +1801,8 @@ class SpotifySyncService:
             return
 
         name = album_dto.title or "Unknown"
-        image_url = album_dto.artwork_url
+        # Hey future me - AlbumDTO.cover ist ImageRef!
+        image_url = album_dto.cover.url
         release_date = album_dto.release_date
         release_date_precision = "day" if release_date else None
         album_type = album_dto.album_type or "album"
@@ -1800,8 +1813,9 @@ class SpotifySyncService:
         if download_images and image_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_album_by_id(spotify_id)
-            existing_url = existing.artwork_url if existing else None
-            existing_path = existing.image_path if existing else None
+            # Model uses cover_url (DB column)
+            existing_url = existing.cover_url if existing else None
+            existing_path = existing.cover_path if existing else None
 
             if await self._image_service.should_redownload(
                 existing_url, image_url, existing_path

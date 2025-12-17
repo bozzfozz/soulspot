@@ -182,7 +182,7 @@ class WatchlistService:
                             "release_date": album.release_date,
                             "total_tracks": album.total_tracks,
                             "album_type": album.album_type,
-                            "images": [{"url": album.artwork_url}] if album.artwork_url else [],
+                            "images": [{"url": album.cover.url}] if album.cover.url else [],
                             "spotify_uri": album.spotify_uri,
                         })
                         if (

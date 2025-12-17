@@ -271,7 +271,7 @@ class EnrichmentService:
                             candidate.spotify_image_url,
                         )
                         if image_path:
-                            artist.artwork_url = image_path
+                            artist.image_url = image_path
 
                     entity_updated = True
             else:  # album
@@ -286,7 +286,7 @@ class EnrichmentService:
                             candidate.spotify_image_url,
                         )
                         if image_path:
-                            album.artwork_url = image_path
+                            album.cover_url = image_path
 
                     entity_updated = True
 

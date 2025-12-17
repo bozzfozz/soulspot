@@ -748,24 +748,25 @@ class LocalLibraryEnrichmentService:
                 spotify_id = artist.spotify_uri.value.split(":")[-1]
 
                 # Hey future me - wir nutzen SpotifyPlugin statt SpotifyClient!
-                # Plugin gibt ArtistDTO zurück, nicht dict.
+                # Plugin gibt ArtistDTO zurück. ArtistDTO.image ist ImageRef!
                 artist_dto = await self._spotify_plugin.get_artist(
                     artist_id=spotify_id,
                 )
 
-                if not artist_dto.artwork_url:
+                # Hey future me - ArtistDTO.image ist ImageRef!
+                if not artist_dto.image.url:
                     logger.debug(f"No images available for artist {artist.name}")
                     continue
 
-                artwork_url = artist_dto.artwork_url
+                artwork_url = artist_dto.image.url
 
                 # Download artwork
                 local_path = await self._image_service.download_artist_image(
-                    image_url=image_url,
+                    image_url=artwork_url,
                     artist_name=artist.name,
                 )
 
-                # Update artist in database
+                # Update artist in database - Model.image_url ist DB-Spalte
                 stmt = (
                     select(ArtistModel)
                     .where(ArtistModel.id == str(artist.id.value))
@@ -774,7 +775,7 @@ class LocalLibraryEnrichmentService:
                 model = result.scalar_one_or_none()
 
                 if model:
-                    model.artwork_url = artwork_url
+                    model.image_url = artwork_url
                     model.image_path = str(local_path) if local_path else None
                     model.updated_at = datetime.now(UTC)
                     stats["repaired"] += 1
@@ -830,12 +831,12 @@ class LocalLibraryEnrichmentService:
             if model.spotify_uri:
                 name_lower = model.name.lower().strip()
                 # spotify_uri ist bereits die vollständige URI (spotify:artist:xxx)
-                lookup[name_lower] = (model.spotify_uri, model.artwork_url, model.image_path)
+                lookup[name_lower] = (model.spotify_uri, model.image_url, model.image_path)
                 # Also store under normalized name (without DJ/The/MC prefixes)
                 # This allows "DJ Paul Elstak" (local) to match "Paul Elstak" (Spotify)
                 name_normalized = normalize_artist_name(model.name)
                 if name_normalized != name_lower:
-                    lookup[name_normalized] = (model.spotify_uri, model.artwork_url, model.image_path)
+                    lookup[name_normalized] = (model.spotify_uri, model.image_url, model.image_path)
 
         return lookup
 
@@ -873,7 +874,7 @@ class LocalLibraryEnrichmentService:
         result = await self._session.execute(stmt)
         rows = result.all()
 
-        # Hey future me - now includes image_path for artwork reuse!
+        # Hey future me - now includes cover_path for artwork reuse!
         lookup: dict[str, tuple[str, str | None, str | None]] = {}
         for album_model, artist_name in rows:
             # Build key: "artist|album" (lowercase)
@@ -882,14 +883,14 @@ class LocalLibraryEnrichmentService:
             key_original = f"{artist_lower}|{album_lower}"
 
             # spotify_uri ist bereits die vollständige URI (spotify:album:xxx)
-            lookup[key_original] = (album_model.spotify_uri, album_model.artwork_url, album_model.image_path)
+            lookup[key_original] = (album_model.spotify_uri, album_model.cover_url, album_model.cover_path)
 
             # Also store under normalized artist name
             # "DJ Paul Elstak|Party Animals" should match "Paul Elstak|Party Animals"
             artist_normalized = normalize_artist_name(artist_name)
             if artist_normalized != artist_lower:
                 key_normalized = f"{artist_normalized}|{album_lower}"
-                lookup[key_normalized] = (album_model.spotify_uri, album_model.artwork_url, album_model.image_path)
+                lookup[key_normalized] = (album_model.spotify_uri, album_model.cover_url, album_model.cover_path)
 
         return lookup
 
@@ -1162,7 +1163,8 @@ class LocalLibraryEnrichmentService:
             sp_popularity = (sp_artist.popularity or 0) / 100.0  # Normalize to 0-1
             sp_followers = sp_artist.followers or 0
             sp_genres = sp_artist.genres or []
-            sp_artwork_url = sp_artist.artwork_url
+            # Hey future me - ArtistDTO hat `image` (ImageRef), nicht `artwork_url`!
+            sp_image_url = sp_artist.image.url if sp_artist.image else None
 
             # Normalize Spotify name for comparison
             sp_normalized = normalize_artist_name(sp_name)
@@ -1252,9 +1254,9 @@ class LocalLibraryEnrichmentService:
                 result = await self._session.execute(stmt)
                 model = result.scalar_one()
 
-                # Copy artwork_url and image_path from existing artist
-                if existing_with_uri.artwork_url and not model.artwork_url:
-                    model.artwork_url = existing_with_uri.artwork_url
+                # Copy image_url and image_path from existing artist
+                if existing_with_uri.image_url and not model.image_url:
+                    model.image_url = existing_with_uri.image_url
                 if (
                     hasattr(existing_with_uri, "image_path")
                     and existing_with_uri.image_path
@@ -1283,7 +1285,7 @@ class LocalLibraryEnrichmentService:
             model = result.scalar_one()
 
             model.spotify_uri = candidate.spotify_uri
-            model.artwork_url = candidate.spotify_image_url
+            model.image_url = candidate.spotify_image_url
 
             # Update genres if we have them and artist doesn't
             if candidate.extra_info.get("genres") and not model.genres:
@@ -1698,7 +1700,8 @@ class LocalLibraryEnrichmentService:
             sp_artist_name = sp_album.artist_name
             sp_release_date = sp_album.release_date or ""
             sp_total_tracks = sp_album.total_tracks or 0
-            sp_image_url = sp_album.artwork_url
+            # Hey future me - AlbumDTO hat `cover` (ImageRef), nicht `artwork_url`!
+            sp_image_url = sp_album.cover.url if sp_album.cover else None
 
             # Normalize Spotify artist name
             sp_artist_normalized = normalize_artist_name(sp_artist_name)
@@ -2359,7 +2362,7 @@ class LocalLibraryEnrichmentService:
             select(AlbumModel)
             .where(
                 AlbumModel.musicbrainz_id.isnot(None),
-                (AlbumModel.artwork_url.is_(None) | (AlbumModel.artwork_url == "")),
+                (AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == "")),
             )
             .limit(limit)
         )
@@ -2371,7 +2374,7 @@ class LocalLibraryEnrichmentService:
         for album in albums:
             stats["processed"] += 1
 
-            if album.artwork_url:
+            if album.cover_url:
                 stats["already_has_artwork"] += 1
                 continue
 
@@ -2389,8 +2392,8 @@ class LocalLibraryEnrichmentService:
                         album_name=album.title,
                     )
 
-                    album.artwork_url = artwork_url
-                    album.artwork_path = local_path
+                    album.cover_url = artwork_url
+                    album.cover_path = local_path
                     album.updated_at = datetime.now(UTC)
 
                     stats["repaired"] += 1
@@ -2466,7 +2469,7 @@ class LocalLibraryEnrichmentService:
             model = result.scalar_one()
 
             model.spotify_uri = candidate.spotify_uri
-            model.artwork_url = candidate.spotify_image_url
+            model.cover_url = candidate.spotify_image_url
             model.updated_at = datetime.now(UTC)
 
         # Hey future me - FLUSH after each album enrichment to ensure the UNIQUE
@@ -2486,7 +2489,7 @@ class LocalLibraryEnrichmentService:
             logger.debug(
                 f"Reusing existing artwork for album '{album.title}' from Followed Albums: {existing_image_path}"
             )
-            model.artwork_path = existing_image_path  # Use the existing path!
+            model.cover_path = existing_image_path  # Use the existing path!
             image_downloaded = True  # Mark as "downloaded" even though we reused
         elif download_artwork and candidate.spotify_image_url:
             # Hey future me - handle both Spotify and Deezer artwork downloads!
@@ -2508,7 +2511,7 @@ class LocalLibraryEnrichmentService:
                 )
 
             if download_result.success:
-                model.artwork_path = download_result.path
+                model.cover_path = download_result.path
                 image_downloaded = True
             else:
                 # Log detailed error for debugging
@@ -2651,7 +2654,7 @@ class LocalLibraryEnrichmentService:
                     "id": a.id,
                     "name": a.name,
                     "spotify_uri": a.spotify_uri,
-                    "artwork_url": a.artwork_url,
+                    "image_url": a.image_url,  # ArtistModel has image_url
                     "track_count": track_counts.get(a.id, 0),
                     "has_spotify": a.spotify_uri is not None,
                 })
@@ -2733,13 +2736,13 @@ class LocalLibraryEnrichmentService:
             "merged_artists": [a.name for a in merge_artists],
         }
 
-        # Transfer artwork_url if keep artist doesn't have one
-        if not keep_artist.artwork_url:
+        # Transfer image_url if keep artist doesn't have one
+        if not keep_artist.image_url:
             for ma in merge_artists:
-                if ma.artwork_url:
-                    keep_artist.artwork_url = ma.artwork_url
+                if ma.image_url:
+                    keep_artist.image_url = ma.image_url
                     logger.debug(
-                        f"Transferred artwork_url from '{ma.name}' to '{keep_artist.name}'"
+                        f"Transferred image_url from '{ma.name}' to '{keep_artist.name}'"
                     )
                     break
 
@@ -2846,7 +2849,7 @@ class LocalLibraryEnrichmentService:
                     "title": album.title,
                     "artist_name": artist_name,
                     "spotify_uri": album.spotify_uri,
-                    "artwork_url": album.artwork_url,
+                    "cover_url": album.cover_url,  # AlbumModel has cover_url
                     "track_count": track_counts.get(album.id, 0),
                     "has_spotify": album.spotify_uri is not None,
                 })
@@ -2919,11 +2922,11 @@ class LocalLibraryEnrichmentService:
         }
 
         # Transfer artwork if keep album doesn't have one
-        if not keep_album.artwork_url:
+        if not keep_album.cover_url:
             for ma in merge_albums:
-                if ma.artwork_url:
-                    keep_album.artwork_url = ma.artwork_url
-                    keep_album.artwork_path = ma.artwork_path
+                if ma.cover_url:
+                    keep_album.cover_url = ma.cover_url
+                    keep_album.cover_path = ma.cover_path
                     logger.debug(
                         f"Transferred artwork from '{ma.title}' to '{keep_album.title}'"
                     )

@@ -211,7 +211,7 @@ async def unified_search(
                                 popularity=dto.popularity or 0,
                                 followers=dto.followers or 0,
                                 genres=dto.genres or [],
-                                image_url=dto.artwork_url,
+                                image_url=dto.image.url,  # ArtistDTO.image is ImageRef
                                 external_url=external_url,
                                 source="deezer",
                             )
@@ -239,7 +239,7 @@ async def unified_search(
                                 release_date=dto.release_date,
                                 album_type=dto.album_type,
                                 total_tracks=dto.total_tracks or 0,
-                                image_url=dto.artwork_url,
+                                image_url=dto.cover.url,  # AlbumDTO.cover is ImageRef
                                 external_url=external_url,
                                 source="deezer",
                             )
@@ -313,7 +313,7 @@ async def unified_search(
                                 popularity=dto.popularity or 0,
                                 followers=dto.followers or 0,
                                 genres=dto.genres or [],
-                                image_url=dto.artwork_url,
+                                image_url=dto.image.url,  # ArtistDTO.image is ImageRef
                                 external_url=external_url,
                                 source="spotify",
                             )
@@ -341,7 +341,7 @@ async def unified_search(
                                 release_date=dto.release_date,
                                 album_type=dto.album_type,
                                 total_tracks=dto.total_tracks or 0,
-                                image_url=dto.artwork_url,
+                                image_url=dto.cover.url,  # AlbumDTO.cover is ImageRef
                                 external_url=external_url,
                                 source="spotify",
                             )
@@ -470,7 +470,7 @@ async def search_spotify_artists(
                             popularity=artist_dto.popularity or 0,
                             followers=artist_dto.followers or 0,
                             genres=artist_dto.genres or [],
-                            image_url=artist_dto.artwork_url,
+                            image_url=artist_dto.image.url,  # ArtistDTO.image is ImageRef
                             external_url=external_url,
                             source="deezer",
                         )
@@ -500,7 +500,7 @@ async def search_spotify_artists(
                             popularity=artist_dto.popularity or 0,
                             followers=artist_dto.followers or 0,
                             genres=artist_dto.genres or [],
-                            image_url=artist_dto.artwork_url,
+                            image_url=artist_dto.image.url,  # ArtistDTO.image is ImageRef
                             external_url=external_url,
                             source="spotify",
                         )
@@ -715,7 +715,7 @@ async def search_spotify_albums(
                         release_date=album_dto.release_date,
                         album_type=album_dto.album_type,
                         total_tracks=album_dto.total_tracks or 0,
-                        image_url=album_dto.artwork_url,
+                        image_url=album_dto.cover.url,  # AlbumDTO.cover is ImageRef
                         external_url=external_url,
                         source="deezer",
                     )
@@ -749,7 +749,7 @@ async def search_spotify_albums(
                         release_date=album_dto.release_date,
                         album_type=album_dto.album_type,
                         total_tracks=album_dto.total_tracks or 0,
-                        image_url=album_dto.artwork_url,
+                        image_url=album_dto.cover.url,  # AlbumDTO.cover is ImageRef
                         external_url=external_url,
                         source="spotify",
                     )

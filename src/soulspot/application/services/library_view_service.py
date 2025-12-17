@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.domain.dtos import AlbumDetailView, TrackView
+from soulspot.domain.dtos import AlbumDetailView, ImageRef, TrackView
 from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
 
 if TYPE_CHECKING:
@@ -144,7 +144,8 @@ class LibraryViewService:
         return AlbumDetailView(
             spotify_id=album_model.spotify_id,
             title=album_model.name,
-            artwork_url=album_model.artwork_url,
+            # DB model has cover_url column → ViewModel has cover: ImageRef
+            cover=ImageRef(url=album_model.cover_url, path=album_model.cover_path),
             release_date=album_model.release_date,
             album_type=album_model.album_type or "album",
             total_tracks=album_model.total_tracks or len(track_views),

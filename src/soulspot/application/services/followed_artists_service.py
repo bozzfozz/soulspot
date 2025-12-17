@@ -511,7 +511,8 @@ class FollowedArtistsService:
             needs_update = False
             name = artist_dto.name
             genres = artist_dto.genres or []
-            artwork_url = artist_dto.artwork_url
+            # DTO now uses ImageRef, extract URL
+            image_url = artist_dto.image.url
 
             # Add service-specific ID if missing (merge across providers)
             if source == "spotify" and artist_dto.spotify_uri:
@@ -535,9 +536,11 @@ class FollowedArtistsService:
                 artist.genres = genres
                 artist.metadata_sources["genres"] = source
                 needs_update = True
-            if artist.artwork_url != artwork_url and artwork_url:
-                artist.artwork_url = artwork_url
-                artist.metadata_sources["artwork_url"] = source
+            # Entity now uses ImageRef for image
+            if artist.image.url != image_url and image_url:
+                from soulspot.domain.value_objects import ImageRef
+                artist.image = ImageRef(url=image_url)
+                artist.metadata_sources["image"] = source
                 needs_update = True
 
             # Hey future me - UPGRADE source if artist was local-only!

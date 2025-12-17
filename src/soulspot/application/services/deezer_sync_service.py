@@ -469,16 +469,20 @@ class DeezerSyncService:
         if existing:
             # Update existing
             existing.name = artist_dto.name
-            existing.image_url = artist_dto.image_url or existing.image_url
+            # Hey future me - DTO.image ist ImageRef, Model.image_url ist DB-Spalte
+            dto_image_url = artist_dto.image.url if artist_dto.image else None
+            existing.image_url = dto_image_url or existing.image_url
             # Note: is_chart and is_related flags are not stored in model
         else:
             # Create new - artist_id is required but not in DTO
             # We need to create a placeholder or skip this
             # For now, just create the artist without invalid fields
+            # Hey future me - DTO.image ist ImageRef!
+            dto_image_url = artist_dto.image.url if artist_dto.image else None
             new_artist = ArtistModel(
                 name=artist_dto.name,
                 deezer_id=artist_dto.deezer_id,
-                artwork_url=artist_dto.artwork_url,
+                image_url=dto_image_url,
                 source="deezer",
             )
             self._session.add(new_artist)
@@ -511,7 +515,10 @@ class DeezerSyncService:
             # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
             artist_name = getattr(artist_dto, 'name', None) or getattr(artist_dto, 'artist_name', None)
             deezer_id = getattr(artist_dto, 'deezer_id', None) or getattr(artist_dto, 'artist_deezer_id', None)
-            artwork_url = getattr(artist_dto, 'artwork_url', None) or getattr(artist_dto, 'artist_artwork_url', None)
+            # Hey future me - DTOs nutzen jetzt ImageRef! ArtistDTO.image.url statt .artwork_url
+            # Fallback auf alte Attribute für Backwards-Compat mit gemischten DTOs
+            image_attr = getattr(artist_dto, 'image', None)
+            artwork_url = getattr(image_attr, 'url', None) if image_attr else None
             genres = getattr(artist_dto, 'genres', None)
             tags = getattr(artist_dto, 'tags', None)
             
@@ -546,7 +553,7 @@ class DeezerSyncService:
                 # If already "deezer" or "hybrid", keep as is
                 
                 existing_model.name = artist_name
-                existing_model.artwork_url = artwork_url or existing_model.artwork_url
+                existing_model.image_url = artwork_url or existing_model.image_url
                 if genres:
                     existing_model.genres = json.dumps(genres)
                 if tags:
@@ -562,7 +569,7 @@ class DeezerSyncService:
                     id=artist_id,
                     name=artist_name,
                     deezer_id=deezer_id,
-                    artwork_url=artwork_url,
+                    image_url=artwork_url,
                     source="deezer",  # Source field in model accepts string
                     genres=json.dumps(genres) if genres else None,
                     tags=json.dumps(tags) if tags else None,
@@ -594,15 +601,18 @@ class DeezerSyncService:
         import uuid
         
         try:
+            # Hey future me - AlbumDTO.cover ist ImageRef!
+            dto_cover_url = album_dto.cover.url if album_dto.cover else None
+            
             # Check if album exists (by deezer_id)
             existing = None
             if album_dto.deezer_id:
                 existing = await self._album_repo.get_by_deezer_id(album_dto.deezer_id)
             
             if existing:
-                # Update existing
+                # Update existing - Model.cover_url ist DB-Spalte
                 existing.title = album_dto.title
-                existing.artwork_url = album_dto.artwork_url or existing.artwork_url
+                existing.cover_url = dto_cover_url or existing.cover_url
             else:
                 # Create new with artist relationship
                 new_album = AlbumModel(
@@ -610,7 +620,7 @@ class DeezerSyncService:
                     title=album_dto.title,
                     artist_id=artist_id,  # CRITICAL: Link to artist
                     deezer_id=album_dto.deezer_id,
-                    artwork_url=album_dto.artwork_url,
+                    cover_url=dto_cover_url,
                     release_date=album_dto.release_date,
                     total_tracks=album_dto.total_tracks,
                     primary_type=album_dto.primary_type or "Album",
@@ -682,6 +692,7 @@ class DeezerSyncService:
         
         Hey future me - hier speichern wir in soulspot_albums!
         source='deezer' markiert, dass es von Deezer kommt.
+        AlbumDTO.cover ist ImageRef! Model.cover_url ist DB-Spalte.
         
         Note: is_chart, is_new_release, is_saved parameters are kept for API compatibility
         but not stored in database (fields don't exist in AlbumModel).
@@ -689,13 +700,16 @@ class DeezerSyncService:
         """
         from soulspot.infrastructure.persistence.models import AlbumModel
         
+        # Hey future me - AlbumDTO.cover ist ImageRef!
+        dto_cover_url = album_dto.cover.url if album_dto.cover else None
+        
         # Check if album exists (by deezer_id)
         existing = await self._album_repo.get_by_deezer_id(album_dto.deezer_id)
         
         if existing:
             # Update existing - use 'title' not 'name'
             existing.title = album_dto.title
-            existing.artwork_url = album_dto.artwork_url or existing.artwork_url
+            existing.cover_url = dto_cover_url or existing.cover_url
             # Note: is_chart, is_new_release, is_saved flags are not stored in model
             if is_saved:
                 existing.is_saved = is_saved  # This field DOES exist
@@ -954,11 +968,15 @@ class DeezerSyncService:
         
         Hey future me - Playlists speichern wir in der playlists Tabelle!
         source='DEEZER' markiert, dass es von Deezer kommt.
+        PlaylistDTO.cover ist ImageRef! Model.cover_url ist DB-Spalte.
         """
         from soulspot.infrastructure.persistence.models import PlaylistModel
         from soulspot.infrastructure.persistence.repositories import PlaylistRepository
         
         playlist_repo = PlaylistRepository(self._session)
+        
+        # Hey future me - PlaylistDTO.cover ist ImageRef!
+        dto_cover_url = playlist_dto.cover.url if playlist_dto.cover else None
         
         # Check if playlist exists (by deezer_id)
         # TODO: Implement get_by_deezer_id for PlaylistRepository
@@ -967,7 +985,7 @@ class DeezerSyncService:
             name=playlist_dto.name,
             description=playlist_dto.description,
             deezer_id=playlist_dto.deezer_id,
-            artwork_url=playlist_dto.artwork_url,
+            cover_url=dto_cover_url,
             owner=playlist_dto.owner_name,
             track_count=playlist_dto.total_tracks,
             source="DEEZER",

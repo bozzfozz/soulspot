@@ -19,6 +19,13 @@ from datetime import datetime
 from typing import Optional
 
 from soulspot.domain.exceptions import ValidationError
+
+# Hey future me – ImageRef importieren aus value_objects!
+# Das ist die EINZIGE Definition - kein Duplizieren hier.
+# ImageRef ist ein Value Object für alle Bild-Referenzen im gesamten System.
+from soulspot.domain.value_objects.image_ref import ImageRef
+
+
 # Hey future me – ArtistDTO ist das Standard-Format für Künstler aus ALLEN Services!
 # Spotify, Deezer, Tidal – alle müssen dieses Format zurückgeben.
 # Optional fields erlauben partielle Daten (nicht jede API hat alle Infos).
@@ -48,9 +55,9 @@ class ArtistDTO:
     musicbrainz_id: str | None = None
 
     # Metadata (Optional - nicht jeder Service hat alles)
-    # Hey future me - KONVENTION: Artists haben `image_url` (Fotos), 
-    # Albums/Tracks haben `artwork_url` (Cover Art)!
-    image_url: str | None = None  # Artist image/photo URL
+    # Hey future me - ImageRef für konsistente Bild-Struktur!
+    # artist.image.url für CDN URL, artist.image.path für lokalen Cache
+    image: ImageRef = field(default_factory=ImageRef)  # Artist profile image
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     disambiguation: str | None = None  # MusicBrainz disambiguation
@@ -103,7 +110,7 @@ class AlbumDTO:
     # Album metadata
     release_date: str | None = None  # ISO format "YYYY-MM-DD" or "YYYY"
     release_year: int | None = None
-    artwork_url: str | None = None  # Cover art URL
+    cover: ImageRef = field(default_factory=ImageRef)  # Album cover image
     total_tracks: int | None = None
 
     # Lidarr-style album types
@@ -201,7 +208,7 @@ class TrackDTO:
     # Optional metadata
     genres: list[str] = field(default_factory=list)
     preview_url: str | None = None  # 30-second preview URL
-    artwork_url: str | None = None  # Track/Single cover art URL
+    cover: ImageRef = field(default_factory=ImageRef)  # Track/Single cover image
 
     # External URLs
     external_urls: dict[str, str] = field(default_factory=dict)
@@ -240,7 +247,7 @@ class PlaylistDTO:
 
     # Playlist metadata
     description: str | None = None
-    artwork_url: str | None = None  # Playlist cover art URL
+    cover: ImageRef = field(default_factory=ImageRef)  # Playlist cover image
     is_public: bool = True
     is_collaborative: bool = False
     total_tracks: int | None = None
@@ -311,7 +318,7 @@ class UserProfileDTO:
 
     email: str | None = None
     country: str | None = None
-    artwork_url: str | None = None  # User profile picture URL
+    avatar: ImageRef = field(default_factory=ImageRef)  # User profile picture
     product: str | None = None  # "free", "premium", etc.
 
     # External URLs
@@ -357,7 +364,7 @@ class TrackView:
     
     IMPORTANT: ViewModels follow DTO naming conventions for consistency:
     - Use `title` (not `name`) to match TrackDTO
-    - Use `artwork_url` (not `image_url`) for album art
+    - Use `cover` (ImageRef) for album art
     """
     spotify_id: str | None
     title: str  # Consistent with TrackDTO
@@ -381,13 +388,13 @@ class AlbumDetailView:
     
     NAMING CONVENTION: ViewModels use DTO field names for consistency:
     - `title` for albums (matches AlbumDTO)
-    - `artwork_url` for cover art (matches AlbumDTO)
+    - `cover` (ImageRef) for cover art (matches AlbumDTO)
     - `name` only for legacy compatibility where absolutely necessary
     """
     # Album info
     spotify_id: str | None
     title: str  # Consistent with AlbumDTO
-    artwork_url: str | None  # Consistent with AlbumDTO
+    cover: ImageRef = field(default_factory=ImageRef)  # Album cover image
     release_date: str | None
     album_type: str
     total_tracks: int
@@ -410,6 +417,9 @@ class AlbumDetailView:
 
 # Export all DTOs
 __all__ = [
+    # Core image reference type
+    "ImageRef",
+    # DTOs
     "ArtistDTO",
     "AlbumDTO",
     "TrackDTO",

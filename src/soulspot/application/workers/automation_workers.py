@@ -228,8 +228,8 @@ class WatchlistWorker:
                                     "album_type": album.primary_type,
                                     "release_date": album.release_date,
                                     "total_tracks": album.total_tracks,
-                                    "images": [{"url": album.artwork_url}]
-                                    if album.artwork_url
+                                    "images": [{"url": album.cover_url}]
+                                    if album.cover_url
                                     else [],
                                 }
                             )

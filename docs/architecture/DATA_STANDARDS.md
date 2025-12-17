@@ -75,7 +75,7 @@ class ArtistDTO:
     musicbrainz_id: str | None 
     
     # OPTIONAL Metadaten
-    image_url: str | None      # Profilbild-URL
+    image: ImageRef            # Profilbild (url + path)
     genres: list[str]          # ["rock", "alternative"]
     tags: list[str]            # User-definierte Tags
     popularity: int | None     # 0-100 (Spotify)
@@ -83,6 +83,9 @@ class ArtistDTO:
     disambiguation: str | None # MusicBrainz Unterscheidung
     external_urls: dict        # {"spotify": "https://..."}
 ```
+
+> **ImageRef** ist ein Value Object mit `url: str | None` (CDN) und `path: str | None` (lokaler Cache).
+> Zugriff: `artist.image.url`, `artist.image.path`, `artist.image.has_image`
 
 #### AlbumDTO
 
@@ -106,7 +109,7 @@ class AlbumDTO:
     # OPTIONAL Metadaten
     release_date: str | None   # "YYYY-MM-DD" oder "YYYY"
     release_year: int | None   # Extrahiertes Jahr
-    artwork_url: str | None    # Cover-Bild URL
+    cover: ImageRef            # Cover-Bild (url + path)
     total_tracks: int | None   
     
     # Album-Typ (Lidarr-Style)
@@ -117,6 +120,8 @@ class AlbumDTO:
     # Nested Tracks (optional)
     tracks: list[TrackDTO]     # Meist leer, separat laden
 ```
+
+> **ImageRef** für Albums: `album.cover.url` (CDN), `album.cover.path` (lokal)
 
 #### TrackDTO
 
@@ -151,12 +156,15 @@ class TrackDTO:
     explicit: bool = False     
     popularity: int | None     # 0-100
     preview_url: str | None    # 30-Sekunden Preview
+    cover: ImageRef            # Track/Single cover (url + path)
     
     # Nested Objects
     additional_artists: list[ArtistDTO]  # Features
     artists: list[ArtistDTO]   # Primary + Additional
     album: AlbumDTO | None     # Optional Album-Context
 ```
+
+> **ImageRef** für Tracks: `track.cover.url` (meist vom Album)
 
 ---
 

@@ -41,6 +41,7 @@ from soulspot.domain.value_objects import (
     ArtistId,
     DownloadId,
     FilePath,
+    ImageRef,
     PlaylistId,
     SpotifyUri,
     TrackId,
@@ -81,7 +82,8 @@ class ArtistRepository(IArtistRepository):
     # session.commit() (handled by dependency). If artist.id already exists in DB, you'll get
     # IntegrityError on commit - this method doesn't check! Use get_by_id first if you care.
     # Hey - genres/tags are serialized as JSON strings for SQLite compatibility!
-    # Hey - image_url is stored directly as string (Spotify CDN URL)!
+    # Hey - Entity image.url → Model artwork_url (storing CDN URL)!
+    # Hey - Entity image.path → Model image_path (storing local cache path)!
     # Hey - disambiguation is text disambiguation from folder (e.g., "English rock band")!
     # Hey - source tracks LOCAL/SPOTIFY/HYBRID for unified Music Manager view!
     # Hey - deezer_id/tidal_id are multi-service IDs for cross-service deduplication!
@@ -93,7 +95,9 @@ class ArtistRepository(IArtistRepository):
             source=artist.source.value,  # Store as string: 'local', 'spotify', 'hybrid'
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
-            artwork_url=artist.artwork_url,
+            # Entity image → Model columns (ImageRef-consistent naming)
+            image_url=artist.image.url,
+            image_path=artist.image.path,
             deezer_id=artist.deezer_id,
             tidal_id=artist.tidal_id,
             disambiguation=artist.disambiguation,
@@ -117,7 +121,9 @@ class ArtistRepository(IArtistRepository):
         model.source = artist.source.value  # Update source (local/spotify/hybrid)
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
-        model.image_url = artist.image_url
+        # Entity image → Model columns (ImageRef-consistent naming)
+        model.image_url = artist.image.url
+        model.image_path = artist.image.path
         model.deezer_id = artist.deezer_id
         model.tidal_id = artist.tidal_id
         model.disambiguation = artist.disambiguation
@@ -147,7 +153,7 @@ class ArtistRepository(IArtistRepository):
     # the domain Artist object with all its value objects (ArtistId, SpotifyUri). The if/else on
     # spotify_uri handles nullable field - can't call SpotifyUri.from_string(None)!
     # Hey - genres/tags are deserialized from JSON strings!
-    # Hey - image_url is stored directly as string (no conversion needed)!
+    # Hey - Model artwork_url + image_path → Entity image: ImageRef!
     # Hey - disambiguation is text from folder (e.g., "English rock band")!
     async def get_by_id(self, artist_id: ArtistId) -> Artist | None:
         """Get an artist by ID."""
@@ -167,7 +173,8 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            # Model image_url + image_path → Entity image: ImageRef
+            image=ImageRef(url=model.image_url, path=model.image_path),
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -193,7 +200,8 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            # Model image_url + image_path → Entity image: ImageRef
+            image=ImageRef(url=model.image_url, path=model.image_path),
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -219,7 +227,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            image=ImageRef(url=model.image_url, path=model.image_path),
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -256,7 +264,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            image=ImageRef(url=model.image_url, path=model.image_path),
             disambiguation=model.disambiguation,
             genres=json.loads(model.genres) if model.genres else [],
             tags=json.loads(model.tags) if model.tags else [],
@@ -282,7 +290,7 @@ class ArtistRepository(IArtistRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
-                artwork_url=model.artwork_url,
+                image=ImageRef(url=model.image_url, path=model.image_path),
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -362,7 +370,7 @@ class ArtistRepository(IArtistRepository):
                     source=ArtistSource(model.source),  # Include source field
                     spotify_uri=None,
                     musicbrainz_id=model.musicbrainz_id,
-                    artwork_url=model.artwork_url,
+                    image=ImageRef(url=model.image_url, path=model.image_path),
                     disambiguation=model.disambiguation,
                     genres=json.loads(model.genres) if model.genres else [],
                     tags=json.loads(model.tags) if model.tags else [],
@@ -471,7 +479,7 @@ class ArtistRepository(IArtistRepository):
                 if model.spotify_uri
                 else None,
                 musicbrainz_id=model.musicbrainz_id,
-                artwork_url=model.artwork_url,
+                image=ImageRef(url=model.image_url, path=model.image_path),
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -517,7 +525,7 @@ class ArtistRepository(IArtistRepository):
         stmt = (
             select(ArtistModel)
             .where(ArtistModel.spotify_uri.isnot(None))  # Has Spotify link
-            .where(ArtistModel.artwork_url.is_(None))  # But no artwork
+            .where(ArtistModel.image_url.is_(None))  # But no artwork
             .order_by(ArtistModel.name)
             .limit(limit)
         )
@@ -532,7 +540,7 @@ class ArtistRepository(IArtistRepository):
                 source=ArtistSource(model.source),  # Include source field
                 spotify_uri=SpotifyUri(model.spotify_uri) if model.spotify_uri else None,
                 musicbrainz_id=model.musicbrainz_id,
-                artwork_url=model.artwork_url,
+                image=ImageRef(url=model.image_url, path=model.image_path),
                 disambiguation=model.disambiguation,
                 genres=json.loads(model.genres) if model.genres else [],
                 tags=json.loads(model.tags) if model.tags else [],
@@ -577,7 +585,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            image=ImageRef(url=model.image_url, path=model.image_path),
             deezer_id=model.deezer_id,
             tidal_id=model.tidal_id,
             disambiguation=model.disambiguation,
@@ -614,7 +622,7 @@ class ArtistRepository(IArtistRepository):
             if model.spotify_uri
             else None,
             musicbrainz_id=model.musicbrainz_id,
-            artwork_url=model.artwork_url,
+            image=ImageRef(url=model.image_url, path=model.image_path),
             deezer_id=model.deezer_id,
             tidal_id=model.tidal_id,
             disambiguation=model.disambiguation,
@@ -637,6 +645,7 @@ class AlbumRepository(IAlbumRepository):
         
         Hey future me - this is the ONE place that maps DB → Entity!
         When you add fields to Album entity, UPDATE THIS FUNCTION!
+        Model stores artwork_url + artwork_path separately → Entity has cover: ImageRef
         """
         return Album(
             id=AlbumId.from_string(model.id),
@@ -652,10 +661,10 @@ class AlbumRepository(IAlbumRepository):
             musicbrainz_id=model.musicbrainz_id,
             deezer_id=model.deezer_id,
             tidal_id=model.tidal_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            artwork_url=model.artwork_url,
+            # Hey future me - cover maps to ImageRef-consistent column names!
+            # Model columns: cover_url (CDN), cover_path (local cache)
+            # Entity field: cover.url (CDN), cover.path (local cache)
+            cover=ImageRef(url=model.cover_url, path=model.cover_path),
             primary_type=model.primary_type,
             secondary_types=model.secondary_types or [],
             disambiguation=model.disambiguation,
@@ -678,8 +687,9 @@ class AlbumRepository(IAlbumRepository):
             musicbrainz_id=album.musicbrainz_id,
             deezer_id=album.deezer_id,
             tidal_id=album.tidal_id,
-            artwork_path=str(album.artwork_path.value) if album.artwork_path else None,
-            artwork_url=album.artwork_url,
+            # Entity cover → Model cover_url/cover_path (ImageRef-consistent)
+            cover_path=album.cover.path,
+            cover_url=album.cover.url,
             primary_type=album.primary_type,
             secondary_types=album.secondary_types,
             disambiguation=album.disambiguation,
@@ -705,10 +715,9 @@ class AlbumRepository(IAlbumRepository):
         model.musicbrainz_id = album.musicbrainz_id
         model.deezer_id = album.deezer_id
         model.tidal_id = album.tidal_id
-        model.artwork_path = (
-            str(album.artwork_path.value) if album.artwork_path else None
-        )
-        model.artwork_url = album.artwork_url
+        # Entity cover → Model cover_url/cover_path (ImageRef-consistent)
+        model.cover_path = album.cover.path
+        model.cover_url = album.cover.url
         model.primary_type = album.primary_type
         model.secondary_types = album.secondary_types
         model.disambiguation = album.disambiguation
@@ -1654,7 +1663,9 @@ class PlaylistRepository(IPlaylistRepository):
             description=playlist.description,
             source=playlist.source.value,
             spotify_uri=str(playlist.spotify_uri) if playlist.spotify_uri else None,
-            artwork_url=playlist.artwork_url,
+            # Entity cover → Model cover_url/cover_path (ImageRef-consistent)
+            cover_url=playlist.cover.url,
+            cover_path=playlist.cover.path,
             created_at=playlist.created_at,
             updated_at=playlist.updated_at,
         )
@@ -1682,7 +1693,9 @@ class PlaylistRepository(IPlaylistRepository):
         model.description = playlist.description
         model.source = playlist.source.value
         model.spotify_uri = str(playlist.spotify_uri) if playlist.spotify_uri else None
-        model.artwork_url = playlist.artwork_url
+        # Entity cover → Model cover_url/cover_path (ImageRef-consistent)
+        model.cover_url = playlist.cover.url
+        model.cover_path = playlist.cover.path
         model.updated_at = playlist.updated_at
 
         # Update playlist tracks - delete old and add new
@@ -1739,7 +1752,8 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
-            artwork_url=model.artwork_url,  # Spotify playlist cover image
+            # Model cover_url + cover_path → Entity cover: ImageRef
+            cover=ImageRef(url=model.cover_url, path=model.cover_path),
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -1778,7 +1792,8 @@ class PlaylistRepository(IPlaylistRepository):
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
-            artwork_url=model.artwork_url,  # Spotify playlist cover image
+            # Model cover_url + cover_path → Entity cover: ImageRef
+            cover=ImageRef(url=model.cover_url, path=model.cover_path),
             track_ids=track_ids,
             created_at=model.created_at,
             updated_at=model.updated_at,
@@ -1853,7 +1868,8 @@ class PlaylistRepository(IPlaylistRepository):
                     spotify_uri=SpotifyUri.from_string(model.spotify_uri)
                     if model.spotify_uri
                     else None,
-                    artwork_url=model.artwork_url,
+                    # Model cover_url + cover_path → Entity cover: ImageRef
+                    cover=ImageRef(url=model.cover_url, path=model.cover_path),
                     track_ids=track_ids,
                     created_at=model.created_at,
                     updated_at=model.updated_at,
@@ -2211,14 +2227,14 @@ class DownloadRepository(IDownloadRepository):
             )
 
             # Attach track info as extra attributes for dashboard display
-            # Hey future me - album_art comes from Track -> Album -> artwork_url!
+            # Hey future me - album_art comes from Track -> Album -> cover_url!
             if model.track:
                 download.track_title = model.track.title  # type: ignore[attr-defined]
                 download.artist_name = (  # type: ignore[attr-defined]
                     model.track.artist.name if model.track.artist else None
                 )
                 download.album_art_url = (  # type: ignore[attr-defined]
-                    model.track.album.artwork_url if model.track.album else None
+                    model.track.album.cover_url if model.track.album else None
                 )
             else:
                 download.track_title = None  # type: ignore[attr-defined]
@@ -4398,7 +4414,7 @@ class ProviderBrowseRepository:
             # If already "spotify" or "hybrid", keep as is
             
             model.name = name
-            model.artwork_url = image_url
+            model.image_url = image_url
             if image_path is not None:
                 model.image_path = image_path
             model.genres = genres_json
@@ -4704,9 +4720,9 @@ class ProviderBrowseRepository:
 
         if model:
             model.title = name
-            model.artwork_url = image_url
+            model.cover_url = image_url
             if image_path is not None:
-                model.image_path = image_path
+                model.cover_path = image_path
             model.release_date = release_date
             model.release_date_precision = release_date_precision
             model.primary_type = album_type  # album_type → primary_type
@@ -4720,8 +4736,8 @@ class ProviderBrowseRepository:
                 title=name,
                 artist_id=internal_artist_id,
                 spotify_uri=spotify_uri,
-                artwork_url=image_url,
-                image_path=image_path,
+                cover_url=image_url,
+                cover_path=image_path,
                 release_date=release_date,
                 release_date_precision=release_date_precision,
                 primary_type=album_type,  # album_type → primary_type
@@ -5057,7 +5073,7 @@ class ProviderBrowseRepository:
         if model:
             model.name = name
             model.description = description
-            model.artwork_url = cover_url
+            model.cover_url = cover_url
             if cover_path is not None:
                 model.cover_path = cover_path
             model.updated_at = now

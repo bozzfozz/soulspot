@@ -418,7 +418,7 @@ class ChartsService:
                     isrc=dto.isrc,
                     duration_ms=dto.duration_ms,
                     preview_url=dto.preview_url,
-                    artwork_url=dto.artwork_url,
+                    artwork_url=dto.cover.url,  # TrackDTO.cover is ImageRef (album artwork)
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -451,7 +451,7 @@ class ChartsService:
                     upc=dto.upc,
                     release_date=dto.release_date,
                     total_tracks=dto.total_tracks or 0,
-                    artwork_url=dto.artwork_url,
+                    artwork_url=dto.cover.url,  # AlbumDTO.cover is ImageRef
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -480,7 +480,7 @@ class ChartsService:
                 chart_artist = ChartArtist(
                     name=dto.name,
                     deezer_id=dto.deezer_id,
-                    image_url=dto.image_url,  # ArtistDTO now uses image_url (not artwork_url)
+                    image_url=dto.image.url,  # ArtistDTO.image is ImageRef
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},
@@ -513,7 +513,7 @@ class ChartsService:
                     upc=dto.upc,
                     release_date=dto.release_date,
                     total_tracks=dto.total_tracks or 0,
-                    artwork_url=dto.artwork_url,
+                    artwork_url=dto.cover.url,  # AlbumDTO.cover is ImageRef
                     source_service="deezer",
                     external_urls=dto.external_urls or {},
                 )

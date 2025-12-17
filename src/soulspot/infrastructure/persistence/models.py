@@ -101,12 +101,10 @@ class ArtistModel(Base):
     tidal_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, unique=True, index=True
     )
-    # Hey future me - artwork_url stores the artist's profile picture from streaming CDN!
-    # Typically 320x320 resolution. String(512) allows for long URLs. Nullable because
-    # not all artists have images.
-    artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Hey future me - image_path is for LOCALLY CACHED images!
-    # Downloaded from CDN for offline access. Path like "artwork/artists/{id}.webp"
+    # Hey future me - ImageRef-consistent naming! Matches Artist.image.url in Python
+    # image_url = CDN URL from streaming service (Spotify/Deezer profile pic)
+    # image_path = Local cached file path (artwork/artists/{id}.webp)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Hey future me - genres and tags are stored as JSON text (SQLite compatible)!
     # The app layer serializes/deserializes list[str] to/from JSON string.
@@ -202,10 +200,11 @@ class AlbumModel(Base):
     tidal_id: Mapped[str | None] = mapped_column(
         String(50), nullable=True, unique=True, index=True
     )
-    artwork_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Hey future me - image_path is legacy alias for artwork_path (cached local image)
-    image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Hey future me - ImageRef-consistent naming! Matches Album.cover.url/path in Python
+    # cover_url = CDN URL from streaming service (Spotify/Deezer album cover)
+    # cover_path = Local cached file path (artwork/albums/{id}.webp)
+    cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cover_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Hey future me - Lidarr-style dual album type system!
     album_artist: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -397,8 +396,10 @@ class PlaylistModel(Base):
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
-    artwork_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    # Local path to downloaded cover image (e.g., "artwork/spotify/playlists/abc123.webp")
+    # Hey future me - ImageRef-consistent naming! Matches Playlist.cover.url/path in Python
+    # cover_url = CDN URL from streaming service (Spotify playlist cover)
+    # cover_path = Local cached file path (artwork/playlists/{id}.webp)
+    cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     cover_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # True for the special "Liked Songs" playlist - no Spotify URI for this one!
     is_liked_songs: Mapped[bool] = mapped_column(

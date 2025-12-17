@@ -126,13 +126,13 @@ class MetadataService:
             Processed artwork data (JPEG bytes) or None if not found
         """
         # 1. Try cached artwork_url first (saves API calls!)
-        if album and album.artwork_url:
+        if album and album.cover.url:
             logger.info(
                 "Using cached artwork URL for album: %s (%s)",
                 album.title,
-                album.artwork_url[:50] + "..." if len(album.artwork_url) > 50 else album.artwork_url,
+                album.cover.url[:50] + "..." if len(album.cover.url) > 50 else album.cover.url,
             )
-            artwork_data = await self._download_from_url(album.artwork_url)
+            artwork_data = await self._download_from_url(album.cover.url)
             if artwork_data:
                 return artwork_data
             logger.warning(
@@ -286,7 +286,8 @@ class MetadataService:
                 best_match = search_result.items[0]
 
             # Check if we have artwork URL
-            if not best_match.artwork_url:
+            # Hey future me - AlbumDTO.cover ist ImageRef!
+            if not best_match.cover.url:
                 logger.debug(f"Deezer album has no artwork: {best_match.title}")
                 return None
 
@@ -294,7 +295,7 @@ class MetadataService:
             from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
             client = await HttpClientPool.get_client()
-            response = await client.get(best_match.artwork_url, follow_redirects=True)
+            response = await client.get(best_match.cover.url, follow_redirects=True)
             response.raise_for_status()
             image_data = response.content
 
@@ -330,14 +331,15 @@ class MetadataService:
 
             album_dto = await self._spotify_plugin.get_album(album_id)
 
-            if not album_dto.artwork_url:
+            # Hey future me - AlbumDTO.cover ist ImageRef!
+            if not album_dto.cover.url:
                 logger.debug("No artwork URL found for album: %s", album_id)
                 return None
 
             from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
             client = await HttpClientPool.get_client()
-            response = await client.get(album_dto.artwork_url, follow_redirects=True)
+            response = await client.get(album_dto.cover.url, follow_redirects=True)
             response.raise_for_status()
             image_data = response.content
             logger.info(
@@ -376,13 +378,14 @@ class MetadataService:
                 return None
 
             album_dto = await self._spotify_plugin.get_album(track_dto.album_spotify_id)
-            if not album_dto.artwork_url:
+            # Hey future me - AlbumDTO.cover ist ImageRef!
+            if not album_dto.cover.url:
                 return None
 
             from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
             client = await HttpClientPool.get_client()
-            response = await client.get(album_dto.artwork_url, follow_redirects=True)
+            response = await client.get(album_dto.cover.url, follow_redirects=True)
             response.raise_for_status()
             image_data = response.content
             logger.info(

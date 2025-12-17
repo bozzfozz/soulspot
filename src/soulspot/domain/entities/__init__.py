@@ -12,6 +12,7 @@ from soulspot.domain.value_objects import (
     DownloadId,
     FilePath,
     FilterRuleId,
+    ImageRef,
     PlaylistId,
     SpotifyUri,
     TrackId,
@@ -89,6 +90,9 @@ class ProviderMode(str, Enum):
 # are shown together. UI uses this to display badges and enable/disable actions (e.g., can't "unfollow"
 # a LOCAL-only artist). When an artist exists in both sources, it's marked HYBRID and we merge metadata
 # from both (Spotify provides artwork/genres, local files provide actual track ownership).
+#
+# UPDATED: image field is now ImageRef value object for consistent image handling!
+# Use: artist.image.url for CDN URL, artist.image.path for local cache
 @dataclass
 class Artist:
     """Artist entity representing a music artist."""
@@ -99,7 +103,8 @@ class Artist:
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
-    artwork_url: str | None = None
+    # Hey future me - image is now ImageRef! Access via artist.image.url or artist.image.path
+    image: ImageRef = field(default_factory=ImageRef)
     # Hey future me - multi-service IDs for cross-service artist deduplication!
     # spotify_uri is the primary Spotify ID, these are for Deezer/Tidal.
     # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
@@ -165,8 +170,9 @@ class Album:
     # When syncing from multiple services, use musicbrainz_id as primary dedup key if available.
     deezer_id: str | None = None
     tidal_id: str | None = None
-    artwork_path: FilePath | None = None
-    artwork_url: str | None = None  # Spotify CDN URL for album cover
+    # Hey future me - cover is now ImageRef! Combines old artwork_path + artwork_url
+    # Use: album.cover.url for Spotify CDN, album.cover.path for local cached file
+    cover: ImageRef = field(default_factory=ImageRef)
     # Hey future me - Lidarr-style dual album type system for naming templates!
     # primary_type: Album, EP, Single, Broadcast, Other
     # secondary_types: Compilation, Soundtrack, Spokenword, Interview, Audiobook, Live, Remix, DJ-mix
@@ -238,14 +244,24 @@ class Album:
         # Otherwise combine: "Live Album", "Remix EP", etc.
         return f"{' '.join(secondary)} {primary}"
 
-    # Hey, update_artwork is a domain method! Sets artwork_path AND bumps updated_at. Called after
-    # post-processing downloads artwork from CoverArtArchive. The FilePath type ensures path is
-    # valid. If you bypass this and set artwork_path directly, updated_at won't change and cache
-    # won't invalidate! Always use domain methods for state changes, not direct field assignment.
-    def update_artwork(self, artwork_path: FilePath) -> None:
-        """Update album artwork."""
-        self.artwork_path = artwork_path
+    # Hey, update_cover is a domain method! Updates the cover ImageRef AND bumps updated_at. Called
+    # after post-processing downloads artwork from CoverArtArchive. Use this method instead of direct
+    # field assignment so updated_at changes and cache invalidates correctly.
+    def update_cover(self, *, url: str | None = None, path: FilePath | str | None = None) -> None:
+        """Update album cover art.
+        
+        Args:
+            url: Remote CDN URL (Spotify, Deezer, etc.)
+            path: Local cached file path
+        """
+        path_str = str(path) if path is not None else None
+        self.cover = ImageRef(url=url or self.cover.url, path=path_str or self.cover.path)
         self.updated_at = datetime.now(UTC)
+
+    # Backward compatibility alias
+    def update_artwork(self, artwork_path: FilePath) -> None:
+        """DEPRECATED: Use update_cover(path=...) instead."""
+        self.update_cover(path=str(artwork_path))
 
 
 # Yo future me, Track entity is the CORE domain object! Every track has artist_id (required) and
@@ -329,6 +345,9 @@ class PlaylistSource(str, Enum):
 # list not set. source=SPOTIFY means synced from Spotify (has spotify_uri). source=MANUAL means
 # user-created locally. description is optional (can be empty). Use add_track/remove_track methods
 # instead of manipulating track_ids directly - they update timestamps and handle duplicates correctly!
+#
+# UPDATED: cover field is now ImageRef for consistent image handling!
+# Use: playlist.cover.url for CDN URL, playlist.cover.path for local cache
 @dataclass
 class Playlist:
     """Playlist entity representing a collection of tracks."""
@@ -338,7 +357,8 @@ class Playlist:
     description: str | None = None
     source: PlaylistSource = PlaylistSource.MANUAL
     spotify_uri: SpotifyUri | None = None
-    artwork_url: str | None = None
+    # Hey future me - cover is now ImageRef! Use playlist.cover.url or playlist.cover.path
+    cover: ImageRef = field(default_factory=ImageRef)
     track_ids: list[TrackId] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
