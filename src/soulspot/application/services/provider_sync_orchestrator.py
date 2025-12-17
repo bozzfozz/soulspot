@@ -396,7 +396,7 @@ class ProviderSyncOrchestrator:
         return result
 
     # =========================================================================
-    # CHARTS SYNC (Deezer only - Spotify has no public charts API)
+    # CHARTS SYNC (DEPRECATED - Charts should use IN-MEMORY CACHE!)
     # =========================================================================
 
     async def sync_charts(
@@ -405,38 +405,32 @@ class ProviderSyncOrchestrator:
     ) -> AggregatedSyncResult:
         """Sync charts from available providers.
         
-        Hey future me - NUR DEEZER hat public Charts API!
-        Spotify hat keine öffentliche Charts API.
+        ⚠️ DEPRECATED: Charts should NOT be written to DB!
+        Use DeezerSyncWorker._charts_cache instead (in-memory).
         
-        Args:
-            force: Skip cooldown check
-            
-        Returns:
-            AggregatedSyncResult with stats
+        This method exists for backward compatibility but returns
+        empty result. Use ChartsService directly for live data.
+        
+        Hey future me - Charts MÜSSEN in-memory bleiben, NICHT in DB!
+        User's Library soll nicht mit Browse-Content gemischt werden.
         """
+        import warnings
+        warnings.warn(
+            "sync_charts() is deprecated. Charts use in-memory cache now. "
+            "Use ChartsService directly or DeezerSyncWorker.get_cached_charts().",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
+        # Return empty result - charts don't go to DB anymore
         result = AggregatedSyncResult()
+        result.skipped_providers = ["deezer", "spotify"]
+        result.synced = True  # Not an error, just deprecated
         
-        if self._deezer_sync and await self._is_provider_enabled("deezer"):
-            try:
-                deezer_result = await self._deezer_sync.sync_charts(force=force)
-                if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = (
-                        deezer_result.get("tracks_synced", 0) +
-                        deezer_result.get("albums_synced", 0) +
-                        deezer_result.get("artists_synced", 0)
-                    )
-                    result.added = result.source_counts["deezer"]
-            except Exception as e:
-                logger.warning(f"Deezer charts sync failed: {e}")
-                result.errors["deezer"] = str(e)
-        else:
-            result.skipped_providers.append("deezer")
-        
-        # Note: Spotify has no public charts API
-        result.skipped_providers.append("spotify")
-        
-        result.total = sum(result.source_counts.values())
-        result.synced = result.total > 0 or not result.errors
+        logger.warning(
+            "sync_charts() called but is deprecated! "
+            "Charts use in-memory cache now, not database."
+        )
         
         return result
 

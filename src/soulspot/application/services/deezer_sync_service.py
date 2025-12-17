@@ -113,7 +113,7 @@ class DeezerSyncService:
         self._last_sync_times[sync_type] = datetime.now(UTC)
     
     # =========================================================================
-    # CHARTS SYNC
+    # CHARTS SYNC (DEPRECATED - Use in-memory cache!)
     # =========================================================================
     
     async def sync_charts(
@@ -123,114 +123,37 @@ class DeezerSyncService:
     ) -> dict[str, Any]:
         """Sync Deezer charts to database.
         
-        Hey future me - Charts synken wir zu soulspot_tracks/albums/artists!
-        Alle Einträge bekommen source='deezer' und is_chart=True Flag.
+        ⚠️ DEPRECATED: Charts should NOT be written to DB!
+        Use DeezerSyncWorker._charts_cache (in-memory) instead.
         
-        Args:
-            limit: Max items per category
-            force: Skip cooldown check
-            
+        Hey future me - Diese Methode NICHT mehr verwenden!
+        Charts dürfen nicht in soulspot_* Tabellen geschrieben werden,
+        weil sie dann mit der User Library vermischt werden.
+        
+        Stattdessen: DeezerSyncWorker.get_cached_charts() nutzen.
+        
         Returns:
-            Sync result with counts
+            Dict with deprecated warning
         """
-        if not force and not self._should_sync("charts", self.CHARTS_SYNC_COOLDOWN):
-            return {
-                "skipped": True,
-                "reason": "cooldown",
-                "next_sync_in_minutes": self.CHARTS_SYNC_COOLDOWN,
-            }
+        import warnings
+        warnings.warn(
+            "DeezerSyncService.sync_charts() is deprecated. "
+            "Charts use in-memory cache now via DeezerSyncWorker. "
+            "Use ChartsService for live data.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         
-        result = {
-            "tracks_synced": 0,
-            "albums_synced": 0,
-            "artists_synced": 0,
-            "errors": [],
+        logger.warning(
+            "sync_charts() DEPRECATED! Charts should use in-memory cache, "
+            "not database. Use DeezerSyncWorker.get_cached_charts()."
+        )
+        
+        return {
+            "deprecated": True,
+            "reason": "Charts use in-memory cache now, not DB",
+            "alternative": "DeezerSyncWorker.get_cached_charts() or ChartsService",
         }
-        
-        try:
-            # CRITICAL FIX (Dec 2025): Sync artists FIRST, then albums, then tracks
-            # This ensures we have artist IDs available for relationship creation
-            
-            # Step 1: Sync chart artists first
-            chart_artists = await self._plugin.get_chart_artists(limit=limit)
-            artist_id_map = {}  # Map deezer_id -> internal artist_id
-            
-            for artist_dto in chart_artists:
-                try:
-                    artist_id = await self._ensure_artist_exists(artist_dto, is_chart=True)
-                    if artist_id and artist_dto.deezer_id:
-                        artist_id_map[artist_dto.deezer_id] = artist_id
-                    result["artists_synced"] += 1
-                except Exception as e:
-                    result["errors"].append(f"Artist {artist_dto.name}: {e}")
-            
-            # Step 2: Sync chart albums (now we have artist IDs)
-            chart_albums = await self._plugin.get_chart_albums(limit=limit)
-            for album_dto in chart_albums:
-                try:
-                    # Ensure album's artist exists first
-                    artist_id = None
-                    if album_dto.artist_deezer_id and album_dto.artist_deezer_id in artist_id_map:
-                        artist_id = artist_id_map[album_dto.artist_deezer_id]
-                    elif album_dto.artist_deezer_id:
-                        # Artist not in charts but referenced - create it
-                        from soulspot.domain.dtos import ArtistDTO
-                        artist_dto_minimal = ArtistDTO(
-                            name=album_dto.artist_name,
-                            source_service="deezer",
-                            deezer_id=album_dto.artist_deezer_id,
-                        )
-                        artist_id = await self._ensure_artist_exists(artist_dto_minimal)
-                    
-                    if artist_id:
-                        await self._save_album_with_artist(album_dto, artist_id, is_chart=True)
-                        result["albums_synced"] += 1
-                    else:
-                        logger.warning(f"Skipping album '{album_dto.title}' - could not resolve artist")
-                except Exception as e:
-                    result["errors"].append(f"Album {album_dto.title}: {e}")
-            
-            # Step 3: Sync chart tracks (now we have artist IDs)
-            chart_tracks = await self._plugin.get_chart_tracks(limit=limit)
-            for track_dto in chart_tracks:
-                try:
-                    # Ensure track's artist exists first
-                    artist_id = None
-                    if track_dto.artist_deezer_id and track_dto.artist_deezer_id in artist_id_map:
-                        artist_id = artist_id_map[track_dto.artist_deezer_id]
-                    elif track_dto.artist_deezer_id:
-                        # Artist not in charts but referenced - create it
-                        from soulspot.domain.dtos import ArtistDTO
-                        artist_dto_minimal = ArtistDTO(
-                            name=track_dto.artist_name,
-                            source_service="deezer",
-                            deezer_id=track_dto.artist_deezer_id,
-                        )
-                        artist_id = await self._ensure_artist_exists(artist_dto_minimal)
-                    
-                    if artist_id:
-                        await self._save_track_with_artist(track_dto, artist_id, is_chart=True)
-                        result["tracks_synced"] += 1
-                    else:
-                        logger.warning(f"Skipping track '{track_dto.title}' - could not resolve artist")
-                except Exception as e:
-                    result["errors"].append(f"Track {track_dto.title}: {e}")
-            
-            await self._session.commit()
-            self._mark_synced("charts")
-            
-            logger.info(
-                f"DeezerSyncService: Charts synced - "
-                f"{result['tracks_synced']} tracks, "
-                f"{result['albums_synced']} albums, "
-                f"{result['artists_synced']} artists"
-            )
-            
-        except Exception as e:
-            logger.error(f"DeezerSyncService: Charts sync failed: {e}")
-            result["error"] = str(e)
-        
-        return result
     
     # =========================================================================
     # NEW RELEASES SYNC

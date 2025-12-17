@@ -2302,18 +2302,22 @@ async def browse_charts_page(
     session: AsyncSession = Depends(get_db_session),
     chart_type: str = Query(default="tracks", description="Type: tracks, albums, artists"),
     limit: int = Query(default=50, ge=10, le=100, description="Number of items"),
+    force_refresh: bool = Query(default=False, description="Force fresh fetch (bypass cache)"),
 ) -> Any:
-    """Browse Charts from MULTIPLE SOURCES.
+    """Browse Charts from MULTIPLE SOURCES using IN-MEMORY CACHE.
 
-    Hey future me - dieser Route zeigt aggregierte Charts von allen Providern!
-    Aktuell hauptsächlich Deezer (FREE - keine Auth nötig!).
+    Hey future me - Charts werden NICHT in die DB geschrieben!
+    Sie werden vom DeezerSyncWorker in einen In-Memory Cache geladen.
+    Diese Route liest aus dem Cache für schnelle Response.
     
     Architecture:
-        Route → ChartsService
+        DeezerSyncWorker (background)
                      ↓
-        [DeezerPlugin] (free charts API)
+        DeezerChartsCache (in-memory)
                      ↓
-        ChartsResult → Template
+        This Route → Template
+    
+    Fallback: Bei Cache-Miss oder force_refresh wird live gefetcht.
 
     Deezer advantage: NO AUTH NEEDED for charts!
     Top 100 tracks, albums, artists available for free.
@@ -2325,6 +2329,8 @@ async def browse_charts_page(
     error: str | None = None
     items: list[dict[str, Any]] = []
     source_counts: dict[str, int] = {}
+    cache_info: dict[str, Any] = {}
+    result = None
 
     # Check which providers are enabled
     enabled_providers: list[str] = []
@@ -2345,98 +2351,140 @@ async def browse_charts_page(
             },
         )
 
-    service = ChartsService(
-        deezer_plugin=deezer_plugin,
-    )
-
-    try:
-        if chart_type == "tracks":
-            result = await service.get_chart_tracks(
-                limit=limit,
-                enabled_providers=enabled_providers,
-            )
-            source_counts = result.source_counts
-            for track in result.tracks:
-                duration_sec = track.duration_ms // 1000
-                duration_min = duration_sec // 60
-                duration_sec_rem = duration_sec % 60
-                items.append({
-                    "id": track.deezer_id or track.spotify_id or "",
-                    "name": track.title,
-                    "artist_name": track.artist_name,
-                    "album_name": track.album_name or "",
-                    "image_url": track.artwork_url,
-                    "preview_url": track.preview_url,
-                    "duration_str": f"{duration_min}:{duration_sec_rem:02d}",
-                    "position": track.chart_position,
-                    "source": track.source_service,
-                    "external_url": track.external_urls.get(track.source_service, ""),
-                })
-            for provider, err in result.errors.items():
-                logger.warning(f"Charts tracks: {provider} error: {err}")
-
-        elif chart_type == "albums":
-            result = await service.get_chart_albums(
-                limit=limit,
-                enabled_providers=enabled_providers,
-            )
-            source_counts = result.source_counts
-            for album in result.albums:
-                items.append({
-                    "id": album.deezer_id or album.spotify_id or "",
-                    "name": album.title,
-                    "artist_name": album.artist_name,
-                    "image_url": album.artwork_url,
-                    "release_date": album.release_date,
-                    "total_tracks": album.total_tracks,
-                    "position": album.chart_position,
-                    "source": album.source_service,
-                    "external_url": album.external_urls.get(album.source_service, ""),
-                })
-            for provider, err in result.errors.items():
-                logger.warning(f"Charts albums: {provider} error: {err}")
-
-        elif chart_type == "artists":
-            result = await service.get_chart_artists(
-                limit=limit,
-                enabled_providers=enabled_providers,
-            )
-            source_counts = result.source_counts
-            for artist in result.artists:
-                items.append({
-                    "id": artist.deezer_id or artist.spotify_id or "",
-                    "name": artist.name,
-                    "image_url": artist.artwork_url,
-                    "genres": artist.genres[:3] if artist.genres else [],
-                    "position": artist.chart_position,
-                    "source": artist.source_service,
-                    "external_url": artist.external_urls.get(artist.source_service, ""),
-                })
-            for provider, err in result.errors.items():
-                logger.warning(f"Charts artists: {provider} error: {err}")
-
-        elif chart_type == "editorial":
-            result = await service.get_editorial_picks(
-                limit=limit,
-                enabled_providers=enabled_providers,
-            )
-            source_counts = result.source_counts
-            for album in result.albums:
-                items.append({
-                    "id": album.deezer_id or album.spotify_id or "",
-                    "name": album.title,
-                    "artist_name": album.artist_name,
-                    "image_url": album.artwork_url,
-                    "release_date": album.release_date,
-                    "total_tracks": album.total_tracks,
-                    "source": album.source_service,
-                    "external_url": album.external_urls.get(album.source_service, ""),
-                })
-            for provider, err in result.errors.items():
-                logger.warning(f"Editorial: {provider} error: {err}")
-
+    # -------------------------------------------------------------------------
+    # TRY TO USE CACHED DATA FROM BACKGROUND WORKER
+    # -------------------------------------------------------------------------
+    # Hey future me - Charts werden IN-MEMORY gecacht, NICHT in der DB!
+    # Der DeezerSyncWorker aktualisiert den Cache periodisch.
+    worker = getattr(request.app.state, "deezer_sync_worker", None)
+    
+    if worker and not force_refresh:
+        cache = worker.get_cached_charts()
+        if cache.is_fresh():
+            # Use cached data!
+            if chart_type == "tracks" and cache.tracks_result:
+                result = cache.tracks_result
+            elif chart_type == "albums" and cache.albums_result:
+                result = cache.albums_result
+            elif chart_type == "artists" and cache.artists_result:
+                result = cache.artists_result
+            
+            if result:
+                cache_info = {
+                    "source": "cache",
+                    "age_seconds": cache.get_age_seconds(),
+                    "cached_at": cache.cached_at.isoformat() if cache.cached_at else None,
+                }
+                logger.debug(f"Charts: Using cached data ({cache_info['age_seconds']}s old)")
         else:
-            error = f"Unknown chart type: {chart_type}"
+            logger.debug("Charts: Cache stale or invalid, fetching live")
+            cache_info = {"source": "live", "reason": "cache_stale"}
+    else:
+        if force_refresh:
+            logger.info("Charts: Force refresh requested")
+            cache_info = {"source": "live", "reason": "force_refresh"}
+        else:
+            logger.debug("Charts: No worker available, fetching live")
+            cache_info = {"source": "live", "reason": "no_worker"}
+
+    # -------------------------------------------------------------------------
+    # FETCH LIVE IF NO CACHE OR FORCE REFRESH
+    # -------------------------------------------------------------------------
+    if result is None:
+        # Try force sync via worker first (updates cache)
+        if worker and force_refresh:
+            await worker.force_charts_sync()
+            cache = worker.get_cached_charts()
+            if chart_type == "tracks" and cache.tracks_result:
+                result = cache.tracks_result
+            elif chart_type == "albums" and cache.albums_result:
+                result = cache.albums_result
+            elif chart_type == "artists" and cache.artists_result:
+                result = cache.artists_result
+            if result:
+                cache_info["source"] = "force_synced"
+
+        # Fallback: fetch directly via ChartsService (NOT via DeezerSyncService!)
+        if result is None:
+            service = ChartsService(deezer_plugin=deezer_plugin)
+            try:
+                if chart_type == "tracks":
+                    result = await service.get_chart_tracks(
+                        limit=limit, enabled_providers=enabled_providers
+                    )
+                elif chart_type == "albums":
+                    result = await service.get_chart_albums(
+                        limit=limit, enabled_providers=enabled_providers
+                    )
+                elif chart_type == "artists":
+                    result = await service.get_chart_artists(
+                        limit=limit, enabled_providers=enabled_providers
+                    )
+            except Exception as e:
+                logger.error(f"Charts: Service failed: {e}")
+                error = f"Failed to fetch charts: {e}"
+                result = None
+
+    # -------------------------------------------------------------------------
+    # CONVERT RESULT TO TEMPLATE FORMAT
+    # -------------------------------------------------------------------------
+    try:
+        if result:
+            source_counts = result.source_counts
+            
+            if chart_type == "tracks":
+                for track in result.tracks[:limit]:
+                    duration_sec = track.duration_ms // 1000
+                    duration_min = duration_sec // 60
+                    duration_sec_rem = duration_sec % 60
+                    items.append({
+                        "id": track.deezer_id or track.spotify_id or "",
+                        "name": track.title,
+                        "artist_name": track.artist_name,
+                        "album_name": track.album_name or "",
+                        "image_url": track.artwork_url,
+                        "preview_url": track.preview_url,
+                        "duration_str": f"{duration_min}:{duration_sec_rem:02d}",
+                        "position": track.chart_position,
+                        "source": track.source_service,
+                        "external_url": track.external_urls.get(track.source_service, ""),
+                    })
+                for provider, err in result.errors.items():
+                    logger.warning(f"Charts tracks: {provider} error: {err}")
+
+            elif chart_type == "albums":
+                for album in result.albums[:limit]:
+                    items.append({
+                        "id": album.deezer_id or album.spotify_id or "",
+                        "name": album.title,
+                        "artist_name": album.artist_name,
+                        "image_url": album.artwork_url,
+                        "release_date": album.release_date,
+                        "total_tracks": album.total_tracks,
+                        "position": album.chart_position,
+                        "source": album.source_service,
+                        "external_url": album.external_urls.get(album.source_service, ""),
+                    })
+                for provider, err in result.errors.items():
+                    logger.warning(f"Charts albums: {provider} error: {err}")
+
+            elif chart_type == "artists":
+                for artist in result.artists[:limit]:
+                    items.append({
+                        "id": artist.deezer_id or artist.spotify_id or "",
+                        "name": artist.name,
+                        # ChartArtist uses image_url (not artwork_url like tracks/albums)
+                        "image_url": artist.image_url,
+                        "genres": artist.genres[:3] if artist.genres else [],
+                        "position": artist.chart_position,
+                        "source": artist.source_service,
+                        "external_url": artist.external_urls.get(artist.source_service, ""),
+                    })
+                for provider, err in result.errors.items():
+                    logger.warning(f"Charts artists: {provider} error: {err}")
+
+            else:
+                error = f"Unknown chart type: {chart_type}"
 
     except Exception as e:
         logger.error(f"Charts fetch failed: {e}")
@@ -2447,7 +2495,7 @@ async def browse_charts_page(
 
     logger.info(
         f"Charts page ({chart_type}): {len(items)} items "
-        f"(Deezer: {source_counts.get('deezer', 0)})"
+        f"(Deezer: {source_counts.get('deezer', 0)}, cache: {cache_info.get('source', 'unknown')})"
     )
 
     return templates.TemplateResponse(
@@ -2460,6 +2508,7 @@ async def browse_charts_page(
             "source_counts": source_counts,
             "limit": limit,
             "error": error,
+            "cache_info": cache_info,  # For debugging in template
         },
     )
 

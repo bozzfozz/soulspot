@@ -27,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from soulspot.application.cache.deezer_charts_cache import DeezerChartsCache
     from soulspot.config import Settings
     from soulspot.infrastructure.persistence import Database
 
@@ -77,6 +78,11 @@ class DeezerSyncWorker:
         self.check_interval_seconds = check_interval_seconds
         self._running = False
         self._task: asyncio.Task[None] | None = None
+
+        # Hey future me - Charts werden IN-MEMORY gecacht, NICHT in die DB geschrieben!
+        # Das verhindert Vermischung von Browse-Content mit User's Library.
+        from soulspot.application.cache.deezer_charts_cache import DeezerChartsCache
+        self._charts_cache = DeezerChartsCache()
 
         # Hey future me - diese Timestamps tracken wann der letzte erfolgreiche Sync war.
         # Sie sind in-memory, d.h. beim Neustart werden alle Syncs sofort ausgeführt.
@@ -309,13 +315,19 @@ class DeezerSyncWorker:
     # =========================================================================
 
     async def _run_charts_sync(self, session: Any, now: datetime) -> None:
-        """Run charts sync (public API - no auth needed)."""
-        logger.info("Starting automatic Deezer charts sync...")
+        """Run charts sync to IN-MEMORY CACHE (public API - no auth needed).
+        
+        Hey future me - WICHTIG: Charts werden NICHT in die DB geschrieben!
+        Sie werden nur im _charts_cache gehalten. Das verhindert Vermischung
+        von Browse-Content mit User's Library.
+        
+        Wir nutzen ChartsService (nicht DeezerSyncService) direkt und
+        speichern das Ergebnis im Cache.
+        """
+        logger.info("Starting automatic Deezer charts sync (in-memory cache)...")
 
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
+            from soulspot.application.services.charts_service import ChartsService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -328,12 +340,36 @@ class DeezerSyncWorker:
                 access_token=None,  # No auth for public API
             )
 
-            sync_service = DeezerSyncService(
-                session=session,
+            # Use ChartsService directly - it returns ChartsResult, not DB writes!
+            charts_service = ChartsService(
+                spotify_plugin=None,  # No Spotify for public charts
                 deezer_plugin=deezer_plugin,
             )
 
-            result = await sync_service.sync_charts()
+            # Fetch all chart types and store in cache
+            tracks_result = await charts_service.get_chart_tracks(
+                limit=50, enabled_providers=["deezer"]
+            )
+            albums_result = await charts_service.get_chart_albums(
+                limit=50, enabled_providers=["deezer"]
+            )
+            artists_result = await charts_service.get_chart_artists(
+                limit=50, enabled_providers=["deezer"]
+            )
+            
+            # Update the in-memory cache (NO DB writes!)
+            self._charts_cache.update_all(
+                tracks=tracks_result,
+                albums=albums_result,
+                artists=artists_result,
+            )
+
+            result = {
+                "cached": True,
+                "tracks": len(tracks_result.tracks),
+                "albums": len(albums_result.albums),
+                "artists": len(artists_result.artists),
+            }
 
             # Update tracking
             self._last_sync["charts"] = now
@@ -341,7 +377,10 @@ class DeezerSyncWorker:
             self._sync_stats["charts"]["last_result"] = result
             self._sync_stats["charts"]["last_error"] = None
 
-            logger.info(f"Deezer charts sync completed: {result}")
+            logger.info(
+                f"Deezer charts cached: {result['tracks']} tracks, "
+                f"{result['albums']} albums, {result['artists']} artists"
+            )
 
         except Exception as e:
             self._sync_stats["charts"]["last_error"] = str(e)
@@ -562,7 +601,31 @@ class DeezerSyncWorker:
                 k: v.isoformat() if v else None for k, v in self._last_sync.items()
             },
             "sync_stats": self._sync_stats,
+            "charts_cache_stats": self._charts_cache.get_stats(),
         }
+
+    def get_cached_charts(self) -> "DeezerChartsCache":
+        """Get the in-memory charts cache.
+        
+        Hey future me - das ist der Zugriffspunkt für die API!
+        Die Charts-Route ruft diese Methode auf um gecachte Charts zu bekommen.
+        
+        Returns:
+            DeezerChartsCache instance with cached chart data
+        """
+        from soulspot.application.cache.deezer_charts_cache import DeezerChartsCache
+        return self._charts_cache
+
+    async def force_charts_sync(self) -> dict[str, Any]:
+        """Force immediate charts sync (for manual refresh button).
+        
+        Returns:
+            Sync result with counts
+        """
+        logger.info("Force charts sync requested...")
+        async with self.db.session_scope() as session:
+            await self._run_charts_sync(session, datetime.now(UTC))
+        return self._charts_cache.get_stats()
 
     def reset_sync_time(self, sync_type: str) -> bool:
         """Reset last sync time to force immediate resync.
