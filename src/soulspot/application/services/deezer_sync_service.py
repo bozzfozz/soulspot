@@ -21,6 +21,7 @@
 # - ViewModels erstellen (das macht LibraryViewService)
 """Deezer Sync Service - Syncs Deezer data to database."""
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -147,32 +148,73 @@ class DeezerSyncService:
         }
         
         try:
-            # Sync chart tracks
-            chart_tracks = await self._plugin.get_chart_tracks(limit=limit)
-            for track_dto in chart_tracks:
-                try:
-                    await self._save_track_from_dto(track_dto, is_chart=True)
-                    result["tracks_synced"] += 1
-                except Exception as e:
-                    result["errors"].append(f"Track {track_dto.title}: {e}")
+            # CRITICAL FIX (Dec 2025): Sync artists FIRST, then albums, then tracks
+            # This ensures we have artist IDs available for relationship creation
             
-            # Sync chart albums
-            chart_albums = await self._plugin.get_chart_albums(limit=limit)
-            for album_dto in chart_albums:
-                try:
-                    await self._save_album_from_dto(album_dto, is_chart=True)
-                    result["albums_synced"] += 1
-                except Exception as e:
-                    result["errors"].append(f"Album {album_dto.title}: {e}")
-            
-            # Sync chart artists
+            # Step 1: Sync chart artists first
             chart_artists = await self._plugin.get_chart_artists(limit=limit)
+            artist_id_map = {}  # Map deezer_id -> internal artist_id
+            
             for artist_dto in chart_artists:
                 try:
-                    await self._save_artist_from_dto(artist_dto, is_chart=True)
+                    artist_id = await self._ensure_artist_exists(artist_dto, is_chart=True)
+                    if artist_id and artist_dto.deezer_id:
+                        artist_id_map[artist_dto.deezer_id] = artist_id
                     result["artists_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Artist {artist_dto.name}: {e}")
+            
+            # Step 2: Sync chart albums (now we have artist IDs)
+            chart_albums = await self._plugin.get_chart_albums(limit=limit)
+            for album_dto in chart_albums:
+                try:
+                    # Ensure album's artist exists first
+                    artist_id = None
+                    if album_dto.artist_deezer_id and album_dto.artist_deezer_id in artist_id_map:
+                        artist_id = artist_id_map[album_dto.artist_deezer_id]
+                    elif album_dto.artist_deezer_id:
+                        # Artist not in charts but referenced - create it
+                        from soulspot.domain.dtos import ArtistDTO
+                        artist_dto_minimal = ArtistDTO(
+                            name=album_dto.artist_name,
+                            source_service="deezer",
+                            deezer_id=album_dto.artist_deezer_id,
+                        )
+                        artist_id = await self._ensure_artist_exists(artist_dto_minimal)
+                    
+                    if artist_id:
+                        await self._save_album_with_artist(album_dto, artist_id, is_chart=True)
+                        result["albums_synced"] += 1
+                    else:
+                        logger.warning(f"Skipping album '{album_dto.title}' - could not resolve artist")
+                except Exception as e:
+                    result["errors"].append(f"Album {album_dto.title}: {e}")
+            
+            # Step 3: Sync chart tracks (now we have artist IDs)
+            chart_tracks = await self._plugin.get_chart_tracks(limit=limit)
+            for track_dto in chart_tracks:
+                try:
+                    # Ensure track's artist exists first
+                    artist_id = None
+                    if track_dto.artist_deezer_id and track_dto.artist_deezer_id in artist_id_map:
+                        artist_id = artist_id_map[track_dto.artist_deezer_id]
+                    elif track_dto.artist_deezer_id:
+                        # Artist not in charts but referenced - create it
+                        from soulspot.domain.dtos import ArtistDTO
+                        artist_dto_minimal = ArtistDTO(
+                            name=track_dto.artist_name,
+                            source_service="deezer",
+                            deezer_id=track_dto.artist_deezer_id,
+                        )
+                        artist_id = await self._ensure_artist_exists(artist_dto_minimal)
+                    
+                    if artist_id:
+                        await self._save_track_with_artist(track_dto, artist_id, is_chart=True)
+                        result["tracks_synced"] += 1
+                    else:
+                        logger.warning(f"Skipping track '{track_dto.title}' - could not resolve artist")
+                except Exception as e:
+                    result["errors"].append(f"Track {track_dto.title}: {e}")
             
             await self._session.commit()
             self._mark_synced("charts")
@@ -204,6 +246,9 @@ class DeezerSyncService:
         Hey future me - New Releases synken wir zu soulspot_albums!
         Kombiniert Editorial + Chart Albums für gute Mischung.
         
+        CRITICAL: Sync in correct order - Artists FIRST, then Albums!
+        We need artist_id for foreign key relationships.
+        
         Args:
             limit: Max albums to sync
             force: Skip cooldown check
@@ -225,28 +270,34 @@ class DeezerSyncService:
         }
         
         try:
-            # Get editorial releases (curated)
+            # Collect all album DTOs first
             editorial_albums = await self._plugin.get_editorial_releases(limit=limit // 2)
-            for album_dto in editorial_albums:
-                try:
-                    await self._save_album_from_dto(album_dto, is_new_release=True)
-                    result["albums_synced"] += 1
-                    
-                    # Also save the artist
-                    if album_dto.artist_name:
-                        artist_dto = await self._plugin.get_artist(album_dto.deezer_id or "")
-                        if artist_dto:
-                            await self._save_artist_from_dto(artist_dto)
-                            result["artists_synced"] += 1
-                except Exception as e:
-                    result["errors"].append(f"Album {album_dto.title}: {e}")
-            
-            # Get chart albums (popular)
             chart_albums = await self._plugin.get_chart_albums(limit=limit // 2)
-            for album_dto in chart_albums:
+            all_albums = editorial_albums + chart_albums
+            
+            # Step 1: Build artist_id mapping (deezer_id → internal UUID)
+            artist_id_map: dict[str, str] = {}
+            
+            # Extract unique artists from albums
+            for album_dto in all_albums:
+                if album_dto.artist_deezer_id and album_dto.artist_deezer_id not in artist_id_map:
+                    # Try to ensure artist exists
+                    artist_id = await self._ensure_artist_exists(album_dto, is_chart=False)
+                    if artist_id:
+                        artist_id_map[album_dto.artist_deezer_id] = artist_id
+                        result["artists_synced"] += 1
+            
+            # Step 2: Sync albums with artist relationships
+            for album_dto in all_albums:
                 try:
-                    await self._save_album_from_dto(album_dto, is_new_release=True)
-                    result["albums_synced"] += 1
+                    artist_id = artist_id_map.get(album_dto.artist_deezer_id or "")
+                    if artist_id:
+                        await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
+                        result["albums_synced"] += 1
+                    else:
+                        logger.warning(
+                            f"DeezerSyncService: Album '{album_dto.title}' skipped - no artist_id"
+                        )
                 except Exception as e:
                     result["errors"].append(f"Album {album_dto.title}: {e}")
             
@@ -304,9 +355,24 @@ class DeezerSyncService:
             # Get albums from Deezer
             albums = await self._plugin.get_artist_albums(deezer_artist_id, limit=limit)
             
+            # Step 1: Ensure artist exists and get artist_id
+            # We need artist_id to link albums properly
+            artist_id: str | None = None
+            
+            if albums and albums[0]:
+                # Get artist_id from first album DTO
+                artist_id = await self._ensure_artist_exists(albums[0], is_chart=False)
+            
+            if not artist_id:
+                logger.warning(
+                    f"DeezerSyncService: Cannot sync albums for artist {deezer_artist_id} - no artist_id"
+                )
+                return {"albums_synced": 0, "error": "artist_not_found"}
+            
+            # Step 2: Sync albums with artist relationship
             for album_dto in albums:
                 try:
-                    await self._save_album_from_dto(album_dto)
+                    await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
                     result["albums_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Album {album_dto.title}: {e}")
@@ -349,9 +415,23 @@ class DeezerSyncService:
                 deezer_artist_id, limit=limit
             )
             
+            # Step 1: Ensure artist exists and get artist_id
+            artist_id: str | None = None
+            
+            if top_tracks and top_tracks[0]:
+                # Get artist_id from first track DTO
+                artist_id = await self._ensure_artist_exists(top_tracks[0], is_chart=False)
+            
+            if not artist_id:
+                logger.warning(
+                    f"DeezerSyncService: Cannot sync tracks for artist {deezer_artist_id} - no artist_id"
+                )
+                return {"tracks_synced": 0, "error": "artist_not_found"}
+            
+            # Step 2: Sync tracks with artist relationship
             for track_dto in top_tracks:
                 try:
-                    await self._save_track_from_dto(track_dto, is_top_track=True)
+                    await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
                     result["tracks_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")
@@ -479,6 +559,170 @@ class DeezerSyncService:
                 source="deezer",
             )
             self._session.add(new_artist)
+    
+    async def _ensure_artist_exists(
+        self,
+        artist_dto: Any,
+        is_chart: bool = False,
+    ) -> str | None:
+        """Ensure artist exists in database and return its internal ID.
+        
+        CRITICAL FIX (Dec 2025): This method creates/updates artist and RETURNS the ID
+        so we can use it for album/track relationships.
+        
+        Args:
+            artist_dto: Artist DTO from plugin (must have: name, deezer_id, and optionally artwork_url, genres, tags)
+            is_chart: Whether this is from charts
+            
+        Returns:
+            Internal artist ID (UUID) or None if creation failed
+        """
+        from soulspot.domain.entities import Artist, ArtistSource
+        from soulspot.infrastructure.persistence.models import ArtistModel
+        
+        try:
+            # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
+            artist_name = getattr(artist_dto, 'name', None) or getattr(artist_dto, 'artist_name', None)
+            deezer_id = getattr(artist_dto, 'deezer_id', None) or getattr(artist_dto, 'artist_deezer_id', None)
+            artwork_url = getattr(artist_dto, 'artwork_url', None) or getattr(artist_dto, 'artist_artwork_url', None)
+            genres = getattr(artist_dto, 'genres', None)
+            tags = getattr(artist_dto, 'tags', None)
+            
+            if not artist_name or not deezer_id:
+                logger.warning(f"Cannot ensure artist exists - missing name or deezer_id")
+                return None
+            
+            # Check if artist exists (by deezer_id)
+            existing_model = None
+            if deezer_id:
+                existing_model = await self._artist_repo.get_by_deezer_id(deezer_id)
+            
+            if existing_model:
+                # Update existing
+                existing_model.name = artist_name
+                existing_model.artwork_url = artwork_url or existing_model.artwork_url
+                if genres:
+                    existing_model.genres = json.dumps(genres)
+                if tags:
+                    existing_model.tags = json.dumps(tags)
+                return existing_model.id
+            else:
+                # Create new artist with proper domain entity
+                import uuid
+                artist_id = str(uuid.uuid4())
+                
+                new_artist = ArtistModel(
+                    id=artist_id,
+                    name=artist_name,
+                    deezer_id=deezer_id,
+                    artwork_url=artwork_url,
+                    source="deezer",  # Source field in model accepts string
+                    genres=json.dumps(genres) if genres else None,
+                    tags=json.dumps(tags) if tags else None,
+                )
+                self._session.add(new_artist)
+                await self._session.flush()  # Get the ID immediately
+                return artist_id
+                
+        except Exception as e:
+            logger.error(f"Failed to ensure artist exists: {e}")
+            return None
+    
+    async def _save_album_with_artist(
+        self,
+        album_dto: Any,
+        artist_id: str,
+        is_chart: bool = False,
+    ) -> None:
+        """Save album DTO with artist relationship.
+        
+        CRITICAL FIX (Dec 2025): This method properly links album to artist.
+        
+        Args:
+            album_dto: Album DTO from plugin
+            artist_id: Internal artist ID to link to
+            is_chart: Whether this is from charts
+        """
+        from soulspot.infrastructure.persistence.models import AlbumModel
+        import uuid
+        
+        try:
+            # Check if album exists (by deezer_id)
+            existing = None
+            if album_dto.deezer_id:
+                existing = await self._album_repo.get_by_deezer_id(album_dto.deezer_id)
+            
+            if existing:
+                # Update existing
+                existing.title = album_dto.title
+                existing.artwork_url = album_dto.artwork_url or existing.artwork_url
+            else:
+                # Create new with artist relationship
+                new_album = AlbumModel(
+                    id=str(uuid.uuid4()),
+                    title=album_dto.title,
+                    artist_id=artist_id,  # CRITICAL: Link to artist
+                    deezer_id=album_dto.deezer_id,
+                    artwork_url=album_dto.artwork_url,
+                    release_date=album_dto.release_date,
+                    total_tracks=album_dto.total_tracks,
+                    primary_type=album_dto.primary_type or "Album",
+                    source="deezer",
+                )
+                self._session.add(new_album)
+                
+        except Exception as e:
+            logger.error(f"Failed to save album '{album_dto.title}': {e}")
+    
+    async def _save_track_with_artist(
+        self,
+        track_dto: Any,
+        artist_id: str,
+        is_chart: bool = False,
+    ) -> None:
+        """Save track DTO with artist relationship.
+        
+        CRITICAL FIX (Dec 2025): This method properly links track to artist.
+        
+        Args:
+            track_dto: Track DTO from plugin
+            artist_id: Internal artist ID to link to
+            is_chart: Whether this is from charts
+        """
+        from soulspot.infrastructure.persistence.models import TrackModel
+        import uuid
+        
+        try:
+            # Check if track exists (by deezer_id or ISRC)
+            existing = None
+            if track_dto.deezer_id:
+                existing = await self._track_repo.get_by_deezer_id(track_dto.deezer_id)
+            if not existing and track_dto.isrc:
+                existing = await self._track_repo.get_by_isrc(track_dto.isrc)
+            
+            if existing:
+                # Update existing
+                existing.title = track_dto.title
+                existing.deezer_id = track_dto.deezer_id or existing.deezer_id
+                existing.isrc = track_dto.isrc or existing.isrc
+            else:
+                # Create new with artist relationship
+                new_track = TrackModel(
+                    id=str(uuid.uuid4()),
+                    title=track_dto.title,
+                    artist_id=artist_id,  # CRITICAL: Link to artist
+                    deezer_id=track_dto.deezer_id,
+                    isrc=track_dto.isrc,
+                    duration_ms=track_dto.duration_ms or 0,
+                    track_number=track_dto.track_number,
+                    disc_number=track_dto.disc_number or 1,
+                    explicit=track_dto.explicit or False,
+                    source="deezer",
+                )
+                self._session.add(new_track)
+                
+        except Exception as e:
+            logger.error(f"Failed to save track '{track_dto.title}': {e}")
     
     async def _save_album_from_dto(
         self,
@@ -718,10 +962,26 @@ class DeezerSyncService:
             # Get saved albums from Deezer (requires OAuth!)
             paginated = await self._plugin.get_saved_albums(limit=50)
             
+            # Step 1: Build artist_id mapping
+            artist_id_map: dict[str, str] = {}
+            
+            for album_dto in paginated.items:
+                if album_dto.artist_deezer_id and album_dto.artist_deezer_id not in artist_id_map:
+                    artist_id = await self._ensure_artist_exists(album_dto, is_chart=False)
+                    if artist_id:
+                        artist_id_map[album_dto.artist_deezer_id] = artist_id
+            
+            # Step 2: Sync albums with artist relationships
             for album_dto in paginated.items:
                 try:
-                    await self._save_album_from_dto(album_dto, is_saved=True)
-                    result["albums_synced"] += 1
+                    artist_id = artist_id_map.get(album_dto.artist_deezer_id or "")
+                    if artist_id:
+                        await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
+                        result["albums_synced"] += 1
+                    else:
+                        logger.warning(
+                            f"DeezerSyncService: Saved album '{album_dto.title}' skipped - no artist_id"
+                        )
                 except Exception as e:
                     result["errors"].append(f"Album {album_dto.title}: {e}")
             
@@ -808,10 +1068,26 @@ class DeezerSyncService:
             # Get saved tracks from Deezer (requires OAuth!)
             paginated = await self._plugin.get_saved_tracks(limit=100)
             
+            # Step 1: Build artist_id mapping
+            artist_id_map: dict[str, str] = {}
+            
+            for track_dto in paginated.items:
+                if track_dto.artist_deezer_id and track_dto.artist_deezer_id not in artist_id_map:
+                    artist_id = await self._ensure_artist_exists(track_dto, is_chart=False)
+                    if artist_id:
+                        artist_id_map[track_dto.artist_deezer_id] = artist_id
+            
+            # Step 2: Sync tracks with artist relationships
             for track_dto in paginated.items:
                 try:
-                    await self._save_track_from_dto(track_dto, is_saved=True)
-                    result["tracks_synced"] += 1
+                    artist_id = artist_id_map.get(track_dto.artist_deezer_id or "")
+                    if artist_id:
+                        await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
+                        result["tracks_synced"] += 1
+                    else:
+                        logger.warning(
+                            f"DeezerSyncService: Saved track '{track_dto.title}' skipped - no artist_id"
+                        )
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")
             
@@ -867,9 +1143,22 @@ class DeezerSyncService:
             # Get album tracks from Deezer (NO OAuth needed!)
             tracks = await self._plugin.get_album_tracks(deezer_album_id, limit=100)
             
+            # Step 1: Get artist_id (all tracks in same album should have same artist)
+            artist_id: str | None = None
+            
+            if tracks and tracks[0]:
+                artist_id = await self._ensure_artist_exists(tracks[0], is_chart=False)
+            
+            if not artist_id:
+                logger.warning(
+                    f"DeezerSyncService: Cannot sync tracks for album {deezer_album_id} - no artist_id"
+                )
+                return {"synced": False, "tracks_synced": 0, "error": "artist_not_found"}
+            
+            # Step 2: Sync tracks with artist relationship
             for track_dto in tracks:
                 try:
-                    await self._save_track_from_dto(track_dto)
+                    await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
                     result["tracks_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")

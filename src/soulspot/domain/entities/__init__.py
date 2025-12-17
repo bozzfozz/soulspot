@@ -37,14 +37,18 @@ class MetadataSource(str, Enum):
 # - LOCAL: Artist found in local file scan (Lidarr-style folder structure)
 # - SPOTIFY: Followed artist from Spotify (synced from user's Spotify account)
 # - HYBRID: Artist exists in BOTH local library AND Spotify followed artists
-# This field drives the UI badge display (🎵 Local | 🎧 Spotify | 🌟 Both) and determines
+# This field drives the UI badge display (🎵 Local | 🎧 Spotify | 🎵 Deezer | 🌟 Multi) and determines
 # which operations are available (e.g., can't "unfollow" a LOCAL-only artist on Spotify).
+# EXPANDED (Dec 2025): Added support for Deezer, Tidal, and multi-service scenarios
 class ArtistSource(str, Enum):
     """Source of the artist in the unified music manager view."""
 
     LOCAL = "local"  # Artist found in local library file scan
     SPOTIFY = "spotify"  # Followed artist from Spotify
-    HYBRID = "hybrid"  # Artist exists in both local library and Spotify
+    DEEZER = "deezer"  # Favorite artist from Deezer
+    TIDAL = "tidal"  # Favorite artist from Tidal (future)
+    HYBRID = "hybrid"  # Artist exists in multiple sources (local + streaming services)
+    MULTI_SERVICE = "multi_service"  # Artist synced from multiple streaming services
 
 
 # Hey future me - ProviderMode is the 3-way toggle for each external service provider!
