@@ -607,7 +607,8 @@ class DeezerSyncService:
                 normalized_name = artist_name.strip().lower()
                 stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
                 result = await self._session.execute(stmt)
-                existing_model = result.scalar_one_or_none()
+                # Use first() instead of scalar_one_or_none() to handle existing duplicates gracefully
+                existing_model = result.scalars().first()
             
             if existing_model:
                 # Update existing artist - add deezer_id if missing

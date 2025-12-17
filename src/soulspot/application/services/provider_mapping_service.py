@@ -281,7 +281,7 @@ class ProviderMappingService:
             id=AlbumId.generate(),
             title=dto.title,
             artist_id=ArtistId(artist_internal_id),
-            source=self._parse_source(source),
+            source=source,
             spotify_uri=spotify_uri,
             deezer_id=dto.deezer_id,
             tidal_id=dto.tidal_id,

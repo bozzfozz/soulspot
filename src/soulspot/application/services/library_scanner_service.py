@@ -532,7 +532,7 @@ class LibraryScannerService:
 
         # Update model with extra fields (album_artist, secondary_types)
         stmt = select(AlbumModel).where(AlbumModel.id == str(album.id.value))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         album_model = result.scalar_one()
         album_model.album_artist = album_artist
         album_model.secondary_types = secondary_types

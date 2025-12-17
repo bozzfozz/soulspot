@@ -150,7 +150,14 @@ class Album:
     id: AlbumId
     title: str
     artist_id: ArtistId
+    # Hey future me - source tracks where album came from!
+    # Values: 'local' (file scan), 'spotify', 'deezer', 'tidal', 'hybrid' (multiple)
+    source: str = "local"
     release_year: int | None = None
+    # Hey future me - full precision release date (YYYY-MM-DD or YYYY-MM or YYYY)
+    # release_date_precision tells which parts are valid: 'day', 'month', 'year'
+    release_date: str | None = None
+    release_date_precision: str | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     # Hey future me - multi-service IDs for cross-service album deduplication!
@@ -171,6 +178,8 @@ class Album:
     # Example: "Thriller (25th Anniversary Edition)" has disambiguation "25th Anniversary Edition".
     # Used in {Album Disambiguation} naming variable.
     disambiguation: str | None = None
+    # Hey future me - streaming metadata (from Spotify/Deezer/Tidal)
+    total_tracks: int | None = None  # Number of tracks in album
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     metadata_sources: dict[str, str] = field(default_factory=dict)

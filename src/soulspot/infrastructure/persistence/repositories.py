@@ -632,17 +632,58 @@ class AlbumRepository(IAlbumRepository):
         """Initialize repository with session."""
         self.session = session
 
+    def _model_to_entity(self, model: AlbumModel) -> Album:
+        """Convert AlbumModel to Album entity with ALL fields.
+        
+        Hey future me - this is the ONE place that maps DB → Entity!
+        When you add fields to Album entity, UPDATE THIS FUNCTION!
+        """
+        return Album(
+            id=AlbumId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            source=model.source,
+            release_year=model.release_year,
+            release_date=model.release_date,
+            release_date_precision=model.release_date_precision,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            artwork_path=FilePath.from_string(model.artwork_path)
+            if model.artwork_path
+            else None,
+            artwork_url=model.artwork_url,
+            primary_type=model.primary_type,
+            secondary_types=model.secondary_types or [],
+            disambiguation=model.disambiguation,
+            total_tracks=model.total_tracks,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     async def add(self, album: Album) -> None:
         """Add a new album."""
         model = AlbumModel(
             id=str(album.id.value),
             title=album.title,
             artist_id=str(album.artist_id.value),
+            source=album.source,
             release_year=album.release_year,
+            release_date=album.release_date,
+            release_date_precision=album.release_date_precision,
             spotify_uri=str(album.spotify_uri.value) if album.spotify_uri else None,
             musicbrainz_id=album.musicbrainz_id,
+            deezer_id=album.deezer_id,
+            tidal_id=album.tidal_id,
             artwork_path=str(album.artwork_path.value) if album.artwork_path else None,
-            artwork_url=album.artwork_url,  # NEW: Include artwork URL!
+            artwork_url=album.artwork_url,
+            primary_type=album.primary_type,
+            secondary_types=album.secondary_types,
+            disambiguation=album.disambiguation,
+            total_tracks=album.total_tracks,
             created_at=album.created_at,
             updated_at=album.updated_at,
         )
@@ -656,13 +697,22 @@ class AlbumRepository(IAlbumRepository):
 
         model.title = album.title
         model.artist_id = str(album.artist_id.value)
+        model.source = album.source
         model.release_year = album.release_year
+        model.release_date = album.release_date
+        model.release_date_precision = album.release_date_precision
         model.spotify_uri = str(album.spotify_uri.value) if album.spotify_uri else None
         model.musicbrainz_id = album.musicbrainz_id
+        model.deezer_id = album.deezer_id
+        model.tidal_id = album.tidal_id
         model.artwork_path = (
             str(album.artwork_path.value) if album.artwork_path else None
         )
-        model.artwork_url = album.artwork_url  # NEW: Include artwork URL!
+        model.artwork_url = album.artwork_url
+        model.primary_type = album.primary_type
+        model.secondary_types = album.secondary_types
+        model.disambiguation = album.disambiguation
+        model.total_tracks = album.total_tracks
         model.updated_at = album.updated_at
 
         self.session.add(model)
@@ -683,21 +733,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     async def get_by_artist(self, artist_id: ArtistId) -> list[Album]:
         """Get all albums by an artist."""
@@ -709,24 +745,7 @@ class AlbumRepository(IAlbumRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Album(
-                id=AlbumId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                release_year=model.release_year,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                artwork_path=FilePath.from_string(model.artwork_path)
-                if model.artwork_path
-                else None,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Album | None:
         """Get an album by MusicBrainz ID."""
@@ -737,22 +756,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     # Hey future me, this gets album by Spotify URI! Essential for playlist import to avoid
     # creating duplicate albums. Spotify track data includes album info with URI, so we can
@@ -776,22 +780,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     async def get_by_title_and_artist(
         self, title: str, artist_id: ArtistId
@@ -829,22 +818,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            artwork_url=model.artwork_url if hasattr(model, "artwork_url") else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     # =========================================================================
     # ENRICHMENT METHODS
@@ -897,25 +871,7 @@ class AlbumRepository(IAlbumRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Album(
-                id=AlbumId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                release_year=model.release_year,
-                spotify_uri=None,
-                musicbrainz_id=model.musicbrainz_id,
-                artwork_path=FilePath.from_string(model.artwork_path)
-                if model.artwork_path
-                else None,
-                artwork_url=model.artwork_url
-                if hasattr(model, "artwork_url")
-                else None,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def count_unenriched(self, include_compilations: bool = True) -> int:
         """Count albums that need enrichment.
@@ -975,23 +931,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     async def get_by_tidal_id(self, tidal_id: str) -> Album | None:
         """Get an album by Tidal ID.
@@ -1009,23 +949,7 @@ class AlbumRepository(IAlbumRepository):
         if not model:
             return None
 
-        return Album(
-            id=AlbumId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            release_year=model.release_year,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            artwork_path=FilePath.from_string(model.artwork_path)
-            if model.artwork_path
-            else None,
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
 
 class TrackRepository(ITrackRepository):
@@ -4454,7 +4378,8 @@ class ProviderBrowseRepository:
             normalized_name = name.strip().lower()
             stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
             result = await self.session.execute(stmt)
-            model = result.scalar_one_or_none()
+            # Use first() instead of scalar_one_or_none() to handle existing duplicates gracefully
+            model = result.scalars().first()
 
         now = datetime.now(UTC)
         # Genres stored as JSON in unified model

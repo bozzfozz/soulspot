@@ -27,6 +27,122 @@ Focused repository-specific guidance for AI coding agents to be productive immed
 - Use `run_in_terminal` ONLY for code execution, not filesystem exploration
 - Always use tool-provided APIs for file operations
 
+## 0.1 🔥 CRITICAL: ALWAYS VERIFY BEFORE CHANGING CODE
+
+⚠️ **ABSOLUTE RULE: VERIFY BEFORE MODIFYING, ADDING, OR REMOVING ANYTHING**
+
+**MANDATORY verification checklist for ANY code change:**
+
+1. **Check Documentation FIRST:**
+   - Read `docs/architecture/DATA_STANDARDS.md` (DTO definitions)
+   - Read `docs/architecture/DATA_LAYER_PATTERNS.md` (Entity/Repository patterns)
+   - Read `docs/architecture/CONFIGURATION.md` (Config/Settings patterns)
+   - Search `docs/` for the feature/field/function name
+
+2. **Check Database Schema:**
+   - Read `src/soulspot/infrastructure/persistence/models.py` (SQLAlchemy models)
+   - Search for related fields in all `*Model` classes
+   - Verify Entity ↔ Model consistency (both must have same fields!)
+
+3. **Check Migrations:**
+   - Search `alembic/versions/` for relevant changes
+   - If migration exists for a field → It's intentional, respect it!
+
+4. **Check DTOs and Plugins:**
+   - Read `src/soulspot/infrastructure/plugins/dto.py`
+   - Check if DTO has the field/parameter
+   - If DTO has it → Entity/Model MUST have it too for mapping!
+
+5. **Check Usage Across Codebase:**
+   - Use `grep_search` to find all references
+   - Check Services, Repositories, Routes
+   - If used in multiple places → INVESTIGATE before changing!
+
+6. **Check Interface-Implementation Contracts:**
+   - Read `src/soulspot/domain/ports/__init__.py` (Interfaces)
+   - Verify Repository implements ALL interface methods
+   - If you change Repository → Update Interface too!
+
+**Decision Matrix:**
+
+| Situation | Action |
+|-----------|--------|
+| **Error: "unexpected keyword argument X"** | ❌ Don't remove X! Check if Model/DTO has X → Add to Entity |
+| **Error: "missing required argument Y"** | ✅ Check DTO default values, add Y with proper default |
+| **Adding new feature** | ✅ Add to: DTO → Entity → Model → Migration → Repository |
+| **Deprecating feature** | ✅ Mark `@deprecated`, document in CHANGELOG, keep for 1 version |
+| **Refactoring function** | ✅ Check ALL usages first, update callers, test |
+
+**Examples:**
+
+```python
+❌ WRONG: See Album() error "unexpected keyword 'source'"
+          → Delete "source" parameter from caller
+          → BREAKS: AlbumModel HAS source field in DB!
+
+✅ RIGHT: See Album() error "unexpected keyword 'source'"
+          → Check AlbumModel: HAS source field ✓
+          → Check Album Entity: MISSING source field!
+          → Add source to Album Entity
+          → Update AlbumRepository._model_to_entity()
+          → Keep source in caller
+
+❌ WRONG: Want to add new field "rating" to Track
+          → Add to Track Entity only
+          → BREAKS: TrackModel doesn't have it, repo fails!
+
+✅ RIGHT: Want to add new field "rating" to Track
+          → Add to TrackDTO (with default)
+          → Add to Track Entity (with default)
+          → Add to TrackModel (nullable column)
+          → Create Alembic migration
+          → Update TrackRepository add/update methods
+          → Update _model_to_entity mapping
+```
+
+**RED FLAGS (stop and verify!):**
+- Any error message mentioning "argument" or "keyword"
+- About to modify constructor signature
+- About to add/remove field from Entity/Model/DTO
+- Migration exists for the feature you're changing
+- Function is used in more than 3 places
+
+**GOLDEN RULE:**
+```
+BEFORE ANY CHANGE:
+1. Read Documentation
+2. Check DB Schema & Migrations
+3. Verify DTOs & Entities are in sync
+4. Search for all usages
+5. Understand the FULL DATA FLOW
+
+Entity ↔ Model ↔ DTO ↔ Plugin
+ALL FOUR must be consistent!
+
+🚨 IF UNSURE AFTER VERIFICATION → ASK USER, DON'T GUESS! 🚨
+When in doubt → CLARIFY with user before proceeding!
+Breaking changes require careful planning.
+```
+
+**Escalation Protocol:**
+1. ✅ **Simple/Clear** → Proceed with change after verification
+2. ⚠️ **Uncertain** → Present findings + ask user for decision
+3. 🚨 **Breaking/Complex** → Document impact + request approval
+
+**When to ask user BEFORE proceeding:**
+- Verification shows conflicting information (DTO has field, Model doesn't)
+- Migration exists but unclear if feature is abandoned
+- Change affects >5 files or multiple layers
+- Security/data integrity concerns
+- Deprecation without clear replacement path
+
+This rule prevents:
+- Breaking Entity ↔ Model ↔ DTO mapping consistency
+- Removing planned features that exist in DB/migrations
+- Missing interface updates when changing implementations
+- Unintentional breaking changes without deprecation
+- Making assumptions when facts are unclear
+
 ## 1. Purpose & Big Picture
 
 **What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
