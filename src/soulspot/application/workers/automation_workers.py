@@ -272,7 +272,7 @@ class WatchlistWorker:
                         await session.rollback()
 
             except Exception as e:
-                logger.error(f"Error in watchlist checking: {e}\", exc_info=True)
+                logger.error(f"Error in watchlist checking: {e}", exc_info=True)
 
     async def _trigger_automation(
         self, watchlist: Any, new_releases: list[dict[str, Any]]
