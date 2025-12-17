@@ -299,7 +299,7 @@ class LibraryScannerService:
 
                             # Batch commit
                             if processed % BATCH_SIZE == 0:
-                                await self.session.commit()
+                                await self._session.commit()
                                 logger.debug(f"Committed batch ({processed} tracks)")
 
                             # Progress callback
@@ -319,7 +319,7 @@ class LibraryScannerService:
                             processed += 1
 
             # Final commit
-            await self.session.commit()
+            await self._session.commit()
             stats["completed_at"] = datetime.now(UTC).isoformat()
 
             logger.info(
@@ -404,7 +404,7 @@ class LibraryScannerService:
 
         # Check database
         stmt = select(ArtistModel).where(func.lower(ArtistModel.name) == name_lower)
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -454,7 +454,7 @@ class LibraryScannerService:
         # Hey future me - this UUID is needed for Lidarr folder naming when moving files!
         if musicbrainz_id:
             stmt = select(ArtistModel).where(ArtistModel.id == str(artist.id.value))
-            result = await self.session.execute(stmt)
+            result = await self._session.execute(stmt)
             artist_model = result.scalar_one()
             artist_model.musicbrainz_id = musicbrainz_id
             logger.debug(
@@ -506,7 +506,7 @@ class LibraryScannerService:
             func.lower(AlbumModel.title) == title_lower,
             AlbumModel.artist_id == artist_id_str,
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -697,7 +697,7 @@ class LibraryScannerService:
             created_at=track.created_at,
             updated_at=track.updated_at,
         )
-        self.session.add(model)
+        self._session.add(model)
 
         result["imported"] = True
         result["new_track"] = True
@@ -718,7 +718,7 @@ class LibraryScannerService:
         stmt = select(TrackModel.file_path, TrackModel.last_scanned_at).where(
             TrackModel.file_path.isnot(None)
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         known_files = {row[0]: row[1] for row in result.all()}
 
         changed_files = []
@@ -1011,7 +1011,7 @@ class LibraryScannerService:
             created_at=track.created_at,
             updated_at=track.updated_at,
         )
-        self.session.add(model)
+        self._session.add(model)
 
     async def _count_tracks(self) -> int:
         """Count total tracks in database.
@@ -1020,7 +1020,7 @@ class LibraryScannerService:
         If we have tracks, use incremental. If empty, use full scan.
         """
         stmt = select(func.count(TrackModel.id))
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar() or 0
 
     async def _get_track_by_file_path(self, file_path: Path) -> TrackModel | None:
@@ -1031,7 +1031,7 @@ class LibraryScannerService:
         stmt = select(TrackModel).where(
             TrackModel.file_path == str(file_path.resolve())
         )
-        result = await self.session.execute(stmt)
+        result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
     # =========================================================================
@@ -1340,7 +1340,7 @@ class LibraryScannerService:
         """
         # Load all artists (key = lowercase name)
         artist_stmt = select(ArtistModel.id, ArtistModel.name)
-        result = await self.session.execute(artist_stmt)
+        result = await self._session.execute(artist_stmt)
         for row in result.all():
             artist_id = ArtistId.from_string(row[0])
             name_lower = row[1].lower().strip()
@@ -1353,7 +1353,7 @@ class LibraryScannerService:
             AlbumModel.artist_id,
             AlbumModel.album_artist,
         )
-        result = await self.session.execute(album_stmt)
+        result = await self._session.execute(album_stmt)
         for row in result.all():
             album_id = AlbumId.from_string(row[0])
             # Use album_artist if present (for compilations), otherwise artist_id
@@ -1493,7 +1493,7 @@ class LibraryScannerService:
         total_stmt = select(func.count(TrackModel.id)).where(
             TrackModel.file_path.isnot(None)
         )
-        total_result = await self.session.execute(total_stmt)
+        total_result = await self._session.execute(total_stmt)
         total_in_db = total_result.scalar() or 0
 
         # If we have more files on disk than in DB, no cleanup needed
@@ -1544,7 +1544,7 @@ class LibraryScannerService:
                 .offset(offset)
                 .limit(CHUNK_SIZE)
             )
-            result = await self.session.execute(stmt)
+            result = await self._session.execute(stmt)
             chunk = result.all()
 
             if not chunk:
@@ -1570,7 +1570,7 @@ class LibraryScannerService:
             for i in range(0, len(tracks_to_remove), 500):
                 batch = tracks_to_remove[i : i + 500]
                 delete_stmt = delete(TrackModel).where(TrackModel.id.in_(batch))
-                await self.session.execute(delete_stmt)
+                await self._session.execute(delete_stmt)
 
                 # Yield to event loop every few batches
                 if i % 2000 == 0 and i > 0:
@@ -1592,7 +1592,7 @@ class LibraryScannerService:
                 .distinct()
             )
         )
-        orphan_count_result = await self.session.execute(orphan_count_stmt)
+        orphan_count_result = await self._session.execute(orphan_count_stmt)
         orphan_album_count = orphan_count_result.scalar() or 0
 
         if orphan_album_count > 0:
@@ -1606,7 +1606,7 @@ class LibraryScannerService:
                     .distinct()
                 )
             )
-            await self.session.execute(delete_albums_stmt)
+            await self._session.execute(delete_albums_stmt)
             stats["removed_albums"] = orphan_album_count
             logger.info(f"Removed {orphan_album_count} orphaned albums")
         else:
@@ -1627,7 +1627,7 @@ class LibraryScannerService:
                 )
             )
         )
-        orphan_count_result = await self.session.execute(orphan_count_stmt)
+        orphan_count_result = await self._session.execute(orphan_count_stmt)
         orphan_artist_count = orphan_count_result.scalar() or 0
 
         if orphan_artist_count > 0:
@@ -1645,14 +1645,14 @@ class LibraryScannerService:
                     )
                 )
             )
-            await self.session.execute(delete_artists_stmt)
+            await self._session.execute(delete_artists_stmt)
             stats["removed_artists"] = orphan_artist_count
             logger.info(f"Removed {orphan_artist_count} orphaned artists")
         else:
             logger.info("No orphaned artists found")
 
         # Commit cleanup changes
-        await self.session.commit()
+        await self._session.commit()
 
         logger.info(
             f"Cleanup complete: {stats['removed_tracks']} tracks, "
@@ -1693,7 +1693,7 @@ class LibraryScannerService:
             AlbumModel.album_artist,
             AlbumModel.secondary_types,
         )
-        albums_result = await self.session.execute(albums_stmt)
+        albums_result = await self._session.execute(albums_stmt)
         albums = albums_result.all()
 
         for album_id, album_title, album_artist, secondary_types in albums:
@@ -1710,7 +1710,7 @@ class LibraryScannerService:
                 .where(TrackModel.album_id == album_id)
                 .where(TrackModel.file_path.isnot(None))  # Only local files
             )
-            tracks_result = await self.session.execute(tracks_stmt)
+            tracks_result = await self._session.execute(tracks_stmt)
             track_artists = [row[0] for row in tracks_result.all()]
 
             if len(track_artists) < 3:
@@ -1733,7 +1733,7 @@ class LibraryScannerService:
 
                 # Update the album model
                 update_stmt = select(AlbumModel).where(AlbumModel.id == album_id)
-                update_result = await self.session.execute(update_stmt)
+                update_result = await self._session.execute(update_stmt)
                 album_model = update_result.scalar_one()
                 album_model.secondary_types = current_types
                 album_model.album_artist = "Various Artists"

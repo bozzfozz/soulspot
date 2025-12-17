@@ -480,7 +480,7 @@ class ChartsService:
                 chart_artist = ChartArtist(
                     name=dto.name,
                     deezer_id=dto.deezer_id,
-                    artwork_url=dto.artwork_url,
+                    image_url=dto.image_url,  # ArtistDTO now uses image_url (not artwork_url)
                     source_service="deezer",
                     chart_position=position,
                     external_urls=dto.external_urls or {},

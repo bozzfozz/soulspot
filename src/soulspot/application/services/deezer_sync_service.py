@@ -469,7 +469,7 @@ class DeezerSyncService:
         if existing:
             # Update existing
             existing.name = artist_dto.name
-            existing.artwork_url = artist_dto.artwork_url or existing.artwork_url
+            existing.image_url = artist_dto.image_url or existing.image_url
             # Note: is_chart and is_related flags are not stored in model
         else:
             # Create new - artist_id is required but not in DTO

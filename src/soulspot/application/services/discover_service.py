@@ -461,8 +461,8 @@ class DiscoverService:
                     existing.spotify_id = artist.spotify_id
                 if not existing.deezer_id and artist.deezer_id:
                     existing.deezer_id = artist.deezer_id
-                if not existing.artwork_url and artist.artwork_url:
-                    existing.artwork_url = artist.artwork_url
+                if not existing.image_url and artist.image_url:
+                    existing.image_url = artist.image_url
                 if not existing.genres and artist.genres:
                     existing.genres = artist.genres
                 # Merge external_urls
@@ -500,8 +500,8 @@ class DiscoverService:
                     existing.spotify_id = artist.spotify_id
                 if not existing.deezer_id and artist.deezer_id:
                     existing.deezer_id = artist.deezer_id
-                if not existing.artwork_url and artist.artwork_url:
-                    existing.artwork_url = artist.artwork_url
+                if not existing.image_url and artist.image_url:
+                    existing.image_url = artist.image_url
                 existing.external_urls.update(artist.external_urls)
         
         # Sort by frequency (recommendations count) then popularity

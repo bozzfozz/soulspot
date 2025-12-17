@@ -48,7 +48,9 @@ class ArtistDTO:
     musicbrainz_id: str | None = None
 
     # Metadata (Optional - nicht jeder Service hat alles)
-    artwork_url: str | None = None  # Artist image/photo URL
+    # Hey future me - KONVENTION: Artists haben `image_url` (Fotos), 
+    # Albums/Tracks haben `artwork_url` (Cover Art)!
+    image_url: str | None = None  # Artist image/photo URL
     genres: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     disambiguation: str | None = None  # MusicBrainz disambiguation

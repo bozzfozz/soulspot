@@ -117,7 +117,7 @@ class ArtistRepository(IArtistRepository):
         model.source = artist.source.value  # Update source (local/spotify/hybrid)
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
-        model.artwork_url = artist.artwork_url
+        model.image_url = artist.image_url
         model.deezer_id = artist.deezer_id
         model.tidal_id = artist.tidal_id
         model.disambiguation = artist.disambiguation
