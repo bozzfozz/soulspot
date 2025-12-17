@@ -4429,24 +4429,47 @@ class ProviderBrowseRepository:
         popularity: int | None = None,
         follower_count: int | None = None,
     ) -> None:
-        """Insert or update a Spotify artist in unified library."""
+        """Insert or update a Spotify artist in unified library.
+        
+        CRITICAL FIX (Dec 2025): Prevents duplicate artists by checking name first!
+        - First checks for existing artist by spotify_uri
+        - Then checks for existing artist by NAME (prevents Spotify/Deezer duplicates)
+        - Only creates NEW artist if neither exists
+        - Updates source to "hybrid" if artist exists from other provider
+        """
         from .models import ArtistModel
 
         spotify_uri = f"spotify:artist:{spotify_id}"
         
-        # Check if exists by spotify_uri
+        # STEP 1: Check if exists by spotify_uri
         stmt = select(ArtistModel).where(
             ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
+        
+        # STEP 2: If not found by spotify_uri, check by NAME (prevent duplicates!)
+        if not model:
+            stmt = select(ArtistModel).where(ArtistModel.name == name)
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
 
         now = datetime.now(UTC)
         # Genres stored as JSON in unified model
         genres_json = json.dumps(genres) if genres else None
 
         if model:
-            # Update existing
+            # Update existing artist - add spotify_uri if missing
+            if not model.spotify_uri:
+                model.spotify_uri = spotify_uri
+            
+            # Update source to "hybrid" if it was only from one provider before
+            if model.source == "deezer":
+                model.source = "hybrid"
+            elif model.source == "local":
+                model.source = "hybrid"
+            # If already "spotify" or "hybrid", keep as is
+            
             model.name = name
             model.artwork_url = image_url
             if image_path is not None:

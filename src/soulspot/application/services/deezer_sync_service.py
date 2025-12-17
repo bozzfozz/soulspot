@@ -567,8 +567,11 @@ class DeezerSyncService:
     ) -> str | None:
         """Ensure artist exists in database and return its internal ID.
         
-        CRITICAL FIX (Dec 2025): This method creates/updates artist and RETURNS the ID
-        so we can use it for album/track relationships.
+        CRITICAL FIX (Dec 2025): Prevents duplicate artists by checking name first!
+        - First checks for existing artist by deezer_id
+        - Then checks for existing artist by NAME (prevents Spotify/Deezer duplicates)
+        - Only creates NEW artist if neither exists
+        - Updates source to "hybrid" if artist exists from other provider
         
         Args:
             artist_dto: Artist DTO from plugin (must have: name, deezer_id, and optionally artwork_url, genres, tags)
@@ -579,6 +582,7 @@ class DeezerSyncService:
         """
         from soulspot.domain.entities import Artist, ArtistSource
         from soulspot.infrastructure.persistence.models import ArtistModel
+        from sqlalchemy import select
         
         try:
             # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
@@ -592,21 +596,37 @@ class DeezerSyncService:
                 logger.warning(f"Cannot ensure artist exists - missing name or deezer_id")
                 return None
             
-            # Check if artist exists (by deezer_id)
+            # STEP 1: Check if artist exists by deezer_id
             existing_model = None
             if deezer_id:
                 existing_model = await self._artist_repo.get_by_deezer_id(deezer_id)
             
+            # STEP 2: If not found by deezer_id, check by NAME (prevent duplicates!)
+            if not existing_model:
+                stmt = select(ArtistModel).where(ArtistModel.name == artist_name)
+                result = await self._session.execute(stmt)
+                existing_model = result.scalar_one_or_none()
+            
             if existing_model:
-                # Update existing
+                # Update existing artist - add deezer_id if missing
+                if not existing_model.deezer_id:
+                    existing_model.deezer_id = deezer_id
+                
+                # Update source to "hybrid" if it was only from one provider before
+                if existing_model.source == "spotify":
+                    existing_model.source = "hybrid"
+                elif existing_model.source == "local":
+                    existing_model.source = "hybrid"
+                # If already "deezer" or "hybrid", keep as is
+                
                 existing_model.name = artist_name
                 existing_model.artwork_url = artwork_url or existing_model.artwork_url
                 if genres:
                     existing_model.genres = json.dumps(genres)
                 if tags:
                     existing_model.tags = json.dumps(tags)
-                # CRITICAL FIX: existing_model.id is ArtistId value object, extract .value
-                return str(existing_model.id.value)
+                
+                return str(existing_model.id)
             else:
                 # Create new artist with proper domain entity
                 import uuid
