@@ -1,0 +1,226 @@
+{# Hey future me - Desktop TopBar for the content area!
+   This sits above the main content, below the sidebar header level.
+   
+   Features:
+   - Breadcrumb navigation (shows page hierarchy)
+   - Global search trigger (opens Command Palette via Cmd+K)
+   - Quick action buttons (refresh, notifications)
+   
+   Usage:
+   - Include at top of app-content, after mobile-header
+   - Pass `breadcrumbs` list: [{"label": "Library", "url": "/library"}, {"label": "Artists"}]
+   - Last breadcrumb has no URL (current page)
+   - OR: Uses request.url.path to auto-generate breadcrumbs
+   
+   This complements the sidebar - sidebar for nav sections, topbar for context.
+   On mobile (<768px), this is hidden - mobile-header handles everything.
+#}
+
+{# Auto-generate breadcrumbs from URL path if not provided #}
+{% if not breadcrumbs %}
+    {% set path_parts = request.url.path.strip('/').split('/') %}
+    {% set auto_breadcrumbs = [] %}
+    {% set current_url = '' %}
+    {% for part in path_parts if part %}
+        {% set current_url = current_url ~ '/' ~ part %}
+        {% set label = part.replace('-', ' ').replace('_', ' ').title() %}
+        {% if loop.last %}
+            {% set _ = auto_breadcrumbs.append({'label': label}) %}
+        {% else %}
+            {% set _ = auto_breadcrumbs.append({'label': label, 'url': current_url}) %}
+        {% endif %}
+    {% endfor %}
+    {% if not auto_breadcrumbs %}
+        {% set auto_breadcrumbs = [{'label': 'Dashboard'}] %}
+    {% endif %}
+    {% set breadcrumbs = auto_breadcrumbs %}
+{% endif %}
+
+<!-- Desktop TopBar (hidden on mobile) -->
+<div class="topbar hidden-mobile">
+    <div class="topbar-content">
+        
+        <!-- Breadcrumbs (left) -->
+        <nav class="topbar-breadcrumbs" aria-label="Breadcrumb">
+            {% if breadcrumbs %}
+                {% for crumb in breadcrumbs %}
+                    {% if loop.last %}
+                        <span class="breadcrumb-current" aria-current="page">{{ crumb.label }}</span>
+                    {% else %}
+                        <a href="{{ crumb.url }}" class="breadcrumb-link">{{ crumb.label }}</a>
+                        <i class="bi bi-chevron-right breadcrumb-separator" aria-hidden="true"></i>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <span class="breadcrumb-current" aria-current="page">Dashboard</span>
+            {% endif %}
+        </nav>
+        
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+        
+        <!-- Quick Actions (right) -->
+        <div class="topbar-actions">
+            <!-- Search Trigger (opens Command Palette) -->
+            <button type="button" 
+                    class="topbar-search-trigger"
+                    onclick="document.dispatchEvent(new CustomEvent('open-command-palette'))"
+                    title="Search (Cmd+K)">
+                <i class="bi bi-search"></i>
+                <span class="topbar-search-label">Search...</span>
+                <kbd class="topbar-kbd">⌘K</kbd>
+            </button>
+            
+            <!-- Refresh Button -->
+            <button type="button" 
+                    class="btn-icon topbar-btn"
+                    onclick="location.reload()"
+                    title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            
+            <!-- Theme Toggle (duplicate for topbar, syncs with sidebar) -->
+            <button type="button" 
+                    class="btn-icon topbar-btn"
+                    onclick="document.getElementById('theme-toggle-btn')?.click()"
+                    title="Toggle Theme">
+                <i class="bi bi-moon-stars"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ===== TOPBAR STYLES ===== */
+/* Hey future me - Desktop-only bar above content.
+   Shows breadcrumbs + search + actions. Sticky at top when scrolling.
+   Hidden on mobile (<768px) - mobile-header is used instead. */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-fixed, 1000);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-primary);
+    margin: calc(var(--space-6) * -1);
+    margin-bottom: var(--space-6);
+    padding: 0 var(--space-6);
+}
+
+.topbar-content {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: 56px;
+    max-width: var(--container-max-width);
+    margin: 0 auto;
+}
+
+/* Breadcrumbs */
+.topbar-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-sm);
+}
+
+.breadcrumb-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.breadcrumb-link:hover {
+    color: var(--text-primary);
+}
+
+.breadcrumb-separator {
+    color: var(--text-muted);
+    font-size: var(--font-size-xs);
+    opacity: 0.5;
+}
+
+.breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: var(--font-weight-medium);
+}
+
+/* Search Trigger */
+.topbar-search-trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 200px;
+}
+
+.topbar-search-trigger:hover {
+    background: var(--bg-quaternary);
+    border-color: var(--border-secondary);
+    color: var(--text-secondary);
+}
+
+.topbar-search-trigger:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.topbar-search-label {
+    flex: 1;
+    text-align: left;
+}
+
+.topbar-kbd {
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-family: inherit;
+    color: var(--text-muted);
+}
+
+/* Actions */
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.topbar-btn {
+    color: var(--text-muted);
+}
+
+.topbar-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+/* Hide on mobile (handled by .hidden-mobile in components.css) */
+@media (max-width: 768px) {
+    .topbar {
+        display: none;
+    }
+}
+
+/* Light mode adjustments */
+[data-theme="light"] .topbar {
+    background: var(--bg-secondary);
+    border-color: var(--border-primary);
+}
+
+[data-theme="light"] .topbar-search-trigger {
+    background: var(--bg-primary);
+}
+
+[data-theme="light"] .topbar-kbd {
+    background: var(--bg-secondary);
+}
+</style>

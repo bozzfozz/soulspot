@@ -664,6 +664,12 @@
   
   palette.querySelector('.command-palette-backdrop').addEventListener('click', close);
   
+  // ===== CUSTOM EVENT LISTENER =====
+  // Allows external triggers: document.dispatchEvent(new CustomEvent('open-command-palette'))
+  document.addEventListener('open-command-palette', () => {
+    if (!isOpen) open();
+  });
+  
   // ===== GLOBAL KEYBOARD SHORTCUT =====
   
   document.addEventListener('keydown', (e) => {

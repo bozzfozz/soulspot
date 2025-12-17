@@ -9,17 +9,20 @@
 
 {% block content %}
 <!-- Page Header -->
-<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-6); flex-wrap: wrap; gap: var(--space-4);">
-    <div style="display: flex; align-items: center; gap: var(--space-4);">
-        <div style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent-secondary), #7c3aed); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
-            <i class="bi bi-gear" style="color: white; font-size: 1.25rem;"></i>
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon header-icon-settings">
+                <i class="bi bi-gear"></i>
+            </div>
+            <div class="header-icon-glow header-icon-glow-settings"></div>
         </div>
         <div>
-            <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Settings</h1>
-            <p style="color: var(--text-muted); font-size: var(--font-size-sm);">Configure your SoulSpot instance</p>
+            <h1>Settings</h1>
+            <p class="subtitle">Configure your SoulSpot instance</p>
         </div>
     </div>
-    <div class="flex gap-3">
+    <div class="header-actions">
         <button class="btn btn-outline" onclick="confirmReset()">
             <i class="bi bi-arrow-counterclockwise"></i>
             Reset to Defaults

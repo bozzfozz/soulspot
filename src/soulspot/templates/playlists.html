@@ -35,9 +35,9 @@
 </div>
 
 <!-- Stats Grid with animations -->
-<div class="stats-grid" style="margin-bottom: 2rem;">
-    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
-        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%); color: var(--color-primary);">
+<div class="stats-grid mb-8">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow delay-0">
+        <div class="stat-icon stat-icon-hover-flip stat-icon-primary">
             <i class="bi bi-list-ul"></i>
         </div>
         <div class="stat-content">
@@ -47,8 +47,8 @@
         <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 1;">
-        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(16, 185, 129, 0.05) 100%); color: var(--color-success);">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow delay-1">
+        <div class="stat-icon stat-icon-hover-flip stat-icon-success">
             <i class="bi bi-music-note"></i>
         </div>
         <div class="stat-content">
@@ -58,8 +58,8 @@
         <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 2;">
-        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%); color: #3b82f6;">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow delay-2">
+        <div class="stat-icon stat-icon-hover-flip stat-icon-info">
             <i class="bi bi-check-circle"></i>
         </div>
         <div class="stat-content">
@@ -69,8 +69,8 @@
         <div class="stat-shine"></div>
     </div>
 
-    <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 3;">
-        <div class="stat-icon stat-icon-hover-flip" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%); color: var(--color-warning);">
+    <div class="stat-card stat-card-animated blur-fade-in hover-glow delay-3">
+        <div class="stat-icon stat-icon-hover-flip stat-icon-warning">
             <i class="bi bi-clock"></i>
         </div>
         <div class="stat-content">
@@ -160,7 +160,7 @@
 
 <!-- Pagination -->
 {% if total_pages is defined and total_pages > 1 %}
-<div class="flex items-center justify-center gap-2" style="margin-top: 2rem;">
+<div class="flex items-center justify-center gap-2 mt-8">
     {% if page > 1 %}
     <a href="?page={{ page - 1 }}" class="btn btn-outline btn-sm">
         <i class="bi bi-chevron-left"></i>
@@ -177,12 +177,12 @@
 
 {% else %}
 <!-- Empty State -->
-<div class="section-card" style="text-align: center; padding: 4rem;">
+<div class="section-card text-center p-6">
     <div class="empty-icon empty-icon-animated">
         <i class="bi bi-collection-play"></i>
     </div>
     <h3>No Playlists Yet</h3>
-    <p class="text-muted" style="margin-top: 0.5rem; margin-bottom: 2rem;">
+    <p class="text-muted mt-2 mb-8">
         Import your first playlist from Spotify to get started.
     </p>
     <a href="/playlists/import" class="btn btn-primary btn-glow">

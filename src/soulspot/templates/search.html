@@ -9,41 +9,41 @@
 {% block title %}Search - SoulSpot{% endblock %}
 
 {% block content %}
-<div style="display: flex; gap: var(--space-6); flex-wrap: wrap;">
+<div class="search-layout">
     
     <!-- Filters Sidebar -->
-    <aside style="width: 280px; flex-shrink: 0;">
-        <div class="card" style="position: sticky; top: var(--space-6);">
-            <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
-                    <i class="bi bi-funnel" style="color: var(--accent-primary);"></i>
+    <aside class="filter-sidebar">
+        <div class="card">
+            <div class="filter-card-header">
+                <h3>
+                    <i class="bi bi-funnel text-primary"></i>
                     Filters
                 </h3>
                 <button class="btn btn-ghost btn-sm" onclick="SearchManager.clearFilters()">Clear All</button>
             </div>
             
-            <div style="padding: var(--space-4); max-height: calc(100vh - 200px); overflow-y: auto;">
+            <div class="filter-card-body">
                 <!-- Search Source Filter -->
-                <div class="filter-group" style="margin-bottom: var(--space-5);">
-                    <button class="filter-header" onclick="toggleFilter('source')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-search" style="color: var(--accent-primary);"></i>
+                <div class="filter-group">
+                    <button class="filter-header" onclick="toggleFilter('source')">
+                        <span>
+                            <i class="bi bi-search text-primary"></i>
                             Search Source
                         </span>
-                        <i class="bi bi-chevron-down filter-icon" id="source-icon" style="transition: transform 0.2s;"></i>
+                        <i class="bi bi-chevron-down filter-icon" id="source-icon"></i>
                     </button>
-                    <div id="source-filter" class="filter-content" style="padding-left: var(--space-6); margin-top: var(--space-2);">
+                    <div id="source-filter" class="filter-content">
                         <label class="filter-option">
-                            <input type="radio" name="searchSource" value="spotify" checked style="accent-color: var(--accent-primary);" onchange="SearchManager.setSearchSource('spotify')">
-                            <span style="display: flex; align-items: center; gap: var(--space-2);">
-                                <i class="bi bi-spotify" style="color: #1DB954;"></i>
+                            <input type="radio" name="searchSource" value="spotify" checked onchange="SearchManager.setSearchSource('spotify')">
+                            <span>
+                                <i class="bi bi-spotify icon-spotify"></i>
                                 Spotify
                             </span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="searchSource" value="soulseek" style="accent-color: var(--accent-primary);" onchange="SearchManager.setSearchSource('soulseek')">
-                            <span style="display: flex; align-items: center; gap: var(--space-2);">
-                                <i class="bi bi-cloud-download" style="color: #3b82f6;"></i>
+                            <input type="radio" name="searchSource" value="soulseek" onchange="SearchManager.setSearchSource('soulseek')">
+                            <span>
+                                <i class="bi bi-cloud-download icon-soulseek"></i>
                                 Soulseek
                             </span>
                         </label>
@@ -51,54 +51,54 @@
                 </div>
 
                 <!-- Spotify Type Filter (only for Spotify search) -->
-                <div id="spotify-type-filter-group" class="filter-group" style="margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
-                    <button class="filter-header" onclick="toggleFilter('spotifyType')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-filter" style="color: #1DB954;"></i>
+                <div id="spotify-type-filter-group" class="filter-group">
+                    <button class="filter-header" onclick="toggleFilter('spotifyType')">
+                        <span>
+                            <i class="bi bi-filter icon-spotify"></i>
                             Spotify Type
                         </span>
-                        <i class="bi bi-chevron-down filter-icon" id="spotifyType-icon" style="transition: transform 0.2s;"></i>
+                        <i class="bi bi-chevron-down filter-icon" id="spotifyType-icon"></i>
                     </button>
-                    <div id="spotifyType-filter" class="filter-content" style="padding-left: var(--space-6); margin-top: var(--space-2);">
+                    <div id="spotifyType-filter" class="filter-content">
                         <label class="filter-option">
-                            <input type="radio" name="spotifyType" value="artists" checked style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('artists')">
+                            <input type="radio" name="spotifyType" value="artists" checked onchange="SearchManager.setSpotifyType('artists')">
                             <span><i class="bi bi-person"></i> Artists</span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="spotifyType" value="albums" style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('albums')">
+                            <input type="radio" name="spotifyType" value="albums" onchange="SearchManager.setSpotifyType('albums')">
                             <span><i class="bi bi-disc"></i> Albums</span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="spotifyType" value="tracks" style="accent-color: #1DB954;" onchange="SearchManager.setSpotifyType('tracks')">
+                            <input type="radio" name="spotifyType" value="tracks" onchange="SearchManager.setSpotifyType('tracks')">
                             <span><i class="bi bi-music-note"></i> Tracks</span>
                         </label>
                     </div>
                 </div>
 
                 <!-- Quality Filter (only for Soulseek search) -->
-                <div id="quality-filter-group" class="filter-group" style="display: none; margin-bottom: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border-primary);">
-                    <button class="filter-header" onclick="toggleFilter('quality')" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) 0; background: none; border: none; color: var(--text-primary); cursor: pointer;">
-                        <span style="display: flex; align-items: center; gap: var(--space-2);">
-                            <i class="bi bi-check-circle" style="color: #22c55e;"></i>
+                <div id="quality-filter-group" class="filter-group hidden">
+                    <button class="filter-header" onclick="toggleFilter('quality')">
+                        <span>
+                            <i class="bi bi-check-circle icon-quality"></i>
                             Quality
                         </span>
-                        <i class="bi bi-chevron-down filter-icon" id="quality-icon" style="transition: transform 0.2s;"></i>
+                        <i class="bi bi-chevron-down filter-icon" id="quality-icon"></i>
                     </button>
-                    <div id="quality-filter" class="filter-content" style="padding-left: var(--space-6); margin-top: var(--space-2);">
+                    <div id="quality-filter" class="filter-content">
                         <label class="filter-option">
-                            <input type="radio" name="quality" value="flac" style="accent-color: var(--accent-primary);">
+                            <input type="radio" name="quality" value="flac">
                             <span>FLAC (Lossless)</span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="quality" value="320" style="accent-color: var(--accent-primary);">
+                            <input type="radio" name="quality" value="320">
                             <span>320kbps MP3</span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="quality" value="256" style="accent-color: var(--accent-primary);">
+                            <input type="radio" name="quality" value="256">
                             <span>256kbps+</span>
                         </label>
                         <label class="filter-option">
-                            <input type="radio" name="quality" value="any" checked style="accent-color: var(--accent-primary);">
+                            <input type="radio" name="quality" value="any" checked>
                             <span>Any Quality</span>
                         </label>
                     </div>
@@ -107,49 +107,51 @@
         </div>
 
         <!-- Recent Searches -->
-        <div class="card" style="margin-top: var(--space-4);">
-            <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary); display: flex; justify-content: space-between; align-items: center;">
-                <h4 style="font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); display: flex; align-items: center; gap: var(--space-2);">
-                    <i class="bi bi-clock-history" style="color: var(--text-muted);"></i>
+        <div class="card">
+            <div class="filter-card-header">
+                <h4>
+                    <i class="bi bi-clock-history text-muted"></i>
                     Recent Searches
                 </h4>
-                <button class="btn btn-ghost btn-sm" onclick="SearchManager.clearHistory()" style="font-size: var(--font-size-xs);">Clear</button>
+                <button class="btn btn-ghost btn-sm" onclick="SearchManager.clearHistory()">Clear</button>
             </div>
-            <div id="search-history" style="padding: var(--space-4);">
-                <p style="color: var(--text-muted); text-align: center; font-size: var(--font-size-sm);">No recent searches</p>
+            <div id="search-history" class="filter-card-body">
+                <p class="text-muted text-center text-sm">No recent searches</p>
             </div>
         </div>
     </aside>
 
     <!-- Main Content -->
-    <main style="flex: 1; min-width: 0;">
+    <main class="search-main">
         <!-- Page Header -->
-        <div style="margin-bottom: var(--space-6);">
-            <div style="display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-2);">
-                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #1DB954, #191414); border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center;">
-                    <i class="bi bi-search" style="color: white; font-size: 1.25rem;"></i>
+        <div class="page-header">
+            <div class="header-content">
+                <div class="header-icon-wrapper">
+                    <div class="header-icon header-icon-search">
+                        <i class="bi bi-search"></i>
+                    </div>
+                    <div class="header-icon-glow header-icon-glow-search"></div>
                 </div>
                 <div>
-                    <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-1);">Search Music</h1>
-                    <p style="color: var(--text-muted); font-size: var(--font-size-sm);">
-                        Search <span id="search-source-label" style="color: #1DB954; font-weight: 600;">Spotify</span> for artists, albums, and tracks
+                    <h1>Search Music</h1>
+                    <p class="subtitle">
+                        Search <span id="search-source-label" class="icon-spotify font-semibold">Spotify</span> for artists, albums, and tracks
                     </p>
                 </div>
             </div>
         </div>
 
         <!-- Search Bar -->
-        <div class="card" style="margin-bottom: var(--space-6);">
-            <form onsubmit="SearchManager.performSearch(event)" style="padding: var(--space-5);">
-                <div style="position: relative; margin-bottom: var(--space-4);">
-                    <i class="bi bi-search" style="position: absolute; left: var(--space-4); top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+        <div class="card mb-6">
+            <form onsubmit="SearchManager.performSearch(event)" class="search-form">
+                <div class="search-input-wrapper">
+                    <i class="bi bi-search"></i>
                     <input type="text" id="search-input" placeholder="Search for artists, albums, or tracks..."
-                           class="form-input" style="width: 100%; padding-left: 2.75rem; font-size: var(--font-size-lg);"
-                           autocomplete="off" oninput="SearchManager.handleSearchInput(event)">
+                           class="form-input" autocomplete="off" oninput="SearchManager.handleSearchInput(event)">
                     <!-- Autocomplete Dropdown -->
-                    <div id="autocomplete-results" class="autocomplete-dropdown" style="display: none;"></div>
+                    <div id="autocomplete-results" class="autocomplete-dropdown hidden"></div>
                 </div>
-                <p style="font-size: var(--font-size-xs); color: var(--text-muted); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                <p class="search-hint">
                     <i class="bi bi-info-circle"></i>
                     Press Enter to search, or select a suggestion
                 </p>
@@ -168,10 +170,10 @@
         <!-- Search Results -->
         <div id="search-results">
             <!-- Empty State -->
-            <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
-                <i class="bi bi-search" style="font-size: 5rem; color: var(--text-muted); margin-bottom: var(--space-6); display: block;"></i>
-                <h3 style="font-size: var(--font-size-xl); margin-bottom: var(--space-2);">Start Your Search</h3>
-                <p style="color: var(--text-muted); max-width: 400px; margin: 0 auto;">
+            <div class="card search-empty-state">
+                <i class="bi bi-search"></i>
+                <h3>Start Your Search</h3>
+                <p>
                     Search Spotify for artists to follow, or find downloadable tracks on Soulseek
                 </p>
             </div>
@@ -181,123 +183,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<style>
-    .filter-option {
-        display: flex;
-        align-items: center;
-        gap: var(--space-2);
-        padding: var(--space-2);
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
-        transition: background-color var(--transition-fast);
-    }
-    .filter-option:hover {
-        background: var(--bg-tertiary);
-    }
-    .filter-content {
-        max-height: 500px;
-        overflow: hidden;
-        transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
-        opacity: 1;
-    }
-    .filter-content.collapsed {
-        max-height: 0;
-        opacity: 0;
-    }
-    .autocomplete-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-primary);
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-lg);
-        z-index: 100;
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    .autocomplete-item {
-        padding: var(--space-3) var(--space-4);
-        cursor: pointer;
-        transition: background-color var(--transition-fast);
-    }
-    .autocomplete-item:hover {
-        background: var(--bg-tertiary);
-    }
-    
-    /* Artist/Album/Track result cards */
-    .spotify-result-card {
-        display: flex;
-        align-items: center;
-        gap: var(--space-4);
-        padding: var(--space-4);
-        border-bottom: 1px solid var(--border-primary);
-        transition: background-color var(--transition-fast);
-    }
-    .spotify-result-card:hover {
-        background: var(--bg-tertiary);
-    }
-    .spotify-result-card:last-child {
-        border-bottom: none;
-    }
-    .spotify-result-image {
-        width: 64px;
-        height: 64px;
-        border-radius: var(--radius-md);
-        object-fit: cover;
-        background: var(--bg-tertiary);
-        flex-shrink: 0;
-    }
-    .spotify-result-info {
-        flex: 1;
-        min-width: 0;
-    }
-    .spotify-result-name {
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-primary);
-        margin-bottom: var(--space-1);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .spotify-result-meta {
-        font-size: var(--font-size-sm);
-        color: var(--text-muted);
-    }
-    .spotify-result-actions {
-        display: flex;
-        gap: var(--space-2);
-        flex-shrink: 0;
-    }
-    
-    /* Follow button states */
-    .btn-follow {
-        background: #1DB954;
-        color: white;
-        border: none;
-    }
-    .btn-follow:hover {
-        background: #1ed760;
-    }
-    .btn-following {
-        background: transparent;
-        color: #1DB954;
-        border: 1px solid #1DB954;
-    }
-    .btn-following:hover {
-        background: rgba(29, 185, 84, 0.1);
-    }
-    
-    @media (max-width: 1024px) {
-        aside {
-            width: 100% !important;
-            position: static !important;
-        }
-    }
-</style>
 <script src="/static/js/search.js"></script>
 <script>
     // Hey future me - Search page initialization and filter toggle logic.
