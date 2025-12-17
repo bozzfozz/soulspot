@@ -2081,84 +2081,14 @@ async def library_incomplete_albums_page(request: Request) -> Any:
 
 
 @router.get("/spotify/artists", response_class=HTMLResponse)
-async def spotify_artists_page(
-    request: Request,
-    sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-) -> Any:
-    """Spotify followed artists page with auto-sync.
-
-    Auto-syncs followed artists from Spotify on page load (with cooldown).
-    Shows all followed artists from DB after sync.
-
-    Uses SHARED server-side token from DatabaseTokenManager, so any device
-    on the network can access this page without per-browser session cookies.
-
-    Hey future me - IMPORTANT: Sync FIRST, then load from DB!
-    This ensures freshly synced data is visible immediately without refresh.
-    The flow is: Sync (if needed/cooldown) -> Commit -> Load from DB -> Render.
+async def spotify_artists_page(request: Request) -> Any:
+    """DEPRECATED: Redirect to unified library artists view with Spotify filter.
+    
+    Hey future me - this Spotify-specific route is deprecated (Dec 2025)!
+    Use /library/artists?source=spotify for multi-provider unified view.
     """
-    artists = []
-    sync_stats = None
-    error = None
-
-    # Hey future me - Database-First architecture:
-    # 1. TRY to sync to DB (if token available and cooldown passed)
-    # 2. ALWAYS load from DB for display - even if sync fails or token is invalid!
-    # This ensures data is visible even without a valid Spotify token.
-
-    # Step 1: Try to sync if SpotifyPlugin has valid token (OPTIONAL - failures don't block DB load)
-    try:
-        # Hey future me - SpotifySyncService now uses SpotifyPlugin internally!
-        # No more access_token passing - plugin handles auth internally.
-        # Auto-sync (respects cooldown) - updates DB and commits
-        sync_stats = await sync_service.sync_followed_artists()
-    except Exception as sync_error:
-        # Sync failed (token invalid, API error, etc.) - log but don't block
-        # We'll still load existing data from DB below
-        logger.warning(f"Spotify sync failed (will show cached data): {sync_error}")
-
-    # Step 2: ALWAYS load from DB - even if sync failed or token is invalid!
-    # This is the key Database-First principle: cached data must always be available.
-    try:
-        artist_models = await sync_service.get_artists(limit=500)
-
-        # Convert to template-friendly format
-        for artist in artist_models:
-            genres = []
-            if artist.genres:
-                try:
-                    genres = (
-                        json.loads(artist.genres)
-                        if isinstance(artist.genres, str)
-                        else artist.genres
-                    )
-                except (json.JSONDecodeError, TypeError):
-                    genres = []
-
-            artists.append(
-                {
-                    "spotify_id": artist.spotify_id,
-                    "name": artist.name,
-                    "image_url": artist.artwork_url,
-                    "genres": genres[:3],  # Max 3 genres for display
-                    "genres_count": len(genres),
-                    "popularity": artist.popularity,
-                    "follower_count": artist.follower_count,
-                }
-            )
-    except Exception as e:
-        error = str(e)
-
-    return templates.TemplateResponse(
-        request,
-        "spotify_artists.html",
-        context={
-            "artists": artists,
-            "sync_stats": sync_stats,
-            "error": error,
-            "total_count": len(artists),
-        },
-    )
+    from starlette.responses import RedirectResponse
+    return RedirectResponse(url="/library/artists?source=spotify", status_code=301)
 
 
 @router.get("/browse/new-releases", response_class=HTMLResponse)
@@ -2580,7 +2510,7 @@ async def spotify_discover_page(
     if not enabled_providers:
         return templates.TemplateResponse(
             request,
-            "spotify_discover.html",
+            "discover.html",
             context={
                 "discoveries": [],
                 "based_on_count": 0,
@@ -2598,7 +2528,7 @@ async def spotify_discover_page(
     if not artists:
         return templates.TemplateResponse(
             request,
-            "spotify_discover.html",
+            "discover.html",
             context={
                 "discoveries": [],
                 "based_on_count": 0,
@@ -2697,168 +2627,13 @@ async def spotify_discover_page(
 
     return templates.TemplateResponse(
         request,
-        "spotify_discover.html",
+        "discover.html",
         context={
             "discoveries": discoveries,
             "based_on_count": sample_size,
             "total_discoveries": len(discoveries),
             "source_counts": source_counts,
             "error": error,
-        },
-    )
-
-
-@router.get("/spotify/artists/{artist_id}", response_class=HTMLResponse)
-async def spotify_artist_detail_page(
-    request: Request,
-    artist_id: str,
-    sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
-) -> Any:
-    """Spotify artist detail page with albums.
-
-    Hey future me - refactored to use SpotifyPlugin via SpotifySyncService!
-    Auto-syncs artist's albums from Spotify on page load (with cooldown).
-    Shows artist info and album grid.
-
-    SpotifyPlugin handles auth internally - no more manual token fetching!
-    """
-    artist = None
-    albums = []
-    sync_stats = None
-    error = None
-
-    try:
-        # Get artist from DB
-        artist_model = await sync_service.get_artist(artist_id)
-
-        if not artist_model:
-            return templates.TemplateResponse(
-                request,
-                "error.html",
-                context={
-                    "error_code": 404,
-                    "error_message": f"Artist {artist_id} nicht gefunden",
-                },
-                status_code=404,
-            )
-
-        # Parse artist data
-        genres = []
-        if artist_model.genres:
-            try:
-                genres = (
-                    json.loads(artist_model.genres)
-                    if isinstance(artist_model.genres, str)
-                    else artist_model.genres
-                )
-            except (json.JSONDecodeError, TypeError):
-                genres = []
-
-        artist = {
-            "spotify_id": artist_model.spotify_id,
-            "name": artist_model.name,
-            "image_url": artist_model.artwork_url,
-            "genres": genres,
-            "popularity": artist_model.popularity,
-            "follower_count": artist_model.follower_count,
-        }
-
-        # Hey future me - SpotifyPlugin handles auth internally!
-        # No more "if access_token:" checks needed.
-        # Auto-sync albums (respects cooldown)
-        try:
-            sync_stats = await sync_service.sync_artist_albums(artist_id)
-        except Exception as sync_error:
-            # Sync failed but we can still show cached data
-            logger.warning(f"Album sync failed (showing cached): {sync_error}")
-
-        # Get albums from DB
-        album_models = await sync_service.get_artist_albums(artist_id, limit=200)
-
-        for album in album_models:
-            albums.append(
-                {
-                    "spotify_id": album.spotify_uri,
-                    "name": album.title,
-                    "image_url": album.artwork_url,
-                    "release_date": album.release_date,
-                    "album_type": album.primary_type,
-                    "total_tracks": album.total_tracks,
-                }
-            )
-
-        # Sort: albums first, then singles, by release date desc
-        type_order = {"album": 0, "single": 1, "compilation": 2}
-        albums.sort(
-            key=lambda a: (
-                type_order.get(a["album_type"], 99),
-                a["release_date"] or "",
-            ),
-            reverse=True,
-        )
-
-    except Exception as e:
-        error = str(e)
-
-    # Hey future me - fetch related artists for "Fans Also Like" section!
-    # This runs AFTER main artist/albums load to not block the page.
-    # We only fetch if we have a valid access_token.
-    related_artists: list[dict[str, Any]] = []
-    try:
-        access_token = None
-        if hasattr(request.app.state, "db_token_manager"):
-            db_token_manager_ra: DatabaseTokenManager = (
-                request.app.state.db_token_manager
-            )
-            access_token = await db_token_manager_ra.get_token_for_background()
-
-        if access_token:
-            # Fetch related artists from Spotify
-            related_raw = await spotify_client.get_related_artists(
-                artist_id, access_token
-            )
-
-            # Batch check following status
-            related_ids: list[str] = [
-                str(a.get("id")) for a in related_raw if a.get("id") is not None
-            ]
-            following_statuses: list[bool] = []
-            if related_ids:
-                following_statuses = await spotify_client.check_if_following_artists(
-                    related_ids, access_token
-                )
-
-            # Build simplified list for template
-            for idx, ra in enumerate(related_raw[:12]):  # Limit to 12 for UI
-                images = ra.get("images", [])
-                image_url = images[0]["url"] if images else None
-
-                related_artists.append(
-                    {
-                        "spotify_id": ra.get("id", ""),
-                        "name": ra.get("name", "Unknown"),
-                        "image_url": image_url,
-                        "genres": ra.get("genres", [])[:2],  # Limit genres
-                        "popularity": ra.get("popularity", 0),
-                        "is_following": following_statuses[idx]
-                        if idx < len(following_statuses)
-                        else False,
-                    }
-                )
-    except Exception as e:
-        # Don't fail the whole page if related artists fail
-        logger.warning(f"Failed to fetch related artists for {artist_id}: {e}")
-
-    return templates.TemplateResponse(
-        request,
-        "spotify_artist_detail.html",
-        context={
-            "artist": artist,
-            "albums": albums,
-            "sync_stats": sync_stats,
-            "error": error,
-            "album_count": len(albums),
-            "related_artists": related_artists,
         },
     )
 
@@ -2870,81 +2645,36 @@ async def spotify_album_detail_page(
     request: Request,
     artist_id: str,
     album_id: str,
-    view_service: LibraryViewService = Depends(get_library_view_service),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Spotify album detail page with tracks.
-
-    Hey future me - REFACTORED nach Architecture Standard Phase 1!
-    Route nutzt jetzt LibraryViewService statt SpotifySyncService.
+    """DEPRECATED: Redirect to unified library album view.
     
-    Warum LibraryViewService?
-    - Single Responsibility: ViewModels ≠ Sync Logic
-    - SpotifySyncService war God Class (1839 Zeilen!)
-    - Graceful Degradation: Wenn kein Spotify Auth, zeigt cached Daten
-    
-    Flow:
-    1. Route ruft view_service.get_album_detail_view()
-    2. Service holt Daten aus DB + synct Tracks (wenn authenticated)
-    3. Service konvertiert zu AlbumDetailView (ViewModel)
-    4. Route gibt ViewModel an Template
-    
-    Die Route weiß NICHT, ob TrackModel "title" oder "name" hat!
+    Hey future me - this Spotify-specific route is deprecated (Dec 2025)!
+    Use /library/albums/{artist_name}::{album_title} for multi-provider unified view.
     """
-    # Get ViewModel from service - Route knows NOTHING about Models!
-    album_view = await view_service.get_album_detail_view(artist_id, album_id)
+    from urllib.parse import quote
+    from sqlalchemy import select
+    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
+    from starlette.responses import RedirectResponse
     
-    if not album_view:
-        return templates.TemplateResponse(
-            request,
-            "error.html",
-            context={
-                "error_code": 404,
-                "error_message": f"Album {album_id} nicht gefunden",
-            },
-            status_code=404,
-        )
-    
-    # Convert ViewModel to template context
-    # Hey future me - wir müssen TrackView zu dict konvertieren für Jinja2
-    tracks_for_template = [
-        {
-            "spotify_id": t.spotify_id,
-            "name": t.name,
-            "track_number": t.track_number,
-            "disc_number": t.disc_number,
-            "duration_ms": t.duration_ms,
-            "duration_str": t.duration_str,
-            "explicit": t.explicit,
-            "preview_url": t.preview_url,
-            "isrc": t.isrc,
-            "is_downloaded": t.is_downloaded,
-        }
-        for t in album_view.tracks
-    ]
-    
-    return templates.TemplateResponse(
-        request,
-        "spotify_album_detail.html",
-        context={
-            "artist": {
-                "spotify_id": album_view.artist_spotify_id,
-                "name": album_view.artist_name,
-            } if album_view.artist_name else None,
-            "album": {
-                "spotify_id": album_view.spotify_id,
-                "name": album_view.title,
-                "image_url": album_view.artwork_url,
-                "release_date": album_view.release_date,
-                "album_type": album_view.album_type,
-                "total_tracks": album_view.total_tracks,
-            },
-            "tracks": tracks_for_template,
-            "sync_stats": {"synced": album_view.synced} if album_view.synced else None,
-            "error": album_view.sync_error,
-            "track_count": album_view.track_count,
-            "total_duration": album_view.total_duration_str,
-        },
+    # Try to find album by spotify_uri to get artist_name::album_title key
+    album_uri = f"spotify:album:{album_id}"
+    stmt = (
+        select(AlbumModel)
+        .join(AlbumModel.artist)
+        .where(AlbumModel.spotify_uri == album_uri)
+        .options(joinedload(AlbumModel.artist))
     )
+    result = await session.execute(stmt)
+    album_model = result.unique().scalar_one_or_none()
+    
+    if album_model and album_model.artist:
+        # Build library album key: artist_name::album_title
+        album_key = f"{album_model.artist.name}::{album_model.title}"
+        return RedirectResponse(url=f"/library/albums/{quote(album_key)}", status_code=301)
+    else:
+        # Album not in library yet - redirect to library albums list
+        return RedirectResponse(url="/library/albums", status_code=302)
 
 
 # Hey future me, DEPRECATED route! Users should use /spotify/artists instead for auto-sync.
@@ -2970,3 +2700,4 @@ async def followed_artists_page_deprecated(request: Request) -> Any:
         },
         headers={"Location": "/spotify/artists"},
     )
+

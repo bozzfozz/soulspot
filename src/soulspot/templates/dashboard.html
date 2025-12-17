@@ -101,7 +101,7 @@
 <div class="section-card mt-8">
     <div class="section-header section-header-animated" data-delay="0">
         <h2><i class="bi bi-stars"></i> New Releases</h2>
-        <a href="/spotify/artists" class="btn btn-outline btn-sm">
+        <a href="/library/artists?source=spotify" class="btn btn-outline btn-sm">
             Browse Artists
             <i class="bi bi-arrow-right"></i>
         </a>
@@ -109,7 +109,7 @@
 
     <div class="releases-grid">
         {% for release in latest_releases[:16] %}
-        <a href="/spotify/artists/{{ release.artist_id }}/albums/{{ release.spotify_id }}" 
+        <a href="/library/albums/{{ release.spotify_id }}" 
            class="release-card release-card-animated blur-fade-in hover-scale-interactive" 
            style="--delay: {{ loop.index0 }};">
             <div class="release-image shimmer-loading">
