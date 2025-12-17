@@ -91,13 +91,20 @@ class BatchActionRequest(BaseModel):
 
 
 # Hey future me - Single track download request! This is what the UI sends when clicking
-# "Download" on a track. Can use EITHER track_id (local DB ID) OR spotify_id (for Spotify tracks).
-# If spotify_id is provided without track_id, we'll look up or create the track in our DB.
+# "Download" on a track. Can use ANY provider ID:
+# - track_id: Local DB UUID (for tracks without provider IDs)
+# - spotify_id: Spotify track URI (spotify:track:ID)
+# - deezer_id: Deezer track ID
+# - tidal_id: Tidal track ID
+# Priority: spotify_id > deezer_id > tidal_id > track_id (fallback).
+# If provider ID is given, we look up the track in our DB first.
 class SingleDownloadRequest(BaseModel):
     """Request for single track download."""
 
     track_id: str | None = None
     spotify_id: str | None = None
+    deezer_id: str | None = None
+    tidal_id: str | None = None
     title: str | None = None
     artist: str | None = None
     album: str | None = None
@@ -125,54 +132,91 @@ async def create_download(
     Works whether slskd is online or offline. If offline, download is queued
     with WAITING status and will be processed when slskd becomes available.
 
-    Accepts either track_id (local DB ID) or spotify_id (Spotify track ID).
-    If spotify_id is provided, looks up the track in DB first. If not found,
-    returns 404 (track must be imported first via playlist sync or manual import).
+    Accepts track_id (local DB ID) OR any provider ID (spotify_id, deezer_id, tidal_id).
+    If provider ID is provided, looks up the track in DB first. If not found,
+    returns 404 (track must be imported first via sync or manual import).
 
     Args:
-        request: Download request with track_id/spotify_id and optional metadata
+        request: Download request with track_id/provider_id and optional metadata
         download_repository: Download repository
-        track_repository: Track repository for spotify_id lookup
+        track_repository: Track repository for provider ID lookup
         download_worker: Download worker for queueing
         slskd_available: Whether slskd is currently available
 
     Returns:
         Created download info including ID and status
     """
-    # Must provide either track_id or spotify_id
-    if not request.track_id and not request.spotify_id:
-        raise HTTPException(status_code=400, detail="Either track_id or spotify_id required")
+    # Must provide at least one ID
+    if not any([request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]):
+        raise HTTPException(
+            status_code=400, 
+            detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id"
+        )
 
     try:
         # Determine track_id to use
         track_id_str = request.track_id
 
-        # Hey future me - if only spotify_id provided, LOOK UP the track in our DB!
-        # This is important because TrackId expects a UUID, not a spotify URI.
-        # The track should already exist (from playlist import). If not found, 404.
-        if not track_id_str and request.spotify_id:
-            # Look up track by spotify URI (e.g., "spotify:track:abc123")
-            spotify_uri = SpotifyUri.from_string(request.spotify_id)
-            existing_track = await track_repository.get_by_spotify_uri(spotify_uri)
+        # Hey future me - Multi-provider lookup! Try each provider ID in priority order.
+        # Priority: spotify_id > deezer_id > tidal_id > track_id (fallback).
+        # This matches the frontend logic and ensures we use the most authoritative ID.
+        if not track_id_str:
+            existing_track = None
+            provider_name = None
+            
+            # Try Spotify ID first
+            if request.spotify_id:
+                spotify_uri = SpotifyUri.from_string(request.spotify_id)
+                existing_track = await track_repository.get_by_spotify_uri(spotify_uri)
+                provider_name = "spotify"
+                provider_id = request.spotify_id
+            
+            # Try Deezer ID second
+            elif request.deezer_id:
+                # Look up track by deezer_id
+                from sqlalchemy import select
+                from soulspot.infrastructure.persistence.models import TrackModel
+                stmt = select(TrackModel).where(TrackModel.deezer_id == request.deezer_id)
+                result = await track_repository.session.execute(stmt)
+                model = result.scalar_one_or_none()
+                if model:
+                    from soulspot.domain.value_objects import TrackId as DomainTrackId
+                    existing_track = await track_repository.get(DomainTrackId.from_string(model.id))
+                provider_name = "deezer"
+                provider_id = request.deezer_id
+            
+            # Try Tidal ID third
+            elif request.tidal_id:
+                # Look up track by tidal_id
+                from sqlalchemy import select
+                from soulspot.infrastructure.persistence.models import TrackModel
+                stmt = select(TrackModel).where(TrackModel.tidal_id == request.tidal_id)
+                result = await track_repository.session.execute(stmt)
+                model = result.scalar_one_or_none()
+                if model:
+                    from soulspot.domain.value_objects import TrackId as DomainTrackId
+                    existing_track = await track_repository.get(DomainTrackId.from_string(model.id))
+                provider_name = "tidal"
+                provider_id = request.tidal_id
 
             if existing_track:
                 # Found track - use its ID
                 track_id_str = str(existing_track.id.value)
-                logger.debug(f"Found track by spotify_id: {request.spotify_id} -> {track_id_str}")
+                logger.debug(f"Found track by {provider_name}_id: {provider_id} -> {track_id_str}")
             else:
                 # Track not in DB - user needs to import it first
                 logger.warning(
                     LogMessages.file_operation_failed(
                         operation="track_lookup",
-                        path=f"spotify:{request.spotify_id}",
+                        path=f"{provider_name}:{provider_id}",
                         reason="Track not found in database",
-                        hint="Import track first via playlist sync or manual import"
+                        hint="Import track first via sync or manual import"
                     ).format()
                 )
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Track with spotify_id '{request.spotify_id}' not found in database. "
-                           "Please import the track first (via playlist sync or manual import)."
+                    detail=f"Track with {provider_name}_id '{provider_id}' not found in database. "
+                           "Please import the track first (via sync or manual import)."
                 )
 
         track_id = TrackId.from_string(track_id_str)

@@ -1770,16 +1770,52 @@ async def library_album_detail(
 
     artist_name, album_title = album_key.split("::", 1)
 
-    # Query tracks for this album
+    # Get album first to check if we need to sync tracks
+    from soulspot.infrastructure.persistence.models import AlbumModel
+    
+    album_stmt = (
+        select(AlbumModel)
+        .join(AlbumModel.artist)
+        .where(
+            AlbumModel.artist.has(name=artist_name),
+            AlbumModel.title == album_title,
+        )
+        .options(joinedload(AlbumModel.artist))
+    )
+    album_result = await session.execute(album_stmt)
+    album_model = album_result.unique().scalar_one_or_none()
+    
+    if not album_model:
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            context={
+                "error_code": 404,
+                "error_message": f"Album '{album_title}' by '{artist_name}' not found",
+            },
+            status_code=404,
+        )
+    
+    # Auto-sync tracks for Spotify albums if not synced yet
+    if album_model.source in ["spotify", "hybrid"] and not album_model.tracks_synced_at:
+        # Try to sync tracks from Spotify
+        spotify_sync = request.app.state.spotify_sync
+        if spotify_sync and hasattr(spotify_sync, "sync_album_tracks"):
+            try:
+                # Extract album_id from spotify_uri (format: spotify:album:ID)
+                album_spotify_id = album_model.spotify_uri.split(":")[-1] if album_model.spotify_uri else None
+                if album_spotify_id:
+                    await spotify_sync.sync_album_tracks(album_spotify_id, force=False)
+                    await session.commit()
+            except Exception as e:
+                logger.warning(f"Failed to auto-sync tracks for album {album_model.id}: {e}")
+
+    # Query tracks for this album - include ALL tracks, not just those with file_path
     stmt = (
         select(TrackModel)
-        .join(TrackModel.artist)
-        .join(TrackModel.album)
-        .where(
-            TrackModel.artist.has(name=artist_name),
-            TrackModel.album.has(title=album_title),
-        )
+        .where(TrackModel.album_id == album_model.id)
         .options(joinedload(TrackModel.artist), joinedload(TrackModel.album))
+        .order_by(TrackModel.disc_number, TrackModel.track_number)
     )
     result = await session.execute(stmt)
     track_models = result.unique().scalars().all()
@@ -1807,6 +1843,12 @@ async def library_album_detail(
             "duration_ms": track.duration_ms,
             "file_path": track.file_path,
             "is_broken": track.is_broken,
+            "source": track.source,  # 'local', 'spotify', 'deezer', 'tidal', 'hybrid'
+            # Extract provider IDs for download support
+            "spotify_id": track.spotify_uri.split(":")[-1] if track.spotify_uri else None,
+            "deezer_id": track.deezer_id,
+            "tidal_id": track.tidal_id,
+            "is_downloaded": bool(track.file_path),
         }
         for track in track_models
     ]

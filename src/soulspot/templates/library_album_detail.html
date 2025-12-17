@@ -259,12 +259,24 @@
                 {% endif %}
                 <tr class="track-row" 
                     data-track-id="{{ track.id }}"
-                    data-title="{{ track.title|lower }}">
+                    data-spotify-id="{{ track.spotify_id or '' }}"
+                    data-deezer-id="{{ track.deezer_id or '' }}"
+                    data-tidal-id="{{ track.tidal_id or '' }}"
+                    data-source="{{ track.source }}"
+                    data-title="{{ track.title|lower }}"
+                    data-artist="{{ track.artist }}"
+                    data-album="{{ album.title }}">
                     <td>
                         <input type="checkbox" 
                                class="track-checkbox form-checkbox"
                                data-track-id="{{ track.id }}"
-                               data-status="{% if track.is_broken %}broken{% elif track.file_path %}available{% else %}missing{% endif %}"
+                               data-spotify-id="{{ track.spotify_id or '' }}"
+                               data-deezer-id="{{ track.deezer_id or '' }}"
+                               data-tidal-id="{{ track.tidal_id or '' }}"
+                               data-source="{{ track.source }}"
+                               data-track-title="{{ track.title }}"
+                               data-track-artist="{{ track.artist }}"
+                               data-status="{% if track.is_broken %}broken{% elif track.is_downloaded %}available{% else %}missing{% endif %}"
                                onchange="updateBulkActions()">
                     </td>
                     <td style="color: var(--text-muted);">{{ track.track_number or loop.index }}</td>
@@ -289,13 +301,54 @@
                     </td>
                     <td>
                         <div style="display: flex; gap: var(--space-2);">
-                            {% if not track.file_path or track.is_broken %}
+                            {% if not track.is_downloaded %}
+                            {# Multi-provider download support: Spotify, Deezer, Tidal #}
+                            {% if track.spotify_id %}
+                            {# Spotify track - construct spotify URI for download #}
+                            <button class="btn btn-sm btn-outline"
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"spotify_id": "spotify:track:{{ track.spotify_id }}", "title": "{{ track.title }}", "artist": "{{ track.artist }}", "album": "{{ album.title }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
+                                <i class="bi bi-download"></i>
+                                Download
+                            </button>
+                            {% elif track.deezer_id %}
+                            {# Deezer track - use deezer_id for download #}
+                            <button class="btn btn-sm btn-outline"
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"deezer_id": "{{ track.deezer_id }}", "title": "{{ track.title }}", "artist": "{{ track.artist }}", "album": "{{ album.title }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
+                                <i class="bi bi-download"></i>
+                                Download
+                            </button>
+                            {% elif track.tidal_id %}
+                            {# Tidal track - use tidal_id for download #}
+                            <button class="btn btn-sm btn-outline"
+                                    hx-post="/api/downloads"
+                                    hx-vals='{"tidal_id": "{{ track.tidal_id }}", "title": "{{ track.title }}", "artist": "{{ track.artist }}", "album": "{{ album.title }}"}'
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
+                                <i class="bi bi-download"></i>
+                                Download
+                            </button>
+                            {% else %}
+                            {# Local track missing file - use track_id #}
                             <button class="btn btn-sm btn-outline"
                                     hx-post="/api/downloads"
                                     hx-vals='{"track_id": "{{ track.id }}"}'
                                     hx-swap="none"
                                     hx-on::after-request="if(event.detail.successful) SoulSpot.toast('Download queued', 'success')">
+                                <i class="bi bi-download"></i>
                                 Download
+                            </button>
+                            {% endif %}
+                            {% else %}
+                            {# Track already downloaded #}
+                            <button class="btn btn-sm btn-success" disabled>
+                                <i class="bi bi-check"></i>
+                                Downloaded
                             </button>
                             {% endif %}
                             <button class="btn btn-sm btn-ghost"
@@ -541,16 +594,16 @@ function updateBulkActions() {
 
 function bulkDownloadSelected() {
     const checkedBoxes = document.querySelectorAll('.track-checkbox:checked');
-    const trackIds = Array.from(checkedBoxes)
-        .filter(cb => cb.getAttribute('data-status') !== 'available')
-        .map(cb => cb.getAttribute('data-track-id'));
+    const downloadableBoxes = Array.from(checkedBoxes).filter(cb => 
+        cb.getAttribute('data-status') !== 'available'
+    );
     
-    if (trackIds.length === 0) {
+    if (downloadableBoxes.length === 0) {
         SoulSpot.showNotification('No tracks to download', 'info');
         return;
     }
     
-    queueDownloads(trackIds, `Queued ${trackIds.length} track(s) for download`);
+    queueDownloadsFromCheckboxes(downloadableBoxes, `Queued ${downloadableBoxes.length} track(s) for download`);
     
     document.querySelectorAll('.track-checkbox').forEach(cb => cb.checked = false);
     if (document.getElementById('select-all-checkbox')) {
@@ -561,20 +614,95 @@ function bulkDownloadSelected() {
 
 function downloadAllMissing() {
     const missingTracks = document.querySelectorAll('.track-checkbox[data-status="missing"], .track-checkbox[data-status="broken"]');
-    const trackIds = Array.from(missingTracks).map(cb => cb.getAttribute('data-track-id'));
     
-    if (trackIds.length === 0) {
+    if (missingTracks.length === 0) {
         SoulSpot.showNotification('Alle Tracks sind bereits verfügbar!', 'info');
         return;
     }
     
-    queueDownloads(trackIds, `Queued all ${trackIds.length} missing track(s) for download`);
-}
+    queueDownloadsFromCheckboxes(Array.from(missingTracks), `Queued all ${missingTracks.length} missing track(s) for download`);
 }
 
-// Hey future me - switched from /api/tracks/{id}/download to /api/downloads with track_id in body!
-// The old endpoint doesn't support WAITING status when slskd is offline.
-// The new endpoint creates WAITING downloads that QueueDispatcherWorker will pick up later.
+// Hey future me - Multi-provider download support (Spotify, Deezer, Tidal)!
+// Reads data attributes from checkboxes to determine which API parameters to use.
+// Priority: spotify_id > deezer_id > tidal_id > track_id (fallback).
+function queueDownloadsFromCheckboxes(checkboxes, successMessage) {
+    let successCount = 0;
+    let failureCount = 0;
+    
+    const downloadPromises = checkboxes.map(checkbox => {
+        const spotifyId = checkbox.getAttribute('data-spotify-id');
+        const deezerId = checkbox.getAttribute('data-deezer-id');
+        const tidalId = checkbox.getAttribute('data-tidal-id');
+        const trackId = checkbox.getAttribute('data-track-id');
+        const title = checkbox.getAttribute('data-track-title');
+        const artist = checkbox.getAttribute('data-track-artist');
+        const source = checkbox.getAttribute('data-source');
+        
+        // Determine which provider ID to use based on track source
+        let requestBody;
+        if (spotifyId) {
+            // Spotify track - construct full URI
+            requestBody = { 
+                spotify_id: `spotify:track:${spotifyId}`,
+                title: title,
+                artist: artist,
+                album: '{{ album.title }}'
+            };
+        } else if (deezerId) {
+            // Deezer track
+            requestBody = { 
+                deezer_id: deezerId,
+                title: title,
+                artist: artist,
+                album: '{{ album.title }}'
+            };
+        } else if (tidalId) {
+            // Tidal track
+            requestBody = { 
+                tidal_id: tidalId,
+                title: title,
+                artist: artist,
+                album: '{{ album.title }}'
+            };
+        } else {
+            // Local track or no provider ID
+            requestBody = { track_id: trackId };
+        }
+        
+        return fetch('/api/downloads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        })
+        .then(response => {
+            if (!response.ok) {
+                failureCount++;
+                return { success: false };
+            }
+            successCount++;
+            return { success: true };
+        })
+        .catch(error => {
+            failureCount++;
+            console.error(`Error queuing download:`, error);
+            return { success: false };
+        });
+    });
+    
+    Promise.all(downloadPromises).then(() => {
+        if (failureCount === 0) {
+            SoulSpot.showNotification(successMessage, 'success');
+        } else if (successCount === 0) {
+            SoulSpot.showNotification(`Failed to queue ${failureCount} track(s). Please try again.`, 'error');
+        } else {
+            SoulSpot.showNotification(`Queued ${successCount} track(s), ${failureCount} failed`, 'warning');
+        }
+    });
+}
+
+// DEPRECATED: Old function that only supported track_id
+// Kept for reference, but replaced by queueDownloadsFromCheckboxes()
 function queueDownloads(trackIds, successMessage) {
     let successCount = 0;
     let failureCount = 0;
