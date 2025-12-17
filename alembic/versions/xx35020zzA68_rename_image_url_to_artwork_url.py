@@ -89,6 +89,15 @@ def upgrade() -> None:
     # Rename soulspot_artists.image_url → artwork_url (if needed)
     if _column_exists(connection, "soulspot_artists", "image_url"):
         print("Renaming soulspot_artists.image_url → artwork_url")
+        
+        # CRITICAL: Drop expression-based index BEFORE batch_alter_table
+        # SQLite can't automatically copy expression-based indexes during table recreation
+        print("Dropping ix_soulspot_artists_name_lower index (will recreate after)")
+        connection.execute(sa.text(
+            "DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"
+        ))
+        connection.commit()
+        
         # For SQLite, we need to use batch mode with recreate strategy
         with op.batch_alter_table(
             "soulspot_artists",
@@ -101,6 +110,15 @@ def upgrade() -> None:
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
+        
+        # CRITICAL: Recreate expression-based index AFTER batch_alter_table
+        print("Recreating ix_soulspot_artists_name_lower index")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name_lower "
+            "ON soulspot_artists (lower(name))"
+        ))
+        connection.commit()
+        
     elif _column_exists(connection, "soulspot_artists", "artwork_url"):
         print("Column soulspot_artists.artwork_url already exists - skipping rename")
     else:
@@ -152,6 +170,14 @@ def downgrade() -> None:
     # Revert soulspot_artists.artwork_url → image_url (if needed)
     if _column_exists(connection, "soulspot_artists", "artwork_url"):
         print("Reverting soulspot_artists.artwork_url → image_url")
+        
+        # CRITICAL: Drop expression-based index BEFORE batch_alter_table
+        print("Dropping ix_soulspot_artists_name_lower index (will recreate after)")
+        connection.execute(sa.text(
+            "DROP INDEX IF EXISTS ix_soulspot_artists_name_lower"
+        ))
+        connection.commit()
+        
         with op.batch_alter_table(
             "soulspot_artists",
             schema=None,
@@ -163,6 +189,15 @@ def downgrade() -> None:
                 existing_type=sa.String(512),
                 existing_nullable=True,
             )
+        
+        # CRITICAL: Recreate expression-based index AFTER batch_alter_table
+        print("Recreating ix_soulspot_artists_name_lower index")
+        connection.execute(sa.text(
+            "CREATE INDEX IF NOT EXISTS ix_soulspot_artists_name_lower "
+            "ON soulspot_artists (lower(name))"
+        ))
+        connection.commit()
+        
     elif _column_exists(connection, "soulspot_artists", "image_url"):
         print("Column soulspot_artists.image_url already exists - skipping revert")
     else:
