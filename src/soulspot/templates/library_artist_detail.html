@@ -76,10 +76,19 @@
                 {% else %}
                 <i class="bi bi-disc"></i>
                 {% endif %}
+                {# Album type badge #}
+                {% set is_compilation = "compilation" in (album.secondary_types or []) %}
+                {% if is_compilation %}
+                <span class="album-type-badge album-type-compilation">Compilation</span>
+                {% elif album.primary_type == 'ep' %}
+                <span class="album-type-badge album-type-ep">EP</span>
+                {% elif album.primary_type == 'single' %}
+                <span class="album-type-badge album-type-single">Single</span>
+                {% endif %}
             </div>
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
             <div class="album-meta">
-                <span>{{ album.track_count }} tracks</span>
+                <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
                 {% if album.year %}<span>{{ album.year }}</span>{% endif %}
             </div>
         </a>
@@ -147,11 +156,39 @@
         font-size: 2.5rem;
         color: rgba(255, 255, 255, 0.4);
         overflow: hidden;
+        position: relative;
     }
     .album-cover img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+    }
+    /* Album type badges - positioned on album cover */
+    .album-cover .album-type-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        backdrop-filter: blur(8px);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        z-index: 5;
+    }
+    /* Single - blue */
+    .album-type-single {
+        background: rgba(59, 130, 246, 0.85);
+        color: white;
+    }
+    /* EP - purple */
+    .album-type-ep {
+        background: rgba(139, 92, 246, 0.85);
+        color: white;
+    }
+    /* Compilation - amber/orange */
+    .album-type-compilation {
+        background: rgba(245, 158, 11, 0.85);
+        color: white;
     }
     .album-title {
         font-size: var(--font-size-sm);

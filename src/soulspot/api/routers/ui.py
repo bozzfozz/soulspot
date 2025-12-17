@@ -1686,6 +1686,8 @@ async def library_artist_detail(
             "year": album.release_year,
             "artwork_url": album.artwork_url if hasattr(album, "artwork_url") else None,
             "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
+            "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
+            "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
         }
 
     # Count tracks per album
@@ -1796,20 +1798,6 @@ async def library_album_detail(
             status_code=404,
         )
     
-    # Auto-sync tracks for Spotify albums if not synced yet
-    if album_model.source in ["spotify", "hybrid"] and not album_model.tracks_synced_at:
-        # Try to sync tracks from Spotify
-        spotify_sync = request.app.state.spotify_sync
-        if spotify_sync and hasattr(spotify_sync, "sync_album_tracks"):
-            try:
-                # Extract album_id from spotify_uri (format: spotify:album:ID)
-                album_spotify_id = album_model.spotify_uri.split(":")[-1] if album_model.spotify_uri else None
-                if album_spotify_id:
-                    await spotify_sync.sync_album_tracks(album_spotify_id, force=False)
-                    await session.commit()
-            except Exception as e:
-                logger.warning(f"Failed to auto-sync tracks for album {album_model.id}: {e}")
-
     # Query tracks for this album - include ALL tracks, not just those with file_path
     stmt = (
         select(TrackModel)

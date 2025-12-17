@@ -1391,6 +1391,12 @@ class DeezerPlugin(IMusicServicePlugin):
 
         Hey future me – der zentrale Album-Konverter!
         Wird von allen Methoden genutzt die Alben zurückgeben.
+        
+        WICHTIG: Konvertiert Deezer record_type zu standardisiertem primary_type:
+        - "album" → "album"
+        - "ep" → "ep"
+        - "single" → "single"
+        - "compile" → "compilation" (Note: Deezer uses "compile", we normalize to "compilation")
 
         Args:
             deezer_album: DeezerAlbum dataclass from deezer_client
@@ -1398,6 +1404,16 @@ class DeezerPlugin(IMusicServicePlugin):
         Returns:
             Standard AlbumDTO
         """
+        # Normalize Deezer record_type to standard primary_type
+        record_type = deezer_album.record_type or "album"
+        primary_type = record_type
+        secondary_types = []
+        
+        # Deezer uses "compile", we normalize to "compilation"
+        if record_type == "compile":
+            primary_type = "album"
+            secondary_types = ["compilation"]
+        
         return AlbumDTO(
             title=deezer_album.title,
             artist_name=deezer_album.artist_name,
@@ -1406,7 +1422,9 @@ class DeezerPlugin(IMusicServicePlugin):
             artist_deezer_id=str(deezer_album.artist_id) if deezer_album.artist_id else None,
             release_date=deezer_album.release_date,
             total_tracks=deezer_album.nb_tracks or 0,
-            album_type=deezer_album.record_type or "album",
+            album_type=record_type,  # Keep original Deezer value
+            primary_type=primary_type,  # Normalized value
+            secondary_types=secondary_types,  # Compilation flag
             artwork_url=deezer_album.cover_big or deezer_album.cover_medium,
             upc=deezer_album.upc,
             external_urls={"deezer": deezer_album.link or ""},
