@@ -1754,18 +1754,18 @@ class LibraryScannerService:
         """Get summary of current library state."""
         artist_count = await self.artist_repo.count_all()
         album_count_stmt = select(func.count(AlbumModel.id))
-        album_result = await self.session.execute(album_count_stmt)
+        album_result = await self._session.execute(album_count_stmt)
         album_count = album_result.scalar() or 0
 
         track_count_stmt = select(func.count(TrackModel.id))
-        track_result = await self.session.execute(track_count_stmt)
+        track_result = await self._session.execute(track_count_stmt)
         track_count = track_result.scalar() or 0
 
         # Count files with file_path
         local_count_stmt = select(func.count(TrackModel.id)).where(
             TrackModel.file_path.isnot(None)
         )
-        local_result = await self.session.execute(local_count_stmt)
+        local_result = await self._session.execute(local_count_stmt)
         local_count = local_result.scalar() or 0
 
         return {
