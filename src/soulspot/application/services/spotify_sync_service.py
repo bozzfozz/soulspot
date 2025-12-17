@@ -1325,7 +1325,7 @@ class SpotifySyncService:
             spotify_uri=spotify_uri,
             name=name,
             description=description,
-            cover_url=cover_url,
+            cover_url=artwork_url,  # FIXED: Was undefined cover_url
             cover_path=cover_path,
             source="SPOTIFY",
         )

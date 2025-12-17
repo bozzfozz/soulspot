@@ -605,7 +605,8 @@ class DeezerSyncService:
                     existing_model.genres = json.dumps(genres)
                 if tags:
                     existing_model.tags = json.dumps(tags)
-                return existing_model.id
+                # CRITICAL FIX: existing_model.id is ArtistId value object, extract .value
+                return str(existing_model.id.value)
             else:
                 # Create new artist with proper domain entity
                 import uuid
