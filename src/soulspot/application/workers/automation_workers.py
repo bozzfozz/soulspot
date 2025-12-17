@@ -437,57 +437,57 @@ class DiscographyWorker:
                 # Get watchlist repository instance
                 watchlist_repo = ArtistWatchlistRepository(session)
 
-            # Get all active watchlists
-            active_watchlists = await watchlist_repo.list_active(limit=100)
+                # Get all active watchlists
+                active_watchlists = await watchlist_repo.list_active(limit=100)
 
-            if not active_watchlists:
-                logger.debug("No active watchlists to check")
-                return
+                if not active_watchlists:
+                    logger.debug("No active watchlists to check")
+                    return
 
-            logger.info(f"Checking discographies for {len(active_watchlists)} artists")
+                logger.info(f"Checking discographies for {len(active_watchlists)} artists")
 
-            # Check each artist's discography
-            for watchlist in active_watchlists:
-                try:
-                    # Skip if auto_download is disabled
-                    if not watchlist.auto_download:
-                        logger.debug(
-                            f"Skipping artist {watchlist.artist_id} - auto_download disabled"
-                        )
-                        continue
+                # Check each artist's discography
+                for watchlist in active_watchlists:
+                    try:
+                        # Skip if auto_download is disabled
+                        if not watchlist.auto_download:
+                            logger.debug(
+                                f"Skipping artist {watchlist.artist_id} - auto_download disabled"
+                            )
+                            continue
 
-                    # Hey - we have access_token from token_manager above!
-                    # Token is refreshed automatically by TokenRefreshWorker.
+                        # Hey - we have access_token from token_manager above!
+                        # Token is refreshed automatically by TokenRefreshWorker.
 
-                    # Check discography using service
-                    discography_info = await discography_service.check_discography(
-                        artist_id=watchlist.artist_id, access_token=access_token
-                    )
-
-                    # If missing albums found and auto_download enabled, trigger automation
-                    if discography_info.missing_albums and watchlist.auto_download:
-                        logger.info(
-                            f"Found {len(discography_info.missing_albums)} missing albums "
-                            f"for artist {watchlist.artist_id}"
+                        # Check discography using service
+                        discography_info = await discography_service.check_discography(
+                            artist_id=watchlist.artist_id, access_token=access_token
                         )
 
-                        # Hey - trigger automation workflow for missing albums
-                        # The workflow service handles creating downloads, applying filters, etc
-                        await workflow_service.trigger_workflow(
-                            trigger=AutomationTrigger.MISSING_ALBUM,
-                            context={
-                                "artist_id": str(watchlist.artist_id.value),
-                                "missing_albums": discography_info.missing_albums,
-                                "quality_profile": watchlist.quality_profile,
-                            },
-                        )
+                        # If missing albums found and auto_download enabled, trigger automation
+                        if discography_info.missing_albums and watchlist.auto_download:
+                            logger.info(
+                                f"Found {len(discography_info.missing_albums)} missing albums "
+                                f"for artist {watchlist.artist_id}"
+                            )
 
-                except Exception as e:
-                    logger.error(
-                        f"Error checking discography for artist {watchlist.artist_id}: {e}",
-                        exc_info=True,
-                    )
-                    continue  # Continue with next artist on error
+                            # Hey - trigger automation workflow for missing albums
+                            # The workflow service handles creating downloads, applying filters, etc
+                            await workflow_service.trigger_workflow(
+                                trigger=AutomationTrigger.MISSING_ALBUM,
+                                context={
+                                    "artist_id": str(watchlist.artist_id.value),
+                                    "missing_albums": discography_info.missing_albums,
+                                    "quality_profile": watchlist.quality_profile,
+                                },
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error checking discography for artist {watchlist.artist_id}: {e}",
+                            exc_info=True,
+                        )
+                        continue  # Continue with next artist on error
 
             except Exception as e:
                 logger.error(f"Error in discography checking: {e}", exc_info=True)
@@ -594,76 +594,76 @@ class QualityUpgradeWorker:
 
                 track_repo = TrackRepository(session)
 
-            # Get all tracks from library (paginated to avoid memory issues)
-            # In production, might want to add filters like "bitrate < 320" or "format = mp3"
-            all_tracks = await track_repo.list_all()
+                # Get all tracks from library (paginated to avoid memory issues)
+                # In production, might want to add filters like "bitrate < 320" or "format = mp3"
+                all_tracks = await track_repo.list_all()
 
-            if not all_tracks:
-                logger.debug("No tracks in library to check for upgrades")
-                return
+                if not all_tracks:
+                    logger.debug("No tracks in library to check for upgrades")
+                    return
 
-            logger.info(
-                f"Scanning {len(all_tracks)} tracks for quality upgrade opportunities"
-            )
+                logger.info(
+                    f"Scanning {len(all_tracks)} tracks for quality upgrade opportunities"
+                )
 
-            upgrade_candidates_found = 0
+                upgrade_candidates_found = 0
 
-            # Check each track for upgrade opportunities
-            for track in all_tracks:
-                try:
-                    # Skip tracks without audio files (not downloaded yet)
-                    if not track.file_path or not track.is_downloaded():
-                        continue
+                # Check each track for upgrade opportunities
+                for track in all_tracks:
+                    try:
+                        # Skip tracks without audio files (not downloaded yet)
+                        if not track.file_path or not track.is_downloaded():
+                            continue
 
-                    # Use quality service to identify upgrade opportunities
-                    # This checks bitrate, format, and calculates improvement score
-                    # Hey - method will be implemented in QualityUpgradeService later
-                    # For now, skip if method doesn't exist yet (graceful degradation)
-                    if not hasattr(
-                        quality_service, "identify_upgrade_opportunities"
-                    ):
-                        logger.debug(
-                            "Quality upgrade identification not yet implemented - skipping"
-                        )
-                        continue
-
-                    candidates = (
-                        await quality_service.identify_upgrade_opportunities(
-                            track_id=track.id
-                        )
-                    )
-
-                    # Process each candidate
-                    for candidate in candidates:
-                        # Hey - only trigger automation if improvement score meets threshold
-                        # Score > 20 means significant upgrade (MP3 -> FLAC, 128kbps -> 320kbps)
-                        # Score < 20 means marginal (256kbps -> 320kbps) - maybe not worth bandwidth
-                        improvement_threshold = 20.0
-
-                        if candidate.improvement_score >= improvement_threshold:
-                            logger.info(
-                                f"Found upgrade opportunity for track {track.id}: "
-                                f"{candidate.current_format}@{candidate.current_bitrate}kbps -> "
-                                f"{candidate.target_format}@{candidate.target_bitrate}kbps "
-                                f"(score: {candidate.improvement_score})"
+                        # Use quality service to identify upgrade opportunities
+                        # This checks bitrate, format, and calculates improvement score
+                        # Hey - method will be implemented in QualityUpgradeService later
+                        # For now, skip if method doesn't exist yet (graceful degradation)
+                        if not hasattr(
+                            quality_service, "identify_upgrade_opportunities"
+                        ):
+                            logger.debug(
+                                "Quality upgrade identification not yet implemented - skipping"
                             )
+                            continue
 
-                            # Trigger automation workflow for quality upgrade
-                            # Hey - quality upgrade automation will be completed with real search logic
-                            await workflow_service.trigger_workflow(
-                                trigger=AutomationTrigger.QUALITY_UPGRADE,
-                                context={
-                                    "track_id": str(track.id.value),
-                                    "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
-                                    "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
-                                    "improvement_score": candidate.improvement_score,
-                                },
+                        candidates = (
+                            await quality_service.identify_upgrade_opportunities(
+                                track_id=track.id
                             )
-                            upgrade_candidates_found += 1
+                        )
 
-                except Exception as e:
-                    logger.error(f"Error checking upgrade for track {track.id}: {e}", exc_info=True)
-                    continue  # Continue with next track on error
+                        # Process each candidate
+                        for candidate in candidates:
+                            # Hey - only trigger automation if improvement score meets threshold
+                            # Score > 20 means significant upgrade (MP3 -> FLAC, 128kbps -> 320kbps)
+                            # Score < 20 means marginal (256kbps -> 320kbps) - maybe not worth bandwidth
+                            improvement_threshold = 20.0
+
+                            if candidate.improvement_score >= improvement_threshold:
+                                logger.info(
+                                    f"Found upgrade opportunity for track {track.id}: "
+                                    f"{candidate.current_format}@{candidate.current_bitrate}kbps -> "
+                                    f"{candidate.target_format}@{candidate.target_bitrate}kbps "
+                                    f"(score: {candidate.improvement_score})"
+                                )
+
+                                # Trigger automation workflow for quality upgrade
+                                # Hey - quality upgrade automation will be completed with real search logic
+                                await workflow_service.trigger_workflow(
+                                    trigger=AutomationTrigger.QUALITY_UPGRADE,
+                                    context={
+                                        "track_id": str(track.id.value),
+                                        "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
+                                        "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
+                                        "improvement_score": candidate.improvement_score,
+                                    },
+                                )
+                                upgrade_candidates_found += 1
+
+                    except Exception as e:
+                        logger.error(f"Error checking upgrade for track {track.id}: {e}", exc_info=True)
+                        continue  # Continue with next track on error
 
                 logger.info(
                     f"Quality upgrade scan complete - found {upgrade_candidates_found} candidates"
