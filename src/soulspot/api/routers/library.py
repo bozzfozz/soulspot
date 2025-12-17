@@ -891,6 +891,52 @@ async def clear_local_library(
     }
 
 
+@router.delete("/clear-all")
+async def clear_entire_library(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """⚠️ DEV ONLY: Clear ENTIRE library (local + Spotify + Deezer + Tidal).
+    
+    Hey future me - this is the ULTRA NUCLEAR OPTION! Only for development/testing!
+    DELETES EVERYTHING:
+    - ALL artists (local + Spotify + Deezer + hybrid)
+    - ALL albums (local + Spotify + Deezer + hybrid)
+    - ALL tracks (local + Spotify + Deezer + hybrid)
+    
+    ⚠️ TODO: REMOVE THIS ENDPOINT BEFORE PRODUCTION!
+    This is ONLY for development to quickly reset the entire library.
+    
+    Returns:
+        Statistics about deleted entities
+    """
+    from sqlalchemy import delete, func, select
+    from soulspot.infrastructure.persistence.models import (
+        ArtistModel,
+        AlbumModel,
+        TrackModel,
+    )
+    
+    # Count before deletion
+    artists_count = await session.scalar(select(func.count(ArtistModel.id)))
+    albums_count = await session.scalar(select(func.count(AlbumModel.id)))
+    tracks_count = await session.scalar(select(func.count(TrackModel.id)))
+    
+    # Nuclear option: DELETE EVERYTHING (CASCADE will handle relationships)
+    await session.execute(delete(TrackModel))
+    await session.execute(delete(AlbumModel))
+    await session.execute(delete(ArtistModel))
+    await session.commit()
+    
+    return {
+        "success": True,
+        "message": "⚠️ ENTIRE library cleared (local + Spotify + Deezer + Tidal)",
+        "deleted_artists": artists_count or 0,
+        "deleted_albums": albums_count or 0,
+        "deleted_tracks": tracks_count or 0,
+        "warning": "This was a COMPLETE wipe. Sync from providers to restore data.",
+    }
+
+
 # =====================================================
 # Duplicate Detection Endpoints
 # =====================================================

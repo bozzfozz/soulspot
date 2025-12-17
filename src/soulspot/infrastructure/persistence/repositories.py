@@ -4449,8 +4449,10 @@ class ProviderBrowseRepository:
         model = result.scalar_one_or_none()
         
         # STEP 2: If not found by spotify_uri, check by NAME (prevent duplicates!)
+        # CRITICAL FIX: Case-insensitive + whitespace normalization!
         if not model:
-            stmt = select(ArtistModel).where(ArtistModel.name == name)
+            normalized_name = name.strip().lower()
+            stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
             result = await self.session.execute(stmt)
             model = result.scalar_one_or_none()
 

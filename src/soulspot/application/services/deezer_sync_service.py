@@ -582,7 +582,7 @@ class DeezerSyncService:
         """
         from soulspot.domain.entities import Artist, ArtistSource
         from soulspot.infrastructure.persistence.models import ArtistModel
-        from sqlalchemy import select
+        from sqlalchemy import func, select
         
         try:
             # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
@@ -602,8 +602,10 @@ class DeezerSyncService:
                 existing_model = await self._artist_repo.get_by_deezer_id(deezer_id)
             
             # STEP 2: If not found by deezer_id, check by NAME (prevent duplicates!)
+            # CRITICAL FIX: Case-insensitive + whitespace normalization!
             if not existing_model:
-                stmt = select(ArtistModel).where(ArtistModel.name == artist_name)
+                normalized_name = artist_name.strip().lower()
+                stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
                 result = await self._session.execute(stmt)
                 existing_model = result.scalar_one_or_none()
             

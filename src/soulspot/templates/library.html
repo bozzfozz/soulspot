@@ -199,6 +199,8 @@
     <div class="card-header danger-zone-header"><h3><i class="bi bi-exclamation-triangle-fill"></i> Danger Zone</h3></div>
     <div class="card-body">
         <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">These actions are destructive and cannot be undone.</p>
+        
+        <!-- Clear Local Library -->
         <div class="danger-action">
             <div class="danger-action-info">
                 <h4><i class="bi bi-trash3"></i> Clear Local Library</h4>
@@ -211,6 +213,28 @@
             </button>
         </div>
         <div id="clear-library-status" style="margin-top: 1rem;"></div>
+        
+        <!-- Clear ENTIRE Library (DEV ONLY) -->
+        <div class="danger-action" style="margin-top: 1.5rem; border-top: 2px solid var(--danger-primary); padding-top: 1.5rem;">
+            <div class="danger-action-info">
+                <h4><i class="bi bi-radioactive"></i> ⚠️ DEV ONLY: Clear ENTIRE Library</h4>
+                <p style="color: var(--danger-primary); font-weight: bold;">
+                    Delete EVERYTHING: Local files + Spotify + Deezer + Tidal data. 
+                    Complete wipe! Only for development/testing.
+                </p>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                    ⚠️ TODO: Remove this button before production release!
+                </p>
+            </div>
+            <button class="btn btn-danger" id="clear-all-btn"
+                    hx-delete="/api/library/clear-all" hx-target="#clear-all-status" hx-swap="innerHTML"
+                    hx-confirm="⚠️ DELETE EVERYTHING? This will remove:\n\n• ALL local files\n• ALL Spotify data\n• ALL Deezer data\n• ALL Tidal data\n\nThis cannot be undone!\n\nType 'DELETE EVERYTHING' to confirm."
+                    style="background: linear-gradient(135deg, #dc2626, #991b1b);">
+                <i class="bi bi-radioactive"></i>Clear ENTIRE Library
+            </button>
+        </div>
+        <div id="clear-all-status" style="margin-top: 1rem;"></div>
+        
     </div>
 </div>
 {% endblock %}
