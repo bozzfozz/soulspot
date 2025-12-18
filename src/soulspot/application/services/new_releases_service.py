@@ -152,11 +152,13 @@ class NewReleasesService:
                 logger.debug("NewReleasesService: Spotify skipped (not authenticated or capability unavailable)")
                 errors["spotify"] = "Not authenticated"
         
-        # Deezer task
+        # Deezer task - now uses get_new_releases() which requires auth!
+        # This shows only releases from FOLLOWED artists, not random charts.
         if "deezer" in enabled_providers and self._deezer:
-            if self._deezer.can_use(PluginCapability.BROWSE_NEW_RELEASES):
+            # Check if Deezer is authenticated - get_new_releases needs OAuth!
+            if self._deezer.is_authenticated:
                 task = asyncio.create_task(
-                    self._get_deezer_releases(
+                    self._deezer.get_new_releases(
                         days=days,
                         include_singles=include_singles,
                         include_compilations=include_compilations,
@@ -164,7 +166,11 @@ class NewReleasesService:
                 )
                 tasks.append(("deezer", task))
             else:
-                logger.debug("NewReleasesService: Deezer skipped (capability unavailable)")
+                logger.debug(
+                    "NewReleasesService: Deezer skipped (not authenticated). "
+                    "User needs to connect Deezer to see releases from followed artists."
+                )
+                errors["deezer"] = "Not authenticated - connect Deezer to see releases from your followed artists"
         
         # Wait for all tasks
         for provider, task in tasks:
@@ -199,48 +205,9 @@ class NewReleasesService:
             errors=errors,
         )
     
-    async def _get_deezer_releases(
-        self,
-        days: int,
-        include_singles: bool,
-        include_compilations: bool,
-    ) -> list[AlbumDTO]:
-        """Get new releases from Deezer and convert to AlbumDTOs.
-        
-        Hey future me - Deezer Plugin gibt dict zurück, wir brauchen AlbumDTOs!
-        """
-        if not self._deezer:
-            return []
-        
-        result = await self._deezer.get_browse_new_releases(
-            limit=100,
-            include_compilations=include_compilations,
-        )
-        
-        if not result.get("success"):
-            raise ExternalServiceError(f"Deezer API error: {result.get('error', 'Unknown Deezer error')}")
-        
-        albums: list[AlbumDTO] = []
-        for album_data in result.get("albums", []):
-            # Filter singles if not wanted
-            record_type = album_data.get("record_type", "album")
-            if not include_singles and record_type in ("single", "ep"):
-                continue
-            
-            albums.append(AlbumDTO(
-                title=album_data.get("title", ""),
-                artist_name=album_data.get("artist_name", ""),
-                source_service="deezer",
-                deezer_id=str(album_data.get("deezer_id") or album_data.get("id", "")),
-                artist_deezer_id=str(album_data.get("artist_id", "")) if album_data.get("artist_id") else None,
-                release_date=album_data.get("release_date"),
-                total_tracks=album_data.get("total_tracks") or album_data.get("nb_tracks") or 0,
-                album_type=record_type,
-                artwork_url=album_data.get("cover_big") or album_data.get("cover_medium"),
-                external_urls={"deezer": album_data.get("link", "")},
-            ))
-        
-        return albums
+    # NOTE: _get_deezer_releases() removed - we now call deezer.get_new_releases() directly!
+    # The old method used get_browse_new_releases() which showed ALL editorial/charts,
+    # not just releases from followed artists. The new approach is consistent with Spotify.
     
     def _deduplicate_albums(self, albums: list[AlbumDTO]) -> list[AlbumDTO]:
         """Deduplicate albums by ISRC or normalized artist::title.

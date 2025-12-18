@@ -193,7 +193,7 @@ class ProviderSyncOrchestrator:
         return result
 
     # =========================================================================
-    # NEW RELEASES SYNC (Deezer primary - NO AUTH NEEDED!)
+    # NEW RELEASES SYNC (DEPRECATED!)
     # =========================================================================
 
     async def sync_new_releases(
@@ -203,59 +203,52 @@ class ProviderSyncOrchestrator:
     ) -> AggregatedSyncResult:
         """Sync new releases from all available providers.
         
-        Hey future me - Deezer ist hier PRIMARY!
-        Warum? Deezer New Releases brauchen KEIN OAuth!
-        Spotify New Releases brauchen OAuth.
+        Hey future me - DIESE METHODE IST DEPRECATED!
         
-        Strategy:
-        1. Try Deezer first (NO AUTH!)
-        2. Add Spotify if authenticated
-        3. Deduplicate by artist+title
+        Warum deprecated?
+        - New Releases sind BROWSE-Content, nicht User-Library-Content
+        - BROWSE-Content sollte GECACHED werden, nicht in DB geschrieben
+        - Das vermeidet Library-Pollution (random Künstler in User's Library)
+        - Nutze stattdessen NewReleasesSyncWorker mit NewReleasesCache!
+        
+        Der richtige Flow:
+        1. NewReleasesSyncWorker ruft NewReleasesService.get_all_new_releases() auf
+        2. Ergebnisse werden in-memory gecached (NewReleasesCache)
+        3. UI Route liest aus dem Cache
+        4. KEINE DB-Persistenz für Browse-Content!
+        
+        Migration:
+        - Statt sync_new_releases() → NewReleasesSyncWorker nutzen
+        - Statt Provider-spezifische sync_new_releases() → Cache-Only
         
         Args:
-            limit: Max releases per provider
-            force: Skip cooldown check
+            limit: Max releases per provider (IGNORED - deprecated)
+            force: Skip cooldown check (IGNORED - deprecated)
             
         Returns:
-            AggregatedSyncResult with stats from each provider
+            AggregatedSyncResult with deprecation warning
         """
+        import warnings
+        warnings.warn(
+            "ProviderSyncOrchestrator.sync_new_releases() is deprecated. "
+            "Use NewReleasesSyncWorker with NewReleasesCache instead. "
+            "Browse-Content (New Releases) should be cached, not written to DB.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
+        logger.warning(
+            "ProviderSyncOrchestrator.sync_new_releases() is DEPRECATED! "
+            "Browse-Content should use NewReleasesSyncWorker cache, not DB. "
+            "This prevents Library pollution with random artists."
+        )
+        
         result = AggregatedSyncResult()
-        
-        # 1. Try Deezer first (NO AUTH - always available!)
-        if self._deezer_sync and await self._is_provider_enabled("deezer"):
-            try:
-                deezer_result = await self._deezer_sync.sync_new_releases(
-                    limit=limit,
-                    force=force,
-                )
-                if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get("albums_synced", 0)
-                    result.added += deezer_result.get("albums_synced", 0)
-                elif deezer_result.get("skipped_cooldown"):
-                    result.skipped_providers.append("deezer")
-            except Exception as e:
-                logger.warning(f"Deezer new releases sync failed: {e}")
-                result.errors["deezer"] = str(e)
-        
-        # 2. Add Spotify (if authenticated and enabled)
-        if self._spotify_sync and await self._is_provider_enabled("spotify"):
-            try:
-                spotify_result = await self._spotify_sync.sync_new_releases(
-                    limit=limit,
-                    force=force,
-                )
-                if spotify_result.get("synced"):
-                    result.source_counts["spotify"] = spotify_result.get("albums_synced", 0)
-                    result.added += spotify_result.get("albums_synced", 0)
-                elif spotify_result.get("skipped_cooldown"):
-                    result.skipped_providers.append("spotify")
-            except Exception as e:
-                logger.warning(f"Spotify new releases sync failed: {e}")
-                result.errors["spotify"] = str(e)
-        
-        result.total = sum(result.source_counts.values())
-        result.synced = result.total > 0 or not result.errors
-        
+        result.synced = False
+        result.errors["deprecated"] = (
+            "This method is deprecated. New Releases are Browse-Content "
+            "and should use NewReleasesSyncWorker cache instead of DB."
+        )
         return result
 
     # =========================================================================

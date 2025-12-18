@@ -36,6 +36,7 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 if TYPE_CHECKING:
+    from soulspot.application.services.images import ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
 logger = logging.getLogger(__name__)
@@ -64,11 +65,13 @@ class DeezerSyncService:
     CHARTS_SYNC_COOLDOWN = 60  # Charts ändern sich nicht so schnell
     NEW_RELEASES_SYNC_COOLDOWN = 60
     ARTIST_ALBUMS_SYNC_COOLDOWN = 120  # 2 Stunden
+    TRACKS_SYNC_COOLDOWN = 30  # 30 Minuten für Album-Tracks
     
     def __init__(
         self,
         session: AsyncSession,
         deezer_plugin: "DeezerPlugin",
+        image_service: "ImageService | None" = None,
     ) -> None:
         """Initialize Deezer sync service.
         
@@ -78,9 +81,11 @@ class DeezerSyncService:
         Args:
             session: Database session
             deezer_plugin: DeezerPlugin für API calls
+            image_service: ImageService für Bilder-Downloads (optional)
         """
         self._session = session
         self._plugin = deezer_plugin
+        self._image_service = image_service
         
         # Repositories für DB-Zugriff
         self._artist_repo = ArtistRepository(session)
@@ -156,7 +161,7 @@ class DeezerSyncService:
         }
     
     # =========================================================================
-    # NEW RELEASES SYNC
+    # NEW RELEASES SYNC (DEPRECATED - Use in-memory cache!)
     # =========================================================================
     
     async def sync_new_releases(
@@ -166,77 +171,45 @@ class DeezerSyncService:
     ) -> dict[str, Any]:
         """Sync Deezer new releases to database.
         
-        Hey future me - New Releases synken wir zu soulspot_albums!
-        Kombiniert Editorial + Chart Albums für gute Mischung.
+        ⚠️ DEPRECATED: New Releases should NOT be written to DB!
+        Use DeezerSyncWorker._new_releases_cache (in-memory) instead.
         
-        CRITICAL: Sync in correct order - Artists FIRST, then Albums!
-        We need artist_id for foreign key relationships.
+        Hey future me - Diese Methode NICHT mehr verwenden!
+        New Releases dürfen nicht in soulspot_* Tabellen geschrieben werden,
+        weil sie dann mit der User Library vermischt werden.
         
-        Args:
-            limit: Max albums to sync
-            force: Skip cooldown check
-            
+        User's Library sollte NUR enthalten:
+        - Followed Artists (und deren Alben via sync_artist_albums)
+        - Liked Songs
+        - Saved Albums
+        - User Playlists
+        
+        New Releases sind Browse-Content, nicht persönliche Library!
+        
+        Stattdessen: DeezerSyncWorker.get_cached_new_releases() nutzen.
+        
         Returns:
-            Sync result with counts
+            Dict with deprecated warning
         """
-        if not force and not self._should_sync("new_releases", self.NEW_RELEASES_SYNC_COOLDOWN):
-            return {
-                "skipped": True,
-                "reason": "cooldown",
-                "next_sync_in_minutes": self.NEW_RELEASES_SYNC_COOLDOWN,
-            }
+        import warnings
+        warnings.warn(
+            "DeezerSyncService.sync_new_releases() is deprecated. "
+            "New Releases use in-memory cache now via DeezerSyncWorker. "
+            "Use DeezerSyncWorker.get_cached_new_releases() for live data.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         
-        result = {
-            "albums_synced": 0,
-            "artists_synced": 0,
-            "errors": [],
+        logger.warning(
+            "sync_new_releases() DEPRECATED! New Releases should use in-memory cache, "
+            "not database. Use DeezerSyncWorker.get_cached_new_releases()."
+        )
+        
+        return {
+            "deprecated": True,
+            "reason": "New Releases use in-memory cache now, not DB",
+            "alternative": "DeezerSyncWorker.get_cached_new_releases()",
         }
-        
-        try:
-            # Collect all album DTOs first
-            editorial_albums = await self._plugin.get_editorial_releases(limit=limit // 2)
-            chart_albums = await self._plugin.get_chart_albums(limit=limit // 2)
-            all_albums = editorial_albums + chart_albums
-            
-            # Step 1: Build artist_id mapping (deezer_id → internal UUID)
-            artist_id_map: dict[str, str] = {}
-            
-            # Extract unique artists from albums
-            for album_dto in all_albums:
-                if album_dto.artist_deezer_id and album_dto.artist_deezer_id not in artist_id_map:
-                    # Try to ensure artist exists
-                    artist_id = await self._ensure_artist_exists(album_dto, is_chart=False)
-                    if artist_id:
-                        artist_id_map[album_dto.artist_deezer_id] = artist_id
-                        result["artists_synced"] += 1
-            
-            # Step 2: Sync albums with artist relationships
-            for album_dto in all_albums:
-                try:
-                    artist_id = artist_id_map.get(album_dto.artist_deezer_id or "")
-                    if artist_id:
-                        await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
-                        result["albums_synced"] += 1
-                    else:
-                        logger.warning(
-                            f"DeezerSyncService: Album '{album_dto.title}' skipped - no artist_id"
-                        )
-                except Exception as e:
-                    result["errors"].append(f"Album {album_dto.title}: {e}")
-            
-            await self._session.commit()
-            self._mark_synced("new_releases")
-            
-            logger.info(
-                f"DeezerSyncService: New releases synced - "
-                f"{result['albums_synced']} albums"
-            )
-            
-        except Exception as e:
-            logger.error(f"DeezerSyncService: New releases sync failed: {e}")
-            result["error"] = str(e)
-        
-        return result
     
     # =========================================================================
     # ARTIST ALBUMS SYNC (FALLBACK für Spotify!)
@@ -299,6 +272,11 @@ class DeezerSyncService:
                     result["albums_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Album {album_dto.title}: {e}")
+            
+            # Step 3: Mark artist's albums as synced
+            # Hey future me - this is CRITICAL for the gradual background sync!
+            # Without this, the same artist would be re-synced every cycle.
+            await self._update_artist_albums_synced_at(deezer_artist_id)
             
             await self._session.commit()
             self._mark_synced(cache_key)
@@ -466,23 +444,39 @@ class DeezerSyncService:
         # Check if artist exists (by deezer_id or name)
         existing = await self._artist_repo.get_by_deezer_id(artist_dto.deezer_id)
         
+        # Hey future me - DTO.image ist ImageRef, Model.image_url ist DB-Spalte
+        dto_image_url = artist_dto.image.url if artist_dto.image else None
+        deezer_id = artist_dto.deezer_id
+        
         if existing:
             # Update existing
             existing.name = artist_dto.name
-            # Hey future me - DTO.image ist ImageRef, Model.image_url ist DB-Spalte
-            dto_image_url = artist_dto.image.url if artist_dto.image else None
             existing.image_url = dto_image_url or existing.image_url
+            
+            # Download artist image if URL changed (Deezer provider)
+            if self._image_service and deezer_id and dto_image_url:
+                if await self._image_service.should_redownload(
+                    existing.image_url, dto_image_url, existing.image_path
+                ):
+                    image_path = await self._image_service.download_artist_image(
+                        deezer_id, dto_image_url, provider="deezer"
+                    )
+                    if image_path:
+                        existing.image_path = image_path
             # Note: is_chart and is_related flags are not stored in model
         else:
-            # Create new - artist_id is required but not in DTO
-            # We need to create a placeholder or skip this
-            # For now, just create the artist without invalid fields
-            # Hey future me - DTO.image ist ImageRef!
-            dto_image_url = artist_dto.image.url if artist_dto.image else None
+            # Create new - Download artist image for new artist (Deezer provider)
+            image_path = None
+            if self._image_service and deezer_id and dto_image_url:
+                image_path = await self._image_service.download_artist_image(
+                    deezer_id, dto_image_url, provider="deezer"
+                )
+            
             new_artist = ArtistModel(
                 name=artist_dto.name,
                 deezer_id=artist_dto.deezer_id,
                 image_url=dto_image_url,
+                image_path=image_path,
                 source="deezer",
             )
             self._session.add(new_artist)
@@ -559,17 +553,36 @@ class DeezerSyncService:
                 if tags:
                     existing_model.tags = json.dumps(tags)
                 
+                # Download artist image if URL changed (Deezer provider)
+                if self._image_service and deezer_id and artwork_url:
+                    if await self._image_service.should_redownload(
+                        existing_model.image_url, artwork_url, existing_model.image_path
+                    ):
+                        image_path = await self._image_service.download_artist_image(
+                            deezer_id, artwork_url, provider="deezer"
+                        )
+                        if image_path:
+                            existing_model.image_path = image_path
+                
                 return str(existing_model.id)
             else:
                 # Create new artist with proper domain entity
                 import uuid
                 artist_id = str(uuid.uuid4())
                 
+                # Download artist image for new artist (Deezer provider)
+                image_path = None
+                if self._image_service and deezer_id and artwork_url:
+                    image_path = await self._image_service.download_artist_image(
+                        deezer_id, artwork_url, provider="deezer"
+                    )
+                
                 new_artist = ArtistModel(
                     id=artist_id,
                     name=artist_name,
                     deezer_id=deezer_id,
                     image_url=artwork_url,
+                    image_path=image_path,
                     source="deezer",  # Source field in model accepts string
                     genres=json.dumps(genres) if genres else None,
                     tags=json.dumps(tags) if tags else None,
@@ -581,6 +594,58 @@ class DeezerSyncService:
         except Exception as e:
             logger.error(f"Failed to ensure artist exists: {e}")
             return None
+
+    async def _update_artist_albums_synced_at(self, deezer_artist_id: str) -> None:
+        """Update artist's albums_synced_at timestamp after album sync.
+
+        Hey future me - this is CRITICAL for the gradual background sync!
+        Without this, the worker can't track which artists have been synced.
+
+        Args:
+            deezer_artist_id: Deezer artist ID
+        """
+        from sqlalchemy import update
+
+        from soulspot.infrastructure.persistence.models import ArtistModel
+
+        deezer_uri = f"deezer:artist:{deezer_artist_id}"
+
+        try:
+            stmt = (
+                update(ArtistModel)
+                .where(ArtistModel.deezer_uri == deezer_uri)
+                .values(albums_synced_at=datetime.now(UTC))
+            )
+            await self._session.execute(stmt)
+            logger.debug(f"Updated albums_synced_at for Deezer artist {deezer_artist_id}")
+        except Exception as e:
+            logger.warning(f"Failed to update albums_synced_at: {e}")
+
+    async def _update_album_tracks_synced_at(self, deezer_album_id: str) -> None:
+        """Update album's tracks_synced_at timestamp after track sync.
+
+        Hey future me - this is CRITICAL for the gradual background sync!
+        Without this, the worker can't track which albums have had tracks synced.
+
+        Args:
+            deezer_album_id: Deezer album ID
+        """
+        from sqlalchemy import update
+
+        from soulspot.infrastructure.persistence.models import AlbumModel
+
+        deezer_uri = f"deezer:album:{deezer_album_id}"
+
+        try:
+            stmt = (
+                update(AlbumModel)
+                .where(AlbumModel.deezer_uri == deezer_uri)
+                .values(tracks_synced_at=datetime.now(UTC))
+            )
+            await self._session.execute(stmt)
+            logger.debug(f"Updated tracks_synced_at for Deezer album {deezer_album_id}")
+        except Exception as e:
+            logger.warning(f"Failed to update tracks_synced_at: {e}")
     
     async def _save_album_with_artist(
         self,
@@ -613,7 +678,25 @@ class DeezerSyncService:
                 # Update existing - Model.cover_url ist DB-Spalte
                 existing.title = album_dto.title
                 existing.cover_url = dto_cover_url or existing.cover_url
+                
+                # Download album cover if URL changed (Deezer provider)
+                if self._image_service and album_dto.deezer_id and dto_cover_url:
+                    if await self._image_service.should_redownload(
+                        existing.cover_url, dto_cover_url, existing.cover_path
+                    ):
+                        cover_path = await self._image_service.download_album_image(
+                            album_dto.deezer_id, dto_cover_url, provider="deezer"
+                        )
+                        if cover_path:
+                            existing.cover_path = cover_path
             else:
+                # Download album cover for new album (Deezer provider)
+                cover_path = None
+                if self._image_service and album_dto.deezer_id and dto_cover_url:
+                    cover_path = await self._image_service.download_album_image(
+                        album_dto.deezer_id, dto_cover_url, provider="deezer"
+                    )
+                
                 # Create new with artist relationship
                 new_album = AlbumModel(
                     id=str(uuid.uuid4()),
@@ -621,6 +704,7 @@ class DeezerSyncService:
                     artist_id=artist_id,  # CRITICAL: Link to artist
                     deezer_id=album_dto.deezer_id,
                     cover_url=dto_cover_url,
+                    cover_path=cover_path,
                     release_date=album_dto.release_date,
                     total_tracks=album_dto.total_tracks,
                     primary_type=album_dto.primary_type or "Album",
@@ -1127,6 +1211,10 @@ class DeezerSyncService:
                     result["tracks_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")
+            
+            # Step 3: Mark album tracks as synced
+            # Hey future me - this is CRITICAL for the gradual background sync!
+            await self._update_album_tracks_synced_at(deezer_album_id)
             
             await self._session.commit()
             self._mark_synced(cache_key)

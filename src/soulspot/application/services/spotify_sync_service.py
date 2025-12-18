@@ -872,7 +872,7 @@ class SpotifySyncService:
         return stats
 
     # =========================================================================
-    # NEW RELEASES SYNC
+    # NEW RELEASES SYNC (DEPRECATED!)
     # =========================================================================
 
     async def sync_new_releases(
@@ -882,67 +882,58 @@ class SpotifySyncService:
     ) -> dict[str, Any]:
         """Sync Spotify new releases to database.
         
-        Hey future me - das ist die KONSISTENTE Methode wie DeezerSyncService!
-        BRAUCHT Spotify OAuth um New Releases zu holen.
+        Hey future me - DIESE METHODE IST DEPRECATED!
+        
+        Warum deprecated?
+        - New Releases sind BROWSE-Content, nicht User-Library-Content
+        - BROWSE-Content sollte GECACHED werden, nicht in DB geschrieben
+        - Das vermeidet Library-Pollution (random Künstler in User's Library)
+        - Nutze stattdessen NewReleasesSyncWorker mit NewReleasesCache!
+        
+        Der richtige Flow:
+        1. NewReleasesSyncWorker ruft NewReleasesService.get_all_new_releases() auf
+        2. Ergebnisse werden in-memory gecached (NewReleasesCache)
+        3. UI Route liest aus dem Cache
+        4. KEINE DB-Persistenz für Browse-Content!
+        
+        Migration:
+        - Statt sync_new_releases() → NewReleasesSyncWorker nutzen
+        - Statt repo.upsert_album() → Cache-Only
         
         Args:
-            limit: Max albums to sync
-            force: Skip cooldown check
+            limit: Max albums to sync (IGNORED - deprecated)
+            force: Skip cooldown check (IGNORED - deprecated)
             
         Returns:
-            Sync result with counts
+            Warning dict indicating deprecation
         """
-        stats: dict[str, Any] = {
+        import warnings
+        warnings.warn(
+            "sync_new_releases() is deprecated. "
+            "Use NewReleasesSyncWorker with NewReleasesCache instead. "
+            "Browse-Content (New Releases) should be cached, not written to DB.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        
+        logger.warning(
+            "SpotifySyncService.sync_new_releases() is DEPRECATED! "
+            "Browse-Content should use NewReleasesSyncWorker cache, not DB. "
+            "This prevents Library pollution with random artists."
+        )
+        
+        return {
             "synced": False,
             "albums_synced": 0,
             "error": None,
             "skipped_cooldown": False,
+            "deprecated": True,
+            "message": (
+                "This method is deprecated. New Releases are Browse-Content "
+                "and should use NewReleasesSyncWorker cache instead of DB. "
+                "See NewReleasesCache for the correct approach."
+            ),
         }
-        
-        # Check cooldown
-        sync_status = await self.repo.get_sync_status("new_releases")
-        if not force and sync_status:
-            last_sync = sync_status.last_sync_at
-            if last_sync:
-                last_sync = ensure_utc_aware(last_sync)
-                elapsed = (datetime.now(UTC) - last_sync).total_seconds() / 60
-                if elapsed < self.ALBUMS_SYNC_COOLDOWN:
-                    stats["skipped_cooldown"] = True
-                    return stats
-        
-        try:
-            # Get new releases from Spotify
-            albums = await self.spotify_plugin.get_new_releases(limit=limit)
-            
-            for album_dto in albums:
-                try:
-                    # Save album to DB
-                    # Hey future me - AlbumDTO.cover ist jetzt ImageRef!
-                    await self.repo.upsert_album(
-                        spotify_id=album_dto.spotify_id or "",
-                        artist_id=album_dto.artist_id or "",
-                        name=album_dto.title,
-                        image_url=album_dto.cover.url,
-                        release_date=album_dto.release_date,
-                        album_type=album_dto.album_type or "album",
-                        total_tracks=album_dto.total_tracks,
-                    )
-                    stats["albums_synced"] += 1
-                except Exception as e:
-                    logger.warning(f"Failed to save album {album_dto.title}: {e}")
-            
-            # Update sync status
-            await self.repo.update_sync_status("new_releases")
-            await self._session.commit()
-            
-            stats["synced"] = True
-            logger.info(f"SpotifySyncService: New releases synced - {stats['albums_synced']} albums")
-            
-        except Exception as e:
-            logger.error(f"SpotifySyncService: New releases sync failed: {e}")
-            stats["error"] = str(e)
-        
-        return stats
 
     # =========================================================================
     # ALBUM TRACKS SYNC

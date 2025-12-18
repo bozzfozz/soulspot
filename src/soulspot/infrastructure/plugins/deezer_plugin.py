@@ -1345,6 +1345,123 @@ class DeezerPlugin(IMusicServicePlugin):
             logger.error(f"DeezerPlugin: get_chart_artists failed: {e}")
             return []
 
+    # =========================================================================
+    # NEW RELEASES FROM FOLLOWED ARTISTS (Multi-Provider Feature)
+    # =========================================================================
+
+    async def get_new_releases(
+        self,
+        days: int = 90,
+        include_singles: bool = True,
+        include_compilations: bool = True,
+    ) -> list[AlbumDTO]:
+        """Get new album releases from followed artists.
+
+        Hey future me - DAS ist die RICHTIGE Methode für New Releases!
+        Zeigt NUR Releases von Artists denen du folgst, NICHT alle Editorial/Charts!
+        
+        Wie Spotify: 
+        1. Holt alle Followed Artists
+        2. Für jeden Artist: Recent Albums holen
+        3. Filtert nach Release-Datum
+        
+        WICHTIG: Braucht OAuth (User muss bei Deezer eingeloggt sein)!
+        Wenn nicht authenticated, gibt leere Liste zurück mit Warning.
+
+        Args:
+            days: Look back period (default 90 days)
+            include_singles: Include singles/EPs in results
+            include_compilations: Include compilation albums
+
+        Returns:
+            List of AlbumDTOs from followed artists within timeframe
+        """
+        from datetime import datetime, timedelta, UTC
+
+        # Check if authenticated - New Releases from followed needs OAuth!
+        if not self.is_authenticated:
+            logger.warning(
+                "DeezerPlugin.get_new_releases() requires OAuth! "
+                "User needs to connect Deezer to see releases from followed artists. "
+                "Use get_browse_new_releases() for public editorial/charts."
+            )
+            return []
+
+        cutoff_date = datetime.now(UTC) - timedelta(days=days)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+        try:
+            # Step 1: Get all followed artists (paginated)
+            all_artists: list[ArtistDTO] = []
+            after: str | None = None
+            
+            while True:
+                result = await self.get_followed_artists(limit=50, after=after)
+                all_artists.extend(result.items)
+                if result.next_offset is None:
+                    break
+                after = str(result.next_offset)
+
+            logger.info(
+                f"DeezerPlugin: Fetching new releases for {len(all_artists)} followed artists"
+            )
+
+            # Step 2: Get recent albums for each artist
+            all_albums: list[AlbumDTO] = []
+            seen_ids: set[str] = set()
+
+            for artist in all_artists:
+                if not artist.deezer_id:
+                    continue
+
+                try:
+                    # Get artist albums
+                    albums = await self.get_artist_albums(
+                        artist_id=artist.deezer_id,
+                        limit=20,  # Max 20 recent albums per artist
+                    )
+
+                    # Filter by release date and type
+                    for album in albums:
+                        # Skip duplicates
+                        if album.deezer_id and album.deezer_id in seen_ids:
+                            continue
+
+                        # Filter by album type
+                        album_type = (album.album_type or "album").lower()
+                        if album_type == "single" and not include_singles:
+                            continue
+                        if album_type == "compilation" and not include_compilations:
+                            continue
+
+                        # Check release date
+                        if album.release_date and album.release_date >= cutoff_str:
+                            if album.deezer_id:
+                                seen_ids.add(album.deezer_id)
+                            # Ensure source is set
+                            if not album.source_service:
+                                album.source_service = "deezer"
+                            all_albums.append(album)
+
+                except Exception as e:
+                    # Log error but continue with other artists
+                    logger.warning(
+                        f"DeezerPlugin: Failed to get albums for artist {artist.deezer_id}: {e}"
+                    )
+                    continue
+
+            logger.info(
+                f"DeezerPlugin: Found {len(all_albums)} new releases from "
+                f"{len(all_artists)} followed artists (last {days} days)"
+            )
+            return all_albums
+
+        except PluginError:
+            raise
+        except Exception as e:
+            logger.exception(f"DeezerPlugin: get_new_releases failed: {e}")
+            return []
+
     async def get_genres(self) -> list[dict[str, Any]]:
         """Get all available Deezer genres.
 

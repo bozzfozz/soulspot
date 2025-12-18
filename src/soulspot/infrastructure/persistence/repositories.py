@@ -4253,7 +4253,9 @@ class ProviderBrowseRepository:
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    async def get_artists_pending_album_sync(self, limit: int = 5) -> list[Any]:
+    async def get_artists_pending_album_sync(
+        self, limit: int = 5, source: str = "spotify"
+    ) -> list[Any]:
         """Get artists whose albums haven't been synced yet.
 
         Hey future me - this is for gradual background album sync!
@@ -4263,6 +4265,7 @@ class ProviderBrowseRepository:
 
         Args:
             limit: Maximum number of artists to return (default 5)
+            source: Provider source filter ('spotify' or 'deezer')
 
         Returns:
             List of ArtistModel objects without synced albums
@@ -4272,7 +4275,7 @@ class ProviderBrowseRepository:
         stmt = (
             select(ArtistModel)
             .where(
-                ArtistModel.source == "spotify",
+                ArtistModel.source == source,
                 ArtistModel.albums_synced_at.is_(None),
             )
             .order_by(ArtistModel.name)  # Alphabetical for predictability
@@ -4281,10 +4284,13 @@ class ProviderBrowseRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def count_artists_pending_album_sync(self) -> int:
+    async def count_artists_pending_album_sync(self, source: str = "spotify") -> int:
         """Count artists whose albums haven't been synced yet.
 
         Useful for progress tracking in UI.
+
+        Args:
+            source: Provider source filter ('spotify' or 'deezer')
 
         Returns:
             Number of artists still needing album sync
@@ -4292,14 +4298,14 @@ class ProviderBrowseRepository:
         from .models import ArtistModel
 
         stmt = select(func.count(ArtistModel.id)).where(
-            ArtistModel.source == "spotify",
+            ArtistModel.source == source,
             ArtistModel.albums_synced_at.is_(None),
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
     async def get_artists_due_for_resync(
-        self, max_age_hours: int = 24, limit: int = 5
+        self, max_age_hours: int = 24, limit: int = 5, source: str = "spotify"
     ) -> list[Any]:
         """Get artists whose albums haven't been synced in a while.
 
@@ -4313,6 +4319,7 @@ class ProviderBrowseRepository:
         Args:
             max_age_hours: How many hours before resync is needed (default 24)
             limit: Maximum number of artists to return (default 5)
+            source: Provider source filter ('spotify' or 'deezer')
 
         Returns:
             List of ArtistModel objects needing album resync
@@ -4326,7 +4333,7 @@ class ProviderBrowseRepository:
         stmt = (
             select(ArtistModel)
             .where(
-                ArtistModel.source == "spotify",
+                ArtistModel.source == source,
                 ArtistModel.albums_synced_at.isnot(None),
                 ArtistModel.albums_synced_at < cutoff_time,
             )
@@ -4336,11 +4343,14 @@ class ProviderBrowseRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def count_artists_due_for_resync(self, max_age_hours: int = 24) -> int:
+    async def count_artists_due_for_resync(
+        self, max_age_hours: int = 24, source: str = "spotify"
+    ) -> int:
         """Count artists whose albums are due for resync.
 
         Args:
             max_age_hours: How many hours before resync is needed
+            source: Provider source filter ('spotify' or 'deezer')
 
         Returns:
             Number of artists needing album resync
@@ -4352,7 +4362,7 @@ class ProviderBrowseRepository:
         cutoff_time = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         stmt = select(func.count(ArtistModel.id)).where(
-            ArtistModel.source == "spotify",
+            ArtistModel.source == source,
             ArtistModel.albums_synced_at.isnot(None),
             ArtistModel.albums_synced_at < cutoff_time,
         )
@@ -4506,6 +4516,60 @@ class ProviderBrowseRepository:
 
         stmt = select(func.count(AlbumModel.id)).where(
             AlbumModel.source == "spotify"
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_albums_pending_track_sync(
+        self, limit: int = 10, source: str = "spotify"
+    ) -> list[Any]:
+        """Get albums whose tracks haven't been synced yet.
+
+        Hey future me - this is for gradual background TRACK sync!
+        When we sync artist albums via get_artist_albums(), the API only returns
+        simplified album objects WITHOUT tracks. This method finds albums where
+        tracks_synced_at IS NULL so the background worker can gradually fill in
+        the tracks without hitting API rate limits.
+
+        Default 10 per cycle = ~10 API calls (one per album) - reasonable for rate limits.
+
+        Args:
+            limit: Maximum number of albums to return (default 10)
+            source: Provider source filter ('spotify' or 'deezer')
+
+        Returns:
+            List of AlbumModel objects without synced tracks
+        """
+        from .models import AlbumModel
+
+        stmt = (
+            select(AlbumModel)
+            .where(
+                AlbumModel.source == source,
+                AlbumModel.tracks_synced_at.is_(None),
+            )
+            .order_by(AlbumModel.release_date.desc())  # Newest albums first
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_albums_pending_track_sync(self, source: str = "spotify") -> int:
+        """Count albums whose tracks haven't been synced yet.
+
+        Useful for progress tracking in UI and logging.
+
+        Args:
+            source: Provider source filter ('spotify' or 'deezer')
+
+        Returns:
+            Number of albums still needing track sync
+        """
+        from .models import AlbumModel
+
+        stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.source == source,
+            AlbumModel.tracks_synced_at.is_(None),
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0

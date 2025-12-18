@@ -87,6 +87,7 @@ class SpotifySyncWorker:
             "liked_songs": None,
             "saved_albums": None,
             "artist_albums": None,  # Gradual background album sync
+            "album_tracks": None,  # Gradual background track sync for albums
         }
 
         # Hey future me - RATE LIMIT COOLDOWN!
@@ -104,6 +105,12 @@ class SpotifySyncWorker:
             "liked_songs": {"count": 0, "last_result": None, "last_error": None},
             "saved_albums": {"count": 0, "last_result": None, "last_error": None},
             "artist_albums": {
+                "count": 0,
+                "last_result": None,
+                "last_error": None,
+                "pending": 0,
+            },
+            "album_tracks": {
                 "count": 0,
                 "last_result": None,
                 "last_error": None,
@@ -355,6 +362,27 @@ class SpotifySyncWorker:
                         artists_per_cycle,
                         resync_hours,
                         resync_enabled,
+                    )
+
+                # Gradual Album Tracks sync - loads tracks for albums that don't have them
+                # Hey future me - this is the SECOND gradual sync!
+                # When we sync artist albums, Spotify only returns simplified album objects
+                # WITHOUT tracks. This sync gradually fills in the tracks for those albums.
+                # Default: 10 albums per cycle, every 2 minutes = ~300 albums/hour
+                album_tracks_interval = await settings_service.get_int(
+                    "spotify.album_tracks_sync_interval_minutes", default=2
+                )
+                albums_per_cycle = await settings_service.get_int(
+                    "spotify.album_tracks_per_cycle", default=10
+                )
+                if await settings_service.get_bool(
+                    "spotify.auto_sync_album_tracks", default=True
+                ) and self._is_sync_due("album_tracks", album_tracks_interval, now):
+                    await self._run_album_tracks_sync(
+                        session,
+                        access_token,
+                        now,
+                        albums_per_cycle,
                     )
 
                 # Commit any changes
@@ -659,10 +687,11 @@ class SpotifySyncWorker:
             artists_to_sync: list[Any] = []
 
             # Phase 1: Get never-synced artists (highest priority)
+            # Hey future me - explicit source="spotify" for clarity!
             pending_artists = await repo.get_artists_pending_album_sync(
-                limit=artists_per_cycle
+                limit=artists_per_cycle, source="spotify"
             )
-            pending_count = await repo.count_artists_pending_album_sync()
+            pending_count = await repo.count_artists_pending_album_sync(source="spotify")
             artists_to_sync.extend(pending_artists)
 
             # Phase 2: If resync enabled and we have room, add artists needing resync
@@ -672,9 +701,10 @@ class SpotifySyncWorker:
                 resync_artists = await repo.get_artists_due_for_resync(
                     max_age_hours=resync_hours,
                     limit=remaining_slots,
+                    source="spotify",
                 )
                 resync_count = await repo.count_artists_due_for_resync(
-                    max_age_hours=resync_hours
+                    max_age_hours=resync_hours, source="spotify"
                 )
                 artists_to_sync.extend(resync_artists)
 
@@ -758,6 +788,141 @@ class SpotifySyncWorker:
         except Exception as e:
             self._sync_stats["artist_albums"]["last_error"] = str(e)
             logger.error(f"Artist albums sync failed: {e}", exc_info=True)
+            raise
+
+    async def _run_album_tracks_sync(
+        self,
+        session: Any,
+        access_token: str,
+        now: datetime,
+        albums_per_cycle: int = 10,
+    ) -> None:
+        """Run gradual album tracks sync (load tracks for albums that don't have them).
+
+        Hey future me - this is the SECOND gradual background sync!
+        When we sync artist albums via get_artist_albums(), Spotify only returns
+        simplified album objects WITHOUT tracks (no track list, just basic album info).
+
+        This sync gradually fills in the tracks for albums where tracks_synced_at IS NULL.
+        With default settings:
+        - 10 albums per cycle
+        - Every 2 minutes
+        - = 300 albums/hour
+        - = All albums done in a few hours (depending on how many artists)
+
+        Why 10 per cycle?
+        - get_album() returns full album with tracks in ONE call
+        - So 10 albums = 10 API calls
+        - Spotify rate limit is ~30 calls/second, but we're being nice with delays
+        - 10 per cycle with 0.5s delay = 5 seconds per cycle max
+
+        Args:
+            session: Database session
+            access_token: Spotify OAuth token
+            now: Current timestamp
+            albums_per_cycle: How many albums to process (default 10)
+        """
+        try:
+            from soulspot.application.services.app_settings_service import (
+                AppSettingsService,
+            )
+            from soulspot.application.services.images import ImageService
+            from soulspot.application.services.spotify_sync_service import (
+                SpotifySyncService,
+            )
+            from soulspot.infrastructure.integrations.spotify_client import (
+                SpotifyClient,
+            )
+            from soulspot.infrastructure.persistence.repositories import (
+                SpotifyBrowseRepository,
+            )
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+            repo = SpotifyBrowseRepository(session)
+
+            # Get albums that have never had tracks synced
+            # Hey future me - explicit source="spotify" for clarity!
+            pending_albums = await repo.get_albums_pending_track_sync(
+                limit=albums_per_cycle, source="spotify"
+            )
+            pending_count = await repo.count_albums_pending_track_sync(source="spotify")
+
+            if not pending_albums:
+                # All albums have been synced
+                logger.debug("No albums pending track sync")
+                self._sync_stats["album_tracks"]["pending"] = 0
+                return
+
+            logger.info(
+                f"Starting gradual album tracks sync: {len(pending_albums)} albums "
+                f"this cycle. Total pending: {pending_count}"
+            )
+
+            # Set up services
+            spotify_client = SpotifyClient(self.settings.spotify)
+            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            image_service = ImageService()
+            settings_service = AppSettingsService(session)
+
+            sync_service = SpotifySyncService(
+                session=session,
+                spotify_plugin=spotify_plugin,
+                image_service=image_service,
+                settings_service=settings_service,
+            )
+
+            synced_count = 0
+            total_tracks = 0
+
+            for album in pending_albums:
+                try:
+                    # Sync tracks for this album
+                    # Hey future me - album.spotify_id is the Spotify ID from the model!
+                    result = await sync_service.sync_album_tracks(
+                        album_id=album.spotify_id,
+                        force=True,  # Skip cooldown since we're doing gradual sync
+                    )
+
+                    if result.get("synced"):
+                        synced_count += 1
+                        total_tracks += result.get("total", 0)
+                        logger.debug(
+                            f"Synced {result.get('total', 0)} tracks for album "
+                            f"'{album.title}' (ID: {album.spotify_id})"
+                        )
+                    elif result.get("error"):
+                        logger.warning(
+                            f"Failed to sync tracks for album '{album.title}': "
+                            f"{result.get('error')}"
+                        )
+
+                    # Small delay between albums to be nice to the API
+                    await asyncio.sleep(0.5)
+
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to sync tracks for album {album.title}: {e}"
+                    )
+                    # Continue with next album, don't fail the whole batch
+
+            # Update tracking
+            self._last_sync["album_tracks"] = now
+            self._sync_stats["album_tracks"]["count"] += 1
+            self._sync_stats["album_tracks"]["last_result"] = {
+                "albums_synced": synced_count,
+                "total_tracks": total_tracks,
+            }
+            self._sync_stats["album_tracks"]["last_error"] = None
+            self._sync_stats["album_tracks"]["pending"] = pending_count - synced_count
+
+            logger.info(
+                f"Gradual album tracks sync complete: {synced_count} albums, "
+                f"{total_tracks} tracks. Still pending: {pending_count - synced_count}"
+            )
+
+        except Exception as e:
+            self._sync_stats["album_tracks"]["last_error"] = str(e)
+            logger.error(f"Album tracks sync failed: {e}", exc_info=True)
             raise
 
     @property
@@ -845,6 +1010,16 @@ class SpotifySyncWorker:
                         results["artist_albums"] = "success"
                     except Exception as e:
                         results["artist_albums"] = f"error: {e}"
+
+                if sync_type is None or sync_type == "album_tracks":
+                    try:
+                        # Force sync a batch of pending albums (load tracks)
+                        await self._run_album_tracks_sync(
+                            session, access_token, now, albums_per_cycle=20
+                        )
+                        results["album_tracks"] = "success"
+                    except Exception as e:
+                        results["album_tracks"] = f"error: {e}"
 
                 await session.commit()
 
