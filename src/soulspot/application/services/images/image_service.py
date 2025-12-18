@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -401,6 +401,105 @@ class ImageService:
         Simple helper, but useful when you KNOW there's no image.
         """
         return DEFAULT_PLACEHOLDERS.get(entity_type, GENERIC_PLACEHOLDER)
+
+    # Provider priority for multi-source entities
+    # Higher priority = checked first
+    PROVIDER_PRIORITY: ClassVar[list[str]] = [
+        "spotify",      # Best quality, most consistent
+        "deezer",       # Good quality
+        "tidal",        # Good quality
+        "musicbrainz",  # Community-sourced, variable quality
+    ]
+    
+    def get_best_image(
+        self,
+        entity_type: EntityType,
+        provider_ids: dict[str, str | None],
+        fallback_url: str | None = None,
+    ) -> str:
+        """Get the best available cached image from multiple providers.
+        
+        Future me note:
+        This is THE method for templates when an entity has multiple provider IDs!
+        
+        Use case: A local library track matched to both Spotify AND Deezer.
+        We want to show the BEST available image, checking in priority order.
+        
+        Args:
+            entity_type: "artist", "album", or "playlist"
+            provider_ids: Dict of provider → ID, e.g.:
+                {"spotify": "abc123", "deezer": "456", "musicbrainz": None}
+            fallback_url: CDN URL to use if no cached image found
+            
+        Returns:
+            Best available URL (local cache > fallback > placeholder)
+            
+        Example:
+            >>> image_service.get_best_image(
+            ...     entity_type="artist",
+            ...     provider_ids={
+            ...         "spotify": "1dfeR4HaWDbWqFHLkxsg1d",
+            ...         "deezer": "123456",
+            ...         "musicbrainz": "abc-def-ghi"
+            ...     },
+            ...     fallback_url="https://i.scdn.co/image/..."
+            ... )
+            "/artwork/local/artists/spotify/1dfeR4HaWDbWqFHLkxsg1d.webp"
+        """
+        # Check cached images in priority order
+        for provider in self.PROVIDER_PRIORITY:
+            provider_id = provider_ids.get(provider)
+            if not provider_id:
+                continue
+            
+            # Build path: {entity_type}s/{provider}/{provider_id}.webp
+            relative_path = f"{entity_type}s/{provider}/{provider_id}.webp"
+            full_path = Path(self.cache_base_path) / relative_path
+            
+            if full_path.exists():
+                logger.debug(
+                    "Found best image for %s from %s: %s",
+                    entity_type, provider, relative_path
+                )
+                return f"{self.local_serve_prefix}/{relative_path}"
+        
+        # No cached image found - use fallback URL if provided
+        if fallback_url:
+            return fallback_url
+        
+        # Last resort: placeholder
+        return DEFAULT_PLACEHOLDERS.get(entity_type, GENERIC_PLACEHOLDER)
+    
+    def find_cached_image(
+        self,
+        entity_type: EntityType,
+        provider_ids: dict[str, str | None],
+    ) -> str | None:
+        """Find the best cached image path (without fallback to CDN/placeholder).
+        
+        Future me note:
+        Like get_best_image() but returns None if no cache exists.
+        Useful for checking "do we have ANY local image?"
+        
+        Args:
+            entity_type: "artist", "album", or "playlist"
+            provider_ids: Dict of provider → ID
+            
+        Returns:
+            Relative path like "artists/spotify/abc.webp" or None
+        """
+        for provider in self.PROVIDER_PRIORITY:
+            provider_id = provider_ids.get(provider)
+            if not provider_id:
+                continue
+            
+            relative_path = f"{entity_type}s/{provider}/{provider_id}.webp"
+            full_path = Path(self.cache_base_path) / relative_path
+            
+            if full_path.exists():
+                return relative_path
+        
+        return None
     
     # === Public Async Methods (for services) ===
     
@@ -951,32 +1050,35 @@ class ImageService:
     # Hey future me - these methods are for the Sync-Service migration!
     # The problem: SpotifySyncService uses spotify_id, but ImageService
     # expects internal UUID. These methods bridge that gap by:
-    # 1. Accepting provider ID (e.g., spotify_id)
+    # 1. Accepting provider ID (e.g., spotify_id, deezer_id)
     # 2. Downloading and converting to WebP
     # 3. Returning ONLY the relative path (no DB update!)
     #
     # The caller (Sync-Service) is responsible for:
     # - Passing the path to the repository's upsert method
-    # - The repository handles mapping spotify_id → internal record
+    # - The repository handles mapping provider_id → internal record
     #
-    # Path structure: {entity_type}s/spotify/{provider_id}.webp
+    # Path structure: {entity_type}s/{provider}/{provider_id}.webp
     # Example: artists/spotify/1dfeR4HaWDbWqFHLkxsg1d.webp
+    #          artists/deezer/123456.webp
+    #          albums/musicbrainz/abc-def-123.webp
     #
     # This keeps the existing flow intact while using ImageService internals.
 
     async def download_artist_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
-        """Download artist image by provider ID (e.g., Spotify ID).
+        """Download artist image by provider ID (e.g., Spotify ID, Deezer ID).
         
         Future me note:
-        This is a MIGRATION BRIDGE for SpotifySyncService.
+        This is a MIGRATION BRIDGE for Sync-Services.
         Downloads + converts to WebP, returns path only.
         Does NOT update database - caller passes path to repo.
         
         Args:
-            provider_id: External provider ID (e.g., Spotify ID)
+            provider_id: External provider ID (e.g., Spotify ID, Deezer ID)
             image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
             
         Returns:
             Relative path like "artists/spotify/abc123.webp" or None
@@ -985,34 +1087,47 @@ class ImageService:
             provider_id=provider_id,
             image_url=image_url,
             entity_type="artist",
+            provider=provider,
         )
 
     async def download_album_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
         """Download album image by provider ID.
         
         Future me note:
         Same as download_artist_image but for albums.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
         """
         return await self._download_for_provider(
             provider_id=provider_id,
             image_url=image_url,
             entity_type="album",
+            provider=provider,
         )
 
     async def download_playlist_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
         """Download playlist image by provider ID.
         
         Future me note:
         Same as download_artist_image but for playlists.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal")
         """
         return await self._download_for_provider(
             provider_id=provider_id,
             image_url=image_url,
             entity_type="playlist",
+            provider=provider,
         )
 
     async def _download_for_provider(
@@ -1020,26 +1135,35 @@ class ImageService:
         provider_id: str,
         image_url: str | None,
         entity_type: str,
+        provider: str = "spotify",
     ) -> str | None:
         """Internal method to download image for provider ID.
         
         Future me note:
         This is the actual implementation behind the provider-ID methods.
-        Uses a "spotify/" subdirectory to keep provider images organized
-        and separate from internal-UUID-based images.
+        Uses a provider subdirectory to keep images organized by source.
         
-        Path structure: {entity_type}s/spotify/{provider_id}.webp
+        Path structure: {entity_type}s/{provider}/{provider_id}.webp
+        
+        Examples:
+            - artists/spotify/1dfeR4HaWDbWqFHLkxsg1d.webp
+            - albums/deezer/123456.webp
+            - artists/musicbrainz/abc-def-ghi.webp
         
         Args:
-            provider_id: External ID (Spotify ID, etc.)
+            provider_id: External ID (Spotify ID, Deezer ID, etc.)
             image_url: URL to fetch
             entity_type: "artist", "album", or "playlist"
+            provider: Provider name for subdirectory
             
         Returns:
             Relative path or None if failed
         """
         if not image_url or not provider_id:
             return None
+
+        # Sanitize provider name (lowercase, no special chars)
+        safe_provider = provider.lower().replace(" ", "_")
 
         try:
             # Fetch image data
@@ -1051,13 +1175,15 @@ class ImageService:
             webp_data = self._convert_to_webp(image_data)
             if not webp_data:
                 logger.warning(
-                    "WebP conversion failed for %s %s", entity_type, provider_id
+                    "WebP conversion failed for %s %s (%s)", 
+                    entity_type, provider_id, safe_provider
                 )
                 return None
 
-            # Build path: {entity_type}s/spotify/{provider_id}.webp
+            # Build path: {entity_type}s/{provider}/{provider_id}.webp
             # Example: artists/spotify/1dfeR4HaWDbWqFHLkxsg1d.webp
-            relative_path = f"{entity_type}s/spotify/{provider_id}.webp"
+            #          albums/deezer/123456.webp
+            relative_path = f"{entity_type}s/{safe_provider}/{provider_id}.webp"
             full_path = Path(self.cache_base_path) / relative_path
 
             # Ensure directory exists
@@ -1066,8 +1192,9 @@ class ImageService:
             # Write file
             full_path.write_bytes(webp_data)
             logger.debug(
-                "Downloaded %s image for provider ID %s: %s",
+                "Downloaded %s image for %s:%s → %s",
                 entity_type,
+                safe_provider,
                 provider_id,
                 relative_path,
             )
@@ -1075,8 +1202,9 @@ class ImageService:
 
         except Exception as e:
             logger.error(
-                "Error downloading %s image for %s: %s",
+                "Error downloading %s image for %s:%s: %s",
                 entity_type,
+                safe_provider,
                 provider_id,
                 e,
             )
@@ -1091,38 +1219,58 @@ class ImageService:
     # with detailed error information for tracking batch job failures.
 
     async def download_artist_image_with_result(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> ImageDownloadResult:
         """Download artist image with detailed error tracking.
         
         Future me note:
         Use this instead of download_artist_image() when you need to know
         WHY an image download failed (for error reporting in batch jobs).
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
         """
         return await self._download_for_provider_with_result(
             provider_id=provider_id,
             image_url=image_url,
             entity_type="artist",
+            provider=provider,
         )
 
     async def download_album_image_with_result(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> ImageDownloadResult:
-        """Download album image with detailed error tracking."""
+        """Download album image with detailed error tracking.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
+        """
         return await self._download_for_provider_with_result(
             provider_id=provider_id,
             image_url=image_url,
             entity_type="album",
+            provider=provider,
         )
 
     async def download_playlist_image_with_result(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> ImageDownloadResult:
-        """Download playlist image with detailed error tracking."""
+        """Download playlist image with detailed error tracking.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal")
+        """
         return await self._download_for_provider_with_result(
             provider_id=provider_id,
             image_url=image_url,
             entity_type="playlist",
+            provider=provider,
         )
 
     async def _download_for_provider_with_result(
@@ -1130,12 +1278,19 @@ class ImageService:
         provider_id: str,
         image_url: str | None,
         entity_type: str,
+        provider: str = "spotify",
     ) -> ImageDownloadResult:
         """Download image with detailed error result.
         
         Future me note:
         This provides detailed error tracking for batch operations.
         Same logic as _download_for_provider but returns ImageDownloadResult.
+        
+        Args:
+            provider_id: External ID
+            image_url: URL to fetch
+            entity_type: "artist", "album", or "playlist"
+            provider: Provider name for subdirectory
         """
         if not image_url:
             return ImageDownloadResult.error(
@@ -1150,6 +1305,9 @@ class ImageService:
                 "No provider ID provided",
                 image_url,
             )
+
+        # Sanitize provider name
+        safe_provider = provider.lower().replace(" ", "_")
 
         try:
             # Fetch image data with error tracking
@@ -1170,8 +1328,8 @@ class ImageService:
                     image_url,
                 )
 
-            # Build path
-            relative_path = f"{entity_type}s/spotify/{provider_id}.webp"
+            # Build path: {entity_type}s/{provider}/{provider_id}.webp
+            relative_path = f"{entity_type}s/{safe_provider}/{provider_id}.webp"
             full_path = Path(self.cache_base_path) / relative_path
 
             # Ensure directory exists and write
@@ -1186,8 +1344,9 @@ class ImageService:
                 )
 
             logger.debug(
-                "Downloaded %s image for provider ID %s: %s",
+                "Downloaded %s image for %s:%s → %s",
                 entity_type,
+                safe_provider,
                 provider_id,
                 relative_path,
             )
@@ -1195,8 +1354,9 @@ class ImageService:
 
         except Exception as e:
             logger.error(
-                "Error downloading %s image for %s: %s",
+                "Error downloading %s image for %s:%s: %s",
                 entity_type,
+                safe_provider,
                 provider_id,
                 e,
             )

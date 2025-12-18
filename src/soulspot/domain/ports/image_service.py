@@ -149,6 +149,46 @@ class IImageService(Protocol):
         """Get placeholder URL for an entity type."""
         ...
     
+    def get_best_image(
+        self,
+        entity_type: EntityType,
+        provider_ids: dict[str, str | None],
+        fallback_url: str | None = None,
+    ) -> str:
+        """Get the best available cached image from multiple providers.
+        
+        Checks cached images in priority order (spotify > deezer > tidal > musicbrainz).
+        Use this when an entity has IDs from multiple providers.
+        
+        Args:
+            entity_type: "artist", "album", or "playlist"
+            provider_ids: Dict of provider → ID, e.g.:
+                {"spotify": "abc123", "deezer": "456", "musicbrainz": None}
+            fallback_url: CDN URL to use if no cached image found
+            
+        Returns:
+            Best available URL (local cache > fallback > placeholder)
+        """
+        ...
+    
+    def find_cached_image(
+        self,
+        entity_type: EntityType,
+        provider_ids: dict[str, str | None],
+    ) -> str | None:
+        """Find the best cached image path (without fallback).
+        
+        Like get_best_image() but returns None if no cache exists.
+        
+        Args:
+            entity_type: "artist", "album", or "playlist"
+            provider_ids: Dict of provider → ID
+            
+        Returns:
+            Relative path like "artists/spotify/abc.webp" or None
+        """
+        ...
+    
     async def get_image(
         self,
         entity_type: EntityType,
@@ -261,21 +301,28 @@ class IImageService(Protocol):
     # =========================================================================
     # Provider-ID Download Methods (for Sync-Service migration)
     # =========================================================================
-    # These methods accept provider IDs (e.g., Spotify ID) and return paths
-    # without updating the database. The caller handles DB updates.
+    # These methods accept provider IDs (e.g., Spotify ID, Deezer ID) and return
+    # paths without updating the database. The caller handles DB updates.
+    # 
+    # Path structure: {entity_type}s/{provider}/{provider_id}.webp
+    # Examples:
+    #   - artists/spotify/1dfeR4HaWDbWqFHLkxsg1d.webp
+    #   - albums/deezer/123456.webp
+    #   - artists/musicbrainz/abc-def-ghi.webp
 
     async def download_artist_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
         """Download artist image by provider ID.
         
-        Migration bridge for SpotifySyncService.
+        Migration bridge for Sync-Services.
         Downloads + converts to WebP, returns path only.
         Does NOT update database.
         
         Args:
-            provider_id: External provider ID (e.g., Spotify ID)
+            provider_id: External provider ID (e.g., Spotify ID, Deezer ID)
             image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
             
         Returns:
             Relative path like "artists/spotify/abc123.webp" or None
@@ -283,20 +330,30 @@ class IImageService(Protocol):
         ...
 
     async def download_album_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
         """Download album image by provider ID.
         
         Migration bridge for Sync-Services.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal", "musicbrainz")
         """
         ...
 
     async def download_playlist_image(
-        self, provider_id: str, image_url: str | None
+        self, provider_id: str, image_url: str | None, provider: str = "spotify"
     ) -> str | None:
         """Download playlist image by provider ID.
         
         Migration bridge for Sync-Services.
+        
+        Args:
+            provider_id: External provider ID
+            image_url: URL to download from
+            provider: Provider name ("spotify", "deezer", "tidal")
         """
         ...
 

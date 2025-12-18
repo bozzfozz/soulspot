@@ -31,16 +31,39 @@ from soulspot.application.services.images import (
 image_service = ImageService()
 url = image_service.get_display_url(source_url, local_path, "artist")
 
-# For downloads (provider-based)
+# For downloads (provider-based) - defaults to "spotify"
 path = await image_service.download_artist_image(spotify_id, url)
 
+# For other providers
+path = await image_service.download_artist_image(deezer_id, url, provider="deezer")
+path = await image_service.download_album_image(mbid, url, provider="musicbrainz")
+
 # For batch operations with error tracking
-result = await image_service.download_artist_image_with_result(id, url)
+result = await image_service.download_artist_image_with_result(id, url, provider="deezer")
 if result.success:
-    print(f"Saved to: {result.path}")
+    print(f"Saved to: {result.path}")  # e.g., "artists/deezer/123456.webp"
 else:
     print(f"Error: {result.error_code} - {result.error_message}")
+
+# For multi-provider entities (BEST IMAGE FROM ANY PROVIDER)
+# Use when entity has IDs from multiple providers
+url = image_service.get_best_image(
+    entity_type="artist",
+    provider_ids={
+        "spotify": "1dfeR4HaWDbWqFHLkxsg1d",
+        "deezer": "123456",
+        "musicbrainz": "abc-def-ghi",
+    },
+    fallback_url="https://i.scdn.co/image/..."  # Optional CDN fallback
+)
+# Returns best available: spotify → deezer → tidal → musicbrainz → fallback → placeholder
 ```
+
+**Supported Providers (Priority Order):**
+1. `spotify` (default) → `artists/spotify/{spotify_id}.webp`
+2. `deezer` → `artists/deezer/{deezer_id}.webp`
+3. `tidal` → `artists/tidal/{tidal_id}.webp`
+4. `musicbrainz` → `artists/musicbrainz/{mbid}.webp`
 
 ---
 
