@@ -23,10 +23,13 @@ from soulspot.application.services.discover_service import (
     DiscoverResult,
     DiscoverService,
 )
+
 # Hey future me – ImageService ist der NEUE zentrale Ort für Bildoperationen!
 # Ersetzt nach und nach artwork_service.py (Legacy)
 # Siehe docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
 from soulspot.application.services.images import (
+    ImageDownloadErrorCode,
+    ImageDownloadResult,
     ImageInfo,
     ImageService,
     SaveImageResult,
@@ -48,13 +51,6 @@ from soulspot.application.services.spotify_auth_service import (
     AuthUrlResult,
     SpotifyAuthService,
     TokenResult,
-)
-from soulspot.application.services.images import (
-    ImageService,
-    ImageDownloadErrorCode,
-    ImageDownloadResult,
-    ImageInfo,
-    SaveImageResult,
 )
 from soulspot.application.services.token_manager import TokenManager
 
