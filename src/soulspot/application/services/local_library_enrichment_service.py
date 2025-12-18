@@ -41,7 +41,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.application.services.app_settings_service import AppSettingsService
-from soulspot.application.services.artwork_service import ArtworkService
+from soulspot.application.services.images import ImageService
 from soulspot.domain.dtos import AlbumDTO, ArtistDTO
 from soulspot.domain.entities import Album, Artist
 from soulspot.domain.exceptions import BusinessRuleViolation, EntityNotFoundError
@@ -241,7 +241,7 @@ class LocalLibraryEnrichmentService:
 
         # Services
         self._settings_service = AppSettingsService(session)
-        self._image_service = ArtworkService(settings)
+        self._image_service = ImageService()
 
         # Hey future me - Deezer is our FREE fallback for artwork!
         # Unlike Spotify, Deezer doesn't need OAuth for metadata/artwork.

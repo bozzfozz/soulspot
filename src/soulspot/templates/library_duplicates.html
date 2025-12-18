@@ -374,12 +374,12 @@ function renderAlbumDuplicates() {
                 ${group.albums.map((album, albumIndex) => `
                     <div class="duplicate-item ${album.id === group.suggested_primary_id ? 'primary' : ''}"
                          data-group="${groupIndex}" data-album="${albumIndex}">
-                        ${album.artwork_url 
-                            ? `<img src="${album.artwork_url}" class="duplicate-item-image" alt="${escapeHtml(album.name)}">`
+                        ${album.cover_url 
+                            ? `<img src="${album.cover_url}" class="duplicate-item-image" alt="${escapeHtml(album.title)}">`
                             : `<div class="duplicate-item-avatar"><i class="bi bi-disc"></i></div>`
                         }
                         <div class="duplicate-item-info">
-                            <div class="duplicate-item-name">${escapeHtml(album.name)}</div>
+                            <div class="duplicate-item-name">${escapeHtml(album.title)}</div>
                             <div class="duplicate-item-meta">
                                 <span><i class="bi bi-person"></i> ${escapeHtml(album.artist_name)}</span>
                                 <span><i class="bi bi-music-note-list"></i> ${album.track_count} tracks</span>

@@ -113,7 +113,10 @@
            class="release-card release-card-animated blur-fade-in hover-scale-interactive" 
            style="--delay: {{ loop.index0 }};">
             <div class="release-image shimmer-loading">
-                <img src="{{ release.image_url or 'https://via.placeholder.com/200x200?text=♪' }}"
+                {# Hey future me - get_display_url is the central ImageService helper!
+                   It prioritizes: local cache > CDN URL > placeholder
+                   See: src/soulspot/application/services/images/image_service.py #}
+                <img src="{{ get_display_url(release.image_url, release.image_path, 'album') }}"
                     alt="{{ release.name }}"
                     loading="lazy">
                 <div class="release-overlay">
@@ -165,7 +168,8 @@
         {% for playlist in playlists[:6] %}
         <a href="/playlists/{{ playlist.id }}" class="playlist-card playlist-card-animated blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 }};">
             <div class="playlist-image shimmer-loading">
-                <img src="{{ playlist.cover_url or 'https://via.placeholder.com/200x200?text=♪' }}"
+                {# Hey future me - get_display_url provides: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}"
                     alt="{{ playlist.name }}"
                     loading="lazy">
                 <div class="playlist-overlay">
@@ -211,7 +215,8 @@
         {% for activity in recent_activity[:5] %}
         <div class="activity-item scroll-reveal" data-delay="{{ loop.index0 }}">
             <div class="activity-artwork shimmer-loading">
-                <img src="{{ activity.album_art or 'https://via.placeholder.com/48x48?text=♪' }}"
+                {# ImageService: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(activity.album_art, activity.album_art_path, 'album') }}"
                     alt="{{ activity.title }}">
             </div>
             <div class="activity-info">

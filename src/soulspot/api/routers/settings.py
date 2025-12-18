@@ -528,12 +528,9 @@ async def get_spotify_sync_settings(
     # Get image stats if possible
     image_stats = None
     try:
-        from soulspot.application.services.artwork_service import (
-            ArtworkService,
-        )
+        from soulspot.application.services.images import ImageService
 
-        app_settings = get_settings()
-        image_service = ArtworkService(app_settings)
+        image_service = ImageService()
 
         disk_usage = image_service.get_disk_usage()
         image_count = image_service.get_image_count()
@@ -550,7 +547,7 @@ async def get_spotify_sync_settings(
         )
     except (OSError, ValueError) as e:
         # Hey future me - image stats are optional, don't fail the entire response if
-        # ArtworkService can't access the disk or config is invalid.
+        # ImageService can't access the disk or config is invalid.
         logger.debug("Could not fetch Spotify image stats: %s", e)
 
     return SpotifySyncSettingsResponse(
@@ -718,10 +715,9 @@ async def get_spotify_image_stats() -> SpotifyImageStats:
 
     Returns breakdown of storage used by artist, album, and playlist images.
     """
-    from soulspot.application.services.artwork_service import ArtworkService
+    from soulspot.application.services.images import ImageService
 
-    app_settings = get_settings()
-    image_service = ArtworkService(app_settings)
+    image_service = ImageService()
 
     disk_usage = image_service.get_disk_usage()
     image_count = image_service.get_image_count()
@@ -865,7 +861,7 @@ async def trigger_manual_sync(
         Success status and message
     """
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.artwork_service import ArtworkService
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
@@ -900,7 +896,7 @@ async def trigger_manual_sync(
         access_token=token.access_token,
     )
 
-    image_service = ArtworkService(app_settings)
+    image_service = ImageService()
     settings_service = AppSettingsService(session)
 
     sync_service = SpotifySyncService(

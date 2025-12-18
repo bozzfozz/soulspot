@@ -8,17 +8,11 @@
 
 <div class="card track-item" style="padding: var(--space-4);" data-track-id="{{ track.id }}">
     <div style="display: flex; gap: var(--space-4);">
-        <!-- Album Art -->
-        {% if track.album_art %}
-        <img src="{{ track.album_art }}" 
+        <!-- Album Art (uses ImageService) -->
+        <img src="{{ get_display_url(track.album_art, track.album_art_path, 'track') }}" 
              alt="Album art for {{ track.title }}"
              loading="lazy"
              style="width: 64px; height: 64px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0;">
-        {% else %}
-        <div style="width: 64px; height: 64px; border-radius: var(--radius-md); background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <i class="bi bi-music-note" style="font-size: 24px; color: var(--text-muted);"></i>
-        </div>
-        {% endif %}
         
         <!-- Track Info -->
         <div style="flex: 1; min-width: 0;">

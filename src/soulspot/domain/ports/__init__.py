@@ -12,6 +12,18 @@ from soulspot.domain.ports.download_provider import (
     ProviderDownload,
 )
 
+# Image service interfaces - central image handling
+# Hey future me – ImageService ist der ZENTRALE Ort für Bildoperationen!
+# Siehe docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md für Details.
+from soulspot.domain.ports.image_service import (
+    EntityType,
+    IImageService,
+    ImageInfo,
+    ImageProvider,
+    ImageSize,
+    SaveImageResult,
+)
+
 # Notification system interfaces
 from soulspot.domain.ports.notification import (
     INotificationProvider,

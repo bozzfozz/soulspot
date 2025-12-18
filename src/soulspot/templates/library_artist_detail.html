@@ -20,14 +20,9 @@
 
 <!-- Artist Header -->
 <div style="display: flex; align-items: center; gap: var(--space-6); margin-bottom: var(--space-8);">
-    <div class="artist-avatar-large" {% if not artist.image_url %}style="background: linear-gradient(135deg, #a855f7, #7c3aed);"{% endif %}>
-        {% if artist.image_url %}
-        <img src="{{ artist.image_url }}" alt="{{ artist.name }}" loading="lazy">
-        {% else %}
-        <span style="font-size: 3rem; font-weight: var(--font-weight-bold); color: white;">
-            {{ artist.name[0]|upper }}
-        </span>
-        {% endif %}
+    {# ImageService provides SVG placeholder if no image #}
+    <div class="artist-avatar-large">
+        <img src="{{ get_display_url(artist.image_url, artist.image_path, 'artist') }}" alt="{{ artist.name }}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
     </div>
     <div>
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ artist.name }}</h1>

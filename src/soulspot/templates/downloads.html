@@ -114,7 +114,8 @@
             
             <!-- Album Art with Status Overlay -->
             <div class="download-artwork">
-                <img src="{{ item.album_art|default('https://via.placeholder.com/64x64/1a1a2e/6366f1?text=♪') }}" 
+                {# ImageService: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(item.album_art, item.album_art_path, 'album') }}" 
                      alt="{{ item.title|default('Track') }}"
                      loading="lazy">
                 <div class="artwork-overlay">

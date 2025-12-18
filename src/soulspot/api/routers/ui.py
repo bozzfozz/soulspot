@@ -54,6 +54,35 @@ logger = logging.getLogger(__name__)
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
+# Hey future me - ImageService provides centralized image URL resolution!
+# We add get_display_url as a global template function so templates can call:
+#   {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
+# This replaces scattered inline logic with a single source of truth.
+# See: docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
+from soulspot.application.services.images import ImageService
+
+_image_service = ImageService()
+
+
+def _get_display_url(
+    source_url: str | None,
+    local_path: str | None,
+    entity_type: str = "album",
+) -> str:
+    """Template helper for image URL resolution.
+    
+    Usage in Jinja2:
+        {{ get_display_url(album.cover_url, album.cover_path, 'album') }}
+        {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
+        {{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}
+    """
+    return _image_service.get_display_url(source_url, local_path, entity_type)  # type: ignore[arg-type]
+
+
+# Register as global template function
+templates.env.globals["get_display_url"] = _get_display_url
+templates.env.globals["get_placeholder"] = _image_service.get_placeholder
+
 router = APIRouter()
 
 
@@ -137,6 +166,8 @@ async def index(
             "description": p.description,
             "track_count": p.track_count(),
             "cover_url": p.cover.url if p.cover else None,
+            # Hey future me - cover_path enables get_display_url() to prefer local cache
+            "cover_path": p.cover.path if p.cover else None,
             "downloaded_count": 0,
         }
         for p in playlists_list[:6]
@@ -163,18 +194,22 @@ async def index(
         # Extract artist name and album art
         artist_name = "Unknown Artist"
         album_art_url = None
+        album_art_path = None
 
         if track_model:
             if track_model.artist:
                 artist_name = track_model.artist.name
-            if track_model.album and track_model.album.cover_url:
+            if track_model.album:
                 album_art_url = track_model.album.cover_url
+                album_art_path = track_model.album.cover_path
 
         recent_activity.append(
             {
                 "title": track_model.title if track_model else "Unknown Track",
                 "artist": artist_name,
                 "album_art": album_art_url,
+                # Hey future me - album_art_path enables get_display_url() local cache
+                "album_art_path": album_art_path,
                 "status": d.status.value,
                 "timestamp": d.completed_at.strftime("%H:%M")
                 if d.completed_at
@@ -206,6 +241,10 @@ async def index(
             "artist_name": artist_name,
             "artist_id": album.artist_id,
             "image_url": album.cover_url,
+            # Hey future me - image_path is for local cache. These are browse albums
+            # from spotify_albums table, not library albums, so no local cache yet.
+            # Template uses: get_display_url(image_url, image_path, 'album')
+            "image_path": album.cover_path,
             "release_date": album.release_date,
             "album_type": album.primary_type,
             "total_tracks": album.total_tracks,
@@ -267,6 +306,7 @@ async def playlists(
     # Hey future me - cover_url field in API response is for template compatibility!
     # It gets its value from playlist.cover.url (ImageRef value object).
     # Without it, all playlists show placeholder images even though covers exist.
+    # cover_path enables get_display_url() to prefer local cache over CDN.
     playlists_data = [
         {
             "id": str(playlist.id.value),
@@ -275,6 +315,7 @@ async def playlists(
             "track_count": len(playlist.track_ids),
             "source": playlist.source.value,
             "cover_url": playlist.cover.url if playlist.cover else None,
+            "cover_path": playlist.cover.path if playlist.cover else None,
             "created_at": playlist.created_at.isoformat(),
         }
         for playlist in playlists_list
@@ -438,6 +479,7 @@ async def playlist_detail(
         # Convert ORM models to template-friendly dicts
         # Hey future me - album_art comes from the Album's cover_url!
         # We eager-load the album relationship and grab its cover image.
+        # album_art_path enables get_display_url() local cache preference.
         tracks = [
             {
                 "id": track.id,
@@ -445,6 +487,7 @@ async def playlist_detail(
                 "artist": track.artist.name if track.artist else "Unknown Artist",
                 "album": track.album.title if track.album else "Unknown Album",
                 "album_art": track.album.cover_url if track.album else None,
+                "album_art_path": track.album.cover_path if track.album else None,
                 "duration_ms": track.duration_ms,
                 "spotify_uri": track.spotify_uri,
                 "file_path": track.file_path,
@@ -464,6 +507,7 @@ async def playlist_detail(
             "updated_at": playlist.updated_at.isoformat(),
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
             "cover_url": playlist.cover.url if playlist.cover else None,  # Spotify playlist cover image (ImageRef)
+            "cover_path": playlist.cover.path if playlist.cover else None,
         }
 
         return templates.TemplateResponse(
@@ -581,7 +625,9 @@ async def _get_downloads_data(
             "title": track.title if track else f"Track {dl.track_id[:8]}",
             "artist": track.artist.name if track and track.artist else "Unknown Artist",
             "album": track.album.title if track and track.album else "Unknown Album",
-            "album_art": track.album.cover_url if track and track.album and hasattr(track.album, "cover_url") else None,
+            "album_art": track.album.cover_url if track and track.album else None,
+            # Hey future me - album_art_path enables get_display_url() local cache
+            "album_art_path": track.album.cover_path if track and track.album else None,
         })
 
     return {

@@ -30,6 +30,14 @@ from soulspot.application.services.discover_service import (
     DiscoverResult,
     DiscoverService,
 )
+# Hey future me – ImageService ist der NEUE zentrale Ort für Bildoperationen!
+# Ersetzt nach und nach artwork_service.py (Legacy)
+# Siehe docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
+from soulspot.application.services.images import (
+    ImageInfo,
+    ImageService,
+    SaveImageResult,
+)
 from soulspot.application.services.library_view_service import LibraryViewService
 from soulspot.application.services.new_releases_service import (
     NewReleasesResult,
@@ -48,12 +56,17 @@ from soulspot.application.services.spotify_auth_service import (
     SpotifyAuthService,
     TokenResult,
 )
-from soulspot.application.services.artwork_service import (
-    ArtworkService,
+from soulspot.application.services.images import (
+    ImageService,
     ImageDownloadErrorCode,
     ImageDownloadResult,
+    ImageInfo,
+    SaveImageResult,
 )
 from soulspot.application.services.token_manager import TokenManager
+
+# ArtworkService is DEPRECATED and can be deleted
+# All functionality has been migrated to ImageService
 
 __all__ = [
     "AggregatedSyncResult",
@@ -78,17 +91,20 @@ __all__ = [
     "DiscoverService",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
+    "ImageInfo",
+    "ImageService",
     "LibraryViewService",
     "NewReleasesResult",
     "NewReleasesService",
     "ProviderMappingService",
     "ProviderSyncOrchestrator",
+    "SaveImageResult",
     "Session",
     "SessionStore",
     "SlskdCredentials",
     "SpotifyAuthService",
     "SpotifyCredentials",
-    "ArtworkService",
     "TokenManager",
     "TokenResult",
 ]
+

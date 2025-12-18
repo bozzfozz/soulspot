@@ -19,7 +19,8 @@
 <!-- Playlist Header -->
 <div class="card" style="background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); padding: var(--space-8); margin-bottom: var(--space-8);">
     <div class="flex gap-6" style="align-items: flex-start;">
-        <img src="{{ playlist.cover_url or 'https://via.placeholder.com/200x200?text=' + (playlist.name[:1] if playlist.name else 'P') }}"
+        {# ImageService: local cache > CDN > placeholder #}
+        <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}"
             alt="{{ playlist.name }}"
             style="width: 200px; height: 200px; border-radius: var(--radius-lg); object-fit: cover; box-shadow: var(--shadow-xl); flex-shrink: 0;">
         <div style="flex: 1; min-width: 0;">
@@ -143,9 +144,10 @@
                                style="accent-color: var(--accent-primary);">
                     </td>
                     <td style="padding: var(--space-3); color: var(--text-muted);">{{ loop.index }}</td>
-                    <td style="padding: var(--space-3);">
+                    <td style="padding: var(--space-3);"> 
                         <div class="flex gap-3" style="align-items: center;">
-                            <img src="{{ track.album_art or 'https://via.placeholder.com/40x40?text=' + (track.title[:1] if track.title else 'T') }}"
+                            {# ImageService: local cache > CDN > placeholder #}
+                            <img src="{{ get_display_url(track.album_art, track.album_art_path, 'album') }}"
                                 style="width: 40px; height: 40px; border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0;">
                             <span style="font-weight: var(--font-weight-medium);">{{ track.title or 'Unknown Title' }}</span>
                         </div>

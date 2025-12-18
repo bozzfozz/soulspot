@@ -122,7 +122,8 @@
         
         <a href="/playlists/{{ playlist.id }}" style="display: block;">
             <div class="media-card-image">
-                <img src="{{ playlist.cover_url or 'https://via.placeholder.com/300x300?text=' + (playlist.name[:1] if playlist.name else 'P') }}"
+                {# ImageService: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}"
                     alt="{{ playlist.name }}">
                 <div class="media-card-overlay">
                     <div class="media-card-actions">

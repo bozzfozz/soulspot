@@ -31,7 +31,7 @@ from soulspot.infrastructure.persistence.repositories import SpotifyBrowseReposi
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.artwork_service import ArtworkService
+    from soulspot.application.services.images import ImageService
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class SpotifySyncService:
         self,
         session: AsyncSession,
         spotify_plugin: "SpotifyPlugin",
-        image_service: "ArtworkService | None" = None,
+        image_service: "ImageService | None" = None,
         settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize sync service.
