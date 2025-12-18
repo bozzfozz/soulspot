@@ -1215,6 +1215,14 @@ async def library_artists(
         .outerjoin(local_album_count_subq, ArtistModel.id == local_album_count_subq.c.artist_id)
     )
 
+    # Exclude Various Artists patterns from artist view
+    # Hey future me - VA/Compilations have their own section, don't clutter artist list!
+    from soulspot.domain.value_objects.album_types import VARIOUS_ARTISTS_PATTERNS
+    
+    stmt = stmt.where(
+        ~func.lower(ArtistModel.name).in_(list(VARIOUS_ARTISTS_PATTERNS))
+    )
+    
     # Apply source filter if requested
     if source == "local":
         # Only artists with local files (source='local' OR 'hybrid')
@@ -1228,7 +1236,10 @@ async def library_artists(
     # else: source == "all" or None -> Show ALL artists (no filter)
 
     # Get total count for display (no pagination, so just count)
-    count_stmt = select(func.count(ArtistModel.id))
+    # Also exclude VA patterns from count
+    count_stmt = select(func.count(ArtistModel.id)).where(
+        ~func.lower(ArtistModel.name).in_(list(VARIOUS_ARTISTS_PATTERNS))
+    )
     if source == "local":
         count_stmt = count_stmt.where(ArtistModel.source.in_(["local", "hybrid"]))
     elif source == "spotify":
