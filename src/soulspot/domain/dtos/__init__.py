@@ -391,10 +391,9 @@ class AlbumDetailView:
     - `cover` (ImageRef) for cover art (matches AlbumDTO)
     - `name` only for legacy compatibility where absolutely necessary
     """
-    # Album info
+    # Album info (required fields first - no defaults)
     spotify_id: str | None
     title: str  # Consistent with AlbumDTO
-    cover: ImageRef = field(default_factory=ImageRef)  # Album cover image
     release_date: str | None
     album_type: str
     total_tracks: int
@@ -410,7 +409,8 @@ class AlbumDetailView:
     track_count: int
     total_duration_str: str  # "45 min 32 sec"
     
-    # Sync status
+    # Fields with defaults come last (Python dataclass requirement)
+    cover: ImageRef = field(default_factory=ImageRef)  # Album cover image
     synced: bool = False
     sync_error: str | None = None
 
