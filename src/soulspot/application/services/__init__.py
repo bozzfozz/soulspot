@@ -2,13 +2,6 @@
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.auto_import import AutoImportService
-from soulspot.application.services.charts_service import (
-    ChartAlbum,
-    ChartArtist,
-    ChartsResult,
-    ChartsService,
-    ChartTrack,
-)
 from soulspot.application.services.compilation_analyzer_service import (
     AlbumAnalysisResult,
     CompilationAnalyzerService,
@@ -74,11 +67,6 @@ __all__ = [
     "AppSettingsService",
     "AuthUrlResult",
     "AutoImportService",
-    "ChartAlbum",
-    "ChartArtist",
-    "ChartsResult",
-    "ChartsService",
-    "ChartTrack",
     "CompilationAnalyzerService",
     "CredentialsService",
     "DeezerAuthService",
