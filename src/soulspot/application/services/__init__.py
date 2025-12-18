@@ -2,13 +2,6 @@
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.auto_import import AutoImportService
-from soulspot.application.services.charts_service import (
-    ChartAlbum,
-    ChartArtist,
-    ChartsResult,
-    ChartsService,
-    ChartTrack,
-)
 from soulspot.application.services.compilation_analyzer_service import (
     AlbumAnalysisResult,
     CompilationAnalyzerService,
@@ -30,10 +23,13 @@ from soulspot.application.services.discover_service import (
     DiscoverResult,
     DiscoverService,
 )
+
 # Hey future me – ImageService ist der NEUE zentrale Ort für Bildoperationen!
 # Ersetzt nach und nach artwork_service.py (Legacy)
 # Siehe docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
 from soulspot.application.services.images import (
+    ImageDownloadErrorCode,
+    ImageDownloadResult,
     ImageInfo,
     ImageService,
     SaveImageResult,
@@ -56,13 +52,6 @@ from soulspot.application.services.spotify_auth_service import (
     SpotifyAuthService,
     TokenResult,
 )
-from soulspot.application.services.images import (
-    ImageService,
-    ImageDownloadErrorCode,
-    ImageDownloadResult,
-    ImageInfo,
-    SaveImageResult,
-)
 from soulspot.application.services.token_manager import TokenManager
 
 # ArtworkService is DEPRECATED and can be deleted
@@ -74,11 +63,6 @@ __all__ = [
     "AppSettingsService",
     "AuthUrlResult",
     "AutoImportService",
-    "ChartAlbum",
-    "ChartArtist",
-    "ChartsResult",
-    "ChartsService",
-    "ChartTrack",
     "CompilationAnalyzerService",
     "CredentialsService",
     "DeezerAuthService",
