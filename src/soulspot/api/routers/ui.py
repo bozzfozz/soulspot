@@ -1720,8 +1720,16 @@ async def library_artist_detail(
             albums_result = await session.execute(albums_stmt)
             album_models = albums_result.scalars().all()
         except Exception as e:
-            logger.warning(f"Failed to auto-sync albums for {artist_model.name}: {e}")
-            # Continue anyway - show empty albums list
+            # Log with structured message
+            from soulspot.infrastructure.observability.log_messages import LogMessages
+            logger.warning(
+                LogMessages.sync_failed(
+                    entity="Albums",
+                    source="deezer/spotify",
+                    error=str(e),
+                    hint=f"Artist: {artist_model.name}"
+                )
+            )
             # Continue anyway - show empty albums list
 
     # Step 3: Get tracks for these albums (for LOCAL/HYBRID artists)

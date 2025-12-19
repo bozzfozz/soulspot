@@ -655,12 +655,21 @@ class LibraryDiscoveryWorker:
                     
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
-                        await album_repo.update_deezer_id(
-                            album_id=album.id,
-                            deezer_id=best_match.deezer_id,
-                        )
-                        stats["deezer_enriched"] += 1
-                        logger.debug(f"Deezer enriched album '{album.title}' → deezer_id={best_match.deezer_id}")
+                        
+                        # Check if deezer_id already exists on another album (avoid duplicates)
+                        existing = await album_repo.get_by_deezer_id(best_match.deezer_id)
+                        if existing and existing.id != album.id:
+                            logger.debug(
+                                f"Deezer ID {best_match.deezer_id} already assigned to album "
+                                f"'{existing.title}', skipping duplicate for '{album.title}'"
+                            )
+                        else:
+                            await album_repo.update_deezer_id(
+                                album_id=album.id,
+                                deezer_id=best_match.deezer_id,
+                            )
+                            stats["deezer_enriched"] += 1
+                            logger.debug(f"Deezer enriched album '{album.title}' → deezer_id={best_match.deezer_id}")
                     
                     await asyncio.sleep(0.05)
 
@@ -672,12 +681,21 @@ class LibraryDiscoveryWorker:
                         
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
-                            await album_repo.update_spotify_uri(
-                                album_id=album.id,
-                                spotify_uri=str(best_match.spotify_uri),
-                            )
-                            stats["spotify_enriched"] += 1
-                            logger.debug(f"Spotify enriched album '{album.title}' → spotify_uri={best_match.spotify_uri}")
+                            
+                            # Check if spotify_uri already exists on another album (avoid duplicates)
+                            existing = await album_repo.get_by_spotify_uri(str(best_match.spotify_uri))
+                            if existing and existing.id != album.id:
+                                logger.debug(
+                                    f"Spotify URI {best_match.spotify_uri} already assigned to album "
+                                    f"'{existing.title}', skipping duplicate for '{album.title}'"
+                                )
+                            else:
+                                await album_repo.update_spotify_uri(
+                                    album_id=album.id,
+                                    spotify_uri=str(best_match.spotify_uri),
+                                )
+                                stats["spotify_enriched"] += 1
+                                logger.debug(f"Spotify enriched album '{album.title}' → spotify_uri={best_match.spotify_uri}")
                         
                         await asyncio.sleep(0.05)
                     except Exception as e:
