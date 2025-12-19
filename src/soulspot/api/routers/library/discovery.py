@@ -278,7 +278,7 @@ async def get_missing_albums_html(
             "id": str(album.id.value),
             "title": album.title,
             "album_type": album.album_type,
-            "release_date": album.release_date.isoformat() if album.release_date else None,
+            "release_date": album.release_date,  # Already a string (YYYY-MM-DD format)
             "total_tracks": album.total_tracks,
             "cover_url": album.cover_url,
             "deezer_id": album.deezer_id,
