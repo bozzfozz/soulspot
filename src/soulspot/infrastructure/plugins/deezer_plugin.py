@@ -1514,7 +1514,11 @@ class DeezerPlugin(IMusicServicePlugin):
         - "album" → "album"
         - "ep" → "ep"
         - "single" → "single"
-        - "compile" → "compilation" (Note: Deezer uses "compile", we normalize to "compilation")
+        - "compile" → "album" (Deezer's "compile" is treated as regular album, not compilation)
+        
+        NOTE: Deezer's "compile" record_type does NOT reliably indicate compilation albums
+        (various artists). True compilations should be detected by checking track-level
+        artist diversity, not by record_type alone.
 
         Args:
             deezer_album: DeezerAlbum dataclass from deezer_client
@@ -1527,10 +1531,18 @@ class DeezerPlugin(IMusicServicePlugin):
         primary_type = record_type
         secondary_types = []
         
-        # Deezer uses "compile", we normalize to "compilation"
+        # Deezer uses "compile" as a record_type, OFFICIALLY meaning "compilation/collection"
+        # BUT in practice, Deezer marks many regular artist albums as "compile" (API inconsistency).
+        # Examples: "Drokz" albums are marked "compile" but are NOT various-artists compilations.
+        # 
+        # TRADE-OFF DECISION: Treat "compile" as "album" to avoid hiding regular albums.
+        # Side effect: TRUE compilations marked as "compile" won't be filterable via include_compilations.
+        # 
+        # TODO: Implement smart compilation detection by checking track-level artist diversity
+        # instead of relying on Deezer's unreliable record_type field.
         if record_type == "compile":
             primary_type = "album"
-            secondary_types = ["compilation"]
+            # Don't automatically add "compilation" to secondary_types
         
         return AlbumDTO(
             title=deezer_album.title,
@@ -1540,9 +1552,9 @@ class DeezerPlugin(IMusicServicePlugin):
             artist_deezer_id=str(deezer_album.artist_id) if deezer_album.artist_id else None,
             release_date=deezer_album.release_date,
             total_tracks=deezer_album.nb_tracks or 0,
-            album_type=record_type,  # Keep original Deezer value
+            album_type=primary_type,  # Use normalized value ("album" for "compile")
             primary_type=primary_type,  # Normalized value
-            secondary_types=secondary_types,  # Compilation flag
+            secondary_types=secondary_types,
             cover=ImageRef.from_url(deezer_album.cover_big or deezer_album.cover_medium),
             upc=deezer_album.upc,
             external_urls={"deezer": deezer_album.link or ""},

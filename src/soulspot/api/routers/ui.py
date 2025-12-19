@@ -1776,6 +1776,7 @@ async def library_artist_detail(
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
 
     artist_data = {
+        "id": str(artist_model.id),  # CRITICAL: Needed for /api/library/discovery/missing/{artist_id}
         "name": artist_model.name,
         "source": artist_model.source,  # NEW: Show source badge
         "disambiguation": artist_model.disambiguation,
