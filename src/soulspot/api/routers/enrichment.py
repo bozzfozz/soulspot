@@ -34,7 +34,7 @@ from soulspot.api.dependencies import (
     get_spotify_plugin,
 )
 from soulspot.config.settings import Settings
-from soulspot.infrastructure.job_queue import JobQueue, JobStatus, JobType
+from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.infrastructure.logging.messages import LogMessages
 
 if TYPE_CHECKING:

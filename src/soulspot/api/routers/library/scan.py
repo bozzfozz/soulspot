@@ -30,7 +30,7 @@ from soulspot.api.dependencies import (
     get_library_scanner_service,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
-from soulspot.infrastructure.job_queue import JobQueue, JobStatus, JobType
+from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 
 logger = logging.getLogger(__name__)
 
