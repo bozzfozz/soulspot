@@ -264,6 +264,86 @@ class Album:
         self.update_cover(path=str(artwork_path))
 
 
+# Hey future me - ArtistDiscography stores the COMPLETE discography from external providers!
+# This is NOT what the user owns - it's what Deezer/Spotify SAYS the artist has released.
+# Used by LibraryDiscoveryWorker to show "Missing Albums" in UI.
+#
+# Key difference:
+# - Album entity = something the user HAS (in library or saved on streaming)
+# - ArtistDiscography = something that EXISTS (from provider API)
+#
+# Workflow:
+# 1. LibraryDiscoveryWorker calls DeezerPlugin.get_artist_albums()
+# 2. Results stored as ArtistDiscography entries
+# 3. UI shows: "You have 12/50 albums" (is_owned = True for 12)
+# 4. User clicks "Download missing" → creates Download entries
+@dataclass
+class ArtistDiscography:
+    """Discography entry - an album known to exist from external providers.
+    
+    Hey future me - this is for DISCOVERY, not ownership tracking!
+    
+    - Populated by LibraryDiscoveryWorker from Deezer/Spotify API
+    - Stores ALL known albums/singles/EPs for an artist
+    - is_owned field computed by comparing with user's soulspot_albums
+    - UI shows missing albums with download buttons
+    """
+
+    id: AlbumId  # Reuse AlbumId value object for consistency
+    artist_id: ArtistId
+    title: str
+    # album_type: "album", "single", "ep", "compilation", "live", "remix"
+    album_type: str = "album"
+    
+    # Provider IDs - can have multiple if found on multiple services
+    deezer_id: str | None = None
+    spotify_uri: SpotifyUri | None = None
+    musicbrainz_id: str | None = None
+    tidal_id: str | None = None
+    
+    # Album metadata
+    release_date: str | None = None  # YYYY-MM-DD or YYYY-MM or YYYY
+    release_date_precision: str | None = None  # "day", "month", "year"
+    total_tracks: int | None = None
+    cover_url: str | None = None  # CDN URL from provider (for display)
+    
+    # Discovery metadata
+    source: str = "deezer"  # Which provider discovered this
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    last_seen_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    
+    # Computed field - TRUE if user owns this album (in soulspot_albums)
+    is_owned: bool = False
+    
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        """Validate discography entry data."""
+        if not self.title or not self.title.strip():
+            raise ValueError("Album title cannot be empty")
+        valid_types = {"album", "single", "ep", "compilation", "live", "remix"}
+        if self.album_type.lower() not in valid_types:
+            raise ValueError(f"Invalid album_type: {self.album_type}")
+
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri."""
+        if not self.spotify_uri:
+            return None
+        return str(self.spotify_uri).split(":")[-1]
+
+    @property
+    def release_year(self) -> int | None:
+        """Extract year from release_date."""
+        if not self.release_date:
+            return None
+        try:
+            return int(self.release_date[:4])
+        except (ValueError, IndexError):
+            return None
+
+
 # Yo future me, Track entity is the CORE domain object! Every track has artist_id (required) and
 # optionally album_id (singles have no album). track_number/disc_number are for multi-disc albums.
 # isrc is International Standard Recording Code (globally unique, good for matching). file_path
@@ -1004,6 +1084,7 @@ __all__ = [
     # Existing entities
     "Artist",
     "Album",
+    "ArtistDiscography",  # NEW: Complete discography from providers
     "Track",
     "Playlist",
     "Download",

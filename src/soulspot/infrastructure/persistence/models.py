@@ -264,6 +264,99 @@ class AlbumModel(Base):
     )
 
 
+# Hey future me - ArtistDiscographyModel stores the COMPLETE discography from external providers!
+# This is NOT the user's library - it's what Deezer/Spotify SAYS the artist has released.
+# Used by LibraryDiscoveryWorker to show "Missing Albums" in UI.
+# Key insight: soulspot_albums = what user OWNS, artist_discography = what EXISTS.
+class ArtistDiscographyModel(Base):
+    """Complete discography of an artist as discovered from external providers.
+    
+    Hey future me - This is for DISCOVERY, not ownership!
+    
+    - LibraryDiscoveryWorker fetches from Deezer/Spotify API
+    - Stores ALL known albums/singles for an artist
+    - UI compares with soulspot_albums to show "Missing"
+    - User can then choose to download missing items
+    
+    Example:
+        Artist "Metallica" has 50 entries here (all albums, singles, EPs)
+        User owns 12 albums in soulspot_albums
+        UI shows: "38 albums missing" with download buttons
+    """
+
+    __tablename__ = "artist_discography"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    artist_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("soulspot_artists.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Album identification
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    # album_type: "album", "single", "ep", "compilation", "live", "remix"
+    album_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="album", server_default="album"
+    )
+    
+    # Provider IDs - can have multiple if found on multiple services
+    deezer_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    tidal_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    
+    # Album metadata
+    release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    release_date_precision: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    total_tracks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    
+    # Discovery metadata
+    # source: which provider discovered this first ("deezer", "spotify", "musicbrainz")
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="deezer", server_default="deezer"
+    )
+    discovered_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    
+    # Computed field (updated by sync job comparing with soulspot_albums)
+    # TRUE if matching album exists in soulspot_albums (by deezer_id, spotify_uri, or title+artist)
+    is_owned: Mapped[bool] = mapped_column(
+        sa.Boolean(), nullable=False, default=False, server_default="0"
+    )
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    # Relationships
+    artist: Mapped["ArtistModel"] = relationship("ArtistModel")
+
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri."""
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.split(":")[-1]
+
+    __table_args__ = (
+        # Unique constraint: same album shouldn't appear twice for same artist
+        sa.UniqueConstraint("artist_id", "title", "album_type", name="uq_discography_artist_title_type"),
+        # Index for finding missing albums quickly
+        Index("ix_discography_missing", "artist_id", "is_owned"),
+    )
+
+
 # Hey future me, TrackModel is the BUSIEST table - queries hit it constantly! The file_*
 # fields (file_size, file_hash, file_hash_algorithm) are for library integrity checks - detecting
 # duplicates, corruption, etc. The is_broken flag marks files that failed validation (corrupt,

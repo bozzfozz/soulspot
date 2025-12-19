@@ -1,0 +1,82 @@
+{# Hey future me - this is the HTMX response fragment for Missing Albums!
+   Called by /api/library/discovery/missing/{artist_id}
+   Shows a grid of albums the user doesn't have in their library.
+   Each card has a "Find & Download" button that searches for the album. #}
+
+{% if error %}
+<div class="alert alert-warning" style="display: flex; align-items: center; gap: var(--space-3);">
+    <i class="bi bi-exclamation-triangle"></i>
+    <span>{{ error }}</span>
+</div>
+{% elif albums|length == 0 %}
+<div class="empty-state-small" style="text-align: center; padding: var(--space-6);">
+    <i class="bi bi-check-circle" style="font-size: 2rem; color: var(--success);"></i>
+    <p style="margin-top: var(--space-3); color: var(--text-muted);">
+        {% if total == 0 %}
+        No discography data yet. Run Discovery to fetch album lists.
+        {% else %}
+        You have all {{ total }} album{{ 's' if total != 1 else '' }} from this artist! 🎉
+        {% endif %}
+    </p>
+</div>
+{% else %}
+{# Stats banner #}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); padding: var(--space-3); background: var(--bg-tertiary); border-radius: var(--radius-md);">
+    <span style="font-size: var(--font-size-sm); color: var(--text-muted);">
+        <i class="bi bi-vinyl" style="margin-right: var(--space-2);"></i>
+        {{ owned }} of {{ total }} album{{ 's' if total != 1 else '' }} in your collection
+    </span>
+    <span style="font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--accent-secondary);">
+        {{ missing }} missing
+    </span>
+</div>
+
+{# Albums grid #}
+<div class="albums-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-4);">
+    {% for album in albums %}
+    <div class="missing-album-card" style="background: var(--bg-tertiary); border-radius: var(--radius-lg); overflow: hidden; transition: transform var(--transition-fast), box-shadow var(--transition-fast);">
+        {# Album cover #}
+        <div class="album-cover" style="aspect-ratio: 1; position: relative; background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+            {% if album.cover_url %}
+            <img src="{{ album.cover_url }}" alt="{{ album.title }}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;">
+            {% else %}
+            <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-disc" style="font-size: 3rem; color: rgba(255,255,255,0.6);"></i>
+            </div>
+            {% endif %}
+            {# Album type badge #}
+            <span class="album-type-badge" style="position: absolute; top: var(--space-2); right: var(--space-2); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.7); color: white; text-transform: uppercase;">
+                {{ album.album_type }}
+            </span>
+            {# Source badge #}
+            <span style="position: absolute; bottom: var(--space-2); left: var(--space-2); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: {% if album.source == 'deezer' %}#FF0092{% elif album.source == 'spotify' %}#1DB954{% else %}var(--bg-secondary){% endif %}; color: white;">
+                {{ album.source }}
+            </span>
+        </div>
+        {# Album info #}
+        <div style="padding: var(--space-3);">
+            <h4 style="font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ album.title }}">
+                {{ album.title }}
+            </h4>
+            <div style="font-size: var(--font-size-xs); color: var(--text-muted); margin-top: var(--space-1);">
+                {% if album.release_date %}{{ album.release_date[:4] }}{% endif %}
+                {% if album.total_tracks %} · {{ album.total_tracks }} tracks{% endif %}
+            </div>
+            {# Download button #}
+            <a href="/search?q={{ (artist_name ~ ' ' ~ album.title)|urlencode }}" 
+               class="btn btn-primary btn-sm" 
+               style="width: 100%; margin-top: var(--space-3); font-size: var(--font-size-xs);">
+                <i class="bi bi-search"></i> Find & Download
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<style>
+.missing-album-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+</style>

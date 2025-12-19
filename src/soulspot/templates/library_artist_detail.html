@@ -99,6 +99,40 @@
     {% endif %}
 </div>
 
+<!-- Missing Albums Section (from discography discovery) -->
+{# Hey future me - diese Section zeigt Alben die der User NICHT hat!
+   Geladen via HTMX von /api/library/discovery/missing/{artist_id}.
+   Nur anzeigen wenn der Artist eine ID hat (sonst wurde noch keine Discovery gemacht).
+   Die Karten haben Download-Buttons die zur Search mit artist+album title führen. #}
+<div class="card" style="padding: var(--space-6); margin-bottom: var(--space-6);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5);">
+        <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0;">
+            <i class="bi bi-collection" style="color: var(--accent-secondary); margin-right: var(--space-2);"></i>
+            Missing from Collection
+        </h2>
+        <button class="btn btn-ghost btn-sm" 
+                hx-get="/api/library/discovery/missing/{{ artist.id }}"
+                hx-target="#missing-albums-container"
+                hx-swap="innerHTML"
+                hx-trigger="click"
+                hx-indicator="#missing-albums-loading">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    
+    <div id="missing-albums-loading" class="htmx-indicator" style="text-align: center; padding: var(--space-4);">
+        <i class="bi bi-arrow-repeat spin" style="font-size: 1.5rem;"></i>
+        <span style="margin-left: var(--space-2);">Loading discography...</span>
+    </div>
+    
+    <div id="missing-albums-container"
+         hx-get="/api/library/discovery/missing/{{ artist.id }}"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <!-- Content loaded via HTMX -->
+    </div>
+</div>
+
 <!-- Hey future me - All Tracks section removed Dec 2025!
      Tracks are already shown inside albums, so this was redundant.
      Users can click on an album to see all tracks in that album. -->

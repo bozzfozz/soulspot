@@ -399,6 +399,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.library_enrichment_worker = library_enrichment_worker
             logger.info("Library enrichment worker registered")
 
+            # =================================================================
+            # Start Library Discovery Worker (ID enrichment for artists/albums/tracks)
+            # =================================================================
+            # Hey future me - dieser SUPERWORKER ersetzt Teile von LocalLibraryEnrichmentService!
+            # Er läuft alle 6 Stunden und:
+            #   Phase 1: Findet Deezer/Spotify IDs für Artists ohne IDs
+            #   Phase 2: Holt komplette Discographien von Deezer/Spotify
+            #   Phase 3: Markiert lokale Alben die auf Streaming Services existieren
+            #   Phase 4: Findet Deezer/Spotify IDs für Alben ohne IDs
+            #   Phase 5: Findet Deezer/Spotify IDs für Tracks via ISRC
+            # Läuft unabhängig von JobQueue (eigener asyncio.create_task).
+            # DEPRECATED by this worker: LocalLibraryEnrichmentService.enrich_batch*() methods
+            from soulspot.application.workers.library_discovery_worker import (
+                LibraryDiscoveryWorker,
+            )
+
+            library_discovery_worker = LibraryDiscoveryWorker(
+                db=db,
+                settings=settings,
+                run_interval_hours=6,  # Run every 6 hours
+            )
+            await library_discovery_worker.start()
+            app.state.library_discovery_worker = library_discovery_worker
+            logger.info("Library discovery worker started (runs every 6h)")
+
             # Start job queue workers
             await job_queue.start(num_workers=settings.download.num_workers)
             logger.info(
@@ -622,6 +647,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Cleanup worker stopped")
             except Exception as e:
                 logger.exception("Error stopping cleanup worker: %s", e)
+
+        # Stop library discovery worker
+        if hasattr(app.state, "library_discovery_worker"):
+            try:
+                logger.info("Stopping library discovery worker...")
+                await app.state.library_discovery_worker.stop()
+                logger.info("Library discovery worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping library discovery worker: %s", e)
 
         # Stop automation workers
         if hasattr(app.state, "automation_manager"):

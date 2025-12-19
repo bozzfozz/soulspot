@@ -2,9 +2,22 @@
 # It enriches local library items (artists, albums) with Spotify metadata.
 # Triggered automatically after library scans (if auto_enrichment_enabled)
 # or manually via API. Uses LocalLibraryEnrichmentService.
-"""Library Spotify enrichment worker for background enrichment jobs."""
+#
+# ⚠️ DEPRECATED (2025.1): This worker is deprecated in favor of LibraryDiscoveryWorker!
+# LibraryDiscoveryWorker provides:
+# - Automatic 6-hourly execution (no manual triggering needed)
+# - 5-phase discovery: Artist IDs → Discography → Ownership → Album IDs → Track IDs
+# - Multi-provider support (Deezer first, Spotify enhancement)
+# - Manual trigger via API: POST /api/library/discovery/trigger
+# This worker will be removed in a future version.
+"""Library Spotify enrichment worker for background enrichment jobs.
+
+.. deprecated:: 2025.1
+    Use LibraryDiscoveryWorker instead. This entire class will be removed in a future version.
+"""
 
 import logging
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
@@ -18,6 +31,10 @@ logger = logging.getLogger(__name__)
 
 class LibraryEnrichmentWorker:
     """Worker for processing library Spotify enrichment jobs.
+
+    .. deprecated:: 2025.1
+        Use LibraryDiscoveryWorker instead. This class will be removed in a future version.
+        LibraryDiscoveryWorker provides automatic 6-hourly enrichment with 5 phases.
 
     This worker:
     1. Receives LIBRARY_SPOTIFY_ENRICHMENT jobs from JobQueue
@@ -42,6 +59,12 @@ class LibraryEnrichmentWorker:
             db: Database instance for creating sessions
             settings: Application settings
         """
+        warnings.warn(
+            "LibraryEnrichmentWorker is deprecated. Use LibraryDiscoveryWorker instead. "
+            "Manual trigger: POST /api/library/discovery/trigger",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._job_queue = job_queue
         self.db = db
         self.settings = settings

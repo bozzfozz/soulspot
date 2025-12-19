@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -268,6 +269,14 @@ class LocalLibraryEnrichmentService:
     async def enrich_batch(self) -> dict[str, Any]:
         """Run a batch enrichment for unenriched artists and albums.
 
+        .. deprecated:: 2025.1
+            Use LibraryDiscoveryWorker instead. This method will be removed in a future version.
+            The LibraryDiscoveryWorker provides:
+            - Automatic periodic execution (every 6 hours)
+            - 5-phase discovery: Artist IDs → Discography → Ownership → Album IDs → Track IDs
+            - Multi-provider support (Deezer first, Spotify enhancement)
+            - API endpoint for manual triggering: POST /api/library/discovery/trigger
+
         This is the MAIN entry point! Call this after library scans.
 
         Hey future me - this method now respects Provider Modes!
@@ -279,6 +288,12 @@ class LocalLibraryEnrichmentService:
         Returns:
             Stats dict with enrichment results
         """
+        warnings.warn(
+            "enrich_batch() is deprecated. Use LibraryDiscoveryWorker instead. "
+            "Manual trigger: POST /api/library/discovery/trigger",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         # Hey future me - CHECK PROVIDER MODES before doing anything!
         # This allows users to completely disable providers in Settings UI.
         spotify_enabled = await self._settings_service.is_provider_enabled("spotify")
@@ -498,6 +513,11 @@ class LocalLibraryEnrichmentService:
     async def enrich_tracks_by_isrc(self, limit: int = 50) -> dict[str, Any]:
         """Enrich tracks using ISRC codes via Deezer API.
 
+        .. deprecated:: 2025.1
+            Use LibraryDiscoveryWorker Phase 5 instead. This method will be removed in a future version.
+            The LibraryDiscoveryWorker runs Phase 5 automatically (Track ID Discovery via ISRC)
+            as part of its 6-hourly cycle. Manual trigger: POST /api/library/discovery/trigger
+
         Hey future me - this is the GOLD MINE! ISRC (International Standard Recording
         Code) is a universal track identifier. If a local file has ISRC in its ID3 tags
         and Deezer has the same ISRC, we get a 100% match. Way better than fuzzy matching!
@@ -520,6 +540,13 @@ class LocalLibraryEnrichmentService:
             "tracks_not_found": 0,
             "errors": [],
         }
+
+        warnings.warn(
+            "enrich_tracks_by_isrc() is deprecated. Use LibraryDiscoveryWorker Phase 5 instead. "
+            "Manual trigger: POST /api/library/discovery/trigger",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         if not self._deezer_client:
             stats["errors"].append("Deezer client not available")
@@ -598,6 +625,11 @@ class LocalLibraryEnrichmentService:
     async def enrich_batch_deezer_only(self) -> dict[str, Any]:
         """Enrich local library using ONLY Deezer (no Spotify required!).
 
+        .. deprecated:: 2025.1
+            Use LibraryDiscoveryWorker instead. This method will be removed in a future version.
+            The LibraryDiscoveryWorker uses Deezer as primary source by default (no OAuth needed).
+            Manual trigger: POST /api/library/discovery/trigger
+
         Hey future me - this is for users without Spotify Premium!
         Deezer's public API doesn't need OAuth, so anyone can use it.
         Quality is slightly lower (no genres from Deezer) but artwork is actually
@@ -609,6 +641,14 @@ class LocalLibraryEnrichmentService:
         Returns:
             Stats dict similar to enrich_batch()
         """
+        warnings.warn(
+            "enrich_batch_deezer_only() is deprecated. Use LibraryDiscoveryWorker instead. "
+            "LibraryDiscoveryWorker uses Deezer as primary source (no OAuth needed). "
+            "Manual trigger: POST /api/library/discovery/trigger",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         stats: dict[str, Any] = {
             "started_at": datetime.now(UTC).isoformat(),
             "artists_processed": 0,

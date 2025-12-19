@@ -17,6 +17,7 @@ from soulspot.application.workers.duplicate_detector_worker import (
     DuplicateDetectorWorker,
 )
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.application.workers.library_discovery_worker import LibraryDiscoveryWorker
 from soulspot.application.workers.metadata_worker import MetadataWorker
 from soulspot.application.workers.new_releases_sync_worker import (
     NewReleasesCache,
@@ -56,4 +57,5 @@ __all__ = [
     # Maintenance Workers
     "CleanupWorker",
     "DuplicateDetectorWorker",
+    "LibraryDiscoveryWorker",  # NEW: Unified enrichment + discography discovery
 ]

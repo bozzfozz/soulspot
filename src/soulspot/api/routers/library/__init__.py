@@ -35,6 +35,7 @@ from .scan import router as scan_router
 from .stats import router as stats_router
 from .duplicates import router as duplicates_router
 from .batch_operations import router as batch_router
+from .discovery import router as discovery_router
 
 # Hey future me - Entity duplicate router lives in parent directory!
 # Imports /duplicates/artists and /duplicates/albums merge endpoints.
@@ -52,6 +53,7 @@ router.include_router(scan_router)
 router.include_router(stats_router)
 router.include_router(duplicates_router)
 router.include_router(batch_router)
+router.include_router(discovery_router)  # ID discovery + discography fetch
 router.include_router(entity_duplicates_router)  # Artist/Album merge
 
 # Re-export templates for sub-routers
