@@ -74,20 +74,33 @@ class Database:
     # pointing to it, and the DB won't complain. Cascades won't work. Relationships break silently.
     # This was a nasty bug to track down - data inconsistencies everywhere until I added this.
     # The event listener runs on EVERY new connection from the pool, so don't do heavy work here!
+    #
+    # UPDATE (Dec 2025): Also enabling WAL mode now! WAL (Write-Ahead Logging) is CRUCIAL for
+    # concurrent access - it allows readers and writers to work simultaneously without blocking.
+    # Without WAL, you get "database is locked" errors when scanning the library (writes) while
+    # the UI is loading data (reads). WAL creates -wal and -shm files next to the .db file.
+    # IMPORTANT: WAL mode persists in the database file, so this only needs to run once per DB
+    # but running it every connection is safe (just a no-op if already set).
     def _enable_sqlite_foreign_keys(self) -> None:
-        """Enable foreign key constraints for SQLite.
+        """Enable foreign key constraints and WAL mode for SQLite.
 
         SQLite has foreign keys disabled by default. This method enables them
-        for all connections.
+        for all connections. Also enables WAL mode for better concurrency.
         """
 
         @event.listens_for(self._engine.sync_engine, "connect")
         def set_sqlite_pragma(dbapi_conn: Any, _connection_record: Any) -> None:
             """Set SQLite pragmas on connection."""
             cursor = dbapi_conn.cursor()
+            # Enable foreign keys (required for cascade deletes to work)
             cursor.execute("PRAGMA foreign_keys=ON")
+            # Enable WAL mode for better concurrency (readers don't block writers)
+            # This prevents "database is locked" errors during library scans
+            cursor.execute("PRAGMA journal_mode=WAL")
+            # Set busy timeout to 30s (matches connect_args timeout)
+            cursor.execute("PRAGMA busy_timeout=30000")
             cursor.close()
-            logger.debug("Enabled foreign keys for SQLite connection")
+            logger.debug("Enabled foreign keys, WAL mode, and busy timeout for SQLite")
 
     # Listen future me, this is a GENERATOR (note the yield!), not a regular async function.
     # Use it with "async for session in db.get_session():" - NOT "session = await db.get_session()".

@@ -1107,9 +1107,12 @@ class LibraryScannerService:
             return metadata
 
         except Exception as e:
+            # Hey future me - some exceptions (especially FLAC/mutagen) have empty str(e)!
+            exc_type = type(e).__name__
+            exc_msg = str(e) if str(e) else "(no message)"
             logger.warning(
-                f"Error extracting full metadata from {file_path}: {e}. "
-                f"Using fallback: format={metadata['format']}"
+                f"Error extracting full metadata from {file_path.name}: "
+                f"[{exc_type}] {exc_msg}. Using fallback: format={metadata['format']}"
             )
             return metadata
 
@@ -1304,7 +1307,14 @@ class LibraryScannerService:
             return audio_info
 
         except Exception as e:
-            logger.warning(f"Error extracting audio info from {file_path}: {e}")
+            # Hey future me - some exceptions (especially from FLAC parsing) have empty str(e)!
+            # We log exception TYPE + message to actually debug these issues.
+            exc_type = type(e).__name__
+            exc_msg = str(e) if str(e) else "(no message)"
+            logger.warning(
+                f"Error extracting audio info from {file_path.name}: "
+                f"[{exc_type}] {exc_msg}"
+            )
             return audio_info
 
     def _extract_genre_tag(self, tags: Any) -> str | None:
