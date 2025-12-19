@@ -164,14 +164,6 @@ class ProviderMappingService:
         elif dto.spotify_id:
             spotify_uri = SpotifyUri.from_string(f"spotify:artist:{dto.spotify_id}")
 
-        # 🔍 DEBUG: Log artist creation with full source trace
-        import traceback
-        logger.warning(
-            f"🆕 CREATING ARTIST [PROVIDER MAPPING]: name='{dto.name}', "
-            f"source={source}, spotify_id={dto.spotify_id}, deezer_id={dto.deezer_id}\n"
-            f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
-        )
-        
         new_artist = Artist(
             id=ArtistId.generate(),
             name=dto.name,

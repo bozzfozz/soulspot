@@ -656,13 +656,11 @@ class LibraryFolderParser:
             return result
 
         # Scan artist folders (top level)
+        # Hey future me - we log DEBUG here so you can enable it to see ALL folders being scanned.
+        # Use INFO level log in library_scanner_service for NEW artists only.
         for artist_path in self._iter_artist_folders():
             try:
-                # 🔍 DEBUG: Log each artist folder being scanned
-                logger.warning(
-                    f"🔍 SCANNING ARTIST FOLDER: path='{artist_path}', "
-                    f"folder_name='{artist_path.name}'"
-                )
+                logger.debug(f"Scanning folder: {artist_path}")
                 artist = self._scan_artist(artist_path)
                 result.artists.append(artist)
                 result.total_artists += 1

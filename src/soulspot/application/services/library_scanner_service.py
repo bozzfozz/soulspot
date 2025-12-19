@@ -439,14 +439,11 @@ class LibraryScannerService:
 
             return artist_id, False
 
-        # Create new artist
-        # 🔍 DEBUG: Log artist creation with full source trace
-        import traceback
-        logger.warning(
-            f"🆕 CREATING ARTIST [LOCAL SCAN]: name='{name}', "
-            f"musicbrainz_id={musicbrainz_id}, disambiguation={disambiguation}\n"
-            f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
-        )
+        # Create new artist from local folder
+        # Hey future me - we log new artists at INFO level so you can see what's being imported
+        # from which folder. This helps catch folder naming issues (like "Ava MaxDance").
+        logger.info(f"📁 New artist from folder: '{name}'")
+        
         artist = Artist(
             id=ArtistId.generate(),
             name=name,  # Keep original casing from folder

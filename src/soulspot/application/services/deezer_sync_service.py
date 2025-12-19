@@ -568,15 +568,7 @@ class DeezerSyncService:
             else:
                 # Create new artist with proper domain entity
                 import uuid
-                import traceback
                 artist_id = str(uuid.uuid4())
-                
-                # 🔍 DEBUG: Log artist creation with full source trace
-                logger.warning(
-                    f"🆕 CREATING ARTIST [DEEZER SYNC]: name='{artist_name}', "
-                    f"deezer_id={deezer_id}, genres={genres}\n"
-                    f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
-                )
                 
                 # Download artist image for new artist (Deezer provider)
                 image_path = None
