@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from soulspot.application.services.session_store import Session
