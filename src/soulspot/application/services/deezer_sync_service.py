@@ -21,7 +21,6 @@
 # - ViewModels erstellen (das macht LibraryViewService)
 """Deezer Sync Service - Syncs Deezer data to database."""
 
-import json
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -78,11 +77,18 @@ class DeezerSyncService:
         Hey future me - DeezerPlugin braucht KEINE OAuth für sync!
         Alle Sync-Methoden hier nutzen die Public API.
         
+        REFACTORED (Dec 2025): Nutzt jetzt ProviderMappingService für Artist-Erstellung!
+        Das ist konsistent mit SpotifySyncService.
+        
         Args:
             session: Database session
             deezer_plugin: DeezerPlugin für API calls
             image_service: ImageService für Bilder-Downloads (optional)
         """
+        from soulspot.application.services.provider_mapping_service import (
+            ProviderMappingService,
+        )
+        
         self._session = session
         self._plugin = deezer_plugin
         self._image_service = image_service
@@ -91,6 +97,10 @@ class DeezerSyncService:
         self._artist_repo = ArtistRepository(session)
         self._album_repo = AlbumRepository(session)
         self._track_repo = TrackRepository(session)
+        
+        # ProviderMappingService für zentrale Artist/Album/Track Erstellung
+        # Hey future me - das verhindert Duplikate und sorgt für konsistente UUIDs!
+        self._mapping_service = ProviderMappingService(session)
         
         # Cache für Sync-Status
         self._last_sync_times: dict[str, datetime] = {}
@@ -422,8 +432,8 @@ class DeezerSyncService:
     # =========================================================================
     # DB SAVE HELPERS
     # =========================================================================
-    # Hey future me - diese Methoden speichern DTOs in der unified Library!
-    # Alle Einträge bekommen source='deezer' für spätere Filterung.
+    # Hey future me - REFACTORED Dec 2025 to use ProviderMappingService!
+    # Alle Artist-Erstellungen gehen jetzt über den MappingService für Konsistenz.
     
     async def _save_artist_from_dto(
         self,
@@ -431,55 +441,61 @@ class DeezerSyncService:
         is_chart: bool = False,
         is_related: bool = False,
     ) -> None:
-        """Save artist DTO to database.
+        """Save artist DTO to database using ProviderMappingService.
         
-        Hey future me - hier speichern wir in soulspot_artists!
-        source='deezer' markiert, dass es von Deezer kommt.
+        Hey future me - REFACTORED to use ProviderMappingService!
+        Das ist jetzt konsistent mit SpotifySyncService.
         
         Note: is_chart and is_related parameters are kept for API compatibility
         but not stored in database (fields don't exist in ArtistModel).
         """
-        from soulspot.infrastructure.persistence.models import ArtistModel
+        from soulspot.domain.dtos import ArtistDTO
+        from soulspot.domain.value_objects import ImageRef
         
-        # Check if artist exists (by deezer_id or name)
-        existing = await self._artist_repo.get_by_deezer_id(artist_dto.deezer_id)
-        
-        # Hey future me - DTO.image ist ImageRef, Model.image_url ist DB-Spalte
-        dto_image_url = artist_dto.image.url if artist_dto.image else None
-        deezer_id = artist_dto.deezer_id
-        
-        if existing:
-            # Update existing
-            existing.name = artist_dto.name
-            existing.image_url = dto_image_url or existing.image_url
+        # Convert to ArtistDTO if needed (for consistent handling)
+        if isinstance(artist_dto, ArtistDTO):
+            dto = artist_dto
+        else:
+            # Build ArtistDTO from raw data
+            image = getattr(artist_dto, 'image', None)
+            if image is None:
+                artwork_url = getattr(artist_dto, 'artwork_url', None)
+                image = ImageRef(url=artwork_url) if artwork_url else ImageRef()
             
-            # Download artist image if URL changed (Deezer provider)
-            if self._image_service and deezer_id and dto_image_url:
-                if await self._image_service.should_redownload(
-                    existing.image_url, dto_image_url, existing.image_path
-                ):
+            dto = ArtistDTO(
+                name=artist_dto.name,
+                deezer_id=artist_dto.deezer_id,
+                image=image,
+                genres=getattr(artist_dto, 'genres', None),
+                tags=getattr(artist_dto, 'tags', None),
+            )
+        
+        # Use ProviderMappingService for consistent artist creation/update
+        artist_id, is_new = await self._mapping_service.get_or_create_artist(
+            dto, source="deezer"
+        )
+        
+        # Download image if we have the service and URL
+        dto_image_url = dto.image.url if dto.image else None
+        deezer_id = dto.deezer_id
+        
+        if self._image_service and deezer_id and dto_image_url:
+            # Get the artist to update image_path
+            from soulspot.domain.value_objects import ArtistId
+            from uuid import UUID
+            
+            artist = await self._artist_repo.get_by_id(ArtistId(UUID(artist_id)))
+            if artist:
+                should_download = is_new or await self._image_service.should_redownload(
+                    artist.image.url, dto_image_url, artist.image.path
+                )
+                if should_download:
                     image_path = await self._image_service.download_artist_image(
                         deezer_id, dto_image_url, provider="deezer"
                     )
                     if image_path:
-                        existing.image_path = image_path
-            # Note: is_chart and is_related flags are not stored in model
-        else:
-            # Create new - Download artist image for new artist (Deezer provider)
-            image_path = None
-            if self._image_service and deezer_id and dto_image_url:
-                image_path = await self._image_service.download_artist_image(
-                    deezer_id, dto_image_url, provider="deezer"
-                )
-            
-            new_artist = ArtistModel(
-                name=artist_dto.name,
-                deezer_id=artist_dto.deezer_id,
-                image_url=dto_image_url,
-                image_path=image_path,
-                source="deezer",
-            )
-            self._session.add(new_artist)
+                        artist.image = ImageRef(url=dto_image_url, path=image_path)
+                        await self._artist_repo.update(artist)
     
     async def _ensure_artist_exists(
         self,
@@ -488,29 +504,24 @@ class DeezerSyncService:
     ) -> str | None:
         """Ensure artist exists in database and return its internal ID.
         
-        CRITICAL FIX (Dec 2025): Prevents duplicate artists by checking name first!
-        - First checks for existing artist by deezer_id
-        - Then checks for existing artist by NAME (prevents Spotify/Deezer duplicates)
-        - Only creates NEW artist if neither exists
-        - Updates source to "hybrid" if artist exists from other provider
+        REFACTORED (Dec 2025): Now uses ProviderMappingService!
+        This is consistent with SpotifySyncService and prevents duplicate artists.
         
         Args:
             artist_dto: Artist DTO from plugin (must have: name, deezer_id, and optionally artwork_url, genres, tags)
-            is_chart: Whether this is from charts
+            is_chart: Whether this is from charts (kept for API compat, not stored)
             
         Returns:
             Internal artist ID (UUID) or None if creation failed
         """
-        from soulspot.domain.entities import Artist, ArtistSource
-        from soulspot.infrastructure.persistence.models import ArtistModel
-        from sqlalchemy import func, select
+        from soulspot.domain.dtos import ArtistDTO
+        from soulspot.domain.value_objects import ImageRef
         
         try:
             # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
             artist_name = getattr(artist_dto, 'name', None) or getattr(artist_dto, 'artist_name', None)
             deezer_id = getattr(artist_dto, 'deezer_id', None) or getattr(artist_dto, 'artist_deezer_id', None)
             # Hey future me - DTOs nutzen jetzt ImageRef! ArtistDTO.image.url statt .artwork_url
-            # Fallback auf alte Attribute für Backwards-Compat mit gemischten DTOs
             image_attr = getattr(artist_dto, 'image', None)
             artwork_url = getattr(image_attr, 'url', None) if image_attr else None
             genres = getattr(artist_dto, 'genres', None)
@@ -520,76 +531,40 @@ class DeezerSyncService:
                 logger.warning(f"Cannot ensure artist exists - missing name or deezer_id")
                 return None
             
-            # STEP 1: Check if artist exists by deezer_id
-            existing_model = None
-            if deezer_id:
-                existing_model = await self._artist_repo.get_by_deezer_id(deezer_id)
+            # Build ArtistDTO for ProviderMappingService
+            dto = ArtistDTO(
+                name=artist_name,
+                deezer_id=deezer_id,
+                image=ImageRef(url=artwork_url) if artwork_url else ImageRef(),
+                genres=genres,
+                tags=tags,
+            )
             
-            # STEP 2: If not found by deezer_id, check by NAME (prevent duplicates!)
-            # CRITICAL FIX: Case-insensitive + whitespace normalization!
-            if not existing_model:
-                normalized_name = artist_name.strip().lower()
-                stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
-                result = await self._session.execute(stmt)
-                # Use first() instead of scalar_one_or_none() to handle existing duplicates gracefully
-                existing_model = result.scalars().first()
+            # Use ProviderMappingService for consistent artist creation/update
+            # Hey future me - this handles all the duplicate detection and source merging!
+            artist_id, is_new = await self._mapping_service.get_or_create_artist(
+                dto, source="deezer"
+            )
             
-            if existing_model:
-                # Update existing artist - add deezer_id if missing
-                if not existing_model.deezer_id:
-                    existing_model.deezer_id = deezer_id
+            # Download image if needed
+            if self._image_service and deezer_id and artwork_url:
+                from soulspot.domain.value_objects import ArtistId
+                from uuid import UUID
                 
-                # Update source to "hybrid" if it was only from one provider before
-                if existing_model.source == "spotify":
-                    existing_model.source = "hybrid"
-                elif existing_model.source == "local":
-                    existing_model.source = "hybrid"
-                # If already "deezer" or "hybrid", keep as is
-                
-                existing_model.name = artist_name
-                existing_model.image_url = artwork_url or existing_model.image_url
-                if genres:
-                    existing_model.genres = json.dumps(genres)
-                if tags:
-                    existing_model.tags = json.dumps(tags)
-                
-                # Download artist image if URL changed (Deezer provider)
-                if self._image_service and deezer_id and artwork_url:
-                    if await self._image_service.should_redownload(
-                        existing_model.image_url, artwork_url, existing_model.image_path
-                    ):
+                artist = await self._artist_repo.get_by_id(ArtistId(UUID(artist_id)))
+                if artist:
+                    should_download = is_new or await self._image_service.should_redownload(
+                        artist.image.url, artwork_url, artist.image.path
+                    )
+                    if should_download:
                         image_path = await self._image_service.download_artist_image(
                             deezer_id, artwork_url, provider="deezer"
                         )
                         if image_path:
-                            existing_model.image_path = image_path
-                
-                return str(existing_model.id)
-            else:
-                # Create new artist with proper domain entity
-                import uuid
-                artist_id = str(uuid.uuid4())
-                
-                # Download artist image for new artist (Deezer provider)
-                image_path = None
-                if self._image_service and deezer_id and artwork_url:
-                    image_path = await self._image_service.download_artist_image(
-                        deezer_id, artwork_url, provider="deezer"
-                    )
-                
-                new_artist = ArtistModel(
-                    id=artist_id,
-                    name=artist_name,
-                    deezer_id=deezer_id,
-                    image_url=artwork_url,
-                    image_path=image_path,
-                    source="deezer",  # Source field in model accepts string
-                    genres=json.dumps(genres) if genres else None,
-                    tags=json.dumps(tags) if tags else None,
-                )
-                self._session.add(new_artist)
-                await self._session.flush()  # Get the ID immediately
-                return artist_id
+                            artist.image = ImageRef(url=artwork_url, path=image_path)
+                            await self._artist_repo.update(artist)
+            
+            return artist_id
                 
         except Exception as e:
             logger.error(f"Failed to ensure artist exists: {e}")
