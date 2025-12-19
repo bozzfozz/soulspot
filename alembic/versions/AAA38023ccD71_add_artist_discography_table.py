@@ -44,7 +44,19 @@ depends_on = None
 
 
 def upgrade() -> None:
-    """Create artist_discography table."""
+    """Create artist_discography table (idempotent - skips if exists)."""
+    # Hey future me - IDEMPOTENT CHECK!
+    # Check if table already exists (handles retry/failed migration scenarios)
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    
+    if "artist_discography" in inspector.get_table_names():
+        # Table already exists - skip creation
+        # This handles cases where migration was partially run before
+        import logging
+        logging.info("Table artist_discography already exists - skipping creation")
+        return
+    
     op.create_table(
         "artist_discography",
         # Primary key
@@ -90,15 +102,14 @@ def upgrade() -> None:
         # Timestamps
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-    )
-    
-    # Composite unique constraint: same album shouldn't be added twice for same artist
-    # Using title + album_type because different versions might have same title
-    # (e.g., "Thriller" album vs "Thriller" single)
-    op.create_unique_constraint(
-        "uq_discography_artist_title_type",
-        "artist_discography",
-        ["artist_id", "title", "album_type"],
+        
+        # Hey future me - SQLITE UNIQUE CONSTRAINT!
+        # SQLite doesn't support ALTER TABLE ADD CONSTRAINT, so we must
+        # define the constraint inline with create_table using UniqueConstraint
+        sa.UniqueConstraint(
+            "artist_id", "title", "album_type",
+            name="uq_discography_artist_title_type"
+        ),
     )
     
     # Index for missing albums query (is_owned = FALSE)
@@ -118,8 +129,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Remove artist_discography table."""
+    """Drop artist_discography table (idempotent - skips if not exists)."""
+    # Hey future me - IDEMPOTENT CHECK!
+    # Check if table exists before dropping
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    
+    if "artist_discography" not in inspector.get_table_names():
+        # Table doesn't exist - nothing to drop
+        import logging
+        logging.info("Table artist_discography doesn't exist - skipping drop")
+        return
+    
+    # Drop in reverse order of creation
     op.drop_index("ix_discography_deezer", table_name="artist_discography")
     op.drop_index("ix_discography_missing", table_name="artist_discography")
-    op.drop_constraint("uq_discography_artist_title_type", "artist_discography", type_="unique")
+    # Unique constraint is dropped automatically with table in SQLite
     op.drop_table("artist_discography")
