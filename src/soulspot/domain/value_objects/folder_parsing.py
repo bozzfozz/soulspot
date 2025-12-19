@@ -658,6 +658,11 @@ class LibraryFolderParser:
         # Scan artist folders (top level)
         for artist_path in self._iter_artist_folders():
             try:
+                # 🔍 DEBUG: Log each artist folder being scanned
+                logger.warning(
+                    f"🔍 SCANNING ARTIST FOLDER: path='{artist_path}', "
+                    f"folder_name='{artist_path.name}'"
+                )
                 artist = self._scan_artist(artist_path)
                 result.artists.append(artist)
                 result.total_artists += 1

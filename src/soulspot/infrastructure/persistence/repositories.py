@@ -97,7 +97,7 @@ class ArtistRepository(IArtistRepository):
         logger.warning(
             f"🆕 CREATING ARTIST [ARTIST REPO]: name='{artist.name}', "
             f"source={artist.source.value}, spotify_uri={artist.spotify_uri}, "
-            f"deezer_id={artist.deezer_id}\\n"
+            f"deezer_id={artist.deezer_id}\n"
             f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
         )
         model = ArtistModel(
