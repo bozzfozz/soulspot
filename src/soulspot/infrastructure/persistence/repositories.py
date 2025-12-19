@@ -89,6 +89,14 @@ class ArtistRepository(IArtistRepository):
     # Hey - deezer_id/tidal_id are multi-service IDs for cross-service deduplication!
     async def add(self, artist: Artist) -> None:
         """Add a new artist."""
+        # 🔍 DEBUG: Log artist creation at repository level
+        import traceback
+        logger.warning(
+            f"🆕 CREATING ARTIST [ARTIST REPO]: name='{artist.name}', "
+            f"source={artist.source.value}, spotify_uri={artist.spotify_uri}, "
+            f"deezer_id={artist.deezer_id}\\n"
+            f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
+        )
         model = ArtistModel(
             id=str(artist.id.value),
             name=artist.name,
@@ -5304,6 +5312,13 @@ class ProviderBrowseRepository:
             return existing.id
 
         # Create new artist with minimal data
+        # 🔍 DEBUG: Log artist creation with full source trace
+        import traceback
+        logger.warning(
+            f"🆕 CREATING ARTIST [SPOTIFY BROWSE REPO]: name='{artist_name}', "
+            f"spotify_uri={spotify_uri}\n"
+            f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
+        )
         new_artist = ArtistModel(
             name=artist_name,
             spotify_uri=spotify_uri,

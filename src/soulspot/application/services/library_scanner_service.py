@@ -440,6 +440,13 @@ class LibraryScannerService:
             return artist_id, False
 
         # Create new artist
+        # 🔍 DEBUG: Log artist creation with full source trace
+        import traceback
+        logger.warning(
+            f"🆕 CREATING ARTIST [LOCAL SCAN]: name='{name}', "
+            f"musicbrainz_id={musicbrainz_id}, disambiguation={disambiguation}\n"
+            f"Stack trace: {''.join(traceback.format_stack()[-5:-1])}"
+        )
         artist = Artist(
             id=ArtistId.generate(),
             name=name,  # Keep original casing from folder
