@@ -1,9 +1,12 @@
-{# Hey future me - Duplicate Review page!
-   Shows all detected duplicates with side-by-side comparison.
+{# Hey future me - Duplicate Review page for SIMILAR TRACKS!
+   Shows all detected duplicate CANDIDATES with side-by-side comparison.
+   These are SIMILAR tracks (fuzzy match by title/artist/duration).
    Users can keep one, keep both, or dismiss false positives.
    Uses HTMX for dynamic updates without page reload.
    The DuplicateDetectorWorker populates duplicate_candidates table,
-   this page reads from /api/library/duplicates endpoint. #}
+   this page reads from /api/library/duplicates/candidates endpoint.
+   
+   Note: For IDENTICAL files (same hash), see library.html → View File Duplicates #}
 
 {% extends "base.html" %}
 
@@ -21,12 +24,12 @@
         </div>
         <div>
             <h1>Duplicate Review</h1>
-            <p class="subtitle">Review and resolve duplicate tracks in your library</p>
+            <p class="subtitle">Review and resolve similar tracks in your library</p>
         </div>
     </div>
     <div class="header-actions">
         <button class="btn btn-outline"
-                hx-post="/api/library/duplicates/scan"
+                hx-post="/api/library/duplicates/candidates/scan"
                 hx-target="#scan-status"
                 hx-swap="innerHTML">
             <i class="bi bi-search"></i>
@@ -43,7 +46,7 @@
 <div id="scan-status" style="margin-bottom: var(--space-4);"></div>
 
 <!-- Stats Bar -->
-<div id="duplicate-stats" class="stats-grid" style="margin-bottom: var(--space-6);" hx-get="/api/library/duplicates?limit=1" hx-trigger="load" hx-swap="none" hx-on::after-request="updateStats(event)">
+<div id="duplicate-stats" class="stats-grid" style="margin-bottom: var(--space-6);" hx-get="/api/library/duplicates/candidates?limit=1" hx-trigger="load" hx-swap="none" hx-on::after-request="updateStats(event)">
     <div class="stat-card stat-card-animated blur-fade-in hover-glow" style="--delay: 0;">
         <div class="stat-icon stat-icon-hover-flip" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
             <i class="bi bi-clock"></i>
@@ -90,7 +93,7 @@
 </div>
 
 <!-- Duplicates List -->
-<div id="duplicates-container" hx-get="/api/library/duplicates?status=pending&limit=50" hx-trigger="load" hx-swap="innerHTML">
+<div id="duplicates-container" hx-get="/api/library/duplicates/candidates?status=pending&limit=50" hx-trigger="load" hx-swap="innerHTML">
     <!-- Loading state -->
     <div class="loading-state">
         <i class="bi bi-arrow-repeat bi-spin" style="font-size: 2rem; color: var(--text-muted);"></i>
@@ -342,8 +345,8 @@ function filterDuplicates(status) {
         tab.classList.toggle('active', tab.dataset.status === status);
     });
     
-    // Build URL with status filter
-    let url = '/api/library/duplicates?limit=50';
+    // Build URL with status filter - using /candidates endpoint for similar tracks
+    let url = '/api/library/duplicates/candidates?limit=50';
     if (status !== 'all') {
         url += `&status=${status}`;
     }
@@ -363,7 +366,7 @@ async function resolveDuplicate(duplicateId, action) {
     card.classList.add('resolving');
     
     try {
-        const response = await fetch(`/api/library/duplicates/${duplicateId}/resolve`, {
+        const response = await fetch(`/api/library/duplicates/candidates/${duplicateId}/resolve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: action })
@@ -394,6 +397,7 @@ async function resolveDuplicate(duplicateId, action) {
 }
 
 // Dismiss a duplicate as false positive
+// Hey future me - uses the /resolve endpoint with action="dismiss"
 async function dismissDuplicate(duplicateId) {
     const card = document.querySelector(`[data-duplicate-id="${duplicateId}"]`);
     if (!card) return;
@@ -401,8 +405,11 @@ async function dismissDuplicate(duplicateId) {
     card.classList.add('resolving');
     
     try {
-        const response = await fetch(`/api/library/duplicates/dismiss/${duplicateId}`, {
-            method: 'DELETE'
+        // Use the same resolve endpoint with action="dismiss"
+        const response = await fetch(`/api/library/duplicates/candidates/${duplicateId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'dismiss' })
         });
         
         if (response.ok) {

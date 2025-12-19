@@ -19,6 +19,7 @@ from soulspot.api.routers import (
     compilations,
     download_manager,
     downloads,
+    enrichment,
     library,
     logs,
     metadata,
@@ -50,6 +51,7 @@ api_router.include_router(onboarding.router, prefix="/onboarding", tags=["Onboar
 api_router.include_router(metadata.router, prefix="/metadata", tags=["Metadata"])
 api_router.include_router(search.router, tags=["Search"])
 api_router.include_router(library.router, tags=["Library"])
+api_router.include_router(enrichment.router, tags=["Enrichment"])
 api_router.include_router(compilations.router, tags=["Compilations"])
 api_router.include_router(automation.router, tags=["Automation"])
 api_router.include_router(notifications.router, tags=["Notifications"])
@@ -68,6 +70,7 @@ __all__ = [
     "compilations",
     "download_manager",
     "downloads",
+    "enrichment",
     "library",
     "logs",
     "metadata",

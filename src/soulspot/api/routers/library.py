@@ -1,8 +1,52 @@
-"""Library management API endpoints."""
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║   ⚠️  DEPRECATED - DO NOT USE - SCHEDULED FOR DELETION  ⚠️                   ║
+║                                                                              ║
+║   This file has been REPLACED by the modular library/ package:              ║
+║                                                                              ║
+║   NEW STRUCTURE:                                                             ║
+║   ├── library/                                                               ║
+║   │   ├── __init__.py       → Router aggregation                            ║
+║   │   ├── scan.py           → /import/*, /scan (deprecated)                 ║
+║   │   ├── stats.py          → /stats, /broken-*, /incomplete-*              ║
+║   │   ├── duplicates.py     → /duplicates/files, /duplicates/candidates/*   ║
+║   │   └── batch_operations.py → /clear*, /batch-rename/*                    ║
+║   └── enrichment.py         → /enrichment/* (SEPARATE ROUTER!)              ║
+║                                                                              ║
+║   MIGRATION:                                                                 ║
+║   - All 34 endpoints have been migrated to the new modular structure        ║
+║   - Enrichment endpoints moved to /api/enrichment/* (was /api/library/*)    ║
+║   - Entity duplicates (artists/albums) → library_duplicates.py              ║
+║                                                                              ║
+║   TO DELETE THIS FILE:                                                       ║
+║   1. Delete this file: rm src/soulspot/api/routers/library.py               ║
+║   2. The library/ package will be auto-discovered                           ║
+║   3. Test: poetry run python -c "from soulspot.api.routers import library"  ║
+║                                                                              ║
+║   DEPRECATION DATE: January 2025                                            ║
+║   DELETE AFTER: Testing confirms new structure works                         ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Library management API endpoints.
+
+⚠️ DEPRECATED: Use the new modular structure in library/ package instead!
+"""
 
 import logging
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+# Emit deprecation warning when this module is imported
+warnings.warn(
+    "library.py is DEPRECATED! "
+    "Delete this file and use the new library/ package instead. "
+    "See the module docstring for migration details.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -38,6 +82,12 @@ if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
+
+# Log deprecation warning
+logger.warning(
+    "⚠️ DEPRECATED: library.py is being used! "
+    "Delete this file and use the new library/ package instead."
+)
 
 # Initialize templates (same pattern as ui.py)
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
@@ -217,37 +267,54 @@ async def get_scan_status(
     )
 
 
-# Yo, finds duplicate files in the library! Optional resolved filter lets you show only unresolved
-# duplicates (which need action) or resolved ones (already handled). Returns duplicate_count per group
-# and calculates wasted_bytes (size of duplicates minus one copy you need). The wasted bytes formula
-# total_size - (size / count) is clever - keeps one copy, counts rest as waste. Sum aggregates across
-# all duplicate groups. No pagination - could return thousands of duplicates and blow up memory! Should
-# add limit/offset. Duplicate detection is by hash, so identical content = duplicate even if different
-# filenames/metadata. Be careful - a re-release might be detected as duplicate of original!
-@router.get("/duplicates")
-async def get_duplicates(
+# Hey future me - this endpoint finds DUPLICATE FILES by hash!
+# Renamed from /duplicates to /duplicates/files to avoid conflict with /duplicates/candidates.
+# - /duplicates/files → Same file content (hash match) - detected during import
+# - /duplicates/candidates → Similar tracks (fuzzy match) - detected by DuplicateService
+@router.get("/duplicates/files")
+async def get_duplicate_files(
     resolved: bool | None = Query(None, description="Filter by resolved status"),
+    limit: int = Query(100, ge=1, le=500, description="Max results to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """Get duplicate files.
+    """Get duplicate files (same hash = identical content).
+
+    Hey future me - these are EXACT duplicates (identical file content).
+    Detected during library import when file_hash matches.
+    
+    Different from /duplicates/candidates which finds SIMILAR tracks
+    (fuzzy matching by title/artist/duration).
 
     Args:
-        resolved: Filter by resolved status
+        resolved: Filter by resolved status (None=all, True=resolved, False=unresolved)
+        limit: Max duplicate groups to return (default 100, max 500)
+        offset: Pagination offset
         session: Database session
 
     Returns:
-        List of duplicate files
+        List of duplicate file groups with pagination info
     """
     use_case = GetDuplicatesUseCase(session)
-    duplicates = await use_case.execute(resolved=resolved)
+    # Hey future me - GetDuplicatesUseCase doesn't support pagination yet!
+    # We apply it after the query - not ideal but works for now.
+    # TODO: Add pagination to GetDuplicatesUseCase for better performance.
+    all_duplicates = await use_case.execute(resolved=resolved)
+    
+    # Apply pagination
+    total = len(all_duplicates)
+    duplicates = all_duplicates[offset:offset + limit]
 
     return {
         "duplicates": duplicates,
-        "total_count": len(duplicates),
-        "total_duplicate_files": sum(d["duplicate_count"] for d in duplicates),
+        "total_count": total,
+        "returned_count": len(duplicates),
+        "limit": limit,
+        "offset": offset,
+        "total_duplicate_files": sum(d["duplicate_count"] for d in all_duplicates),
         "total_wasted_bytes": sum(
             d["total_size_bytes"] - (d["total_size_bytes"] // d["duplicate_count"])
-            for d in duplicates
+            for d in all_duplicates
         ),
     }
 
@@ -561,11 +628,6 @@ async def start_import_scan(
             status="pending",
             message=f"Library import scan queued ({mode_str}, defer_cleanup={defer_cleanup})",
         )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start import scan: {str(e)}"
-        ) from e
 
     except Exception as e:
         raise HTTPException(
@@ -894,6 +956,7 @@ async def clear_local_library(
 @router.delete("/clear-all")
 async def clear_entire_library(
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """⚠️ DEV ONLY: Clear ENTIRE library (local + Spotify + Deezer + Tidal).
     
@@ -903,12 +966,19 @@ async def clear_entire_library(
     - ALL albums (local + Spotify + Deezer + hybrid)
     - ALL tracks (local + Spotify + Deezer + hybrid)
     
-    ⚠️ TODO: REMOVE THIS ENDPOINT BEFORE PRODUCTION!
-    This is ONLY for development to quickly reset the entire library.
+    ⚠️ PROTECTED: Only available when DEBUG mode is enabled!
     
     Returns:
         Statistics about deleted entities
     """
+    # Hey future me - this endpoint is DANGEROUS! Only allow in DEBUG mode.
+    if not settings.debug:
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint is only available in DEBUG mode. "
+                   "Set DEBUG=true in your configuration to enable it.",
+        )
+    
     from sqlalchemy import delete, func, select
     from soulspot.infrastructure.persistence.models import (
         ArtistModel,
@@ -976,9 +1046,11 @@ class ResolveDuplicateRequest(BaseModel):
     action: str  # keep_first, keep_second, keep_both, dismiss
 
 
-# Hey future me – dieser Endpoint gibt alle Duplicate Candidates zurück.
-# Die Candidates werden vom DuplicateDetectorWorker erstellt und hier für Review angezeigt.
-@router.get("/duplicates")
+# Hey future me – this endpoint returns SIMILAR TRACK CANDIDATES for review!
+# Renamed from /duplicates to /duplicates/candidates to avoid conflict with /duplicates/files.
+# - /duplicates/files → Same file content (hash match) - detected during import
+# - /duplicates/candidates → Similar tracks (fuzzy match) - detected by DuplicateService
+@router.get("/duplicates/candidates")
 async def list_duplicate_candidates(
     status: str | None = Query(
         None, description="Filter by status: pending, confirmed, dismissed"
@@ -989,8 +1061,14 @@ async def list_duplicate_candidates(
 ) -> DuplicateCandidatesResponse:
     """List duplicate track candidates for review.
 
+    Hey future me - these are SIMILAR tracks (fuzzy matching)!
+    Created by DuplicateDetectorWorker based on title/artist/duration.
+    
+    Different from /duplicates/files which finds EXACT duplicates
+    (same file hash = identical content).
+
     Args:
-        status: Optional status filter
+        status: Optional status filter (pending, confirmed, dismissed)
         limit: Maximum candidates to return
         offset: Pagination offset
         session: Database session
@@ -1034,10 +1112,11 @@ async def list_duplicate_candidates(
     )
 
 
-# Hey future me – dieser Endpoint resolved einen Duplicate Candidate.
+# Hey future me – dieser Endpoint resolved einen Duplicate Candidate (Similar Track).
+# Renamed to /duplicates/candidates/{id}/resolve for consistency.
 # Actions: keep_first (Track 1 behalten), keep_second (Track 2 behalten),
 # keep_both (beide behalten, als "nicht duplikat" markieren), dismiss (ignorieren).
-@router.post("/duplicates/{candidate_id}/resolve")
+@router.post("/duplicates/candidates/{candidate_id}/resolve")
 async def resolve_duplicate(
     candidate_id: str,
     request: ResolveDuplicateRequest,
@@ -1073,13 +1152,17 @@ async def resolve_duplicate(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# Hey future me – dieser Endpoint triggert einen manuellen Duplicate Scan.
-# Nützlich wenn der User nicht auf den nächsten automatischen Scan warten will.
-@router.post("/duplicates/scan")
+# Hey future me – dieser Endpoint triggert einen manuellen Duplicate CANDIDATE Scan.
+# Renamed to /duplicates/candidates/scan for consistency with other candidate endpoints.
+# This scans for SIMILAR tracks (fuzzy match), not identical files (hash match).
+@router.post("/duplicates/candidates/scan")
 async def trigger_duplicate_scan(
     request: Request,
 ) -> dict[str, Any]:
-    """Trigger a manual duplicate scan.
+    """Trigger a manual duplicate candidates scan.
+    
+    Hey future me - this scans for SIMILAR tracks using fuzzy matching
+    (title, artist, duration). Different from import-time hash detection.
 
     Returns:
         Scan job information
@@ -1094,7 +1177,7 @@ async def trigger_duplicate_scan(
     job_id = await worker.trigger_scan_now()
 
     return {
-        "message": "Duplicate scan started",
+        "message": "Duplicate candidates scan started",
         "job_id": job_id,
     }
 
