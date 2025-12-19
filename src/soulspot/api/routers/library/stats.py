@@ -21,11 +21,11 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
 )
-from soulspot.application.use_cases.library.get_broken_files import GetBrokenFilesUseCase
-from soulspot.application.use_cases.library.check_album_completeness import (
+from soulspot.application.use_cases.scan_library import GetBrokenFilesUseCase
+from soulspot.application.use_cases.check_album_completeness import (
     CheckAlbumCompletenessUseCase,
 )
-from soulspot.application.use_cases.library.re_download_broken_files import (
+from soulspot.application.use_cases.re_download_broken import (
     ReDownloadBrokenFilesUseCase,
 )
 

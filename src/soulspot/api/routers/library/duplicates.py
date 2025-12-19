@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import get_db_session
-from soulspot.application.use_cases.library.get_duplicates import GetDuplicatesUseCase
+from soulspot.application.use_cases.scan_library import GetDuplicatesUseCase
 
 logger = logging.getLogger(__name__)
 
