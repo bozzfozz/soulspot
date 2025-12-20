@@ -2,7 +2,7 @@
 
 Hey future me - this serves locally stored album/artist artwork!
 
-The artwork_path stored in the database is relative to ARTWORK_PATH setting.
+The image_path stored in the database is relative to IMAGE_PATH setting.
 This endpoint resolves the full path and serves the file securely.
 
 Security: Uses Path.resolve() + is_relative_to() to prevent path traversal attacks.
@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/artwork", tags=["artwork"])
 
 
-# Hey future me - this serves local artwork files from the ARTWORK_PATH directory!
+# Hey future me - this serves local artwork files from the IMAGE_PATH directory!
 # Security is critical here: we MUST prevent path traversal attacks (../../etc/passwd).
-# The resolve() + is_relative_to() pattern ensures the file is actually inside artwork_path.
+# The resolve() + is_relative_to() pattern ensures the file is actually inside image_path.
 @router.get("/{file_path:path}")
 async def serve_artwork(
     file_path: str,
@@ -32,7 +32,7 @@ async def serve_artwork(
     """Serve artwork file from local storage.
 
     Args:
-        file_path: Relative path to artwork file (from artwork_path setting)
+        file_path: Relative path to artwork file (from image_path setting)
 
     Returns:
         FileResponse with the image file
@@ -41,15 +41,15 @@ async def serve_artwork(
         404 if file not found
         403 if path traversal attempted
     """
-    # Get artwork base path from settings
-    artwork_base = settings.storage.artwork_path
+    # Get image base path from settings
+    image_base = settings.storage.image_path
 
-    # Resolve the full path and check it's within artwork_base (security!)
+    # Resolve the full path and check it's within image_base (security!)
     try:
-        full_path = (artwork_base / file_path).resolve()
+        full_path = (image_base / file_path).resolve()
 
-        # Security check: ensure resolved path is still inside artwork_base
-        if not full_path.is_relative_to(artwork_base.resolve()):
+        # Security check: ensure resolved path is still inside image_base
+        if not full_path.is_relative_to(image_base.resolve()):
             logger.warning(f"Path traversal attempt blocked: {file_path}")
             raise HTTPException(status_code=403, detail="Access denied")
 

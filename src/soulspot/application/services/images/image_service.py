@@ -42,199 +42,23 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Literal, Protocol
+from typing import TYPE_CHECKING, ClassVar, Literal
+
+# Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
+from soulspot.domain.ports.image_service import (
+    EntityType,
+    ImageInfo,
+    ImageProvider,
+    ImageSize,
+    IImageService,
+    SaveImageResult,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 logger = logging.getLogger(__name__)
-
-
-# === Type Definitions ===
-
-EntityType = Literal["artist", "album", "playlist", "track"]
-ImageProvider = Literal["spotify", "deezer", "tidal", "musicbrainz", "caa", "local"]
-
-
-class ImageSize(Enum):
-    """Standard image sizes for consistent handling.
-    
-    Future me note:
-    Phase 2 will add thumbnail generation. For now, we just track
-    what size the source image is (if known).
-    """
-    UNKNOWN = "unknown"
-    SMALL = "small"      # ~64x64
-    MEDIUM = "medium"    # ~300x300
-    LARGE = "large"      # ~640x640
-    ORIGINAL = "original"  # As-is from source
-
-
-# === Data Transfer Objects ===
-
-@dataclass(frozen=True)
-class ImageInfo:
-    """Complete information about an entity's image.
-    
-    Future me note:
-    This is what we return from get_image(). It's frozen (immutable)
-    because it's a snapshot of the image state at query time.
-    The caller should NOT modify this - if they need different data,
-    they call the service again.
-    """
-    entity_type: EntityType
-    entity_id: str
-    
-    # URLs for display
-    display_url: str           # Best URL for frontend (local > CDN > placeholder)
-    source_url: str | None     # Original CDN URL (may be None if local-only)
-    
-    # Local cache info
-    local_path: str | None
-    is_cached: bool
-    
-    # Provider info
-    provider: ImageProvider | None
-    
-    # Image dimensions (if known)
-    width: int | None = None
-    height: int | None = None
-    
-    # Status flags
-    needs_refresh: bool = False  # True if cache is stale
-    
-    # Timestamps
-    fetched_at: datetime | None = None
-    last_verified_at: datetime | None = None
-
-
-@dataclass
-class SaveImageResult:
-    """Result of a save_image() operation.
-    
-    Future me note:
-    This tells the caller what happened. Did we download? Did we reuse cache?
-    Did something fail? All the info is here.
-    """
-    success: bool
-    image_info: ImageInfo | None = None
-    error: str | None = None
-    
-    # What actually happened
-    downloaded: bool = False       # True if we downloaded from CDN
-    cached_reused: bool = False    # True if we reused existing cache
-    deduplicated: bool = False     # True if image was deduplicated (Phase 2)
-    
-    @classmethod
-    def failure(cls, error: str) -> SaveImageResult:
-        """Factory for failure results."""
-        return cls(success=False, error=error)
-    
-    @classmethod
-    def success_cached(cls, image_info: ImageInfo) -> SaveImageResult:
-        """Factory for success with cache reuse."""
-        return cls(success=True, image_info=image_info, cached_reused=True)
-    
-    @classmethod
-    def success_downloaded(cls, image_info: ImageInfo) -> SaveImageResult:
-        """Factory for success with new download."""
-        return cls(success=True, image_info=image_info, downloaded=True)
-
-
-# === Service Interface (Port) ===
-
-class IImageService(Protocol):
-    """Image Service Port (Interface).
-    
-    Future me note:
-    This is the contract that any ImageService implementation must follow.
-    Currently there's only one implementation, but this allows:
-    - Mock implementations for testing
-    - Alternative implementations (e.g., S3-based in future)
-    
-    NOTE: Downloads are NOT part of this interface!
-    Downloads are handled by Plugins (SpotifyPlugin, DeezerPlugin, etc.)
-    in the Infrastructure layer. ImageService only does URL resolution,
-    validation, and cache management.
-    """
-    
-    def get_display_url(
-        self,
-        source_url: str | None,
-        local_path: str | None,
-        entity_type: EntityType = "album",
-    ) -> str:
-        """Get the best display URL for an image.
-        
-        This is SYNC because it's used in Jinja2 templates.
-        Priority: local > CDN > placeholder
-        
-        Args:
-            source_url: CDN URL from provider (Spotify, Deezer, etc.)
-            local_path: Local cache path (if downloaded)
-            entity_type: Type of entity (for type-specific placeholders)
-            
-        Returns:
-            URL to display the image
-        """
-        ...
-    
-    async def get_image(
-        self,
-        entity_type: EntityType,
-        entity_id: str,
-    ) -> ImageInfo | None:
-        """Get complete image information for an entity.
-        
-        Args:
-            entity_type: Type of entity (artist, album, playlist)
-            entity_id: Entity's internal ID
-            
-        Returns:
-            ImageInfo with all available metadata, or None if not found
-        """
-        ...
-    
-    async def validate_image(
-        self,
-        source_url: str,
-    ) -> bool:
-        """Check if an image URL is still valid (HTTP HEAD request).
-        
-        Future me note:
-        This helps detect broken/expired CDN URLs.
-        Use sparingly - makes network request!
-        
-        Args:
-            source_url: CDN URL to validate
-            
-        Returns:
-            True if URL returns 200 OK, False otherwise
-        """
-        ...
-    
-    async def optimize_cache(
-        self,
-        max_age_days: int = 90,
-        dry_run: bool = True,
-    ) -> dict[str, int]:
-        """Clean up old/orphaned cached images.
-        
-        Future me note:
-        Call this periodically (e.g., weekly cron) to free disk space.
-        Removes images that:
-        - Haven't been accessed in max_age_days
-        - Are orphaned (entity was deleted)
-        
-        Args:
-            max_age_days: Delete images older than this
-            dry_run: If True, just report what would be deleted
-            
-        Returns:
-            Dict with stats: {deleted_count, freed_bytes, orphaned_count}
-        """
-        ...
 
 
 # === Default Placeholders ===
@@ -345,8 +169,9 @@ class ImageService:
     session: AsyncSession | None = None  # DB session (optional for sync methods)
     
     # Configuration
-    cache_base_path: str = field(default="/app/data/cache/images")
-    local_serve_prefix: str = field(default="/artwork/local")
+    # Hey future me - default ist für lokale Dev, Docker überschreibt via dependency injection!
+    cache_base_path: str = field(default="./images")
+    local_serve_prefix: str = field(default="/images/local")
     
     # === Public Sync Methods (for templates) ===
     
@@ -1166,13 +991,14 @@ class ImageService:
         safe_provider = provider.lower().replace(" ", "_")
 
         try:
-            # Fetch image data
-            image_data = await self._fetch_image(image_url)
+            # Fetch image data (BUG FIX: was _fetch_image, now _download_image)
+            image_data = await self._download_image(image_url)
             if not image_data:
                 return None
 
-            # Convert to WebP
-            webp_data = self._convert_to_webp(image_data)
+            # Convert to WebP (BUG FIX: added await, added target_size)
+            target_size = IMAGE_SIZES.get(entity_type, 300)  # type: ignore[arg-type]
+            webp_data = await self._convert_to_webp(image_data, target_size)
             if not webp_data:
                 logger.warning(
                     "WebP conversion failed for %s %s (%s)", 
@@ -1310,8 +1136,8 @@ class ImageService:
         safe_provider = provider.lower().replace(" ", "_")
 
         try:
-            # Fetch image data with error tracking
-            image_data = await self._fetch_image(image_url)
+            # Fetch image data with error tracking (BUG FIX: was _fetch_image)
+            image_data = await self._download_image(image_url)
             if not image_data:
                 return ImageDownloadResult.error(
                     ImageDownloadErrorCode.NETWORK_OTHER,
@@ -1319,8 +1145,9 @@ class ImageService:
                     image_url,
                 )
 
-            # Convert to WebP
-            webp_data = self._convert_to_webp(image_data)
+            # Convert to WebP (BUG FIX: added await, added target_size)
+            target_size = IMAGE_SIZES.get(entity_type, 300)  # type: ignore[arg-type]
+            webp_data = await self._convert_to_webp(image_data, target_size)
             if not webp_data:
                 return ImageDownloadResult.error(
                     ImageDownloadErrorCode.WEBP_CONVERSION_ERROR,

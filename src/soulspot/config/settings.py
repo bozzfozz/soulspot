@@ -207,9 +207,9 @@ class StorageSettings(BaseSettings):
         default=Path("./music"),
         description="Directory for organized music files",
     )
-    artwork_path: Path = Field(
-        default=Path("./artwork"),
-        description="Directory for album artwork",
+    image_path: Path = Field(
+        default=Path("./images"),
+        description="Directory for cached images (artist/album artwork)",
     )
     temp_path: Path = Field(
         default=Path("./tmp"),
@@ -222,7 +222,7 @@ class StorageSettings(BaseSettings):
     # "/home/user/app/downloads"). This prevents bugs where relative paths break when working
     # directory changes! Without this, Path("./music") might point to /tmp/music when running
     # tests but /app/music in production. ALWAYS use absolute paths for file operations!
-    @field_validator("download_path", "music_path", "artwork_path", "temp_path")
+    @field_validator("download_path", "music_path", "image_path", "temp_path")
     @classmethod
     def ensure_path_is_absolute(cls, v: Path) -> Path:
         """Ensure paths are absolute."""
@@ -681,7 +681,7 @@ class Settings(BaseSettings):
         # Ensure storage directories exist
         self.storage.download_path.mkdir(parents=True, exist_ok=True)
         self.storage.music_path.mkdir(parents=True, exist_ok=True)
-        self.storage.artwork_path.mkdir(parents=True, exist_ok=True)
+        self.storage.image_path.mkdir(parents=True, exist_ok=True)
         self.storage.temp_path.mkdir(parents=True, exist_ok=True)
 
         # Ensure database parent directory exists for SQLite

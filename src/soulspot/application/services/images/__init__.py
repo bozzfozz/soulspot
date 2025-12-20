@@ -2,6 +2,11 @@
 # This module is the CENTRAL place for all image-related logic.
 # ArtworkService (legacy) is being deprecated - its logic moves here.
 #
+# Clean Architecture: DTOs are defined in domain/ports/image_service.py
+# and re-exported here for convenience. This keeps:
+# - Single Source of Truth: DTOs defined ONCE in domain layer
+# - Convenient imports: from soulspot.application.services.images import ImageService, ImageInfo
+#
 # What ImageService does:
 #   - get_display_url(): Sync method for templates (local > CDN > placeholder)
 #   - download_and_cache(): Download from CDN, convert to WebP, cache locally
@@ -20,7 +25,7 @@ Central module for all image-related operations:
 - ImageService: Download, cache, convert, display images
 
 Usage:
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageService, ImageInfo
     
     # Via dependency injection
     image_service = ImageService(session=session)
@@ -43,10 +48,19 @@ Usage:
     is_valid = await image_service.validate_image("https://i.scdn.co/image/abc123")
 """
 
+# Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
+from soulspot.domain.ports.image_service import (
+    EntityType,
+    ImageInfo,
+    ImageProvider,
+    ImageSize,
+    IImageService,
+    SaveImageResult,
+)
+
+# Implementation
 from soulspot.application.services.images.image_service import (
     ImageService,
-    ImageInfo,
-    SaveImageResult,
     ImageDownloadErrorCode,
     ImageDownloadResult,
     IMAGE_SIZES,
@@ -54,9 +68,15 @@ from soulspot.application.services.images.image_service import (
 )
 
 __all__ = [
-    "ImageService",
+    # DTOs from Domain Port
+    "EntityType",
     "ImageInfo",
+    "ImageProvider",
+    "ImageSize",
+    "IImageService",
     "SaveImageResult",
+    # Implementation-specific
+    "ImageService",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "IMAGE_SIZES",

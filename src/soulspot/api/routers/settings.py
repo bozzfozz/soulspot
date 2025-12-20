@@ -528,9 +528,10 @@ async def get_spotify_sync_settings(
     # Get image stats if possible
     image_stats = None
     try:
-        from soulspot.application.services.images import ImageService
+        from soulspot.api.dependencies import get_image_service
+        from soulspot.config import get_settings
 
-        image_service = ImageService()
+        image_service = get_image_service(get_settings())
 
         disk_usage = image_service.get_disk_usage()
         image_count = image_service.get_image_count()
@@ -715,9 +716,10 @@ async def get_spotify_image_stats() -> SpotifyImageStats:
 
     Returns breakdown of storage used by artist, album, and playlist images.
     """
-    from soulspot.application.services.images import ImageService
+    from soulspot.api.dependencies import get_image_service
+    from soulspot.config import get_settings
 
-    image_service = ImageService()
+    image_service = get_image_service(get_settings())
 
     disk_usage = image_service.get_disk_usage()
     image_count = image_service.get_image_count()
@@ -860,9 +862,10 @@ async def trigger_manual_sync(
     Returns:
         Success status and message
     """
+    from soulspot.api.dependencies import get_image_service
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.images import ImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.config import get_settings as get_app_settings
     from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
     from soulspot.infrastructure.persistence.repositories import SpotifyTokenRepository
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -874,7 +877,7 @@ async def trigger_manual_sync(
             detail=f"Invalid sync type: {sync_type}. Valid types: {valid_types}",
         )
 
-    app_settings = get_settings()
+    app_settings = get_app_settings()
 
     # Get token from database using repository
     token_repo = SpotifyTokenRepository(session)
@@ -896,7 +899,7 @@ async def trigger_manual_sync(
         access_token=token.access_token,
     )
 
-    image_service = ImageService()
+    image_service = get_image_service(app_settings)
     settings_service = AppSettingsService(session)
 
     sync_service = SpotifySyncService(

@@ -1855,12 +1855,14 @@ async def apply_enrichment_candidate(
     But we still check before downloading images in case settings changed.
     """
     # Hey future me - NOW uses EnrichmentService! Clean Architecture.
+    # ImageService via Dependency Injection.
+    from soulspot.api.dependencies import get_image_service
     from soulspot.application.services.enrichment_service import EnrichmentService
-    from soulspot.application.services.images import ImageService
+    from soulspot.config import get_settings
     from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 
     service = EnrichmentService(session)
-    image_service = ImageService()
+    image_service = get_image_service(get_settings())
 
     try:
         result = await service.apply_candidate(candidate_id, image_service)

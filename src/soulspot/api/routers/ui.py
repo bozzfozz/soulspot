@@ -59,9 +59,13 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 #   {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
 # This replaces scattered inline logic with a single source of truth.
 # See: docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
-from soulspot.application.services.images import ImageService
+#
+# NOTE: Using module-level instance for SYNC template methods (get_display_url).
+# For ASYNC methods (download_and_cache), use Depends(get_image_service_with_session).
+from soulspot.api.dependencies import get_image_service
+from soulspot.config import get_settings
 
-_image_service = ImageService()
+_image_service = get_image_service(get_settings())
 
 
 def _get_display_url(

@@ -128,12 +128,12 @@ echo -e "${GREEN}✓${NC} Database: $DATABASE_URL"
 # Update storage paths to use container paths
 export STORAGE__DOWNLOAD_PATH="${STORAGE__DOWNLOAD_PATH:-/downloads}"
 export STORAGE__MUSIC_PATH="${STORAGE__MUSIC_PATH:-/music}"
-export STORAGE__ARTWORK_PATH="${STORAGE__ARTWORK_PATH:-/config/artwork}"
+export STORAGE__IMAGE_PATH="${STORAGE__IMAGE_PATH:-/config/images}"
 export STORAGE__TEMP_PATH="${STORAGE__TEMP_PATH:-/config/tmp}"
 
 # Ensure additional config directories exist
-mkdir -p /config/artwork /config/tmp
-chown -R $PUID:$PGID /config/artwork /config/tmp
+mkdir -p /config/images /config/tmp
+chown -R $PUID:$PGID /config/images /config/tmp
 
 echo ""
 echo "Initializing database..."

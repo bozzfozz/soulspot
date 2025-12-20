@@ -77,12 +77,12 @@ class MetadataService:
         self._settings = settings
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
-        self._artwork_path = settings.storage.artwork_path
+        self._image_path = settings.storage.image_path
         self._max_size = settings.postprocessing.artwork_max_size
         self._quality = settings.postprocessing.artwork_quality
 
-        # Ensure artwork directory exists
-        self._artwork_path.mkdir(parents=True, exist_ok=True)
+        # Ensure image directory exists
+        self._image_path.mkdir(parents=True, exist_ok=True)
 
     def set_spotify_plugin(self, plugin: "SpotifyPlugin") -> None:
         """Update the Spotify plugin reference.
@@ -496,10 +496,10 @@ class MetadataService:
             ValueError: If path validation fails
         """
         filename = f"{album.id.value}.jpg"
-        filepath = self._artwork_path / filename
+        filepath = self._image_path / filename
 
         validated_path = PathValidator.validate_image_file_path(
-            filepath, self._artwork_path, resolve=False
+            filepath, self._image_path, resolve=False
         )
 
         await asyncio.to_thread(validated_path.write_bytes, artwork_data)

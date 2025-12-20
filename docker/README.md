@@ -177,7 +177,7 @@ TZ=Europe/Berlin  # Your timezone (e.g., America/New_York, UTC)
 | `API_PORT` | `8765` | API port (set in Dockerfile for containers) |
 | `STORAGE__DOWNLOAD_PATH` | `/downloads` | Container download path (set in docker-entrypoint.sh) |
 | `STORAGE__MUSIC_PATH` | `/music` | Container music path (set in docker-entrypoint.sh) |
-| `STORAGE__ARTWORK_PATH` | `/config/artwork` | Container artwork path (set in docker-entrypoint.sh) |
+| `STORAGE__IMAGE_PATH` | `/config/images` | Container image cache path (set in docker-entrypoint.sh) |
 | `STORAGE__TEMP_PATH` | `/config/tmp` | Container temp path (set in docker-entrypoint.sh) |
 
 ---

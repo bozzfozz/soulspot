@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from soulspot.application.services.deezer_auth_service import (
         DeezerAuthService,
     )
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.spotify_auth_service import (
         SpotifyAuthService,
     )
@@ -824,10 +825,10 @@ def get_queue_playlist_downloads_use_case(
 
 
 # Hey future me - this creates SpotifySyncService for auto-syncing Spotify data!
-# REFACTORED to use SpotifyPlugin with Deezer fallback!
+# REFACTORED to use SpotifyPlugin (Dec 2025)!
 # Used by the /spotify/* UI routes to auto-sync on page load and fetch data from DB.
 # Requires both DB session and SpotifyPlugin for API calls + persistence.
-# DeezerPlugin is added for multi-provider fallback (NO AUTH NEEDED for artist albums!).
+# ImageService wird mitgegeben für Bilder-Downloads!
 async def get_spotify_sync_service(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -835,14 +836,12 @@ async def get_spotify_sync_service(
 ) -> AsyncGenerator:
     """Get Spotify sync service for auto-sync and browse.
 
-    Hey future me - refactored to use SpotifyPlugin WITH Deezer fallback!
+    Hey future me - refactored to use SpotifyPlugin (Dec 2025)!
     No more raw SpotifyClient - plugin handles auth and returns DTOs.
     
-    MULTI-PROVIDER (Nov 2025):
-    - Spotify is primary for artists/albums (requires OAuth)
-    - Deezer is fallback for artist albums (NO AUTH NEEDED!)
-    - If user isn't authenticated with Spotify, we try Deezer instead
-    - This ensures artist albums work even without Spotify OAuth!
+    ImageService wird IMMER mitgegeben für Bilder-Downloads!
+    Die download_*_image() Methoden brauchen keine Session -
+    sie geben nur den Pfad zurück, der Caller aktualisiert die DB.
 
     Args:
         request: FastAPI request for app state access
@@ -850,10 +849,10 @@ async def get_spotify_sync_service(
         settings: Application settings
 
     Yields:
-        SpotifySyncService instance
+        SpotifySyncService instance with ImageService
     """
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
-    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
     # Create SpotifyPlugin for the sync service
@@ -873,12 +872,19 @@ async def get_spotify_sync_service(
         access_token=access_token,
     )
 
-    # NOTE (Dec 2025): Deezer fallback removed from SpotifySyncService!
-    # Use DeezerSyncService for Deezer operations instead.
+    # Hey future me - ImageService OHNE Session für Sync-Services!
+    # download_*_image() macht nur: HTTP → WebP → Datei → Pfad zurück
+    # Der Sync-Service aktualisiert selbst die DB mit dem Pfad.
+    # image_path: Docker: /config/images, Local: ./images
+    image_service = ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
 
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,
+        image_service=image_service,
     )
 
 
@@ -940,6 +946,7 @@ async def get_library_view_service(
     Yields:
         LibraryViewService instance
     """
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.library_view_service import LibraryViewService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
@@ -961,9 +968,17 @@ async def get_library_view_service(
                 access_token=access_token,
             )
             
+            # Hey future me - ImageService OHNE Session für Sync-Services!
+            # image_path: Docker: /config/images, Local: ./images
+            image_service = ImageService(
+                cache_base_path=str(settings.storage.image_path),
+                local_serve_prefix="/images/local",
+            )
+            
             spotify_sync = SpotifySyncService(
                 session=session,
                 spotify_plugin=spotify_plugin,
+                image_service=image_service,
             )
     except Exception as e:
         # No auth or error - graceful degradation (show cached data)
@@ -1021,6 +1036,7 @@ def get_deezer_plugin() -> "DeezerPlugin":
 # KEINE OAuth nötig für Charts, New Releases, Artist Albums!
 async def get_deezer_sync_service(
     session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
 ) -> AsyncGenerator:
     """Get Deezer sync service for syncing Deezer data to database.
     
@@ -1032,20 +1048,113 @@ async def get_deezer_sync_service(
     - sync_new_releases() - Neuerscheinungen zu DB
     - sync_artist_albums() - Artist Discographie (Fallback für Spotify!)
     
+    ImageService wird IMMER mitgegeben für Bilder-Downloads!
+    Die download_*_image() Methoden brauchen keine Session -
+    sie geben nur den Pfad zurück, der Caller aktualisiert die DB.
+    
     Args:
         session: Database session
+        settings: App settings for ImageService
 
     Yields:
-        DeezerSyncService instance
+        DeezerSyncService instance with ImageService
     """
     from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.application.services.images import ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     
     deezer_plugin = DeezerPlugin()
     
+    # Hey future me - ImageService OHNE Session für Sync-Services!
+    # download_*_image() macht nur: HTTP → WebP → Datei → Pfad zurück
+    # Der Sync-Service aktualisiert selbst die DB mit dem Pfad.
+    # image_path: Docker: /config/images, Local: ./images
+    image_service = ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
+    
     yield DeezerSyncService(
         session=session,
         deezer_plugin=deezer_plugin,
+        image_service=image_service,
+    )
+
+
+# Hey future me - ImageService ist der ZENTRALE Bild-Service!
+# Handles: URL resolution, download, WebP conversion, cache management.
+# Sync methods für Templates, async methods für Services.
+# KEINE Provider-Logik - Plugins liefern die URLs, ImageService verarbeitet sie.
+def get_image_service(
+    settings: Settings = Depends(get_settings),
+) -> "ImageService":
+    """Get ImageService for all image operations.
+    
+    Hey future me - ZENTRALER Image Service nach Clean Architecture!
+    
+    Features:
+    - get_display_url() - SYNC für Templates (local > CDN > placeholder)
+    - get_best_image() - SYNC Multi-Provider beste verfügbare
+    - download_and_cache() - ASYNC Download + WebP + Cache
+    - validate_image() - ASYNC HEAD-Request CDN-Validität
+    - optimize_cache() - ASYNC Cache-Cleanup
+    
+    WICHTIG: Für async Methoden (download, get_image) session separat übergeben!
+    Sync methods (get_display_url, get_placeholder) brauchen keine Session.
+    
+    Returns:
+        ImageService instance
+    
+    Example:
+        # In Template (sync method):
+        image_service.get_display_url(source_url, local_path, "artist")
+        
+        # In Route (async method):
+        await image_service.download_and_cache(url, "album", entity_id)
+    """
+    from soulspot.application.services.images import ImageService
+    
+    # Hey future me - image_path ist der konfigurierte Bild-Cache-Pfad!
+    # Docker: /config/images (via STORAGE__IMAGE_PATH)
+    # Local dev: ./images
+    return ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
+
+
+# Hey future me - ImageService MIT Session für async Methoden!
+# Nutze diese Dependency wenn du get_image() oder download_and_cache() brauchst.
+# Für reine URL-Resolution (get_display_url) reicht get_image_service().
+async def get_image_service_with_session(
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> "ImageService":
+    """Get ImageService WITH database session for async operations.
+    
+    Hey future me - nutze diese Dependency für async Methoden!
+    
+    Async methods that need session:
+    - get_image() - Loads entity from DB
+    - download_and_cache() - Updates entity image_path in DB
+    - _update_entity_image_path() - Internal DB update
+    
+    Args:
+        session: Database session for entity operations
+        settings: App settings for cache path
+        
+    Returns:
+        ImageService instance with session
+    """
+    from soulspot.application.services.images import ImageService
+    
+    # Hey future me - image_path ist der konfigurierte Bild-Cache-Pfad!
+    # Docker: /config/images (via STORAGE__IMAGE_PATH)
+    # Local dev: ./images
+    return ImageService(
+        session=session,
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
     )
 
 
@@ -1067,6 +1176,8 @@ async def get_provider_sync_orchestrator(
     - sync_related_artists() - Discovery feature
     - sync_charts() - Deezer only (Spotify has no public charts API)
     
+    ImageService wird für BEIDE Sync-Services mitgegeben!
+    
     Args:
         request: FastAPI request (for token access)
         session: Database session
@@ -1076,6 +1187,7 @@ async def get_provider_sync_orchestrator(
     """
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.provider_sync_orchestrator import (
         ProviderSyncOrchestrator,
     )
@@ -1086,11 +1198,19 @@ async def get_provider_sync_orchestrator(
 
     settings = get_settings()
     
+    # Hey future me - ImageService OHNE Session für Sync-Services!
+    # image_path: Docker: /config/images, Local: ./images
+    image_service = ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
+    
     # Deezer is ALWAYS available (NO AUTH NEEDED!)
     deezer_plugin = DeezerPlugin()
     deezer_sync = DeezerSyncService(
         session=session,
         deezer_plugin=deezer_plugin,
+        image_service=image_service,
     )
     
     # Spotify is OPTIONAL (needs OAuth)
@@ -1108,6 +1228,7 @@ async def get_provider_sync_orchestrator(
             spotify_sync = SpotifySyncService(
                 session=session,
                 spotify_plugin=spotify_plugin,
+                image_service=image_service,
             )
     except Exception as e:
         logger.debug(f"No Spotify auth for ProviderSyncOrchestrator: {e}")
