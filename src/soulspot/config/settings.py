@@ -678,18 +678,30 @@ class Settings(BaseSettings):
     # later during first download! The exists_ok=True means no error if directories already exist.
     def ensure_directories(self) -> None:
         """Ensure all storage directories exist, including database parent directory."""
-        # Ensure storage directories exist
-        self.storage.download_path.mkdir(parents=True, exist_ok=True)
-        self.storage.music_path.mkdir(parents=True, exist_ok=True)
-        self.storage.image_path.mkdir(parents=True, exist_ok=True)
-        self.storage.temp_path.mkdir(parents=True, exist_ok=True)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Ensure storage directories exist with logging
+        for name, path in [
+            ("Downloads", self.storage.download_path),
+            ("Music", self.storage.music_path),
+            ("Images", self.storage.image_path),
+            ("Temp", self.storage.temp_path),
+        ]:
+            existed = path.exists()
+            path.mkdir(parents=True, exist_ok=True)
+            status = "exists" if existed else "created"
+            logger.info("Storage path %s: %s (%s)", name, path, status)
 
         # Ensure database parent directory exists for SQLite
         db_path = self._get_sqlite_db_path()
         if db_path is not None:
             db_parent = db_path.parent
             if db_parent and str(db_parent) != ".":
+                existed = db_parent.exists()
                 db_parent.mkdir(parents=True, exist_ok=True)
+                status = "exists" if existed else "created"
+                logger.info("Database directory: %s (%s)", db_parent, status)
 
 
 # Listen up future me, @lru_cache makes this a SINGLETON! First call creates Settings by reading .env

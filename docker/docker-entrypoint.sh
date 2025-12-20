@@ -135,6 +135,14 @@ export STORAGE__TEMP_PATH="${STORAGE__TEMP_PATH:-/config/tmp}"
 mkdir -p /config/images /config/tmp
 chown -R $PUID:$PGID /config/images /config/tmp
 
+# Log storage paths
+echo ""
+echo "Storage Paths:"
+echo -e "${GREEN}✓${NC} Downloads:    $STORAGE__DOWNLOAD_PATH $([ -d "$STORAGE__DOWNLOAD_PATH" ] && echo '(exists)' || echo '(will be mounted)')"
+echo -e "${GREEN}✓${NC} Music:        $STORAGE__MUSIC_PATH $([ -d "$STORAGE__MUSIC_PATH" ] && echo '(exists)' || echo '(will be mounted)')"
+echo -e "${GREEN}✓${NC} Images:       $STORAGE__IMAGE_PATH $([ -d "$STORAGE__IMAGE_PATH" ] && echo '(exists)' || echo '(created)')"
+echo -e "${GREEN}✓${NC} Temp:         $STORAGE__TEMP_PATH $([ -d "$STORAGE__TEMP_PATH" ] && echo '(exists)' || echo '(created)')"
+
 echo ""
 echo "Initializing database..."
 
