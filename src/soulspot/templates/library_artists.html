@@ -53,7 +53,7 @@
         </div>
         <button id="enrich-btn" 
                 class="btn btn-primary btn-sm"
-                hx-post="/api/library/enrichment/trigger"
+                hx-post="/api/enrichment/trigger"
                 hx-swap="none"
                 hx-on::after-request="startEnrichmentPolling()">
             <i class="bi bi-cloud-download"></i>
@@ -334,7 +334,7 @@ function startEnrichmentPolling() {
     // Start polling for status
     enrichmentPollInterval = setInterval(async () => {
         try {
-            const response = await fetch('/api/library/enrichment/status');
+            const response = await fetch('/api/enrichment/status');
             const data = await response.json();
             
             // Update progress text
