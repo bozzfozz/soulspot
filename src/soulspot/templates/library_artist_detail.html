@@ -66,11 +66,8 @@
         {% for album in artist.albums %}
         <a href="/library/albums/{{ album.id }}" class="album-card">
             <div class="album-cover">
-                {% if album.artwork_url %}
-                <img src="{{ album.artwork_url }}" alt="{{ album.title }}" loading="lazy">
-                {% else %}
-                <i class="bi bi-disc"></i>
-                {% endif %}
+                {# ImageService provides: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
                 {# Album type badge - show for all types (single/EP/album/compilation) #}
                 {% set is_compilation = "compilation" in (album.secondary_types or []) %}
                 {% if is_compilation %}

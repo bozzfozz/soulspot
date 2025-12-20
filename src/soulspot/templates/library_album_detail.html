@@ -29,11 +29,8 @@
 <!-- Album Header -->
 <div style="display: flex; flex-wrap: wrap; gap: var(--space-6); margin-bottom: var(--space-8);">
     <div class="album-cover-large">
-        {% if album.artwork_url %}
-        <img src="{{ album.artwork_url }}" alt="{{ album.title }}" loading="lazy">
-        {% else %}
-        <i class="bi bi-disc"></i>
-        {% endif %}
+        {# ImageService provides: local cache > CDN > placeholder #}
+        <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
     </div>
     <div style="flex: 1; min-width: 200px;">
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ album.title }}</h1>

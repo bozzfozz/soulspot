@@ -58,13 +58,8 @@
            data-year="{{ album.year or 0 }}"
            data-track-count="{{ album.total_tracks }}">
             <div class="album-cover">
-                {% if album.artwork_path %}
-                <img src="/api/artwork/{{ album.artwork_path }}" alt="{{ album.title }}" loading="lazy">
-                {% elif album.artwork_url %}
-                <img src="{{ album.artwork_url }}" alt="{{ album.title }}" loading="lazy">
-                {% else %}
-                <i class="bi bi-disc"></i>
-                {% endif %}
+                {# ImageService provides: local cache > CDN > placeholder #}
+                <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
                 {# Type badge - text only, no icons #}
                 {% if album.is_compilation %}
                 <span class="album-type-badge album-type-compilation">Compilation</span>

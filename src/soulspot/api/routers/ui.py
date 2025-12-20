@@ -1276,6 +1276,7 @@ async def library_artists(
             "total_albums": total_albums or 0,  # ALL albums
             "local_albums": local_albums or 0,  # Only albums with local tracks
             "image_url": artist.image_url,  # Spotify CDN URL or None
+            "image_path": artist.image_path,  # Local cached image path or None
             "genres": artist.genres,  # JSON list of genres (from Spotify)
         }
         for artist, total_tracks, local_tracks, total_albums, local_albums in rows
@@ -1755,6 +1756,7 @@ async def library_artist_detail(
             "track_count": 0,  # Will be updated from tracks
             "year": album.release_year,
             "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
+            "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
             "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
             "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
             "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
@@ -1797,6 +1799,7 @@ async def library_artist_detail(
         "track_count": len(tracks_data),
         "album_count": len(albums),
         "image_url": artist_model.image_url,  # Spotify CDN URL or None
+        "image_path": artist_model.image_path,  # Local cached image path or None
         "genres": artist_model.genres,  # Spotify genres
     }
 
@@ -1892,6 +1895,7 @@ async def library_album_detail(
             "year": album_model.release_year if hasattr(album_model, "release_year") else None,
             "total_duration_ms": 0,
             "artwork_url": album_model.cover_url if hasattr(album_model, "cover_url") else None,
+            "artwork_path": album_model.cover_path if hasattr(album_model, "cover_path") else None,
             "is_compilation": "compilation" in (album_model.secondary_types or []),
             "needs_sync": True,  # Flag to show "Sync required" message
             "source": album_model.source,
@@ -1946,6 +1950,15 @@ async def library_album_detail(
         and hasattr(track_models[0].album, "cover_url")
         else None
     )
+    
+    # Get local artwork path
+    artwork_path = (
+        track_models[0].album.cover_path
+        if track_models
+        and track_models[0].album
+        and hasattr(track_models[0].album, "cover_path")
+        else None
+    )
 
     # Get album ID and is_compilation for compilation features
     album_id = (
@@ -1967,6 +1980,7 @@ async def library_album_detail(
         "year": year,
         "total_duration_ms": total_duration_ms,
         "artwork_url": artwork_url,  # Spotify CDN URL or None
+        "artwork_path": artwork_path,  # Local cached image path or None
         "is_compilation": is_compilation,  # For compilation badge and override UI
     }
 
