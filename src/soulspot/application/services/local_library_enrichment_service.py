@@ -65,6 +65,7 @@ from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 if TYPE_CHECKING:
     from soulspot.config import Settings
+    from soulspot.domain.ports.image_provider import IImageProviderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -209,6 +210,7 @@ class LocalLibraryEnrichmentService:
         session: AsyncSession,
         spotify_plugin: SpotifyPlugin | None,
         settings: Settings,
+        image_provider_registry: IImageProviderRegistry | None = None,
     ) -> None:
         """Initialize enrichment service.
 
@@ -220,14 +222,25 @@ class LocalLibraryEnrichmentService:
         - merge_artists/albums
         - enrich_disambiguation_batch (nur MusicBrainz)
 
+        image_provider_registry ist OPTIONAL für Rückwärtskompatibilität:
+        - Wenn vorhanden: Nutzt multi-provider fallback (Spotify → Deezer → CAA)
+        - Wenn None: Nutzt legacy single-client approach (Spotify/Deezer/CAA direkt)
+        - Neue Instanzen sollten immer mit registry erstellt werden!
+
         Args:
             session: Database session
             spotify_plugin: Spotify plugin (handles auth internally), optional
             settings: Application settings
+            image_provider_registry: Multi-provider image registry, optional
         """
         self._session = session
         self._spotify_plugin = spotify_plugin
         self._settings = settings
+
+        # Hey future me - ImageProviderRegistry is our NEW multi-provider fallback system!
+        # If registry is provided, use it for image fetching (Spotify → Deezer → CAA).
+        # If None, we fall back to the legacy single-client approach (backwards compat).
+        self._image_provider_registry = image_provider_registry
 
         # Repositories
         self._artist_repo = ArtistRepository(session)
@@ -261,6 +274,77 @@ class LocalLibraryEnrichmentService:
         # Pass the musicbrainz settings from the main config!
         self._musicbrainz_client = MusicBrainzClient(settings.musicbrainz)
 
+    # =========================================================================
+    # MULTI-PROVIDER IMAGE FETCHING (Jan 2025)
+    # Hey future me - this is the NEW way to fetch images using the registry!
+    # The registry tries providers in order (Spotify → Deezer → CAA) until
+    # one succeeds. This replaces the scattered image fetch code.
+    # =========================================================================
+
+    async def _get_artist_image_via_registry(
+        self,
+        artist_name: str,
+        spotify_uri: str | None = None,
+    ) -> str | None:
+        """Get artist image URL using multi-provider registry.
+
+        Hey future me - this method uses the NEW ImageProviderRegistry!
+        It tries providers in priority order: Spotify → Deezer → CoverArtArchive.
+        Falls back to legacy approach if registry is not configured.
+
+        Args:
+            artist_name: Artist name for search-based lookup
+            spotify_uri: Optional Spotify URI for direct lookup (format: spotify:artist:ID)
+
+        Returns:
+            Image URL if found, None otherwise
+        """
+        if not self._image_provider_registry:
+            # Legacy fallback - no registry configured
+            return None
+
+        spotify_id = spotify_uri.split(":")[-1] if spotify_uri else None
+
+        image_ref = await self._image_provider_registry.get_artist_image(
+            artist_name=artist_name,
+            provider_artist_id=spotify_id,
+        )
+
+        return image_ref.url if image_ref else None
+
+    async def _get_album_image_via_registry(
+        self,
+        album_title: str,
+        artist_name: str,
+        spotify_uri: str | None = None,
+    ) -> str | None:
+        """Get album image URL using multi-provider registry.
+
+        Hey future me - this method uses the NEW ImageProviderRegistry!
+        It tries providers in priority order: Spotify → Deezer → CoverArtArchive.
+        Falls back to legacy approach if registry is not configured.
+
+        Args:
+            album_title: Album title for search-based lookup
+            artist_name: Artist name for search context
+            spotify_uri: Optional Spotify URI for direct lookup (format: spotify:album:ID)
+
+        Returns:
+            Image URL if found, None otherwise
+        """
+        if not self._image_provider_registry:
+            # Legacy fallback - no registry configured
+            return None
+
+        spotify_id = spotify_uri.split(":")[-1] if spotify_uri else None
+
+        image_ref = await self._image_provider_registry.get_album_image(
+            album_title=album_title,
+            artist_name=artist_name,
+            provider_album_id=spotify_id,
+        )
+
+        return image_ref.url if image_ref else None
 
     # =========================================================================
     # MAIN BATCH ENRICHMENT
@@ -784,21 +868,31 @@ class LocalLibraryEnrichmentService:
             stats["processed"] += 1
 
             try:
-                # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
-                spotify_id = artist.spotify_uri.value.split(":")[-1]
-
-                # Hey future me - wir nutzen SpotifyPlugin statt SpotifyClient!
-                # Plugin gibt ArtistDTO zurück. ArtistDTO.image ist ImageRef!
-                artist_dto = await self._spotify_plugin.get_artist(
-                    artist_id=spotify_id,
+                # Hey future me - TRY REGISTRY FIRST for multi-provider fallback!
+                # Registry tries: Spotify → Deezer → CoverArtArchive
+                # Falls back to direct Spotify plugin if no registry configured.
+                artwork_url = await self._get_artist_image_via_registry(
+                    artist_name=artist.name,
+                    spotify_uri=artist.spotify_uri.value,
                 )
 
-                # Hey future me - ArtistDTO.image ist ImageRef!
-                if not artist_dto.image.url:
-                    logger.debug(f"No images available for artist {artist.name}")
-                    continue
+                if not artwork_url:
+                    # Fallback to direct Spotify plugin call (legacy behavior)
+                    # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
+                    spotify_id = artist.spotify_uri.value.split(":")[-1]
 
-                artwork_url = artist_dto.image.url
+                    # Hey future me - wir nutzen SpotifyPlugin statt SpotifyClient!
+                    # Plugin gibt ArtistDTO zurück. ArtistDTO.image ist ImageRef!
+                    artist_dto = await self._spotify_plugin.get_artist(
+                        artist_id=spotify_id,
+                    )
+
+                    # Hey future me - ArtistDTO.image ist ImageRef!
+                    if not artist_dto.image.url:
+                        logger.debug(f"No images available for artist {artist.name}")
+                        continue
+
+                    artwork_url = artist_dto.image.url
 
                 # Download artwork
                 local_path = await self._image_service.download_artist_image(

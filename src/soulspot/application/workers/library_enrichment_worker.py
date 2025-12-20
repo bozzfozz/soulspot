@@ -95,6 +95,14 @@ class LibraryEnrichmentWorker:
         from soulspot.application.services.local_library_enrichment_service import (
             LocalLibraryEnrichmentService,
         )
+        from soulspot.application.services.images.image_provider_registry import (
+            ImageProviderRegistry,
+        )
+        from soulspot.infrastructure.image_providers import (
+            CoverArtArchiveImageProvider,
+            DeezerImageProvider,
+            SpotifyImageProvider,
+        )
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
         from soulspot.infrastructure.persistence.repositories import (
             SpotifyTokenRepository,
@@ -115,24 +123,46 @@ class LibraryEnrichmentWorker:
                 token_repo = SpotifyTokenRepository(session)
                 token_model = await token_repo.get_active_token()
 
-                if not token_model or not token_model.access_token:
-                    logger.warning("No valid Spotify token available for enrichment")
-                    return {
-                        "success": False,
-                        "error": "No valid Spotify token. Please re-authenticate.",
-                    }
+                # Hey future me - Spotify token is OPTIONAL now!
+                # We can still enrich using Deezer/CoverArtArchive even without Spotify.
+                access_token = token_model.access_token if token_model else None
+                spotify_plugin: SpotifyPlugin | None = None
 
-                access_token = token_model.access_token
+                if access_token:
+                    # Hey future me - SpotifyPlugin erstellen mit Token!
+                    # Das Plugin managed den Token intern.
+                    spotify_client = SpotifyClient(self.settings.spotify)
+                    spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+                else:
+                    logger.info(
+                        "No Spotify token available - will use Deezer/CoverArtArchive only for images"
+                    )
 
-                # Hey future me - SpotifyPlugin erstellen mit Token!
-                # Das Plugin managed den Token intern.
-                spotify_client = SpotifyClient(self.settings.spotify)
-                spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+                # Hey future me - Build the ImageProviderRegistry with all available providers!
+                # This enables multi-source fallback: Spotify → Deezer → CoverArtArchive
+                # Each provider is registered with a priority (lower = higher priority)
+                image_registry = ImageProviderRegistry()
+
+                # Register providers based on availability
+                # Priority: Spotify (1) → Deezer (2) → CoverArtArchive (3)
+                if spotify_plugin:
+                    image_registry.register(SpotifyImageProvider(spotify_plugin), priority=1)
+
+                # Deezer is always available (no auth required)
+                image_registry.register(DeezerImageProvider(), priority=2)
+
+                # CoverArtArchive is always available (no auth required, albums only)
+                image_registry.register(CoverArtArchiveImageProvider(), priority=3)
+
+                logger.debug(
+                    f"ImageProviderRegistry configured with {len(image_registry.get_available_providers())} providers"
+                )
 
                 service = LocalLibraryEnrichmentService(
                     session=session,
                     spotify_plugin=spotify_plugin,
                     settings=self.settings,
+                    image_provider_registry=image_registry,
                 )
 
                 # Run batch enrichment

@@ -67,6 +67,11 @@ from soulspot.application.services.images.image_service import (
     WEBP_QUALITY,
 )
 
+# Provider Registry (Multi-Source Image System)
+from soulspot.application.services.images.image_provider_registry import (
+    ImageProviderRegistry,
+)
+
 __all__ = [
     # DTOs from Domain Port
     "EntityType",
@@ -81,5 +86,7 @@ __all__ = [
     "ImageDownloadResult",
     "IMAGE_SIZES",
     "WEBP_QUALITY",
+    # Multi-Source Provider Registry
+    "ImageProviderRegistry",
 ]
 
