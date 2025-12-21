@@ -1011,6 +1011,15 @@ class LocalLibraryEnrichmentService:
             stats["errors"].append({"error": "ImageProviderRegistry not configured"})
             return stats
 
+        registered_providers = self._image_provider_registry.get_registered_providers()
+        available_providers = await self._image_provider_registry.get_available_providers()
+        available_provider_names = [p.provider_name for p in available_providers]
+        if not available_provider_names:
+            logger.info(
+                "Album cover repair: no image providers available (registered=%s)",
+                registered_providers,
+            )
+
         for album in albums:
             stats["processed"] += 1
 
@@ -1039,6 +1048,30 @@ class LocalLibraryEnrichmentService:
 
                 if not image_result:
                     stats["no_image_found"] += 1
+
+                    # Hey future me - this is the missing visibility: WHY did this album get no cover?
+                    # We log provider availability + IDs + the exact query shape providers use.
+                    normalized_title = " ".join(album.title.split()) if album.title else ""
+                    simplified_title = normalized_title
+                    if "(" in simplified_title and ")" in simplified_title:
+                        simplified_title = simplified_title.split("(", 1)[0].strip()
+
+                    query = normalized_title
+                    if artist_name and normalized_title:
+                        query = f"{artist_name} {normalized_title}"
+
+                    logger.info(
+                        "No album cover found: artist='%s' album='%s' (album_id=%s, spotify_uri=%s, album_ids=%s, query='%s', simplified_title='%s', available_providers=%s, registered_providers=%s)",
+                        artist_name,
+                        normalized_title,
+                        album.id,
+                        album.spotify_uri,
+                        album_ids,
+                        query,
+                        simplified_title,
+                        available_provider_names,
+                        registered_providers,
+                    )
                     continue
 
                 # Use provider ID if we have one; otherwise use stable UUID to avoid collisions.
@@ -1060,6 +1093,17 @@ class LocalLibraryEnrichmentService:
                             "error": download_result.error_message,
                         }
                     )
+
+                    logger.warning(
+                        "Album cover download failed: artist='%s' album='%s' (album_id=%s, provider=%s, provider_id=%s, image_url=%s, error=%s)",
+                        artist_name,
+                        album.title,
+                        album.id,
+                        image_result.provider,
+                        provider_id,
+                        image_result.url,
+                        download_result.error_message,
+                    )
                     continue
 
                 album.cover_url = image_result.url
@@ -1069,6 +1113,14 @@ class LocalLibraryEnrichmentService:
                 stats["repaired"] += 1
 
             except Exception as e:
+                logger.warning(
+                    "Album cover repair error: artist='%s' album='%s' (album_id=%s, spotify_uri=%s): %s",
+                    getattr(getattr(album, "artist", None), "name", None) or "Unknown Artist",
+                    getattr(album, "title", None) or "",
+                    getattr(album, "id", None),
+                    getattr(album, "spotify_uri", None),
+                    e,
+                )
                 stats["errors"].append(
                     {"album": album.title, "error": str(e)}
                 )
