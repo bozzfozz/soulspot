@@ -103,7 +103,13 @@ class LibraryEnrichmentWorker:
             DeezerImageProvider,
             SpotifyImageProvider,
         )
+        from soulspot.infrastructure.integrations.coverartarchive_client import (
+            CoverArtArchiveClient,
+        )
         from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+        from soulspot.infrastructure.integrations.musicbrainz_client import (
+            MusicBrainzClient,
+        )
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
         from soulspot.infrastructure.persistence.repositories import (
             SpotifyTokenRepository,
@@ -155,7 +161,13 @@ class LibraryEnrichmentWorker:
                 image_registry.register(DeezerImageProvider(deezer_client), priority=2)
 
                 # CoverArtArchive is always available (no auth required, albums only)
-                image_registry.register(CoverArtArchiveImageProvider(), priority=3)
+                # Hey future me - CAA provider needs BOTH MusicBrainz + CAA clients.
+                mb_client = MusicBrainzClient(self.settings.musicbrainz)
+                caa_client = CoverArtArchiveClient()
+                image_registry.register(
+                    CoverArtArchiveImageProvider(musicbrainz_client=mb_client, caa_client=caa_client),
+                    priority=3,
+                )
 
                 logger.debug(
                     f"ImageProviderRegistry configured with {len(image_registry.get_available_providers())} providers"
