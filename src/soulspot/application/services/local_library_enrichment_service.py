@@ -304,10 +304,11 @@ class LocalLibraryEnrichmentService:
             return None
 
         spotify_id = spotify_uri.split(":")[-1] if spotify_uri else None
+        artist_ids = {"spotify": spotify_id} if spotify_id else {}
 
         image_ref = await self._image_provider_registry.get_artist_image(
             artist_name=artist_name,
-            provider_artist_id=spotify_id,
+            artist_ids=artist_ids,
         )
 
         return image_ref.url if image_ref else None
@@ -336,12 +337,20 @@ class LocalLibraryEnrichmentService:
             # Legacy fallback - no registry configured
             return None
 
-        spotify_id = spotify_uri.split(":")[-1] if spotify_uri else None
+        album_ids: dict[str, str] = {}
+        if spotify_uri:
+            parts = spotify_uri.split(":")
+            # spotify:album:ID
+            if len(parts) >= 3 and parts[0] == "spotify" and parts[1] == "album":
+                album_ids["spotify"] = parts[-1]
+            # deezer:ID (used by Deezer-only enrichment)
+            elif len(parts) >= 2 and parts[0] == "deezer":
+                album_ids["deezer"] = parts[-1]
 
         image_ref = await self._image_provider_registry.get_album_image(
             album_title=album_title,
             artist_name=artist_name,
-            provider_album_id=spotify_id,
+            album_ids=album_ids,
         )
 
         return image_ref.url if image_ref else None
@@ -869,12 +878,24 @@ class LocalLibraryEnrichmentService:
 
             try:
                 # Hey future me - TRY REGISTRY FIRST for multi-provider fallback!
-                # Registry tries: Spotify → Deezer → CoverArtArchive
-                # Falls back to direct Spotify plugin if no registry configured.
-                artwork_url = await self._get_artist_image_via_registry(
-                    artist_name=artist.name,
-                    spotify_uri=artist.spotify_uri.value,
-                )
+                # If registry returns a provider, we use that provider name for caching.
+                artwork_url: str | None = None
+                provider = "spotify"
+
+                if self._image_provider_registry:
+                    spotify_id = artist.spotify_uri.value.split(":")[-1]
+                    image_result = await self._image_provider_registry.get_artist_image(
+                        artist_name=artist.name,
+                        artist_ids={"spotify": spotify_id} if spotify_id else {},
+                    )
+                    if image_result:
+                        artwork_url = image_result.url
+                        provider = image_result.provider
+                else:
+                    artwork_url = await self._get_artist_image_via_registry(
+                        artist_name=artist.name,
+                        spotify_uri=artist.spotify_uri.value,
+                    )
 
                 if not artwork_url:
                     # Fallback to direct Spotify plugin call (legacy behavior)
@@ -894,10 +915,16 @@ class LocalLibraryEnrichmentService:
 
                     artwork_url = artist_dto.image.url
 
-                # Download artwork
-                local_path = await self._image_service.download_artist_image(
+                # Hey future me - ImageService downloads require a stable provider_id.
+                # Prefer Spotify ID (best cache reuse). Fall back to UUID if we only have search.
+                provider_id = artist.spotify_uri.value.split(":")[-1]
+                if not provider_id:
+                    provider_id = str(artist.id.value)
+
+                download_result = await self._image_service.download_artist_image_with_result(
+                    provider_id=provider_id,
                     image_url=artwork_url,
-                    artist_name=artist.name,
+                    provider=provider,
                 )
 
                 # Update artist in database - Model.image_url ist DB-Spalte
@@ -910,10 +937,15 @@ class LocalLibraryEnrichmentService:
 
                 if model:
                     model.image_url = artwork_url
-                    model.image_path = str(local_path) if local_path else None
+                    model.image_path = download_result.path if download_result.success else None
                     model.updated_at = datetime.now(UTC)
-                    stats["repaired"] += 1
-                    logger.info(f"Repaired artwork for artist: {artist.name}")
+                    if download_result.success:
+                        stats["repaired"] += 1
+                        logger.info(f"Repaired artwork for artist: {artist.name}")
+                    else:
+                        stats["errors"].append(
+                            {"name": artist.name, "error": download_result.error_message}
+                        )
 
                 # Rate limiting
                 await asyncio.sleep(0.05)  # 50ms between API calls
@@ -925,6 +957,123 @@ class LocalLibraryEnrichmentService:
         await self._session.commit()
         logger.info(f"Artwork repair complete: {stats['repaired']} artists repaired")
 
+        return stats
+
+    async def repair_missing_album_artwork(self, limit: int = 100) -> dict[str, Any]:
+        """Fetch and download album covers for local albums missing artwork.
+
+        Hey future me - this is the counterpart to repair_missing_artwork() but for ALBUMS.
+        The UI enrichment button was originally "fetch artist images"; users also expect
+        album covers to appear for their local library, even if albums are not fully enriched.
+
+        Strategy:
+        - Only touch albums that have local tracks (file_path set)
+        - If cover_url is missing, ask ImageProviderRegistry (Deezer/Spotify search + fallback)
+        - Download via ImageService and store both cover_url (remote) + cover_path (local cache)
+
+        Args:
+            limit: Maximum number of albums to process
+
+        Returns:
+            Stats dict with repaired count and errors
+        """
+        stats: dict[str, Any] = {
+            "processed": 0,
+            "repaired": 0,
+            "already_has_artwork": 0,
+            "no_image_found": 0,
+            "errors": [],
+        }
+
+        # Only process albums that actually exist in local library
+        has_local_tracks = (
+            select(TrackModel.id)
+            .where(TrackModel.album_id == AlbumModel.id)
+            .where(TrackModel.file_path.isnot(None))
+            .exists()
+        )
+
+        stmt = (
+            select(AlbumModel)
+            .where(has_local_tracks)
+            .where((AlbumModel.cover_url.is_(None)) | (AlbumModel.cover_url == ""))
+            .order_by(AlbumModel.title)
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        albums = result.scalars().all()
+
+        if not albums:
+            return stats
+
+        if not self._image_provider_registry:
+            # Registry is optional for backwards compat; without it, we skip.
+            stats["errors"].append({"error": "ImageProviderRegistry not configured"})
+            return stats
+
+        for album in albums:
+            stats["processed"] += 1
+
+            if album.cover_url:
+                stats["already_has_artwork"] += 1
+                continue
+
+            try:
+                artist_model = await self._session.get(ArtistModel, album.artist_id)
+                artist_name = artist_model.name if artist_model else "Unknown Artist"
+
+                # Prefer direct provider IDs when we have them.
+                album_ids: dict[str, str] = {}
+                if album.spotify_uri:
+                    parts = album.spotify_uri.split(":")
+                    if len(parts) >= 3 and parts[0] == "spotify" and parts[1] == "album":
+                        album_ids["spotify"] = parts[-1]
+                    elif len(parts) >= 2 and parts[0] == "deezer":
+                        album_ids["deezer"] = parts[-1]
+
+                image_result = await self._image_provider_registry.get_album_image(
+                    album_title=album.title,
+                    artist_name=artist_name,
+                    album_ids=album_ids,
+                )
+
+                if not image_result:
+                    stats["no_image_found"] += 1
+                    continue
+
+                # Use provider ID if we have one; otherwise use stable UUID to avoid collisions.
+                provider_id = album_ids.get(image_result.provider)  # type: ignore[arg-type]
+                if not provider_id:
+                    provider_id = album.id
+
+                download_result = await self._image_service.download_album_image_with_result(
+                    provider_id=provider_id,
+                    image_url=image_result.url,
+                    provider=image_result.provider,
+                )
+
+                if not download_result.success:
+                    stats["errors"].append(
+                        {
+                            "album": album.title,
+                            "artist": artist_name,
+                            "error": download_result.error_message,
+                        }
+                    )
+                    continue
+
+                album.cover_url = image_result.url
+                album.cover_path = download_result.path
+                album.updated_at = datetime.now(UTC)
+
+                stats["repaired"] += 1
+
+            except Exception as e:
+                stats["errors"].append(
+                    {"album": album.title, "error": str(e)}
+                )
+
+        await self._session.commit()
         return stats
 
     # =========================================================================

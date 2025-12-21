@@ -48,8 +48,11 @@
             <i class="bi bi-image"></i>
         </div>
         <div class="enrichment-banner-text">
-            <strong>{{ artists_without_image }} artist{{ 's' if artists_without_image != 1 else '' }} missing artwork</strong>
-            <span>Click to fetch artist images</span>
+            <strong>
+                {{ artists_without_image }} artist{{ 's' if artists_without_image != 1 else '' }} +
+                {{ albums_without_cover }} album{{ 's' if albums_without_cover != 1 else '' }} missing artwork
+            </strong>
+            <span>Click to fetch artist images and album covers</span>
         </div>
         <button id="enrich-btn" 
                 class="btn btn-primary btn-sm"

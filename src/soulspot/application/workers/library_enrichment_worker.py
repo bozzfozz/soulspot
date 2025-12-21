@@ -98,22 +98,12 @@ class LibraryEnrichmentWorker:
         from soulspot.application.services.images.image_provider_registry import (
             ImageProviderRegistry,
         )
-        from soulspot.infrastructure.image_providers import (
-            CoverArtArchiveImageProvider,
-            DeezerImageProvider,
-            SpotifyImageProvider,
-        )
-        from soulspot.infrastructure.integrations.coverartarchive_client import (
-            CoverArtArchiveClient,
-        )
-        from soulspot.infrastructure.integrations.deezer_client import DeezerClient
-        from soulspot.infrastructure.integrations.musicbrainz_client import (
-            MusicBrainzClient,
-        )
+        from soulspot.infrastructure.providers import DeezerImageProvider, SpotifyImageProvider
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
         from soulspot.infrastructure.persistence.repositories import (
             SpotifyTokenRepository,
         )
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
         from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
         payload = job.payload
@@ -156,18 +146,9 @@ class LibraryEnrichmentWorker:
                     image_registry.register(SpotifyImageProvider(spotify_plugin), priority=1)
 
                 # Deezer is always available (no auth required)
-                # Hey future me - DeezerImageProvider wraps DeezerClient (public API, no auth).
-                deezer_client = DeezerClient()
-                image_registry.register(DeezerImageProvider(deezer_client), priority=2)
-
-                # CoverArtArchive is always available (no auth required, albums only)
-                # Hey future me - CAA provider needs BOTH MusicBrainz + CAA clients.
-                mb_client = MusicBrainzClient(self.settings.musicbrainz)
-                caa_client = CoverArtArchiveClient()
-                image_registry.register(
-                    CoverArtArchiveImageProvider(musicbrainz_client=mb_client, caa_client=caa_client),
-                    priority=3,
-                )
+                # Hey future me - DeezerImageProvider wraps DeezerPlugin (public API works without OAuth).
+                deezer_plugin = DeezerPlugin()
+                image_registry.register(DeezerImageProvider(deezer_plugin), priority=2)
 
                 # Hey future me - get_available_providers() is ASYNC (checks is_available()).
                 # If you forget to await it, you'll get a coroutine warning + TypeError on len().
@@ -186,6 +167,20 @@ class LibraryEnrichmentWorker:
 
                 # Run batch enrichment
                 stats = await service.enrich_batch()
+
+                # Repair missing artwork for already-enriched artists (spotify_uri present but image missing)
+                artist_artwork_stats = await service.repair_missing_artwork(limit=200)
+                stats["artist_artwork_processed"] = artist_artwork_stats.get("processed", 0)
+                stats["artist_artwork_repaired"] = artist_artwork_stats.get("repaired", 0)
+                stats["artist_artwork_errors"] = artist_artwork_stats.get("errors", [])
+
+                # Hey future me - the enrichment UI button is used to "fetch artwork".
+                # Users expect this to also fill in missing ALBUM covers, not only artist images.
+                # This does NOT change spotify_uri matching; it only fetches cover_url/cover_path.
+                cover_stats = await service.repair_missing_album_artwork(limit=200)
+                stats["album_covers_processed"] = cover_stats.get("processed", 0)
+                stats["album_covers_repaired"] = cover_stats.get("repaired", 0)
+                stats["album_covers_errors"] = cover_stats.get("errors", [])
 
                 logger.info(
                     f"Enrichment job {job.id} complete: "

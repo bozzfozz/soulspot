@@ -1282,10 +1282,25 @@ async def library_artists(
         for artist, total_tracks, local_tracks, total_albums, local_albums in rows
     ]
 
-    # Check for unenriched artists on THIS PAGE (have local files but no image)
-    # Hey future me - count artists that need Spotify enrichment for artwork!
+    # Check for missing artwork (artists + albums)
+    # Hey future me - the enrichment button fetches BOTH artist images and album covers.
     artists_without_image = sum(1 for a in artists if not a["image_url"])
-    enrichment_needed = artists_without_image > 0
+
+    has_local_album_tracks = (
+        select(TrackModel.id)
+        .where(TrackModel.album_id == AlbumModel.id)
+        .where(TrackModel.file_path.isnot(None))
+        .exists()
+    )
+    albums_without_cover_stmt = (
+        select(func.count(AlbumModel.id))
+        .where(has_local_album_tracks)
+        .where((AlbumModel.cover_url.is_(None)) | (AlbumModel.cover_url == ""))
+    )
+    albums_without_cover_result = await session.execute(albums_without_cover_stmt)
+    albums_without_cover = albums_without_cover_result.scalar() or 0
+
+    enrichment_needed = (artists_without_image + albums_without_cover) > 0
 
     # Count ALL artists by source for filter badges (not just current page!)
     # Hey future me - these counts come from DB, not from current page data
@@ -1317,6 +1332,7 @@ async def library_artists(
             "artists": artists,
             "enrichment_needed": enrichment_needed,
             "artists_without_image": artists_without_image,
+            "albums_without_cover": albums_without_cover,
             "current_source": source or "all",  # Active filter
             "source_counts": source_counts,  # For filter badge counts
             "total_count": total_count,  # Total artists shown
