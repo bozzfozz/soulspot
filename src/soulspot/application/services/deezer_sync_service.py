@@ -651,13 +651,18 @@ class DeezerSyncService:
             
             if existing:
                 # Update existing - Model.cover_url ist DB-Spalte
+                # CRITICAL: Check if we need to download BEFORE updating cover_url!
+                old_cover_url = existing.cover_url
+                old_cover_path = existing.cover_path
+                
                 existing.title = album_dto.title
                 existing.cover_url = dto_cover_url or existing.cover_url
                 
-                # Download album cover if URL changed (Deezer provider)
+                # Download album cover if URL changed or no local copy (Deezer provider)
+                # Hey future me - we use OLD values here to detect changes!
                 if self._image_service and album_dto.deezer_id and dto_cover_url:
                     if await self._image_service.should_redownload(
-                        existing.cover_url, dto_cover_url, existing.cover_path
+                        old_cover_url, dto_cover_url, old_cover_path
                     ):
                         cover_path = await self._image_service.download_album_image(
                             album_dto.deezer_id, dto_cover_url, provider="deezer"

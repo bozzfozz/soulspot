@@ -878,19 +878,44 @@ async def download_all_images(
     )
     
     try:
-        # Artists with image_url but no image_path
+        from pathlib import Path
+        
+        # Artists with image_url - check if path missing OR file doesn't exist
         artist_stmt = select(ArtistModel).where(
             ArtistModel.image_url.isnot(None),
-            ArtistModel.image_path.is_(None),
         )
         artist_results = await session.execute(artist_stmt)
         artists = artist_results.scalars().all()
         
-        logger.info(f"📥 Bulk Download: Found {len(artists)} artists needing images")
+        # Count how many actually need download
+        artists_needing_download = 0
+        for artist in artists:
+            if not artist.image_path:
+                artists_needing_download += 1
+            elif artist.image_path:
+                full_path = Path(image_service.cache_base_path) / artist.image_path
+                if not full_path.exists():
+                    artists_needing_download += 1
+        
+        logger.info(f"📥 Bulk Download: Found {artists_needing_download} artists needing images")
         
         for artist in artists:
             try:
                 if artist.image_url:
+                    # Check if download is needed: no path OR file doesn't exist
+                    needs_download = False
+                    if not artist.image_path:
+                        needs_download = True
+                    elif artist.image_path:
+                        full_path = Path(image_service.cache_base_path) / artist.image_path
+                        if not full_path.exists():
+                            needs_download = True
+                            logger.debug(f"📥 Artist image path exists but file missing: {artist.image_path}")
+                    
+                    if not needs_download:
+                        result.skipped += 1
+                        continue
+                    
                     # Extract provider ID from URI (spotify:artist:ID or deezer_id)
                     provider_id = artist.spotify_id if artist.spotify_id else artist.deezer_id
                     provider = "spotify" if artist.spotify_id else "deezer"
@@ -920,16 +945,17 @@ async def download_all_images(
                 result.errors += 1
                 logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
         
-        # Albums with cover_url but no cover_path
+        # Albums with cover_url - check if path missing OR file doesn't exist
         album_stmt = select(AlbumModel).where(
             AlbumModel.cover_url.isnot(None),
-            AlbumModel.cover_path.is_(None),
         )
         album_results = await session.execute(album_stmt)
         albums = album_results.scalars().all()
         
         # Debug: Count albums in each state
         from sqlalchemy import func
+        from pathlib import Path
+        
         total_albums = await session.execute(select(func.count()).select_from(AlbumModel))
         albums_with_url = await session.execute(
             select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_url.isnot(None))
@@ -937,17 +963,42 @@ async def download_all_images(
         albums_with_path = await session.execute(
             select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_path.isnot(None))
         )
+        
+        # Count how many actually need download (no path OR path points to missing file)
+        albums_needing_download = 0
+        for album in albums:
+            if not album.cover_path:
+                albums_needing_download += 1
+            elif album.cover_path:
+                full_path = Path(image_service.cache_base_path) / album.cover_path
+                if not full_path.exists():
+                    albums_needing_download += 1
+        
         logger.info(
             f"📊 Album Stats: Total={total_albums.scalar()}, "
             f"with_url={albums_with_url.scalar()}, with_path={albums_with_path.scalar()}, "
-            f"needing_download={len(albums)}"
+            f"actually_needing_download={albums_needing_download}"
         )
         
-        logger.info(f"📥 Bulk Download: Found {len(albums)} albums needing covers")
+        logger.info(f"📥 Bulk Download: Found {albums_needing_download} albums needing covers")
         
         for album in albums:
             try:
                 if album.cover_url:
+                    # Check if download is needed: no path OR file doesn't exist
+                    needs_download = False
+                    if not album.cover_path:
+                        needs_download = True
+                    elif album.cover_path:
+                        full_path = Path(image_service.cache_base_path) / album.cover_path
+                        if not full_path.exists():
+                            needs_download = True
+                            logger.debug(f"📥 Album cover path exists but file missing: {album.cover_path}")
+                    
+                    if not needs_download:
+                        result.skipped += 1
+                        continue
+                    
                     provider_id = album.spotify_id if album.spotify_id else album.deezer_id
                     provider = "spotify" if album.spotify_id else "deezer"
                     
@@ -977,19 +1028,42 @@ async def download_all_images(
                 result.errors += 1
                 logger.error(f"❌ Error downloading album cover for {album.title}: {e}", exc_info=True)
         
-        # Playlists with cover_url but no cover_path
+        # Playlists with cover_url - check if path missing OR file doesn't exist
         playlist_stmt = select(PlaylistModel).where(
             PlaylistModel.cover_url.isnot(None),
-            PlaylistModel.cover_path.is_(None),
         )
         playlist_results = await session.execute(playlist_stmt)
         playlists = playlist_results.scalars().all()
         
-        logger.info(f"📥 Bulk Download: Found {len(playlists)} playlists needing covers")
+        # Count how many actually need download
+        playlists_needing_download = 0
+        for playlist in playlists:
+            if not playlist.cover_path:
+                playlists_needing_download += 1
+            elif playlist.cover_path:
+                full_path = Path(image_service.cache_base_path) / playlist.cover_path
+                if not full_path.exists():
+                    playlists_needing_download += 1
+        
+        logger.info(f"📥 Bulk Download: Found {playlists_needing_download} playlists needing covers")
         
         for playlist in playlists:
             try:
                 if playlist.cover_url:
+                    # Check if download is needed: no path OR file doesn't exist
+                    needs_download = False
+                    if not playlist.cover_path:
+                        needs_download = True
+                    elif playlist.cover_path:
+                        full_path = Path(image_service.cache_base_path) / playlist.cover_path
+                        if not full_path.exists():
+                            needs_download = True
+                            logger.debug(f"📥 Playlist cover path exists but file missing: {playlist.cover_path}")
+                    
+                    if not needs_download:
+                        result.skipped += 1
+                        continue
+                    
                     provider_id = playlist.spotify_id
                     provider = "spotify"  # Playlists are currently Spotify-only
                     
