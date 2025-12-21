@@ -2130,6 +2130,7 @@
             if (!response.ok) throw new Error('Failed to load image stats');
             
             const stats = await response.json();
+            console.log('🖼️ Image Stats Loaded:', stats);  // DEBUG: See what API returns
             updateImageStatsDisplay(stats);
             
         } catch (error) {

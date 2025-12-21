@@ -1210,7 +1210,10 @@ class ImageService:
         total = 0
         
         cache_path = Path(self.cache_base_path)
+        logger.info("📊 Image Stats - Cache path: %s (exists: %s)", cache_path, cache_path.exists())
+        
         if not cache_path.exists():
+            logger.warning("⚠️ Image cache directory does not exist: %s", cache_path)
             return {"artists": 0, "albums": 0, "playlists": 0, "total": 0}
         
         for category in ("artists", "albums", "playlists"):
@@ -1223,10 +1226,15 @@ class ImageService:
                 )
                 usage[category] = cat_bytes
                 total += cat_bytes
+                logger.debug("📊 %s: %d bytes from %d files", category, cat_bytes, 
+                            sum(1 for f in category_path.rglob("*") if f.is_file()))
             else:
                 usage[category] = 0
+                logger.debug("📊 %s directory does not exist", category)
         
         usage["total"] = total
+        logger.info("📊 Image Stats Total: %d bytes across %d files", total, 
+                   sum(1 for f in cache_path.rglob("*") if f.is_file()))
         return usage
 
     def get_image_count(self) -> dict[str, int]:

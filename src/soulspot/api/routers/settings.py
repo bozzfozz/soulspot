@@ -1,7 +1,7 @@
 """Settings management API endpoints."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -11,6 +11,9 @@ from soulspot.api.dependencies import get_credentials_service, get_db_session, g
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.config import get_settings
+
+if TYPE_CHECKING:
+    from soulspot.application.services.images import ImageService
 
 logger = logging.getLogger(__name__)
 
