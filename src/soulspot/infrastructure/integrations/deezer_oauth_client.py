@@ -1,4 +1,27 @@
-"""Deezer OAuth client stub for future user integration.
+"""⚠️ DEPRECATED - DO NOT USE! ⚠️
+
+This file is DEPRECATED and scheduled for removal.
+
+REASON: All OAuth functionality has been implemented in deezer_client.py.
+This file was a stub that never got implemented - all methods raise NotImplementedError.
+
+USE INSTEAD:
+    from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+    
+    # DeezerClient has ALL the OAuth functionality:
+    # - get_user_favorites()
+    # - get_user_playlists()
+    # - get_user_albums()
+    # - get_followed_artists()
+
+DELETE THIS FILE when cleaning up the codebase.
+File location: src/soulspot/infrastructure/integrations/deezer_oauth_client.py
+
+-------------------------------------------------------------------------------
+Original docstring (kept for reference):
+-------------------------------------------------------------------------------
+
+Deezer OAuth client stub for future user integration.
 
 Hey future me - this is a STUB for future Deezer OAuth integration!
 The existing DeezerClient (deezer_client.py) handles PUBLIC API calls for metadata.
@@ -46,11 +69,20 @@ IMPORTANT difference from Spotify/Tidal:
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
 from soulspot.domain.ports import IDeezerClient
 
 logger = logging.getLogger(__name__)
+
+# Emit deprecation warning on import
+warnings.warn(
+    "deezer_oauth_client is DEPRECATED. Use deezer_client.DeezerClient instead. "
+    "All OAuth methods are implemented there. This stub will be removed.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class DeezerOAuthNotConfiguredError(Exception):
@@ -60,16 +92,21 @@ class DeezerOAuthNotConfiguredError(Exception):
 
 
 class DeezerOAuthClient(IDeezerClient):
-    """Stub implementation of Deezer OAuth client.
-
-    This is a placeholder for future Deezer OAuth integration.
-    For metadata enrichment without OAuth, use DeezerClient instead.
-
-    Hey future me - when implementing:
-    1. Remember: No refresh tokens! Handle token expiry gracefully
-    2. Prompt users to re-authenticate before token expires
-    3. Store deezer_id on Track/Artist/Album entities
-    4. Map Deezer responses to generic domain entities
+    """⚠️ DEPRECATED - Use DeezerClient instead! ⚠️
+    
+    This class is a STUB that never got implemented. 
+    ALL methods raise NotImplementedError.
+    
+    Use deezer_client.DeezerClient instead - it has all OAuth functionality!
+    
+    Example:
+        # ❌ DON'T USE:
+        from soulspot.infrastructure.integrations.deezer_oauth_client import DeezerOAuthClient
+        
+        # ✅ USE INSTEAD:
+        from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+        client = DeezerClient()
+        favorites = await client.get_user_favorites(access_token)
     """
 
     def __init__(
@@ -78,6 +115,13 @@ class DeezerOAuthClient(IDeezerClient):
         secret_key: str | None = None,
         redirect_uri: str | None = None,
     ) -> None:
+        """Initialize deprecated OAuth client - emits warning."""
+        warnings.warn(
+            "DeezerOAuthClient is DEPRECATED. Use DeezerClient instead. "
+            "All OAuth methods are implemented in deezer_client.py.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         """Initialize Deezer OAuth client.
 
         Args:

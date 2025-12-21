@@ -1,15 +1,41 @@
-"""Image Providers - Implementations of IImageProvider interface.
+"""⚠️ DEPRECATED PACKAGE - DO NOT USE! ⚠️
 
-Hey future me - hier leben die Provider-Implementierungen!
+This entire directory is DEPRECATED and scheduled for removal.
 
-Jeder Provider wrapped einen Plugin/Client und implementiert IImageProvider:
-- SpotifyImageProvider → SpotifyPlugin
-- DeezerImageProvider → DeezerPlugin (oder DeezerClient)
-- CoverArtArchiveImageProvider → MusicBrainzClient + CoverArtArchiveClient
+REASON: This package duplicates functionality from infrastructure/providers/.
+The active implementations live in:
+    src/soulspot/infrastructure/providers/
 
-Die Providers werden vom ImageProviderRegistry verwaltet und
-nach Priorität abgefragt.
+USE INSTEAD:
+    from soulspot.infrastructure.providers import (
+        SpotifyImageProvider,
+        DeezerImageProvider,
+        ImageProviderRegistry,
+    )
+
+This package was created as an alternative location but is NOT used anywhere
+in the codebase. All actual imports use infrastructure/providers/.
+
+DELETE THIS DIRECTORY when cleaning up:
+    git rm -r src/soulspot/infrastructure/image_providers/
+
+Files in this deprecated directory:
+- __init__.py (this file)
+- spotify_image_provider.py → Use providers/spotify_image_provider.py
+- deezer_image_provider.py → Use providers/deezer_image_provider.py  
+- caa_image_provider.py → NOT in providers/ (feature not actively used)
 """
+
+import warnings
+
+# Emit deprecation warning on import
+warnings.warn(
+    "soulspot.infrastructure.image_providers is DEPRECATED. "
+    "Use soulspot.infrastructure.providers instead. "
+    "This package will be removed in a future release.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from soulspot.infrastructure.image_providers.spotify_image_provider import (
     SpotifyImageProvider,

@@ -1,4 +1,16 @@
-"""Deezer Image Provider - IImageProvider implementation for Deezer.
+"""⚠️ DEPRECATED - DO NOT USE! ⚠️
+
+This file is DEPRECATED. Use the version in infrastructure/providers/ instead:
+    from soulspot.infrastructure.providers import DeezerImageProvider
+
+This file will be removed in a future release.
+DELETE: src/soulspot/infrastructure/image_providers/deezer_image_provider.py
+
+-------------------------------------------------------------------------------
+Original docstring (kept for reference):
+-------------------------------------------------------------------------------
+
+Deezer Image Provider - IImageProvider implementation for Deezer.
 
 Hey future me - dieser Provider wrapped DeezerClient für das Image-System!
 
@@ -26,6 +38,7 @@ FLOW:
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import TYPE_CHECKING
 
 from soulspot.domain.ports.image_provider import (
@@ -41,6 +54,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Emit deprecation warning on import
+warnings.warn(
+    "This DeezerImageProvider is DEPRECATED. "
+    "Use soulspot.infrastructure.providers.DeezerImageProvider instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 # Quality → Deezer size mapping
 _QUALITY_TO_SIZE = {
@@ -53,11 +74,9 @@ _QUALITY_TO_SIZE = {
 
 
 class DeezerImageProvider(IImageProvider):
-    """Deezer image provider using DeezerClient.
+    """⚠️ DEPRECATED - Use infrastructure.providers.DeezerImageProvider instead!
     
     Hey future me - dieser Provider:
-    1. Wrapped DeezerClient für IImageProvider Interface
-    2. Nutzt search_artists/search_albums für Suche
     3. KEINE Auth nötig! Immer verfügbar
     4. Deezer hat gute Bildqualität (bis 1000x1000)
     

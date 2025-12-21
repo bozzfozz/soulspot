@@ -1,4 +1,19 @@
-"""CoverArtArchive Image Provider - IImageProvider for MusicBrainz/CAA.
+"""⚠️ DEPRECATED - DO NOT USE! ⚠️
+
+This file is DEPRECATED. The CoverArtArchive feature is not actively used.
+
+This file will be removed in a future release.
+DELETE: src/soulspot/infrastructure/image_providers/caa_image_provider.py
+
+NOTE: Unlike SpotifyImageProvider and DeezerImageProvider, there is NO 
+replacement in infrastructure/providers/. If CAA support is needed in the
+future, it should be re-implemented there.
+
+-------------------------------------------------------------------------------
+Original docstring (kept for reference):
+-------------------------------------------------------------------------------
+
+CoverArtArchive Image Provider - IImageProvider for MusicBrainz/CAA.
 
 Hey future me - dieser Provider nutzt MusicBrainz + CoverArtArchive für Album-Artwork!
 
@@ -30,6 +45,7 @@ Priorität: 3 (niedrigste) - nur für Alben, als letzter Fallback
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from soulspot.domain.ports.image_provider import (
@@ -50,14 +66,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Emit deprecation warning on import
+warnings.warn(
+    "CoverArtArchiveImageProvider is DEPRECATED. "
+    "This feature is not actively used. The entire image_providers package will be removed.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 class CoverArtArchiveImageProvider(IImageProvider):
-    """CoverArtArchive image provider for album covers.
+    """⚠️ DEPRECATED - This feature is not actively used!
     
     Hey future me - dieser Provider:
-    1. Nutzt MusicBrainz für Album-Suche (Release Group Search)
-    2. Nutzt CAA für Artwork-Download
-    3. Hat KEINE Artist-Bilder - nur Alben!
     4. Keine Auth nötig, immer verfügbar
     
     Priorität: 3 - nur als letzter Fallback für Album-Cover

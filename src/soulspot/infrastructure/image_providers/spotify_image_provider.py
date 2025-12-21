@@ -1,4 +1,16 @@
-"""Spotify Image Provider - IImageProvider implementation for Spotify.
+"""⚠️ DEPRECATED - DO NOT USE! ⚠️
+
+This file is DEPRECATED. Use the version in infrastructure/providers/ instead:
+    from soulspot.infrastructure.providers import SpotifyImageProvider
+
+This file will be removed in a future release.
+DELETE: src/soulspot/infrastructure/image_providers/spotify_image_provider.py
+
+-------------------------------------------------------------------------------
+Original docstring (kept for reference):
+-------------------------------------------------------------------------------
+
+Spotify Image Provider - IImageProvider implementation for Spotify.
 
 Hey future me - dieser Provider wrapped SpotifyPlugin für das Image-System!
 
@@ -20,6 +32,7 @@ FLOW:
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import TYPE_CHECKING
 
 from soulspot.domain.ports.image_provider import (
@@ -35,9 +48,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Emit deprecation warning on import
+warnings.warn(
+    "This SpotifyImageProvider is DEPRECATED. "
+    "Use soulspot.infrastructure.providers.SpotifyImageProvider instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 class SpotifyImageProvider(IImageProvider):
-    """Spotify image provider using SpotifyPlugin.
+    """⚠️ DEPRECATED - Use infrastructure.providers.SpotifyImageProvider instead!
     
     Hey future me - dieser Provider:
     1. Wrapped SpotifyPlugin für IImageProvider Interface
