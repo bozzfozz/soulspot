@@ -1563,17 +1563,33 @@ class LocalLibraryEnrichmentService:
         # causing UNIQUE constraint errors BEFORE our check could run.
         # NOTE: no_autoflush is a SYNC context manager, not async!
         with self._session.no_autoflush:
+            # Hey future me - Deezer candidates use a synthetic "deezer:ID" in candidate.spotify_uri
+            # to flow through the same pipeline, BUT we must never persist that into ArtistModel.spotify_uri.
+            # ArtistModel.spotify_uri is strictly for real Spotify URIs ("spotify:artist:...").
+            source = candidate.extra_info.get("source", "spotify")
+            deezer_id = candidate.extra_info.get("deezer_id") if source == "deezer" else None
+
             # Hey future me - CHECK FOR DUPLICATE SPOTIFY URI FIRST!
             # Another artist might already have this spotify_uri (duplicate local artists
             # for same Spotify artist, or folder parsing created multiple entries).
             # We skip enrichment if URI is already claimed to avoid UNIQUE constraint errors.
-            existing_uri_check = await self._session.execute(
-                select(ArtistModel).where(
-                    ArtistModel.spotify_uri == candidate.spotify_uri,
-                    ArtistModel.id != str(artist.id.value),  # Exclude current artist
+            existing_with_uri = None
+            if source == "spotify":
+                existing_uri_check = await self._session.execute(
+                    select(ArtistModel).where(
+                        ArtistModel.spotify_uri == candidate.spotify_uri,
+                        ArtistModel.id != str(artist.id.value),  # Exclude current artist
+                    )
                 )
-            )
-            existing_with_uri = existing_uri_check.scalar_one_or_none()
+                existing_with_uri = existing_uri_check.scalar_one_or_none()
+            elif source == "deezer" and deezer_id:
+                existing_deezer_check = await self._session.execute(
+                    select(ArtistModel).where(
+                        ArtistModel.deezer_id == str(deezer_id),
+                        ArtistModel.id != str(artist.id.value),
+                    )
+                )
+                existing_with_uri = existing_deezer_check.scalar_one_or_none()
 
             if existing_with_uri:
                 # Hey future me - URI already assigned to another artist (likely "Paul Elstak")
@@ -1619,7 +1635,10 @@ class LocalLibraryEnrichmentService:
             result = await self._session.execute(stmt)
             model = result.scalar_one()
 
-            model.spotify_uri = candidate.spotify_uri
+            if source == "spotify":
+                model.spotify_uri = candidate.spotify_uri
+            elif source == "deezer" and deezer_id:
+                model.deezer_id = str(deezer_id)
             model.image_url = candidate.spotify_image_url
 
             # Update genres if we have them and artist doesn't
@@ -1695,7 +1714,7 @@ class LocalLibraryEnrichmentService:
             entity_id=str(artist.id.value),
             entity_name=artist.name,
             success=True,
-            spotify_uri=candidate.spotify_uri,
+            spotify_uri=candidate.spotify_uri if enrichment_source == "spotify" else None,
             image_downloaded=image_downloaded,
             error=image_error if not image_downloaded and download_artwork else None,
             source=enrichment_source,
@@ -2772,17 +2791,33 @@ class LocalLibraryEnrichmentService:
         # "Query-invoked autoflush" error! Same issue as with artists.
         # NOTE: no_autoflush is a SYNC context manager, not async!
         with self._session.no_autoflush:
+            # Hey future me - Deezer candidates use a synthetic "deezer:ID" in candidate.spotify_uri
+            # to reuse the same pipeline, BUT we must not write that into AlbumModel.spotify_uri.
+            # AlbumModel.spotify_uri is strictly for real Spotify URIs ("spotify:album:...").
+            source = candidate.extra_info.get("source", "spotify")
+            deezer_id = candidate.extra_info.get("deezer_id") if source == "deezer" else None
+
             # Hey future me - CHECK FOR DUPLICATE SPOTIFY URI FIRST!
             # Another album might already have this spotify_uri (duplicate local albums
             # for same Spotify album, or folder parsing created multiple entries).
             # We skip enrichment if URI is already claimed to avoid UNIQUE constraint errors.
-            existing_uri_check = await self._session.execute(
-                select(AlbumModel).where(
-                    AlbumModel.spotify_uri == candidate.spotify_uri,
-                    AlbumModel.id != str(album.id.value),  # Exclude current album
+            existing_with_uri = None
+            if source == "spotify":
+                existing_uri_check = await self._session.execute(
+                    select(AlbumModel).where(
+                        AlbumModel.spotify_uri == candidate.spotify_uri,
+                        AlbumModel.id != str(album.id.value),  # Exclude current album
+                    )
                 )
-            )
-            existing_with_uri = existing_uri_check.scalar_one_or_none()
+                existing_with_uri = existing_uri_check.scalar_one_or_none()
+            elif source == "deezer" and deezer_id:
+                existing_deezer_check = await self._session.execute(
+                    select(AlbumModel).where(
+                        AlbumModel.deezer_id == str(deezer_id),
+                        AlbumModel.id != str(album.id.value),
+                    )
+                )
+                existing_with_uri = existing_deezer_check.scalar_one_or_none()
 
             if existing_with_uri:
                 logger.warning(
@@ -2803,7 +2838,10 @@ class LocalLibraryEnrichmentService:
             result = await self._session.execute(stmt)
             model = result.scalar_one()
 
-            model.spotify_uri = candidate.spotify_uri
+            if source == "spotify":
+                model.spotify_uri = candidate.spotify_uri
+            elif source == "deezer" and deezer_id:
+                model.deezer_id = str(deezer_id)
             model.cover_url = candidate.spotify_image_url
             model.updated_at = datetime.now(UTC)
 
@@ -2870,7 +2908,7 @@ class LocalLibraryEnrichmentService:
             entity_id=str(album.id.value),
             entity_name=album.title,
             success=True,
-            spotify_uri=candidate.spotify_uri,
+            spotify_uri=candidate.spotify_uri if source == "spotify" else None,
             image_downloaded=image_downloaded,
             error=image_error if not image_downloaded and download_artwork else None,
             source=source,
