@@ -710,11 +710,12 @@ async def toggle_spotify_sync_setting(
     }
 
 
-@router.get("/spotify-sync/image-stats")
-async def get_spotify_image_stats() -> SpotifyImageStats:
-    """Get disk usage statistics for Spotify images.
+@router.get("/library/image-stats")
+async def get_library_image_stats() -> SpotifyImageStats:
+    """Get disk usage statistics for library images (all providers).
 
-    Returns breakdown of storage used by artist, album, and playlist images.
+    Returns breakdown of storage used by artist, album, and playlist images
+    from all providers (Spotify, Deezer, Tidal, etc.).
     """
     from soulspot.api.dependencies import get_image_service
     from soulspot.config import get_settings
@@ -736,12 +737,19 @@ async def get_spotify_image_stats() -> SpotifyImageStats:
     )
 
 
-# Hey future me – dieser Endpoint ist ein Alias für image-stats, damit das JS von der
-# Settings-Seite funktioniert. Der URL-Pfad /disk-usage ist intuitiver für UI-Entwickler.
+# Hey future me – primary endpoint for Library tab image stats!
+# Preferred URL since image storage moved from Spotify tab to Library tab (Dec 2025).
+@router.get("/library/disk-usage")
+async def get_library_disk_usage() -> SpotifyImageStats:
+    """Get disk usage for library images (all providers)."""
+    return await get_library_image_stats()
+
+
+# DEPRECATED: Legacy endpoint for backwards compatibility
 @router.get("/spotify-sync/disk-usage")
-async def get_spotify_disk_usage() -> SpotifyImageStats:
-    """Alias for image-stats - get disk usage for Spotify images."""
-    return await get_spotify_image_stats()
+async def get_spotify_disk_usage_legacy() -> SpotifyImageStats:
+    """Deprecated: Use /library/disk-usage instead."""
+    return await get_library_image_stats()
 
 
 # =============================================================================

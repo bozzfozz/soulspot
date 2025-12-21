@@ -259,63 +259,6 @@
                 </div>
             </div>
 
-            <!-- Image Download -->
-            <div style="margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
-                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4);">Image Storage</h3>
-                
-                <div class="sync-option-card">
-                    <div class="sync-option-info">
-                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-                            <i class="bi bi-images"></i>
-                        </div>
-                        <div>
-                            <div class="sync-option-title">Download Images Locally</div>
-                            <div class="sync-option-desc">Store artist, album, and playlist images on disk for offline access</div>
-                        </div>
-                    </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="spotify-download-images" checked onchange="toggleSpotifySyncSetting('download_images')">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-
-                <!-- Disk Usage Stats -->
-                <div id="image-stats-container" class="stats-container" style="margin-top: var(--space-4);">
-                    <div class="stat-box">
-                        <div class="stat-icon"><i class="bi bi-people"></i></div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="stat-artists-count">-</div>
-                            <div class="stat-label">Artist Images</div>
-                            <div class="stat-size" id="stat-artists-size">-</div>
-                        </div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-icon"><i class="bi bi-disc"></i></div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="stat-albums-count">-</div>
-                            <div class="stat-label">Album Covers</div>
-                            <div class="stat-size" id="stat-albums-size">-</div>
-                        </div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-icon"><i class="bi bi-music-note-list"></i></div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="stat-playlists-count">-</div>
-                            <div class="stat-label">Playlist Covers</div>
-                            <div class="stat-size" id="stat-playlists-size">-</div>
-                        </div>
-                    </div>
-                    <div class="stat-box stat-total">
-                        <div class="stat-icon"><i class="bi bi-hdd"></i></div>
-                        <div class="stat-content">
-                            <div class="stat-value" id="stat-total-count">-</div>
-                            <div class="stat-label">Total Images</div>
-                            <div class="stat-size" id="stat-total-size">-</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Synced Data Statistics -->
             <div style="margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
                 <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4);">Synced Data</h3>
@@ -1047,6 +990,66 @@
                 </div>
             </div>
 
+            <!-- Image Storage -->
+            <div style="margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border-primary);">
+                <h3 style="font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);">
+                    <i class="bi bi-images" style="color: #3b82f6;"></i>
+                    Image Storage
+                </h3>
+                
+                <div class="sync-option-card">
+                    <div class="sync-option-info">
+                        <div class="sync-option-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                            <i class="bi bi-images"></i>
+                        </div>
+                        <div>
+                            <div class="sync-option-title">Download Images Locally</div>
+                            <div class="sync-option-desc">Store artist, album, and playlist images on disk for offline access</div>
+                        </div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="spotify-download-images" checked onchange="toggleSpotifySyncSetting('download_images')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Disk Usage Stats -->
+                <div id="image-stats-container" class="stats-container" style="margin-top: var(--space-4);">
+                    <div class="stat-box">
+                        <div class="stat-icon"><i class="bi bi-people"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="stat-artists-count">-</div>
+                            <div class="stat-label">Artist Images</div>
+                            <div class="stat-size" id="stat-artists-size">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-icon"><i class="bi bi-disc"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="stat-albums-count">-</div>
+                            <div class="stat-label">Album Covers</div>
+                            <div class="stat-size" id="stat-albums-size">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-icon"><i class="bi bi-music-note-list"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="stat-playlists-count">-</div>
+                            <div class="stat-label">Playlist Covers</div>
+                            <div class="stat-size" id="stat-playlists-size">-</div>
+                        </div>
+                    </div>
+                    <div class="stat-box stat-total">
+                        <div class="stat-icon"><i class="bi bi-hdd"></i></div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="stat-total-count">-</div>
+                            <div class="stat-label">Total Images</div>
+                            <div class="stat-size" id="stat-total-size">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Save Button -->
             <div style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-primary); display: flex; justify-content: flex-end;">
                 <button type="button" class="btn btn-primary" onclick="saveNamingSettings()">
@@ -1679,6 +1682,12 @@
         document.querySelectorAll('.tab-content').forEach(content => {
             content.style.display = content.id === `tab-${tabName}` ? 'block' : 'none';
         });
+        
+        // Hey future me - load image stats when switching to Library tab!
+        // Image Storage section was moved from Spotify to Library tab (Dec 2025).
+        if (tabName === 'library') {
+            loadImageStats();
+        }
     }
 
     // Password Toggle
@@ -2117,7 +2126,7 @@
     // Wenn keine Images existieren, zeigen wir "0 B" und "0" an.
     async function loadImageStats() {
         try {
-            const response = await fetch('/api/settings/spotify-sync/disk-usage');
+            const response = await fetch('/api/settings/library/disk-usage');
             if (!response.ok) throw new Error('Failed to load image stats');
             
             const stats = await response.json();
@@ -2369,6 +2378,7 @@
         loadSpotifySyncSettings();
         loadAutomationSettings();
         loadNamingSettings();
+        loadImageStats();  // Hey future me - load image stats on page load for Library tab!
     });
 
     // =====================================================
