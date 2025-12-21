@@ -782,7 +782,7 @@ async def download_all_images(
     Use case: User enabled "Download Images Locally" after syncing library.
     
     Process:
-    1. Query all artists/albums/playlists with artwork_url but no artwork_path
+    1. Query all artists/albums/playlists with image URLs but no local paths
     2. Download each image to local cache
     3. Update database with new paths
     
@@ -848,10 +848,10 @@ async def download_all_images(
                 result.errors += 1
                 logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
         
-        # Albums with artwork_url but no artwork_path
+        # Albums with cover_url but no cover_path
         album_stmt = select(AlbumModel).where(
-            AlbumModel.artwork_url.isnot(None),
-            AlbumModel.artwork_path.is_(None),
+            AlbumModel.cover_url.isnot(None),
+            AlbumModel.cover_path.is_(None),
         )
         album_results = await session.execute(album_stmt)
         albums = album_results.scalars().all()
@@ -860,19 +860,19 @@ async def download_all_images(
         
         for album in albums:
             try:
-                if album.artwork_url:
+                if album.cover_url:
                     provider_id = album.spotify_id if album.spotify_id else album.deezer_id
                     provider = "spotify" if album.spotify_id else "deezer"
                     
                     if provider_id:
                         image_path = await image_service.download_album_image(
                             provider_id=provider_id,
-                            image_url=album.artwork_url,
+                            image_url=album.cover_url,
                             provider=provider,
                         )
                         
                         if image_path:
-                            album.artwork_path = image_path
+                            album.cover_path = image_path
                             result.albums_downloaded += 1
                             logger.debug(f"✅ Downloaded album cover: {album.title}")
                         else:
