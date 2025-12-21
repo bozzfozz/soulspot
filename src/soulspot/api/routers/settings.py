@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_credentials_service, get_db_session
+from soulspot.api.dependencies import get_credentials_service, get_db_session, get_image_service
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.config import get_settings
@@ -711,17 +711,14 @@ async def toggle_spotify_sync_setting(
 
 
 @router.get("/library/image-stats")
-async def get_library_image_stats() -> SpotifyImageStats:
+async def get_library_image_stats(
+    image_service: "ImageService" = Depends(get_image_service),
+) -> SpotifyImageStats:
     """Get disk usage statistics for library images (all providers).
 
     Returns breakdown of storage used by artist, album, and playlist images
     from all providers (Spotify, Deezer, Tidal, etc.).
     """
-    from soulspot.api.dependencies import get_image_service
-    from soulspot.config import get_settings
-
-    image_service = get_image_service(get_settings())
-
     disk_usage = image_service.get_disk_usage()
     image_count = image_service.get_image_count()
 
@@ -740,16 +737,20 @@ async def get_library_image_stats() -> SpotifyImageStats:
 # Hey future me – primary endpoint for Library tab image stats!
 # Preferred URL since image storage moved from Spotify tab to Library tab (Dec 2025).
 @router.get("/library/disk-usage")
-async def get_library_disk_usage() -> SpotifyImageStats:
+async def get_library_disk_usage(
+    image_service: "ImageService" = Depends(get_image_service),
+) -> SpotifyImageStats:
     """Get disk usage for library images (all providers)."""
-    return await get_library_image_stats()
+    return await get_library_image_stats(image_service)
 
 
 # DEPRECATED: Legacy endpoint for backwards compatibility
 @router.get("/spotify-sync/disk-usage")
-async def get_spotify_disk_usage_legacy() -> SpotifyImageStats:
+async def get_spotify_disk_usage_legacy(
+    image_service: "ImageService" = Depends(get_image_service),
+) -> SpotifyImageStats:
     """Deprecated: Use /library/disk-usage instead."""
-    return await get_library_image_stats()
+    return await get_library_image_stats(image_service)
 
 
 # =============================================================================
