@@ -264,6 +264,11 @@ class EnrichmentService:
                 if artist:
                     artist.spotify_uri = candidate.spotify_uri
 
+                    # Hey future me - keep URL vs local cache separate.
+                    # image_url is the provider CDN URL; image_path is our local cache path.
+                    if candidate.spotify_image_url:
+                        artist.image_url = candidate.spotify_image_url
+
                     # Download image if URL provided
                     if candidate.spotify_image_url:
                         image_path = await spotify_image_service.download_artist_image(
@@ -271,13 +276,17 @@ class EnrichmentService:
                             candidate.spotify_image_url,
                         )
                         if image_path:
-                            artist.image_url = image_path
+                            artist.image_path = image_path
 
                     entity_updated = True
             else:  # album
                 album = await self._session.get(AlbumModel, str(candidate.entity_id))
                 if album:
                     album.spotify_uri = candidate.spotify_uri
+
+                    # Hey future me - cover_url is CDN URL; cover_path is our local cache path.
+                    if candidate.spotify_image_url:
+                        album.cover_url = candidate.spotify_image_url
 
                     # Download image if URL provided
                     if candidate.spotify_image_url:
@@ -286,7 +295,7 @@ class EnrichmentService:
                             candidate.spotify_image_url,
                         )
                         if image_path:
-                            album.cover_url = image_path
+                            album.cover_path = image_path
 
                     entity_updated = True
 
@@ -295,15 +304,21 @@ class EnrichmentService:
                     f"{candidate.entity_type.value.capitalize()} {candidate.entity_id} not found"
                 )
 
-            logger.info(
-                f"✅ Enrichment Applied\n"
-                f"├─ Entity: {candidate.entity_type.value} '{entity_name}'\n"
-                f"├─ Candidate ID: {candidate_id}\n"
-                f"└─ Spotify URI: {selected_candidate.spotify_uri}"
-            )
-
             # Mark candidate as selected (also rejects others for same entity)
             selected_candidate = await self._repo.mark_selected(candidate_id)
+
+            # Hey future me - we only log AFTER mark_selected() so we can show final URI reliably.
+            logger.info(
+                "✅ Enrichment Applied\n"
+                "├─ Entity Type: %s\n"
+                "├─ Entity ID: %s\n"
+                "├─ Candidate ID: %s\n"
+                "└─ Spotify URI: %s",
+                selected_candidate.entity_type.value,
+                str(selected_candidate.entity_id),
+                candidate_id,
+                selected_candidate.spotify_uri,
+            )
 
             await self._session.commit()
 
