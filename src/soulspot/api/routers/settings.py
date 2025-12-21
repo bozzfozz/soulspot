@@ -757,6 +757,195 @@ async def get_spotify_disk_usage_legacy(
 
 
 # =============================================================================
+# BULK IMAGE DOWNLOAD (for retroactive caching)
+# =============================================================================
+
+class BulkImageDownloadResult(BaseModel):
+    """Result of bulk image download operation."""
+    
+    artists_downloaded: int = Field(description="Number of artist images downloaded")
+    albums_downloaded: int = Field(description="Number of album covers downloaded")
+    playlists_downloaded: int = Field(description="Number of playlist covers downloaded")
+    total_downloaded: int = Field(description="Total images downloaded")
+    errors: int = Field(description="Number of download errors")
+    skipped: int = Field(description="Number already cached")
+
+
+@router.post("/library/download-all-images")
+async def download_all_images(
+    session: AsyncSession = Depends(get_db_session),
+    image_service: "ImageService" = Depends(get_image_service),
+) -> BulkImageDownloadResult:
+    """Download all missing images for entities in library.
+    
+    Hey future me - this is for RETROACTIVE image caching!
+    Use case: User enabled "Download Images Locally" after syncing library.
+    
+    Process:
+    1. Query all artists/albums/playlists with artwork_url but no artwork_path
+    2. Download each image to local cache
+    3. Update database with new paths
+    
+    This runs ASYNC in the endpoint (may take time for large libraries).
+    TODO: Convert to background task if libraries get huge (>1000 entities).
+    """
+    from soulspot.infrastructure.persistence.repositories import (
+        AlbumRepository,
+        ArtistRepository,
+        PlaylistRepository,
+    )
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        PlaylistModel,
+    )
+    from sqlalchemy import select
+    
+    result = BulkImageDownloadResult(
+        artists_downloaded=0,
+        albums_downloaded=0,
+        playlists_downloaded=0,
+        total_downloaded=0,
+        errors=0,
+        skipped=0,
+    )
+    
+    try:
+        # Artists with image_url but no image_path
+        artist_stmt = select(ArtistModel).where(
+            ArtistModel.image_url.isnot(None),
+            ArtistModel.image_path.is_(None),
+        )
+        artist_results = await session.execute(artist_stmt)
+        artists = artist_results.scalars().all()
+        
+        logger.info(f"📥 Bulk Download: Found {len(artists)} artists needing images")
+        
+        for artist in artists:
+            try:
+                if artist.image_url:
+                    # Extract provider ID from URI (spotify:artist:ID or deezer_id)
+                    provider_id = artist.spotify_id if artist.spotify_id else artist.deezer_id
+                    provider = "spotify" if artist.spotify_id else "deezer"
+                    
+                    if provider_id:
+                        image_path = await image_service.download_artist_image(
+                            provider_id=provider_id,
+                            image_url=artist.image_url,
+                            provider=provider,
+                        )
+                        
+                        if image_path:
+                            artist.image_path = image_path
+                            result.artists_downloaded += 1
+                            logger.debug(f"✅ Downloaded artist image: {artist.name}")
+                        else:
+                            result.errors += 1
+                            logger.warning(f"❌ Failed to download artist image: {artist.name}")
+                    else:
+                        result.skipped += 1
+            except Exception as e:
+                result.errors += 1
+                logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
+        
+        # Albums with artwork_url but no artwork_path
+        album_stmt = select(AlbumModel).where(
+            AlbumModel.artwork_url.isnot(None),
+            AlbumModel.artwork_path.is_(None),
+        )
+        album_results = await session.execute(album_stmt)
+        albums = album_results.scalars().all()
+        
+        logger.info(f"📥 Bulk Download: Found {len(albums)} albums needing covers")
+        
+        for album in albums:
+            try:
+                if album.artwork_url:
+                    provider_id = album.spotify_id if album.spotify_id else album.deezer_id
+                    provider = "spotify" if album.spotify_id else "deezer"
+                    
+                    if provider_id:
+                        image_path = await image_service.download_album_image(
+                            provider_id=provider_id,
+                            image_url=album.artwork_url,
+                            provider=provider,
+                        )
+                        
+                        if image_path:
+                            album.artwork_path = image_path
+                            result.albums_downloaded += 1
+                            logger.debug(f"✅ Downloaded album cover: {album.title}")
+                        else:
+                            result.errors += 1
+                            logger.warning(f"❌ Failed to download album cover: {album.title}")
+                    else:
+                        result.skipped += 1
+            except Exception as e:
+                result.errors += 1
+                logger.error(f"❌ Error downloading album cover for {album.title}: {e}")
+        
+        # Playlists with cover_url but no cover_path
+        playlist_stmt = select(PlaylistModel).where(
+            PlaylistModel.cover_url.isnot(None),
+            PlaylistModel.cover_path.is_(None),
+        )
+        playlist_results = await session.execute(playlist_stmt)
+        playlists = playlist_results.scalars().all()
+        
+        logger.info(f"📥 Bulk Download: Found {len(playlists)} playlists needing covers")
+        
+        for playlist in playlists:
+            try:
+                if playlist.cover_url:
+                    provider_id = playlist.spotify_id
+                    provider = "spotify"  # Playlists are currently Spotify-only
+                    
+                    if provider_id:
+                        image_path = await image_service.download_playlist_image(
+                            provider_id=provider_id,
+                            image_url=playlist.cover_url,
+                            provider=provider,
+                        )
+                        
+                        if image_path:
+                            playlist.cover_path = image_path
+                            result.playlists_downloaded += 1
+                            logger.debug(f"✅ Downloaded playlist cover: {playlist.name}")
+                        else:
+                            result.errors += 1
+                            logger.warning(f"❌ Failed to download playlist cover: {playlist.name}")
+                    else:
+                        result.skipped += 1
+            except Exception as e:
+                result.errors += 1
+                logger.error(f"❌ Error downloading playlist cover for {playlist.name}: {e}")
+        
+        # Commit all changes
+        await session.commit()
+        
+        result.total_downloaded = (
+            result.artists_downloaded + 
+            result.albums_downloaded + 
+            result.playlists_downloaded
+        )
+        
+        logger.info(
+            f"📥 Bulk Download Complete: "
+            f"{result.total_downloaded} images downloaded, "
+            f"{result.errors} errors, {result.skipped} skipped"
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Bulk image download failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Bulk image download failed: {e}",
+        )
+    
+    return result
+
+
+# =============================================================================
 # SPOTIFY DATABASE STATS
 # =============================================================================
 # Hey future me - diese Stats zeigen wieviele Entities aus Spotify in der DB sind!

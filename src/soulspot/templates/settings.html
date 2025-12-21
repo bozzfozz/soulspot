@@ -1048,6 +1048,24 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Bulk Download Button -->
+                <div style="margin-top: var(--space-4); padding: var(--space-4); background: var(--bg-secondary); border-radius: var(--radius-md); border-left: 4px solid #f59e0b;">
+                    <div style="display: flex; align-items: flex-start; gap: var(--space-3);">
+                        <i class="bi bi-info-circle" style="color: #f59e0b; font-size: 20px; margin-top: 2px;"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: var(--font-weight-medium); margin-bottom: var(--space-1);">Missing Images?</div>
+                            <div style="color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-3);">
+                                If you enabled "Download Images Locally" after syncing your library, images are still stored remotely. Click below to download all missing images to your local cache.
+                            </div>
+                            <button type="button" class="btn btn-secondary" onclick="downloadAllImages()" id="bulk-download-btn">
+                                <i class="bi bi-cloud-download"></i>
+                                Download All Missing Images
+                            </button>
+                            <div id="bulk-download-status" style="margin-top: var(--space-2); font-size: var(--font-size-sm); color: var(--text-muted);"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Save Button -->
@@ -2217,6 +2235,60 @@
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Hey future me – BULK IMAGE DOWNLOAD für retroaktives Caching!
+    // Nutzer hat "Download Images Locally" NACH dem Sync aktiviert.
+    // Jetzt müssen wir alle bereits synced entities nachholen.
+    async function downloadAllImages() {
+        const btn = document.getElementById('bulk-download-btn');
+        const statusEl = document.getElementById('bulk-download-status');
+        
+        if (!btn || !statusEl) return;
+        
+        try {
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Downloading...';
+            statusEl.textContent = 'Starting bulk download... This may take a few minutes.';
+            statusEl.style.color = '#3b82f6';
+            
+            const response = await fetch('/api/settings/library/download-all-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            
+            if (!response.ok) throw new Error('Bulk download failed');
+            
+            const result = await response.json();
+            
+            // Show success message
+            statusEl.textContent = `✅ Downloaded ${result.total_downloaded} images (${result.artists_downloaded} artists, ${result.albums_downloaded} albums, ${result.playlists_downloaded} playlists). Errors: ${result.errors}, Skipped: ${result.skipped}`;
+            statusEl.style.color = '#10b981';
+            
+            // Reload image stats to show updated counts
+            await loadImageStats();
+            
+            // Re-enable button after 3 seconds
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-download"></i> Download All Missing Images';
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Bulk image download failed:', error);
+            statusEl.textContent = '❌ Download failed. Please try again.';
+            statusEl.style.color = '#ef4444';
+            
+            // Re-enable button
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download"></i> Download All Missing Images';
+        }
+    }
+    
+    // Helper to format numbers with thousand separators
+    function formatNumber(num) {
+        return new Intl.NumberFormat().format(num);
     }
     
     // Hey future me – diese Funktion updated den UI State basierend auf dem Master Toggle.
