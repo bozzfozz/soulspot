@@ -828,22 +828,27 @@ async def download_all_images(
                     provider_id = artist.spotify_id if artist.spotify_id else artist.deezer_id
                     provider = "spotify" if artist.spotify_id else "deezer"
                     
-                    if provider_id:
-                        image_path = await image_service.download_artist_image(
-                            provider_id=provider_id,
-                            image_url=artist.image_url,
-                            provider=provider,
-                        )
-                        
-                        if image_path:
-                            artist.image_path = image_path
-                            result.artists_downloaded += 1
-                            logger.debug(f"✅ Downloaded artist image: {artist.name}")
-                        else:
-                            result.errors += 1
-                            logger.warning(f"❌ Failed to download artist image: {artist.name}")
+                    if not provider_id:
+                        # Fallback for artists without service ID: use hash of name
+                        import hashlib
+                        hash_input = artist.name.lower()
+                        provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+                        provider = "local"
+                        logger.debug(f"📥 Artist has no service ID, using hash: {artist.name} → {provider_id}")
+                    
+                    image_path = await image_service.download_artist_image(
+                        provider_id=provider_id,
+                        image_url=artist.image_url,
+                        provider=provider,
+                    )
+                    
+                    if image_path:
+                        artist.image_path = image_path
+                        result.artists_downloaded += 1
+                        logger.debug(f"✅ Downloaded artist image: {artist.name}")
                     else:
-                        result.skipped += 1
+                        result.errors += 1
+                        logger.warning(f"❌ Failed to download artist image: {artist.name}")
             except Exception as e:
                 result.errors += 1
                 logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
@@ -864,25 +869,31 @@ async def download_all_images(
                     provider_id = album.spotify_id if album.spotify_id else album.deezer_id
                     provider = "spotify" if album.spotify_id else "deezer"
                     
-                    if provider_id:
-                        image_path = await image_service.download_album_image(
-                            provider_id=provider_id,
-                            image_url=album.cover_url,
-                            provider=provider,
-                        )
-                        
-                        if image_path:
-                            album.cover_path = image_path
-                            result.albums_downloaded += 1
-                            logger.debug(f"✅ Downloaded album cover: {album.title}")
-                        else:
-                            result.errors += 1
-                            logger.warning(f"❌ Failed to download album cover: {album.title}")
+                    if not provider_id:
+                        # Fallback for albums without service ID: use hash of title + artist
+                        import hashlib
+                        hash_input = f"{album.title}_{album.artist.name if album.artist else 'unknown'}".lower()
+                        provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+                        provider = "local"
+                        logger.debug(f"📥 Album has no service ID, using hash: {album.title} → {provider_id}")
+                    
+                    logger.debug(f"📥 Downloading album cover: {album.title} (provider={provider}, id={provider_id})")
+                    image_path = await image_service.download_album_image(
+                        provider_id=provider_id,
+                        image_url=album.cover_url,
+                        provider=provider,
+                    )
+                    
+                    if image_path:
+                        album.cover_path = image_path
+                        result.albums_downloaded += 1
+                        logger.debug(f"✅ Downloaded album cover: {album.title} → {image_path}")
                     else:
-                        result.skipped += 1
+                        result.errors += 1
+                        logger.warning(f"❌ Failed to download album cover: {album.title} (URL: {album.cover_url})")
             except Exception as e:
                 result.errors += 1
-                logger.error(f"❌ Error downloading album cover for {album.title}: {e}")
+                logger.error(f"❌ Error downloading album cover for {album.title}: {e}", exc_info=True)
         
         # Playlists with cover_url but no cover_path
         playlist_stmt = select(PlaylistModel).where(
