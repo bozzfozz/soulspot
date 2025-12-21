@@ -169,11 +169,11 @@ async def get_all_settings(
             debug=general_summary["debug"],
         ),
         integration=IntegrationSettings(
-            spotify_client_id=spotify_creds.client_id,
+            spotify_client_id=spotify_creds.client_id or "",
             spotify_client_secret="***" if spotify_creds.client_secret else "",
-            spotify_redirect_uri=spotify_creds.redirect_uri,
-            slskd_url=slskd_creds.url,
-            slskd_username=slskd_creds.username,
+            spotify_redirect_uri=spotify_creds.redirect_uri or "",
+            slskd_url=slskd_creds.url or "",
+            slskd_username=slskd_creds.username or "",
             slskd_password="***" if slskd_creds.password else "",
             slskd_api_key="***" if slskd_creds.api_key else None,
             musicbrainz_app_name=settings.musicbrainz.app_name,
@@ -409,15 +409,15 @@ async def get_default_settings() -> AllSettings:
             debug=False,
         ),
         integration=IntegrationSettings(
-            spotify_client_id=spotify_defaults.client_id,
+            spotify_client_id=spotify_defaults.client_id or "",
             spotify_client_secret="",  # nosec B106 - empty string default, not a password
-            spotify_redirect_uri=spotify_defaults.redirect_uri,
-            slskd_url=slskd_defaults.url,
-            slskd_username=slskd_defaults.username,
+            spotify_redirect_uri=spotify_defaults.redirect_uri or "",
+            slskd_url=slskd_defaults.url or "",
+            slskd_username=slskd_defaults.username or "",
             slskd_password="",  # nosec B106 - empty string default, not a password
             slskd_api_key=slskd_defaults.api_key,
-            musicbrainz_app_name=musicbrainz_defaults.app_name,
-            musicbrainz_contact=musicbrainz_defaults.contact,
+            musicbrainz_app_name=musicbrainz_defaults.app_name or "SoulSpot",
+            musicbrainz_contact=musicbrainz_defaults.contact or "",
         ),
         download=DownloadSettings(
             max_concurrent_downloads=download_defaults.max_concurrent_downloads,
@@ -946,11 +946,16 @@ async def download_all_images(
                 logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
         
         # Albums with cover_url - check if path missing OR file doesn't exist
-        album_stmt = select(AlbumModel).where(
-            AlbumModel.cover_url.isnot(None),
+        # NOTE: Use joinedload(artist) to avoid lazy-loading in async context!
+        # Without this, album.artist.name causes greenlet_spawn error
+        from sqlalchemy.orm import joinedload
+        album_stmt = (
+            select(AlbumModel)
+            .options(joinedload(AlbumModel.artist))
+            .where(AlbumModel.cover_url.isnot(None))
         )
         album_results = await session.execute(album_stmt)
-        albums = album_results.scalars().all()
+        albums = album_results.unique().scalars().all()  # unique() required with joinedload
         
         # Debug: Count albums in each state
         from sqlalchemy import func
