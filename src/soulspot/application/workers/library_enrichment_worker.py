@@ -169,8 +169,12 @@ class LibraryEnrichmentWorker:
                     priority=3,
                 )
 
+                # Hey future me - get_available_providers() is ASYNC (checks is_available()).
+                # If you forget to await it, you'll get a coroutine warning + TypeError on len().
+                available_providers = await image_registry.get_available_providers()
                 logger.debug(
-                    f"ImageProviderRegistry configured with {len(image_registry.get_available_providers())} providers"
+                    "ImageProviderRegistry configured with %d providers",
+                    len(available_providers),
                 )
 
                 service = LocalLibraryEnrichmentService(
