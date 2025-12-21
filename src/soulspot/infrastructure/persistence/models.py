@@ -1059,7 +1059,7 @@ class AppSettingsModel(Base):
     Example keys:
     - 'spotify.auto_sync_enabled' (boolean)
     - 'spotify.artists_sync_interval_minutes' (integer)
-    - 'spotify.download_images' (boolean)
+    - 'library.download_images' (boolean - multi-provider)
     """
 
     __tablename__ = "app_settings"

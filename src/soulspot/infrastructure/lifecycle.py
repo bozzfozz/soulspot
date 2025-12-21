@@ -620,6 +620,124 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             auto_import_task = asyncio.create_task(auto_import_service.start())
             logger.info("Auto-import service started")
 
+            # =================================================================
+            # Image Backfill Task (Fire-and-Forget)
+            # =================================================================
+            # Hey future me - this downloads missing images on container start!
+            # Use case: User enabled "Download Images Locally" after syncing library.
+            # Runs in background to not block startup - logs errors but doesn't crash app.
+            async def backfill_missing_images():
+                """Background task to download images for entities without local paths."""
+                try:
+                    # Small delay to let other startup tasks finish first
+                    await asyncio.sleep(10)
+                    
+                    logger.info("🖼️ Image backfill: Starting check for missing images...")
+                    
+                    from soulspot.application.services.images import ImageService
+                    from soulspot.infrastructure.persistence.models import (
+                        AlbumModel,
+                        ArtistModel,
+                    )
+                    from sqlalchemy import select
+                    import hashlib
+                    
+                    async with db.session_scope() as backfill_session:
+                        image_service = ImageService(
+                            cache_base_path=str(settings.storage.image_path),
+                            local_serve_prefix="/images/local",
+                        )
+                        
+                        # Check if image download is enabled
+                        backfill_settings_service = AppSettingsService(backfill_session)
+                        should_download = await backfill_settings_service.get_bool(
+                            "library.download_images", default=True
+                        )
+                        
+                        if not should_download:
+                            logger.info("🖼️ Image backfill: Download images is disabled, skipping")
+                            return
+                        
+                        # Find artists without local images
+                        artist_stmt = select(ArtistModel).where(
+                            ArtistModel.image_url.isnot(None),
+                            ArtistModel.image_path.is_(None),
+                        ).limit(100)  # Limit to prevent overload on large libraries
+                        
+                        artist_results = await backfill_session.execute(artist_stmt)
+                        artists = artist_results.scalars().all()
+                        
+                        if artists:
+                            logger.info(f"🖼️ Image backfill: Found {len(artists)} artists needing images (showing first 100)")
+                            
+                            for artist in artists:
+                                try:
+                                    provider_id = artist.spotify_id or artist.deezer_id
+                                    provider = "spotify" if artist.spotify_id else "deezer"
+                                    
+                                    if not provider_id:
+                                        # Fallback: hash of artist name
+                                        provider_id = hashlib.md5(artist.name.lower().encode()).hexdigest()[:16]
+                                        provider = "local"
+                                    
+                                    image_path = await image_service.download_artist_image(
+                                        provider_id=provider_id,
+                                        image_url=artist.image_url,
+                                        provider=provider,
+                                    )
+                                    
+                                    if image_path:
+                                        artist.image_path = image_path
+                                        logger.debug(f"✅ Backfilled artist image: {artist.name}")
+                                except Exception as e:
+                                    logger.warning(f"❌ Failed to backfill artist image for {artist.name}: {e}")
+                        
+                        # Find albums without local covers
+                        album_stmt = select(AlbumModel).where(
+                            AlbumModel.cover_url.isnot(None),
+                            AlbumModel.cover_path.is_(None),
+                        ).limit(100)  # Limit to prevent overload
+                        
+                        album_results = await backfill_session.execute(album_stmt)
+                        albums = album_results.scalars().all()
+                        
+                        if albums:
+                            logger.info(f"🖼️ Image backfill: Found {len(albums)} albums needing covers (showing first 100)")
+                            
+                            for album in albums:
+                                try:
+                                    provider_id = album.spotify_id or album.deezer_id
+                                    provider = "spotify" if album.spotify_id else "deezer"
+                                    
+                                    if not provider_id:
+                                        # Fallback: hash of album title + artist
+                                        hash_input = f"{album.title}_{album.artist.name if album.artist else 'unknown'}".lower()
+                                        provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+                                        provider = "local"
+                                    
+                                    image_path = await image_service.download_album_image(
+                                        provider_id=provider_id,
+                                        image_url=album.cover_url,
+                                        provider=provider,
+                                    )
+                                    
+                                    if image_path:
+                                        album.cover_path = image_path
+                                        logger.debug(f"✅ Backfilled album cover: {album.title}")
+                                except Exception as e:
+                                    logger.warning(f"❌ Failed to backfill album cover for {album.title}: {e}")
+                        
+                        # Commit all changes
+                        await backfill_session.commit()
+                        logger.info("🖼️ Image backfill: Complete")
+                        
+                except Exception as e:
+                    # Don't crash app if backfill fails - just log
+                    logger.error(f"🖼️ Image backfill failed: {e}", exc_info=True)
+            
+            # Start backfill task (fire-and-forget)
+            asyncio.create_task(backfill_missing_images())
+
             # Yield to keep the app running - session stays open during app lifetime
             yield
 

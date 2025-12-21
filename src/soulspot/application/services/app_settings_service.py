@@ -412,8 +412,8 @@ class AppSettingsService:
         return await self.get_int("spotify.playlists_sync_interval_minutes", default=10)
 
     async def should_download_images(self) -> bool:
-        """Check if image downloading is enabled."""
-        return await self.get_bool("spotify.download_images", default=True)
+        """Check if image downloading is enabled for all providers (multi-source)."""
+        return await self.get_bool("library.download_images", default=True)
 
     async def should_remove_unfollowed_artists(self) -> bool:
         """Check if unfollowed artists should be removed from DB."""
@@ -472,7 +472,7 @@ class AppSettingsService:
                 "spotify.playlists_sync_interval_minutes", default=10
             ),
             "download_images": await self.get_bool(
-                "spotify.download_images", default=True
+                "library.download_images", default=True
             ),
             "remove_unfollowed_artists": await self.get_bool(
                 "spotify.remove_unfollowed_artists", default=True
@@ -1040,9 +1040,9 @@ class AppSettingsService:
         """Check if artwork should be downloaded during enrichment.
 
         Default: True - downloads artwork to local filesystem in addition
-        to storing the Spotify image URL in DB.
+        to storing the provider image URL in DB (multi-provider).
 
-        Respects spotify.download_images as master toggle for all image downloads.
+        Respects library.download_images as master toggle for all image downloads.
         """
         # Check master image download toggle first
         if not await self.should_download_images():

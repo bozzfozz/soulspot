@@ -621,7 +621,7 @@ async def update_spotify_sync_settings(
         category="spotify",
     )
     await settings_service.set(
-        "spotify.download_images",
+        "library.download_images",
         settings_update.download_images,
         value_type="boolean",
         category="spotify",
@@ -679,7 +679,7 @@ async def toggle_spotify_sync_setting(
         "auto_sync_playlists": "spotify.auto_sync_playlists",
         "auto_sync_liked_songs": "spotify.auto_sync_liked_songs",
         "auto_sync_saved_albums": "spotify.auto_sync_saved_albums",
-        "download_images": "spotify.download_images",
+        "download_images": "library.download_images",
         "remove_unfollowed_artists": "spotify.remove_unfollowed_artists",
         "remove_unfollowed_playlists": "spotify.remove_unfollowed_playlists",
         "auto_resync_artist_albums": "spotify.auto_resync_artist_albums",
