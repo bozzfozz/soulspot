@@ -103,6 +103,7 @@ class LibraryEnrichmentWorker:
             DeezerImageProvider,
             SpotifyImageProvider,
         )
+        from soulspot.infrastructure.integrations.deezer_client import DeezerClient
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
         from soulspot.infrastructure.persistence.repositories import (
             SpotifyTokenRepository,
@@ -149,7 +150,9 @@ class LibraryEnrichmentWorker:
                     image_registry.register(SpotifyImageProvider(spotify_plugin), priority=1)
 
                 # Deezer is always available (no auth required)
-                image_registry.register(DeezerImageProvider(), priority=2)
+                # Hey future me - DeezerImageProvider wraps DeezerClient (public API, no auth).
+                deezer_client = DeezerClient()
+                image_registry.register(DeezerImageProvider(deezer_client), priority=2)
 
                 # CoverArtArchive is always available (no auth required, albums only)
                 image_registry.register(CoverArtArchiveImageProvider(), priority=3)
