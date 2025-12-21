@@ -30,11 +30,29 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from soulspot.application.services.images import ImageService
     from soulspot.application.services.token_manager import DatabaseTokenManager
     from soulspot.config import Settings
     from soulspot.infrastructure.persistence import Database
 
 logger = logging.getLogger(__name__)
+
+
+def _get_image_service() -> "ImageService":
+    """Get ImageService with correct Docker cache path.
+    
+    Hey future me - THIS IS CRITICAL!
+    ImageService() ohne Parameter nutzt default ./images (FALSCH in Docker!).
+    Wir müssen den korrekten Pfad aus Settings holen.
+    """
+    from soulspot.application.services.images import ImageService
+    from soulspot.config import get_settings
+    
+    settings = get_settings()
+    return ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
 
 
 class SpotifySyncWorker:
@@ -449,7 +467,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.application.services.spotify_sync_service import (
                 SpotifySyncService,
             )
@@ -460,7 +477,7 @@ class SpotifySyncWorker:
 
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
@@ -497,7 +514,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.application.services.spotify_sync_service import (
                 SpotifySyncService,
             )
@@ -508,7 +524,7 @@ class SpotifySyncWorker:
 
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
@@ -544,7 +560,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.application.services.spotify_sync_service import (
                 SpotifySyncService,
             )
@@ -555,7 +570,7 @@ class SpotifySyncWorker:
 
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
@@ -590,7 +605,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.application.services.spotify_sync_service import (
                 SpotifySyncService,
             )
@@ -601,7 +615,7 @@ class SpotifySyncWorker:
 
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
@@ -726,11 +740,10 @@ class SpotifySyncWorker:
 
             # Set up services
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-            from soulspot.application.services.images import ImageService
 
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(
@@ -826,7 +839,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.application.services.spotify_sync_service import (
                 SpotifySyncService,
             )
@@ -861,7 +873,7 @@ class SpotifySyncWorker:
             # Set up services
             spotify_client = SpotifyClient(self.settings.spotify)
             spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-            image_service = ImageService()
+            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
             sync_service = SpotifySyncService(

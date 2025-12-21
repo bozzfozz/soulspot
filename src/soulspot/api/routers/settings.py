@@ -41,24 +41,28 @@ class GeneralSettings(BaseModel):
 # Spotify Developer Dashboard or OAuth will fail! If these are wrong, integration endpoints will blow up with
 # 401/403 errors. Store these in .env file, NEVER commit to git!
 class IntegrationSettings(BaseModel):
-    """Integration settings for external services."""
+    """Integration settings for external services.
+    
+    Hey future me - ALL fields have defaults because DB might be empty!
+    Settings page loads this on startup, crashes if any field is required but None.
+    """
 
-    # Spotify
-    spotify_client_id: str = Field(description="Spotify client ID")
-    spotify_client_secret: str = Field(description="Spotify client secret")
-    spotify_redirect_uri: str = Field(description="Spotify redirect URI")
+    # Spotify - defaults to empty strings (unconfigured state)
+    spotify_client_id: str = Field(default="", description="Spotify client ID")
+    spotify_client_secret: str = Field(default="", description="Spotify client secret")
+    spotify_redirect_uri: str = Field(default="", description="Spotify redirect URI")
 
-    # slskd
-    slskd_url: str = Field(description="slskd URL")
-    slskd_username: str = Field(description="slskd username")
-    slskd_password: str = Field(description="slskd password")
+    # slskd - defaults to empty strings (unconfigured state)
+    slskd_url: str = Field(default="", description="slskd URL")
+    slskd_username: str = Field(default="", description="slskd username")
+    slskd_password: str = Field(default="", description="slskd password")
     slskd_api_key: str | None = Field(
         default=None, description="slskd API key (optional)"
     )
 
-    # MusicBrainz
-    musicbrainz_app_name: str = Field(description="MusicBrainz app name")
-    musicbrainz_contact: str = Field(description="MusicBrainz contact email")
+    # MusicBrainz - sensible defaults for rate limiting compliance
+    musicbrainz_app_name: str = Field(default="SoulSpot", description="MusicBrainz app name")
+    musicbrainz_contact: str = Field(default="", description="MusicBrainz contact email")
 
 
 # Hey, download worker configuration! max_concurrent_downloads is resource-limited (1-10 range) because
@@ -757,6 +761,69 @@ async def get_spotify_disk_usage_legacy(
 
 
 # =============================================================================
+# DEBUG: Album Cover Inspection (temporary endpoint)
+# =============================================================================
+
+@router.get("/library/debug-album-covers")
+async def debug_album_covers(
+    session: AsyncSession = Depends(get_db_session),
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Debug endpoint to inspect album cover URLs and paths.
+    
+    Hey future me - TEMPORARY debug endpoint!
+    Remove after fixing album cover download issue.
+    
+    Shows first N albums with their cover_url and cover_path values
+    to understand why bulk download finds 0 albums needing covers.
+    """
+    from soulspot.infrastructure.persistence.models import AlbumModel
+    from sqlalchemy import select, func
+    
+    # Get sample albums
+    stmt = select(AlbumModel).limit(limit)
+    result = await session.execute(stmt)
+    albums = result.scalars().all()
+    
+    # Count stats
+    total = await session.execute(select(func.count()).select_from(AlbumModel))
+    with_url = await session.execute(
+        select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_url.isnot(None))
+    )
+    with_path = await session.execute(
+        select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_path.isnot(None))
+    )
+    needing_download = await session.execute(
+        select(func.count()).select_from(AlbumModel).where(
+            AlbumModel.cover_url.isnot(None),
+            AlbumModel.cover_path.is_(None),
+        )
+    )
+    
+    return {
+        "stats": {
+            "total_albums": total.scalar(),
+            "albums_with_cover_url": with_url.scalar(),
+            "albums_with_cover_path": with_path.scalar(),
+            "albums_needing_download": needing_download.scalar(),
+        },
+        "sample_albums": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "artist_id": a.artist_id,
+                "spotify_id": a.spotify_id,
+                "deezer_id": a.deezer_id,
+                "cover_url": a.cover_url,
+                "cover_path": a.cover_path,
+                "source": a.source,
+            }
+            for a in albums
+        ],
+    }
+
+
+# =============================================================================
 # BULK IMAGE DOWNLOAD (for retroactive caching)
 # =============================================================================
 
@@ -860,6 +927,21 @@ async def download_all_images(
         )
         album_results = await session.execute(album_stmt)
         albums = album_results.scalars().all()
+        
+        # Debug: Count albums in each state
+        from sqlalchemy import func
+        total_albums = await session.execute(select(func.count()).select_from(AlbumModel))
+        albums_with_url = await session.execute(
+            select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_url.isnot(None))
+        )
+        albums_with_path = await session.execute(
+            select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_path.isnot(None))
+        )
+        logger.info(
+            f"📊 Album Stats: Total={total_albums.scalar()}, "
+            f"with_url={albums_with_url.scalar()}, with_path={albums_with_path.scalar()}, "
+            f"needing_download={len(albums)}"
+        )
         
         logger.info(f"📥 Bulk Download: Found {len(albums)} albums needing covers")
         

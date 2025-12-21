@@ -36,6 +36,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _get_image_service() -> "ImageService":
+    """Get ImageService with correct Docker cache path.
+    
+    Hey future me - THIS IS CRITICAL!
+    ImageService() ohne Parameter nutzt default ./images (FALSCH in Docker!).
+    Wir müssen den korrekten Pfad aus Settings holen.
+    """
+    from soulspot.application.services.images import ImageService
+    from soulspot.config import get_settings
+    
+    settings = get_settings()
+    return ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/images/local",
+    )
+
+
 class DeezerSyncWorker:
     """Background worker that automatically syncs data from Deezer.
 
@@ -378,7 +395,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -389,7 +405,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
@@ -420,7 +436,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -431,7 +446,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
@@ -462,7 +477,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -473,7 +487,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
@@ -504,7 +518,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -515,7 +528,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
@@ -577,7 +590,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -635,7 +647,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
@@ -718,7 +730,6 @@ class DeezerSyncWorker:
             from soulspot.application.services.deezer_sync_service import (
                 DeezerSyncService,
             )
-            from soulspot.application.services.images import ImageService
             from soulspot.infrastructure.integrations.deezer_client import (
                 DeezerClient,
             )
@@ -753,7 +764,7 @@ class DeezerSyncWorker:
                 client=deezer_client,
                 access_token=access_token,
             )
-            image_service = ImageService()
+            image_service = _get_image_service()
 
             sync_service = DeezerSyncService(
                 session=session,
