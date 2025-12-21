@@ -171,7 +171,7 @@ class ImageService:
     # Configuration
     # Hey future me - default ist für lokale Dev, Docker überschreibt via dependency injection!
     cache_base_path: str = field(default="./images")
-    local_serve_prefix: str = field(default="/images/local")
+    local_serve_prefix: str = field(default="/api/images")
     
     # === Public Sync Methods (for templates) ===
     

@@ -51,7 +51,7 @@ def _get_image_service() -> "ImageService":
     settings = get_settings()
     return ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
 
 

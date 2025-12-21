@@ -645,7 +645,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     async with db.session_scope() as backfill_session:
                         image_service = ImageService(
                             cache_base_path=str(settings.storage.image_path),
-                            local_serve_prefix="/images/local",
+                            local_serve_prefix="/api/images",
                         )
                         
                         # Check if image download is enabled

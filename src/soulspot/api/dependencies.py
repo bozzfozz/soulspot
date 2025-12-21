@@ -145,7 +145,7 @@ def get_image_service(settings: Settings = Depends(get_settings)) -> "ImageServi
 
     return ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
 
 
@@ -898,7 +898,7 @@ async def get_spotify_sync_service(
     # image_path: Docker: /config/images, Local: ./images
     image_service = ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
 
     yield SpotifySyncService(
@@ -992,7 +992,7 @@ async def get_library_view_service(
             # image_path: Docker: /config/images, Local: ./images
             image_service = ImageService(
                 cache_base_path=str(settings.storage.image_path),
-                local_serve_prefix="/images/local",
+                local_serve_prefix="/api/images",
             )
             
             spotify_sync = SpotifySyncService(
@@ -1091,7 +1091,7 @@ async def get_deezer_sync_service(
     # image_path: Docker: /config/images, Local: ./images
     image_service = ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
     
     yield DeezerSyncService(
@@ -1139,7 +1139,7 @@ def get_image_service(
     # Local dev: ./images
     return ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
 
 
@@ -1174,7 +1174,7 @@ async def get_image_service_with_session(
     return ImageService(
         session=session,
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
 
 
@@ -1222,7 +1222,7 @@ async def get_provider_sync_orchestrator(
     # image_path: Docker: /config/images, Local: ./images
     image_service = ImageService(
         cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/images/local",
+        local_serve_prefix="/api/images",
     )
     
     # Deezer is ALWAYS available (NO AUTH NEEDED!)
