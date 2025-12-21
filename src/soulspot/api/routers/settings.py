@@ -246,7 +246,7 @@ async def update_settings(
 
     # Spotify credentials - only update if not masked
     if integration.spotify_client_secret != "***":
-        await credentials_service.set_spotify_credentials(
+        await credentials_service.save_spotify_credentials(
             client_id=integration.spotify_client_id,
             client_secret=integration.spotify_client_secret,
             redirect_uri=integration.spotify_redirect_uri,
@@ -254,7 +254,7 @@ async def update_settings(
     elif integration.spotify_client_id:
         # Client ID changed but secret stayed masked - update only client_id and redirect_uri
         current_creds = await credentials_service.get_spotify_credentials()
-        await credentials_service.set_spotify_credentials(
+        await credentials_service.save_spotify_credentials(
             client_id=integration.spotify_client_id,
             client_secret=current_creds.client_secret,  # Keep existing
             redirect_uri=integration.spotify_redirect_uri,
@@ -264,7 +264,7 @@ async def update_settings(
     if integration.slskd_password != "***" or integration.slskd_api_key not in ("***", None):
         # Resolve masked values to current credentials
         current_slskd = await credentials_service.get_slskd_credentials()
-        await credentials_service.set_slskd_credentials(
+        await credentials_service.save_slskd_credentials(
             url=integration.slskd_url,
             username=integration.slskd_username,
             password=integration.slskd_password if integration.slskd_password != "***" else current_slskd.password,
@@ -273,7 +273,7 @@ async def update_settings(
     elif integration.slskd_url:
         # URL/username changed but secrets stayed masked - update only non-secret fields
         current_slskd = await credentials_service.get_slskd_credentials()
-        await credentials_service.set_slskd_credentials(
+        await credentials_service.save_slskd_credentials(
             url=integration.slskd_url,
             username=integration.slskd_username,
             password=current_slskd.password,  # Keep existing
