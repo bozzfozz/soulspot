@@ -120,21 +120,31 @@
 {# Hey future me - diese Section zeigt Alben die der User NICHT hat!
    Geladen via HTMX von /api/library/discovery/missing/{artist_id}.
    Nur anzeigen wenn der Artist eine ID hat (sonst wurde noch keine Discovery gemacht).
-   Die Karten haben Download-Buttons die zur Search mit artist+album title führen. #}
+   Die Karten haben Download-Buttons die zur Search mit artist+album title führen.
+   Filter: album_types kann album,ep,single,compilation sein (Default: alle) #}
 <div class="card" style="padding: var(--space-6); margin-bottom: var(--space-6);">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
         <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0;">
             <i class="bi bi-collection" style="color: var(--accent-secondary); margin-right: var(--space-2);"></i>
             Missing from Collection
         </h2>
-        <button class="btn btn-ghost btn-sm" 
-                hx-get="/api/library/discovery/missing/{{ artist.id }}"
-                hx-target="#missing-albums-container"
-                hx-swap="innerHTML"
-                hx-trigger="click"
-                hx-indicator="#missing-albums-loading">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-        </button>
+        <div style="display: flex; gap: var(--space-2); align-items: center;">
+            {# Album type filter #}
+            <select id="missing-album-types" 
+                    style="padding: var(--space-2); border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: var(--font-size-sm);"
+                    onchange="refreshMissingAlbums()">
+                <option value="album,ep,single,compilation" selected>All Types</option>
+                <option value="album,ep">Albums & EPs</option>
+                <option value="album">Albums Only</option>
+                <option value="single">Singles Only</option>
+                <option value="compilation">Compilations Only</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" 
+                    onclick="refreshMissingAlbums()"
+                    title="Refresh">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
     </div>
     
     <div id="missing-albums-loading" class="htmx-indicator" style="text-align: center; padding: var(--space-4);">
@@ -143,12 +153,20 @@
     </div>
     
     <div id="missing-albums-container"
-         hx-get="/api/library/discovery/missing/{{ artist.id }}"
+         hx-get="/api/library/discovery/missing/{{ artist.id }}?album_types=album,ep,single,compilation"
          hx-trigger="load"
          hx-swap="innerHTML">
         <!-- Content loaded via HTMX -->
     </div>
 </div>
+
+<script>
+function refreshMissingAlbums() {
+    const types = document.getElementById('missing-album-types').value;
+    const container = document.getElementById('missing-albums-container');
+    htmx.ajax('GET', '/api/library/discovery/missing/{{ artist.id }}?album_types=' + types, {target: container, swap: 'innerHTML'});
+}
+</script>
 
 <!-- Hey future me - All Tracks section removed Dec 2025!
      Tracks are already shown inside albums, so this was redundant.

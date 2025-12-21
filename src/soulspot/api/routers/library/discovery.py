@@ -201,7 +201,7 @@ async def get_missing_albums_html(
     artist_id: str,
     session: AsyncSession = Depends(get_db_session),
     album_types: str = Query(
-        default="album,ep",
+        default="album,ep,single,compilation",
         description="Comma-separated album types to include (album, ep, single, compilation)",
     ),
 ) -> HTMLResponse:
@@ -212,7 +212,7 @@ async def get_missing_albums_html(
 
     Args:
         artist_id: UUID of the artist
-        album_types: Filter by type (default: album,ep - excludes singles)
+        album_types: Filter by type (default: all types including singles)
 
     Returns:
         HTML fragment with missing album cards
