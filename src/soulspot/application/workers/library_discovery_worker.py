@@ -731,6 +731,54 @@ class LibraryDiscoveryWorker:
                 })
                 logger.warning(f"Failed to enrich album '{album.title}': {e}")
 
+        # === PHASE 4B: Update primary_type for albums that already have IDs ===
+        # Hey future me - this is for albums that got IDs before we added primary_type!
+        # We fetch the album data from Deezer/Spotify and extract the album_type.
+        albums_needing_type = await album_repo.get_albums_without_primary_type(limit=100)
+        
+        if albums_needing_type and (deezer_plugin or spotify_plugin):
+            logger.info(f"Phase 4B: Updating primary_type for {len(albums_needing_type)} albums with existing IDs")
+            stats["primary_type_updated"] = 0
+            
+            for album in albums_needing_type:
+                try:
+                    # Try Deezer first (if album has deezer_id)
+                    if album.deezer_id and deezer_plugin:
+                        try:
+                            album_details = await deezer_plugin.get_album(str(album.deezer_id))
+                            if album_details and album_details.album_type:
+                                await album_repo.update_primary_type(
+                                    album_id=album.id,
+                                    primary_type=album_details.album_type,
+                                )
+                                stats["primary_type_updated"] += 1
+                                logger.debug(
+                                    f"Updated primary_type='{album_details.album_type}' for album '{album.title}' via Deezer"
+                                )
+                                continue  # Skip Spotify if Deezer worked
+                        except Exception as e:
+                            logger.debug(f"Deezer album fetch failed for '{album.title}': {e}")
+                    
+                    # Fallback to Spotify (if album has spotify_uri)
+                    if album.spotify_uri and spotify_plugin:
+                        try:
+                            album_details = await spotify_plugin.get_album(str(album.spotify_uri))
+                            if album_details and album_details.album_type:
+                                await album_repo.update_primary_type(
+                                    album_id=album.id,
+                                    primary_type=album_details.album_type,
+                                )
+                                stats["primary_type_updated"] += 1
+                                logger.debug(
+                                    f"Updated primary_type='{album_details.album_type}' for album '{album.title}' via Spotify"
+                                )
+                        except Exception as e:
+                            logger.debug(f"Spotify album fetch failed for '{album.title}': {e}")
+                    
+                    await asyncio.sleep(0.05)
+                except Exception as e:
+                    logger.debug(f"Failed to update primary_type for album '{album.title}': {e}")
+
         return stats
 
     async def _phase5_enrich_tracks(self, session: "AsyncSession") -> dict[str, Any]:

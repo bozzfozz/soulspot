@@ -1222,6 +1222,44 @@ class AlbumRepository(IAlbumRepository):
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]
 
+    async def get_albums_without_primary_type(self, limit: int = 100) -> list[Album]:
+        """Get albums with local files but missing primary_type (or set to default 'Album').
+        
+        Hey future me - this finds albums that need Album/EP/Single classification!
+        We check albums that have provider IDs (Deezer/Spotify) but primary_type was never set,
+        OR primary_type is still the default 'Album' (could be misclassified EP/Single).
+        
+        Args:
+            limit: Maximum number of albums to return
+            
+        Returns:
+            List of Album entities needing primary_type discovery
+        """
+        has_local_tracks = (
+            select(TrackModel.id)
+            .where(TrackModel.album_id == AlbumModel.id)
+            .where(TrackModel.file_path.isnot(None))
+            .exists()
+        )
+        
+        # Get albums with IDs but no/default primary_type
+        stmt = (
+            select(AlbumModel)
+            .where(has_local_tracks)
+            .where(
+                (AlbumModel.deezer_id.isnot(None)) | (AlbumModel.spotify_uri.isnot(None))
+            )
+            .where(
+                (AlbumModel.primary_type.is_(None)) | (AlbumModel.primary_type == "Album")
+            )
+            .order_by(AlbumModel.title)
+            .limit(limit)
+        )
+        
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        return [self._model_to_entity(model) for model in models]
+
     async def get_albums_without_deezer_id(self, limit: int = 50) -> list[Album]:
         """Get albums that have local files but no deezer_id yet.
         
