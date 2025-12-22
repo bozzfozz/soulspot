@@ -499,7 +499,109 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
+    @staticmethod
+    def download_retry_scheduled(
+        track: str,
+        artist: str,
+        retry_count: int,
+        next_retry_at: str,
+        error_code: str | None = None
+    ) -> str:
+        """Format a download retry scheduled message.
+
+        Hey future me - log when a failed download is scheduled for retry!
+
+        Args:
+            track: Track title
+            artist: Artist name
+            retry_count: Current retry attempt number
+            next_retry_at: When the retry will happen
+            error_code: Error code that triggered retry
+        """
+        fields = {
+            "Track": track,
+            "Artist": artist,
+            "Retry": f"#{retry_count}",
+            "Scheduled": next_retry_at,
+        }
+        if error_code:
+            fields["Error Code"] = error_code
+
+        template = LogTemplate(
+            icon="🔄",
+            title="Download Retry Scheduled",
+            fields=fields,
+            hint="Download will be retried automatically"
+        )
+        return template.format()
+
+    @staticmethod
+    def download_retry_exhausted(
+        track: str,
+        artist: str,
+        total_retries: int,
+        error_code: str | None = None
+    ) -> str:
+        """Format a download retries exhausted message.
+
+        Hey future me - log when all retries have been used up!
+
+        Args:
+            track: Track title
+            artist: Artist name
+            total_retries: Total number of retries attempted
+            error_code: Final error code
+        """
+        fields = {
+            "Track": track,
+            "Artist": artist,
+            "Total Retries": str(total_retries),
+        }
+        if error_code:
+            fields["Final Error"] = error_code
+
+        template = LogTemplate(
+            icon="⛔",
+            title="Download Retries Exhausted",
+            fields=fields,
+            hint="Manual intervention required - try different source"
+        )
+        return template.format()
+
+    @staticmethod
+    def source_blocked(
+        username: str,
+        reason: str,
+        scope: str = "USERNAME",
+        expires_at: str | None = None
+    ) -> str:
+        """Format a source blocked message.
+
+        Hey future me - log when a source gets blocked!
+
+        Args:
+            username: Blocked username
+            reason: Why blocked
+            scope: Blocklist scope (USERNAME, FILEPATH, SPECIFIC)
+            expires_at: When block expires (or None for permanent)
+        """
+        fields = {
+            "Username": username,
+            "Reason": reason,
+            "Scope": scope,
+        }
+        if expires_at:
+            fields["Expires"] = expires_at
+
+        template = LogTemplate(
+            icon="🚫",
+            title="Source Blocked",
+            fields=fields,
+            hint="Source will be skipped in future searches"
+        )
+        return template.format()
+
     # === Configuration ===
     
     @staticmethod

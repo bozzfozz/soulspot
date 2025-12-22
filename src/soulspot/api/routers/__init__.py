@@ -15,6 +15,7 @@ from soulspot.api.routers import (
     artists,
     auth,
     automation,
+    blocklist,
     compilations,
     download_manager,
     downloads,
@@ -23,9 +24,11 @@ from soulspot.api.routers import (
     library,
     logs,
     metadata,
+    metrics,
     notifications,
     onboarding,
     playlists,
+    quality_profiles,
     search,
     settings,
     sse,
@@ -59,6 +62,9 @@ api_router.include_router(sse.router, tags=["SSE"])
 api_router.include_router(workers.router, prefix="/workers", tags=["Workers"])
 api_router.include_router(download_manager.router, tags=["Download Manager"])
 api_router.include_router(logs.router, tags=["Logs"])
+api_router.include_router(metrics.router, tags=["Metrics"])
+api_router.include_router(quality_profiles.router, prefix="/quality-profiles", tags=["Quality Profiles"])
+api_router.include_router(blocklist.router, prefix="/blocklist", tags=["Blocklist"])
 
 __all__ = [
     "api_router",
@@ -67,6 +73,7 @@ __all__ = [
     "artwork",
     "auth",
     "automation",
+    "blocklist",
     "compilations",
     "download_manager",
     "downloads",
@@ -74,9 +81,11 @@ __all__ = [
     "library",
     "logs",
     "metadata",
+    "metrics",
     "notifications",
     "onboarding",
     "playlists",
+    "quality_profiles",
     "search",
     "settings",
     "sse",

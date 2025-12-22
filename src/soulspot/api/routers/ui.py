@@ -831,6 +831,30 @@ async def settings(request: Request) -> Any:
     return templates.TemplateResponse(request, "settings.html")
 
 
+@router.get("/settings/quality-profiles", response_class=HTMLResponse)
+async def quality_profiles_page(request: Request) -> Any:
+    """Quality profiles management page.
+    
+    Hey future me - this page lets users manage download quality preferences!
+    - List all profiles (builtin + custom)
+    - Create/edit/delete custom profiles
+    - Set active profile for downloads
+    """
+    return templates.TemplateResponse(request, "quality_profiles.html")
+
+
+@router.get("/settings/blocklist", response_class=HTMLResponse)
+async def blocklist_page(request: Request) -> Any:
+    """Blocklist management page.
+    
+    Hey future me - this page shows blocked Soulseek sources!
+    - Auto-blocks from failed downloads
+    - Manual blocks for known bad sources
+    - Clear expired blocks
+    """
+    return templates.TemplateResponse(request, "blocklist.html")
+
+
 # Alias for /dashboard - redirects to main page (/) for backwards compatibility
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request) -> Any:  # noqa: ARG001

@@ -258,9 +258,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.new_releases_sync_worker = new_releases_sync_worker
         logger.info("New Releases sync worker started (syncs every 30min by default)")
 
-        # Initialize job queue with configured max concurrent downloads
+        # Initialize PERSISTENT job queue (survives restarts!)
+        # Hey future me - PersistentJobQueue wraps JobQueue with DB persistence.
+        # Jobs are stored in background_jobs table and recovered on startup.
+        # This prevents losing queued downloads when container restarts!
         from soulspot.application.workers.download_worker import DownloadWorker
-        from soulspot.application.workers.job_queue import JobQueue
+        from soulspot.application.workers.persistent_job_queue import (
+            PersistentJobQueue,
+        )
         from soulspot.application.workers.library_scan_worker import LibraryScanWorker
         from soulspot.infrastructure.integrations.slskd_client import SlskdClient
         from soulspot.infrastructure.persistence.repositories import (
@@ -268,9 +273,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             TrackRepository,
         )
 
-        job_queue = JobQueue(
-            max_concurrent_jobs=settings.download.max_concurrent_downloads
+        # Create persistent job queue with DB session factory
+        job_queue = PersistentJobQueue(
+            session_factory=db.get_session_factory(),
+            max_concurrent_jobs=settings.download.max_concurrent_downloads,
         )
+        
+        # Recover pending jobs from database (crashed workers, etc.)
+        recovered_count = await job_queue.recover_jobs()
+        if recovered_count > 0:
+            logger.info(f"Recovered {recovered_count} pending jobs from database")
+        
         app.state.job_queue = job_queue
 
         # =================================================================
@@ -517,7 +530,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_status_sync_worker = None
                 app.state.download_status_sync_task = None
 
+            # =================================================================
+            # Start Retry Scheduler Worker (auto-retries failed downloads)
+            # =================================================================
+            # Hey future me - dieser Worker RETRIED fehlgeschlagene Downloads automatisch!
+            # Er checkt alle 30s ob Downloads bereit für Retry sind (basierend auf
+            # next_retry_at timestamp und retry_count < max_retries).
+            # Exponential backoff: 1min, 5min, 15min zwischen Retries.
+            # NON-RETRYABLE errors (file_not_found, user_blocked) werden NICHT retried!
+            # Dieser Worker braucht KEINEN slskd_client - er ändert nur DB Status
+            # von FAILED → WAITING. QueueDispatcherWorker macht den Rest.
+            from soulspot.application.workers.retry_scheduler_worker import (
+                RetrySchedulerWorker,
+            )
 
+            retry_scheduler_worker = RetrySchedulerWorker(
+                session_factory=db.get_session_factory(),
+                check_interval=30,  # Check every 30 seconds
+                max_retries_per_cycle=10,  # Max 10 retries per cycle to prevent flooding
+            )
+            retry_scheduler_task = asyncio.create_task(retry_scheduler_worker.start())
+            app.state.retry_scheduler_worker = retry_scheduler_worker
+            app.state.retry_scheduler_task = retry_scheduler_task
+            logger.info("Retry scheduler worker started (checks every 30s, max 3 retries)")
 
             # =================================================================
             # Start Automation Workers (optional, controlled by settings)
@@ -827,6 +862,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.info("Download status sync worker stopped")
             except Exception as e:
                 logger.exception("Error stopping download status sync worker: %s", e)
+
+        # Stop retry scheduler worker (auto-retry for failed downloads)
+        if hasattr(app.state, "retry_scheduler_worker") and app.state.retry_scheduler_worker is not None:
+            try:
+                logger.info("Stopping retry scheduler worker...")
+                app.state.retry_scheduler_worker.stop()
+                if hasattr(app.state, "retry_scheduler_task") and app.state.retry_scheduler_task is not None:
+                    try:
+                        await asyncio.wait_for(
+                            app.state.retry_scheduler_task,
+                            timeout=5.0,
+                        )
+                    except TimeoutError:
+                        app.state.retry_scheduler_task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await app.state.retry_scheduler_task
+                logger.info("Retry scheduler worker stopped")
+            except Exception as e:
+                logger.exception("Error stopping retry scheduler worker: %s", e)
 
         # Stop Spotify sync worker first (depends on token manager)
         if hasattr(app.state, "spotify_sync_worker"):

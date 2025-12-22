@@ -188,6 +188,52 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
             ):
                 overall_status = HealthStatus.DEGRADED
 
+        # Worker health checks
+        workers_status = {}
+        workers_healthy = True
+
+        # Download Worker
+        download_worker = getattr(app.state, "download_worker", None)
+        if download_worker:
+            worker_status = download_worker.get_status()
+            workers_status["download_worker"] = {
+                "running": worker_status.get("running", False),
+                "queue_size": worker_status.get("queue_size", 0),
+            }
+            if not worker_status.get("running"):
+                workers_healthy = False
+
+        # Download Status Sync Worker
+        status_sync_worker = getattr(app.state, "download_status_sync_worker", None)
+        if status_sync_worker:
+            worker_status = status_sync_worker.get_status()
+            workers_status["download_status_sync"] = {
+                "running": worker_status.get("running", False),
+                "last_poll": worker_status.get("stats", {}).get("last_poll_at"),
+            }
+            if not worker_status.get("running"):
+                workers_healthy = False
+
+        # Retry Scheduler Worker
+        retry_scheduler = getattr(app.state, "retry_scheduler_worker", None)
+        if retry_scheduler:
+            worker_status = retry_scheduler.get_status()
+            workers_status["retry_scheduler"] = {
+                "running": worker_status.get("running", False),
+            }
+
+        # Token Refresh Worker
+        token_worker = getattr(app.state, "token_refresh_worker", None)
+        if token_worker:
+            worker_status = token_worker.get_status()
+            workers_status["token_refresh"] = {
+                "running": worker_status.get("running", False),
+            }
+
+        checks["workers"] = workers_status
+        if not workers_healthy and overall_status == HealthStatus.HEALTHY:
+            overall_status = HealthStatus.DEGRADED
+
         return {
             "status": overall_status.value,
             "checks": checks,

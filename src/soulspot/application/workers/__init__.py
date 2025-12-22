@@ -23,10 +23,19 @@ from soulspot.application.workers.new_releases_sync_worker import (
     NewReleasesCache,
     NewReleasesSyncWorker,
 )
+from soulspot.application.workers.persistent_job_queue import (
+    PersistentJobQueue,
+    PersistentJobQueueStats,
+    create_persistent_job_queue,
+)
 from soulspot.application.workers.playlist_sync_worker import PlaylistSyncWorker
 from soulspot.application.workers.queue_dispatcher_worker import (
     QueueDispatcherWorker,
     create_queue_dispatcher_worker,
+)
+from soulspot.application.workers.retry_scheduler_worker import (
+    RetrySchedulerWorker,
+    create_retry_scheduler_worker,
 )
 from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
@@ -36,6 +45,10 @@ __all__ = [
     "JobQueue",
     "JobStatus",
     "JobType",
+    # Persistent Job Queue (survives restarts!)
+    "PersistentJobQueue",
+    "PersistentJobQueueStats",
+    "create_persistent_job_queue",
     # Core Workers
     "DeezerSyncWorker",
     "DownloadWorker",
@@ -47,6 +60,10 @@ __all__ = [
     "QueueDispatcherWorker",
     "create_queue_dispatcher_worker",
     "DownloadStatusSyncWorker",
+    # Retry System
+    "RetrySchedulerWorker",
+    "create_retry_scheduler_worker",
+    # New Releases
     "NewReleasesSyncWorker",
     "NewReleasesCache",
     # Automation Workers

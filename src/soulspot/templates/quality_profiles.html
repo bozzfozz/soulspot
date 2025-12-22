@@ -1,0 +1,554 @@
+{# Hey future me - Quality Profiles Management Page!
+   
+   This page lets users manage their download quality preferences.
+   
+   Features:
+   - List all profiles (builtin + custom)
+   - Create new custom profiles
+   - Edit existing profiles
+   - Set active profile
+   - Delete custom profiles (not builtin)
+   
+   Integration:
+   - API: /api/quality-profiles
+   - Used by: PostProcessingWorker, DownloadService
+   - Active profile stored in app_settings
+#}
+
+{% extends "base.html" %}
+
+{% block title %}Quality Profiles - SoulSpot{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="header-content">
+        <div class="header-icon-wrapper">
+            <div class="header-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);">
+                <i class="bi bi-sliders vinyl-record-icon"></i>
+            </div>
+            <div class="header-icon-glow" style="background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);"></div>
+        </div>
+        <div>
+            <h1>Quality Profiles</h1>
+            <p class="subtitle">Manage download quality preferences</p>
+        </div>
+    </div>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="showCreateModal()">
+            <i class="bi bi-plus-lg"></i>
+            New Profile
+        </button>
+    </div>
+</div>
+
+<!-- Info Banner -->
+<div class="alert alert-info mb-6 blur-fade-in">
+    <i class="bi bi-info-circle-fill"></i>
+    <span>
+        Quality profiles define format preferences (FLAC > MP3), bitrate constraints, 
+        and keywords to exclude. The <strong>active profile</strong> is used for all new downloads.
+    </span>
+</div>
+
+<!-- Profiles Grid -->
+<div id="profiles-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Loaded via HTMX -->
+    <div class="loading-placeholder">
+        <div class="spinner"></div>
+        <p>Loading profiles...</p>
+    </div>
+</div>
+
+<!-- Create/Edit Modal -->
+<div id="profile-modal" class="modal" style="display: none;">
+    <div class="modal-backdrop" onclick="closeModal()"></div>
+    <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+            <h2 id="modal-title">Create Quality Profile</h2>
+            <button class="modal-close" onclick="closeModal()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="profile-form" onsubmit="saveProfile(event)">
+                <input type="hidden" id="profile-id" value="">
+                
+                <!-- Name -->
+                <div class="form-group">
+                    <label class="form-label" for="profile-name">Profile Name *</label>
+                    <input type="text" id="profile-name" class="form-input" 
+                           placeholder="e.g., High Quality FLAC" required
+                           maxlength="100">
+                    <p class="form-helper">A unique name for this profile</p>
+                </div>
+                
+                <!-- Description -->
+                <div class="form-group">
+                    <label class="form-label" for="profile-description">Description</label>
+                    <textarea id="profile-description" class="form-input" 
+                              placeholder="Optional description..."
+                              rows="2"></textarea>
+                </div>
+                
+                <!-- Preferred Formats -->
+                <div class="form-group">
+                    <label class="form-label">Preferred Formats (drag to reorder)</label>
+                    <div id="formats-container" class="formats-list">
+                        <div class="format-item" data-format="flac">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <input type="checkbox" id="format-flac" checked>
+                            <label for="format-flac">FLAC (Lossless)</label>
+                        </div>
+                        <div class="format-item" data-format="mp3">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <input type="checkbox" id="format-mp3" checked>
+                            <label for="format-mp3">MP3</label>
+                        </div>
+                        <div class="format-item" data-format="aac">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <input type="checkbox" id="format-aac">
+                            <label for="format-aac">AAC/M4A</label>
+                        </div>
+                        <div class="format-item" data-format="ogg">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <input type="checkbox" id="format-ogg">
+                            <label for="format-ogg">OGG Vorbis</label>
+                        </div>
+                        <div class="format-item" data-format="wav">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <input type="checkbox" id="format-wav">
+                            <label for="format-wav">WAV</label>
+                        </div>
+                    </div>
+                    <p class="form-helper">Top formats are preferred. Uncheck to exclude.</p>
+                </div>
+                
+                <!-- Bitrate Constraints -->
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label" for="profile-min-bitrate">Min Bitrate (kbps)</label>
+                        <input type="number" id="profile-min-bitrate" class="form-input"
+                               placeholder="e.g., 192" min="0" max="9999">
+                        <p class="form-helper">Leave empty for no minimum</p>
+                    </div>
+                    <div class="form-group flex-1">
+                        <label class="form-label" for="profile-max-bitrate">Max Bitrate (kbps)</label>
+                        <input type="number" id="profile-max-bitrate" class="form-input"
+                               placeholder="e.g., 320" min="0" max="9999">
+                        <p class="form-helper">Leave empty for no maximum</p>
+                    </div>
+                </div>
+                
+                <!-- Max File Size -->
+                <div class="form-group">
+                    <label class="form-label" for="profile-max-size">Max File Size (MB)</label>
+                    <input type="number" id="profile-max-size" class="form-input"
+                           placeholder="e.g., 50" min="0" max="9999">
+                    <p class="form-helper">Skip files larger than this. Leave empty for no limit.</p>
+                </div>
+                
+                <!-- Exclude Keywords -->
+                <div class="form-group">
+                    <label class="form-label" for="profile-exclude">Exclude Keywords</label>
+                    <input type="text" id="profile-exclude" class="form-input"
+                           placeholder="live, demo, remix, acoustic">
+                    <p class="form-helper">Comma-separated keywords to skip in search results</p>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button type="submit" form="profile-form" class="btn btn-primary">
+                <i class="bi bi-check-lg"></i>
+                Save Profile
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Profile Cards */
+.profile-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    transition: all var(--transition-normal);
+}
+
+.profile-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-md);
+}
+
+.profile-card.active {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.profile-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+}
+
+.profile-card-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.profile-card-badges {
+    display: flex;
+    gap: var(--space-2);
+}
+
+.profile-card-description {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-4);
+}
+
+.profile-card-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.profile-detail {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    background: var(--bg-tertiary);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
+.profile-card-actions {
+    display: flex;
+    gap: var(--space-2);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* Format List in Modal */
+.formats-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.format-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    cursor: grab;
+}
+
+.format-item:active {
+    cursor: grabbing;
+}
+
+.format-item .drag-handle {
+    color: var(--text-muted);
+    cursor: grab;
+}
+
+.format-item label {
+    flex: 1;
+    cursor: pointer;
+}
+
+/* Form Row */
+.form-row {
+    display: flex;
+    gap: var(--space-4);
+}
+
+/* Loading Placeholder */
+.loading-placeholder {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    color: var(--text-muted);
+}
+</style>
+
+<script>
+// Hey future me - Quality Profiles JS!
+
+let profiles = [];
+let editingId = null;
+
+// Load profiles on page load
+document.addEventListener('DOMContentLoaded', loadProfiles);
+
+async function loadProfiles() {
+    try {
+        const response = await fetch('/api/quality-profiles');
+        const data = await response.json();
+        profiles = data.profiles || [];
+        renderProfiles();
+    } catch (error) {
+        console.error('Failed to load profiles:', error);
+        showNotification('Failed to load profiles', 'error');
+    }
+}
+
+function renderProfiles() {
+    const container = document.getElementById('profiles-container');
+    
+    if (profiles.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state" style="grid-column: 1 / -1;">
+                <i class="bi bi-sliders" style="font-size: 3rem; color: var(--text-muted);"></i>
+                <h3>No Quality Profiles</h3>
+                <p>Create a profile to define your download preferences</p>
+                <button class="btn btn-primary" onclick="showCreateModal()">
+                    <i class="bi bi-plus-lg"></i> Create Profile
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = profiles.map((profile, index) => `
+        <div class="profile-card ${profile.is_active ? 'active' : ''} blur-fade-in" 
+             style="animation-delay: ${index * 50}ms;">
+            <div class="profile-card-header">
+                <div class="profile-card-title">
+                    ${profile.is_active ? '<i class="bi bi-check-circle-fill" style="color: var(--color-success);"></i>' : ''}
+                    ${escapeHtml(profile.name)}
+                </div>
+                <div class="profile-card-badges">
+                    ${profile.is_builtin ? '<span class="badge badge-info">Built-in</span>' : ''}
+                    ${profile.is_active ? '<span class="badge badge-success">Active</span>' : ''}
+                </div>
+            </div>
+            
+            ${profile.description ? `<p class="profile-card-description">${escapeHtml(profile.description)}</p>` : ''}
+            
+            <div class="profile-card-details">
+                <span class="profile-detail">
+                    <i class="bi bi-music-note-list"></i>
+                    ${profile.preferred_formats?.join(', ').toUpperCase() || 'Any format'}
+                </span>
+                ${profile.min_bitrate ? `
+                <span class="profile-detail">
+                    <i class="bi bi-speedometer"></i>
+                    ≥${profile.min_bitrate} kbps
+                </span>
+                ` : ''}
+                ${profile.max_bitrate ? `
+                <span class="profile-detail">
+                    <i class="bi bi-speedometer2"></i>
+                    ≤${profile.max_bitrate} kbps
+                </span>
+                ` : ''}
+                ${profile.max_file_size_mb ? `
+                <span class="profile-detail">
+                    <i class="bi bi-hdd"></i>
+                    Max ${profile.max_file_size_mb} MB
+                </span>
+                ` : ''}
+                ${profile.exclude_keywords?.length ? `
+                <span class="profile-detail">
+                    <i class="bi bi-x-circle"></i>
+                    ${profile.exclude_keywords.length} excluded
+                </span>
+                ` : ''}
+            </div>
+            
+            <div class="profile-card-actions">
+                ${!profile.is_active ? `
+                <button class="btn btn-sm btn-success-outline" onclick="activateProfile('${profile.id}')">
+                    <i class="bi bi-check-lg"></i> Activate
+                </button>
+                ` : ''}
+                ${!profile.is_builtin ? `
+                <button class="btn btn-sm btn-outline" onclick="editProfile('${profile.id}')">
+                    <i class="bi bi-pencil"></i> Edit
+                </button>
+                <button class="btn btn-sm btn-danger-outline" onclick="deleteProfile('${profile.id}', '${escapeHtml(profile.name)}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+                ` : `
+                <button class="btn btn-sm btn-outline" disabled title="Built-in profiles cannot be edited">
+                    <i class="bi bi-lock"></i> Read-only
+                </button>
+                `}
+            </div>
+        </div>
+    `).join('');
+}
+
+function showCreateModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Create Quality Profile';
+    document.getElementById('profile-form').reset();
+    document.getElementById('profile-id').value = '';
+    
+    // Reset format checkboxes
+    document.querySelectorAll('#formats-container input[type="checkbox"]').forEach((cb, i) => {
+        cb.checked = i < 2; // Check first two (FLAC, MP3)
+    });
+    
+    openModal();
+}
+
+function editProfile(id) {
+    const profile = profiles.find(p => p.id === id);
+    if (!profile) return;
+    
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Quality Profile';
+    document.getElementById('profile-id').value = id;
+    document.getElementById('profile-name').value = profile.name;
+    document.getElementById('profile-description').value = profile.description || '';
+    document.getElementById('profile-min-bitrate').value = profile.min_bitrate || '';
+    document.getElementById('profile-max-bitrate').value = profile.max_bitrate || '';
+    document.getElementById('profile-max-size').value = profile.max_file_size_mb || '';
+    document.getElementById('profile-exclude').value = (profile.exclude_keywords || []).join(', ');
+    
+    // Set format checkboxes
+    const formats = profile.preferred_formats || [];
+    document.querySelectorAll('#formats-container input[type="checkbox"]').forEach(cb => {
+        const format = cb.id.replace('format-', '');
+        cb.checked = formats.includes(format);
+    });
+    
+    openModal();
+}
+
+async function saveProfile(event) {
+    event.preventDefault();
+    
+    // Collect preferred formats in order
+    const formatItems = document.querySelectorAll('#formats-container .format-item');
+    const preferredFormats = [];
+    formatItems.forEach(item => {
+        const format = item.dataset.format;
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox.checked) {
+            preferredFormats.push(format);
+        }
+    });
+    
+    // Collect exclude keywords
+    const excludeInput = document.getElementById('profile-exclude').value;
+    const excludeKeywords = excludeInput
+        ? excludeInput.split(',').map(k => k.trim()).filter(k => k)
+        : [];
+    
+    const data = {
+        name: document.getElementById('profile-name').value,
+        description: document.getElementById('profile-description').value || null,
+        preferred_formats: preferredFormats,
+        min_bitrate: parseInt(document.getElementById('profile-min-bitrate').value) || null,
+        max_bitrate: parseInt(document.getElementById('profile-max-bitrate').value) || null,
+        max_file_size_mb: parseInt(document.getElementById('profile-max-size').value) || null,
+        exclude_keywords: excludeKeywords
+    };
+    
+    try {
+        const url = editingId 
+            ? `/api/quality-profiles/${editingId}`
+            : '/api/quality-profiles';
+        const method = editingId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to save profile');
+        }
+        
+        showNotification(`Profile ${editingId ? 'updated' : 'created'} successfully`, 'success');
+        closeModal();
+        loadProfiles();
+        
+    } catch (error) {
+        console.error('Save error:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+async function activateProfile(id) {
+    try {
+        const response = await fetch(`/api/quality-profiles/${id}/activate`, {
+            method: 'PUT'
+        });
+        
+        if (!response.ok) throw new Error('Failed to activate profile');
+        
+        showNotification('Profile activated', 'success');
+        loadProfiles();
+        
+    } catch (error) {
+        console.error('Activate error:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+async function deleteProfile(id, name) {
+    if (!confirm(`Delete profile "${name}"? This cannot be undone.`)) return;
+    
+    try {
+        const response = await fetch(`/api/quality-profiles/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete profile');
+        }
+        
+        showNotification('Profile deleted', 'success');
+        loadProfiles();
+        
+    } catch (error) {
+        console.error('Delete error:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+function openModal() {
+    document.getElementById('profile-modal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    document.getElementById('profile-modal').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Close modal on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}

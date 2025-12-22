@@ -3,7 +3,15 @@
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from soulspot.domain.entities import Album, Artist, Download, Playlist, Track
+from soulspot.domain.entities import (
+    Album,
+    Artist,
+    BlocklistEntry,
+    Download,
+    Playlist,
+    QualityProfile,
+    Track,
+)
 
 # Download provider interfaces for Download Manager
 from soulspot.domain.ports.download_provider import (
@@ -524,8 +532,204 @@ class IDownloadRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def list_retry_eligible(self, limit: int = 10) -> list[Download]:
+        """List downloads eligible for automatic retry.
 
-# External Integration Ports
+        Hey future me - this is used by RetrySchedulerWorker!
+
+        Returns downloads that match ALL criteria:
+        - status = FAILED
+        - retry_count < max_retries
+        - next_retry_at <= now (retry time has arrived)
+        - last_error_code NOT in non-retryable codes (handled by entity)
+
+        Ordered by next_retry_at ASC (oldest scheduled retry first).
+        """
+        pass
+
+    @abstractmethod
+    async def count_by_status(self, status: str) -> int:
+        """Count downloads with a specific status."""
+        pass
+
+
+# =============================================================================
+# BLOCKLIST REPOSITORY - Source blocking for download system
+# =============================================================================
+# Hey future me - this repository manages the blocklist for Soulseek sources!
+# It's used by:
+# 1. DownloadStatusSyncWorker - to auto-block after repeated failures
+# 2. SearchAndDownloadUseCase - to filter out blocked sources from search results
+# 3. Blocklist UI - to view/edit blocked sources manually
+
+
+class IBlocklistRepository(ABC):
+    """Repository interface for BlocklistEntry entities.
+
+    Hey future me - manages source blocking for the download system!
+    """
+
+    @abstractmethod
+    async def add(self, entry: "BlocklistEntry") -> None:
+        """Add a new blocklist entry."""
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, entry_id: str) -> "BlocklistEntry | None":
+        """Get a blocklist entry by ID."""
+        pass
+
+    @abstractmethod
+    async def get_by_source(
+        self, username: str | None, filepath: str | None
+    ) -> "BlocklistEntry | None":
+        """Get a blocklist entry by username and/or filepath.
+
+        Used to check if a specific source is already blocked before creating new entry.
+        """
+        pass
+
+    @abstractmethod
+    async def update(self, entry: "BlocklistEntry") -> None:
+        """Update an existing blocklist entry."""
+        pass
+
+    @abstractmethod
+    async def delete(self, entry_id: str) -> None:
+        """Delete a blocklist entry."""
+        pass
+
+    @abstractmethod
+    async def is_blocked(
+        self, username: str | None, filepath: str | None
+    ) -> bool:
+        """Check if a source is currently blocked (considering expiry).
+
+        This is the main method used during search to filter out blocked sources.
+        It checks:
+        1. Exact match on username+filepath
+        2. Username-only block (any file from this user)
+        3. Filepath-only block (this file from any user)
+        And ensures expires_at is NULL or > now().
+        """
+        pass
+
+    @abstractmethod
+    async def list_active(self, limit: int = 100) -> list["BlocklistEntry"]:
+        """List all active (non-expired) blocklist entries.
+
+        Used by blocklist UI to show current blocks.
+        """
+        pass
+
+    @abstractmethod
+    async def list_expired(self, limit: int = 100) -> list["BlocklistEntry"]:
+        """List expired blocklist entries.
+
+        Used by cleanup worker to remove old entries.
+        """
+        pass
+
+    @abstractmethod
+    async def delete_expired(self) -> int:
+        """Delete all expired blocklist entries.
+
+        Returns the number of entries deleted.
+        Called by CleanupWorker periodically.
+        """
+        pass
+
+    @abstractmethod
+    async def count_active(self) -> int:
+        """Count active (non-expired) blocklist entries."""
+        pass
+
+
+# Hey future me – IQualityProfileRepository manages Quality Profiles for download preferences!
+# Quality profiles define file format preferences (FLAC > MP3), bitrate limits (min 192kbps, max 320kbps),
+# file size limits, and exclude keywords for filtering search results. Profiles are stored in DB
+# so users can create custom profiles beyond the defaults (AUDIOPHILE, BALANCED, SPACE_SAVER).
+# The "active" profile is used by DownloadService to filter/score search results before downloading.
+class IQualityProfileRepository(ABC):
+    """Repository interface for QualityProfile entities.
+
+    Manages quality profiles that define download preferences:
+    - Preferred audio formats (FLAC, MP3, etc.)
+    - Bitrate constraints (min/max)
+    - File size limits
+    - Exclude keywords for filtering results
+    """
+
+    @abstractmethod
+    async def add(self, profile: "QualityProfile") -> None:
+        """Add a new quality profile.
+
+        Raises:
+            ValueError: If profile with same name already exists
+        """
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, profile_id: str) -> "QualityProfile | None":
+        """Get a quality profile by ID."""
+        pass
+
+    @abstractmethod
+    async def get_by_name(self, name: str) -> "QualityProfile | None":
+        """Get a quality profile by name.
+
+        Used to load predefined profiles like "Audiophile", "Balanced".
+        """
+        pass
+
+    @abstractmethod
+    async def get_active(self) -> "QualityProfile | None":
+        """Get the currently active quality profile.
+
+        Returns:
+            The profile marked as active, or None if no active profile
+        """
+        pass
+
+    @abstractmethod
+    async def set_active(self, profile_id: str) -> None:
+        """Set a quality profile as the active one.
+
+        Deactivates all other profiles before activating the specified one.
+        """
+        pass
+
+    @abstractmethod
+    async def update(self, profile: "QualityProfile") -> None:
+        """Update an existing quality profile."""
+        pass
+
+    @abstractmethod
+    async def delete(self, profile_id: str) -> None:
+        """Delete a quality profile.
+
+        Raises:
+            ValueError: If trying to delete the active profile
+        """
+        pass
+
+    @abstractmethod
+    async def list_all(self) -> list["QualityProfile"]:
+        """List all quality profiles.
+
+        Returns profiles ordered by name.
+        """
+        pass
+
+    @abstractmethod
+    async def ensure_defaults_exist(self) -> None:
+        """Ensure default profiles exist in the database.
+
+        Creates AUDIOPHILE, BALANCED, SPACE_SAVER profiles if they don't exist.
+        Called on application startup.
+        """
+        pass
 
 
 # Yo, ISlskdClient is the PORT for slskd integration! It abstracts HTTP client details away from

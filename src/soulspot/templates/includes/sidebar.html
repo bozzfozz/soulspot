@@ -131,9 +131,17 @@
         <!-- System Section -->
         <div class="sidebar-section">
             <div class="sidebar-section-title">System</div>
-            <a href="/settings" class="sidebar-item {% if '/settings' in request.url.path %}active{% endif %}">
+            <a href="/settings" class="sidebar-item {% if request.url.path == '/settings' %}active{% endif %}">
                 <i class="bi bi-gear sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Settings</span>
+            </a>
+            <a href="/settings/quality-profiles" class="sidebar-item {% if '/quality-profiles' in request.url.path %}active{% endif %}">
+                <i class="bi bi-sliders sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Quality Profiles</span>
+            </a>
+            <a href="/settings/blocklist" class="sidebar-item {% if '/blocklist' in request.url.path %}active{% endif %}">
+                <i class="bi bi-shield-x sidebar-item-icon"></i>
+                <span class="sidebar-item-text">Blocklist</span>
             </a>
             <a href="/api/logs" class="sidebar-item {% if '/logs' in request.url.path %}active{% endif %}">
                 <i class="bi bi-terminal sidebar-item-icon"></i>

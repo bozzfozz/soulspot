@@ -1,10 +1,25 @@
 """Domain entities."""
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
+from soulspot.domain.entities.error_codes import (
+    RETRYABLE_ERRORS,
+    NON_RETRYABLE_ERRORS,
+    DownloadErrorCode,
+    get_error_description,
+    is_non_retryable_error,
+    is_retryable_error,
+    normalize_error_code,
+)
+from soulspot.domain.entities.quality_profile import (
+    AudioFormat,
+    QualityProfile,
+    QualityMatcher,
+    QUALITY_PROFILES,
+)
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
@@ -497,6 +512,20 @@ class DownloadStatus(str, Enum):
 # bars. started_at and completed_at are for analytics. error_message stores exception message if FAILED.
 # The is_finished() method checks if in terminal state (won't change anymore). Use domain methods
 # (start, complete, fail) to change status - they enforce state machine rules and update timestamps!
+#
+# NEW: AUTO-RETRY FEATURE (2025-12)
+# retry_count: How many times this download has been attempted
+# max_retries: Maximum retry attempts (default: 3)
+# next_retry_at: When the next retry is scheduled (None = not scheduled)
+# last_error_code: Classified error code for intelligent retry decisions
+#
+# RETRY-FLOW:
+# 1. Download fails → fail_with_retry() sets status=FAILED, retry_count++, calculates next_retry_at
+# 2. RetrySchedulerWorker checks every 30s for: status=FAILED & next_retry_at <= now & retry_count < max_retries
+# 3. If found: status → WAITING, QueueDispatcherWorker picks it up
+# 4. After max_retries: Download stays FAILED (manual retry possible via schedule_retry())
+#
+# BACKOFF FORMULA: [1, 5, 15] minutes for retries 1, 2, 3
 @dataclass
 class Download:
     """Download entity representing a track download operation."""
@@ -513,6 +542,21 @@ class Download:
     completed_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    # Retry management fields
+    retry_count: int = 0
+    max_retries: int = 3
+    next_retry_at: datetime | None = None
+    last_error_code: str | None = None
+
+    # Backoff intervals in minutes: retry 1 → 1min, retry 2 → 5min, retry 3 → 15min
+    _RETRY_BACKOFF_MINUTES: ClassVar[list[int]] = [1, 5, 15]
+
+    # Error codes that should NOT be retried (permanent failures)
+    _NON_RETRYABLE_ERRORS: ClassVar[set[str]] = {
+        "file_not_found",
+        "user_blocked",
+        "invalid_file",
+    }
 
     def __post_init__(self) -> None:
         """Validate download data."""
@@ -561,9 +605,117 @@ class Download:
         self.updated_at = datetime.now(UTC)
 
     def fail(self, error_message: str) -> None:
-        """Mark download as failed."""
+        """Mark download as failed.
+        
+        Note: For automatic retry scheduling, use fail_with_retry() instead.
+        This method just sets FAILED status without scheduling retries.
+        """
         self.status = DownloadStatus.FAILED
         self.error_message = error_message
+        self.updated_at = datetime.now(UTC)
+
+    def fail_with_retry(
+        self,
+        error_message: str,
+        error_code: str | None = None,
+    ) -> bool:
+        """Mark download as failed and schedule retry if applicable.
+
+        Hey future me - this is the SMART fail method! It:
+        1. Sets FAILED status and error_message
+        2. Classifies error via error_code
+        3. Checks if should_retry()
+        4. If yes: Calculates next_retry_at with exponential backoff
+        5. Returns True if retry was scheduled, False if terminal failure
+
+        Args:
+            error_message: Human-readable error description
+            error_code: Classified error code (e.g., "timeout", "source_offline", "file_not_found")
+                       If None, defaults to "unknown" which is retryable.
+
+        Returns:
+            True if retry was scheduled, False if download is permanently failed
+        """
+        self.status = DownloadStatus.FAILED
+        self.error_message = error_message
+        self.last_error_code = error_code or "unknown"
+        self.updated_at = datetime.now(UTC)
+
+        if self.should_retry():
+            self._schedule_next_retry()
+            return True
+        return False
+
+    def should_retry(self) -> bool:
+        """Check if this download should be automatically retried.
+
+        Returns True if:
+        - Status is FAILED
+        - retry_count < max_retries
+        - last_error_code is not in NON_RETRYABLE_ERRORS
+
+        Hey future me - this is used by:
+        1. fail_with_retry() to decide if scheduling retry
+        2. RetrySchedulerWorker to filter eligible downloads
+        3. UI to show "Will retry" vs "Permanently failed"
+        """
+        if self.status != DownloadStatus.FAILED:
+            return False
+        if self.retry_count >= self.max_retries:
+            return False
+        if self.last_error_code in self._NON_RETRYABLE_ERRORS:
+            return False
+        return True
+
+    def _schedule_next_retry(self) -> None:
+        """Calculate and set next_retry_at with exponential backoff.
+
+        Backoff formula: [1, 5, 15] minutes for retries 1, 2, 3+
+        Called internally by fail_with_retry() when should_retry() is True.
+        """
+        # Get backoff minutes based on current retry_count
+        # After max backoff entries, use the last value
+        backoff_idx = min(self.retry_count, len(self._RETRY_BACKOFF_MINUTES) - 1)
+        delay_minutes = self._RETRY_BACKOFF_MINUTES[backoff_idx]
+
+        self.retry_count += 1
+        self.next_retry_at = datetime.now(UTC) + timedelta(minutes=delay_minutes)
+
+    def schedule_retry(self) -> None:
+        """Manually schedule a retry for a failed download.
+
+        Hey future me - this is for MANUAL retries from UI! User clicks "Retry"
+        on a permanently failed download (max_retries reached or non-retryable error).
+        We reset retry_count and schedule immediately.
+
+        Raises:
+            ValueError: If download is not in FAILED status
+        """
+        if self.status != DownloadStatus.FAILED:
+            raise ValueError(f"Cannot schedule retry for download in status {self.status}")
+
+        # Reset retry count for manual retry
+        self.retry_count = 0
+        self.last_error_code = None
+        self.next_retry_at = datetime.now(UTC)  # Immediate retry
+        self.status = DownloadStatus.WAITING
+        self.error_message = None
+        self.updated_at = datetime.now(UTC)
+
+    def activate_for_retry(self) -> None:
+        """Move download from FAILED to WAITING for retry processing.
+
+        Hey future me - this is called by RetrySchedulerWorker!
+        After next_retry_at has passed and should_retry() is True.
+        Moves from FAILED → WAITING so QueueDispatcherWorker picks it up.
+        """
+        if self.status != DownloadStatus.FAILED:
+            raise ValueError(f"Cannot activate for retry from status {self.status}")
+        if not self.should_retry():
+            raise ValueError("Download is not eligible for retry")
+
+        self.status = DownloadStatus.WAITING
+        self.next_retry_at = None  # Clear - we're now active
         self.updated_at = datetime.now(UTC)
 
     def cancel(self) -> None:
@@ -1069,6 +1221,184 @@ class DuplicateCandidate:
         self.reviewed_at = datetime.now(UTC)
 
 
+# =============================================================================
+# BLOCKLIST - Auto-block failing download sources
+# =============================================================================
+# Hey future me - this entity tracks BLOCKED sources on Soulseek!
+#
+# The problem: Some sources consistently fail (offline users, blocked IPs, invalid files).
+# Without a blocklist, we waste time retrying the same bad sources over and over.
+#
+# The solution: After 3 failures from the same username+filepath combo within 24h,
+# we auto-block that source. Future searches will skip blocked sources.
+#
+# SCOPE OPTIONS:
+# - username: Block all files from this user (for user_blocked errors)
+# - filepath: Block this specific file (for file_not_found errors)
+# - username+filepath: Block this file from this user only (default for most errors)
+#
+# EXPIRY: Blocks expire after configurable period (default 7 days).
+# This handles cases where a user fixes their setup or comes back online.
+
+
+class BlocklistScope(str, Enum):
+    """What to block from a failing source."""
+
+    USERNAME = "username"  # Block all files from this username
+    FILEPATH = "filepath"  # Block this filepath from all users
+    SPECIFIC = "specific"  # Block this filepath from this username only
+
+
+@dataclass
+class BlocklistEntry:
+    """A blocked download source.
+
+    Hey future me - this tracks WHY a source is blocked!
+
+    Fields:
+    - id: Unique identifier
+    - username: Soulseek username (can be None for filepath-only blocks)
+    - filepath: File path on the user's share (can be None for username-only blocks)
+    - scope: What combination is blocked (see BlocklistScope)
+    - reason: The error code that caused the block (e.g., "file_not_found", "user_blocked")
+    - failure_count: How many failures led to this block
+    - blocked_at: When the block was created
+    - expires_at: When the block expires (None = never)
+    - is_manual: True if manually blocked by user, False if auto-blocked
+
+    Indexing strategy:
+    - Unique index on (username, filepath) for fast duplicate checks
+    - Index on expires_at for cleanup queries
+    """
+
+    id: str
+    username: str | None = None
+    filepath: str | None = None
+    scope: BlocklistScope = BlocklistScope.SPECIFIC
+    reason: str | None = None
+    failure_count: int = 3  # Typically blocked after 3 failures
+    blocked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    expires_at: datetime | None = None  # None = permanent
+    is_manual: bool = False  # True if user manually blocked
+
+    def __post_init__(self) -> None:
+        """Validate blocklist entry data."""
+        # Must have at least username or filepath
+        if self.username is None and self.filepath is None:
+            raise ValueError("BlocklistEntry must have username or filepath (or both)")
+
+        # Scope validation
+        if self.scope == BlocklistScope.USERNAME and self.username is None:
+            raise ValueError("USERNAME scope requires username")
+        if self.scope == BlocklistScope.FILEPATH and self.filepath is None:
+            raise ValueError("FILEPATH scope requires filepath")
+        if self.scope == BlocklistScope.SPECIFIC:
+            if self.username is None or self.filepath is None:
+                raise ValueError("SPECIFIC scope requires both username and filepath")
+
+    def is_expired(self) -> bool:
+        """Check if this block has expired."""
+        if self.expires_at is None:
+            return False  # Permanent block
+        return datetime.now(UTC) > self.expires_at
+
+    def extend_block(self, additional_days: int = 7) -> None:
+        """Extend the block duration.
+
+        Called when the same source fails again while already blocked.
+        This resets the expiry timer.
+        """
+        self.failure_count += 1
+        if self.expires_at is not None:
+            self.expires_at = datetime.now(UTC) + timedelta(days=additional_days)
+
+    def make_permanent(self) -> None:
+        """Make this block permanent (no expiry)."""
+        self.expires_at = None
+        self.is_manual = True  # Permanent = manual override
+
+    @classmethod
+    def create_auto_block(
+        cls,
+        id: str,
+        username: str | None,
+        filepath: str | None,
+        reason: str,
+        failure_count: int = 3,
+        expiry_days: int = 7,
+    ) -> "BlocklistEntry":
+        """Factory for auto-blocking after repeated failures.
+
+        Args:
+            id: Unique identifier
+            username: Soulseek username (None for filepath-only blocks)
+            filepath: File path on share (None for username-only blocks)
+            reason: Error code that caused the block
+            failure_count: Number of failures that triggered block
+            expiry_days: Days until block expires (default 7)
+
+        Returns:
+            New BlocklistEntry configured for auto-blocking
+        """
+        # Determine scope based on what's provided
+        if username and filepath:
+            scope = BlocklistScope.SPECIFIC
+        elif username:
+            scope = BlocklistScope.USERNAME
+        else:
+            scope = BlocklistScope.FILEPATH
+
+        return cls(
+            id=id,
+            username=username,
+            filepath=filepath,
+            scope=scope,
+            reason=reason,
+            failure_count=failure_count,
+            blocked_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=expiry_days),
+            is_manual=False,
+        )
+
+    @classmethod
+    def create_manual_block(
+        cls,
+        id: str,
+        username: str | None = None,
+        filepath: str | None = None,
+        reason: str = "manually_blocked",
+    ) -> "BlocklistEntry":
+        """Factory for manual user-initiated blocks.
+
+        Args:
+            id: Unique identifier
+            username: Username to block (None for filepath-only)
+            filepath: Filepath to block (None for username-only)
+            reason: Reason for block (default "manually_blocked")
+
+        Returns:
+            New BlocklistEntry configured as permanent manual block
+        """
+        if username and filepath:
+            scope = BlocklistScope.SPECIFIC
+        elif username:
+            scope = BlocklistScope.USERNAME
+        else:
+            scope = BlocklistScope.FILEPATH
+
+        return cls(
+            id=id,
+            username=username,
+            filepath=filepath,
+            scope=scope,
+            reason=reason,
+            failure_count=1,  # Manual = single action
+            blocked_at=datetime.now(UTC),
+            expires_at=None,  # Permanent
+            is_manual=True,
+        )
+
+
 # Import download manager entities for re-export
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
@@ -1109,6 +1439,22 @@ __all__ = [
     "TrackInfo",
     "UnifiedDownload",
     "UnifiedDownloadStatus",
+    # Blocklist entities (for source blocking)
+    "BlocklistEntry",
+    "BlocklistScope",
+    # Error Codes (for download retry system)
+    "DownloadErrorCode",
+    "is_retryable_error",
+    "is_non_retryable_error",
+    "get_error_description",
+    "normalize_error_code",
+    "NON_RETRYABLE_ERRORS",
+    "RETRYABLE_ERRORS",
+    # Quality Profile (for download quality preferences)
+    "AudioFormat",
+    "QualityProfile",
+    "QualityMatcher",
+    "QUALITY_PROFILES",
     # Enums
     "MetadataSource",
     "PlaylistSource",

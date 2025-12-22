@@ -542,7 +542,21 @@ class PlaylistTrackModel(Base):
 
 
 class DownloadModel(Base):
-    """SQLAlchemy model for Download entity."""
+    """SQLAlchemy model for Download entity.
+    
+    Hey future me - AUTO-RETRY FIELDS added in 2025-12!
+    
+    retry_count: How many times this download has been attempted
+    max_retries: Maximum retry attempts (default: 3)
+    next_retry_at: When next retry is scheduled (NULL = not scheduled)
+    last_error_code: Classified error code for intelligent retry decisions
+    
+    RetrySchedulerWorker uses these to find retry-eligible downloads:
+    SELECT * FROM downloads 
+    WHERE status = 'failed' 
+      AND retry_count < max_retries 
+      AND next_retry_at <= NOW()
+    """
 
     __tablename__ = "downloads"
 
@@ -572,6 +586,12 @@ class DownloadModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
     )
+    
+    # Retry management fields (added 2025-12)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    next_retry_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
     track: Mapped["TrackModel"] = relationship("TrackModel", back_populates="download")
@@ -579,6 +599,13 @@ class DownloadModel(Base):
     __table_args__ = (
         Index("ix_downloads_status_created", "status", "created_at"),
         Index("ix_downloads_priority_created", "priority", "created_at"),
+        # Retry scheduling index - finds retry-eligible downloads efficiently
+        Index(
+            "ix_downloads_retry_scheduling",
+            "status",
+            "retry_count",
+            "next_retry_at",
+        ),
     )
 
 
@@ -1283,4 +1310,222 @@ class EnrichmentCandidateModel(Base):
         Index("ix_enrichment_entity", "entity_type", "entity_id"),
         Index("ix_enrichment_spotify_uri", "spotify_uri"),
         Index("ix_enrichment_confidence", "confidence_score"),
+    )
+
+
+# =============================================================================
+# BLOCKLIST - Auto-block failing download sources
+# =============================================================================
+# Hey future me - this stores BLOCKED sources on Soulseek!
+#
+# The problem: Some sources consistently fail (offline users, blocked IPs, invalid files).
+# Without a blocklist, we waste time retrying the same bad sources over and over.
+#
+# The solution: After 3 failures from the same username+filepath combo within 24h,
+# we auto-block that source. Future searches will skip blocked sources.
+#
+# SCOPE OPTIONS:
+# - username: Block all files from this user
+# - filepath: Block this specific file from everyone
+# - specific: Block this file from this user only (default)
+#
+# EXPIRY: Blocks expire after configurable period (default 7 days).
+# =============================================================================
+
+
+class BlocklistModel(Base):
+    """Blocked download sources.
+
+    Stores usernames and/or filepaths that consistently fail downloads.
+    Used to skip known-bad sources in search results.
+    """
+
+    __tablename__ = "blocklist"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # Soulseek username (can be None for filepath-only blocks)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    # File path on user's share (can be None for username-only blocks)
+    filepath: Mapped[str | None] = mapped_column(String(1024), nullable=True, index=True)
+    # Block scope: 'username', 'filepath', or 'specific' (both)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False, default="specific")
+    # Error code that caused the block (e.g., "file_not_found", "user_blocked")
+    reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # How many failures led to this block
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    # When the block was created
+    blocked_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # When the block expires (NULL = permanent)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True, index=True
+    )
+    # True if user manually blocked, False if auto-blocked
+    is_manual: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+
+    __table_args__ = (
+        # Prevent duplicate entries for same username+filepath combo
+        sa.UniqueConstraint("username", "filepath", name="uq_blocklist_source"),
+        # Fast lookup for active blocks during search
+        Index("ix_blocklist_lookup", "username", "filepath", "expires_at"),
+        # CheckConstraint to ensure at least one of username/filepath is set
+        sa.CheckConstraint(
+            "username IS NOT NULL OR filepath IS NOT NULL",
+            name="ck_blocklist_has_target",
+        ),
+    )
+
+
+# =============================================================================
+# PERSISTENT JOB QUEUE - Survive restarts!
+# =============================================================================
+# Hey future me - this is the PERSISTENT job storage for background workers!
+#
+# PROBLEM: In-memory JobQueue loses all jobs on app restart.
+# User queues 50 album downloads, container restarts, everything gone!
+#
+# SOLUTION: Store jobs in database, load them on startup.
+# Jobs persist across restarts, workers pick them up where they left off.
+#
+# WORKER LOCKING:
+# - Multiple workers can run (horizontal scaling)
+# - locked_by + locked_at prevent race conditions
+# - Stale lock detection: If locked_at > 5min and still RUNNING, worker crashed
+#
+# IMPORTANT: This table works WITH the in-memory priority queue!
+# Jobs are loaded from DB → put into priority queue → processed.
+# Status updates are written back to DB immediately.
+# =============================================================================
+
+
+class BackgroundJobModel(Base):
+    """Persistent job storage for background workers.
+
+    Stores all background jobs with their status, payload, and results.
+    Survives app restarts - jobs are recovered on startup.
+    """
+
+    __tablename__ = "background_jobs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # Job type: download, library_scan, metadata_enrichment, etc.
+    job_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    # Status: pending, running, completed, failed, cancelled
+    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    # Priority: Higher = processed first (default 0)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    # Job payload as JSON (track info, settings, etc.)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    # Result as JSON (success data, progress, etc.)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Error message if failed
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Retry tracking
+    retries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    # Worker locking - prevents multiple workers processing same job
+    locked_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    # Optional: next_run_at for scheduled/delayed jobs
+    next_run_at: Mapped[datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True, index=True
+    )
+
+    __table_args__ = (
+        # Fast query for pending jobs ordered by priority
+        Index("ix_jobs_pending", "status", "priority", "created_at"),
+        # Fast query for locked jobs (stale detection)
+        Index("ix_jobs_locked", "locked_by", "locked_at"),
+        # Fast query for scheduled jobs
+        Index("ix_jobs_scheduled", "next_run_at", "status"),
+    )
+
+
+# =============================================================================
+# QUALITY PROFILES - Download preferences
+# =============================================================================
+# Hey future me - Quality Profiles control which files get downloaded!
+#
+# PROBLEM: User searches for a track, gets 100 results with different quality.
+# Without profiles: User manually picks the best one every time.
+# With profiles: System auto-filters/scores results based on preferences.
+#
+# SCORING: QualityMatcher (in domain entity) uses profile to score each result:
+# - Format match: FLAC preferred over MP3? Higher score for FLAC files
+# - Bitrate: 320kbps > 128kbps (within min/max range)
+# - Size: Within limits? Files >max_file_size_mb are filtered out
+# - Keywords: "live" in filename but user hates live? Filtered out
+#
+# PROFILES:
+# - AUDIOPHILE: FLAC/ALAC only, no size limit, exclude "low quality" keywords
+# - BALANCED: FLAC > MP3 > AAC, 192-320 kbps, reasonable size limit
+# - SPACE_SAVER: MP3/AAC, 128-256 kbps, strict size limit
+#
+# ONE ACTIVE: Only one profile can be active at a time (is_active=True).
+# =============================================================================
+
+
+class QualityProfileModel(Base):
+    """Quality profile for download preferences.
+
+    Defines preferred audio formats, bitrate constraints, file size limits,
+    and exclude keywords for filtering search results.
+    """
+
+    __tablename__ = "quality_profiles"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    # Unique name for the profile (e.g., "Audiophile", "Balanced")
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    # Optional description
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON array of preferred formats in priority order: ["flac", "mp3", "aac"]
+    # Stored as JSON string, converted to List[AudioFormat] in entity
+    preferred_formats: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]"
+    )
+    # Minimum acceptable bitrate in kbps (NULL = no minimum)
+    min_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Maximum acceptable bitrate in kbps (NULL = no maximum)
+    max_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Maximum file size in MB (NULL = no limit)
+    max_file_size_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # JSON array of keywords to exclude: ["live", "remix", "demo"]
+    exclude_keywords: Mapped[str] = mapped_column(
+        Text, nullable=False, default="[]"
+    )
+    # Only one profile can be active at a time
+    is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    # Built-in profiles can't be deleted (AUDIOPHILE, BALANCED, SPACE_SAVER)
+    is_builtin: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # Fast lookup for active profile
+        Index("ix_quality_profiles_is_active", "is_active"),
     )

@@ -7,9 +7,118 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from functools import wraps
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
+
+if TYPE_CHECKING:
+    from soulspot.infrastructure.observability.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+
+# ========================================================================
+# Circuit Breaker Registry - Global tracking for monitoring
+# ========================================================================
+# Hey future me - this is a GLOBAL REGISTRY for all CircuitBreaker instances!
+# Why? So we can expose circuit breaker stats in /metrics and /health endpoints.
+# Each CircuitBreaker registers itself on creation, unregisters on __del__.
+# Thread-safe (well, asyncio-safe) via dict operations being atomic.
+# Use get_all_circuit_breakers() to get stats for all breakers at once!
+
+
+class CircuitBreakerRegistry:
+    """Global registry for circuit breaker instances.
+
+    Hey future me - this lets us track all circuit breakers for monitoring!
+
+    Features:
+    - Auto-registration when CircuitBreaker is created
+    - Get stats for all breakers at once for /metrics endpoint
+    - Find specific breakers by name for debugging
+    """
+
+    _breakers: dict[str, "CircuitBreaker"] = {}
+
+    @classmethod
+    def register(cls, breaker: "CircuitBreaker") -> None:
+        """Register a circuit breaker instance.
+
+        Args:
+            breaker: CircuitBreaker to register
+        """
+        cls._breakers[breaker.name] = breaker
+        logger.debug(f"Circuit breaker '{breaker.name}' registered")
+
+    @classmethod
+    def unregister(cls, name: str) -> None:
+        """Unregister a circuit breaker by name.
+
+        Args:
+            name: Name of breaker to unregister
+        """
+        if name in cls._breakers:
+            del cls._breakers[name]
+            logger.debug(f"Circuit breaker '{name}' unregistered")
+
+    @classmethod
+    def get(cls, name: str) -> "CircuitBreaker | None":
+        """Get a circuit breaker by name.
+
+        Args:
+            name: Name of breaker to find
+
+        Returns:
+            CircuitBreaker if found, None otherwise
+        """
+        return cls._breakers.get(name)
+
+    @classmethod
+    def get_all(cls) -> dict[str, "CircuitBreaker"]:
+        """Get all registered circuit breakers.
+
+        Returns:
+            Dict of name -> CircuitBreaker
+        """
+        return dict(cls._breakers)
+
+    @classmethod
+    def get_all_stats(cls) -> dict[str, "CircuitBreakerStats"]:
+        """Get stats for all registered circuit breakers.
+
+        Hey future me - this is what /metrics should call!
+
+        Returns:
+            Dict of name -> CircuitBreakerStats
+        """
+        from soulspot.infrastructure.observability.circuit_breaker import (
+            CircuitBreakerStats,
+        )
+
+        return {name: breaker.stats for name, breaker in cls._breakers.items()}
+
+    @classmethod
+    def clear(cls) -> None:
+        """Clear all registered breakers (for testing)."""
+        cls._breakers.clear()
+
+
+def get_all_circuit_breakers() -> dict[str, "CircuitBreaker"]:
+    """Convenience function to get all circuit breakers.
+
+    Returns:
+        Dict of name -> CircuitBreaker
+    """
+    return CircuitBreakerRegistry.get_all()
+
+
+def get_circuit_breaker_stats() -> dict[str, "CircuitBreakerStats"]:
+    """Convenience function to get all circuit breaker stats.
+
+    Hey future me - use this in /metrics endpoint!
+
+    Returns:
+        Dict of name -> CircuitBreakerStats
+    """
+    return CircuitBreakerRegistry.get_all_stats()
 
 T = TypeVar("T")
 
@@ -112,6 +221,7 @@ class CircuitBreaker:
     # (imagine two failures incrementing _failure_count at same time, count goes up by 1 not 2!).
     # Each instance is for ONE service - don't share across different APIs or you'll get weird
     # behavior (Spotify fails but MusicBrainz gets blocked too!). Use globals/singletons per service.
+    # Also, it auto-registers itself with CircuitBreakerRegistry so metrics can find it!
     def __init__(
         self,
         name: str,
@@ -129,6 +239,9 @@ class CircuitBreaker:
         self._total_failures = 0
         self._total_successes = 0
         self._lock = asyncio.Lock()
+
+        # Register with global registry for metrics/monitoring
+        CircuitBreakerRegistry.register(self)
 
     @property
     def state(self) -> CircuitState:

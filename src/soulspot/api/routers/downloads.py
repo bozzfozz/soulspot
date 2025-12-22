@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -78,15 +79,15 @@ class UpdatePriorityRequest(BaseModel):
 
 
 # Yo, batch actions request for bulk operations! download_ids is list of download UUIDs to operate on.
-# action string determines what to do: "cancel", "pause", "resume", "priority". priority field is only used
-# for action="priority", otherwise it's ignored. This is a multi-purpose schema which is flexible but less
-# type-safe than separate schemas per action. Consider splitting into CancelBatchRequest, PauseBatchRequest, etc
-# for better API clarity and validation!
+# action string determines what to do: "cancel", "pause", "resume", "priority", "retry".
+# priority field is only used for action="priority", otherwise it's ignored.
+# retry action schedules failed downloads for automatic retry (resets retry_count).
+# This is a multi-purpose schema which is flexible but less type-safe than separate schemas per action.
 class BatchActionRequest(BaseModel):
     """Request model for batch operations on downloads."""
 
     download_ids: list[str]
-    action: str  # "cancel", "pause", "resume", "priority"
+    action: str  # "cancel", "pause", "resume", "priority", "retry"
     priority: int | None = None
 
 
@@ -523,6 +524,200 @@ async def list_downloads(
         "has_next": has_next,
         "has_previous": has_previous,
         "status": status,
+    }
+
+
+# Hey future me - download history shows recently COMPLETED downloads!
+# Unlike list_downloads which shows active queue, this shows finished work.
+# Useful for: "what did I download this week?", analytics, re-download.
+# Results sorted by completed_at DESC (newest first).
+@router.get("/history")
+async def get_download_history(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=200, description="Results per page"),
+    days: int = Query(7, ge=1, le=90, description="History days to include"),
+    download_repository: DownloadRepository = Depends(get_download_repository),
+) -> dict[str, Any]:
+    """Get download history (completed downloads).
+
+    Shows recently completed downloads sorted by completion time.
+    Useful for reviewing what was downloaded recently.
+
+    Args:
+        page: Page number (1-indexed)
+        limit: Results per page (max 200)
+        days: How many days of history to include (max 90)
+        download_repository: Download repository
+
+    Returns:
+        Paginated list of completed downloads with stats
+    """
+    from datetime import timedelta
+
+    offset = (page - 1) * limit
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    # Get completed downloads within time range
+    downloads = await download_repository.list_by_status(
+        status=DownloadStatus.COMPLETED.value,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Filter by date (if repository doesn't support it)
+    downloads_in_range = [
+        d for d in downloads
+        if d.completed_at and d.completed_at >= since
+    ]
+
+    total = await download_repository.count_by_status(DownloadStatus.COMPLETED.value)
+    total_pages = (total + limit - 1) // limit
+
+    # Calculate stats
+    total_size_mb = sum(
+        d.file_size_bytes / (1024 * 1024)
+        for d in downloads_in_range
+        if d.file_size_bytes
+    )
+
+    return {
+        "downloads": [
+            {
+                "id": str(d.id.value),
+                "track_id": str(d.track_id.value),
+                "title": d.title,
+                "artist": d.artist,
+                "album": d.album,
+                "file_path": d.file_path,
+                "file_size_mb": round(d.file_size_bytes / (1024 * 1024), 2)
+                if d.file_size_bytes
+                else None,
+                "duration_seconds": (
+                    (d.completed_at - d.started_at).total_seconds()
+                    if d.completed_at and d.started_at
+                    else None
+                ),
+                "completed_at": d.completed_at.isoformat() if d.completed_at else None,
+                "created_at": d.created_at.isoformat(),
+            }
+            for d in downloads_in_range
+        ],
+        "stats": {
+            "total_downloads": len(downloads_in_range),
+            "total_size_mb": round(total_size_mb, 2),
+            "period_days": days,
+        },
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_previous": page > 1,
+        },
+    }
+
+
+# Hey future me - comprehensive download statistics endpoint!
+# Shows overall download performance, success rates, queue health.
+# Used by dashboard for download analytics widget.
+@router.get("/statistics")
+async def get_download_statistics(
+    download_repository: DownloadRepository = Depends(get_download_repository),
+) -> dict[str, Any]:
+    """Get comprehensive download statistics.
+
+    Returns detailed statistics about download performance:
+    - Queue status (pending, active, failed)
+    - Success/failure rates
+    - Average download times
+    - Historical trends (today, week, all-time)
+
+    Returns:
+        Download statistics dashboard data
+    """
+    from datetime import timedelta
+    from sqlalchemy import func, select
+    from soulspot.infrastructure.persistence.models import DownloadModel
+
+    session = download_repository.session
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
+
+    # Current queue status
+    queue_pending = await download_repository.count_by_status(DownloadStatus.WAITING.value)
+    queue_pending += await download_repository.count_by_status(DownloadStatus.PENDING.value)
+    queue_pending += await download_repository.count_by_status(DownloadStatus.QUEUED.value)
+
+    active_downloading = await download_repository.count_by_status(DownloadStatus.DOWNLOADING.value)
+    total_completed = await download_repository.count_by_status(DownloadStatus.COMPLETED.value)
+    total_failed = await download_repository.count_by_status(DownloadStatus.FAILED.value)
+    total_cancelled = await download_repository.count_by_status(DownloadStatus.CANCELLED.value)
+
+    # Downloads today
+    stmt_today = select(func.count()).select_from(DownloadModel).where(
+        DownloadModel.status == DownloadStatus.COMPLETED.value,
+        DownloadModel.completed_at >= today_start,
+    )
+    result = await session.execute(stmt_today)
+    completed_today = result.scalar() or 0
+
+    # Downloads this week
+    stmt_week = select(func.count()).select_from(DownloadModel).where(
+        DownloadModel.status == DownloadStatus.COMPLETED.value,
+        DownloadModel.completed_at >= week_ago,
+    )
+    result = await session.execute(stmt_week)
+    completed_this_week = result.scalar() or 0
+
+    # Average download time (from completed downloads)
+    stmt_avg = select(
+        func.avg(
+            func.julianday(DownloadModel.completed_at) - func.julianday(DownloadModel.started_at)
+        ) * 86400  # Convert days to seconds
+    ).where(
+        DownloadModel.status == DownloadStatus.COMPLETED.value,
+        DownloadModel.started_at.isnot(None),
+        DownloadModel.completed_at.isnot(None),
+    )
+    result = await session.execute(stmt_avg)
+    avg_download_time = result.scalar() or 0
+
+    # Retry statistics
+    stmt_retries = select(
+        func.sum(DownloadModel.retry_count)
+    ).where(
+        DownloadModel.retry_count > 0,
+    )
+    result = await session.execute(stmt_retries)
+    total_retries = result.scalar() or 0
+
+    # Calculate success rate
+    total_attempted = total_completed + total_failed
+    success_rate = (total_completed / total_attempted * 100) if total_attempted > 0 else 0
+
+    return {
+        "queue": {
+            "pending": queue_pending,
+            "active": active_downloading,
+            "total_queued": queue_pending + active_downloading,
+        },
+        "completed": {
+            "total": total_completed,
+            "today": completed_today,
+            "this_week": completed_this_week,
+        },
+        "failed": {
+            "total": total_failed,
+            "cancelled": total_cancelled,
+        },
+        "performance": {
+            "success_rate_percent": round(success_rate, 1),
+            "average_download_seconds": round(avg_download_time, 1),
+            "total_retries": total_retries,
+        },
+        "timestamp": now.isoformat(),
     }
 
 
@@ -1188,6 +1383,15 @@ async def batch_action(
                 download.resume()
             elif request.action == "priority" and request.priority is not None:
                 download.update_priority(request.priority)
+            elif request.action == "retry":
+                # Retry failed downloads - schedules for immediate retry
+                if download.status != DownloadStatus.FAILED:
+                    errors.append({
+                        "id": download_id,
+                        "error": f"Cannot retry - status is {download.status.value}, not FAILED"
+                    })
+                    continue
+                download.schedule_retry()
             else:
                 errors.append({"id": download_id, "error": "Invalid action"})
                 continue

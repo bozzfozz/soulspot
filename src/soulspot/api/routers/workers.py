@@ -398,6 +398,167 @@ def _get_duplicate_detector_worker_status(request: Request) -> WorkerStatusInfo:
     )
 
 
+def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Retry Scheduler Worker.
+
+    Hey future me - holt den Status vom RetrySchedulerWorker.
+    Dieser Worker plant automatische Retries für fehlgeschlagene Downloads.
+    Uses exponential backoff (1, 5, 15 minutes).
+    """
+    worker = getattr(request.app.state, "retry_scheduler_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Retry Scheduler",
+            icon="bi bi-arrow-repeat",
+            settings_url="/settings?tab=downloads",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last check time
+    last_check_at = stats.get("last_check_at")
+    if last_check_at:
+        dt = datetime.fromisoformat(last_check_at)
+        last_check_formatted = _format_time_ago(dt)
+    else:
+        last_check_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Retry Scheduler",
+        icon="bi bi-arrow-repeat",
+        settings_url="/settings?tab=downloads",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "check_interval_seconds": raw_status.get("check_interval_seconds", 60),
+            "last_check": last_check_formatted,
+            "retries_scheduled": stats.get("retries_scheduled", 0),
+            "retries_successful": stats.get("retries_successful", 0),
+            "max_retries": raw_status.get("max_retries", 3),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
+def _get_post_processing_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Post-Processing Worker.
+
+    Hey future me - holt den Status vom PostProcessingWorker.
+    Dieser Worker tagged und organisiert Downloads nach Fertigstellung.
+    """
+    worker = getattr(request.app.state, "post_processing_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Post-Processing",
+            icon="bi bi-file-earmark-music",
+            settings_url="/settings?tab=downloads",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last process time
+    last_process_at = stats.get("last_process_at")
+    if last_process_at:
+        dt = datetime.fromisoformat(last_process_at)
+        last_process_formatted = _format_time_ago(dt)
+    else:
+        last_process_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Post-Processing",
+        icon="bi bi-file-earmark-music",
+        settings_url="/settings?tab=downloads",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "check_interval_seconds": raw_status.get("check_interval_seconds", 30),
+            "last_process": last_process_formatted,
+            "files_tagged": stats.get("files_tagged", 0),
+            "files_moved": stats.get("files_moved", 0),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
+def _get_queue_dispatcher_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Queue Dispatcher Worker.
+
+    Hey future me - holt den Status vom QueueDispatcherWorker.
+    Dieser Worker dispatched Jobs aus der PersistentJobQueue an slskd.
+    """
+    worker = getattr(request.app.state, "queue_dispatcher_worker", None)
+
+    if worker is None:
+        return WorkerStatusInfo(
+            name="Queue Dispatcher",
+            icon="bi bi-send",
+            settings_url="/settings?tab=downloads",
+            running=False,
+            status="stopped",
+            details={"error": "Worker not initialized"},
+        )
+
+    raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+
+    # Format last dispatch time
+    last_dispatch_at = stats.get("last_dispatch_at")
+    if last_dispatch_at:
+        dt = datetime.fromisoformat(last_dispatch_at)
+        last_dispatch_formatted = _format_time_ago(dt)
+    else:
+        last_dispatch_formatted = "noch nie"
+
+    # Determine status
+    if not raw_status.get("running"):
+        status = "stopped"
+    elif stats.get("last_error"):
+        status = "error"
+    else:
+        status = "idle"
+
+    return WorkerStatusInfo(
+        name="Queue Dispatcher",
+        icon="bi bi-send",
+        settings_url="/settings?tab=downloads",
+        running=raw_status.get("running", False),
+        status=status,
+        details={
+            "dispatch_interval_seconds": raw_status.get("dispatch_interval_seconds", 5),
+            "last_dispatch": last_dispatch_formatted,
+            "jobs_dispatched": stats.get("jobs_dispatched", 0),
+            "concurrent_limit": raw_status.get("concurrent_limit", 3),
+            "last_error": stats.get("last_error"),
+        },
+    )
+
+
 def _get_service_status(request: Request) -> dict[str, Any]:
     """Get connectivity status for all external services.
 
@@ -444,6 +605,9 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     - Token Refresh Worker: Keeps Spotify OAuth tokens fresh
     - Spotify Sync Worker: Automatically syncs Spotify data
     - Download Monitor Worker: Tracks slskd download progress
+    - Retry Scheduler Worker: Schedules automatic retries for failed downloads
+    - Post-Processing Worker: Tags and organizes completed downloads
+    - Queue Dispatcher Worker: Dispatches jobs from queue to slskd
     - Automation Workers: Watchlist, Discography, Quality Upgrade
     - Cleanup Worker: Removes orphaned files (disabled by default)
     - Duplicate Detector Worker: Finds duplicate tracks (disabled by default)
@@ -460,6 +624,9 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
         "token_refresh": _get_token_worker_status(request),
         "spotify_sync": _get_spotify_sync_worker_status(request),
         "download_monitor": _get_download_monitor_worker_status(request),
+        "retry_scheduler": _get_retry_scheduler_worker_status(request),
+        "post_processing": _get_post_processing_worker_status(request),
+        "queue_dispatcher": _get_queue_dispatcher_worker_status(request),
         "automation": _get_automation_workers_status(request),
         "cleanup": _get_cleanup_worker_status(request),
         "duplicate_detector": _get_duplicate_detector_worker_status(request),
@@ -492,6 +659,9 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
         "token_refresh",
         "spotify_sync",
         "download_monitor",
+        "retry_scheduler",
+        "post_processing",
+        "queue_dispatcher",
         "automation",
         "cleanup",
         "duplicate_detector",
@@ -547,6 +717,22 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
                 completed = worker.details.get("downloads_completed", 0)
                 failed = worker.details.get("downloads_failed", 0)
                 details_html = f'<div class="tooltip-detail">↻ alle {poll_interval}s • ✓ {completed} • ✕ {failed}</div>'
+
+            elif worker_key == "retry_scheduler":
+                retries = worker.details.get("retries_scheduled", 0)
+                successful = worker.details.get("retries_successful", 0)
+                max_retries = worker.details.get("max_retries", 3)
+                details_html = f'<div class="tooltip-detail">Scheduled: {retries} • Success: {successful} • Max: {max_retries}</div>'
+
+            elif worker_key == "post_processing":
+                tagged = worker.details.get("files_tagged", 0)
+                moved = worker.details.get("files_moved", 0)
+                details_html = f'<div class="tooltip-detail">Tagged: {tagged} • Moved: {moved}</div>'
+
+            elif worker_key == "queue_dispatcher":
+                dispatched = worker.details.get("jobs_dispatched", 0)
+                concurrent = worker.details.get("concurrent_limit", 3)
+                details_html = f'<div class="tooltip-detail">Dispatched: {dispatched} • Parallel: {concurrent}</div>'
 
             elif worker_key == "automation":
                 watchlist = worker.details.get("watchlist_running", False)

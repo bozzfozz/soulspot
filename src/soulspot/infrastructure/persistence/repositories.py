@@ -21,10 +21,13 @@ from soulspot.domain.entities import (
     Album,
     Artist,
     ArtistDiscography,
+    BlocklistEntry,
+    BlocklistScope,
     Download,
     DownloadStatus,
     Playlist,
     PlaylistSource,
+    QualityProfile,
     Track,
 )
 from soulspot.domain.exceptions import EntityNotFoundException, ValidationException
@@ -33,9 +36,11 @@ from soulspot.domain.ports import (
     IArtistRepository,
     IArtistWatchlistRepository,
     IAutomationRuleRepository,
+    IBlocklistRepository,
     IDownloadRepository,
     IFilterRuleRepository,
     IPlaylistRepository,
+    IQualityProfileRepository,
     IQualityUpgradeCandidateRepository,
     ISessionRepository,
     ITrackRepository,
@@ -2349,6 +2354,11 @@ class DownloadRepository(IDownloadRepository):
             completed_at=download.completed_at,
             created_at=download.created_at,
             updated_at=download.updated_at,
+            # Retry management fields
+            retry_count=download.retry_count,
+            max_retries=download.max_retries,
+            next_retry_at=download.next_retry_at,
+            last_error_code=download.last_error_code,
         )
         self.session.add(model)
 
@@ -2371,6 +2381,11 @@ class DownloadRepository(IDownloadRepository):
         model.started_at = download.started_at
         model.completed_at = download.completed_at
         model.updated_at = download.updated_at
+        # Retry management fields
+        model.retry_count = download.retry_count
+        model.max_retries = download.max_retries
+        model.next_retry_at = download.next_retry_at
+        model.last_error_code = download.last_error_code
 
     async def delete(self, download_id: DownloadId) -> None:
         """Delete a download."""
@@ -2687,6 +2702,85 @@ class DownloadRepository(IDownloadRepository):
         result = await self.session.execute(stmt)
         track_ids = result.scalars().all()
         return set(track_ids)
+
+    async def list_retry_eligible(self, limit: int = 10) -> list[Download]:
+        """List downloads eligible for automatic retry.
+
+        Hey future me - this is used by RetrySchedulerWorker!
+
+        Returns downloads that match ALL criteria:
+        - status = FAILED
+        - retry_count < max_retries
+        - next_retry_at <= now (retry time has arrived)
+
+        Note: Error code filtering (non-retryable errors) is handled by the entity's
+        should_retry() method after retrieval - we can't easily filter ClassVar in SQL.
+
+        Ordered by next_retry_at ASC (oldest scheduled retry first).
+        """
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC)
+
+        stmt = (
+            select(DownloadModel)
+            .options(selectinload(DownloadModel.track))
+            .where(
+                DownloadModel.status == DownloadStatus.FAILED.value,
+                DownloadModel.next_retry_at.isnot(None),
+                DownloadModel.next_retry_at <= now,
+                # Note: retry_count < max_retries is checked in SQL for efficiency
+                # But entity.should_retry() also validates this + error codes
+            )
+            .order_by(DownloadModel.next_retry_at.asc())
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        downloads = []
+        for model in models:
+            # Only include if retry_count < max_retries (SQL can't easily compare columns)
+            if model.retry_count >= model.max_retries:
+                continue
+
+            download = self._model_to_entity(model)
+            downloads.append(download)
+
+        return downloads
+
+    def _model_to_entity(self, model: DownloadModel) -> Download:
+        """Convert DownloadModel to Download entity.
+
+        Hey future me - centralized conversion! Use this instead of inline conversion
+        to ensure all fields (including retry fields) are properly mapped.
+        """
+        try:
+            status = DownloadStatus(model.status)
+        except ValueError:
+            status = DownloadStatus.PENDING
+
+        return Download(
+            id=DownloadId.from_string(model.id),
+            track_id=TrackId.from_string(model.track_id),
+            status=status,
+            priority=model.priority,
+            target_path=FilePath.from_string(model.target_path)
+            if model.target_path
+            else None,
+            source_url=model.source_url,
+            progress_percent=model.progress_percent,
+            error_message=model.error_message,
+            started_at=model.started_at,
+            completed_at=model.completed_at,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            # Retry management fields
+            retry_count=model.retry_count,
+            max_retries=model.max_retries,
+            next_retry_at=model.next_retry_at,
+            last_error_code=model.last_error_code,
+        )
 
 
 class ArtistWatchlistRepository(IArtistWatchlistRepository):
@@ -6489,6 +6583,493 @@ class ArtistDiscographyRepository:
             discovered_at=ensure_utc_aware(model.discovered_at),
             last_seen_at=ensure_utc_aware(model.last_seen_at),
             is_owned=model.is_owned,
+            created_at=ensure_utc_aware(model.created_at),
+            updated_at=ensure_utc_aware(model.updated_at),
+        )
+
+
+# =============================================================================
+# BLOCKLIST REPOSITORY
+# =============================================================================
+# Hey future me - this manages source blocking for the download system!
+#
+# USAGE:
+# - DownloadStatusSyncWorker: Calls add_or_update_block() after repeated failures
+# - SearchAndDownloadUseCase: Calls is_blocked() to filter search results
+# - Blocklist UI: Uses list_active() to show current blocks
+# - CleanupWorker: Calls delete_expired() to remove old entries
+
+
+class BlocklistRepository(IBlocklistRepository):
+    """Repository for BlocklistEntry entities.
+
+    Hey future me - manages Soulseek source blocking!
+    See IBlocklistRepository for method documentation.
+    """
+
+    def __init__(self, session: AsyncSession):
+        """Initialize with database session."""
+        self.session = session
+
+    async def add(self, entry: BlocklistEntry) -> None:
+        """Add a new blocklist entry."""
+        from .models import BlocklistModel
+
+        model = BlocklistModel(
+            id=entry.id,
+            username=entry.username,
+            filepath=entry.filepath,
+            scope=entry.scope.value,
+            reason=entry.reason,
+            failure_count=entry.failure_count,
+            blocked_at=entry.blocked_at,
+            expires_at=entry.expires_at,
+            is_manual=entry.is_manual,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, entry_id: str) -> BlocklistEntry | None:
+        """Get a blocklist entry by ID."""
+        from .models import BlocklistModel
+
+        stmt = select(BlocklistModel).where(BlocklistModel.id == entry_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def get_by_source(
+        self, username: str | None, filepath: str | None
+    ) -> BlocklistEntry | None:
+        """Get a blocklist entry by username and/or filepath."""
+        from .models import BlocklistModel
+
+        # Build conditions based on what's provided
+        conditions = []
+        if username is not None:
+            conditions.append(BlocklistModel.username == username)
+        else:
+            conditions.append(BlocklistModel.username.is_(None))
+
+        if filepath is not None:
+            conditions.append(BlocklistModel.filepath == filepath)
+        else:
+            conditions.append(BlocklistModel.filepath.is_(None))
+
+        stmt = select(BlocklistModel).where(*conditions)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def update(self, entry: BlocklistEntry) -> None:
+        """Update an existing blocklist entry."""
+        from .models import BlocklistModel
+
+        stmt = select(BlocklistModel).where(BlocklistModel.id == entry.id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            raise ValueError(f"BlocklistEntry not found: {entry.id}")
+
+        model.username = entry.username
+        model.filepath = entry.filepath
+        model.scope = entry.scope.value
+        model.reason = entry.reason
+        model.failure_count = entry.failure_count
+        model.blocked_at = entry.blocked_at
+        model.expires_at = entry.expires_at
+        model.is_manual = entry.is_manual
+
+    async def delete(self, entry_id: str) -> None:
+        """Delete a blocklist entry."""
+        from .models import BlocklistModel
+
+        stmt = delete(BlocklistModel).where(BlocklistModel.id == entry_id)
+        await self.session.execute(stmt)
+
+    async def is_blocked(
+        self, username: str | None, filepath: str | None
+    ) -> bool:
+        """Check if a source is currently blocked.
+
+        Hey future me - this is called during search to filter results!
+        It checks for:
+        1. Exact match on username+filepath (SPECIFIC block)
+        2. Username-only block (USERNAME scope - blocks all files from user)
+        3. Filepath-only block (FILEPATH scope - blocks file from everyone)
+
+        Only considers non-expired blocks (expires_at IS NULL OR > now()).
+        """
+        from sqlalchemy import or_
+        from datetime import datetime, UTC
+        from .models import BlocklistModel
+
+        now = datetime.now(UTC)
+
+        # Build OR conditions for different block scopes
+        # This covers all blocking scenarios
+        conditions = []
+
+        if username is not None and filepath is not None:
+            # Check for SPECIFIC block (exact match)
+            conditions.append(
+                (BlocklistModel.username == username) &
+                (BlocklistModel.filepath == filepath)
+            )
+            # Check for USERNAME block (any file from this user)
+            conditions.append(
+                (BlocklistModel.username == username) &
+                (BlocklistModel.filepath.is_(None))
+            )
+            # Check for FILEPATH block (this file from anyone)
+            conditions.append(
+                (BlocklistModel.username.is_(None)) &
+                (BlocklistModel.filepath == filepath)
+            )
+        elif username is not None:
+            # Only username provided - check USERNAME blocks
+            conditions.append(BlocklistModel.username == username)
+        elif filepath is not None:
+            # Only filepath provided - check FILEPATH blocks
+            conditions.append(BlocklistModel.filepath == filepath)
+        else:
+            # Nothing provided - can't be blocked
+            return False
+
+        # Query for any matching active block
+        stmt = select(BlocklistModel.id).where(
+            or_(*conditions),
+            # Only active blocks (not expired)
+            or_(
+                BlocklistModel.expires_at.is_(None),
+                BlocklistModel.expires_at > now,
+            ),
+        ).limit(1)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    async def list_active(self, limit: int = 100) -> list[BlocklistEntry]:
+        """List all active (non-expired) blocklist entries."""
+        from datetime import datetime, UTC
+        from sqlalchemy import or_
+        from .models import BlocklistModel
+
+        now = datetime.now(UTC)
+
+        stmt = (
+            select(BlocklistModel)
+            .where(
+                or_(
+                    BlocklistModel.expires_at.is_(None),
+                    BlocklistModel.expires_at > now,
+                )
+            )
+            .order_by(BlocklistModel.blocked_at.desc())
+            .limit(limit)
+        )
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(m) for m in models]
+
+    async def list_expired(self, limit: int = 100) -> list[BlocklistEntry]:
+        """List expired blocklist entries."""
+        from datetime import datetime, UTC
+        from .models import BlocklistModel
+
+        now = datetime.now(UTC)
+
+        stmt = (
+            select(BlocklistModel)
+            .where(
+                BlocklistModel.expires_at.isnot(None),
+                BlocklistModel.expires_at <= now,
+            )
+            .order_by(BlocklistModel.expires_at.desc())
+            .limit(limit)
+        )
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(m) for m in models]
+
+    async def delete_expired(self) -> int:
+        """Delete all expired blocklist entries."""
+        from datetime import datetime, UTC
+        from .models import BlocklistModel
+
+        now = datetime.now(UTC)
+
+        stmt = delete(BlocklistModel).where(
+            BlocklistModel.expires_at.isnot(None),
+            BlocklistModel.expires_at <= now,
+        )
+
+        result = await self.session.execute(stmt)
+        return result.rowcount or 0
+
+    async def count_active(self) -> int:
+        """Count active (non-expired) blocklist entries."""
+        from datetime import datetime, UTC
+        from sqlalchemy import or_
+        from .models import BlocklistModel
+
+        now = datetime.now(UTC)
+
+        stmt = select(func.count()).select_from(BlocklistModel).where(
+            or_(
+                BlocklistModel.expires_at.is_(None),
+                BlocklistModel.expires_at > now,
+            )
+        )
+
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    def _model_to_entity(self, model: "BlocklistModel") -> BlocklistEntry:
+        """Convert SQLAlchemy model to domain entity."""
+        from .models import BlocklistModel, ensure_utc_aware
+
+        return BlocklistEntry(
+            id=model.id,
+            username=model.username,
+            filepath=model.filepath,
+            scope=BlocklistScope(model.scope),
+            reason=model.reason,
+            failure_count=model.failure_count,
+            blocked_at=ensure_utc_aware(model.blocked_at),
+            expires_at=ensure_utc_aware(model.expires_at) if model.expires_at else None,
+            is_manual=model.is_manual,
+        )
+
+
+# =============================================================================
+# QUALITY PROFILE REPOSITORY
+# =============================================================================
+# Hey future me - manages quality profiles for download preferences!
+#
+# Quality profiles control which files get downloaded based on:
+# - Format preferences (FLAC > MP3 > AAC)
+# - Bitrate constraints (min 192kbps, max 320kbps)
+# - File size limits (max 50MB)
+# - Exclude keywords (skip "live", "demo", "instrumental")
+#
+# ensure_defaults_exist() creates AUDIOPHILE, BALANCED, SPACE_SAVER on startup
+# if they don't already exist. BALANCED is set as active by default.
+# =============================================================================
+
+
+class QualityProfileRepository(IQualityProfileRepository):
+    """Repository for QualityProfile entities.
+
+    Manages quality profiles that define download preferences.
+    See IQualityProfileRepository for method documentation.
+    """
+
+    def __init__(self, session: AsyncSession):
+        """Initialize with database session."""
+        self.session = session
+
+    async def add(self, profile: QualityProfile) -> None:
+        """Add a new quality profile."""
+        from .models import QualityProfileModel
+        import json
+
+        # Check if name already exists
+        existing = await self.get_by_name(profile.name)
+        if existing is not None:
+            raise ValueError(f"QualityProfile with name '{profile.name}' already exists")
+
+        model = QualityProfileModel(
+            id=profile.id,
+            name=profile.name,
+            description=profile.description,
+            preferred_formats=json.dumps([f.value for f in profile.preferred_formats]),
+            min_bitrate=profile.min_bitrate,
+            max_bitrate=profile.max_bitrate,
+            max_file_size_mb=profile.max_file_size_mb,
+            exclude_keywords=json.dumps(profile.exclude_keywords),
+            is_active=profile.is_active,
+            is_builtin=profile.is_builtin,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        )
+        self.session.add(model)
+
+    async def get_by_id(self, profile_id: str) -> QualityProfile | None:
+        """Get a quality profile by ID."""
+        from .models import QualityProfileModel
+
+        stmt = select(QualityProfileModel).where(QualityProfileModel.id == profile_id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def get_by_name(self, name: str) -> QualityProfile | None:
+        """Get a quality profile by name."""
+        from .models import QualityProfileModel
+
+        stmt = select(QualityProfileModel).where(QualityProfileModel.name == name)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def get_active(self) -> QualityProfile | None:
+        """Get the currently active quality profile."""
+        from .models import QualityProfileModel
+
+        stmt = select(QualityProfileModel).where(QualityProfileModel.is_active == True)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def set_active(self, profile_id: str) -> None:
+        """Set a quality profile as active.
+
+        Deactivates all other profiles first, then activates the specified one.
+        """
+        from .models import QualityProfileModel
+
+        # Deactivate all profiles
+        deactivate_stmt = (
+            update(QualityProfileModel)
+            .where(QualityProfileModel.is_active == True)
+            .values(is_active=False)
+        )
+        await self.session.execute(deactivate_stmt)
+
+        # Activate the specified profile
+        activate_stmt = (
+            update(QualityProfileModel)
+            .where(QualityProfileModel.id == profile_id)
+            .values(is_active=True, updated_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(activate_stmt)
+
+        if result.rowcount == 0:
+            raise ValueError(f"QualityProfile not found: {profile_id}")
+
+    async def update(self, profile: QualityProfile) -> None:
+        """Update an existing quality profile."""
+        from .models import QualityProfileModel
+        import json
+
+        stmt = select(QualityProfileModel).where(QualityProfileModel.id == profile.id)
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            raise ValueError(f"QualityProfile not found: {profile.id}")
+
+        model.name = profile.name
+        model.description = profile.description
+        model.preferred_formats = json.dumps([f.value for f in profile.preferred_formats])
+        model.min_bitrate = profile.min_bitrate
+        model.max_bitrate = profile.max_bitrate
+        model.max_file_size_mb = profile.max_file_size_mb
+        model.exclude_keywords = json.dumps(profile.exclude_keywords)
+        model.is_active = profile.is_active
+        model.is_builtin = profile.is_builtin
+        model.updated_at = datetime.now(UTC)
+
+    async def delete(self, profile_id: str) -> None:
+        """Delete a quality profile.
+
+        Raises ValueError if trying to delete the active profile.
+        """
+        from .models import QualityProfileModel
+
+        # Check if profile exists and is active
+        profile = await self.get_by_id(profile_id)
+        if profile is None:
+            raise ValueError(f"QualityProfile not found: {profile_id}")
+
+        if profile.is_active:
+            raise ValueError("Cannot delete the active quality profile")
+
+        if profile.is_builtin:
+            raise ValueError("Cannot delete built-in quality profiles")
+
+        stmt = delete(QualityProfileModel).where(QualityProfileModel.id == profile_id)
+        await self.session.execute(stmt)
+
+    async def list_all(self) -> list[QualityProfile]:
+        """List all quality profiles ordered by name."""
+        from .models import QualityProfileModel
+
+        stmt = select(QualityProfileModel).order_by(QualityProfileModel.name)
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(m) for m in models]
+
+    async def ensure_defaults_exist(self) -> None:
+        """Ensure default profiles exist in the database.
+
+        Creates AUDIOPHILE, BALANCED, SPACE_SAVER profiles if they don't exist.
+        Sets BALANCED as active if no profile is active.
+        """
+        from soulspot.domain.entities import QUALITY_PROFILES
+
+        for name, profile in QUALITY_PROFILES.items():
+            existing = await self.get_by_name(profile.name)
+            if existing is None:
+                # Mark as builtin since these are defaults
+                profile.is_builtin = True
+                await self.add(profile)
+
+        # Ensure at least one profile is active (default to BALANCED)
+        active = await self.get_active()
+        if active is None:
+            balanced = await self.get_by_name("Balanced")
+            if balanced is not None:
+                await self.set_active(balanced.id)
+
+    def _model_to_entity(self, model: "QualityProfileModel") -> QualityProfile:
+        """Convert SQLAlchemy model to domain entity."""
+        from .models import ensure_utc_aware
+        from soulspot.domain.entities import AudioFormat
+        import json
+
+        # Parse JSON fields
+        preferred_formats_raw = json.loads(model.preferred_formats or "[]")
+        preferred_formats = [AudioFormat(f) for f in preferred_formats_raw]
+        exclude_keywords = json.loads(model.exclude_keywords or "[]")
+
+        return QualityProfile(
+            id=model.id,
+            name=model.name,
+            description=model.description,
+            preferred_formats=preferred_formats,
+            min_bitrate=model.min_bitrate,
+            max_bitrate=model.max_bitrate,
+            max_file_size_mb=model.max_file_size_mb,
+            exclude_keywords=exclude_keywords,
+            is_active=model.is_active,
+            is_builtin=model.is_builtin,
             created_at=ensure_utc_aware(model.created_at),
             updated_at=ensure_utc_aware(model.updated_at),
         )
