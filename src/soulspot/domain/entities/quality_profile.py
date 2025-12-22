@@ -154,6 +154,26 @@ class QualityProfile:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
 
+    # Hey future me - historical baggage: older layers used `is_active`/`is_builtin`.
+    # We keep these aliases so the app doesn't explode if some path still calls them,
+    # but the canonical domain vocabulary remains `is_default`/`is_system`.
+    @property
+    def is_active(self) -> bool:
+        return self.is_default
+
+    @is_active.setter
+    def is_active(self, value: bool) -> None:
+        self.is_default = value
+
+    # Hey future me - same story as `is_active`: DB calls it `is_builtin`, domain calls it `is_system`.
+    @property
+    def is_builtin(self) -> bool:
+        return self.is_system
+
+    @is_builtin.setter
+    def is_builtin(self, value: bool) -> None:
+        self.is_system = value
+
     def set_as_default(self) -> None:
         """Mark this profile as default."""
         self.is_default = True

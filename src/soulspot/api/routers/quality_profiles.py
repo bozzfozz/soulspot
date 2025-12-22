@@ -119,15 +119,15 @@ class QualityProfileResponse(BaseModel):
             id=profile.id,
             name=profile.name,
             description=profile.description,
-            preferred_formats=[f.value for f in profile.preferred_formats],
+            preferred_formats=profile.preferred_formats,
             min_bitrate=profile.min_bitrate,
             max_bitrate=profile.max_bitrate,
             max_file_size_mb=profile.max_file_size_mb,
             exclude_keywords=profile.exclude_keywords,
-            is_active=profile.is_active,
-            is_builtin=profile.is_builtin,
+            is_active=profile.is_default,
+            is_builtin=profile.is_system,
             created_at=profile.created_at.isoformat(),
-            updated_at=profile.updated_at.isoformat(),
+            updated_at=(profile.updated_at or profile.created_at).isoformat(),
         )
 
 
@@ -144,21 +144,25 @@ class QualityProfileListResponse(BaseModel):
 # =============================================================================
 
 
-def _validate_formats(format_strings: list[str]) -> list[AudioFormat]:
-    """Validate and convert format strings to AudioFormat enums.
+def _validate_formats(format_strings: list[str]) -> list[str]:
+    """Validate and normalize format strings.
 
-    Hey future me - validates user input before creating entity!
+    Hey future me - we keep formats as plain strings in the domain entity
+    (e.g. "flac"), but we still want strict validation against AudioFormat.
     """
-    valid_formats = []
-    for f in format_strings:
+    normalized: list[str] = []
+    for fmt in format_strings:
         try:
-            valid_formats.append(AudioFormat(f.lower()))
+            normalized.append(AudioFormat(fmt.lower()).value)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid audio format: {f}. Valid formats: {[af.value for af in AudioFormat]}",
+                detail=(
+                    f"Invalid audio format: {fmt}. "
+                    f"Valid formats: {[af.value for af in AudioFormat]}"
+                ),
             )
-    return valid_formats
+    return normalized
 
 
 # =============================================================================
@@ -267,8 +271,8 @@ async def create_quality_profile(
         max_bitrate=data.max_bitrate,
         max_file_size_mb=data.max_file_size_mb,
         exclude_keywords=data.exclude_keywords,
-        is_active=False,
-        is_builtin=False,
+        is_default=False,
+        is_system=False,
     )
 
     await repo.add(profile)
@@ -299,7 +303,7 @@ async def update_quality_profile(
         )
 
     # Protect builtin profile names
-    if profile.is_builtin and data.name and data.name != profile.name:
+    if profile.is_system and data.name and data.name != profile.name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot rename built-in profiles",
@@ -389,13 +393,13 @@ async def delete_quality_profile(
             detail=f"Quality profile not found: {profile_id}",
         )
 
-    if profile.is_active:
+    if profile.is_default:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete the active quality profile. Activate another profile first.",
         )
 
-    if profile.is_builtin:
+    if profile.is_system:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete built-in profiles",
@@ -446,7 +450,7 @@ async def get_default_profiles_info(
             name: {
                 "name": profile.name,
                 "description": profile.description,
-                "preferred_formats": [f.value for f in profile.preferred_formats],
+                "preferred_formats": profile.preferred_formats,
                 "min_bitrate": profile.min_bitrate,
                 "max_bitrate": profile.max_bitrate,
                 "max_file_size_mb": profile.max_file_size_mb,
