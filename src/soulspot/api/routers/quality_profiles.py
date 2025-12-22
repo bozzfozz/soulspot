@@ -116,7 +116,7 @@ class QualityProfileResponse(BaseModel):
     def from_entity(cls, profile: QualityProfile) -> "QualityProfileResponse":
         """Convert domain entity to API response."""
         return cls(
-            id=profile.id,
+            id=str(profile.id),
             name=profile.name,
             description=profile.description,
             preferred_formats=profile.preferred_formats,

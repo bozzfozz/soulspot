@@ -6892,7 +6892,7 @@ class QualityProfileRepository(IQualityProfileRepository):
             raise ValueError(f"QualityProfile with name '{profile.name}' already exists")
 
         model = QualityProfileModel(
-            id=profile.id,
+            id=str(profile.id),
             name=profile.name,
             description=profile.description,
             preferred_formats=json.dumps(profile.preferred_formats),  # Already strings
@@ -7051,6 +7051,7 @@ class QualityProfileRepository(IQualityProfileRepository):
     def _model_to_entity(self, model: "QualityProfileModel") -> QualityProfile:
         """Convert SQLAlchemy model to domain entity."""
         from .models import ensure_utc_aware
+        from soulspot.domain.entities import QualityProfileId
         import json
 
         # Parse JSON fields - preferred_formats is already list[str]
@@ -7058,7 +7059,7 @@ class QualityProfileRepository(IQualityProfileRepository):
         exclude_keywords = json.loads(model.exclude_keywords or "[]")
 
         return QualityProfile(
-            id=model.id,
+            id=QualityProfileId(model.id),
             name=model.name,
             description=model.description,
             preferred_formats=preferred_formats,  # Already list[str]
