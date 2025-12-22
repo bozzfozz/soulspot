@@ -31,44 +31,52 @@
     </span>
 </div>
 
-{# Albums grid #}
+{# Albums grid - using same compact layout as library_albums.html #}
 <div class="albums-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-4);">
     {% for album in albums %}
-    <div class="missing-album-card" style="background: var(--bg-tertiary); border-radius: var(--radius-lg); overflow: hidden; transition: transform var(--transition-fast), box-shadow var(--transition-fast);">
+    <div class="missing-album-card" style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); padding: var(--space-4); transition: transform var(--transition-fast), box-shadow var(--transition-fast); cursor: pointer;">
         {# Album cover #}
-        <div class="album-cover" style="aspect-ratio: 1; position: relative; background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+        <div class="album-cover" style="aspect-ratio: 1; position: relative; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: var(--radius-lg); margin-bottom: var(--space-3); overflow: hidden;">
             {% if album.cover_url %}
             <img src="{{ album.cover_url }}" alt="{{ album.title }}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover;">
             {% else %}
             <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
-                <i class="bi bi-disc" style="font-size: 3rem; color: rgba(255,255,255,0.6);"></i>
+                <i class="bi bi-disc" style="font-size: 3rem; color: rgba(255,255,255,0.4);"></i>
             </div>
             {% endif %}
-            {# Album type badge #}
-            <span class="album-type-badge" style="position: absolute; top: var(--space-2); right: var(--space-2); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.7); color: white; text-transform: uppercase;">
-                {{ album.album_type }}
+            {# Album type badge - top-left like library albums #}
+            {% if album.album_type == 'single' %}
+            <span class="album-type-badge" style="position: absolute; top: 8px; left: 8px; backdrop-filter: blur(8px); background: rgba(59, 130, 246, 0.85); color: white; font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); padding: var(--space-1) var(--space-2); border-radius: var(--radius-md);">
+                Single
             </span>
-            {# Source badge #}
-            <span style="position: absolute; bottom: var(--space-2); left: var(--space-2); font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: {% if album.source == 'deezer' %}#FF0092{% elif album.source == 'spotify' %}#1DB954{% else %}var(--bg-secondary){% endif %}; color: white;">
+            {% elif album.album_type == 'ep' %}
+            <span class="album-type-badge" style="position: absolute; top: 8px; left: 8px; backdrop-filter: blur(8px); background: rgba(139, 92, 246, 0.85); color: white; font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); padding: var(--space-1) var(--space-2); border-radius: var(--radius-md);">
+                EP
+            </span>
+            {% elif album.album_type == 'compilation' %}
+            <span class="album-type-badge" style="position: absolute; top: 8px; left: 8px; backdrop-filter: blur(8px); background: rgba(245, 158, 11, 0.85); color: white; font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); padding: var(--space-1) var(--space-2); border-radius: var(--radius-md);">
+                Compilation
+            </span>
+            {% endif %}
+            {# Source badge - bottom-right corner #}
+            <span style="position: absolute; bottom: 8px; right: 8px; font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; background: {% if album.source == 'deezer' %}#FF0092{% elif album.source == 'spotify' %}#1DB954{% else %}var(--bg-secondary){% endif %}; color: white;">
                 {{ album.source }}
             </span>
         </div>
-        {# Album info #}
-        <div style="padding: var(--space-3);">
-            <h4 style="font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ album.title }}">
-                {{ album.title }}
-            </h4>
-            <div style="font-size: var(--font-size-xs); color: var(--text-muted); margin-top: var(--space-1);">
-                {% if album.release_date %}{{ album.release_date[:4] }}{% endif %}
-                {% if album.total_tracks %} · {{ album.total_tracks }} tracks{% endif %}
-            </div>
-            {# Download button #}
-            <a href="/search?q={{ (artist_name ~ ' ' ~ album.title)|urlencode }}" 
-               class="btn btn-primary btn-sm" 
-               style="width: 100%; margin-top: var(--space-3); font-size: var(--font-size-xs);">
-                <i class="bi bi-search"></i> Find & Download
-            </a>
+        {# Album info - compact like library albums #}
+        <h4 class="album-title" style="font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); margin: 0 0 var(--space-1) 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ album.title }}">
+            {{ album.title }}
+        </h4>
+        <div class="album-meta" style="font-size: var(--font-size-xs); color: var(--text-muted); margin-bottom: var(--space-2);">
+            {% if album.release_date %}<span>{{ album.release_date[:4] }}</span>{% endif %}
+            {% if album.total_tracks %}{% if album.release_date %} · {% endif %}<span><i class="bi bi-music-note" style="margin-right: 2px;"></i>{{ album.total_tracks }}</span>{% endif %}
         </div>
+        {# Download button - compact #}
+        <a href="/search?q={{ (artist_name ~ ' ' ~ album.title)|urlencode }}" 
+           class="btn btn-primary btn-sm" 
+           style="width: 100%; font-size: var(--font-size-xs); padding: var(--space-2);">
+            <i class="bi bi-search"></i> Find & Download
+        </a>
     </div>
     {% endfor %}
 </div>
