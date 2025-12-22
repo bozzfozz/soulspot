@@ -6900,8 +6900,8 @@ class QualityProfileRepository(IQualityProfileRepository):
             max_bitrate=profile.max_bitrate,
             max_file_size_mb=profile.max_file_size_mb,
             exclude_keywords=json.dumps(profile.exclude_keywords),
-            is_active=profile.is_active,
-            is_builtin=profile.is_builtin,
+            is_active=profile.is_default,  # Entity: is_default → Model: is_active
+            is_builtin=profile.is_system,  # Entity: is_system → Model: is_builtin
             created_at=profile.created_at,
             updated_at=profile.updated_at,
         )
@@ -6986,13 +6986,13 @@ class QualityProfileRepository(IQualityProfileRepository):
 
         model.name = profile.name
         model.description = profile.description
-        model.preferred_formats = json.dumps([f.value for f in profile.preferred_formats])
+        model.preferred_formats = json.dumps(profile.preferred_formats)  # Already strings
         model.min_bitrate = profile.min_bitrate
         model.max_bitrate = profile.max_bitrate
         model.max_file_size_mb = profile.max_file_size_mb
         model.exclude_keywords = json.dumps(profile.exclude_keywords)
-        model.is_active = profile.is_active
-        model.is_builtin = profile.is_builtin
+        model.is_active = profile.is_default  # Entity: is_default → Model: is_active
+        model.is_builtin = profile.is_system  # Entity: is_system → Model: is_builtin
         model.updated_at = datetime.now(UTC)
 
     async def delete(self, profile_id: str) -> None:
@@ -7007,10 +7007,10 @@ class QualityProfileRepository(IQualityProfileRepository):
         if profile is None:
             raise ValueError(f"QualityProfile not found: {profile_id}")
 
-        if profile.is_active:
+        if profile.is_default:
             raise ValueError("Cannot delete the active quality profile")
 
-        if profile.is_builtin:
+        if profile.is_system:
             raise ValueError("Cannot delete built-in quality profiles")
 
         stmt = delete(QualityProfileModel).where(QualityProfileModel.id == profile_id)
@@ -7037,8 +7037,8 @@ class QualityProfileRepository(IQualityProfileRepository):
         for name, profile in QUALITY_PROFILES.items():
             existing = await self.get_by_name(profile.name)
             if existing is None:
-                # Mark as builtin since these are defaults
-                profile.is_builtin = True
+                # Mark as system profile since these are defaults
+                profile.is_system = True
                 await self.add(profile)
 
         # Ensure at least one profile is active (default to BALANCED)
@@ -7051,25 +7051,23 @@ class QualityProfileRepository(IQualityProfileRepository):
     def _model_to_entity(self, model: "QualityProfileModel") -> QualityProfile:
         """Convert SQLAlchemy model to domain entity."""
         from .models import ensure_utc_aware
-        from soulspot.domain.entities import AudioFormat
         import json
 
-        # Parse JSON fields
-        preferred_formats_raw = json.loads(model.preferred_formats or "[]")
-        preferred_formats = [AudioFormat(f) for f in preferred_formats_raw]
+        # Parse JSON fields - preferred_formats is already list[str]
+        preferred_formats = json.loads(model.preferred_formats or "[]")
         exclude_keywords = json.loads(model.exclude_keywords or "[]")
 
         return QualityProfile(
             id=model.id,
             name=model.name,
             description=model.description,
-            preferred_formats=preferred_formats,
+            preferred_formats=preferred_formats,  # Already list[str]
             min_bitrate=model.min_bitrate,
             max_bitrate=model.max_bitrate,
             max_file_size_mb=model.max_file_size_mb,
             exclude_keywords=exclude_keywords,
-            is_active=model.is_active,
-            is_builtin=model.is_builtin,
+            is_default=model.is_active,  # Model: is_active → Entity: is_default
+            is_system=model.is_builtin,  # Model: is_builtin → Entity: is_system
             created_at=ensure_utc_aware(model.created_at),
             updated_at=ensure_utc_aware(model.updated_at),
         )
