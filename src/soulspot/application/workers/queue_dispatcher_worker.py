@@ -110,6 +110,20 @@ class QueueDispatcherWorker:
         """Signal the worker to stop."""
         self._running = False
 
+    def get_status(self) -> dict[str, Any]:
+        """Get current worker status for monitoring.
+
+        Hey future me - this is called by the workers API endpoint!
+        Returns status info that shows in the worker status dashboard.
+        """
+        return {
+            "running": self._running,
+            "dispatch_interval_seconds": self._check_interval,
+            "stats": {
+                "last_available": self._last_available,
+            },
+        }
+
     async def _dispatch_cycle(self) -> None:
         """Run one dispatch cycle.
 

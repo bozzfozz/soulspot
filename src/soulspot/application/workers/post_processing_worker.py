@@ -50,7 +50,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -208,6 +208,20 @@ class PostProcessingWorker:
         """Stop the post-processing worker gracefully."""
         self._running = False
         logger.info("PostProcessingWorker stopping...")
+
+    def get_status(self) -> dict[str, Any]:
+        """Get current worker status for monitoring.
+
+        Hey future me - this is called by the workers API endpoint!
+        Returns status info that shows in the worker status dashboard.
+        """
+        return {
+            "running": self._running,
+            "check_interval_seconds": self._check_interval,
+            "stats": {
+                "enabled": self._enabled,
+            },
+        }
 
     async def _process_pending_downloads(self) -> None:
         """Find and process downloads that need post-processing.

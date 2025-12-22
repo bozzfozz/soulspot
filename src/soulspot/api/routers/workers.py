@@ -417,7 +417,7 @@ def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
             details={"error": "Worker not initialized"},
         )
 
-    raw_status = worker.get_status()
+    raw_status = worker.get_stats()
     stats = raw_status.get("stats", {})
 
     # Format last check time
