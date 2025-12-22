@@ -32,9 +32,11 @@
 </div>
 
 {# Albums grid - using same compact layout as library_albums.html #}
-<div class="albums-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-4);">
+<div class="albums-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-4);">
     {% for album in albums %}
-    <div class="missing-album-card" style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); padding: var(--space-4); transition: transform var(--transition-fast), box-shadow var(--transition-fast); cursor: pointer;">
+    <a href="/search?q={{ (artist_name ~ ' ' ~ album.title)|urlencode }}" 
+       class="missing-album-card" 
+       style="background: var(--bg-secondary); border: 1px solid var(--border-primary); border-radius: var(--radius-lg); padding: var(--space-4); transition: transform var(--transition-fast), box-shadow var(--transition-fast); text-decoration: none; color: var(--text-primary); display: block;">
         {# Album cover #}
         <div class="album-cover" style="aspect-ratio: 1; position: relative; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: var(--radius-lg); margin-bottom: var(--space-3); overflow: hidden;">
             {% if album.cover_url %}
@@ -63,21 +65,22 @@
                 {{ album.source }}
             </span>
         </div>
-        {# Album info - compact like library albums #}
-        <h4 class="album-title" style="font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); margin: 0 0 var(--space-1) 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ album.title }}">
+        {# Album info - matching library albums structure exactly #}
+        <h3 class="album-title" style="font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); margin: 0 0 var(--space-1) 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ album.title }}">
             {{ album.title }}
-        </h4>
-        <div class="album-meta" style="font-size: var(--font-size-xs); color: var(--text-muted); margin-bottom: var(--space-2);">
-            {% if album.release_date %}<span>{{ album.release_date[:4] }}</span>{% endif %}
-            {% if album.total_tracks %}{% if album.release_date %} · {% endif %}<span><i class="bi bi-music-note" style="margin-right: 2px;"></i>{{ album.total_tracks }}</span>{% endif %}
+        </h3>
+        <p class="album-artist" style="font-size: var(--font-size-xs); color: var(--text-muted); margin: 0 0 var(--space-2) 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ artist_name }}">
+            {{ artist_name }}
+        </p>
+        <div class="album-meta" style="display: flex; justify-content: space-between; align-items: center; font-size: var(--font-size-xs); color: var(--text-muted);">
+            <span>
+                {% if album.total_tracks %}<i class="bi bi-music-note" style="margin-right: var(--space-1);"></i>{{ album.total_tracks }}{% endif %}
+            </span>
+            {% if album.release_date %}
+            <span>{{ album.release_date[:4] }}</span>
+            {% endif %}
         </div>
-        {# Download button - compact #}
-        <a href="/search?q={{ (artist_name ~ ' ' ~ album.title)|urlencode }}" 
-           class="btn btn-primary btn-sm" 
-           style="width: 100%; font-size: var(--font-size-xs); padding: var(--space-2);">
-            <i class="bi bi-search"></i> Find & Download
-        </a>
-    </div>
+    </a>
     {% endfor %}
 </div>
 {% endif %}
