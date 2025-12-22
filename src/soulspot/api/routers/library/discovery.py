@@ -104,7 +104,7 @@ class DiscographyStatsResponse(BaseModel):
 # Er ist für Power-User die nach dem Hinzufügen neuer Musik sofort Discovery
 # haben wollen statt auf den 6-Stunden-Intervall zu warten.
 # ACHTUNG: Nur triggern wenn nicht bereits läuft (Worker checkt das intern).
-@router.post("/trigger")
+@router.post("/trigger", response_model=None)
 async def trigger_discovery(
     request: Request,
 ) -> DiscoveryTriggerResponse | HTMLResponse:
