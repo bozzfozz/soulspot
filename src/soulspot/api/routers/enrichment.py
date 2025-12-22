@@ -205,6 +205,8 @@ async def repair_missing_artwork(
         Statistics about repaired artwork
     """
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.image_repair_service import ImageRepairService
+    from soulspot.application.services.images import ImageService
     from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
@@ -219,17 +221,20 @@ async def repair_missing_artwork(
             detail="Not authenticated with Spotify. Please connect your account first.",
         )
 
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
+    # Create dependencies for ImageRepairService
+    image_service = ImageService(
+        cache_base_path=settings.artwork_cache_path,
+        local_serve_prefix="/artwork/local",
     )
 
-    service = LocalLibraryEnrichmentService(
+    service = ImageRepairService(
         session=session,
+        image_service=image_service,
+        image_provider_registry=None,  # Use direct plugin fallback
         spotify_plugin=spotify_plugin,
-        settings=settings,
     )
 
-    result = await service.repair_missing_artwork(limit=100)
+    result = await service.repair_artist_images(limit=100)
     return result
 
 
@@ -393,14 +398,20 @@ async def enrich_disambiguation(
     Returns:
         HTML response for HTMX integration
     """
-    from soulspot.application.services.local_library_enrichment_service import (
-        LocalLibraryEnrichmentService,
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.musicbrainz_enrichment_service import (
+        MusicBrainzEnrichmentService,
     )
+    from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
 
-    service = LocalLibraryEnrichmentService(
+    # Create MusicBrainz client and settings service
+    mb_client = MusicBrainzClient(settings.musicbrainz)
+    settings_service = AppSettingsService(session)
+
+    service = MusicBrainzEnrichmentService(
         session=session,
-        spotify_plugin=None,
-        settings=settings,
+        musicbrainz_client=mb_client,
+        settings_service=settings_service,
     )
 
     try:

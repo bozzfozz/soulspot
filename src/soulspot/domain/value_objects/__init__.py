@@ -50,6 +50,15 @@ from soulspot.domain.value_objects.naming import (
     sort_name,
 )
 
+# Artist normalization exports (for matching and deduplication)
+from soulspot.domain.value_objects.artist_normalization import (
+    ARTIST_PREFIXES,
+    ARTIST_SUFFIXES,
+    extract_sort_name,
+    normalize_artist_name,
+    normalize_for_fuzzy_match,
+)
+
 
 # Hey future me, ArtistId is a VALUE OBJECT (Domain-Driven Design)! It's NOT just a UUID - it's a
 # type-safe wrapper that ensures IDs are always valid UUIDs. The @dataclass(frozen=True) makes it

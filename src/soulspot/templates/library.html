@@ -156,8 +156,19 @@
             <button class="btn btn-outline btn-outline-warning" hx-post="/api/library/re-download-broken" hx-confirm="Re-download all broken files?">
                 <i class="bi bi-arrow-repeat"></i>Re-download Broken
             </button>
+            {# Hey future me - Discovery Button! Triggers LibraryDiscoveryWorker to find
+               Deezer/Spotify IDs and album types (Album/EP/Single) for local library items. #}
+            <button class="btn btn-outline" id="discovery-btn"
+                    hx-post="/api/library/discovery/trigger"
+                    hx-target="#discovery-status"
+                    hx-indicator="#discovery-spinner">
+                <i class="bi bi-search"></i>
+                <span id="discovery-spinner" class="htmx-indicator spinner-small"></span>
+                Discover IDs & Types
+            </button>
         </div>
         <div id="compilation-status" style="margin-top: 1rem;"></div>
+        <div id="discovery-status" style="margin-top: 0.5rem;"></div>
         
         {# Hey future me - MusicBrainz Enrichment Section!
            Adds disambiguation data from MusicBrainz for Lidarr-style naming templates.

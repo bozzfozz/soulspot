@@ -2,6 +2,8 @@
 
 Hey future me - this file exists only to keep `library.py` from becoming an unreadable mega-router.
 These endpoints are still mounted under `/api/library/*` because `library.py` includes this router.
+
+Updated 2025: Migrated from LocalLibraryEnrichmentService (deprecated) to LibraryMergeService.
 """
 
 from typing import Any
@@ -11,10 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import get_db_session
-from soulspot.application.services.local_library_enrichment_service import (
-    LocalLibraryEnrichmentService,
-)
-from soulspot.config import Settings, get_settings
+from soulspot.application.services.library_merge_service import LibraryMergeService
 
 router = APIRouter(tags=["duplicates"])
 
@@ -32,7 +31,6 @@ class MergeRequest(BaseModel):
 )
 async def find_duplicate_artists(
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Find potential duplicate artists by normalized name matching.
 
@@ -41,12 +39,8 @@ async def find_duplicate_artists(
 
     Use POST /duplicates/artists/merge to combine duplicates.
     """
-    # Hey future me - spotify_plugin=None weil wir nur lokale DB-Operationen machen!
-    service = LocalLibraryEnrichmentService(
-        session=session,
-        spotify_plugin=None,
-        settings=settings,
-    )
+    # Hey future me - LibraryMergeService braucht nur die Session, keine Plugins!
+    service = LibraryMergeService(session=session)
 
     duplicate_groups = await service.find_duplicate_artists()
 
@@ -64,7 +58,6 @@ async def find_duplicate_artists(
 async def merge_duplicate_artists(
     request: MergeRequest,
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Merge multiple artists into one.
 
@@ -75,11 +68,7 @@ async def merge_duplicate_artists(
         keep_id: ID of artist to keep
         merge_ids: List of artist IDs to merge into keep artist
     """
-    service = LocalLibraryEnrichmentService(
-        session=session,
-        spotify_plugin=None,
-        settings=settings,
-    )
+    service = LibraryMergeService(session=session)
 
     try:
         result = await service.merge_artists(request.keep_id, request.merge_ids)
@@ -97,17 +86,12 @@ async def merge_duplicate_artists(
 )
 async def find_duplicate_albums(
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Find potential duplicate albums by normalized name + artist matching.
 
     Returns groups of albums that might be duplicates.
     """
-    service = LocalLibraryEnrichmentService(
-        session=session,
-        spotify_plugin=None,
-        settings=settings,
-    )
+    service = LibraryMergeService(session=session)
 
     duplicate_groups = await service.find_duplicate_albums()
 
@@ -125,18 +109,13 @@ async def find_duplicate_albums(
 async def merge_duplicate_albums(
     request: MergeRequest,
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Merge multiple albums into one.
 
     All tracks from merge_ids albums will be transferred to keep_id album.
     The merge_ids albums will be deleted after transfer.
     """
-    service = LocalLibraryEnrichmentService(
-        session=session,
-        spotify_plugin=None,
-        settings=settings,
-    )
+    service = LibraryMergeService(session=session)
 
     try:
         result = await service.merge_albums(request.keep_id, request.merge_ids)

@@ -107,7 +107,7 @@ class DiscographyStatsResponse(BaseModel):
 @router.post("/trigger")
 async def trigger_discovery(
     request: Request,
-) -> DiscoveryTriggerResponse:
+) -> DiscoveryTriggerResponse | HTMLResponse:
     """Trigger a manual library discovery cycle.
 
     Runs all 5 phases of the LibraryDiscoveryWorker immediately:
@@ -121,12 +121,21 @@ async def trigger_discovery(
     Use this endpoint to trigger it immediately after adding new music.
 
     Returns:
-        Success status and message
+        Success status and message (JSON or HTML based on Accept header)
     """
     # Get worker from app state
     worker = getattr(request.app.state, "library_discovery_worker", None)
+    
+    # Check Accept header for HTMX HTML response
+    accept_header = request.headers.get("Accept", "")
+    wants_html = "text/html" in accept_header
 
     if worker is None:
+        if wants_html:
+            return HTMLResponse(
+                content='<div class="alert alert-danger">Discovery worker not initialized.</div>',
+                status_code=503,
+            )
         raise HTTPException(
             status_code=503,
             detail="Library discovery worker not initialized. Check server logs.",
@@ -134,6 +143,10 @@ async def trigger_discovery(
 
     # Check if already running
     if worker._running:
+        if wants_html:
+            return HTMLResponse(
+                content='<div class="alert alert-info"><i class="bi bi-hourglass-split"></i> Discovery already running...</div>',
+            )
         return DiscoveryTriggerResponse(
             success=False,
             message="Discovery cycle already in progress. Please wait for it to complete.",
@@ -147,6 +160,11 @@ async def trigger_discovery(
 
         asyncio.create_task(worker.run_once())
 
+        if wants_html:
+            return HTMLResponse(
+                content='<div class="alert alert-success"><i class="bi bi-check-circle"></i> Discovery started! Album types will be updated...</div>',
+            )
+        
         return DiscoveryTriggerResponse(
             success=True,
             message="Discovery cycle triggered. Check status for progress.",
@@ -155,6 +173,11 @@ async def trigger_discovery(
 
     except Exception as e:
         logger.exception("Failed to trigger discovery: %s", e)
+        if wants_html:
+            return HTMLResponse(
+                content=f'<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> Error: {e}</div>',
+                status_code=500,
+            )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to trigger discovery: {e}",

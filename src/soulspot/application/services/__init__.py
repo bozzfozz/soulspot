@@ -54,6 +54,21 @@ from soulspot.application.services.spotify_auth_service import (
 )
 from soulspot.application.services.token_manager import TokenManager
 
+# Hey future me - LibraryMergeService handles duplicate detection and merging!
+# Replaces the duplicate/merge methods from LocalLibraryEnrichmentService (deprecated).
+from soulspot.application.services.library_merge_service import LibraryMergeService
+
+# Hey future me - MusicBrainzEnrichmentService handles disambiguation enrichment!
+# Replaces enrich_disambiguation_batch from LocalLibraryEnrichmentService (deprecated).
+from soulspot.application.services.musicbrainz_enrichment_service import (
+    MusicBrainzEnrichmentService,
+)
+
+# Hey future me - ImageRepairService handles batch image repair!
+# Replaces repair_missing_artwork methods from LocalLibraryEnrichmentService (deprecated).
+# Named ImageRepairService (not ArtworkRepairService) for consistency with ImageService!
+from soulspot.application.services.image_repair_service import ImageRepairService
+
 # ArtworkService is DEPRECATED and can be deleted
 # All functionality has been migrated to ImageService
 
@@ -76,8 +91,11 @@ __all__ = [
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "ImageInfo",
+    "ImageRepairService",
     "ImageService",
+    "LibraryMergeService",
     "LibraryViewService",
+    "MusicBrainzEnrichmentService",
     "NewReleasesResult",
     "NewReleasesService",
     "ProviderMappingService",

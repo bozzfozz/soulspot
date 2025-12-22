@@ -668,6 +668,17 @@ class LibraryDiscoveryWorker:
                                 album_id=album.id,
                                 deezer_id=best_match.deezer_id,
                             )
+                            # Hey future me - SET PRIMARY_TYPE from Deezer's album_type!
+                            # This is critical for Album/EP/Single classification.
+                            # Deezer uses: album, ep, single, compile
+                            if best_match.album_type:
+                                await album_repo.update_primary_type(
+                                    album_id=album.id,
+                                    primary_type=best_match.album_type,
+                                )
+                                logger.debug(
+                                    f"Set primary_type='{best_match.album_type}' for album '{album.title}'"
+                                )
                             stats["deezer_enriched"] += 1
                             logger.debug(f"Deezer enriched album '{album.title}' → deezer_id={best_match.deezer_id}")
                     
@@ -694,6 +705,17 @@ class LibraryDiscoveryWorker:
                                     album_id=album.id,
                                     spotify_uri=str(best_match.spotify_uri),
                                 )
+                                # Hey future me - SET PRIMARY_TYPE from Spotify's album_type!
+                                # Only set if not already set by Deezer (Deezer is processed first).
+                                # Spotify uses: album, single, compilation
+                                if best_match.album_type and not album.deezer_id:
+                                    await album_repo.update_primary_type(
+                                        album_id=album.id,
+                                        primary_type=best_match.album_type,
+                                    )
+                                    logger.debug(
+                                        f"Set primary_type='{best_match.album_type}' for album '{album.title}'"
+                                    )
                                 stats["spotify_enriched"] += 1
                                 logger.debug(f"Spotify enriched album '{album.title}' → spotify_uri={best_match.spotify_uri}")
                         

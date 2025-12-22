@@ -1183,6 +1183,45 @@ class AlbumRepository(IAlbumRepository):
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]
 
+    async def update_primary_type(self, album_id: AlbumId, primary_type: str) -> bool:
+        """Update album's primary_type (album/ep/single) from API data.
+        
+        Hey future me - this sets the Lidarr-style primary type from Deezer/Spotify!
+        Called during Phase 4 when we discover the album_type from the provider.
+        
+        Values: 'album', 'ep', 'single', 'compilation', 'other'
+        The value comes from AlbumDTO.album_type (Deezer: record_type, Spotify: album_type).
+        
+        Args:
+            album_id: ID of the album to update
+            primary_type: Album type from provider ('album', 'ep', 'single', etc.)
+            
+        Returns:
+            True if updated, False if album not found
+        """
+        # Normalize the type value
+        normalized_type = (primary_type or "album").lower().strip()
+        
+        # Map provider values to our standard
+        type_mapping = {
+            "album": "Album",
+            "ep": "EP",
+            "single": "Single",
+            "compile": "Album",  # Deezer uses "compile" for compilations
+            "compilation": "Album",  # Secondary type handles this
+            "broadcast": "Broadcast",
+            "other": "Other",
+        }
+        standard_type = type_mapping.get(normalized_type, "Album")
+        
+        stmt = (
+            update(AlbumModel)
+            .where(AlbumModel.id == str(album_id.value))
+            .values(primary_type=standard_type, updated_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0  # type: ignore[union-attr]
+
     async def get_albums_without_deezer_id(self, limit: int = 50) -> list[Album]:
         """Get albums that have local files but no deezer_id yet.
         

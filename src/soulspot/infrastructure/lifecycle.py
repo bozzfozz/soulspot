@@ -383,34 +383,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.library_scan_worker = library_scan_worker
             logger.info("Library scan worker registered")
 
-            # Initialize library enrichment worker
-            # Hey future me - this worker enriches local library items with Spotify data!
-            # It runs automatically after library scans (if auto_enrichment_enabled)
-            from soulspot.application.workers.library_enrichment_worker import (
-                LibraryEnrichmentWorker,
-            )
-
-            library_enrichment_worker = LibraryEnrichmentWorker(
-                job_queue=job_queue,
-                db=db,
-                settings=settings,
-            )
-            library_enrichment_worker.register()
-            app.state.library_enrichment_worker = library_enrichment_worker
-            logger.info("Library enrichment worker registered")
+            # =================================================================
+            # DEPRECATED: LibraryEnrichmentWorker - REMOVED (Dec 2025)
+            # =================================================================
+            # The old job-based enrichment worker has been replaced by LibraryDiscoveryWorker.
+            # LibraryDiscoveryWorker runs automatically every 6 hours and handles all ID discovery.
+            # Users can trigger it manually via POST /api/library/discovery/trigger
+            # The following services replace LocalLibraryEnrichmentService:
+            # - LibraryMergeService: Duplicate detection & merging
+            # - MusicBrainzEnrichmentService: Disambiguation enrichment
+            # - ImageRepairService: Artwork repair operations
+            # - LibraryDiscoveryWorker: Automatic ID discovery (5 phases)
+            # =================================================================
 
             # =================================================================
             # Start Library Discovery Worker (ID enrichment for artists/albums/tracks)
             # =================================================================
-            # Hey future me - dieser SUPERWORKER ersetzt Teile von LocalLibraryEnrichmentService!
+            # Hey future me - dieser SUPERWORKER ersetzt LocalLibraryEnrichmentService!
             # Er läuft alle 6 Stunden und:
             #   Phase 1: Findet Deezer/Spotify IDs für Artists ohne IDs
             #   Phase 2: Holt komplette Discographien von Deezer/Spotify
             #   Phase 3: Markiert lokale Alben die auf Streaming Services existieren
-            #   Phase 4: Findet Deezer/Spotify IDs für Alben ohne IDs
+            #   Phase 4: Findet Deezer/Spotify IDs für Alben ohne IDs + primary_type
             #   Phase 5: Findet Deezer/Spotify IDs für Tracks via ISRC
             # Läuft unabhängig von JobQueue (eigener asyncio.create_task).
-            # DEPRECATED by this worker: LocalLibraryEnrichmentService.enrich_batch*() methods
             from soulspot.application.workers.library_discovery_worker import (
                 LibraryDiscoveryWorker,
             )
