@@ -19,8 +19,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from rapidfuzz import fuzz
 from sqlalchemy import select
-from thefuzz import fuzz
 
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
