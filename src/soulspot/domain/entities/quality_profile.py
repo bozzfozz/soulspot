@@ -475,3 +475,17 @@ class QualityMatcher:
         ranked.sort(key=lambda x: x[1], reverse=True)
 
         return ranked
+
+
+# =============================================================================
+# EXPORTS - System profiles as dict
+# =============================================================================
+# Hey future me - QUALITY_PROFILES is a dict of system profiles for easy lookup!
+# This is imported in __init__.py and used to initialize the database.
+
+QUALITY_PROFILES: dict[str, QualityProfile] = {
+    "audiophile": create_audiophile_profile(),
+    "balanced": create_balanced_profile(),
+    "space_saver": create_space_saver_profile(),
+    "any": create_any_quality_profile(),
+}
