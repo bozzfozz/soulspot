@@ -6895,7 +6895,7 @@ class QualityProfileRepository(IQualityProfileRepository):
             id=profile.id,
             name=profile.name,
             description=profile.description,
-            preferred_formats=json.dumps([f.value for f in profile.preferred_formats]),
+            preferred_formats=json.dumps(profile.preferred_formats),  # Already strings
             min_bitrate=profile.min_bitrate,
             max_bitrate=profile.max_bitrate,
             max_file_size_mb=profile.max_file_size_mb,
