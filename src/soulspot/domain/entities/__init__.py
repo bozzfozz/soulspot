@@ -17,6 +17,7 @@ from soulspot.domain.entities.error_codes import (
 from soulspot.domain.entities.quality_profile import (
     AudioFormat,
     QualityProfile,
+    QualityProfileId,
     QualityMatcher,
     QUALITY_PROFILES,
 )
