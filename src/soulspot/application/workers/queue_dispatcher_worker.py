@@ -28,6 +28,7 @@ by implementing the IDownloadManager interface.
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 
