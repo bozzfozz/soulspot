@@ -1,0 +1,127 @@
+{# Download Center: Stats Bar Partial
+   
+   Rendered by: /api/downloads/manager/htmx/stats-bar
+   Auto-refresh: hx-get with hx-trigger="every 5s"
+   
+   Context variables:
+   - stats: QueueStatsDTO
+     - waiting: int
+     - pending: int
+     - queued: int
+     - downloading: int
+     - paused: int
+     - stalled: int
+     - completed_today: int
+     - failed_today: int
+     - total_active: int
+#}
+
+<div class="dc-stats-grid">
+    <!-- Downloading (Primary/Highlighted) -->
+    <div class="dc-stat-card dc-stat-primary {% if stats and stats.downloading > 0 %}active{% endif %}" 
+         onclick="filterByStatus('downloading')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-arrow-down-circle-fill"></i>
+            {% if stats and stats.downloading > 0 %}
+            <span class="dc-stat-pulse"></span>
+            {% endif %}
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.downloading if stats else 0 }}</span>
+            <span class="dc-stat-label">Downloading</span>
+        </div>
+    </div>
+
+    <!-- Queued -->
+    <div class="dc-stat-card dc-stat-queued" onclick="filterByStatus('queued')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-list-check"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.queued if stats else 0 }}</span>
+            <span class="dc-stat-label">Queued</span>
+        </div>
+    </div>
+
+    <!-- Waiting -->
+    <div class="dc-stat-card dc-stat-waiting" onclick="filterByStatus('waiting')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-hourglass-split"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ (stats.waiting + stats.pending) if stats else 0 }}</span>
+            <span class="dc-stat-label">Waiting</span>
+        </div>
+    </div>
+
+    <!-- Paused -->
+    {% if stats and stats.paused > 0 %}
+    <div class="dc-stat-card dc-stat-paused" onclick="filterByStatus('paused')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-pause-circle-fill"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.paused }}</span>
+            <span class="dc-stat-label">Paused</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Stalled -->
+    {% if stats and stats.stalled > 0 %}
+    <div class="dc-stat-card dc-stat-stalled" onclick="filterByStatus('stalled')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-exclamation-circle-fill"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.stalled }}</span>
+            <span class="dc-stat-label">Stalled</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Divider -->
+    <div class="dc-stat-divider"></div>
+
+    <!-- Completed Today -->
+    <div class="dc-stat-card dc-stat-success">
+        <div class="dc-stat-icon">
+            <i class="bi bi-check-circle-fill"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.completed_today if stats else 0 }}</span>
+            <span class="dc-stat-label">Today</span>
+        </div>
+    </div>
+
+    <!-- Failed Today -->
+    {% if stats and stats.failed_today > 0 %}
+    <div class="dc-stat-card dc-stat-error" onclick="switchTab('failed')">
+        <div class="dc-stat-icon">
+            <i class="bi bi-x-circle-fill"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value">{{ stats.failed_today }}</span>
+            <span class="dc-stat-label">Failed</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Speed (right-aligned) -->
+    <div class="dc-stat-card dc-stat-speed">
+        <div class="dc-stat-icon">
+            <i class="bi bi-speedometer"></i>
+        </div>
+        <div class="dc-stat-content">
+            <span class="dc-stat-value" id="current-speed">--</span>
+            <span class="dc-stat-label">Speed</span>
+        </div>
+    </div>
+</div>
+
+{% if not stats or stats.total_active == 0 %}
+<!-- Empty State Message -->
+<div class="dc-stats-empty">
+    <span>No active downloads</span>
+</div>
+{% endif %}

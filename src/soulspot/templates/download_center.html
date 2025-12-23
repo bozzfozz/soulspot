@@ -1,0 +1,354 @@
+{# Hey future me - This is the UNIFIED Download Center!
+   Combines the old downloads.html and download_manager.html into one professional UI.
+   Inspired by Lidarr/Radarr queue design with modern glassmorphism effects.
+   
+   Features:
+   - Real-time HTMX updates (3s polling)
+   - Batch operations (pause/resume/cancel all)
+   - View toggle (cards/table)
+   - Expandable download details
+   - Provider health monitoring
+   - Status filters
+   
+   Endpoints:
+   - Page: GET /downloads
+   - Stats: GET /api/downloads/manager/htmx/stats-bar
+   - List: GET /api/downloads/manager/htmx/active-list
+   - Health: GET /api/downloads/manager/htmx/provider-health
+#}
+
+{% extends "base.html" %}
+{% block title %}Download Center - SoulSpot{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/css/download-center.css">
+{% endblock %}
+
+{% block content %}
+<div class="download-center">
+    
+    <!-- ═══════════════════════════════════════════════════════════
+         HEADER SECTION
+         ═══════════════════════════════════════════════════════════ -->
+    <header class="dc-header">
+        <div class="dc-header-left">
+            <div class="dc-header-icon">
+                <i class="bi bi-cloud-download-fill"></i>
+                <div class="dc-header-icon-pulse" id="download-pulse"></div>
+            </div>
+            <div class="dc-header-text">
+                <h1>Download Center</h1>
+                <p class="dc-header-subtitle">Manage your download queue and history</p>
+            </div>
+        </div>
+        
+        <div class="dc-header-actions">
+            <!-- View Toggle -->
+            <div class="dc-view-toggle">
+                <button class="dc-view-btn active" data-view="cards" onclick="setView('cards')" title="Card View">
+                    <i class="bi bi-grid-3x3-gap-fill"></i>
+                </button>
+                <button class="dc-view-btn" data-view="table" onclick="setView('table')" title="Table View">
+                    <i class="bi bi-list-ul"></i>
+                </button>
+            </div>
+            
+            <!-- Batch Actions -->
+            <div class="dc-batch-actions">
+                <button class="btn btn-outline btn-sm" 
+                        hx-post="/api/downloads/pause-all" 
+                        hx-swap="none"
+                        hx-confirm="Pause all active downloads?">
+                    <i class="bi bi-pause-fill"></i>
+                    <span class="btn-text">Pause All</span>
+                </button>
+                <button class="btn btn-outline btn-sm btn-success-outline" 
+                        hx-post="/api/downloads/resume-all" 
+                        hx-swap="none">
+                    <i class="bi bi-play-fill"></i>
+                    <span class="btn-text">Resume All</span>
+                </button>
+                <button class="btn btn-outline btn-sm" 
+                        hx-post="/api/downloads/clear-completed" 
+                        hx-swap="none"
+                        hx-confirm="Clear all completed downloads from view?">
+                    <i class="bi bi-check2-all"></i>
+                    <span class="btn-text">Clear Done</span>
+                </button>
+            </div>
+            
+            <!-- Settings Dropdown -->
+            <div class="dc-settings-dropdown">
+                <button class="btn btn-icon" onclick="toggleSettingsDropdown()" title="Settings">
+                    <i class="bi bi-gear"></i>
+                </button>
+                <div class="dc-dropdown-menu" id="settings-dropdown">
+                    <label class="dc-dropdown-item">
+                        <input type="checkbox" id="auto-refresh-toggle" checked onchange="toggleAutoRefresh()">
+                        <span>Auto-refresh (3s)</span>
+                    </label>
+                    <label class="dc-dropdown-item">
+                        <input type="checkbox" id="notifications-toggle" onchange="toggleNotifications()">
+                        <span>Browser notifications</span>
+                    </label>
+                    <div class="dc-dropdown-divider"></div>
+                    <button class="dc-dropdown-item" onclick="exportDownloads('json')">
+                        <i class="bi bi-filetype-json"></i>
+                        <span>Export as JSON</span>
+                    </button>
+                    <button class="dc-dropdown-item" onclick="exportDownloads('csv')">
+                        <i class="bi bi-filetype-csv"></i>
+                        <span>Export as CSV</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STATS BAR (HTMX Auto-refresh)
+         ═══════════════════════════════════════════════════════════ -->
+    <section class="dc-stats-bar"
+             id="stats-container"
+             hx-get="/api/downloads/manager/htmx/stats-bar"
+             hx-trigger="load, every 5s [auto-refresh-enabled]"
+             hx-swap="innerHTML">
+        {% include "partials/download_center_stats.html" %}
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         MAIN CONTENT AREA
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="dc-main">
+        
+        <!-- SIDEBAR (Filters & Controls) -->
+        <aside class="dc-sidebar" id="sidebar">
+            <button class="dc-sidebar-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            
+            <!-- Filters Section -->
+            <div class="dc-sidebar-section">
+                <h3 class="dc-sidebar-title">
+                    <i class="bi bi-funnel"></i>
+                    Filters
+                </h3>
+                
+                <div class="dc-filter-group">
+                    <label class="dc-filter-label">Status</label>
+                    <select class="dc-filter-select" id="status-filter" onchange="applyFilters()">
+                        <option value="">All Statuses</option>
+                        <option value="downloading">⬇️ Downloading</option>
+                        <option value="queued">📋 Queued</option>
+                        <option value="waiting">⏳ Waiting</option>
+                        <option value="pending">📤 Pending</option>
+                        <option value="paused">⏸️ Paused</option>
+                        <option value="stalled">🚫 Stalled</option>
+                        <option value="failed">❌ Failed</option>
+                    </select>
+                </div>
+                
+                <div class="dc-filter-group">
+                    <label class="dc-filter-label">Provider</label>
+                    <select class="dc-filter-select" id="provider-filter" onchange="applyFilters()">
+                        <option value="">All Providers</option>
+                        <option value="soulseek">🎵 Soulseek (slskd)</option>
+                        <option value="usenet" disabled>📰 Usenet (coming soon)</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-outline btn-sm btn-block" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i>
+                    Clear Filters
+                </button>
+            </div>
+            
+            <!-- Quick Actions Section -->
+            <div class="dc-sidebar-section">
+                <h3 class="dc-sidebar-title">
+                    <i class="bi bi-lightning"></i>
+                    Quick Actions
+                </h3>
+                
+                <button class="dc-quick-action" 
+                        hx-post="/api/downloads/retry-all-failed" 
+                        hx-swap="none"
+                        hx-confirm="Retry all failed downloads?">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span>Retry All Failed</span>
+                </button>
+                
+                <button class="dc-quick-action" 
+                        hx-delete="/api/downloads/failed" 
+                        hx-swap="none"
+                        hx-confirm="Remove all failed downloads?">
+                    <i class="bi bi-trash3"></i>
+                    <span>Clear Failed</span>
+                </button>
+                
+                <button class="dc-quick-action" onclick="showSpeedLimiter()">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Speed Limiter</span>
+                </button>
+            </div>
+            
+            <!-- Provider Health Section -->
+            <div class="dc-sidebar-section">
+                <h3 class="dc-sidebar-title">
+                    <i class="bi bi-heart-pulse"></i>
+                    Provider Status
+                </h3>
+                
+                <div id="provider-health-mini"
+                     hx-get="/api/downloads/manager/htmx/provider-health-mini"
+                     hx-trigger="load, every 10s"
+                     hx-swap="innerHTML">
+                    <div class="dc-provider-status">
+                        <span class="dc-provider-indicator loading"></span>
+                        <span class="dc-provider-name">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CONTENT AREA -->
+        <main class="dc-content">
+            
+            <!-- Tab Navigation -->
+            <nav class="dc-tabs">
+                <button class="dc-tab active" data-tab="queue" onclick="switchTab('queue')">
+                    <i class="bi bi-list-ul"></i>
+                    <span>Queue</span>
+                    <span class="dc-tab-count" id="queue-count">{{ total|default(0) }}</span>
+                </button>
+                <button class="dc-tab" data-tab="history" onclick="switchTab('history')">
+                    <i class="bi bi-clock-history"></i>
+                    <span>History</span>
+                </button>
+                <button class="dc-tab" data-tab="failed" onclick="switchTab('failed')">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>Failed</span>
+                    <span class="dc-tab-count dc-tab-count-error" id="failed-count">{{ failed_count|default(0) }}</span>
+                </button>
+            </nav>
+            
+            <!-- Queue Tab -->
+            <div class="dc-tab-content active" id="tab-queue">
+                <div id="downloads-list"
+                     class="dc-downloads-list"
+                     data-view="cards"
+                     hx-get="/api/downloads/center/htmx/queue"
+                     hx-trigger="load, every 3s [auto-refresh-enabled]"
+                     hx-swap="innerHTML">
+                    {% include "partials/download_center_queue.html" %}
+                </div>
+            </div>
+            
+            <!-- History Tab -->
+            <div class="dc-tab-content" id="tab-history">
+                <div id="history-list"
+                     class="dc-downloads-list"
+                     data-view="cards"
+                     hx-get="/api/downloads/center/htmx/history"
+                     hx-trigger="revealed"
+                     hx-swap="innerHTML">
+                    <div class="dc-loading">
+                        <div class="dc-spinner"></div>
+                        <span>Loading history...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Failed Tab -->
+            <div class="dc-tab-content" id="tab-failed">
+                <div id="failed-list"
+                     class="dc-downloads-list"
+                     data-view="cards"
+                     hx-get="/api/downloads/center/htmx/failed"
+                     hx-trigger="revealed"
+                     hx-swap="innerHTML">
+                    <div class="dc-loading">
+                        <div class="dc-spinner"></div>
+                        <span>Loading failed downloads...</span>
+                    </div>
+                </div>
+            </div>
+            
+        </main>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FOOTER STATUS BAR
+         ═══════════════════════════════════════════════════════════ -->
+    <footer class="dc-footer">
+        <div class="dc-footer-left">
+            <div class="dc-footer-status">
+                <span class="dc-status-indicator" id="connection-status"></span>
+                <span id="connection-text">Connecting...</span>
+            </div>
+        </div>
+        <div class="dc-footer-center">
+            <span class="dc-footer-stat">
+                <i class="bi bi-arrow-down"></i>
+                <span id="total-speed">0 KB/s</span>
+            </span>
+            <span class="dc-footer-divider">|</span>
+            <span class="dc-footer-stat">
+                <i class="bi bi-clock"></i>
+                <span id="session-time">0m</span>
+            </span>
+        </div>
+        <div class="dc-footer-right">
+            <span class="dc-footer-stat">
+                Auto-refresh: <strong id="refresh-status">ON</strong>
+            </span>
+        </div>
+    </footer>
+</div>
+
+<!-- Speed Limiter Modal -->
+<div class="modal" id="speed-limiter-modal">
+    <div class="modal-backdrop" onclick="hideSpeedLimiter()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="bi bi-speedometer2"></i> Speed Limiter</h3>
+            <button class="btn-icon" onclick="hideSpeedLimiter()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="dc-speed-control">
+                <label>Download Limit</label>
+                <div class="dc-speed-input">
+                    <input type="range" id="download-limit" min="0" max="100" value="0" 
+                           oninput="updateSpeedLabel('download')">
+                    <span id="download-limit-label">Unlimited</span>
+                </div>
+            </div>
+            <div class="dc-speed-control">
+                <label>Upload Limit</label>
+                <div class="dc-speed-input">
+                    <input type="range" id="upload-limit" min="0" max="100" value="0"
+                           oninput="updateSpeedLabel('upload')">
+                    <span id="upload-limit-label">Unlimited</span>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="hideSpeedLimiter()">Cancel</button>
+            <button class="btn btn-primary" onclick="applySpeedLimits()">Apply</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/download-center.js"></script>
+<script>
+// Initialize Download Center
+document.addEventListener('DOMContentLoaded', () => {
+    initDownloadCenter();
+});
+</script>
+{% endblock %}

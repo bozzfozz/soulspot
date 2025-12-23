@@ -719,6 +719,20 @@ async def download_manager_page(request: Request) -> Any:
     return templates.TemplateResponse(request, "download_manager.html")
 
 
+# Hey future me - NEW Download Center with professional UI!
+# This is the redesigned download management page with:
+# - Lidarr/Radarr-inspired queue design
+# - Glassmorphism stats bar
+# - Cards/Table view toggle
+# - Real-time HTMX updates
+# - Sidebar with filters and provider health
+# Replaces the old download_manager.html eventually.
+@router.get("/download-center", response_class=HTMLResponse)
+async def download_center_page(request: Request) -> Any:
+    """Download Center page - professional unified download management UI."""
+    return templates.TemplateResponse(request, "download_center.html")
+
+
 # Hey future me - this is the UI styleguide page showing all components! Use it to verify the
 # design system (colors, buttons, cards, badges, etc.) is working. Doesn't hit DB, pure template.
 # Good for debugging CSS issues or showing designers what's available in the component library.

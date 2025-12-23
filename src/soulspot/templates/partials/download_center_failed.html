@@ -1,0 +1,173 @@
+{# 
+Hey future me - Failed downloads tab for Download Center!
+Shows downloads that failed with error info and retry options.
+Displays retry_count, last_error_code, and allows manual retry or delete.
+Users can retry all failed, retry single, or remove permanently.
+#}
+
+{% if downloads %}
+<!-- Failed Count Info -->
+<div class="dc-failed-info">
+    <span class="dc-failed-count">
+        <i class="fas fa-exclamation-triangle"></i>
+        {{ downloads|length }} failed download{% if downloads|length != 1 %}s{% endif %}
+    </span>
+    <div class="dc-failed-actions">
+        <button class="dc-btn dc-btn-primary dc-btn-sm" 
+                onclick="DownloadCenter.retryAllFailed()"
+                title="Retry all failed downloads">
+            <i class="fas fa-redo-alt"></i> Retry All
+        </button>
+        <button class="dc-btn dc-btn-outline dc-btn-sm dc-btn-danger" 
+                onclick="DownloadCenter.clearAllFailed()"
+                title="Remove all failed downloads">
+            <i class="fas fa-trash-alt"></i> Clear All
+        </button>
+    </div>
+</div>
+
+<!-- Card View -->
+{% if view != 'table' %}
+<div class="dc-download-list dc-view-cards">
+    {% for download in downloads %}
+    <div class="dc-download-card dc-status-failed" data-download-id="{{ download.id }}">
+        <!-- Album Art with Error Badge -->
+        <div class="dc-download-artwork">
+            <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                 alt="Album Art"
+                 loading="lazy"
+                 onerror="this.src='/static/img/default-album.svg'">
+            <div class="dc-failed-badge">
+                <i class="fas fa-times-circle"></i>
+            </div>
+        </div>
+        
+        <!-- Track Info -->
+        <div class="dc-download-info">
+            <div class="dc-track-title">{{ download.track_info.title or 'Unknown Title' }}</div>
+            <div class="dc-track-artist">{{ download.track_info.artist or 'Unknown Artist' }}</div>
+            {% if download.track_info.album %}
+            <div class="dc-track-album">{{ download.track_info.album }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Error Info -->
+        <div class="dc-download-error">
+            <div class="dc-error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>{{ download.error_message or 'Unknown error' }}</span>
+            </div>
+            <div class="dc-error-details">
+                {% if download.status_message %}
+                <span class="dc-error-code">{{ download.status_message }}</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Retry Info -->
+        <div class="dc-download-meta">
+            <div class="dc-meta-item dc-retry-info">
+                <i class="fas fa-sync-alt"></i>
+                <span>Retries: {{ download.progress.bytes_downloaded or 0 }} / 3</span>
+            </div>
+            <div class="dc-meta-item">
+                <span class="dc-provider-badge">{{ download.provider_name }}</span>
+            </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="dc-download-actions">
+            <button class="dc-action-btn dc-action-retry" 
+                    onclick="DownloadCenter.retryDownload('{{ download.id }}')"
+                    title="Retry Download">
+                <i class="fas fa-redo"></i>
+            </button>
+            <button class="dc-action-btn" 
+                    onclick="DownloadCenter.searchAlternative('{{ download.track_info.title }}', '{{ download.track_info.artist }}')"
+                    title="Search for alternative source">
+                <i class="fas fa-search"></i>
+            </button>
+            <button class="dc-action-btn dc-action-delete" 
+                    onclick="DownloadCenter.deleteDownload('{{ download.id }}')"
+                    title="Remove permanently">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<!-- Table View -->
+<div class="dc-download-list dc-view-table">
+    <table class="dc-table">
+        <thead>
+            <tr>
+                <th style="width: 50px;"></th>
+                <th>Track</th>
+                <th>Artist</th>
+                <th>Error</th>
+                <th>Retries</th>
+                <th>Provider</th>
+                <th style="width: 150px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for download in downloads %}
+            <tr data-download-id="{{ download.id }}" class="dc-row-failed">
+                <td>
+                    <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                         alt="" class="dc-table-artwork"
+                         onerror="this.src='/static/img/default-album.svg'">
+                </td>
+                <td class="dc-table-title">{{ download.track_info.title or 'Unknown' }}</td>
+                <td>{{ download.track_info.artist or 'Unknown' }}</td>
+                <td class="dc-table-error">
+                    <span class="dc-error-text" title="{{ download.error_message or 'Unknown error' }}">
+                        {{ (download.error_message or 'Unknown error')[:40] }}{% if (download.error_message or '')|length > 40 %}...{% endif %}
+                    </span>
+                </td>
+                <td>
+                    <span class="dc-retry-badge">
+                        {{ download.progress.bytes_downloaded or 0 }} / 3
+                    </span>
+                </td>
+                <td>
+                    <span class="dc-provider-badge dc-provider-{{ download.provider }}">
+                        {{ download.provider_name }}
+                    </span>
+                </td>
+                <td>
+                    <div class="dc-table-actions">
+                        <button class="dc-action-btn dc-action-retry" 
+                                onclick="DownloadCenter.retryDownload('{{ download.id }}')"
+                                title="Retry">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button class="dc-action-btn" 
+                                onclick="DownloadCenter.searchAlternative('{{ download.track_info.title }}', '{{ download.track_info.artist }}')"
+                                title="Search Alternative">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="dc-action-btn dc-action-delete" 
+                                onclick="DownloadCenter.deleteDownload('{{ download.id }}')"
+                                title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% else %}
+<!-- Empty State - All Good! -->
+<div class="dc-empty-state dc-empty-success">
+    <i class="fas fa-check-circle"></i>
+    <h3>No Failed Downloads</h3>
+    <p>All your downloads are running smoothly!</p>
+</div>
+{% endif %}

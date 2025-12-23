@@ -487,3 +487,305 @@ async def htmx_provider_health(
             "overall_healthy": health_response.overall_healthy,
         },
     )
+
+
+# -------------------------------------------------------------------------
+# Download Center HTMX Endpoints (New Unified UI)
+# -------------------------------------------------------------------------
+
+
+@router.get("/htmx/provider-health-mini", response_class=HTMLResponse)
+async def htmx_provider_health_mini(
+    request: Request,
+) -> HTMLResponse:
+    """HTMX endpoint: Render mini provider health for sidebar.
+
+    Compact version for the Download Center sidebar.
+    """
+    health_response = await get_providers_health(request)
+
+    # Build simple HTML for mini display
+    html_parts = []
+    for provider in health_response.providers:
+        status_class = "online" if provider.is_healthy else "offline"
+        html_parts.append(f"""
+        <div class="dc-provider-status">
+            <span class="dc-provider-indicator {status_class}"></span>
+            <span class="dc-provider-name">{provider.provider_name}: {'Connected' if provider.is_healthy else 'Offline'}</span>
+        </div>
+        """)
+
+    return HTMLResponse(content="".join(html_parts))
+
+
+# -------------------------------------------------------------------------
+# Download Center Page Route (New Unified UI)
+# -------------------------------------------------------------------------
+
+
+@router.get("/center", response_class=HTMLResponse)
+async def download_center_page(
+    request: Request,
+    service: DownloadManagerService = Depends(get_download_manager_service),
+) -> HTMLResponse:
+    """Render the new unified Download Center page.
+
+    This is the main page for managing downloads with a professional UI.
+    Combines queue, history, and failed downloads in one view.
+    """
+    # Get initial data for the page
+    downloads = await service.get_active_downloads()
+    stats = await service.get_queue_statistics()
+
+    # Count failed downloads
+    failed_count = stats.failed_today
+
+    return templates.TemplateResponse(
+        "download_center.html",
+        {
+            "request": request,
+            "downloads": [UnifiedDownloadDTO.from_entity(d) for d in downloads],
+            "stats": QueueStatsDTO.from_entity(stats),
+            "total": stats.total_active,
+            "failed_count": failed_count,
+        },
+    )
+
+
+@router.get("/center/htmx/queue", response_class=HTMLResponse)
+async def htmx_download_center_queue(
+    request: Request,
+    status: str | None = None,
+    provider: str | None = None,
+    service: DownloadManagerService = Depends(get_download_manager_service),
+) -> HTMLResponse:
+    """HTMX endpoint: Render queue list for Download Center.
+
+    Supports filtering by status and provider.
+    """
+    downloads = await service.get_active_downloads()
+
+    # Apply filters
+    if status:
+        downloads = [d for d in downloads if d.status.value == status]
+    if provider:
+        downloads = [d for d in downloads if d.provider.value == provider]
+
+    return templates.TemplateResponse(
+        "partials/download_center_queue.html",
+        {
+            "request": request,
+            "downloads": [UnifiedDownloadDTO.from_entity(d) for d in downloads],
+            "view": request.query_params.get("view", "cards"),
+        },
+    )
+
+
+@router.get("/center/htmx/history", response_class=HTMLResponse)
+async def htmx_download_center_history(
+    request: Request,
+    days: int = 7,
+    service: DownloadManagerService = Depends(get_download_manager_service),
+) -> HTMLResponse:
+    """HTMX endpoint: Render history list for Download Center.
+
+    Shows completed downloads from the last N days (default: 7).
+    """
+    completed_downloads = await service.get_completed_downloads(days=days, limit=100)
+
+    return templates.TemplateResponse(
+        "partials/download_center_history.html",
+        {
+            "request": request,
+            "downloads": [UnifiedDownloadDTO.from_entity(d) for d in completed_downloads],
+            "view": request.query_params.get("view", "cards"),
+            "days": days,
+        },
+    )
+
+
+@router.get("/center/htmx/failed", response_class=HTMLResponse)
+async def htmx_download_center_failed(
+    request: Request,
+    service: DownloadManagerService = Depends(get_download_manager_service),
+) -> HTMLResponse:
+    """HTMX endpoint: Render failed downloads for Download Center.
+
+    Shows downloads that failed with retry info and retry option.
+    """
+    failed_downloads = await service.get_failed_downloads(limit=100)
+
+    return templates.TemplateResponse(
+        "partials/download_center_failed.html",
+        {
+            "request": request,
+            "downloads": [UnifiedDownloadDTO.from_entity(d) for d in failed_downloads],
+            "view": request.query_params.get("view", "cards"),
+        },
+    )
+
+
+# -------------------------------------------------------------------------
+# Download Action Endpoints (for History/Failed tab actions)
+# -------------------------------------------------------------------------
+
+
+class RetryAllResponse(BaseModel):
+    """Response for retry all failed endpoint."""
+    retried: int
+    message: str
+
+
+@router.post("/retry-all-failed", response_model=RetryAllResponse)
+async def retry_all_failed_downloads(
+    session: AsyncSession = Depends(get_db_session),
+) -> RetryAllResponse:
+    """Retry all failed downloads.
+
+    Moves all failed downloads back to WAITING status for re-processing.
+    """
+    from sqlalchemy import update
+    from soulspot.domain.entities import DownloadStatus
+    from soulspot.infrastructure.persistence.models import DownloadModel
+
+    # Update all failed downloads to waiting
+    result = await session.execute(
+        update(DownloadModel)
+        .where(DownloadModel.status == DownloadStatus.FAILED.value)
+        .values(status=DownloadStatus.WAITING.value, error_message=None)
+    )
+    await session.commit()
+
+    retried_count = result.rowcount or 0
+    logger.info(f"Retried {retried_count} failed downloads")
+
+    return RetryAllResponse(
+        retried=retried_count,
+        message=f"Queued {retried_count} downloads for retry"
+    )
+
+
+@router.delete("/clear-failed")
+async def clear_all_failed_downloads(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Delete all failed downloads permanently."""
+    from sqlalchemy import delete
+    from soulspot.domain.entities import DownloadStatus
+    from soulspot.infrastructure.persistence.models import DownloadModel
+
+    result = await session.execute(
+        delete(DownloadModel).where(DownloadModel.status == DownloadStatus.FAILED.value)
+    )
+    await session.commit()
+
+    deleted_count = result.rowcount or 0
+    logger.info(f"Deleted {deleted_count} failed downloads")
+
+    return {"deleted": deleted_count, "message": f"Removed {deleted_count} failed downloads"}
+
+
+@router.delete("/history/clear")
+async def clear_old_history(
+    days: int = 7,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Clear completed downloads older than N days."""
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import delete
+    from soulspot.domain.entities import DownloadStatus
+    from soulspot.infrastructure.persistence.models import DownloadModel
+
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
+
+    result = await session.execute(
+        delete(DownloadModel)
+        .where(DownloadModel.status == DownloadStatus.COMPLETED.value)
+        .where(DownloadModel.completed_at < cutoff_date)
+    )
+    await session.commit()
+
+    deleted_count = result.rowcount or 0
+    logger.info(f"Cleared {deleted_count} old completed downloads (older than {days} days)")
+
+    return {"deleted": deleted_count, "message": f"Removed {deleted_count} old downloads"}
+
+
+# -------------------------------------------------------------------------
+# Export Endpoint
+# -------------------------------------------------------------------------
+
+
+@router.get("/export")
+async def export_downloads(
+    format: str = "json",
+    status: str | None = None,
+    service: DownloadManagerService = Depends(get_download_manager_service),
+) -> dict:
+    """Export downloads to JSON or CSV format.
+
+    Args:
+        format: Export format ('json' or 'csv')
+        status: Filter by status (optional)
+    """
+    from fastapi.responses import StreamingResponse
+    import csv
+    import io
+
+    # Get all relevant downloads
+    downloads = await service.get_active_downloads()
+
+    # Add completed/failed if requested
+    if status == "completed" or status is None:
+        completed = await service.get_completed_downloads(days=30, limit=1000)
+        downloads.extend(completed)
+
+    if status == "failed" or status is None:
+        failed = await service.get_failed_downloads(limit=1000)
+        downloads.extend(failed)
+
+    # Filter by status if specified
+    if status and status not in ["completed", "failed"]:
+        downloads = [d for d in downloads if d.status.value == status]
+
+    # Convert to DTOs
+    dtos = [UnifiedDownloadDTO.from_entity(d) for d in downloads]
+
+    if format == "csv":
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header
+        writer.writerow([
+            "ID", "Title", "Artist", "Album", "Status", "Provider",
+            "Progress %", "Size", "Created At", "Error"
+        ])
+
+        # Rows
+        for dto in dtos:
+            writer.writerow([
+                dto.id,
+                dto.track_info.title,
+                dto.track_info.artist,
+                dto.track_info.album or "",
+                dto.status,
+                dto.provider_name,
+                f"{dto.progress.percent:.1f}",
+                dto.progress.size_formatted,
+                dto.created_at.isoformat() if dto.created_at else "",
+                dto.error_message or ""
+            ])
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=downloads.csv"}
+        )
+
+    # Default: JSON
+    return {
+        "count": len(dtos),
+        "exported_at": datetime.now().isoformat(),
+        "downloads": [dto.model_dump(mode="json") for dto in dtos]
+    }

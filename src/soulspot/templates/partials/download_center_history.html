@@ -1,0 +1,165 @@
+{# 
+Hey future me - History tab for Download Center!
+Shows completed downloads with completion time and file info.
+Different from queue - no progress bars, shows completed_at timestamp instead.
+Has option to clear history (deletes from DB) or re-download.
+#}
+
+{% if downloads %}
+<!-- History Count Info -->
+<div class="dc-history-info">
+    <span class="dc-history-count">{{ downloads|length }} completed in last {{ days }} days</span>
+    <button class="dc-btn dc-btn-outline dc-btn-sm" 
+            onclick="DownloadCenter.clearHistory({{ days }})"
+            title="Clear history older than {{ days }} days">
+        <i class="fas fa-trash-alt"></i> Clear Old
+    </button>
+</div>
+
+<!-- Card View -->
+{% if view != 'table' %}
+<div class="dc-download-list dc-view-cards">
+    {% for download in downloads %}
+    <div class="dc-download-card dc-status-completed" data-download-id="{{ download.id }}">
+        <!-- Album Art -->
+        <div class="dc-download-artwork">
+            <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                 alt="Album Art"
+                 loading="lazy"
+                 onerror="this.src='/static/img/default-album.svg'">
+            <div class="dc-completed-badge">
+                <i class="fas fa-check-circle"></i>
+            </div>
+        </div>
+        
+        <!-- Track Info -->
+        <div class="dc-download-info">
+            <div class="dc-track-title">{{ download.track_info.title or 'Unknown Title' }}</div>
+            <div class="dc-track-artist">{{ download.track_info.artist or 'Unknown Artist' }}</div>
+            {% if download.track_info.album %}
+            <div class="dc-track-album">{{ download.track_info.album }}</div>
+            {% endif %}
+        </div>
+        
+        <!-- Completion Info -->
+        <div class="dc-download-meta">
+            {% if download.created_at %}
+            <div class="dc-meta-item">
+                <i class="fas fa-calendar"></i>
+                <span>{{ download.created_at.strftime('%d.%m.%Y') }}</span>
+            </div>
+            {% endif %}
+            {% if download.started_at %}
+            <div class="dc-meta-item">
+                <i class="fas fa-clock"></i>
+                <span>{{ download.started_at.strftime('%H:%M') }}</span>
+            </div>
+            {% endif %}
+            <div class="dc-meta-item">
+                <span class="dc-provider-badge">{{ download.provider_name }}</span>
+            </div>
+        </div>
+        
+        <!-- File Size -->
+        <div class="dc-download-progress">
+            <div class="dc-size-info">
+                <span class="dc-size">{{ download.progress.size_formatted or '—' }}</span>
+            </div>
+        </div>
+        
+        <!-- Actions -->
+        <div class="dc-download-actions">
+            <button class="dc-action-btn" 
+                    onclick="DownloadCenter.openInLibrary('{{ download.track_id }}')"
+                    title="Open in Library">
+                <i class="fas fa-folder-open"></i>
+            </button>
+            <button class="dc-action-btn" 
+                    onclick="DownloadCenter.redownload('{{ download.id }}')"
+                    title="Download Again">
+                <i class="fas fa-redo"></i>
+            </button>
+            <button class="dc-action-btn dc-action-delete" 
+                    onclick="DownloadCenter.deleteHistoryItem('{{ download.id }}')"
+                    title="Remove from History">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<!-- Table View -->
+<div class="dc-download-list dc-view-table">
+    <table class="dc-table">
+        <thead>
+            <tr>
+                <th style="width: 50px;"></th>
+                <th>Track</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th>Completed</th>
+                <th>Size</th>
+                <th>Provider</th>
+                <th style="width: 120px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for download in downloads %}
+            <tr data-download-id="{{ download.id }}">
+                <td>
+                    <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                         alt="" class="dc-table-artwork"
+                         onerror="this.src='/static/img/default-album.svg'">
+                </td>
+                <td class="dc-table-title">{{ download.track_info.title or 'Unknown' }}</td>
+                <td>{{ download.track_info.artist or 'Unknown' }}</td>
+                <td>{{ download.track_info.album or '—' }}</td>
+                <td>
+                    {% if download.started_at %}
+                    {{ download.started_at.strftime('%d.%m.%Y %H:%M') }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>{{ download.progress.size_formatted or '—' }}</td>
+                <td>
+                    <span class="dc-provider-badge dc-provider-{{ download.provider }}">
+                        {{ download.provider_name }}
+                    </span>
+                </td>
+                <td>
+                    <div class="dc-table-actions">
+                        <button class="dc-action-btn" 
+                                onclick="DownloadCenter.openInLibrary('{{ download.track_id }}')"
+                                title="Open in Library">
+                            <i class="fas fa-folder-open"></i>
+                        </button>
+                        <button class="dc-action-btn" 
+                                onclick="DownloadCenter.redownload('{{ download.id }}')"
+                                title="Download Again">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button class="dc-action-btn dc-action-delete" 
+                                onclick="DownloadCenter.deleteHistoryItem('{{ download.id }}')"
+                                title="Remove">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% else %}
+<!-- Empty State -->
+<div class="dc-empty-state">
+    <i class="fas fa-history"></i>
+    <h3>No Download History</h3>
+    <p>Completed downloads from the last {{ days }} days will appear here.</p>
+</div>
+{% endif %}

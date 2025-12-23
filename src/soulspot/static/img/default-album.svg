@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <!-- Background -->
+  <rect width="200" height="200" fill="#1a1a1a"/>
+  
+  <!-- Vinyl Record Circle -->
+  <circle cx="100" cy="100" r="70" fill="#2a2a2a" stroke="#3a3a3a" stroke-width="2"/>
+  <circle cx="100" cy="100" r="50" fill="#1a1a1a"/>
+  <circle cx="100" cy="100" r="20" fill="#fe4155"/>
+  <circle cx="100" cy="100" r="8" fill="#1a1a1a"/>
+  
+  <!-- Grooves -->
+  <circle cx="100" cy="100" r="60" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  <circle cx="100" cy="100" r="55" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  <circle cx="100" cy="100" r="45" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  <circle cx="100" cy="100" r="40" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  <circle cx="100" cy="100" r="35" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  <circle cx="100" cy="100" r="30" fill="none" stroke="#3a3a3a" stroke-width="0.5"/>
+  
+  <!-- Music Note Icon -->
+  <path d="M105 85 L105 115 C105 120 100 125 93 125 C86 125 81 120 81 115 C81 110 86 105 93 105 C95 105 97 105.5 99 106.5 L99 90 L115 85 L115 105 C115 110 110 115 103 115 C96 115 91 110 91 105" 
+        fill="none" stroke="#6a6a6a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

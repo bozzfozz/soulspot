@@ -155,6 +155,73 @@ class DownloadManagerService:
             failed_today=failed_today,
         )
 
+    # Hey future me - get_completed_downloads returns recently completed downloads for History tab!
+    # Ordered by completed_at DESC (most recent first). Includes track metadata for display.
+    # Default limit 100, default days 7 - can be adjusted via parameters.
+    async def get_completed_downloads(
+        self, days: int = 7, limit: int = 100
+    ) -> list[UnifiedDownload]:
+        """Get completed downloads from the last N days.
+
+        Args:
+            days: How many days of history to fetch (default: 7)
+            limit: Maximum number of downloads to return (default: 100)
+
+        Returns:
+            List of UnifiedDownload objects sorted by completed_at desc
+        """
+        since = datetime.now(UTC) - timedelta(days=days)
+
+        result = await self._session.execute(
+            select(DownloadModel)
+            .where(DownloadModel.status == DownloadStatus.COMPLETED.value)
+            .where(DownloadModel.completed_at >= since)
+            .order_by(DownloadModel.completed_at.desc())
+            .limit(limit)
+        )
+        download_models = result.scalars().all()
+
+        unified: list[UnifiedDownload] = []
+        for dm in download_models:
+            track_info = await self._get_track_info(TrackId(dm.track_id))
+            unified.append(self._create_unified_download(dm, track_info, None))
+
+        return unified
+
+    # Hey future me - get_failed_downloads returns all failed downloads for the Failed tab!
+    # These are downloads that failed and weren't successfully retried. Shows retry_count
+    # and last_error_code for debugging. Users can manually retry or delete from here.
+    async def get_failed_downloads(self, limit: int = 100) -> list[UnifiedDownload]:
+        """Get all failed downloads (for retry management).
+
+        Args:
+            limit: Maximum number of downloads to return (default: 100)
+
+        Returns:
+            List of UnifiedDownload objects sorted by updated_at desc
+        """
+        result = await self._session.execute(
+            select(DownloadModel)
+            .where(DownloadModel.status == DownloadStatus.FAILED.value)
+            .order_by(DownloadModel.updated_at.desc())
+            .limit(limit)
+        )
+        download_models = result.scalars().all()
+
+        unified: list[UnifiedDownload] = []
+        for dm in download_models:
+            track_info = await self._get_track_info(TrackId(dm.track_id))
+            download = self._create_unified_download(dm, track_info, None)
+            # Add retry info as metadata
+            download.provider_metadata = {
+                "retry_count": dm.retry_count,
+                "max_retries": dm.max_retries,
+                "last_error_code": dm.last_error_code,
+            }
+            unified.append(download)
+
+        return unified
+
     async def get_download_by_id(
         self, download_id: DownloadId
     ) -> UnifiedDownload | None:

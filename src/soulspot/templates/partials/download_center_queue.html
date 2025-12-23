@@ -1,0 +1,328 @@
+{# Download Center: Queue List Partial
+   
+   Rendered by: /api/downloads/center/htmx/queue
+   Auto-refresh: every 3s when auto-refresh-enabled
+   
+   Context variables:
+   - downloads: list[UnifiedDownloadDTO]
+   - view: str ("cards" or "table")
+   
+   Hey future me - This partial renders both card and table views!
+   The view is controlled by data-view attribute on parent container.
+   JavaScript toggles the view without re-fetching data.
+#}
+
+{% if not downloads %}
+<!-- Empty State -->
+<div class="dc-empty-state">
+    <div class="dc-empty-icon">
+        <i class="bi bi-cloud-download"></i>
+        <div class="dc-empty-ring"></div>
+    </div>
+    <h3>No Downloads in Queue</h3>
+    <p>Your download queue is empty. Browse music to start downloading.</p>
+    <div class="dc-empty-actions">
+        <a href="/browse" class="btn btn-primary">
+            <i class="bi bi-compass"></i>
+            Browse Music
+        </a>
+        <a href="/search" class="btn btn-outline">
+            <i class="bi bi-search"></i>
+            Search
+        </a>
+    </div>
+</div>
+{% else %}
+
+<!-- Cards View -->
+<div class="dc-cards-view">
+    {% for download in downloads %}
+    <div class="dc-download-card dc-status-{{ download.status }}" 
+         data-id="{{ download.id }}"
+         onclick="toggleDownloadExpand(this)">
+        
+        <!-- Card Header -->
+        <div class="dc-card-header">
+            <!-- Album Art -->
+            <div class="dc-card-artwork">
+                <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                     alt="{{ download.track_info.title }}"
+                     loading="lazy"
+                     onerror="this.src='/static/img/default-album.svg'">
+                <div class="dc-artwork-overlay">
+                    {% if download.status == 'downloading' %}
+                    <div class="dc-download-spinner"></div>
+                    {% elif download.status == 'completed' %}
+                    <i class="bi bi-check-lg"></i>
+                    {% elif download.status == 'failed' %}
+                    <i class="bi bi-exclamation-lg"></i>
+                    {% elif download.status == 'paused' %}
+                    <i class="bi bi-pause-fill"></i>
+                    {% elif download.status == 'waiting' or download.status == 'pending' %}
+                    <i class="bi bi-hourglass"></i>
+                    {% else %}
+                    <i class="bi bi-clock"></i>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Track Info -->
+            <div class="dc-card-info">
+                <h4 class="dc-card-title">{{ download.track_info.title }}</h4>
+                <p class="dc-card-artist">{{ download.track_info.artist }}</p>
+                {% if download.track_info.album %}
+                <p class="dc-card-album">{{ download.track_info.album }}</p>
+                {% endif %}
+            </div>
+            
+            <!-- Status Badge -->
+            <div class="dc-card-status">
+                {% set status_config = {
+                    'downloading': {'icon': 'arrow-down-circle', 'class': 'primary', 'text': 'Downloading'},
+                    'queued': {'icon': 'list-check', 'class': 'info', 'text': 'Queued'},
+                    'waiting': {'icon': 'hourglass-split', 'class': 'warning', 'text': 'Waiting'},
+                    'pending': {'icon': 'send', 'class': 'info', 'text': 'Pending'},
+                    'paused': {'icon': 'pause-circle', 'class': 'warning', 'text': 'Paused'},
+                    'stalled': {'icon': 'exclamation-triangle', 'class': 'error', 'text': 'Stalled'},
+                    'completed': {'icon': 'check-circle', 'class': 'success', 'text': 'Done'},
+                    'failed': {'icon': 'x-circle', 'class': 'error', 'text': 'Failed'},
+                    'cancelled': {'icon': 'slash-circle', 'class': 'muted', 'text': 'Cancelled'}
+                } %}
+                {% set config = status_config.get(download.status, {'icon': 'question-circle', 'class': 'muted', 'text': download.status}) %}
+                <span class="dc-status-badge dc-badge-{{ config.class }}">
+                    <i class="bi bi-{{ config.icon }}"></i>
+                    {{ config.text }}
+                </span>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="dc-card-actions" onclick="event.stopPropagation()">
+                {% if download.status == 'downloading' or download.status == 'queued' %}
+                <button class="dc-action-btn" 
+                        hx-post="/api/downloads/{{ download.id }}/pause" 
+                        hx-swap="none"
+                        title="Pause">
+                    <i class="bi bi-pause-fill"></i>
+                </button>
+                {% elif download.status == 'paused' %}
+                <button class="dc-action-btn dc-action-primary" 
+                        hx-post="/api/downloads/{{ download.id }}/resume" 
+                        hx-swap="none"
+                        title="Resume">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+                {% elif download.status == 'failed' %}
+                <button class="dc-action-btn dc-action-primary" 
+                        hx-post="/api/downloads/{{ download.id }}/retry" 
+                        hx-swap="none"
+                        title="Retry">
+                    <i class="bi bi-arrow-repeat"></i>
+                </button>
+                {% endif %}
+                
+                <button class="dc-action-btn" 
+                        hx-post="/api/downloads/{{ download.id }}/priority" 
+                        hx-swap="none"
+                        title="Increase Priority">
+                    <i class="bi bi-arrow-up"></i>
+                </button>
+                
+                <button class="dc-action-btn dc-action-danger" 
+                        hx-delete="/api/downloads/{{ download.id }}" 
+                        hx-swap="none"
+                        hx-confirm="Cancel this download?"
+                        title="Cancel">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Progress Section (only for active downloads) -->
+        {% if download.status in ['downloading', 'queued', 'paused', 'stalled'] %}
+        <div class="dc-card-progress">
+            <div class="dc-progress-bar">
+                <div class="dc-progress-fill dc-progress-{{ download.status }}" 
+                     style="width: {{ download.progress.percent|round(1) }}%">
+                </div>
+                {% if download.status == 'downloading' %}
+                <div class="dc-progress-shimmer"></div>
+                {% endif %}
+            </div>
+            <div class="dc-progress-stats">
+                <span class="dc-progress-percent">{{ download.progress.percent|round(1) }}%</span>
+                <span class="dc-progress-size">{{ download.progress.size_formatted }}</span>
+                {% if download.status == 'downloading' %}
+                <span class="dc-progress-speed">{{ download.progress.speed_formatted }}</span>
+                <span class="dc-progress-eta">{{ download.progress.eta_formatted }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Error Message (only for failed) -->
+        {% if download.status == 'failed' and download.error_message %}
+        <div class="dc-card-error">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>{{ download.error_message|truncate(80) }}</span>
+        </div>
+        {% endif %}
+        
+        <!-- Expanded Details (hidden by default) -->
+        <div class="dc-card-details">
+            <div class="dc-details-grid">
+                <div class="dc-detail-group">
+                    <span class="dc-detail-label">Provider</span>
+                    <span class="dc-detail-value">{{ download.provider_name }}</span>
+                </div>
+                <div class="dc-detail-group">
+                    <span class="dc-detail-label">Added</span>
+                    <span class="dc-detail-value">{{ download.created_at.strftime('%H:%M') if download.created_at else '-' }}</span>
+                </div>
+                {% if download.started_at %}
+                <div class="dc-detail-group">
+                    <span class="dc-detail-label">Started</span>
+                    <span class="dc-detail-value">{{ download.started_at.strftime('%H:%M') }}</span>
+                </div>
+                {% endif %}
+                {% if download.external_id %}
+                <div class="dc-detail-group">
+                    <span class="dc-detail-label">Source ID</span>
+                    <span class="dc-detail-value dc-detail-mono">{{ download.external_id[:16] }}...</span>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Expanded Actions -->
+            <div class="dc-details-actions">
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); searchAlternative('{{ download.track_id }}')">
+                    <i class="bi bi-search"></i>
+                    Search Alternative
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); viewTrack('{{ download.track_id }}')">
+                    <i class="bi bi-info-circle"></i>
+                    Track Details
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Table View -->
+<div class="dc-table-view">
+    <table class="dc-table">
+        <thead>
+            <tr>
+                <th class="dc-th-checkbox">
+                    <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                </th>
+                <th>Track</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Speed</th>
+                <th>ETA</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for download in downloads %}
+            <tr class="dc-table-row dc-status-{{ download.status }}" data-id="{{ download.id }}">
+                <td class="dc-td-checkbox">
+                    <input type="checkbox" class="dc-row-select" value="{{ download.id }}">
+                </td>
+                <td class="dc-td-track">
+                    <div class="dc-track-cell">
+                        <img src="{{ download.track_info.artwork_url or '/static/img/default-album.svg' }}" 
+                             alt="" class="dc-track-thumb">
+                        <div class="dc-track-info">
+                            <span class="dc-track-title">{{ download.track_info.title }}</span>
+                            <span class="dc-track-artist">{{ download.track_info.artist }}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="dc-td-status">
+                    {% set config = status_config.get(download.status, {'icon': 'question-circle', 'class': 'muted', 'text': download.status}) %}
+                    <span class="dc-status-badge dc-badge-{{ config.class }} dc-badge-sm">
+                        <i class="bi bi-{{ config.icon }}"></i>
+                        {{ config.text }}
+                    </span>
+                </td>
+                <td class="dc-td-progress">
+                    <div class="dc-mini-progress">
+                        <div class="dc-mini-bar">
+                            <div class="dc-mini-fill dc-progress-{{ download.status }}" 
+                                 style="width: {{ download.progress.percent|round(1) }}%"></div>
+                        </div>
+                        <span class="dc-mini-percent">{{ download.progress.percent|round(1) }}%</span>
+                    </div>
+                </td>
+                <td class="dc-td-speed">
+                    {% if download.status == 'downloading' %}
+                    {{ download.progress.speed_formatted }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td class="dc-td-eta">
+                    {% if download.status == 'downloading' and download.progress.eta_formatted %}
+                    {{ download.progress.eta_formatted }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td class="dc-td-actions">
+                    <div class="dc-table-actions">
+                        {% if download.status == 'downloading' or download.status == 'queued' %}
+                        <button class="dc-action-btn dc-action-sm" 
+                                hx-post="/api/downloads/{{ download.id }}/pause" 
+                                hx-swap="none"
+                                title="Pause">
+                            <i class="bi bi-pause-fill"></i>
+                        </button>
+                        {% elif download.status == 'paused' %}
+                        <button class="dc-action-btn dc-action-sm dc-action-primary" 
+                                hx-post="/api/downloads/{{ download.id }}/resume" 
+                                hx-swap="none"
+                                title="Resume">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                        {% elif download.status == 'failed' %}
+                        <button class="dc-action-btn dc-action-sm dc-action-primary" 
+                                hx-post="/api/downloads/{{ download.id }}/retry" 
+                                hx-swap="none"
+                                title="Retry">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </button>
+                        {% endif %}
+                        <button class="dc-action-btn dc-action-sm dc-action-danger" 
+                                hx-delete="/api/downloads/{{ download.id }}" 
+                                hx-swap="none"
+                                hx-confirm="Cancel this download?"
+                                title="Cancel">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <!-- Batch Actions Bar (shown when items selected) -->
+    <div class="dc-batch-bar" id="batch-bar">
+        <span class="dc-batch-count"><span id="selected-count">0</span> selected</span>
+        <div class="dc-batch-actions">
+            <button class="btn btn-sm btn-outline" onclick="batchPause()">
+                <i class="bi bi-pause-fill"></i> Pause
+            </button>
+            <button class="btn btn-sm btn-outline" onclick="batchResume()">
+                <i class="bi bi-play-fill"></i> Resume
+            </button>
+            <button class="btn btn-sm btn-outline btn-danger-outline" onclick="batchCancel()">
+                <i class="bi bi-x-lg"></i> Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endif %}
