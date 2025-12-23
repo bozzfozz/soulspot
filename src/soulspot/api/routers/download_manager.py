@@ -364,7 +364,7 @@ async def get_providers_health(
 
     Hey future me – this endpoint reads health from app.state where
     the StatusSyncWorker stores its circuit breaker state. If no
-    worker is running, we show a degraded status.
+    worker is running, we try a direct ping to slskd.
     """
     providers: list[ProviderHealthDTO] = []
 
@@ -391,18 +391,36 @@ async def get_providers_health(
             )
         )
     else:
-        # No worker running - show as unknown
+        # No worker running - try direct ping to slskd
+        settings = get_settings()
+        is_healthy = False
+        error_message = "Status sync worker not running"
+        
+        if settings.slskd.url:
+            try:
+                # Try to create client and check connection
+                slskd_client = SlskdClient(settings.slskd)
+                is_healthy = await slskd_client.check_connection()
+                if is_healthy:
+                    error_message = None
+                else:
+                    error_message = "slskd not reachable"
+            except Exception as e:
+                error_message = f"Connection error: {str(e)[:50]}"
+        else:
+            error_message = "slskd not configured"
+        
         providers.append(
             ProviderHealthDTO(
                 provider="soulseek",
                 provider_name="slskd",
-                is_healthy=False,
+                is_healthy=is_healthy,
                 circuit_state=None,
                 consecutive_failures=0,
                 last_successful_sync=None,
                 seconds_since_last_sync=None,
                 seconds_until_recovery_attempt=None,
-                error_message="Status sync worker not running",
+                error_message=error_message,
             )
         )
 
@@ -501,17 +519,35 @@ async def htmx_provider_health_mini(
     """HTMX endpoint: Render mini provider health for sidebar.
 
     Compact version for the Download Center sidebar.
+    Shows provider status with icon and tooltip.
     """
     health_response = await get_providers_health(request)
 
-    # Build simple HTML for mini display
+    # Build HTML for mini display
     html_parts = []
     for provider in health_response.providers:
         status_class = "online" if provider.is_healthy else "offline"
+        status_text = "Connected" if provider.is_healthy else "Disconnected"
+        icon = "bi-check-circle-fill" if provider.is_healthy else "bi-x-circle-fill"
+        
+        # Build tooltip with details
+        tooltip_parts = [f"Provider: {provider.provider_name}"]
+        if provider.circuit_state:
+            tooltip_parts.append(f"Circuit: {provider.circuit_state}")
+        if provider.consecutive_failures > 0:
+            tooltip_parts.append(f"Failures: {provider.consecutive_failures}")
+        if provider.error_message:
+            tooltip_parts.append(f"Error: {provider.error_message}")
+        tooltip = " | ".join(tooltip_parts)
+        
         html_parts.append(f"""
-        <div class="dc-provider-status">
+        <div class="dc-provider-status" title="{tooltip}">
             <span class="dc-provider-indicator {status_class}"></span>
-            <span class="dc-provider-name">{provider.provider_name}: {'Connected' if provider.is_healthy else 'Offline'}</span>
+            <span class="dc-provider-name">
+                <i class="bi {icon}" style="margin-right: 4px;"></i>
+                {provider.provider_name}
+            </span>
+            <span class="dc-provider-status-text {status_class}">{status_text}</span>
         </div>
         """)
 

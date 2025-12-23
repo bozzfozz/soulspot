@@ -544,22 +544,33 @@ function checkConnectionStatus() {
             const indicator = document.getElementById('connection-status');
             const text = document.getElementById('connection-text');
             
+            if (!indicator || !text) return;
+            
             if (data.overall_healthy) {
                 indicator.className = 'dc-status-indicator connected';
-                text.textContent = 'Connected';
+                text.textContent = 'slskd Connected';
                 DCState.connectionStatus = 'connected';
             } else {
                 indicator.className = 'dc-status-indicator disconnected';
-                text.textContent = 'Disconnected';
+                // Show more details about the issue
+                const provider = data.providers?.[0];
+                if (provider?.error_message) {
+                    text.textContent = provider.error_message;
+                } else if (provider?.circuit_state === 'OPEN') {
+                    text.textContent = `Circuit Open (${provider.consecutive_failures} failures)`;
+                } else {
+                    text.textContent = 'slskd Disconnected';
+                }
                 DCState.connectionStatus = 'disconnected';
             }
         })
-        .catch(() => {
+        .catch((err) => {
             const indicator = document.getElementById('connection-status');
             const text = document.getElementById('connection-text');
-            indicator.className = 'dc-status-indicator disconnected';
-            text.textContent = 'Error';
+            if (indicator) indicator.className = 'dc-status-indicator disconnected';
+            if (text) text.textContent = 'API Error';
             DCState.connectionStatus = 'error';
+            console.error('Health check failed:', err);
         });
     
     // Check again in 30 seconds
