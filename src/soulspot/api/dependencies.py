@@ -129,24 +129,7 @@ async def get_credentials_service(
     return CredentialsService(session, fallback_settings=settings)
 
 
-# Hey future me - ImageService for disk usage stats and image caching!
-# Uses cache_base_path from settings.storage.image_path (Docker: /config/images).
-# This is a simple factory - no session needed for disk operations.
-def get_image_service(settings: Settings = Depends(get_settings)) -> "ImageService":
-    """Get ImageService instance configured with storage paths.
 
-    Args:
-        settings: Application settings for image_path configuration
-
-    Returns:
-        ImageService instance ready for disk operations
-    """
-    from soulspot.application.services.images import ImageService
-
-    return ImageService(
-        cache_base_path=str(settings.storage.image_path),
-        local_serve_prefix="/api/images",
-    )
 
 
 # Yo, creates NEW SpotifyClient on EVERY request! Not cached/singleton. This is fine because

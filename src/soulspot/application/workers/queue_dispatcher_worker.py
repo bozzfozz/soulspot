@@ -28,7 +28,7 @@ by implementing the IDownloadManager interface.
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
@@ -36,6 +36,11 @@ from soulspot.application.workers.job_queue import JobQueue, JobType
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.value_objects import TrackId
 from soulspot.infrastructure.persistence.models import DownloadModel
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from soulspot.domain.ports import ISlskdClient
 
 logger = logging.getLogger(__name__)
 

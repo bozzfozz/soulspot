@@ -39,7 +39,10 @@ OAuth (requires auth):
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from soulspot.domain.ports.plugin import CapabilityInfo
 
 from soulspot.domain.dtos import (
     AlbumDTO,

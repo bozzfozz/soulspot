@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     # NOTE: DeezerChartsCache and DeezerNewReleasesCache removed
     # - Charts: showed generic browse content, feature removed
     # - New Releases: now handled by NewReleasesSyncWorker
+    from soulspot.application.services.images import ImageService
     from soulspot.config import Settings
     from soulspot.infrastructure.persistence import Database
 

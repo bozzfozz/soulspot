@@ -13,6 +13,7 @@ This is the APPLICATION LAYER service that orchestrates:
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,9 @@ from soulspot.domain.ports.download_provider import (
 from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
+
+if TYPE_CHECKING:
+    from soulspot.domain.ports.download_provider import IDownloadProvider
 
 logger = logging.getLogger(__name__)
 

@@ -2611,6 +2611,7 @@ async def spotify_album_detail_page(
     from urllib.parse import quote
 
     from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
     from starlette.responses import RedirectResponse
 
     from soulspot.infrastructure.persistence.models import AlbumModel
