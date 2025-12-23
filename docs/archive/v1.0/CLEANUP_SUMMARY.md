@@ -4,8 +4,8 @@ This document summarizes the cleanup of deprecated files performed on December 2
 
 ## Summary
 
-**Total Files Removed:** 9 code files + 5 documentation files  
-**Lines of Code Removed:** ~2,500+ lines  
+**Total Files Removed:** 11 code files + 5 documentation files  
+**Lines of Code Removed:** ~3,500+ lines  
 **Documentation Archived:** 5 analysis documents moved to archive
 
 ---
@@ -67,6 +67,21 @@ This document summarizes the cleanup of deprecated files performed on December 2
 - **Migration:** OAuth functionality already exists in `deezer_client.py`
 - **Replacement:** `src/soulspot/infrastructure/integrations/deezer_client.py`
 - **Note:** DeezerClient already has all OAuth functionality (favorites, playlists, albums, etc.)
+
+### Phase 3: Final Cleanup
+
+### 7. `src/soulspot/domain/exceptions.py`
+- **Reason:** File superseded by `exceptions/` package (directory)
+- **Migration:** Package structure supports enhanced exception metadata
+- **Replacement:** `src/soulspot/domain/exceptions/` (package directory)
+- **Note:** File could never be imported - Python resolves package over module
+- **File Content:** Only contained `raise ImportError` to prevent usage
+
+### 8. `src/soulspot/application/services/postprocessing/artwork_service.py`
+- **Reason:** All functionality moved to `metadata_service.py`
+- **Migration:** ArtworkService is now an alias in metadata_service.py
+- **Replacement:** `src/soulspot/application/services/postprocessing/metadata_service.py`
+- **Note:** File only contained deletion notice and ImportError
 
 ---
 
