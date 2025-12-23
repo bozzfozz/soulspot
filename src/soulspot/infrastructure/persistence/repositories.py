@@ -5498,13 +5498,17 @@ class ProviderBrowseRepository:
             model.tracks_synced_at = datetime.now(UTC)
 
     async def link_track_to_local(
-        self, spotify_track_id: str, local_track_id: str
+        self, spotify_track_id: str, _local_track_id: str
     ) -> None:
         """Link a Spotify track to a local library track after download.
 
         Hey future me - nach Table Consolidation sind Spotify tracks und local tracks
         in derselben Tabelle! Diese Methode ist jetzt deprecated.
         Stattdessen: Track mit source='spotify' zu source='hybrid' ändern.
+
+        Args:
+            spotify_track_id: Spotify track ID
+            _local_track_id: DEPRECATED - Not used after table consolidation (kept for API compatibility)
         """
         from .models import TrackModel
 

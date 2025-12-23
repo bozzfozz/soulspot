@@ -132,13 +132,13 @@ class WatchlistService:
     # If band releases 3 albums while we were down, we'll get all 3 as "new"
     # REFACTORED: Now uses SpotifyPlugin.get_artist_albums() which returns PaginatedResponse[AlbumDTO]!
     async def check_for_new_releases(
-        self, watchlist: ArtistWatchlist, access_token: str | None = None
+        self, watchlist: ArtistWatchlist, _access_token: str | None = None
     ) -> list[dict[str, Any]]:
         """Check for new releases for an artist.
 
         Args:
             watchlist: Artist watchlist
-            access_token: DEPRECATED - Plugin manages token internally
+            _access_token: DEPRECATED - Plugin manages token internally (kept for API compatibility)
 
         Returns:
             List of new releases found (as dicts for backward compat)

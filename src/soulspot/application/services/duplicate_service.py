@@ -51,7 +51,7 @@ class DuplicateService:
         self,
         status: str | None = None,
         limit: int = 50,
-        offset: int = 0,
+        _offset: int = 0,  # Reserved for pagination, not yet implemented
     ) -> dict[str, Any]:
         """List duplicate candidates with full track details.
 
@@ -60,7 +60,7 @@ class DuplicateService:
         Args:
             status: Filter by status (pending, confirmed, dismissed)
             limit: Maximum number of results
-            offset: Pagination offset
+            _offset: Reserved for future pagination support
 
         Returns:
             Dict with candidates list and counts by status

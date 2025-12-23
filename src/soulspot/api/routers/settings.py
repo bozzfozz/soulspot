@@ -1224,7 +1224,6 @@ class SyncTriggerResponse(BaseModel):
 @router.post("/spotify-sync/trigger/{sync_type}")
 async def trigger_manual_sync(
     sync_type: str,
-    request: Request,
     session: AsyncSession = Depends(get_db_session),
 ) -> SyncTriggerResponse:
     """Trigger a manual Spotify sync.

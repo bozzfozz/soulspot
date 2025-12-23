@@ -299,7 +299,6 @@ async def get_enrichment_candidates(
 async def apply_enrichment_candidate(
     candidate_id: str,
     session: AsyncSession = Depends(get_db_session),
-    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Apply a user-selected enrichment candidate.
 

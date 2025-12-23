@@ -381,7 +381,7 @@ class ArtistSongsService:
     # SpotifyUri is ONLY for Spotify! Don't create "deezer:track:xxx" - SpotifyUri validates prefix!
     # Check order: 1) Spotify URI (if Spotify track) 2) ISRC 3) Title+Artist (case-insensitive)
     async def _process_track_dto(
-        self, track_dto: "TrackDTO", artist_id: ArtistId, source: str = "spotify"
+        self, track_dto: "TrackDTO", artist_id: ArtistId, _source: str = "spotify"
     ) -> tuple[Track | None, bool, bool]:
         """Process a single track from SpotifyPlugin or DeezerPlugin (TrackDTO).
 
@@ -397,7 +397,7 @@ class ArtistSongsService:
         Args:
             track_dto: TrackDTO from SpotifyPlugin or DeezerPlugin
             artist_id: Artist ID to associate track with
-            source: "spotify" or "deezer" - determines URI prefix
+            _source: Reserved for future source tracking (not yet implemented)
 
         Returns:
             Tuple of (Track entity or None, was_created boolean, is_single boolean)
