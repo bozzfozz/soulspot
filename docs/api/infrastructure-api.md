@@ -1,9 +1,9 @@
 # Infrastructure APIs Reference
 
 > **Version:** 2.0  
-> **Last Updated:** 9. Dezember 2025  
+> **Last Updated:** December 23, 2025  
 > **Status:** ✅ Active  
-> **Related Routers:** `stats.py`, `artwork.py`, `sse.py`, `workers.py`
+> **Related Routers:** `stats.py`, `images.py`, `sse.py`, `workers.py`
 
 ---
 
@@ -12,7 +12,7 @@
 This document covers **4 infrastructure APIs** that provide system-level functionality:
 
 1. **Stats API** - Dashboard statistics & trends
-2. **Artwork API** - Local artwork file serving
+2. **Images API** - Local image file serving (formerly artwork.py)
 3. **SSE API** - Server-Sent Events (real-time updates)
 4. **Workers API** - Background worker status
 
@@ -72,19 +72,19 @@ async def get_stats_with_trends(...) -> StatsWithTrends:
 
 ---
 
-## 2. Artwork API (`/api/artwork`)
+## 2. Images API (`/api/images`)
 
-### GET `/api/artwork/{file_path:path}`
+### GET `/api/images/{file_path:path}`
 
-**Purpose:** Serve locally stored album/artist artwork files.
+**Purpose:** Serve locally stored album/artist image files.
 
 **Parameters:**
 - `file_path` (path) - Relative path from `ARTWORK_PATH` setting
 
 **Example Request:**
 ```bash
-GET /api/artwork/artists/abc123/cover.jpg
-GET /api/artwork/albums/xyz789/folder.png
+GET /api/images/artists/abc123/cover.jpg
+GET /api/images/albums/xyz789/folder.png
 ```
 
 **Response:**
@@ -104,10 +104,10 @@ GET /api/artwork/albums/xyz789/folder.png
 
 **Code Reference:**
 ```python
-# src/soulspot/api/routers/artwork.py (lines 23-76)
+# src/soulspot/api/routers/images.py
 @router.get("/{file_path:path}")
-async def serve_artwork(file_path: str, ...) -> FileResponse:
-    """Serve artwork file from local storage."""
+async def serve_image(file_path: str, ...) -> FileResponse:
+    """Serve image file from local storage."""
     ...
 ```
 
