@@ -5,6 +5,15 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, ClassVar, Optional
 
+from soulspot.domain.entities.download_manager import (
+    DownloadProgress,
+    DownloadProvider,
+    DownloadTimestamps,
+    QueueStatistics,
+    TrackInfo,
+    UnifiedDownload,
+    UnifiedDownloadStatus,
+)
 from soulspot.domain.entities.error_codes import (
     NON_RETRYABLE_ERRORS,
     RETRYABLE_ERRORS,
@@ -1397,17 +1406,6 @@ class BlocklistEntry:
             is_manual=True,
         )
 
-
-# Import download manager entities for re-export
-from soulspot.domain.entities.download_manager import (
-    DownloadProgress,
-    DownloadProvider,
-    DownloadTimestamps,
-    QueueStatistics,
-    TrackInfo,
-    UnifiedDownload,
-    UnifiedDownloadStatus,
-)
 
 __all__ = [
     # Existing entities

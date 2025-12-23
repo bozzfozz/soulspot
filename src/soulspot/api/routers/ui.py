@@ -13,6 +13,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_deezer_plugin,
     get_download_repository,
+    get_image_service,
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
@@ -24,6 +25,7 @@ from soulspot.api.dependencies import (
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.config import get_settings
 from soulspot.domain.entities import DownloadStatus
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
@@ -56,9 +58,6 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 #
 # NOTE: Using module-level instance for SYNC template methods (get_display_url).
 # For ASYNC methods (download_and_cache), use Depends(get_image_service_with_session).
-from soulspot.api.dependencies import get_image_service
-from soulspot.config import get_settings
-
 _image_service = get_image_service(get_settings())
 
 

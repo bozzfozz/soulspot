@@ -8,11 +8,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from soulspot.application.services.session_store import Session
-
 from sqlalchemy import Integer, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -71,6 +66,11 @@ from .models import (
     TrackModel,
     ensure_utc_aware,
 )
+
+if TYPE_CHECKING:
+    from soulspot.application.services.session_store import Session
+
+logger = logging.getLogger(__name__)
 
 # Type variable for generic repository
 T = TypeVar("T")
