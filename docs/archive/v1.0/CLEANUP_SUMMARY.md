@@ -4,13 +4,15 @@ This document summarizes the cleanup of deprecated files performed on December 2
 
 ## Summary
 
-**Total Files Removed:** 4 code files + 5 documentation files  
-**Lines of Code Removed:** ~2,100 lines  
+**Total Files Removed:** 9 code files + 5 documentation files  
+**Lines of Code Removed:** ~2,500+ lines  
 **Documentation Archived:** 5 analysis documents moved to archive
 
 ---
 
 ## Deprecated Code Files Removed
+
+### Phase 1: Core Deprecated Files
 
 ### 1. `src/soulspot/application/services/widget_template_registry.py`
 - **Reason:** Widget system was removed from SoulSpot in November 2025
@@ -47,6 +49,24 @@ This document summarizes the cleanup of deprecated files performed on December 2
 - **Clarification:**
   - `file_discovery_service.py` - LOW-LEVEL file discovery (no DB)
   - `library_scanner_service.py` - HIGH-LEVEL library import (with DB)
+
+### Phase 2: Additional Deprecated Files
+
+### 5. `src/soulspot/infrastructure/image_providers/` (entire directory)
+- **Reason:** Duplicate package - functionality already exists in `infrastructure/providers/`
+- **Files Removed:**
+  - `__init__.py` - Package initialization with deprecation warning
+  - `spotify_image_provider.py` - Duplicate of providers/spotify_image_provider.py
+  - `deezer_image_provider.py` - Duplicate of providers/deezer_image_provider.py
+  - `caa_image_provider.py` - Unused CoverArtArchive provider
+- **Replacement:** `src/soulspot/infrastructure/providers/`
+- **Note:** Package was created as alternative location but was never used in production code
+
+### 6. `src/soulspot/infrastructure/integrations/deezer_oauth_client.py`
+- **Reason:** Stub file that was never implemented - all methods raise NotImplementedError
+- **Migration:** OAuth functionality already exists in `deezer_client.py`
+- **Replacement:** `src/soulspot/infrastructure/integrations/deezer_client.py`
+- **Note:** DeezerClient already has all OAuth functionality (favorites, playlists, albums, etc.)
 
 ---
 
