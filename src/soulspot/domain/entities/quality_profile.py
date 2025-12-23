@@ -88,7 +88,7 @@ class QualityProfileId:
             raise ValueError("QualityProfileId cannot be empty")
 
     @classmethod
-    def generate(cls) -> "QualityProfileId":
+    def generate(cls) -> QualityProfileId:
         """Generate a new unique ID."""
         return cls(str(uuid.uuid4()))
 

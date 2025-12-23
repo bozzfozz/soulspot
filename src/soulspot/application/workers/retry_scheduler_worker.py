@@ -41,7 +41,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from soulspot.domain.entities import DownloadStatus
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 logger = logging.getLogger(__name__)

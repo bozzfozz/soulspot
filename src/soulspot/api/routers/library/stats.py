@@ -21,13 +21,13 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
 )
-from soulspot.application.use_cases.scan_library import GetBrokenFilesUseCase
 from soulspot.application.use_cases.check_album_completeness import (
     CheckAlbumCompletenessUseCase,
 )
 from soulspot.application.use_cases.re_download_broken import (
     ReDownloadBrokenFilesUseCase,
 )
+from soulspot.application.use_cases.scan_library import GetBrokenFilesUseCase
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin

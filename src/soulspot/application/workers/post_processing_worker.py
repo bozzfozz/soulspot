@@ -159,7 +159,7 @@ class PostProcessingWorker:
         self._max_per_cycle = max_per_cycle
         self._config = config or PostProcessingConfig()
         self._running = False
-        self._metadata_tagger: "MetadataTaggerService | None" = None
+        self._metadata_tagger: MetadataTaggerService | None = None
         self._stats = {
             "total_processed": 0,
             "total_errors": 0,

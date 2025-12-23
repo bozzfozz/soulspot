@@ -85,7 +85,7 @@ async def get_duplicate_files(
 
     Hey future me - these are EXACT duplicates (identical file content).
     Detected during library import when file_hash matches.
-    
+
     Different from /duplicates/candidates which finds SIMILAR tracks
     (fuzzy matching by title/artist/duration).
 
@@ -103,7 +103,7 @@ async def get_duplicate_files(
     # We apply it after the query - not ideal but works for now.
     # TODO: Add pagination to GetDuplicatesUseCase for better performance.
     all_duplicates = await use_case.execute(resolved=resolved)
-    
+
     # Apply pagination
     total = len(all_duplicates)
     duplicates = all_duplicates[offset:offset + limit]
@@ -140,7 +140,7 @@ async def list_duplicate_candidates(
 
     Hey future me - these are SIMILAR tracks (fuzzy matching)!
     Created by DuplicateDetectorWorker based on title/artist/duration.
-    
+
     Different from /duplicates/files which finds EXACT duplicates
     (same file hash = identical content).
 
@@ -234,7 +234,7 @@ async def trigger_duplicate_scan(
     request: Request,
 ) -> dict[str, Any]:
     """Trigger a manual duplicate candidates scan.
-    
+
     Hey future me - this scans for SIMILAR tracks using fuzzy matching
     (title, artist, duration). Different from import-time hash detection.
 

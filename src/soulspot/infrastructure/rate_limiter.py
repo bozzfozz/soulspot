@@ -23,10 +23,10 @@ ADAPTIVE BACKOFF bei 429:
 
 USAGE:
     limiter = RateLimiter(max_tokens=10, refill_rate=1.0)  # 10 requests/10 sec
-    
+
     async with limiter:
         response = await client.get(url)
-    
+
     # Bei 429:
     await limiter.handle_rate_limit_response()  # Adaptiver Backoff
 """
@@ -34,9 +34,9 @@ USAGE:
 import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RateLimiterConfig:
     """Configuration for rate limiter.
-    
+
     Hey future me – die Standard-Werte sind für Spotify optimiert!
     Spotify hat ungefähr: 180 requests / minute = 3 req/sec
     Wir sind konservativ mit 2 req/sec um Puffer zu haben.
-    
+
     WICHTIG: max_backoff_seconds muss HOCH genug sein!
     Spotify kann Retry-After von 5+ Minuten senden (besonders bei heavy usage).
     Wenn wir das auf 60s cappen, ignorieren wir den Header und bekommen
@@ -64,10 +64,10 @@ class RateLimiterConfig:
 @dataclass
 class RateLimiter:
     """Token Bucket Rate Limiter with adaptive backoff.
-    
+
     Hey future me – das ist die Haupt-Klasse!
     Nutze sie als async context manager für automatisches Token-Management.
-    
+
     Attributes:
         config: Rate limiter configuration
         _tokens: Current available tokens
@@ -76,28 +76,28 @@ class RateLimiter:
         _lock: Async lock for thread-safety
     """
     config: RateLimiterConfig = field(default_factory=RateLimiterConfig)
-    
+
     # Internal state (not in __init__ signature)
     _tokens: float = field(default=0.0, init=False)
     _last_refill: float = field(default_factory=time.monotonic, init=False)
     _current_backoff: float = field(default=0.0, init=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
     _name: str = field(default="default", init=False)
-    
+
     def __post_init__(self) -> None:
         """Initialize tokens to max capacity."""
         self._tokens = float(self.config.max_tokens)
         self._current_backoff = self.config.initial_backoff_seconds
-    
+
     @classmethod
     def for_spotify(cls) -> "RateLimiter":
         """Create rate limiter optimized for Spotify API.
-        
+
         Hey future me – Spotify Rate Limits:
         - Ungefähr 180 requests / minute = 3 req/sec
         - Aber: Burst erlaubt (kurze Spitzen)
         - Konservativ: 2 req/sec sustained, 10 burst
-        
+
         WICHTIG: max_backoff ist jetzt 600s (10 Minuten)!
         Spotify kann lange Retry-After Header senden (5+ Minuten).
         Wir müssen diese respektieren, sonst infinite 429 loop!
@@ -110,11 +110,11 @@ class RateLimiter:
         ))
         limiter._name = "spotify"
         return limiter
-    
+
     @classmethod
     def for_deezer(cls) -> "RateLimiter":
         """Create rate limiter optimized for Deezer API.
-        
+
         Hey future me – Deezer Rate Limits:
         - Ungefähr 50 requests / 5 seconds = 10 req/sec
         - Aber weniger Burst als Spotify
@@ -127,11 +127,11 @@ class RateLimiter:
         ))
         limiter._name = "deezer"
         return limiter
-    
+
     @classmethod
     def for_musicbrainz(cls) -> "RateLimiter":
         """Create rate limiter for MusicBrainz API.
-        
+
         Hey future me – MusicBrainz ist STRENG: 1 req/sec!
         Keine Bursts erlaubt. Wir sind extra konservativ.
         """
@@ -143,30 +143,30 @@ class RateLimiter:
         ))
         limiter._name = "musicbrainz"
         return limiter
-    
+
     def _refill_tokens(self) -> None:
         """Refill tokens based on elapsed time.
-        
+
         Hey future me – das ist der Token Bucket Algorithmus!
         Wir berechnen, wie viele Tokens seit letztem Refill dazugekommen sind.
         """
         now = time.monotonic()
         elapsed = now - self._last_refill
-        
+
         # Calculate new tokens
         new_tokens = elapsed * self.config.refill_rate
         self._tokens = min(self.config.max_tokens, self._tokens + new_tokens)
         self._last_refill = now
-    
+
     async def acquire(self) -> None:
         """Acquire one token, waiting if necessary.
-        
+
         Hey future me – das ist die Haupt-Methode!
         Sie wartet automatisch, wenn keine Tokens verfügbar sind.
         """
         async with self._lock:
             self._refill_tokens()
-            
+
             while self._tokens < 1.0:
                 # Calculate wait time until 1 token available
                 wait_time = (1.0 - self._tokens) / self.config.refill_rate
@@ -174,31 +174,31 @@ class RateLimiter:
                     f"RateLimiter[{self._name}]: No tokens available, "
                     f"waiting {wait_time:.2f}s"
                 )
-                
+
                 # Release lock while waiting
                 self._lock.release()
                 await asyncio.sleep(wait_time)
                 await self._lock.acquire()
-                
+
                 # Refill and check again
                 self._refill_tokens()
-            
+
             # Consume one token
             self._tokens -= 1.0
             logger.debug(
                 f"RateLimiter[{self._name}]: Token acquired, "
                 f"{self._tokens:.1f} remaining"
             )
-    
+
     async def handle_rate_limit_response(self, retry_after: int | None = None) -> float:
         """Handle a 429 rate limit response with adaptive backoff.
-        
+
         Hey future me – WICHTIG bei 429 Errors!
         Wir warten adaptiv länger bei wiederholten 429s.
-        
+
         Args:
             retry_after: Retry-After header from API response (seconds)
-            
+
         Returns:
             The actual wait time used
         """
@@ -208,41 +208,41 @@ class RateLimiter:
                 wait_time = float(retry_after)
             else:
                 wait_time = self._current_backoff
-            
+
             # Cap at max backoff
             wait_time = min(wait_time, self.config.max_backoff_seconds)
-            
+
             logger.warning(
                 f"RateLimiter[{self._name}]: 429 Rate Limited! "
                 f"Waiting {wait_time:.1f}s before retry "
                 f"(backoff level: {self._current_backoff:.1f}s)"
             )
-            
+
             # Increase backoff for next 429
             self._current_backoff = min(
                 self._current_backoff * self.config.backoff_multiplier,
                 self.config.max_backoff_seconds,
             )
-            
+
             # Clear tokens (force wait)
             self._tokens = 0.0
-        
+
         # Wait outside lock
         await asyncio.sleep(wait_time)
         return wait_time
-    
+
     def reset_backoff(self) -> None:
         """Reset backoff after successful request.
-        
+
         Hey future me – rufe das nach JEDEM erfolgreichen Request auf!
         Das setzt den Backoff zurück auf Initial-Wert.
         """
         self._current_backoff = self.config.initial_backoff_seconds
-    
+
     @asynccontextmanager
     async def __call__(self) -> AsyncIterator[None]:
         """Context manager for rate-limited operations.
-        
+
         Usage:
             async with rate_limiter():
                 response = await client.get(url)
@@ -252,25 +252,25 @@ class RateLimiter:
             yield
         finally:
             pass  # Token already consumed
-    
+
     # Alias for async with syntax
     async def __aenter__(self) -> "RateLimiter":
         """Enter async context - acquire token."""
         await self.acquire()
         return self
-    
+
     async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: object) -> None:
         """Exit async context."""
         # If no exception, reset backoff (success!)
         if exc_type is None:
             self.reset_backoff()
-    
+
     @property
     def available_tokens(self) -> float:
         """Get current available tokens (for debugging)."""
         self._refill_tokens()
         return self._tokens
-    
+
     @property
     def name(self) -> str:
         """Get limiter name for logging."""

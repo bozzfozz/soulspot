@@ -651,11 +651,11 @@ class ArtistRepository(IArtistRepository):
 
     async def update_deezer_id(self, artist_id: ArtistId, deezer_id: str) -> bool:
         """Update artist's deezer_id (from LibraryDiscoveryWorker Phase 1).
-        
+
         Args:
             artist_id: Artist to update
             deezer_id: Deezer artist ID (e.g., "123456")
-            
+
         Returns:
             True if updated, False if artist not found
         """
@@ -669,12 +669,12 @@ class ArtistRepository(IArtistRepository):
 
     async def update_albums_synced_at(self, artist_id: ArtistId) -> bool:
         """Update artist's albums_synced_at timestamp (from LibraryDiscoveryWorker Phase 2).
-        
+
         Called after fetching artist's complete discography from Deezer.
-        
+
         Args:
             artist_id: Artist to update
-            
+
         Returns:
             True if updated, False if artist not found
         """
@@ -689,14 +689,14 @@ class ArtistRepository(IArtistRepository):
 
     async def update_spotify_uri(self, artist_id: ArtistId, spotify_uri: str) -> bool:
         """Update artist's spotify_uri (from LibraryDiscoveryWorker Phase 1).
-        
+
         Hey future me - this complements update_deezer_id for multi-source enrichment!
         Artist can have BOTH deezer_id AND spotify_uri.
-        
+
         Args:
             artist_id: Artist to update
             spotify_uri: Spotify URI (e.g., "spotify:artist:xxx")
-            
+
         Returns:
             True if updated, False if artist not found
         """
@@ -712,16 +712,16 @@ class ArtistRepository(IArtistRepository):
         self, limit: int = 20, max_age_hours: int = 24
     ) -> list[Artist]:
         """Get artists with deezer_id that need discography sync.
-        
+
         Hey future me - this is for LibraryDiscoveryWorker Phase 2!
         Returns artists where:
         - Has deezer_id (enriched)
         - albums_synced_at is NULL or older than max_age_hours
-        
+
         Args:
             limit: Max artists to return
             max_age_hours: Re-sync if last sync was this long ago
-            
+
         Returns:
             List of Artist entities needing discography sync
         """
@@ -765,13 +765,13 @@ class ArtistRepository(IArtistRepository):
 
     async def get_with_discography(self, limit: int = 100) -> list[Artist]:
         """Get artists that have entries in artist_discography table.
-        
+
         Hey future me - this is for LibraryDiscoveryWorker Phase 3!
         Used to update is_owned flags.
-        
+
         Args:
             limit: Max artists to return
-            
+
         Returns:
             List of Artist entities with discography entries
         """
@@ -824,7 +824,7 @@ class AlbumRepository(IAlbumRepository):
 
     def _model_to_entity(self, model: AlbumModel) -> Album:
         """Convert AlbumModel to Album entity with ALL fields.
-        
+
         Hey future me - this is the ONE place that maps DB → Entity!
         When you add fields to Album entity, UPDATE THIS FUNCTION!
         Model stores artwork_url + artwork_path separately → Entity has cover: ImageRef
@@ -981,13 +981,13 @@ class AlbumRepository(IAlbumRepository):
         Hey future me - CROSS-SERVICE DEDUPLICATION!
         This finds albums by their title+artist combination, regardless of
         which service they came from (Spotify, Deezer, local).
-        
+
         Used to prevent duplicates when same album is found from different
         providers (e.g., Spotify returns "Dark Side of the Moon" and later
         Deezer also returns "Dark Side of the Moon" for same artist).
-        
+
         NOTE: Uses case-insensitive matching via func.lower() to catch
-        slight variations like "The Dark Side Of The Moon" vs 
+        slight variations like "The Dark Side Of The Moon" vs
         "The Dark Side of the Moon".
 
         Args:
@@ -998,7 +998,7 @@ class AlbumRepository(IAlbumRepository):
             Album entity if found, None otherwise
         """
         from sqlalchemy import func
-        
+
         stmt = select(AlbumModel).where(
             func.lower(AlbumModel.title) == title.lower(),
             AlbumModel.artist_id == str(artist_id.value),
@@ -1150,13 +1150,13 @@ class AlbumRepository(IAlbumRepository):
 
     async def update_deezer_id(self, album_id: AlbumId, deezer_id: str) -> bool:
         """Update album's deezer_id (from LibraryDiscoveryWorker Phase 4).
-        
+
         Hey future me - this sets deezer_id after we found the album on Deezer!
-        
+
         Args:
             album_id: ID of the album to update
             deezer_id: Deezer album ID to set
-            
+
         Returns:
             True if updated, False if album not found
         """
@@ -1170,13 +1170,13 @@ class AlbumRepository(IAlbumRepository):
 
     async def update_spotify_uri(self, album_id: AlbumId, spotify_uri: str) -> bool:
         """Update album's spotify_uri (from LibraryDiscoveryWorker Phase 4).
-        
+
         Hey future me - this complements update_deezer_id for multi-source!
-        
+
         Args:
             album_id: ID of the album to update
             spotify_uri: Spotify URI to set (spotify:album:xxx)
-            
+
         Returns:
             True if updated, False if album not found
         """
@@ -1190,23 +1190,23 @@ class AlbumRepository(IAlbumRepository):
 
     async def update_primary_type(self, album_id: AlbumId, primary_type: str) -> bool:
         """Update album's primary_type (album/ep/single) from API data.
-        
+
         Hey future me - this sets the Lidarr-style primary type from Deezer/Spotify!
         Called during Phase 4 when we discover the album_type from the provider.
-        
+
         Values: 'album', 'ep', 'single', 'compilation', 'other'
         The value comes from AlbumDTO.album_type (Deezer: record_type, Spotify: album_type).
-        
+
         Args:
             album_id: ID of the album to update
             primary_type: Album type from provider ('album', 'ep', 'single', etc.)
-            
+
         Returns:
             True if updated, False if album not found
         """
         # Normalize the type value
         normalized_type = (primary_type or "album").lower().strip()
-        
+
         # Map provider values to our standard
         type_mapping = {
             "album": "Album",
@@ -1218,7 +1218,7 @@ class AlbumRepository(IAlbumRepository):
             "other": "Other",
         }
         standard_type = type_mapping.get(normalized_type, "Album")
-        
+
         stmt = (
             update(AlbumModel)
             .where(AlbumModel.id == str(album_id.value))
@@ -1229,14 +1229,14 @@ class AlbumRepository(IAlbumRepository):
 
     async def get_albums_without_primary_type(self, limit: int = 100) -> list[Album]:
         """Get albums with local files but missing primary_type (or set to default 'Album').
-        
+
         Hey future me - this finds albums that need Album/EP/Single classification!
         We check albums that have provider IDs (Deezer/Spotify) but primary_type was never set,
         OR primary_type is still the default 'Album' (could be misclassified EP/Single).
-        
+
         Args:
             limit: Maximum number of albums to return
-            
+
         Returns:
             List of Album entities needing primary_type discovery
         """
@@ -1246,7 +1246,7 @@ class AlbumRepository(IAlbumRepository):
             .where(TrackModel.file_path.isnot(None))
             .exists()
         )
-        
+
         # Get albums with IDs but no/default primary_type
         stmt = (
             select(AlbumModel)
@@ -1260,20 +1260,20 @@ class AlbumRepository(IAlbumRepository):
             .order_by(AlbumModel.title)
             .limit(limit)
         )
-        
+
         result = await self.session.execute(stmt)
         models = result.scalars().all()
         return [self._model_to_entity(model) for model in models]
 
     async def get_albums_without_deezer_id(self, limit: int = 50) -> list[Album]:
         """Get albums that have local files but no deezer_id yet.
-        
+
         Hey future me - this is for LibraryDiscoveryWorker Phase 4!
         We want to enrich albums that exist locally but haven't been matched to Deezer.
-        
+
         Args:
             limit: Maximum number of albums to return
-            
+
         Returns:
             List of Album entities needing Deezer ID discovery
         """
@@ -1283,7 +1283,7 @@ class AlbumRepository(IAlbumRepository):
             .where(TrackModel.file_path.isnot(None))
             .exists()
         )
-        
+
         stmt = (
             select(AlbumModel)
             .where(AlbumModel.deezer_id.is_(None))
@@ -1291,7 +1291,7 @@ class AlbumRepository(IAlbumRepository):
             .order_by(AlbumModel.title)
             .limit(limit)
         )
-        
+
         result = await self.session.execute(stmt)
         models = result.scalars().all()
         return [self._model_to_entity(model) for model in models]
@@ -1991,13 +1991,13 @@ class TrackRepository(ITrackRepository):
 
     async def update_deezer_id(self, track_id: TrackId, deezer_id: str) -> bool:
         """Update track's deezer_id (from LibraryDiscoveryWorker Phase 5).
-        
+
         Hey future me - this sets deezer_id after we found the track via ISRC!
-        
+
         Args:
             track_id: ID of the track to update
             deezer_id: Deezer track ID to set
-            
+
         Returns:
             True if updated, False if track not found
         """
@@ -2011,13 +2011,13 @@ class TrackRepository(ITrackRepository):
 
     async def update_spotify_uri(self, track_id: TrackId, spotify_uri: str) -> bool:
         """Update track's spotify_uri (from LibraryDiscoveryWorker Phase 5).
-        
+
         Hey future me - this complements update_deezer_id for multi-source!
-        
+
         Args:
             track_id: ID of the track to update
             spotify_uri: Spotify URI to set (spotify:track:xxx)
-            
+
         Returns:
             True if updated, False if track not found
         """
@@ -2031,13 +2031,13 @@ class TrackRepository(ITrackRepository):
 
     async def get_tracks_without_deezer_id_with_isrc(self, limit: int = 50) -> list[Track]:
         """Get tracks that have ISRC but no deezer_id yet.
-        
+
         Hey future me - this is for LibraryDiscoveryWorker Phase 5!
         ISRC is the UNIVERSAL key - we can use it to look up on ANY service.
-        
+
         Args:
             limit: Maximum number of tracks to return
-            
+
         Returns:
             List of Track entities with ISRC but no deezer_id
         """
@@ -2052,7 +2052,7 @@ class TrackRepository(ITrackRepository):
         )
         result = await self.session.execute(stmt)
         models = result.scalars().all()
-        
+
         return [
             Track(
                 id=TrackId.from_string(model.id),
@@ -2691,7 +2691,7 @@ class DownloadRepository(IDownloadRepository):
 
     async def get_completed_track_ids(self) -> set[str]:
         """Get set of track IDs for all completed downloads.
-        
+
         Hey future me - this is for AutoImportService to filter which files to import!
         Only files with completed downloads should be imported to prevent importing
         random files that users didn't request. Returns raw string IDs for fast lookup.
@@ -3728,7 +3728,6 @@ class EnrichmentCandidateRepository:
 
     async def add(self, candidate: Any) -> None:
         """Add a new enrichment candidate."""
-        from soulspot.domain.entities import EnrichmentCandidate
 
         from .models import EnrichmentCandidateModel
 
@@ -3989,11 +3988,11 @@ class EnrichmentCandidateRepository:
 
     async def mark_selected(self, candidate_id: str) -> Any:
         """Mark a candidate as selected (and reject others for same entity).
-        
+
         Hey future me - this does TWO things atomically:
         1. Marks the chosen candidate as selected
         2. Rejects all other candidates for the same entity
-        
+
         Returns:
             The selected EnrichmentCandidate domain entity
         """
@@ -4046,9 +4045,9 @@ class EnrichmentCandidateRepository:
 
     async def mark_rejected(self, candidate_id: str) -> Any:
         """Mark a candidate as rejected.
-        
+
         Hey future me - marks candidate as rejected (user dismissed this match).
-        
+
         Returns:
             The rejected EnrichmentCandidate domain entity
         """
@@ -4109,7 +4108,6 @@ class DuplicateCandidateRepository:
 
     async def add(self, candidate: Any) -> None:
         """Add a new duplicate candidate."""
-        from soulspot.domain.entities import DuplicateCandidate
 
         from .models import DuplicateCandidateModel
 
@@ -4543,7 +4541,7 @@ class DeezerSessionRepository:
         self.session = session
 
     async def create(self, session_id: str, access_token: str | None = None,
-                     deezer_user_id: str | None = None, 
+                     deezer_user_id: str | None = None,
                      deezer_username: str | None = None,
                      oauth_state: str | None = None) -> DeezerSessionModel:
         """Create a new Deezer session.
@@ -4695,7 +4693,7 @@ class DeezerSessionRepository:
 # =============================================================================
 # PROVIDER BROWSE REPOSITORY
 # =============================================================================
-# Hey future me - this repository handles synced provider data (artists, albums, 
+# Hey future me - this repository handles synced provider data (artists, albums,
 # tracks from Spotify, Deezer, Tidal, etc.).
 # The sync flow: Provider API → ProviderBrowseRepository → DB. The browse flow:
 # DB → ProviderBrowseRepository → UI. Auto-sync with diff logic on page load.
@@ -4710,7 +4708,7 @@ class ProviderBrowseRepository:
     - KEINE separaten provider_* Tabellen mehr!
     - Filter nach source='spotify'/'deezer'/'tidal' für provider-spezifische Daten
     - spotify_uri/deezer_uri enthält die Provider-IDs (z.B. "spotify:artist:xxx")
-    
+
     Renamed from SpotifyBrowseRepository → ProviderBrowseRepository (Nov 2025)
     Alias SpotifyBrowseRepository = ProviderBrowseRepository für Rückwärtskompatibilität
     """
@@ -4728,7 +4726,7 @@ class ProviderBrowseRepository:
 
         Used for diff-sync: compare with Spotify API result to find
         new follows and unfollows.
-        
+
         Returns Spotify IDs extracted from spotify_uri.
         """
         from .models import ArtistModel
@@ -4903,7 +4901,7 @@ class ProviderBrowseRepository:
         follower_count: int | None = None,
     ) -> None:
         """Insert or update a Spotify artist in unified library.
-        
+
         CRITICAL FIX (Dec 2025): Prevents duplicate artists by checking name first!
         - First checks for existing artist by spotify_uri
         - Then checks for existing artist by NAME (prevents Spotify/Deezer duplicates)
@@ -4913,14 +4911,14 @@ class ProviderBrowseRepository:
         from .models import ArtistModel
 
         spotify_uri = f"spotify:artist:{spotify_id}"
-        
+
         # STEP 1: Check if exists by spotify_uri
         stmt = select(ArtistModel).where(
             ArtistModel.spotify_uri == spotify_uri
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
-        
+
         # STEP 2: If not found by spotify_uri, check by NAME (prevent duplicates!)
         # CRITICAL FIX: Case-insensitive + whitespace normalization!
         if not model:
@@ -4938,14 +4936,12 @@ class ProviderBrowseRepository:
             # Update existing artist - add spotify_uri if missing
             if not model.spotify_uri:
                 model.spotify_uri = spotify_uri
-            
+
             # Update source to "hybrid" if it was only from one provider before
-            if model.source == "deezer":
-                model.source = "hybrid"
-            elif model.source == "local":
+            if model.source == "deezer" or model.source == "local":
                 model.source = "hybrid"
             # If already "spotify" or "hybrid", keep as is
-            
+
             model.name = name
             model.image_url = image_url
             if image_path is not None:
@@ -4994,7 +4990,7 @@ class ProviderBrowseRepository:
         self, artist_id: str, limit: int = 100, offset: int = 0
     ) -> list[Any]:
         """Get albums for a Spotify artist.
-        
+
         Hey future me - artist_id here is SPOTIFY ID (from API), not UUID!
         We need to look up the artist by spotify_uri first.
         """
@@ -5005,7 +5001,7 @@ class ProviderBrowseRepository:
         artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
-        
+
         if not internal_artist_id:
             return []
 
@@ -5156,7 +5152,7 @@ class ProviderBrowseRepository:
         artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
-        
+
         if not internal_artist_id:
             return 0
 
@@ -5193,7 +5189,7 @@ class ProviderBrowseRepository:
         artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
-        
+
         if not internal_artist_id:
             return []
 
@@ -5277,7 +5273,7 @@ class ProviderBrowseRepository:
         is_saved: bool = False,
     ) -> None:
         """Insert or update a Spotify album in unified library.
-        
+
         Hey future me - artist_id here is SPOTIFY ID, not internal UUID!
         We need to look up the artist first.
         album_type param maps to primary_type field in AlbumModel!
@@ -5286,12 +5282,12 @@ class ProviderBrowseRepository:
 
         spotify_uri = f"spotify:album:{spotify_id}"
         artist_spotify_uri = f"spotify:artist:{artist_id}"
-        
+
         # Find internal artist ID
         artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == artist_spotify_uri)
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
-        
+
         if not internal_artist_id:
             # Artist doesn't exist - skip this album
             return
@@ -5362,7 +5358,7 @@ class ProviderBrowseRepository:
         album_stmt = select(AlbumModel.id).where(AlbumModel.spotify_uri == spotify_uri)
         album_result = await self.session.execute(album_stmt)
         internal_album_id = album_result.scalar_one_or_none()
-        
+
         if not internal_album_id:
             return []
 
@@ -5409,7 +5405,7 @@ class ProviderBrowseRepository:
         album_stmt = select(AlbumModel.id).where(AlbumModel.spotify_uri == spotify_uri)
         album_result = await self.session.execute(album_stmt)
         internal_album_id = album_result.scalar_one_or_none()
-        
+
         if not internal_album_id:
             return 0
 
@@ -5433,25 +5429,25 @@ class ProviderBrowseRepository:
         isrc: str | None = None,
     ) -> None:
         """Insert or update a Spotify track in unified library.
-        
+
         Hey future me - album_id here is SPOTIFY ID, not internal UUID!
         """
         from .models import AlbumModel, TrackModel
 
         spotify_uri = f"spotify:track:{spotify_id}"
         album_spotify_uri = f"spotify:album:{album_id}"
-        
+
         # Find internal album ID and artist_id
         album_stmt = select(AlbumModel.id, AlbumModel.artist_id).where(
             AlbumModel.spotify_uri == album_spotify_uri
         )
         album_result = await self.session.execute(album_stmt)
         album_row = album_result.one_or_none()
-        
+
         if not album_row:
             # Album doesn't exist - skip this track
             return
-        
+
         internal_album_id, artist_id = album_row
 
         # Check if track exists
@@ -5503,7 +5499,7 @@ class ProviderBrowseRepository:
         self, spotify_track_id: str, local_track_id: str
     ) -> None:
         """Link a Spotify track to a local library track after download.
-        
+
         Hey future me - nach Table Consolidation sind Spotify tracks und local tracks
         in derselben Tabelle! Diese Methode ist jetzt deprecated.
         Stattdessen: Track mit source='spotify' zu source='hybrid' ändern.
@@ -5900,7 +5896,7 @@ class ProviderBrowseRepository:
         '_sa_instance_state' error.
 
         Flow: Get/Create Artist → Get/Create Album → Create Track with FKs
-        
+
         Returns:
             Track UUID (NOT Spotify ID!) - this is the soulspot_tracks.id
         """
@@ -5958,7 +5954,7 @@ class ProviderBrowseRepository:
 
     async def get_saved_album_ids(self) -> set[str]:
         """Get all Spotify album IDs marked as saved.
-        
+
         Returns Spotify IDs extracted from spotify_uri.
         """
         from .models import AlbumModel
@@ -6285,14 +6281,14 @@ class SpotifyTokenRepository:
 # Used by LibraryDiscoveryWorker to populate, and UI to show "Missing Albums".
 class ArtistDiscographyRepository:
     """Repository for artist discography entries (complete works from providers).
-    
+
     Hey future me - this is for DISCOVERY, not ownership!
-    
+
     - Populated by LibraryDiscoveryWorker from Deezer/Spotify API
     - Stores ALL known albums/singles/EPs for artists
     - is_owned field computed by comparing with soulspot_albums
     - UI queries this to show "Missing Albums" with download buttons
-    
+
     Key queries:
     - get_missing_for_artist(): Albums user doesn't own
     - get_all_for_artist(): Complete discography
@@ -6303,14 +6299,14 @@ class ArtistDiscographyRepository:
         """Initialize repository with session."""
         self.session = session
 
-    async def add(self, entry: "ArtistDiscography") -> None:
+    async def add(self, entry: ArtistDiscography) -> None:
         """Add a new discography entry.
-        
+
         Args:
             entry: ArtistDiscography domain entity
         """
+
         from .models import ArtistDiscographyModel
-        from soulspot.domain.entities import ArtistDiscography
 
         model = ArtistDiscographyModel(
             id=str(entry.id.value),
@@ -6334,13 +6330,13 @@ class ArtistDiscographyRepository:
         )
         self.session.add(model)
 
-    async def upsert(self, entry: "ArtistDiscography") -> None:
+    async def upsert(self, entry: ArtistDiscography) -> None:
         """Add or update discography entry (dedup by artist_id + title + album_type).
-        
+
         Hey future me - this is the main method used by LibraryDiscoveryWorker!
         If album already exists for artist, we update it (last_seen_at, maybe new IDs).
         If new, we insert it.
-        
+
         Args:
             entry: ArtistDiscography domain entity
         """
@@ -6383,18 +6379,18 @@ class ArtistDiscographyRepository:
         self,
         artist_id: ArtistId,
         album_types: list[str] | None = None,
-    ) -> list["ArtistDiscography"]:
+    ) -> list[ArtistDiscography]:
         """Get complete discography for an artist.
-        
+
         Args:
             artist_id: Artist to get discography for
             album_types: Optional filter (e.g., ["album", "ep"] to exclude singles)
-            
+
         Returns:
             List of ArtistDiscography entries sorted by release_date desc
         """
+
         from .models import ArtistDiscographyModel
-        from soulspot.domain.entities import ArtistDiscography
 
         stmt = select(ArtistDiscographyModel).where(
             ArtistDiscographyModel.artist_id == str(artist_id.value)
@@ -6414,15 +6410,15 @@ class ArtistDiscographyRepository:
         self,
         artist_id: ArtistId,
         album_types: list[str] | None = None,
-    ) -> list["ArtistDiscography"]:
+    ) -> list[ArtistDiscography]:
         """Get albums the user doesn't own for an artist.
-        
+
         Hey future me - this is what the UI calls to show "Missing Albums"!
-        
+
         Args:
             artist_id: Artist to get missing albums for
             album_types: Optional filter (e.g., ["album"] to exclude singles)
-            
+
         Returns:
             List of ArtistDiscography entries where is_owned=False
         """
@@ -6445,7 +6441,7 @@ class ArtistDiscographyRepository:
 
     async def get_stats_for_artist(self, artist_id: ArtistId) -> dict[str, Any]:
         """Get discography statistics for an artist.
-        
+
         Returns dict with:
         - total: Total known albums/singles/etc
         - owned: How many user owns
@@ -6493,18 +6489,18 @@ class ArtistDiscographyRepository:
 
     async def update_is_owned_for_artist(self, artist_id: ArtistId) -> int:
         """Update is_owned flag by comparing with soulspot_albums.
-        
+
         Hey future me - call this after library scan or album sync!
         Compares discography entries with actual albums in soulspot_albums.
         Match by: deezer_id OR spotify_uri OR (title + artist_id fuzzy match).
-        
+
         Args:
             artist_id: Artist to update
-            
+
         Returns:
             Number of entries updated
         """
-        from .models import ArtistDiscographyModel, AlbumModel
+        from .models import AlbumModel, ArtistDiscographyModel
 
         # Get all discography entries for artist
         disc_stmt = select(ArtistDiscographyModel).where(
@@ -6530,13 +6526,7 @@ class ArtistDiscographyRepository:
             is_owned = False
 
             # Match by deezer_id
-            if entry.deezer_id and entry.deezer_id in owned_deezer_ids:
-                is_owned = True
-            # Match by spotify_uri
-            elif entry.spotify_uri and entry.spotify_uri in owned_spotify_uris:
-                is_owned = True
-            # Fallback: fuzzy title match (exact for now)
-            elif entry.title.lower() in owned_titles:
+            if entry.deezer_id and entry.deezer_id in owned_deezer_ids or entry.spotify_uri and entry.spotify_uri in owned_spotify_uris or entry.title.lower() in owned_titles:
                 is_owned = True
 
             if entry.is_owned != is_owned:
@@ -6548,7 +6538,7 @@ class ArtistDiscographyRepository:
 
     async def delete_for_artist(self, artist_id: ArtistId) -> int:
         """Delete all discography entries for an artist.
-        
+
         Returns:
             Number of entries deleted
         """
@@ -6560,10 +6550,11 @@ class ArtistDiscographyRepository:
         result = await self.session.execute(stmt)
         return result.rowcount or 0
 
-    def _model_to_entity(self, model: "ArtistDiscographyModel") -> "ArtistDiscography":
+    def _model_to_entity(self, model: ArtistDiscographyModel) -> ArtistDiscography:
         """Convert SQLAlchemy model to domain entity."""
         from soulspot.domain.entities import ArtistDiscography
         from soulspot.domain.value_objects import AlbumId, ArtistId, SpotifyUri
+
         from .models import ensure_utc_aware
 
         return ArtistDiscography(
@@ -6708,8 +6699,10 @@ class BlocklistRepository(IBlocklistRepository):
 
         Only considers non-expired blocks (expires_at IS NULL OR > now()).
         """
+        from datetime import UTC, datetime
+
         from sqlalchemy import or_
-        from datetime import datetime, UTC
+
         from .models import BlocklistModel
 
         now = datetime.now(UTC)
@@ -6759,8 +6752,10 @@ class BlocklistRepository(IBlocklistRepository):
 
     async def list_active(self, limit: int = 100) -> list[BlocklistEntry]:
         """List all active (non-expired) blocklist entries."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from sqlalchemy import or_
+
         from .models import BlocklistModel
 
         now = datetime.now(UTC)
@@ -6784,7 +6779,8 @@ class BlocklistRepository(IBlocklistRepository):
 
     async def list_expired(self, limit: int = 100) -> list[BlocklistEntry]:
         """List expired blocklist entries."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from .models import BlocklistModel
 
         now = datetime.now(UTC)
@@ -6806,7 +6802,8 @@ class BlocklistRepository(IBlocklistRepository):
 
     async def delete_expired(self) -> int:
         """Delete all expired blocklist entries."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from .models import BlocklistModel
 
         now = datetime.now(UTC)
@@ -6821,8 +6818,10 @@ class BlocklistRepository(IBlocklistRepository):
 
     async def count_active(self) -> int:
         """Count active (non-expired) blocklist entries."""
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
+
         from sqlalchemy import or_
+
         from .models import BlocklistModel
 
         now = datetime.now(UTC)
@@ -6837,9 +6836,9 @@ class BlocklistRepository(IBlocklistRepository):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    def _model_to_entity(self, model: "BlocklistModel") -> BlocklistEntry:
+    def _model_to_entity(self, model: BlocklistModel) -> BlocklistEntry:
         """Convert SQLAlchemy model to domain entity."""
-        from .models import BlocklistModel, ensure_utc_aware
+        from .models import ensure_utc_aware
 
         return BlocklistEntry(
             id=model.id,
@@ -6883,8 +6882,9 @@ class QualityProfileRepository(IQualityProfileRepository):
 
     async def add(self, profile: QualityProfile) -> None:
         """Add a new quality profile."""
-        from .models import QualityProfileModel
         import json
+
+        from .models import QualityProfileModel
 
         # Check if name already exists
         existing = await self.get_by_name(profile.name)
@@ -6937,7 +6937,7 @@ class QualityProfileRepository(IQualityProfileRepository):
         """Get the currently active quality profile."""
         from .models import QualityProfileModel
 
-        stmt = select(QualityProfileModel).where(QualityProfileModel.is_active == True)
+        stmt = select(QualityProfileModel).where(QualityProfileModel.is_active)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -6956,7 +6956,7 @@ class QualityProfileRepository(IQualityProfileRepository):
         # Deactivate all profiles
         deactivate_stmt = (
             update(QualityProfileModel)
-            .where(QualityProfileModel.is_active == True)
+            .where(QualityProfileModel.is_active)
             .values(is_active=False)
         )
         await self.session.execute(deactivate_stmt)
@@ -6974,8 +6974,9 @@ class QualityProfileRepository(IQualityProfileRepository):
 
     async def update(self, profile: QualityProfile) -> None:
         """Update an existing quality profile."""
-        from .models import QualityProfileModel
         import json
+
+        from .models import QualityProfileModel
 
         stmt = select(QualityProfileModel).where(QualityProfileModel.id == profile.id)
         result = await self.session.execute(stmt)
@@ -7034,7 +7035,7 @@ class QualityProfileRepository(IQualityProfileRepository):
         """
         from soulspot.domain.entities import QUALITY_PROFILES
 
-        for name, profile in QUALITY_PROFILES.items():
+        for _name, profile in QUALITY_PROFILES.items():
             existing = await self.get_by_name(profile.name)
             if existing is None:
                 # Mark as system profile since these are defaults
@@ -7048,11 +7049,13 @@ class QualityProfileRepository(IQualityProfileRepository):
             if balanced is not None:
                 await self.set_active(balanced.id)
 
-    def _model_to_entity(self, model: "QualityProfileModel") -> QualityProfile:
+    def _model_to_entity(self, model: QualityProfileModel) -> QualityProfile:
         """Convert SQLAlchemy model to domain entity."""
-        from .models import ensure_utc_aware
-        from soulspot.domain.entities import QualityProfileId
         import json
+
+        from soulspot.domain.entities import QualityProfileId
+
+        from .models import ensure_utc_aware
 
         # Parse JSON fields - preferred_formats is already list[str]
         preferred_formats = json.loads(model.preferred_formats or "[]")

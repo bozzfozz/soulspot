@@ -26,8 +26,11 @@ from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
-    from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
+
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.infrastructure.integrations.musicbrainz_client import (
+        MusicBrainzClient,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +63,9 @@ class MusicBrainzEnrichmentService:
 
     def __init__(
         self,
-        session: "AsyncSession",
-        musicbrainz_client: "MusicBrainzClient",
-        settings_service: "AppSettingsService | None" = None,
+        session: AsyncSession,
+        musicbrainz_client: MusicBrainzClient,
+        settings_service: AppSettingsService | None = None,
     ) -> None:
         """Initialize MusicBrainz enrichment service.
 

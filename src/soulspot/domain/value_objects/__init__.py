@@ -7,9 +7,6 @@ from uuid import UUID, uuid4
 
 from soulspot.domain.exceptions import ValidationException
 
-# ImageRef - Standard-Struktur für alle Bilder (artist.image, album.cover, etc.)
-from soulspot.domain.value_objects.image_ref import ImageRef
-
 # Album type exports
 from soulspot.domain.value_objects.album_types import (
     DIVERSITY_THRESHOLD,
@@ -23,6 +20,15 @@ from soulspot.domain.value_objects.album_types import (
     detect_compilation,
     detect_compilation_from_track_artists,
     is_various_artists,
+)
+
+# Artist normalization exports (for matching and deduplication)
+from soulspot.domain.value_objects.artist_normalization import (
+    ARTIST_PREFIXES,
+    ARTIST_SUFFIXES,
+    extract_sort_name,
+    normalize_artist_name,
+    normalize_for_fuzzy_match,
 )
 
 # Folder parsing exports (Lidarr library structure parsing)
@@ -40,6 +46,9 @@ from soulspot.domain.value_objects.folder_parsing import (
     parse_track_filename,
 )
 
+# ImageRef - Standard-Struktur für alle Bilder (artist.image, album.cover, etc.)
+from soulspot.domain.value_objects.image_ref import ImageRef
+
 # Naming exports (Lidarr-style file/folder naming)
 from soulspot.domain.value_objects.naming import (
     ColonReplacement,
@@ -48,15 +57,6 @@ from soulspot.domain.value_objects.naming import (
     NamingService,
     clean_name,
     sort_name,
-)
-
-# Artist normalization exports (for matching and deduplication)
-from soulspot.domain.value_objects.artist_normalization import (
-    ARTIST_PREFIXES,
-    ARTIST_SUFFIXES,
-    extract_sort_name,
-    normalize_artist_name,
-    normalize_for_fuzzy_match,
 )
 
 

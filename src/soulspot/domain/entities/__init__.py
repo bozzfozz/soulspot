@@ -6,8 +6,8 @@ from enum import Enum
 from typing import Any, ClassVar, Optional
 
 from soulspot.domain.entities.error_codes import (
-    RETRYABLE_ERRORS,
     NON_RETRYABLE_ERRORS,
+    RETRYABLE_ERRORS,
     DownloadErrorCode,
     get_error_description,
     is_non_retryable_error,
@@ -15,11 +15,11 @@ from soulspot.domain.entities.error_codes import (
     normalize_error_code,
 )
 from soulspot.domain.entities.quality_profile import (
+    QUALITY_PROFILES,
     AudioFormat,
+    QualityMatcher,
     QualityProfile,
     QualityProfileId,
-    QualityMatcher,
-    QUALITY_PROFILES,
 )
 from soulspot.domain.value_objects import (
     AlbumId,
@@ -265,7 +265,7 @@ class Album:
     # field assignment so updated_at changes and cache invalidates correctly.
     def update_cover(self, *, url: str | None = None, path: FilePath | str | None = None) -> None:
         """Update album cover art.
-        
+
         Args:
             url: Remote CDN URL (Spotify, Deezer, etc.)
             path: Local cached file path
@@ -296,9 +296,9 @@ class Album:
 @dataclass
 class ArtistDiscography:
     """Discography entry - an album known to exist from external providers.
-    
+
     Hey future me - this is for DISCOVERY, not ownership tracking!
-    
+
     - Populated by LibraryDiscoveryWorker from Deezer/Spotify API
     - Stores ALL known albums/singles/EPs for an artist
     - is_owned field computed by comparing with user's soulspot_albums
@@ -310,27 +310,27 @@ class ArtistDiscography:
     title: str
     # album_type: "album", "single", "ep", "compilation", "live", "remix"
     album_type: str = "album"
-    
+
     # Provider IDs - can have multiple if found on multiple services
     deezer_id: str | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     tidal_id: str | None = None
-    
+
     # Album metadata
     release_date: str | None = None  # YYYY-MM-DD or YYYY-MM or YYYY
     release_date_precision: str | None = None  # "day", "month", "year"
     total_tracks: int | None = None
     cover_url: str | None = None  # CDN URL from provider (for display)
-    
+
     # Discovery metadata
     source: str = "deezer"  # Which provider discovered this
     discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_seen_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
+
     # Computed field - TRUE if user owns this album (in soulspot_albums)
     is_owned: bool = False
-    
+
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -607,7 +607,7 @@ class Download:
 
     def fail(self, error_message: str) -> None:
         """Mark download as failed.
-        
+
         Note: For automatic retry scheduling, use fail_with_retry() instead.
         This method just sets FAILED status without scheduling retries.
         """
@@ -664,9 +664,7 @@ class Download:
             return False
         if self.retry_count >= self.max_retries:
             return False
-        if self.last_error_code in self._NON_RETRYABLE_ERRORS:
-            return False
-        return True
+        return self.last_error_code not in self._NON_RETRYABLE_ERRORS
 
     def _schedule_next_retry(self) -> None:
         """Calculate and set next_retry_at with exponential backoff.

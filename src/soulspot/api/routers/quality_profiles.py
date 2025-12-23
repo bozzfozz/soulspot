@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import get_db_session
-from soulspot.domain.entities import AudioFormat, QualityProfile, QUALITY_PROFILES
+from soulspot.domain.entities import QUALITY_PROFILES, AudioFormat, QualityProfile
 from soulspot.infrastructure.persistence.repositories import QualityProfileRepository
 
 logger = logging.getLogger(__name__)

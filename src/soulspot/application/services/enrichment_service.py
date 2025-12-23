@@ -20,7 +20,6 @@ from soulspot.domain.ports import IEnrichmentCandidateRepository
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
     ArtistModel,
-    EnrichmentCandidateModel,
     TrackModel,
 )
 from soulspot.infrastructure.persistence.repositories import (

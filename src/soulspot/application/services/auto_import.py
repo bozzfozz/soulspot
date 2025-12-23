@@ -57,7 +57,7 @@ class AutoImportService:
 
         Hey future me - refactored to use SpotifyPlugin!
         The plugin handles token management internally, no more access_token juggling.
-        
+
         CRITICAL ADDITION: download_repository parameter!
         We now check if tracks have COMPLETED downloads before importing.
         This prevents importing random files users didn't request!
@@ -216,7 +216,7 @@ class AutoImportService:
                         await asyncio.sleep(0.5)
                         continue
                     raise
-            
+
             if not completed_track_ids:
                 logger.debug("No completed downloads found, skipping import")
                 return
@@ -232,7 +232,7 @@ class AutoImportService:
                 try:
                     # Find associated track
                     track = await self._find_track_for_file(file_path)
-                    
+
                     # CRITICAL CHECK: Only import if track has completed download!
                     if track and str(track.id.value) in completed_track_ids:
                         await self._import_file(file_path, track)
@@ -330,7 +330,7 @@ class AutoImportService:
         This method:
         1. Runs post-processing pipeline (if enabled)
         2. Moves file to final destination (if post-processing didn't already)
-        
+
         Hey future me - track is now passed as parameter (already matched by caller)!
         This avoids duplicate track matching logic.
 

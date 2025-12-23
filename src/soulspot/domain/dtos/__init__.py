@@ -358,10 +358,10 @@ class PaginatedResponse[T]:
 @dataclass
 class TrackView:
     """Track data formatted for template display.
-    
+
     Hey future me - das ist die "View" Version eines Tracks!
     Alle Felder sind template-ready (formatierte Dauer, etc.)
-    
+
     IMPORTANT: ViewModels follow DTO naming conventions for consistency:
     - Use `title` (not `name`) to match TrackDTO
     - Use `cover` (ImageRef) for album art
@@ -381,11 +381,11 @@ class TrackView:
 @dataclass
 class AlbumDetailView:
     """Album detail page view model.
-    
+
     Hey future me - das ist ein ViewModel für die Album-Detail-Seite!
     Enthält alles was das Template braucht, vorformatiert und ready-to-use.
     Routes rufen Service auf und bekommen dieses ViewModel zurück.
-    
+
     NAMING CONVENTION: ViewModels use DTO field names for consistency:
     - `title` for albums (matches AlbumDTO)
     - `cover` (ImageRef) for cover art (matches AlbumDTO)
@@ -397,18 +397,18 @@ class AlbumDetailView:
     release_date: str | None
     album_type: str
     total_tracks: int
-    
+
     # Artist info (optional, kann None sein)
     artist_spotify_id: str | None
     artist_name: str | None
-    
+
     # Tracks (vorformatiert für Template)
     tracks: list[TrackView]
-    
+
     # Aggregate data
     track_count: int
     total_duration_str: str  # "45 min 32 sec"
-    
+
     # Fields with defaults come last (Python dataclass requirement)
     cover: ImageRef = field(default_factory=ImageRef)  # Album cover image
     synced: bool = False

@@ -16,9 +16,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_download_repository
+from soulspot.api.dependencies import get_download_repository
 from soulspot.infrastructure.observability.circuit_breaker import (
     get_circuit_breaker_stats,
 )

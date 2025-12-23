@@ -66,13 +66,13 @@ class Base(DeclarativeBase):
 # with existing artists in DB. Use 'local', 'spotify', 'hybrid' values (not enum - SQLite compatibility).
 class ArtistModel(Base):
     """SQLAlchemy model for Artist entity (Unified Library - Multi-Provider).
-    
+
     Hey future me - This is the UNIFIED library! All providers write here directly:
     - Spotify followed artists (source='spotify')
     - Deezer favorite artists (source='deezer')
     - Local file scan (source='local')
     - Multi-provider (source='hybrid')
-    
+
     NO MORE spotify_artists table! This is the single source of truth.
     """
 
@@ -144,7 +144,7 @@ class ArtistModel(Base):
     @property
     def spotify_id(self) -> str | None:
         """Extract Spotify ID from spotify_uri for backward compatibility.
-        
+
         Hey future me - Workers and old code expect spotify_id!
         This property bridges Model (spotify_uri) with legacy code (spotify_id).
         URI format: "spotify:artist:3TV0qLgjEYM0STMlmI05U3"
@@ -163,7 +163,7 @@ class ArtistModel(Base):
 
 class AlbumModel(Base):
     """SQLAlchemy model for Album entity (Unified Library - Multi-Provider).
-    
+
     Hey future me - This is the UNIFIED library! All providers write here directly.
     NO MORE spotify_albums table! This is the single source of truth.
     """
@@ -215,7 +215,7 @@ class AlbumModel(Base):
         JSON, nullable=False, default=list, server_default="[]"
     )
     disambiguation: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    
+
     # Hey future me - streaming metadata!
     # total_tracks: number of tracks in album
     # is_saved: user saved this album (Spotify Saved Albums feature)
@@ -223,7 +223,7 @@ class AlbumModel(Base):
     is_saved: Mapped[bool] = mapped_column(
         sa.Boolean(), nullable=False, server_default="0", default=False
     )
-    
+
     # Hey future me - sync timestamps for cooldown logic!
     tracks_synced_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
@@ -243,7 +243,7 @@ class AlbumModel(Base):
     @property
     def spotify_id(self) -> str | None:
         """Extract Spotify ID from spotify_uri for backward compatibility.
-        
+
         Hey future me - same pattern as ArtistModel.spotify_id!
         URI format: "spotify:album:6DEjYFkNZh67HP7R9PSZvv"
         Returns: "6DEjYFkNZh67HP7R9PSZvv"
@@ -270,14 +270,14 @@ class AlbumModel(Base):
 # Key insight: soulspot_albums = what user OWNS, artist_discography = what EXISTS.
 class ArtistDiscographyModel(Base):
     """Complete discography of an artist as discovered from external providers.
-    
+
     Hey future me - This is for DISCOVERY, not ownership!
-    
+
     - LibraryDiscoveryWorker fetches from Deezer/Spotify API
     - Stores ALL known albums/singles for an artist
     - UI compares with soulspot_albums to show "Missing"
     - User can then choose to download missing items
-    
+
     Example:
         Artist "Metallica" has 50 entries here (all albums, singles, EPs)
         User owns 12 albums in soulspot_albums
@@ -295,26 +295,26 @@ class ArtistDiscographyModel(Base):
         nullable=False,
         index=True,
     )
-    
+
     # Album identification
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     # album_type: "album", "single", "ep", "compilation", "live", "remix"
     album_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="album", server_default="album"
     )
-    
+
     # Provider IDs - can have multiple if found on multiple services
     deezer_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     tidal_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
-    
+
     # Album metadata
     release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
     release_date_precision: Mapped[str | None] = mapped_column(String(10), nullable=True)
     total_tracks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    
+
     # Discovery metadata
     # source: which provider discovered this first ("deezer", "spotify", "musicbrainz")
     source: Mapped[str] = mapped_column(
@@ -326,13 +326,13 @@ class ArtistDiscographyModel(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, default=utc_now
     )
-    
+
     # Computed field (updated by sync job comparing with soulspot_albums)
     # TRUE if matching album exists in soulspot_albums (by deezer_id, spotify_uri, or title+artist)
     is_owned: Mapped[bool] = mapped_column(
         sa.Boolean(), nullable=False, default=False, server_default="0"
     )
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -367,7 +367,7 @@ class ArtistDiscographyModel(Base):
 # at most one active download). Be careful with migrations - this table can have millions of rows!
 class TrackModel(Base):
     """SQLAlchemy model for Track entity (Unified Library - Multi-Provider).
-    
+
     Hey future me - This is the UNIFIED library! All providers write here directly.
     NO MORE spotify_tracks table! This is the single source of truth.
     """
@@ -451,7 +451,7 @@ class TrackModel(Base):
     @property
     def spotify_id(self) -> str | None:
         """Extract Spotify ID from spotify_uri for backward compatibility.
-        
+
         Hey future me - same pattern as ArtistModel.spotify_id!
         URI format: "spotify:track:5UqCQaDshqbIk3pkhy4Pjg"
         Returns: "5UqCQaDshqbIk3pkhy4Pjg"
@@ -543,18 +543,18 @@ class PlaylistTrackModel(Base):
 
 class DownloadModel(Base):
     """SQLAlchemy model for Download entity.
-    
+
     Hey future me - AUTO-RETRY FIELDS added in 2025-12!
-    
+
     retry_count: How many times this download has been attempted
     max_retries: Maximum retry attempts (default: 3)
     next_retry_at: When next retry is scheduled (NULL = not scheduled)
     last_error_code: Classified error code for intelligent retry decisions
-    
+
     RetrySchedulerWorker uses these to find retry-eligible downloads:
-    SELECT * FROM downloads 
-    WHERE status = 'failed' 
-      AND retry_count < max_retries 
+    SELECT * FROM downloads
+    WHERE status = 'failed'
+      AND retry_count < max_retries
       AND next_retry_at <= NOW()
     """
 
@@ -586,7 +586,7 @@ class DownloadModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
     )
-    
+
     # Retry management fields (added 2025-12)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
@@ -928,7 +928,7 @@ class ProviderSyncStatusModel(Base):
     Hey future me - Nach Table Consolidation (Nov 2025):
     - Tabelle umbenannt von spotify_sync_status zu provider_sync_status
     - Unterstützt jetzt beliebige Provider (Spotify, Deezer, etc.)
-    
+
     Enables cooldown logic - don't hammer APIs on every page load.
     Also provides UI feedback about last sync time and any errors.
     """

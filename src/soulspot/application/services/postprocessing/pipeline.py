@@ -6,11 +6,13 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soulspot.application.services.postprocessing.metadata_service import MetadataService
 from soulspot.application.services.postprocessing.id3_tagging_service import (
     ID3TaggingService,
 )
 from soulspot.application.services.postprocessing.lyrics_service import LyricsService
+from soulspot.application.services.postprocessing.metadata_service import (
+    MetadataService,
+)
 from soulspot.application.services.postprocessing.renaming_service import (
     RenamingService,
 )
@@ -100,7 +102,7 @@ class PostProcessingPipeline:
 
         # Initialize services - now using MetadataService with Multi-Provider
         self._metadata_service = metadata_service or MetadataService(
-            settings, 
+            settings,
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
         )

@@ -75,117 +75,117 @@ _QUALITY_TO_SIZE = {
 
 class DeezerImageProvider(IImageProvider):
     """⚠️ DEPRECATED - Use infrastructure.providers.DeezerImageProvider instead!
-    
+
     Hey future me - dieser Provider:
     3. KEINE Auth nötig! Immer verfügbar
     4. Deezer hat gute Bildqualität (bis 1000x1000)
-    
+
     Priorität: 2 - nach Spotify, vor CAA
     """
-    
+
     def __init__(self, deezer_client: DeezerClient) -> None:
         """Initialize with DeezerClient.
-        
+
         Args:
             deezer_client: Initialized DeezerClient
         """
         self._client = deezer_client
-        
+
     # === Properties ===
-    
+
     @property
     def provider_name(self) -> ProviderName:
         """Deezer provider name."""
         return "deezer"
-    
+
     @property
     def requires_auth(self) -> bool:
         """Deezer public API does NOT require authentication for images!"""
         return False
-    
+
     # === Availability ===
-    
+
     async def is_available(self) -> bool:
         """Deezer public API is always available.
-        
+
         Hey future me - keine Auth nötig!
         Wir könnten hier einen Health-Check machen, aber das wäre zu langsam.
         """
         return True
-    
+
     # === Helper: Get best image URL ===
-    
+
     def _get_best_artist_image(
-        self, 
-        artist, 
+        self,
+        artist,
         quality: ImageQuality,
     ) -> str | None:
         """Get the best artist image URL based on quality preference.
-        
+
         Args:
             artist: DeezerArtist object
             quality: Desired quality
-            
+
         Returns:
             Best available image URL or None
         """
         size = _QUALITY_TO_SIZE.get(quality, "big")
-        
+
         # Try requested size first, then fallback to smaller
         url = getattr(artist, f"picture_{size}", None)
         if url:
             return url
-            
+
         # Fallback chain: xl > big > medium > small
         for fallback in ["picture_xl", "picture_big", "picture_medium", "picture_small"]:
             url = getattr(artist, fallback, None)
             if url:
                 return url
-        
+
         return None
-    
+
     def _get_best_album_image(
-        self, 
-        album, 
+        self,
+        album,
         quality: ImageQuality,
     ) -> str | None:
         """Get the best album image URL based on quality preference.
-        
+
         Args:
             album: DeezerAlbum object
             quality: Desired quality
-            
+
         Returns:
             Best available image URL or None
         """
         size = _QUALITY_TO_SIZE.get(quality, "big")
-        
+
         # Try requested size first, then fallback to smaller
         url = getattr(album, f"cover_{size}", None)
         if url:
             return url
-            
+
         # Fallback chain: xl > big > medium > small
         for fallback in ["cover_xl", "cover_big", "cover_medium", "cover_small"]:
             url = getattr(album, fallback, None)
             if url:
                 return url
-        
+
         return None
-    
+
     # === Direct Lookup Methods (by ID) ===
-    
+
     async def get_artist_image(
         self,
         artist_id: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get artist image by Deezer ID.
-        
+
         Args:
             artist_id: Deezer artist ID (as string, will be converted to int)
             quality: Desired image quality
-            
+
         Returns:
             ImageResult with URL or None if not found
         """
@@ -193,11 +193,11 @@ class DeezerImageProvider(IImageProvider):
             # Deezer IDs are integers
             deezer_id = int(artist_id)
             artist = await self._client.get_artist(deezer_id)
-            
+
             if not artist:
                 logger.debug("No Deezer artist found for ID %s", artist_id)
                 return None
-            
+
             url = self._get_best_artist_image(artist, quality)
             if not url:
                 logger.debug(
@@ -205,7 +205,7 @@ class DeezerImageProvider(IImageProvider):
                     artist_id, artist.name
                 )
                 return None
-            
+
             return ImageResult(
                 url=url,
                 provider="deezer",
@@ -213,7 +213,7 @@ class DeezerImageProvider(IImageProvider):
                 entity_name=artist.name,
                 entity_id=str(artist.id),
             )
-            
+
         except ValueError as e:
             logger.warning("Invalid Deezer artist ID %s: %s", artist_id, e)
             return None
@@ -223,29 +223,29 @@ class DeezerImageProvider(IImageProvider):
                 artist_id, e
             )
             return None
-    
+
     async def get_album_image(
         self,
         album_id: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get album image by Deezer ID.
-        
+
         Args:
             album_id: Deezer album ID (as string)
             quality: Desired image quality
-            
+
         Returns:
             ImageResult with URL or None if not found
         """
         try:
             deezer_id = int(album_id)
             album = await self._client.get_album(deezer_id)
-            
+
             if not album:
                 logger.debug("No Deezer album found for ID %s", album_id)
                 return None
-            
+
             url = self._get_best_album_image(album, quality)
             if not url:
                 logger.debug(
@@ -253,7 +253,7 @@ class DeezerImageProvider(IImageProvider):
                     album_id, album.title
                 )
                 return None
-            
+
             return ImageResult(
                 url=url,
                 provider="deezer",
@@ -261,7 +261,7 @@ class DeezerImageProvider(IImageProvider):
                 entity_name=album.title,
                 entity_id=str(album.id),
             )
-            
+
         except ValueError as e:
             logger.warning("Invalid Deezer album ID %s: %s", album_id, e)
             return None
@@ -271,23 +271,23 @@ class DeezerImageProvider(IImageProvider):
                 album_id, e
             )
             return None
-    
+
     # === Search Methods (by name) ===
-    
+
     async def search_artist_image(
         self,
         artist_name: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """Search for artist image by name.
-        
+
         Hey future me - Deezer Public API, keine Auth nötig!
         Perfekt als Fallback wenn Spotify nicht verfügbar.
-        
+
         Args:
             artist_name: Artist name to search for
             quality: Desired image quality
-            
+
         Returns:
             ImageSearchResult with best_match and alternatives
         """
@@ -296,11 +296,11 @@ class DeezerImageProvider(IImageProvider):
                 query=artist_name,
                 limit=5,
             )
-            
+
             if not artists:
                 logger.debug("No Deezer results for artist: %s", artist_name)
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             # Convert zu ImageResults
             matches: list[ImageResult] = []
             for artist in artists:
@@ -313,26 +313,26 @@ class DeezerImageProvider(IImageProvider):
                         entity_name=artist.name,
                         entity_id=str(artist.id),
                     ))
-            
+
             if not matches:
                 logger.debug(
                     "No images in Deezer results for artist: %s",
                     artist_name
                 )
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             return ImageSearchResult(
                 matches=matches,
                 best_match=matches[0],
             )
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to search Deezer artist image for %s: %s",
                 artist_name, e
             )
             return ImageSearchResult(matches=[], best_match=None)
-    
+
     async def search_album_image(
         self,
         album_title: str,
@@ -340,37 +340,34 @@ class DeezerImageProvider(IImageProvider):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """Search for album image by title and optionally artist.
-        
+
         Hey future me - Deezer ist TOP für Compilations (Bravo Hits etc.)!
         Sucht nach Album-Titel, optional mit Artist-Filter.
-        
+
         Args:
             album_title: Album title to search for
             artist_name: Optional artist name for better matching
             quality: Desired image quality
-            
+
         Returns:
             ImageSearchResult with best_match and alternatives
         """
         try:
             # Build search query
-            if artist_name:
-                query = f"{artist_name} - {album_title}"
-            else:
-                query = album_title
-            
+            query = f"{artist_name} - {album_title}" if artist_name else album_title
+
             albums = await self._client.search_albums(
                 query=query,
                 limit=5,
             )
-            
+
             if not albums:
                 logger.debug(
                     "No Deezer results for album: %s (artist: %s)",
                     album_title, artist_name
                 )
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             # Convert zu ImageResults
             matches: list[ImageResult] = []
             for album in albums:
@@ -383,19 +380,19 @@ class DeezerImageProvider(IImageProvider):
                         entity_name=album.title,
                         entity_id=str(album.id),
                     ))
-            
+
             if not matches:
                 logger.debug(
                     "No images in Deezer results for album: %s",
                     album_title
                 )
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             return ImageSearchResult(
                 matches=matches,
                 best_match=matches[0],
             )
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to search Deezer album image for %s: %s",

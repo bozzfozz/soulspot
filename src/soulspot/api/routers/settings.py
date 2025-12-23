@@ -7,7 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_credentials_service, get_db_session, get_image_service
+from soulspot.api.dependencies import (
+    get_credentials_service,
+    get_db_session,
+    get_image_service,
+)
 from soulspot.application.services.app_settings_service import AppSettingsService
 from soulspot.application.services.credentials_service import CredentialsService
 from soulspot.config import get_settings
@@ -42,7 +46,7 @@ class GeneralSettings(BaseModel):
 # 401/403 errors. Store these in .env file, NEVER commit to git!
 class IntegrationSettings(BaseModel):
     """Integration settings for external services.
-    
+
     Hey future me - ALL fields have defaults because DB might be empty!
     Settings page loads this on startup, crashes if any field is required but None.
     """
@@ -770,21 +774,22 @@ async def debug_album_covers(
     limit: int = 20,
 ) -> dict[str, Any]:
     """Debug endpoint to inspect album cover URLs and paths.
-    
+
     Hey future me - TEMPORARY debug endpoint!
     Remove after fixing album cover download issue.
-    
+
     Shows first N albums with their cover_url and cover_path values
     to understand why bulk download finds 0 albums needing covers.
     """
+    from sqlalchemy import func, select
+
     from soulspot.infrastructure.persistence.models import AlbumModel
-    from sqlalchemy import select, func
-    
+
     # Get sample albums
     stmt = select(AlbumModel).limit(limit)
     result = await session.execute(stmt)
     albums = result.scalars().all()
-    
+
     # Count stats
     total = await session.execute(select(func.count()).select_from(AlbumModel))
     with_url = await session.execute(
@@ -799,7 +804,7 @@ async def debug_album_covers(
             AlbumModel.cover_path.is_(None),
         )
     )
-    
+
     return {
         "stats": {
             "total_albums": total.scalar(),
@@ -829,7 +834,7 @@ async def debug_album_covers(
 
 class BulkImageDownloadResult(BaseModel):
     """Result of bulk image download operation."""
-    
+
     artists_downloaded: int = Field(description="Number of artist images downloaded")
     albums_downloaded: int = Field(description="Number of album covers downloaded")
     playlists_downloaded: int = Field(description="Number of playlist covers downloaded")
@@ -844,30 +849,26 @@ async def download_all_images(
     image_service: "ImageService" = Depends(get_image_service),
 ) -> BulkImageDownloadResult:
     """Download all missing images for entities in library.
-    
+
     Hey future me - this is for RETROACTIVE image caching!
     Use case: User enabled "Download Images Locally" after syncing library.
-    
+
     Process:
     1. Query all artists/albums/playlists with image URLs but no local paths
     2. Download each image to local cache
     3. Update database with new paths
-    
+
     This runs ASYNC in the endpoint (may take time for large libraries).
     TODO: Convert to background task if libraries get huge (>1000 entities).
     """
-    from soulspot.infrastructure.persistence.repositories import (
-        AlbumRepository,
-        ArtistRepository,
-        PlaylistRepository,
-    )
+    from sqlalchemy import select
+
     from soulspot.infrastructure.persistence.models import (
         AlbumModel,
         ArtistModel,
         PlaylistModel,
     )
-    from sqlalchemy import select
-    
+
     result = BulkImageDownloadResult(
         artists_downloaded=0,
         albums_downloaded=0,
@@ -876,17 +877,17 @@ async def download_all_images(
         errors=0,
         skipped=0,
     )
-    
+
     try:
         from pathlib import Path
-        
+
         # Artists with image_url - check if path missing OR file doesn't exist
         artist_stmt = select(ArtistModel).where(
             ArtistModel.image_url.isnot(None),
         )
         artist_results = await session.execute(artist_stmt)
         artists = artist_results.scalars().all()
-        
+
         # Count how many actually need download
         artists_needing_download = 0
         for artist in artists:
@@ -896,9 +897,9 @@ async def download_all_images(
                 full_path = Path(image_service.cache_base_path) / artist.image_path
                 if not full_path.exists():
                     artists_needing_download += 1
-        
+
         logger.info(f"📥 Bulk Download: Found {artists_needing_download} artists needing images")
-        
+
         for artist in artists:
             try:
                 if artist.image_url:
@@ -911,15 +912,15 @@ async def download_all_images(
                         if not full_path.exists():
                             needs_download = True
                             logger.debug(f"📥 Artist image path exists but file missing: {artist.image_path}")
-                    
+
                     if not needs_download:
                         result.skipped += 1
                         continue
-                    
+
                     # Extract provider ID from URI (spotify:artist:ID or deezer_id)
                     provider_id = artist.spotify_id if artist.spotify_id else artist.deezer_id
                     provider = "spotify" if artist.spotify_id else "deezer"
-                    
+
                     if not provider_id:
                         # Fallback for artists without service ID: use hash of name
                         import hashlib
@@ -927,13 +928,13 @@ async def download_all_images(
                         provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
                         provider = "local"
                         logger.debug(f"📥 Artist has no service ID, using hash: {artist.name} → {provider_id}")
-                    
+
                     image_path = await image_service.download_artist_image(
                         provider_id=provider_id,
                         image_url=artist.image_url,
                         provider=provider,
                     )
-                    
+
                     if image_path:
                         artist.image_path = image_path
                         result.artists_downloaded += 1
@@ -944,7 +945,7 @@ async def download_all_images(
             except Exception as e:
                 result.errors += 1
                 logger.error(f"❌ Error downloading artist image for {artist.name}: {e}")
-        
+
         # Albums with cover_url - check if path missing OR file doesn't exist
         # NOTE: Use joinedload(artist) to avoid lazy-loading in async context!
         # Without this, album.artist.name causes greenlet_spawn error
@@ -956,11 +957,12 @@ async def download_all_images(
         )
         album_results = await session.execute(album_stmt)
         albums = album_results.unique().scalars().all()  # unique() required with joinedload
-        
+
         # Debug: Count albums in each state
-        from sqlalchemy import func
         from pathlib import Path
-        
+
+        from sqlalchemy import func
+
         total_albums = await session.execute(select(func.count()).select_from(AlbumModel))
         albums_with_url = await session.execute(
             select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_url.isnot(None))
@@ -968,7 +970,7 @@ async def download_all_images(
         albums_with_path = await session.execute(
             select(func.count()).select_from(AlbumModel).where(AlbumModel.cover_path.isnot(None))
         )
-        
+
         # Count how many actually need download (no path OR path points to missing file)
         albums_needing_download = 0
         for album in albums:
@@ -978,15 +980,15 @@ async def download_all_images(
                 full_path = Path(image_service.cache_base_path) / album.cover_path
                 if not full_path.exists():
                     albums_needing_download += 1
-        
+
         logger.info(
             f"📊 Album Stats: Total={total_albums.scalar()}, "
             f"with_url={albums_with_url.scalar()}, with_path={albums_with_path.scalar()}, "
             f"actually_needing_download={albums_needing_download}"
         )
-        
+
         logger.info(f"📥 Bulk Download: Found {albums_needing_download} albums needing covers")
-        
+
         for album in albums:
             try:
                 if album.cover_url:
@@ -999,14 +1001,14 @@ async def download_all_images(
                         if not full_path.exists():
                             needs_download = True
                             logger.debug(f"📥 Album cover path exists but file missing: {album.cover_path}")
-                    
+
                     if not needs_download:
                         result.skipped += 1
                         continue
-                    
+
                     provider_id = album.spotify_id if album.spotify_id else album.deezer_id
                     provider = "spotify" if album.spotify_id else "deezer"
-                    
+
                     if not provider_id:
                         # Fallback for albums without service ID: use hash of title + artist
                         import hashlib
@@ -1014,14 +1016,14 @@ async def download_all_images(
                         provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
                         provider = "local"
                         logger.debug(f"📥 Album has no service ID, using hash: {album.title} → {provider_id}")
-                    
+
                     logger.debug(f"📥 Downloading album cover: {album.title} (provider={provider}, id={provider_id})")
                     image_path = await image_service.download_album_image(
                         provider_id=provider_id,
                         image_url=album.cover_url,
                         provider=provider,
                     )
-                    
+
                     if image_path:
                         album.cover_path = image_path
                         result.albums_downloaded += 1
@@ -1032,14 +1034,14 @@ async def download_all_images(
             except Exception as e:
                 result.errors += 1
                 logger.error(f"❌ Error downloading album cover for {album.title}: {e}", exc_info=True)
-        
+
         # Playlists with cover_url - check if path missing OR file doesn't exist
         playlist_stmt = select(PlaylistModel).where(
             PlaylistModel.cover_url.isnot(None),
         )
         playlist_results = await session.execute(playlist_stmt)
         playlists = playlist_results.scalars().all()
-        
+
         # Count how many actually need download
         playlists_needing_download = 0
         for playlist in playlists:
@@ -1049,9 +1051,9 @@ async def download_all_images(
                 full_path = Path(image_service.cache_base_path) / playlist.cover_path
                 if not full_path.exists():
                     playlists_needing_download += 1
-        
+
         logger.info(f"📥 Bulk Download: Found {playlists_needing_download} playlists needing covers")
-        
+
         for playlist in playlists:
             try:
                 if playlist.cover_url:
@@ -1064,21 +1066,21 @@ async def download_all_images(
                         if not full_path.exists():
                             needs_download = True
                             logger.debug(f"📥 Playlist cover path exists but file missing: {playlist.cover_path}")
-                    
+
                     if not needs_download:
                         result.skipped += 1
                         continue
-                    
+
                     provider_id = playlist.spotify_id
                     provider = "spotify"  # Playlists are currently Spotify-only
-                    
+
                     if provider_id:
                         image_path = await image_service.download_playlist_image(
                             provider_id=provider_id,
                             image_url=playlist.cover_url,
                             provider=provider,
                         )
-                        
+
                         if image_path:
                             playlist.cover_path = image_path
                             result.playlists_downloaded += 1
@@ -1091,29 +1093,29 @@ async def download_all_images(
             except Exception as e:
                 result.errors += 1
                 logger.error(f"❌ Error downloading playlist cover for {playlist.name}: {e}")
-        
+
         # Commit all changes
         await session.commit()
-        
+
         result.total_downloaded = (
-            result.artists_downloaded + 
-            result.albums_downloaded + 
+            result.artists_downloaded +
+            result.albums_downloaded +
             result.playlists_downloaded
         )
-        
+
         logger.info(
             f"📥 Bulk Download Complete: "
             f"{result.total_downloaded} images downloaded, "
             f"{result.errors} errors, {result.skipped} skipped"
         )
-        
+
     except Exception as e:
         logger.error(f"❌ Bulk image download failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Bulk image download failed: {e}",
         )
-    
+
     return result
 
 
@@ -1394,7 +1396,7 @@ async def get_spotify_sync_worker_status(
 
 class NewReleasesCacheStatus(BaseModel):
     """Cache status for new releases."""
-    
+
     is_valid: bool = Field(description="Whether cache contains valid data")
     is_fresh: bool = Field(description="Whether cache is still fresh (not expired)")
     age_seconds: int | None = Field(description="How old the cache is in seconds")
@@ -1405,7 +1407,7 @@ class NewReleasesCacheStatus(BaseModel):
 
 class NewReleasesSyncWorkerStatus(BaseModel):
     """Status information for the New Releases sync worker."""
-    
+
     running: bool = Field(description="Whether the worker is currently running")
     check_interval_seconds: int = Field(description="How often the worker checks for due syncs")
     last_sync: str | None = Field(description="Last sync time ISO format")
@@ -1420,13 +1422,13 @@ async def get_new_releases_worker_status(
     request: Request,
 ) -> NewReleasesSyncWorkerStatus:
     """Get the status of the New Releases sync background worker.
-    
+
     Returns information about:
     - Whether the worker is running
     - Cache status (fresh, age, album count)
     - Last sync time
     - Sync statistics
-    
+
     Returns:
         Worker status information
     """
@@ -1435,10 +1437,10 @@ async def get_new_releases_worker_status(
             status_code=503,
             detail="New Releases sync worker not initialized",
         )
-    
+
     worker = request.app.state.new_releases_sync_worker
     status = worker.get_status()
-    
+
     return NewReleasesSyncWorkerStatus(
         running=status["running"],
         check_interval_seconds=status["check_interval_seconds"],
@@ -1455,10 +1457,10 @@ async def force_new_releases_sync(
     request: Request,
 ) -> dict[str, Any]:
     """Force an immediate New Releases sync, bypassing cooldown.
-    
+
     Use this for "Refresh" button in the UI to get fresh data.
     Returns the sync result with album count and source breakdown.
-    
+
     Returns:
         Sync result summary
     """
@@ -1467,16 +1469,16 @@ async def force_new_releases_sync(
             status_code=503,
             detail="New Releases sync worker not initialized",
         )
-    
+
     worker = request.app.state.new_releases_sync_worker
     result = await worker.force_sync()
-    
+
     if result is None:
         raise HTTPException(
             status_code=500,
             detail="Sync failed - check logs for details",
         )
-    
+
     return {
         "success": True,
         "album_count": len(result.albums),

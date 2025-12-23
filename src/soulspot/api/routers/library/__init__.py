@@ -31,15 +31,15 @@ from pathlib import Path
 from fastapi import APIRouter
 from fastapi.templating import Jinja2Templates
 
-from .scan import router as scan_router
-from .stats import router as stats_router
-from .duplicates import router as duplicates_router
-from .batch_operations import router as batch_router
-from .discovery import router as discovery_router
-
 # Hey future me - Entity duplicate router lives in parent directory!
 # Imports /duplicates/artists and /duplicates/albums merge endpoints.
 from soulspot.api.routers.library_duplicates import router as entity_duplicates_router
+
+from .batch_operations import router as batch_router
+from .discovery import router as discovery_router
+from .duplicates import router as duplicates_router
+from .scan import router as scan_router
+from .stats import router as stats_router
 
 # Initialize templates (needed by scan.py for HTML fragments)
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent.parent / "templates"

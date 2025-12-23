@@ -1389,9 +1389,9 @@ class SpotifyPlugin(IMusicServicePlugin):
         Raises:
             PluginError: If API calls fail
         """
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime, timedelta
 
-        token = self._ensure_token()
+        self._ensure_token()
         cutoff_date = datetime.now(UTC) - timedelta(days=days)
         cutoff_str = cutoff_date.strftime("%Y-%m-%d")
 

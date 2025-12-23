@@ -45,11 +45,10 @@ ERROR HANDLING:
 - Network error (artwork): Skips artwork, tags other fields
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import httpx
 

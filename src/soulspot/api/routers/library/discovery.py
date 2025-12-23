@@ -125,7 +125,7 @@ async def trigger_discovery(
     """
     # Get worker from app state
     worker = getattr(request.app.state, "library_discovery_worker", None)
-    
+
     # Check Accept header for HTMX HTML response
     accept_header = request.headers.get("Accept", "")
     wants_html = "text/html" in accept_header
@@ -164,7 +164,7 @@ async def trigger_discovery(
             return HTMLResponse(
                 content='<div class="alert alert-success"><i class="bi bi-check-circle"></i> Discovery started! Album types will be updated...</div>',
             )
-        
+
         return DiscoveryTriggerResponse(
             success=True,
             message="Discovery cycle triggered. Check status for progress.",

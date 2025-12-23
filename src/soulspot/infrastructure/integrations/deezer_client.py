@@ -180,27 +180,27 @@ class DeezerClient:
         max_retries: int = 3,
     ) -> httpx.Response:
         """Make rate-limited API request with automatic retry on 429.
-        
+
         Hey future me - ALL Deezer API calls should use this method!
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint path (e.g., "/search/track")
             params: Query parameters
             access_token: OAuth access token (only for user-authenticated endpoints)
             max_retries: Max retries on 429 (default 3)
-            
+
         Returns:
             httpx.Response object
         """
         client = await self._get_client()
         rate_limiter = get_deezer_limiter()
-        
+
         # Add access_token to params if provided
         request_params = params.copy() if params else {}
         if access_token:
             request_params["access_token"] = access_token
-        
+
         for attempt in range(max_retries + 1):
             # Wait for rate limiter token
             async with rate_limiter:
@@ -209,7 +209,7 @@ class DeezerClient:
                     url=endpoint,
                     params=request_params if request_params else None,
                 )
-            
+
             # Check for rate limit (Deezer returns error in JSON)
             if response.status_code == 200:
                 try:
@@ -223,7 +223,7 @@ class DeezerClient:
                                     f"Deezer API rate limited after {max_retries} retries: {endpoint}"
                                 )
                                 return response
-                            
+
                             # Wait with backoff
                             wait_time = await rate_limiter.handle_rate_limit_response()
                             logger.warning(
@@ -233,10 +233,10 @@ class DeezerClient:
                             continue
                 except Exception:
                     pass
-            
+
             # Success or other error - don't retry
             return response
-        
+
         # Should not reach here
         return response
 
@@ -601,13 +601,13 @@ class DeezerClient:
         Hey future me - Deezer returns different fields for search vs direct get.
         Search returns basic info, direct get returns full details.
         This handles both gracefully.
-        
+
         CRITICAL: Chart albums often MISS release_date! We use "1900-01-01" as fallback
         to avoid None dates breaking the UI. The get_browse_new_releases method will
         try to enrich these via detail API.
         """
         artist_data = data.get("artist", {})
-        
+
         # Fallback for missing release_date (common in chart albums)
         release_date = data.get("release_date")
         if not release_date:
@@ -1621,7 +1621,7 @@ class DeezerClient:
         Hey future me - this is the MAIN fallback for Spotify's Browse/New Releases!
         Combines editorial releases and chart albums for a good mix.
         No OAuth needed, works for any user!
-        
+
         CRITICAL FIX: Chart albums often miss release_date! We enrich them via
         detail API (album.id -> /album/{id}) to get the real date.
 
@@ -1649,7 +1649,7 @@ class DeezerClient:
                     # Filter compilations if requested
                     if not include_compilations and album.record_type == "compile":
                         continue
-                    
+
                     # CRITICAL FIX: Enrich albums with fallback date (1900-01-01)
                     # by fetching full details from /album/{id}
                     if album.release_date == "1900-01-01":
@@ -1681,7 +1681,7 @@ class DeezerClient:
 
                     if len(albums) >= limit:
                         break
-            
+
             logger.info(f"Deezer new releases: {len(albums)} total, {enriched_count} enriched with dates")
 
             return {

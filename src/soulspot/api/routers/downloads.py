@@ -9,8 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.api.dependencies import (
     check_slskd_available,
     get_db_session,
@@ -23,6 +21,7 @@ from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.job_queue import JobQueue
 from soulspot.domain.entities import Download, DownloadStatus
 from soulspot.domain.value_objects import DownloadId, SpotifyUri, TrackId
+from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     TrackRepository,
@@ -150,7 +149,7 @@ async def create_download(
     # Must provide at least one ID
     if not any([request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]):
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id"
         )
 
@@ -164,18 +163,19 @@ async def create_download(
         if not track_id_str:
             existing_track = None
             provider_name = None
-            
+
             # Try Spotify ID first
             if request.spotify_id:
                 spotify_uri = SpotifyUri.from_string(request.spotify_id)
                 existing_track = await track_repository.get_by_spotify_uri(spotify_uri)
                 provider_name = "spotify"
                 provider_id = request.spotify_id
-            
+
             # Try Deezer ID second
             elif request.deezer_id:
                 # Look up track by deezer_id
                 from sqlalchemy import select
+
                 from soulspot.infrastructure.persistence.models import TrackModel
                 stmt = select(TrackModel).where(TrackModel.deezer_id == request.deezer_id)
                 result = await track_repository.session.execute(stmt)
@@ -185,11 +185,12 @@ async def create_download(
                     existing_track = await track_repository.get(DomainTrackId.from_string(model.id))
                 provider_name = "deezer"
                 provider_id = request.deezer_id
-            
+
             # Try Tidal ID third
             elif request.tidal_id:
                 # Look up track by tidal_id
                 from sqlalchemy import select
+
                 from soulspot.infrastructure.persistence.models import TrackModel
                 stmt = select(TrackModel).where(TrackModel.tidal_id == request.tidal_id)
                 result = await track_repository.session.execute(stmt)
@@ -637,7 +638,9 @@ async def get_download_statistics(
         Download statistics dashboard data
     """
     from datetime import timedelta
+
     from sqlalchemy import func, select
+
     from soulspot.infrastructure.persistence.models import DownloadModel
 
     session = download_repository.session

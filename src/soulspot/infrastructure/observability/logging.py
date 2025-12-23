@@ -74,12 +74,12 @@ class CorrelationIdFilter(logging.Filter):
 # formatTime/formatException/formatStack calls do the heavy lifting - don't reinvent those!
 class CompactExceptionFormatter(logging.Formatter):
     """Formatter that shows compact exception chains without verbose Python traceback boilerplate.
-    
-    Hey future me - this removes the annoying "The above exception was the direct cause of the 
-    following exception" messages that clutter Docker logs. We show the FULL stack trace but 
-    format it more compactly. Each exception in the chain gets a clear separator with the 
+
+    Hey future me - this removes the annoying "The above exception was the direct cause of the
+    following exception" messages that clutter Docker logs. We show the FULL stack trace but
+    format it more compactly. Each exception in the chain gets a clear separator with the
     exception type and message, followed by the relevant stack frames.
-    
+
     Example output:
     ERROR │ sync_worker:200 │ Sync cycle failed: All connection attempts failed
     ╰─► httpx.ConnectError: All connection attempts failed
@@ -91,25 +91,25 @@ class CompactExceptionFormatter(logging.Formatter):
         File "httpcore/_async/connection.py", line 124, in _connect
           stream = await self._network_backend.connect_tcp(**kwargs)
     """
-    
+
     def formatException(self, ei: tuple[type, BaseException, Any]) -> str:
         """Format exception chain in a compact, readable way.
-        
+
         Args:
             ei: Exception info tuple (type, value, traceback)
-            
+
         Returns:
             Formatted exception string with compact chain representation
         """
         import traceback
         from pathlib import Path
-        
+
         exc_type, exc_value, exc_tb = ei
         if exc_value is None:
             return ""
-        
+
         lines: list[str] = []
-        
+
         # Walk the exception chain (from root cause to final exception)
         exceptions: list[BaseException] = []
         current = exc_value
@@ -117,47 +117,47 @@ class CompactExceptionFormatter(logging.Formatter):
             exceptions.append(current)
             # Follow __cause__ (explicit) or __context__ (implicit) chain
             current = current.__cause__ or current.__context__
-        
+
         # Reverse to show root cause first
         exceptions.reverse()
-        
+
         for i, exc in enumerate(exceptions):
             # Exception header with type and message
             exc_class = exc.__class__.__name__
             exc_msg = str(exc)
-            
+
             if i == 0:
                 # Root cause
                 lines.append(f"╰─► {exc_class}: {exc_msg}")
             else:
                 # Chained exception
                 lines.append(f"╰─► {exc_class}: {exc_msg}")
-            
+
             # Get traceback for this exception
             if exc.__traceback__:
                 tb_lines = traceback.extract_tb(exc.__traceback__)
-                
+
                 # Filter stack frames - only show OUR code (soulspot package)
                 relevant_frames = []
                 for frame in tb_lines:
                     filepath = frame.filename
-                    
+
                     # Skip site-packages and standard library
                     if '/site-packages/' in filepath or '/usr/lib/python' in filepath:
                         continue
-                    
+
                     # Show only soulspot code
                     if 'soulspot' in filepath:
                         # Get just the filename without full path
                         filename = Path(filepath).name
                         relevant_frames.append((filename, frame.lineno, frame.name, frame.line))
-                
+
                 # Format relevant frames
                 for filename, lineno, name, line in relevant_frames:
                     lines.append(f"    File \"{filename}\", line {lineno}, in {name}")
                     if line:
                         lines.append(f"      {line.strip()}")
-        
+
         return "\n".join(lines)
 
 

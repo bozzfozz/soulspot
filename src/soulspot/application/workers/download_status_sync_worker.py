@@ -202,13 +202,13 @@ class DownloadStatusSyncWorker:
         except Exception as e:
             # Use structured log message for better debugging
             from soulspot.infrastructure.observability.log_messages import LogMessages
-            
+
             # Check if this is a connection error (expected when slskd not configured)
             is_connection_error = any(
                 err_type in str(type(e).__name__)
                 for err_type in ["ConnectError", "ConnectionError", "OSError"]
             )
-            
+
             if is_connection_error and self._consecutive_failures == 0:
                 # First failure - log as WARNING (not ERROR) since this is expected
                 logger.warning(
@@ -236,7 +236,7 @@ class DownloadStatusSyncWorker:
                     ),
                     exc_info=True
                 )
-            
+
             self._last_sync_stats = stats
             raise  # Re-raise so start() can handle circuit breaker
 

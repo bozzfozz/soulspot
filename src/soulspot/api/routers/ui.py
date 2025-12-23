@@ -1,8 +1,6 @@
 """UI routes for serving HTML templates."""
 
-import json
 import logging
-from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,16 +15,13 @@ from soulspot.api.dependencies import (
     get_download_repository,
     get_job_queue,
     get_library_scanner_service,
-    get_library_view_service,
     get_playlist_repository,
     get_spotify_browse_repository,
-    get_spotify_plugin,
     get_spotify_plugin_optional,
     get_spotify_sync_service,
     get_track_repository,
 )
 from soulspot.application.services.library_scanner_service import LibraryScannerService
-from soulspot.application.services.library_view_service import LibraryViewService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.domain.entities import DownloadStatus
@@ -38,7 +33,6 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 if TYPE_CHECKING:
-    from soulspot.application.services.token_manager import DatabaseTokenManager
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -74,7 +68,7 @@ def _get_display_url(
     entity_type: str = "album",
 ) -> str:
     """Template helper for image URL resolution.
-    
+
     Usage in Jinja2:
         {{ get_display_url(album.cover_url, album.cover_path, 'album') }}
         {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
@@ -834,7 +828,7 @@ async def settings(request: Request) -> Any:
 @router.get("/settings/quality-profiles", response_class=HTMLResponse)
 async def quality_profiles_page(request: Request) -> Any:
     """Quality profiles management page.
-    
+
     Hey future me - this page lets users manage download quality preferences!
     - List all profiles (builtin + custom)
     - Create/edit/delete custom profiles
@@ -846,7 +840,7 @@ async def quality_profiles_page(request: Request) -> Any:
 @router.get("/settings/blocklist", response_class=HTMLResponse)
 async def blocklist_page(request: Request) -> Any:
     """Blocklist management page.
-    
+
     Hey future me - this page shows blocked Soulseek sources!
     - Auto-blocks from failed downloads
     - Manual blocks for known bad sources
@@ -896,12 +890,12 @@ async def library(
 
     # Hey future me - After Unified Library (2025-12), we count ALL entities in DB!
     # Artists/Albums/Tracks show TOTAL count, "Local Files" shows tracks with file_path.
-    
+
     # Count ALL tracks in DB (not just with file_path)
     total_tracks_stmt = select(func.count(TrackModel.id))
     total_tracks_result = await session.execute(total_tracks_stmt)
     total_tracks = total_tracks_result.scalar() or 0
-    
+
     # Count tracks WITH local files (for "Verfügbar" stat)
     tracks_with_files_stmt = select(func.count(TrackModel.id)).where(
         TrackModel.file_path.isnot(None)
@@ -1196,7 +1190,7 @@ async def library_artists(
         .group_by(TrackModel.artist_id)
         .subquery()
     )
-    
+
     # Subquery for LOCAL track count per artist (tracks with file_path)
     local_track_count_subq = (
         select(TrackModel.artist_id, func.count(TrackModel.id).label("local_tracks"))
@@ -1211,7 +1205,7 @@ async def library_artists(
         .group_by(AlbumModel.artist_id)
         .subquery()
     )
-    
+
     # Subquery for LOCAL album count (albums with at least one local track)
     albums_with_files_subq = (
         select(func.distinct(TrackModel.album_id))
@@ -1246,11 +1240,11 @@ async def library_artists(
     # Exclude Various Artists patterns from artist view
     # Hey future me - VA/Compilations have their own section, don't clutter artist list!
     from soulspot.domain.value_objects.album_types import VARIOUS_ARTISTS_PATTERNS
-    
+
     stmt = stmt.where(
         ~func.lower(ArtistModel.name).in_(list(VARIOUS_ARTISTS_PATTERNS))
     )
-    
+
     # Apply source filter if requested
     if source == "local":
         # Only artists with local files (source='local' OR 'hybrid')
@@ -1380,7 +1374,7 @@ async def library_albums(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Unified library albums browser page - shows ALL albums with local/total counts.
-    
+
     Hey future me - After Table Consolidation (2025-12), shows ALL albums!
     NO PAGINATION - all albums on one page (pagination only for download queue).
     Filter by source param like /library/artists.
@@ -1397,7 +1391,7 @@ async def library_albums(
         .group_by(TrackModel.album_id)
         .subquery()
     )
-    
+
     # Subquery for local track count per album (tracks with file_path)
     local_track_count_subq = (
         select(TrackModel.album_id, func.count(TrackModel.id).label("local_tracks"))
@@ -1712,7 +1706,7 @@ async def library_artist_detail(
     # If artist has NO albums in DB, fetch from available services:
     # 1. Try Spotify (if authenticated + artist has spotify_uri)
     # 2. Fallback to Deezer (NO AUTH NEEDED - public API)
-    # 
+    #
     # This enables album browsing EVEN WITHOUT Spotify login!
     # Deezer can fetch albums by artist name for any artist.
     if not album_models:
@@ -1721,12 +1715,12 @@ async def library_artist_detail(
             from soulspot.application.services.followed_artists_service import (
                 FollowedArtistsService,
             )
+            from soulspot.application.services.token_manager import (
+                DatabaseTokenManager,
+            )
             from soulspot.config import get_settings
             from soulspot.infrastructure.integrations.spotify_client import (
                 SpotifyClient,
-            )
-            from soulspot.application.services.token_manager import (
-                DatabaseTokenManager,
             )
             from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -1751,7 +1745,7 @@ async def library_artist_detail(
 
             # 3. Create service with available plugins (spotify_plugin can be None!)
             followed_service = FollowedArtistsService(
-                session, 
+                session,
                 spotify_plugin=spotify_plugin,  # May be None - service handles this
                 deezer_plugin=deezer_plugin,    # Always available
             )
@@ -1888,7 +1882,7 @@ async def library_album_detail(
 
     # Get album first to check if we need to sync tracks
     from soulspot.infrastructure.persistence.models import AlbumModel
-    
+
     album_stmt = (
         select(AlbumModel)
         .join(AlbumModel.artist)
@@ -1900,7 +1894,7 @@ async def library_album_detail(
     )
     album_result = await session.execute(album_stmt)
     album_model = album_result.unique().scalar_one_or_none()
-    
+
     if not album_model:
         return templates.TemplateResponse(
             request,
@@ -1911,7 +1905,7 @@ async def library_album_detail(
             },
             status_code=404,
         )
-    
+
     # Query tracks for this album - include ALL tracks, not just those with file_path
     stmt = (
         select(TrackModel)
@@ -1990,7 +1984,7 @@ async def library_album_detail(
         and hasattr(track_models[0].album, "cover_url")
         else None
     )
-    
+
     # Get local artwork path
     artwork_path = (
         track_models[0].album.cover_path
@@ -2208,7 +2202,7 @@ async def library_incomplete_albums_page(request: Request) -> Any:
 @router.get("/spotify/artists", response_class=HTMLResponse)
 async def spotify_artists_page(request: Request) -> Any:
     """DEPRECATED: Redirect to unified library artists view with Spotify filter.
-    
+
     Hey future me - this Spotify-specific route is deprecated (Dec 2025)!
     Use /library/artists?source=spotify for multi-provider unified view.
     """
@@ -2232,7 +2226,7 @@ async def browse_new_releases_page(
     Hey future me - REFACTORED to use NewReleasesSyncWorker cache!
     Background worker syncs every 30 minutes and caches results.
     UI reads from cache for fast response. Manual refresh available via button.
-    
+
     MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
     Uses get_spotify_plugin_optional → returns None if not authenticated.
     Falls back to Deezer (NO AUTH NEEDED) for new releases.
@@ -2257,8 +2251,8 @@ async def browse_new_releases_page(
     Returns:
         HTML page with combined new releases from all sources
     """
-    from datetime import datetime, timedelta
     from collections import defaultdict
+    from datetime import datetime, timedelta
 
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.new_releases_service import (
@@ -2286,7 +2280,7 @@ async def browse_new_releases_page(
     # Hier lesen wir aus dem Cache für schnelle Response.
     # force_refresh=True oder cache stale → fetch live.
     worker = getattr(request.app.state, "new_releases_sync_worker", None)
-    
+
     if worker and not force_refresh:
         cache = worker.get_cached_releases()
         if cache.is_fresh():
@@ -2318,7 +2312,7 @@ async def browse_new_releases_page(
             result = await worker.force_sync()
             if result:
                 cache_info["source"] = "force_synced"
-        
+
         # Fallback: fetch directly via service
         if result is None:
             service = NewReleasesService(
@@ -2341,10 +2335,10 @@ async def browse_new_releases_page(
     # CONVERT RESULT TO TEMPLATE FORMAT
     # -------------------------------------------------------------------------
     source_counts: dict[str, int] = {"spotify": 0, "deezer": 0}
-    
+
     if result:
         source_counts = result.source_counts
-        
+
         # Convert AlbumDTOs to template-friendly dicts
         for album in result.albums:
             # Build external URL based on source
@@ -2438,11 +2432,11 @@ async def spotify_discover_page(
 
     Hey future me - REFACTORED to use DiscoverService for Multi-Provider discovery!
     Now aggregates related artists from BOTH Spotify AND Deezer.
-    
+
     MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
     Uses get_spotify_plugin_optional → returns None if not authenticated.
     Falls back to Deezer (NO AUTH NEEDED) for artist discovery.
-    
+
     Architecture:
         Route → DiscoverService
                      ↓
@@ -2461,14 +2455,14 @@ async def spotify_discover_page(
     from soulspot.application.services.discover_service import DiscoverService
 
     settings = AppSettingsService(session)
-    
+
     # Check which providers are enabled
     enabled_providers: list[str] = []
     if await settings.is_provider_enabled("spotify"):
         enabled_providers.append("spotify")
     if await settings.is_provider_enabled("deezer"):
         enabled_providers.append("deezer")
-    
+
     if not enabled_providers:
         return templates.TemplateResponse(
             request,
@@ -2535,11 +2529,11 @@ async def spotify_discover_page(
                 limit=20,
                 enabled_providers=enabled_providers,
             )
-            
+
             # Aggregate source counts
             for src, count in result.source_counts.items():
                 source_counts[src] = source_counts.get(src, 0) + count
-            
+
             for discovered in result.artists:
                 # Skip if already following
                 d_name_norm = discovered.name.lower().strip()
@@ -2547,13 +2541,13 @@ async def spotify_discover_page(
                     continue
                 if discovered.spotify_id and discovered.spotify_id in followed_ids:
                     continue
-                
+
                 # Skip duplicates in this batch
                 key = discovered.spotify_id or discovered.deezer_id or d_name_norm
                 if key in seen_ids:
                     continue
                 seen_ids.add(key)
-                
+
                 discoveries.append({
                     "spotify_id": discovered.spotify_id,
                     "deezer_id": discovered.deezer_id,
@@ -2564,11 +2558,11 @@ async def spotify_discover_page(
                     "based_on": artist.name,
                     "source": discovered.source_service,
                 })
-            
+
             # Log provider errors
             for provider, err in result.errors.items():
                 logger.debug(f"Discover: {provider} error for {artist.name}: {err}")
-                
+
         except Exception as e:
             logger.warning(f"Discovery failed for {artist.name}: {e}")
             continue
@@ -2610,15 +2604,17 @@ async def spotify_album_detail_page(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """DEPRECATED: Redirect to unified library album view.
-    
+
     Hey future me - this Spotify-specific route is deprecated (Dec 2025)!
     Use /library/albums/{artist_name}::{album_title} for multi-provider unified view.
     """
     from urllib.parse import quote
+
     from sqlalchemy import select
-    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
     from starlette.responses import RedirectResponse
-    
+
+    from soulspot.infrastructure.persistence.models import AlbumModel
+
     # Try to find album by spotify_uri to get artist_name::album_title key
     album_uri = f"spotify:album:{album_id}"
     stmt = (
@@ -2629,7 +2625,7 @@ async def spotify_album_detail_page(
     )
     result = await session.execute(stmt)
     album_model = result.unique().scalar_one_or_none()
-    
+
     if album_model and album_model.artist:
         # Build library album key: artist_name::album_title
         album_key = f"{album_model.artist.name}::{album_model.title}"

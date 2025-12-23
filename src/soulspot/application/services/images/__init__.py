@@ -26,50 +26,49 @@ Central module for all image-related operations:
 
 Usage:
     from soulspot.application.services.images import ImageService, ImageInfo
-    
+
     # Via dependency injection
     image_service = ImageService(session=session)
-    
+
     # Get display URL (sync - for templates)
     url = image_service.get_display_url(
         source_url="https://i.scdn.co/image/abc123",
         local_path="artists/ab/abc123.webp",
         entity_type="artist"
     )
-    
+
     # Download and cache (async - for sync services)
     result = await image_service.download_and_cache(
         source_url="https://i.scdn.co/image/abc123",
         entity_type="artist",
         entity_id="abc123",
     )
-    
+
     # Validate URL (async - for batch validation)
     is_valid = await image_service.validate_image("https://i.scdn.co/image/abc123")
 """
 
 # Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
-from soulspot.domain.ports.image_service import (
-    EntityType,
-    ImageInfo,
-    ImageProvider,
-    ImageSize,
-    IImageService,
-    SaveImageResult,
+# Provider Registry (Multi-Source Image System)
+from soulspot.application.services.images.image_provider_registry import (
+    ImageProviderRegistry,
 )
 
 # Implementation
 from soulspot.application.services.images.image_service import (
-    ImageService,
-    ImageDownloadErrorCode,
-    ImageDownloadResult,
     IMAGE_SIZES,
     WEBP_QUALITY,
+    ImageDownloadErrorCode,
+    ImageDownloadResult,
+    ImageService,
 )
-
-# Provider Registry (Multi-Source Image System)
-from soulspot.application.services.images.image_provider_registry import (
-    ImageProviderRegistry,
+from soulspot.domain.ports.image_service import (
+    EntityType,
+    IImageService,
+    ImageInfo,
+    ImageProvider,
+    ImageSize,
+    SaveImageResult,
 )
 
 __all__ = [

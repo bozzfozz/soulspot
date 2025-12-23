@@ -39,7 +39,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
-
 # === Type Definitions ===
 
 ProviderName = Literal["spotify", "deezer", "tidal", "musicbrainz", "coverartarchive", "local"]
@@ -47,7 +46,7 @@ ProviderName = Literal["spotify", "deezer", "tidal", "musicbrainz", "coverartarc
 
 class ImageQuality(Enum):
     """Image quality/size hints.
-    
+
     Future me note:
     Some providers return multiple sizes. This helps choose the right one.
     """
@@ -63,7 +62,7 @@ class ImageQuality(Enum):
 @dataclass(frozen=True)
 class ImageResult:
     """Result of an image lookup.
-    
+
     Future me note:
     Immutable (frozen) - represents a snapshot of what the provider returned.
     url is the CDN URL, not a local path!
@@ -73,7 +72,7 @@ class ImageResult:
     width: int | None = None
     height: int | None = None
     quality: ImageQuality = ImageQuality.MEDIUM
-    
+
     @property
     def is_high_res(self) -> bool:
         """Check if this is a high-resolution image."""
@@ -85,7 +84,7 @@ class ImageResult:
 @dataclass
 class ImageSearchResult:
     """Result of an image search (may have multiple matches).
-    
+
     Future me note:
     When searching by name, we might get multiple candidates.
     best_match is our recommendation, alternatives are fallbacks.
@@ -94,7 +93,7 @@ class ImageSearchResult:
     alternatives: list[ImageResult] = field(default_factory=list)
     query: str = ""  # Original search query
     provider: ProviderName = "spotify"
-    
+
     @property
     def found(self) -> bool:
         """Check if any image was found."""
@@ -105,87 +104,87 @@ class ImageSearchResult:
 
 class IImageProvider(ABC):
     """Interface for image providers.
-    
+
     Future me note:
     This abstraction lets ImageService/MetadataService ask for images
     WITHOUT knowing which provider it's talking to!
-    
+
     Implementierungen müssen diese Methoden implementieren:
     - get_artist_image() - By provider-specific ID
     - get_album_image() - By provider-specific ID
     - search_artist_image() - By name (fuzzy)
     - search_album_image() - By title/artist (fuzzy)
-    
+
     Jede Implementierung wrapped einen Plugin:
     - SpotifyImageProvider → SpotifyPlugin
     - DeezerImageProvider → DeezerPlugin
     - CoverArtArchiveImageProvider → MusicBrainz/CAA API
-    
+
     WICHTIG: Methoden sind async weil sie HTTP-Calls machen!
     """
-    
+
     @property
     @abstractmethod
     def provider_name(self) -> ProviderName:
         """Name of this provider (spotify, deezer, etc.).
-        
+
         Used for:
         - Cache path organization (artists/spotify/...)
         - Logging and debugging
         - Provider priority ordering
         """
         ...
-    
+
     @property
     @abstractmethod
     def requires_auth(self) -> bool:
         """Whether this provider requires authentication.
-        
+
         Future me note:
         - Spotify: True (needs OAuth)
         - Deezer: False (public API for images!)
         - CoverArtArchive: False
         """
         ...
-    
+
     @abstractmethod
     async def is_available(self) -> bool:
         """Check if provider is currently available.
-        
+
         Future me note:
         Checks:
         - Auth status (if requires_auth)
         - Rate limit status
         - Network connectivity
-        
+
         Use this before trying to fetch images!
         """
         ...
-    
+
     # === Direct Lookup Methods (by ID) ===
-    
+
     @abstractmethod
     async def get_artist_image(
-        self, 
+        self,
         artist_id: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get image URL for an artist by provider-specific ID.
-        
+
         Args:
             artist_id: Provider-specific artist ID (e.g., Spotify ID, Deezer ID)
             quality: Desired image quality
-            
+
         Returns:
             ImageResult with URL, or None if not found
-            
+
         Example:
             result = await provider.get_artist_image("1dfeR4HaWDbWqFHLkxsg1d")
             if result:
                 print(f"Found: {result.url} from {result.provider}")
         """
         ...
-    
+
     @abstractmethod
     async def get_album_image(
         self,
@@ -193,18 +192,18 @@ class IImageProvider(ABC):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get image URL for an album by provider-specific ID.
-        
+
         Args:
             album_id: Provider-specific album ID
             quality: Desired image quality
-            
+
         Returns:
             ImageResult with URL, or None if not found
         """
         ...
-    
+
     # === Search Methods (by name) ===
-    
+
     @abstractmethod
     async def search_artist_image(
         self,
@@ -212,20 +211,20 @@ class IImageProvider(ABC):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """Search for artist image by name.
-        
+
         Future me note:
         This is for when you don't have the provider ID!
         Uses fuzzy matching to find best match.
-        
+
         Args:
             artist_name: Artist name to search for
             quality: Desired image quality
-            
+
         Returns:
             ImageSearchResult with best_match and alternatives
         """
         ...
-    
+
     @abstractmethod
     async def search_album_image(
         self,
@@ -234,12 +233,12 @@ class IImageProvider(ABC):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """Search for album image by title and optionally artist.
-        
+
         Args:
             album_title: Album title to search for
             artist_name: Optional artist name for better matching
             quality: Desired image quality
-            
+
         Returns:
             ImageSearchResult with best_match and alternatives
         """
@@ -250,50 +249,50 @@ class IImageProvider(ABC):
 
 class IImageProviderRegistry(ABC):
     """Registry for managing multiple image providers.
-    
+
     Future me note:
     This handles:
     - Provider priority ordering
     - Fallback logic (try Spotify, then Deezer, then CAA)
     - Availability checking
-    
+
     ImageService uses this to get images from the best available provider.
     """
-    
+
     @abstractmethod
     def register(self, provider: IImageProvider, priority: int = 10) -> None:
         """Register a provider with given priority.
-        
+
         Lower priority number = checked first.
         Default priority 10 allows inserting before (1-9) or after (11+).
-        
+
         Args:
             provider: The image provider implementation
             priority: Ordering priority (lower = higher priority)
         """
         ...
-    
+
     @abstractmethod
     def unregister(self, provider_name: ProviderName) -> bool:
         """Remove a provider from the registry.
-        
+
         Args:
             provider_name: Name of provider to remove
-            
+
         Returns:
             True if removed, False if not found
         """
         ...
-    
+
     @abstractmethod
     async def get_available_providers(self) -> list[IImageProvider]:
         """Get list of currently available providers, sorted by priority.
-        
+
         Returns:
             List of available providers (is_available() == True)
         """
         ...
-    
+
     @abstractmethod
     async def get_artist_image(
         self,
@@ -302,22 +301,22 @@ class IImageProviderRegistry(ABC):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get artist image from best available provider.
-        
+
         Future me note:
         This is THE method for getting artist images!
         It tries providers in priority order:
         1. First try direct ID lookup (if artist_ids provided)
         2. Then try search by name (if artist_name provided)
         3. Return first successful result
-        
+
         Args:
             artist_name: Artist name for search
             artist_ids: Dict of provider → artist_id for direct lookup
             quality: Desired image quality
-            
+
         Returns:
             ImageResult from first successful provider, or None
-            
+
         Example:
             result = await registry.get_artist_image(
                 artist_name="Radiohead",
@@ -328,7 +327,7 @@ class IImageProviderRegistry(ABC):
             )
         """
         ...
-    
+
     @abstractmethod
     async def get_album_image(
         self,
@@ -338,7 +337,7 @@ class IImageProviderRegistry(ABC):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get album image from best available provider.
-        
+
         Same logic as get_artist_image but for albums.
         """
         ...

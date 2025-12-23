@@ -89,9 +89,6 @@ class CircuitBreakerRegistry:
         Returns:
             Dict of name -> CircuitBreakerStats
         """
-        from soulspot.infrastructure.observability.circuit_breaker import (
-            CircuitBreakerStats,
-        )
 
         return {name: breaker.stats for name, breaker in cls._breakers.items()}
 

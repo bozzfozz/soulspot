@@ -526,7 +526,7 @@ class IDownloadRepository(ABC):
     @abstractmethod
     async def get_completed_track_ids(self) -> set[str]:
         """Get set of track IDs for all completed downloads.
-        
+
         Used by AutoImportService to filter which files should be imported.
         Only files with completed downloads are valid for import.
         """

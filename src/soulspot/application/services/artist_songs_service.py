@@ -30,15 +30,14 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.domain.entities import Track
 from soulspot.domain.exceptions import (
+    BusinessRuleViolation,
     ConfigurationError,
     EntityNotFoundError,
-    BusinessRuleViolation,
 )
 from soulspot.domain.value_objects import ArtistId, SpotifyUri, TrackId
+from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
     TrackRepository,
@@ -90,7 +89,7 @@ class ArtistSongsService:
         self.track_repo = TrackRepository(session)
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
-        
+
         # Hey future me - ProviderMappingService for centralized ID management!
         # Used for track creation from DTOs (Spotify/Deezer).
         from soulspot.application.services.provider_mapping_service import (
@@ -125,7 +124,7 @@ class ArtistSongsService:
 
         Hey future me - refactored with Deezer fallback!
         No more access_token param - plugin handles auth internally.
-        
+
         MULTI-PROVIDER (Nov 2025):
         1. Try Spotify first (if authenticated)
         2. Fall back to Deezer (NO AUTH NEEDED!) when Spotify fails
@@ -145,7 +144,7 @@ class ArtistSongsService:
             ValueError: If artist not found in database
         """
         from soulspot.domain.ports.plugin import PluginCapability
-        
+
         stats: dict[str, int | str] = {
             "total_fetched": 0,
             "singles_found": 0,
@@ -167,7 +166,7 @@ class ArtistSongsService:
             spotify_artist_id = str(artist.spotify_uri).split(":")[-1]
 
         synced_tracks: list[Track] = []
-        track_dtos: list["TrackDTO"] = []
+        track_dtos: list[TrackDTO] = []
         source = "none"
 
         # 1. Try Spotify first (if we have spotify_uri AND plugin is authenticated)
@@ -260,7 +259,7 @@ class ArtistSongsService:
         1. Search Deezer for the artist by name
         2. Get the first match's Deezer ID
         3. Fetch top tracks using Deezer artist ID
-        
+
         NO AUTH NEEDED for any of this!
 
         Args:
@@ -420,7 +419,7 @@ class ArtistSongsService:
         # the SpotifyUri value object validates "spotify:" prefix and will reject them!
         # For Deezer tracks, skip URI-based dedup and rely on ISRC + title/artist.
         spotify_uri: SpotifyUri | None = None
-        
+
         if track_dto.spotify_id:
             # Spotify track - create proper SpotifyUri
             spotify_uri = SpotifyUri.from_string(
@@ -436,11 +435,11 @@ class ArtistSongsService:
 
         # MULTI-PROVIDER DEDUPLICATION: Check in order of reliability
         existing_track = None
-        
+
         # 1. Check by URI (exact match for same provider) - ONLY for Spotify tracks!
         if spotify_uri:
             existing_track = await self.track_repo.get_by_spotify_uri(spotify_uri)
-        
+
         # 2. Check by ISRC (cross-provider dedup via global identifier)
         if not existing_track and isrc:
             existing_track = await self.track_repo.get_by_isrc(isrc)
@@ -448,7 +447,7 @@ class ArtistSongsService:
                 logger.debug(
                     f"Found existing track by ISRC: {track_dto.title} (ISRC: {isrc})"
                 )
-        
+
         # 3. Check by title + artist (case-insensitive, last resort)
         if not existing_track:
             artist = await self.artist_repo.get_by_id(artist_id)

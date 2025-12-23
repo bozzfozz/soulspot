@@ -13,7 +13,6 @@ Real-time streaming uses SSE (Server-Sent Events) like download_manager.py does.
 
 import asyncio
 import logging
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -60,7 +59,7 @@ async def stream_logs(
     tail: int = Query(100, ge=0, le=1000, description="Number of lines to show initially"),
 ) -> EventSourceResponse:
     """Stream Docker logs via SSE (Server-Sent Events)."""
-    
+
     async def event_generator():
         """Generate SSE events from Docker logs."""
         try:
@@ -78,13 +77,13 @@ async def stream_logs(
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            
+
             # Send initial heartbeat
             yield {
                 "event": "connected",
                 "data": {"timestamp": datetime.now().isoformat(), "status": "streaming"},
             }
-            
+
             # Stream log lines as they arrive
             assert process.stdout is not None  # for mypy
             while True:
@@ -92,38 +91,38 @@ async def stream_logs(
                 if not line:
                     # Process ended or no more output
                     break
-                
+
                 log_line = line.decode("utf-8", errors="replace").rstrip()
-                
+
                 # Apply filters
                 if level != "ALL" and level not in log_line:
                     continue
                 if search and search.lower() not in log_line.lower():
                     continue
-                
+
                 # Send log line as SSE event
                 yield {
                     "event": "log",
                     "data": {"line": log_line, "timestamp": datetime.now().isoformat()},
                 }
-                
+
                 # Small delay to prevent overwhelming browser
                 await asyncio.sleep(0.01)
-            
+
             # Process ended
             await process.wait()
             yield {
                 "event": "disconnected",
                 "data": {"reason": "docker logs process ended", "exit_code": process.returncode},
             }
-            
+
         except Exception as e:
             logger.exception("Error streaming Docker logs: %s", e)
             yield {
                 "event": "error",
                 "data": {"error": str(e), "timestamp": datetime.now().isoformat()},
             }
-    
+
     return EventSourceResponse(event_generator())
 
 
@@ -135,7 +134,7 @@ async def download_logs(
     tail: int = Query(1000, ge=100, le=10000, description="Number of lines to download"),
 ) -> StreamingResponse:
     """Download Docker logs as text file."""
-    
+
     async def log_generator():
         """Generate log file content."""
         try:
@@ -149,7 +148,7 @@ async def download_logs(
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            
+
             # Read all output
             assert result.stdout is not None  # for mypy
             while True:
@@ -157,17 +156,17 @@ async def download_logs(
                 if not line:
                     break
                 yield line
-            
+
             await result.wait()
-            
+
         except Exception as e:
             logger.exception("Error downloading Docker logs: %s", e)
             error_msg = f"Error downloading logs: {e}\n"
             yield error_msg.encode("utf-8")
-    
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"soulspot_logs_{timestamp}.txt"
-    
+
     return StreamingResponse(
         log_generator(),
         media_type="text/plain",

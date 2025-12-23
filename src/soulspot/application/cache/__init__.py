@@ -2,6 +2,7 @@
 
 from soulspot.application.cache.base_cache import BaseCache
 from soulspot.application.cache.deezer_cache import DeezerCache
+
 # NOTE: DeezerChartsCache and DeezerNewReleasesCache removed
 # - Charts: showed generic browse content, feature removed
 # - New Releases: now handled by NewReleasesSyncWorker

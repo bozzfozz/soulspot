@@ -28,16 +28,15 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.domain.entities import Artist
 from soulspot.domain.exceptions import EntityNotFoundError, ValidationError
 from soulspot.domain.value_objects import ArtistId, SpotifyUri
+from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
 if TYPE_CHECKING:
     from typing import Any
-    
+
     from soulspot.domain.dtos import ArtistDTO
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -47,17 +46,17 @@ logger = logging.getLogger(__name__)
 
 def _normalize_album_key(artist_name: str, title: str, release_year: int | None) -> str:
     """Create normalized key for album deduplication.
-    
+
     Hey future me - this is CRITICAL for cross-service deduplication!
     Same album from Spotify and Deezer have different IDs but same:
     - Artist name (case-insensitive, stripped)
     - Album title (case-insensitive, stripped)
     - Release year (optional, helps distinguish remastered versions)
-    
+
     Examples:
     - "Pink Floyd|The Dark Side of the Moon|1973"
     - "aurora|all my demons greeting me as a friend|2016"
-    
+
     GOTCHA: Different versions (remastered, deluxe) may have same name!
     We include release_year to help, but it's not perfect.
     """
@@ -72,7 +71,7 @@ class FollowedArtistsService:
 
     Hey future me - REFACTORED for MULTI-PROVIDER support!
     Now syncs followed artists from Spotify AND Deezer to unified library.
-    
+
     MULTI-PROVIDER (Nov 2025):
     - sync_followed_artists() - Spotify followed artists (requires OAuth)
     - sync_followed_artists_all_providers() - ALL providers aggregated!
@@ -81,7 +80,7 @@ class FollowedArtistsService:
 
     All followed artists from any provider land in the unified soulspot_artists table
     with appropriate source field ('spotify', 'deezer', 'hybrid').
-    
+
     Cross-provider deduplication ensures same artist followed on multiple services
     gets merged into single library entry with all service IDs.
 
@@ -99,14 +98,14 @@ class FollowedArtistsService:
 
         Hey future me - refactored to use SpotifyPlugin WITH Deezer fallback!
         The plugin handles token management internally, no more access_token juggling.
-        
+
         MULTI-SERVICE PATTERN (Dec 2025):
         Both plugins are now OPTIONAL! The service works with:
         - BOTH plugins: Full capability (Spotify primary, Deezer fallback)
         - Spotify only: Standard Spotify-only mode
         - Deezer only: Public API mode (no OAuth needed!)
         - Neither: Will fail on sync operations (but constructor succeeds)
-        
+
         PROVIDER MAPPING SERVICE (Nov 2025):
         Wir nutzen jetzt den zentralen ProviderMappingService für ID-Mapping.
         Statt manuell ArtistId.generate() zu machen, nutzt der MappingService
@@ -140,9 +139,9 @@ class FollowedArtistsService:
 
         Hey future me - refactored to use SpotifyPlugin!
         No more access_token parameter - plugin handles auth internally.
-        
+
         IMPORTANT: This method REQUIRES spotify_plugin to be set!
-        If you need album sync without Spotify, use sync_artist_albums() 
+        If you need album sync without Spotify, use sync_artist_albums()
         which falls back to Deezer.
 
         Returns:
@@ -567,12 +566,12 @@ class FollowedArtistsService:
         Unlike SpotifySyncService which uses separate spotify_albums table, this method
         puts albums directly into the unified music library so they appear alongside
         local albums. This is key for the Music Manager concept!
-        
+
         MULTI-PROVIDER (Nov 2025):
         1. Try Spotify first (if authenticated)
         2. Fall back to Deezer (NO AUTH NEEDED!) when Spotify fails
         3. Deezer albums are searched by artist name, then fetched
-        
+
         WHY fallback?
         - Users without Spotify OAuth can still see artist discographies
         - Deezer's public API is reliable for artist album lookups
@@ -585,7 +584,6 @@ class FollowedArtistsService:
         Returns:
             Dict with sync stats (total, added, skipped, source)
         """
-        from soulspot.domain.entities import Album
         from soulspot.domain.ports.plugin import PluginCapability
         from soulspot.infrastructure.persistence.repositories import AlbumRepository
 
@@ -679,7 +677,7 @@ class FollowedArtistsService:
                 album_dto.title,
                 album_dto.release_year,
             )
-            
+
             # Skip if we've already seen this album (by normalized key)
             if norm_key in seen_keys:
                 stats["skipped"] += 1
@@ -691,7 +689,7 @@ class FollowedArtistsService:
             # Hey future me - Deezer albums DON'T have Spotify URIs!
             # SpotifyUri validates "spotify:" prefix, so we can't create pseudo-URIs.
             spotify_uri: SpotifyUri | None = None
-            
+
             if album_dto.spotify_id:
                 # Spotify album - create proper SpotifyUri
                 spotify_uri = SpotifyUri.from_string(
@@ -703,7 +701,7 @@ class FollowedArtistsService:
                     stats["skipped"] += 1
                     continue
             # For Deezer albums: NO SpotifyUri, skip URI-based dedup check
-            
+
             # Additional check: Search by title + artist to catch cross-service duplicates
             # Hey future me - this catches albums that exist with different source URI
             existing_by_title = await album_repo.get_by_title_and_artist(
@@ -724,7 +722,7 @@ class FollowedArtistsService:
                 artist_internal_id=str(artist.id.value),
                 source=source,
             )
-            
+
             if was_created:
                 stats["added"] += 1
                 logger.debug(
@@ -741,7 +739,7 @@ class FollowedArtistsService:
         return stats  # type: ignore[return-value]
 
     async def _fetch_albums_from_deezer(
-        self, 
+        self,
         artist_name: str,
         deezer_artist_id: str | None = None,
     ) -> list:
@@ -752,7 +750,7 @@ class FollowedArtistsService:
         1. If we HAVE deezer_id → use it directly (FASTER, MORE ACCURATE!)
         2. If NO deezer_id → Search Deezer for the artist by name (fallback)
         3. Fetch albums using the resolved Deezer artist ID
-        
+
         NO AUTH NEEDED for any of this!
 
         Args:
@@ -770,7 +768,7 @@ class FollowedArtistsService:
             # Hey future me - this is the "Übersetzer" - we TRANSLATE our stored ID
             # to the correct Deezer API call, instead of searching by name every time!
             resolved_deezer_id = deezer_artist_id
-            
+
             if not resolved_deezer_id:
                 # Fallback: Search for artist on Deezer by name
                 logger.debug(f"No Deezer ID stored for '{artist_name}', searching...")
@@ -822,7 +820,7 @@ class FollowedArtistsService:
         Hey future me - refactored to use SpotifyPlugin!
         No more access_token param - plugin handles auth internally.
         Returns ArtistDTOs instead of raw Spotify JSON.
-        
+
         IMPORTANT: Requires spotify_plugin to be configured!
 
         Args:
@@ -830,7 +828,7 @@ class FollowedArtistsService:
 
         Returns:
             List of ArtistDTOs from Spotify
-            
+
         Raises:
             ValidationError: If spotify_plugin is not configured
         """

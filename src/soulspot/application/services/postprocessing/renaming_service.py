@@ -484,7 +484,9 @@ class RenamingService:
         try:
             source_path.rename(dest_path)
         except OSError as e:
-            from soulspot.infrastructure.observability.error_formatting import format_oserror_message
+            from soulspot.infrastructure.observability.error_formatting import (
+                format_oserror_message,
+            )
             if e.errno == errno.EXDEV:
                 # Cross-filesystem move - fallback to copy+delete via shutil
                 logger.info(

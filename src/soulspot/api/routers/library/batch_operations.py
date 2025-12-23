@@ -159,15 +159,15 @@ async def clear_entire_library(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """⚠️ DEV ONLY: Clear ENTIRE library (local + Spotify + Deezer + Tidal).
-    
+
     Hey future me - this is the ULTRA NUCLEAR OPTION! Only for development/testing!
     DELETES EVERYTHING:
     - ALL artists (local + Spotify + Deezer + hybrid)
     - ALL albums (local + Spotify + Deezer + hybrid)
     - ALL tracks (local + Spotify + Deezer + hybrid)
-    
+
     ⚠️ PROTECTED: Only available when DEBUG mode is enabled!
-    
+
     Returns:
         Statistics about deleted entities
     """
@@ -177,25 +177,26 @@ async def clear_entire_library(
             detail="This endpoint is only available in DEBUG mode. "
                    "Set DEBUG=true in your configuration to enable it.",
         )
-    
+
     from sqlalchemy import delete, func, select
+
     from soulspot.infrastructure.persistence.models import (
-        ArtistModel,
         AlbumModel,
+        ArtistModel,
         TrackModel,
     )
-    
+
     # Count before deletion
     artists_count = await session.scalar(select(func.count(ArtistModel.id)))
     albums_count = await session.scalar(select(func.count(AlbumModel.id)))
     tracks_count = await session.scalar(select(func.count(TrackModel.id)))
-    
+
     # Nuclear option: DELETE EVERYTHING (CASCADE will handle relationships)
     await session.execute(delete(TrackModel))
     await session.execute(delete(AlbumModel))
     await session.execute(delete(ArtistModel))
     await session.commit()
-    
+
     return {
         "success": True,
         "message": "⚠️ ENTIRE library cleared (local + Spotify + Deezer + Tidal)",
@@ -238,13 +239,13 @@ async def preview_batch_rename(
     from soulspot.application.services.postprocessing.renaming_service import (
         RenamingService,
     )
+    from soulspot.domain.value_objects import AlbumId as DomainAlbumId
+    from soulspot.domain.value_objects import ArtistId as DomainArtistId
     from soulspot.infrastructure.persistence.models import TrackModel
     from soulspot.infrastructure.persistence.repositories import (
         AlbumRepository,
         ArtistRepository,
     )
-    from soulspot.domain.value_objects import AlbumId as DomainAlbumId
-    from soulspot.domain.value_objects import ArtistId as DomainArtistId
 
     # Initialize services
     app_settings_service = AppSettingsService(session)
@@ -364,13 +365,13 @@ async def execute_batch_rename(
     from soulspot.application.services.postprocessing.renaming_service import (
         RenamingService,
     )
+    from soulspot.domain.value_objects import AlbumId as DomainAlbumId
+    from soulspot.domain.value_objects import ArtistId as DomainArtistId
     from soulspot.infrastructure.persistence.models import TrackModel
     from soulspot.infrastructure.persistence.repositories import (
         AlbumRepository,
         ArtistRepository,
     )
-    from soulspot.domain.value_objects import AlbumId as DomainAlbumId
-    from soulspot.domain.value_objects import ArtistId as DomainArtistId
 
     # Initialize services
     app_settings_service = AppSettingsService(session)

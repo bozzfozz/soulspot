@@ -75,7 +75,7 @@ class SpotifySyncService:
 
         Hey future me - refactored to use SpotifyPlugin!
         The plugin handles token management internally, no more access_token juggling.
-        
+
         NOTE (Dec 2025): Deezer fallback removed!
         - Use DeezerSyncService for Deezer operations
         - Use ProviderSyncOrchestrator for multi-provider aggregation (Phase 3)
@@ -244,7 +244,7 @@ class SpotifySyncService:
             # This makes followed artists appear on /library/artists page.
             try:
                 library_stats = await self._sync_to_unified_library(
-                    spotify_artists, 
+                    spotify_artists,
                     removed_ids=to_remove if should_remove else None
                 )
                 logger.info(
@@ -499,7 +499,7 @@ class SpotifySyncService:
         No more access_token - plugin manages auth internally.
         Called when user navigates to artist detail page.
         Lazy-loads albums only when needed.
-        
+
         MULTI-PROVIDER (Nov 2025):
         - Tries Spotify first (if authenticated)
         - Falls back to Deezer (NO AUTH NEEDED!) when Spotify fails
@@ -552,7 +552,7 @@ class SpotifySyncService:
                 stats["added"] += 1
 
             stats["total"] = len(album_dtos)
-            
+
             # Track source for stats/debugging
             if album_dtos:
                 stats["source"] = getattr(album_dtos[0], 'source_service', 'unknown')
@@ -579,16 +579,16 @@ class SpotifySyncService:
         """Fetch all albums for an artist with MULTI-PROVIDER FALLBACK.
 
         Hey future me - MULTI-PROVIDER SUPPORT (Nov 2025)!
-        
+
         Priority order:
         1. Spotify (if authenticated) - preferred for Spotify-sourced artists
         2. Deezer (NO AUTH NEEDED!) - fallback when Spotify unavailable
-        
+
         WHY Deezer fallback?
         - Deezer's public API doesn't require OAuth for artist albums!
         - Users without Spotify OAuth can still browse artist discographies
         - Better UX: "show me albums" works regardless of auth state
-        
+
         GOTCHA: Deezer uses different artist IDs!
         - For Spotify artists, we search by artist name on Deezer
         - Then fetch albums for the matched Deezer artist
@@ -643,17 +643,17 @@ class SpotifySyncService:
         Hey future me - supports BOTH Spotify AND Deezer albums!
         NOW ALSO SYNCS TRACKS automatically if AlbumDTO contains them!
         This prevents the "no tracks" problem where albums load but tracks don't.
-        
+
         DEDUPLICATION STRATEGY:
         - For Spotify albums: Use spotify_id as unique identifier
         - For Deezer albums: Use deezer_id as unique identifier
         - We prefix Deezer IDs with "deezer:" to avoid collisions
-        
+
         WHY this works:
         - Same album from Spotify = same spotify_id = upsert (no duplicate)
         - Same album from Deezer = same deezer_id = upsert (no duplicate)
         - Different source for same album = different IDs = could be duplicate!
-        
+
         TODO: Consider ISRC matching for cross-service deduplication
         """
         from soulspot.domain.dtos import AlbumDTO
@@ -668,7 +668,7 @@ class SpotifySyncService:
         if not unique_id and album_dto.deezer_id:
             # Use Deezer ID with prefix to avoid collisions
             unique_id = f"deezer:{album_dto.deezer_id}"
-        
+
         if not unique_id:
             logger.warning("AlbumDTO missing both spotify_id and deezer_id, skipping")
             return
@@ -692,7 +692,7 @@ class SpotifySyncService:
             album_type=album_type,
             total_tracks=total_tracks,
         )
-        
+
         # NEW: Auto-sync tracks if AlbumDTO contains them!
         # This prevents the "album loaded but no tracks" problem.
         if hasattr(album_dto, 'tracks') and album_dto.tracks:
@@ -702,7 +702,7 @@ class SpotifySyncService:
                     await self._upsert_track_from_dto(track_dto, unique_id)
                 except Exception as e:
                     logger.warning(f"Failed to sync track from album {unique_id}: {e}")
-            
+
             # Mark tracks as synced (prevent re-sync cooldown)
             await self.repo.set_tracks_synced(unique_id)
 
@@ -717,15 +717,15 @@ class SpotifySyncService:
         force: bool = False,
     ) -> dict[str, Any]:
         """Sync top tracks for a specific artist from Spotify.
-        
+
         Hey future me - das ist die KONSISTENTE Methode wie DeezerSyncService!
         BRAUCHT Spotify OAuth um Top Tracks zu holen.
-        
+
         Args:
             artist_id: Spotify artist ID
             market: Market code (default: DE)
             force: Skip cooldown check
-            
+
         Returns:
             Sync result with counts
         """
@@ -736,7 +736,7 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
         }
-        
+
         # Check cooldown (use TRACKS_SYNC_COOLDOWN for consistency)
         sync_status = await self.repo.get_sync_status(cache_key)
         if not force and sync_status:
@@ -747,13 +747,13 @@ class SpotifySyncService:
                 if elapsed < self.TRACKS_SYNC_COOLDOWN:
                     stats["skipped_cooldown"] = True
                     return stats
-        
+
         try:
             # Get top tracks from Spotify
             tracks = await self.spotify_plugin.get_artist_top_tracks(
                 artist_id, market=market
             )
-            
+
             for track_dto in tracks:
                 try:
                     # Save track to DB
@@ -771,21 +771,21 @@ class SpotifySyncService:
                     stats["tracks_synced"] += 1
                 except Exception as e:
                     logger.warning(f"Failed to save track {track_dto.title}: {e}")
-            
+
             # Update sync status
             await self.repo.update_sync_status(cache_key)
             await self._session.commit()
-            
+
             stats["synced"] = True
             logger.info(
                 f"SpotifySyncService: Artist {artist_id} top tracks synced - "
                 f"{stats['tracks_synced']} tracks"
             )
-            
+
         except Exception as e:
             logger.error(f"SpotifySyncService: Artist top tracks sync failed: {e}")
             stats["error"] = str(e)
-        
+
         return stats
 
     # =========================================================================
@@ -798,20 +798,20 @@ class SpotifySyncService:
         force: bool = False,
     ) -> dict[str, Any]:
         """Sync related artists for a specific artist from Spotify.
-        
+
         Hey future me - das ist ein DISCOVERY Feature!
         Holt ähnliche Künstler und speichert sie als "related" in DB.
         BRAUCHT Spotify OAuth.
-        
+
         Use Case:
         - "Artists You Might Like" auf Artist-Detail-Seite
         - Discovery Recommendations
         - "Fans Also Like" Section
-        
+
         Args:
             artist_id: Spotify artist ID
             force: Skip cooldown check
-            
+
         Returns:
             Sync result with counts
         """
@@ -822,7 +822,7 @@ class SpotifySyncService:
             "error": None,
             "skipped_cooldown": False,
         }
-        
+
         # Check cooldown
         sync_status = await self.repo.get_sync_status(cache_key)
         if not force and sync_status:
@@ -833,11 +833,11 @@ class SpotifySyncService:
                 if elapsed < self.ARTISTS_SYNC_COOLDOWN:
                     stats["skipped_cooldown"] = True
                     return stats
-        
+
         try:
             # Get related artists from Spotify
             related_artists = await self.spotify_plugin.get_related_artists(artist_id)
-            
+
             for artist_dto in related_artists:
                 try:
                     # Save artist to DB
@@ -850,25 +850,25 @@ class SpotifySyncService:
                     stats["artists_synced"] += 1
                 except Exception as e:
                     logger.warning(f"Failed to save related artist {artist_dto.name}: {e}")
-            
+
             # TODO: Store the relationship (artist_id -> related_artist_id)
             # This requires a new table: artist_relations
             # For now, we just cache the related artists in DB
-            
+
             # Update sync status
             await self.repo.update_sync_status(cache_key)
             await self._session.commit()
-            
+
             stats["synced"] = True
             logger.info(
                 f"SpotifySyncService: Related artists for {artist_id} synced - "
                 f"{stats['artists_synced']} artists"
             )
-            
+
         except Exception as e:
             logger.error(f"SpotifySyncService: Related artists sync failed: {e}")
             stats["error"] = str(e)
-        
+
         return stats
 
     # =========================================================================
@@ -881,29 +881,29 @@ class SpotifySyncService:
         force: bool = False,
     ) -> dict[str, Any]:
         """Sync Spotify new releases to database.
-        
+
         Hey future me - DIESE METHODE IST DEPRECATED!
-        
+
         Warum deprecated?
         - New Releases sind BROWSE-Content, nicht User-Library-Content
         - BROWSE-Content sollte GECACHED werden, nicht in DB geschrieben
         - Das vermeidet Library-Pollution (random Künstler in User's Library)
         - Nutze stattdessen NewReleasesSyncWorker mit NewReleasesCache!
-        
+
         Der richtige Flow:
         1. NewReleasesSyncWorker ruft NewReleasesService.get_all_new_releases() auf
         2. Ergebnisse werden in-memory gecached (NewReleasesCache)
         3. UI Route liest aus dem Cache
         4. KEINE DB-Persistenz für Browse-Content!
-        
+
         Migration:
         - Statt sync_new_releases() → NewReleasesSyncWorker nutzen
         - Statt repo.upsert_album() → Cache-Only
-        
+
         Args:
             limit: Max albums to sync (IGNORED - deprecated)
             force: Skip cooldown check (IGNORED - deprecated)
-            
+
         Returns:
             Warning dict indicating deprecation
         """
@@ -915,13 +915,13 @@ class SpotifySyncService:
             DeprecationWarning,
             stacklevel=2,
         )
-        
+
         logger.warning(
             "SpotifySyncService.sync_new_releases() is DEPRECATED! "
             "Browse-Content should use NewReleasesSyncWorker cache, not DB. "
             "This prevents Library pollution with random artists."
         )
-        
+
         return {
             "synced": False,
             "albums_synced": 0,
@@ -1640,7 +1640,7 @@ class SpotifySyncService:
                 if album_dto.artist_spotify_id and album_dto.artist_name:
                     # Create a minimal ArtistDTO for the artist
                     from soulspot.domain.dtos import ArtistDTO
-                    
+
                     primary_artist = ArtistDTO(
                         name=album_dto.artist_name,
                         source_service=album_dto.source_service,

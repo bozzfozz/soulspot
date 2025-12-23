@@ -680,7 +680,7 @@ class Settings(BaseSettings):
         """Ensure all storage directories exist, including database parent directory."""
         import logging
         logger = logging.getLogger(__name__)
-        
+
         # Ensure storage directories exist with logging
         for name, path in [
             ("Downloads", self.storage.download_path),

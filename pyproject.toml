@@ -111,6 +111,16 @@ ignore = [
 "__init__.py" = ["F401"]
 "tests/**/*" = ["ARG", "S101"]
 "src/soulspot/api/routers/ui.py" = ["B007"]
+# Plugin interface implementations - unused args are part of the contract
+"src/soulspot/infrastructure/plugins/*.py" = ["ARG002"]
+# Deprecated files (scheduled for deletion)
+"src/soulspot/api/routers/library.py" = ["E402", "F821", "ARG", "B904"]
+"src/soulspot/api/routers/artwork.py" = ["E402"]
+# Workers with intentional patterns
+"src/soulspot/application/workers/*.py" = ["ARG002"]
+# Image providers - interface implementations
+"src/soulspot/infrastructure/image_providers/*.py" = ["ARG002"]
+"src/soulspot/infrastructure/providers/*.py" = ["ARG002"]
 
 [tool.ruff.format]
 quote-style = "double"

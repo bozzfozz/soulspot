@@ -5,7 +5,7 @@ This file is DEPRECATED. The CoverArtArchive feature is not actively used.
 This file will be removed in a future release.
 DELETE: src/soulspot/infrastructure/image_providers/caa_image_provider.py
 
-NOTE: Unlike SpotifyImageProvider and DeezerImageProvider, there is NO 
+NOTE: Unlike SpotifyImageProvider and DeezerImageProvider, there is NO
 replacement in infrastructure/providers/. If CAA support is needed in the
 future, it should be re-implemented there.
 
@@ -77,61 +77,61 @@ warnings.warn(
 
 class CoverArtArchiveImageProvider(IImageProvider):
     """⚠️ DEPRECATED - This feature is not actively used!
-    
+
     Hey future me - dieser Provider:
     4. Keine Auth nötig, immer verfügbar
-    
+
     Priorität: 3 - nur als letzter Fallback für Album-Cover
     """
-    
+
     def __init__(
         self,
         musicbrainz_client: MusicBrainzClient,
         caa_client: CoverArtArchiveClient,
     ) -> None:
         """Initialize with clients.
-        
+
         Args:
             musicbrainz_client: For searching release groups
             caa_client: For fetching artwork
         """
         self._mb_client = musicbrainz_client
         self._caa_client = caa_client
-        
+
     # === Properties ===
-    
+
     @property
     def provider_name(self) -> ProviderName:
         """CoverArtArchive provider name."""
         return "coverartarchive"
-    
+
     @property
     def requires_auth(self) -> bool:
         """MusicBrainz and CAA are free, no auth required."""
         return False
-    
+
     # === Availability ===
-    
+
     async def is_available(self) -> bool:
         """MusicBrainz and CAA are always available (public APIs).
-        
+
         Hey future me - wir könnten Health-Checks machen, aber das ist zu langsam.
         Beide APIs sind sehr stabil und haben gute Uptime.
         """
         return True
-    
+
     # === Direct Lookup Methods (by ID) ===
-    
+
     async def get_artist_image(
         self,
         artist_id: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """CoverArtArchive does NOT have artist images!
-        
+
         Hey future me - CAA ist NUR für Album-Cover.
         Für Artist-Bilder nutze Spotify oder Deezer.
-        
+
         Returns:
             Always None - CAA has no artist images
         """
@@ -141,59 +141,59 @@ class CoverArtArchiveImageProvider(IImageProvider):
             artist_id
         )
         return None
-    
+
     async def get_album_image(
         self,
         album_id: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get album image by MusicBrainz Release Group MBID.
-        
+
         Args:
             album_id: MusicBrainz Release Group ID (MBID)
             quality: Desired image quality
-            
+
         Returns:
             ImageResult with URL or None if not found
         """
         try:
             # CAA uses Release Group MBIDs
             url = await self._caa_client.get_release_group_front_cover(album_id)
-            
+
             if not url:
                 logger.debug("No CAA artwork for release-group %s", album_id)
                 return None
-            
+
             # Thumbnail sizes: 250, 500, 1200
             # Wir versuchen die passende Größe zu bekommen
             thumbnail_url = await self._get_thumbnail_url(album_id, quality)
             final_url = thumbnail_url or url
-            
+
             return ImageResult(
                 url=final_url,
                 provider="coverartarchive",
                 quality=quality,
                 entity_id=album_id,
             )
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to get CAA album image for %s: %s",
                 album_id, e
             )
             return None
-    
+
     async def _get_thumbnail_url(
-        self, 
-        release_group_mbid: str, 
+        self,
+        release_group_mbid: str,
         quality: ImageQuality,
     ) -> str | None:
         """Get thumbnail URL for quality preference.
-        
+
         Args:
             release_group_mbid: MusicBrainz Release Group ID
             quality: Desired quality
-            
+
         Returns:
             Thumbnail URL or None
         """
@@ -205,8 +205,8 @@ class CoverArtArchiveImageProvider(IImageProvider):
             ImageQuality.LARGE: 1200,
             ImageQuality.ORIGINAL: 1200,
         }
-        size = size_map.get(quality, 500)
-        
+        size_map.get(quality, 500)
+
         try:
             # Wir brauchen eine Release ID für Thumbnails, nicht Release Group
             # Das ist kompliziert, daher nutzen wir erstmal die standard URL
@@ -214,19 +214,19 @@ class CoverArtArchiveImageProvider(IImageProvider):
             return None
         except Exception:
             return None
-    
+
     # === Search Methods (by name) ===
-    
+
     async def search_artist_image(
         self,
         artist_name: str,
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """CoverArtArchive does NOT have artist images!
-        
+
         Hey future me - CAA ist NUR für Album-Cover.
         Diese Methode gibt immer leeres Ergebnis zurück.
-        
+
         Returns:
             Empty ImageSearchResult - CAA has no artist images
         """
@@ -236,7 +236,7 @@ class CoverArtArchiveImageProvider(IImageProvider):
             artist_name
         )
         return ImageSearchResult(matches=[], best_match=None)
-    
+
     async def search_album_image(
         self,
         album_title: str,
@@ -244,16 +244,16 @@ class CoverArtArchiveImageProvider(IImageProvider):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageSearchResult:
         """Search for album image via MusicBrainz + CoverArtArchive.
-        
+
         Hey future me - der Killer-Usecase für CAA!
         1. Suche MusicBrainz nach Release Group
         2. Hole Cover von CAA für gefundene Release Groups
-        
+
         Args:
             album_title: Album title to search for
             artist_name: Optional artist name for better matching
             quality: Desired image quality
-            
+
         Returns:
             ImageSearchResult with best_match and alternatives
         """
@@ -264,30 +264,30 @@ class CoverArtArchiveImageProvider(IImageProvider):
                 album=album_title,
                 limit=5,
             )
-            
+
             if not release_groups:
                 logger.debug(
                     "No MusicBrainz results for album: %s (artist: %s)",
                     album_title, artist_name
                 )
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             # 2. Try to get cover art for each release group
             matches: list[ImageResult] = []
-            
+
             for rg in release_groups:
                 rg_mbid = rg.get("id")
                 if not rg_mbid:
                     continue
-                
+
                 # Get cover URL from CAA
                 url = await self._caa_client.get_release_group_front_cover(rg_mbid)
-                
+
                 if url:
                     # Build entity name for logging/debugging
                     rg_title = rg.get("title", album_title)
                     rg_artist = self._extract_artist_credit(rg)
-                    
+
                     matches.append(ImageResult(
                         url=url,
                         provider="coverartarchive",
@@ -295,34 +295,34 @@ class CoverArtArchiveImageProvider(IImageProvider):
                         entity_name=rg_title,
                         entity_id=rg_mbid,
                     ))
-                    
+
                     logger.debug(
                         "Found CAA cover for %s - %s (mbid=%s)",
                         rg_artist, rg_title, rg_mbid
                     )
-            
+
             if not matches:
                 logger.debug(
                     "No CAA artwork found for album: %s (artist: %s)",
                     album_title, artist_name
                 )
                 return ImageSearchResult(matches=[], best_match=None)
-            
+
             return ImageSearchResult(
                 matches=matches,
                 best_match=matches[0],
             )
-            
+
         except Exception as e:
             logger.warning(
                 "Failed to search CAA album image for %s: %s",
                 album_title, e
             )
             return ImageSearchResult(matches=[], best_match=None)
-    
+
     def _extract_artist_credit(self, release_group: dict[str, Any]) -> str:
         """Extract artist name from release group data.
-        
+
         MusicBrainz artist-credit is a complex structure, we just want the name.
         """
         try:

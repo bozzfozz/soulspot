@@ -30,7 +30,6 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.exceptions import ValidationError
-
 from soulspot.infrastructure.persistence.models import AppSettingsModel
 
 logger = logging.getLogger(__name__)

@@ -13,9 +13,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.domain.value_objects import ArtistId
+from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
 # Hey future me – SpotifyClient Import entfernt!
@@ -90,7 +89,7 @@ class DiscographyService:
     # GOTCHA: Spotify returns compilations, live albums, singles - you might not WANT them all
     # Consider adding filter for album_type (album vs single vs compilation)
     #
-    # NACH TABLE CONSOLIDATION (Nov 2025): 
+    # NACH TABLE CONSOLIDATION (Nov 2025):
     # - Nutzt unified soulspot_albums Tabelle
     # - "owned" = file_path IS NOT NULL oder source='local'
     # - "known" = source='spotify' (alle bekannten Spotify-Alben)

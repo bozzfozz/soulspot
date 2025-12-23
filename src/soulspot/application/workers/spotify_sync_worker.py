@@ -40,14 +40,14 @@ logger = logging.getLogger(__name__)
 
 def _get_image_service() -> "ImageService":
     """Get ImageService with correct Docker cache path.
-    
+
     Hey future me - THIS IS CRITICAL!
     ImageService() ohne Parameter nutzt default ./images (FALSCH in Docker!).
     Wir müssen den korrekten Pfad aus Settings holen.
     """
     from soulspot.application.services.images import ImageService
     from soulspot.config import get_settings
-    
+
     settings = get_settings()
     return ImageService(
         cache_base_path=str(settings.storage.image_path),
@@ -138,13 +138,13 @@ class SpotifySyncWorker:
 
     def _is_rate_limited(self) -> bool:
         """Check if we're currently in rate limit cooldown.
-        
+
         Hey future me - diese Methode prüft ob wir noch im Rate Limit Cooldown sind.
         Wenn ja, sollten KEINE Syncs ausgeführt werden!
         """
         if self._rate_limit_until is None:
             return False
-        
+
         now = datetime.now(UTC)
         if now >= self._rate_limit_until:
             # Cooldown expired - reset
@@ -152,7 +152,7 @@ class SpotifySyncWorker:
             self._rate_limit_backoff_minutes = 5  # Reset backoff
             logger.info("Spotify rate limit cooldown expired, resuming syncs")
             return False
-        
+
         # Still in cooldown
         remaining = self._rate_limit_until - now
         logger.debug(
@@ -163,14 +163,14 @@ class SpotifySyncWorker:
 
     def _set_rate_limit_cooldown(self, retry_after_seconds: int | None = None) -> None:
         """Set rate limit cooldown after receiving 429.
-        
+
         Hey future me - EXPONENTIELLES BACKOFF!
         5 min → 10 min → 20 min → 40 min → 60 min (max)
-        
+
         Wenn Spotify Retry-After header sendet, nutze das als Minimum.
         """
         now = datetime.now(UTC)
-        
+
         # Use retry_after if provided, otherwise use backoff
         if retry_after_seconds and retry_after_seconds > 0:
             # Spotify told us how long to wait
@@ -178,15 +178,15 @@ class SpotifySyncWorker:
         else:
             # Use exponential backoff
             cooldown_seconds = self._rate_limit_backoff_minutes * 60
-        
+
         self._rate_limit_until = now + timedelta(seconds=cooldown_seconds)
-        
+
         # Increase backoff for next time (exponential, max 60 min)
         self._rate_limit_backoff_minutes = min(
             self._rate_limit_backoff_minutes * 2,
             60  # Max 60 minutes
         )
-        
+
         logger.warning(
             f"Spotify rate limited! Pausing all syncs for {cooldown_seconds}s "
             f"(until {self._rate_limit_until.isoformat()}). "
@@ -195,7 +195,7 @@ class SpotifySyncWorker:
 
     def _reset_rate_limit_on_success(self) -> None:
         """Reset rate limit backoff after successful sync.
-        
+
         Hey future me - nach einem erfolgreichen Sync setzen wir den Backoff zurück.
         Das bedeutet: Wenn wir einmal rate limited werden und dann wieder
         erfolgreich syncen, startet der nächste Backoff wieder bei 5 Minuten.
@@ -280,7 +280,7 @@ class SpotifySyncWorker:
 
         UPDATE (Nov 2025): Now uses session_scope context manager instead of
         async generator to fix "GC cleaning up non-checked-in connection" errors.
-        
+
         UPDATE (Dez 2025): Added rate limit cooldown check!
         If we're rate limited, we skip ALL syncs until cooldown expires.
         """
@@ -405,7 +405,7 @@ class SpotifySyncWorker:
 
                 # Commit any changes
                 await session.commit()
-                
+
                 # Hey future me - successful sync cycle means we're not rate limited!
                 # Reset the backoff so next rate limit starts at 5 minutes again.
                 self._reset_rate_limit_on_success()
@@ -422,7 +422,7 @@ class SpotifySyncWorker:
                         match = re.search(r'retry[- ]?after[:\s]*(\d+)', error_str)
                         if match:
                             retry_after = int(match.group(1))
-                    
+
                     # Set rate limit cooldown
                     self._set_rate_limit_cooldown(retry_after)
                 else:
