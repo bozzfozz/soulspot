@@ -135,11 +135,13 @@ class MusicBrainzEnrichmentService:
                     stats["artists_enriched"] += 1
             except Exception as e:
                 logger.warning(f"Disambiguation failed for artist '{artist.name}': {e}")
-                stats["errors"].append({
-                    "type": "artist",
-                    "name": artist.name,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "type": "artist",
+                        "name": artist.name,
+                        "error": str(e),
+                    }
+                )
 
             # Rate limiting - MusicBrainz requires 1 req/sec
             await asyncio.sleep(self.MB_RATE_LIMIT_SECONDS)
@@ -156,11 +158,13 @@ class MusicBrainzEnrichmentService:
                     stats["albums_enriched"] += 1
             except Exception as e:
                 logger.warning(f"Disambiguation failed for album '{album.title}': {e}")
-                stats["errors"].append({
-                    "type": "album",
-                    "name": album.title,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "type": "album",
+                        "name": album.title,
+                        "error": str(e),
+                    }
+                )
 
             # Rate limiting
             await asyncio.sleep(self.MB_RATE_LIMIT_SECONDS)
@@ -190,7 +194,10 @@ class MusicBrainzEnrichmentService:
         stmt = (
             select(ArtistModel)
             .where(
-                (ArtistModel.disambiguation.is_(None) | (ArtistModel.disambiguation == "")),
+                (
+                    ArtistModel.disambiguation.is_(None)
+                    | (ArtistModel.disambiguation == "")
+                ),
                 ArtistModel.name.isnot(None),
             )
             .order_by(
@@ -214,7 +221,10 @@ class MusicBrainzEnrichmentService:
         stmt = (
             select(AlbumModel)
             .where(
-                (AlbumModel.disambiguation.is_(None) | (AlbumModel.disambiguation == "")),
+                (
+                    AlbumModel.disambiguation.is_(None)
+                    | (AlbumModel.disambiguation == "")
+                ),
                 AlbumModel.title.isnot(None),
             )
             .order_by(
@@ -350,9 +360,7 @@ class MusicBrainzEnrichmentService:
                             ).get("name", "")
                             if credit_name:
                                 artist_similarity = (
-                                    fuzz.ratio(
-                                        artist_name.lower(), credit_name.lower()
-                                    )
+                                    fuzz.ratio(artist_name.lower(), credit_name.lower())
                                     / 100.0
                                 )
                                 # Boost title score by up to 10% if artist matches well

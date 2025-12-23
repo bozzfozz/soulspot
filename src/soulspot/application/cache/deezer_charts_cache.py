@@ -162,6 +162,8 @@ class DeezerChartsCache:
             "age_seconds": self.get_age_seconds(),
             "track_count": len(self.tracks_result.tracks) if self.tracks_result else 0,
             "album_count": len(self.albums_result.albums) if self.albums_result else 0,
-            "artist_count": len(self.artists_result.artists) if self.artists_result else 0,
+            "artist_count": len(self.artists_result.artists)
+            if self.artists_result
+            else 0,
             "error_count": len(self.sync_errors),
         }

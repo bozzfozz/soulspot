@@ -73,6 +73,7 @@ GENERIC_PLACEHOLDER = "/static/images/placeholder.svg"
 
 # === Error Handling for Downloads ===
 
+
 class ImageDownloadErrorCode(Enum):
     """Error codes for image download failures.
 
@@ -133,10 +134,10 @@ class ImageDownloadResult:
 
 # Image size configuration (from ArtworkService)
 IMAGE_SIZES: dict[EntityType, int] = {
-    "artist": 300,    # Profile pics, 300px is enough
-    "album": 500,     # Cover art needs detail
+    "artist": 300,  # Profile pics, 300px is enough
+    "album": 500,  # Cover art needs detail
     "playlist": 300,  # Grid thumbnails
-    "track": 500,     # Uses album cover
+    "track": 500,  # Uses album cover
 }
 
 WEBP_QUALITY = 85  # Sweet spot for quality vs file size
@@ -207,7 +208,8 @@ class ImageService:
             else:
                 logger.debug(
                     "Local path provided but file missing: %s (entity_type=%s)",
-                    local_path, entity_type
+                    local_path,
+                    entity_type,
                 )
 
         # Priority 2: CDN URL (Spotify, Deezer, etc.)
@@ -228,9 +230,9 @@ class ImageService:
     # Provider priority for multi-source entities
     # Higher priority = checked first
     PROVIDER_PRIORITY: ClassVar[list[str]] = [
-        "spotify",      # Best quality, most consistent
-        "deezer",       # Good quality
-        "tidal",        # Good quality
+        "spotify",  # Best quality, most consistent
+        "deezer",  # Good quality
+        "tidal",  # Good quality
         "musicbrainz",  # Community-sourced, variable quality
     ]
 
@@ -282,7 +284,9 @@ class ImageService:
             if full_path.exists():
                 logger.debug(
                     "Found best image for %s from %s: %s",
-                    entity_type, provider, relative_path
+                    entity_type,
+                    provider,
+                    relative_path,
                 )
                 return f"{self.local_serve_prefix}/{relative_path}"
 
@@ -387,7 +391,7 @@ class ImageService:
         display_url = self.get_display_url(
             source_url=model.image_url,
             local_path=model.image_path,
-            entity_type="artist"
+            entity_type="artist",
         )
 
         return ImageInfo(
@@ -414,9 +418,7 @@ class ImageService:
             return None
 
         display_url = self.get_display_url(
-            source_url=model.cover_url,
-            local_path=model.cover_path,
-            entity_type="album"
+            source_url=model.cover_url, local_path=model.cover_path, entity_type="album"
         )
 
         return ImageInfo(
@@ -445,7 +447,7 @@ class ImageService:
         display_url = self.get_display_url(
             source_url=model.cover_url,
             local_path=model.cover_path,
-            entity_type="playlist"
+            entity_type="playlist",
         )
 
         return ImageInfo(
@@ -543,7 +545,9 @@ class ImageService:
         try:
             image_data = await self._download_image(source_url)
             if not image_data:
-                return SaveImageResult.failure(f"Failed to download image from {source_url}")
+                return SaveImageResult.failure(
+                    f"Failed to download image from {source_url}"
+                )
 
             # Convert to WebP
             target_size = IMAGE_SIZES.get(entity_type, 300)
@@ -555,7 +559,9 @@ class ImageService:
             local_path = await self._save_to_cache(webp_data, entity_type, entity_id)
 
             # Update entity in DB
-            await self._update_entity_image_path(entity_type, entity_id, source_url, local_path)
+            await self._update_entity_image_path(
+                entity_type, entity_id, source_url, local_path
+            )
 
             # Build result
             image_info = ImageInfo(
@@ -571,7 +577,9 @@ class ImageService:
             return SaveImageResult.success_downloaded(image_info)
 
         except Exception as e:
-            logger.exception("Error in download_and_cache for %s/%s", entity_type, entity_id)
+            logger.exception(
+                "Error in download_and_cache for %s/%s", entity_type, entity_id
+            )
             return SaveImageResult.failure(str(e))
 
     async def _download_image(self, url: str) -> bytes | None:
@@ -655,7 +663,9 @@ class ImageService:
 
         await asyncio.to_thread(full_path.write_bytes, image_data)
 
-        logger.debug("Saved image to cache: %s (%d bytes)", relative_path, len(image_data))
+        logger.debug(
+            "Saved image to cache: %s (%d bytes)", relative_path, len(image_data)
+        )
         return relative_path
 
     async def _update_entity_image_path(
@@ -720,7 +730,9 @@ class ImageService:
             from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 
             client = await HttpClientPool.get_client()
-            response = await client.head(source_url, follow_redirects=True, timeout=10.0)
+            response = await client.head(
+                source_url, follow_redirects=True, timeout=10.0
+            )
             return response.status_code == 200
 
         except Exception as e:
@@ -1003,7 +1015,9 @@ class ImageService:
             if not webp_data:
                 logger.warning(
                     "WebP conversion failed for %s %s (%s)",
-                    entity_type, provider_id, safe_provider
+                    entity_type,
+                    provider_id,
+                    safe_provider,
                 )
                 return None
 
@@ -1211,7 +1225,11 @@ class ImageService:
         total = 0
 
         cache_path = Path(self.cache_base_path)
-        logger.info("📊 Image Stats - Cache path: %s (exists: %s)", cache_path, cache_path.exists())
+        logger.info(
+            "📊 Image Stats - Cache path: %s (exists: %s)",
+            cache_path,
+            cache_path.exists(),
+        )
 
         if not cache_path.exists():
             logger.warning("⚠️ Image cache directory does not exist: %s", cache_path)
@@ -1221,21 +1239,26 @@ class ImageService:
             category_path = cache_path / category
             if category_path.exists():
                 cat_bytes = sum(
-                    f.stat().st_size
-                    for f in category_path.rglob("*")
-                    if f.is_file()
+                    f.stat().st_size for f in category_path.rglob("*") if f.is_file()
                 )
                 usage[category] = cat_bytes
                 total += cat_bytes
-                logger.debug("📊 %s: %d bytes from %d files", category, cat_bytes,
-                            sum(1 for f in category_path.rglob("*") if f.is_file()))
+                logger.debug(
+                    "📊 %s: %d bytes from %d files",
+                    category,
+                    cat_bytes,
+                    sum(1 for f in category_path.rglob("*") if f.is_file()),
+                )
             else:
                 usage[category] = 0
                 logger.debug("📊 %s directory does not exist", category)
 
         usage["total"] = total
-        logger.info("📊 Image Stats Total: %d bytes across %d files", total,
-                   sum(1 for f in cache_path.rglob("*") if f.is_file()))
+        logger.info(
+            "📊 Image Stats Total: %d bytes across %d files",
+            total,
+            sum(1 for f in cache_path.rglob("*") if f.is_file()),
+        )
         return usage
 
     def get_image_count(self) -> dict[str, int]:
@@ -1265,5 +1288,3 @@ class ImageService:
 
         counts["total"] = total
         return counts
-
-

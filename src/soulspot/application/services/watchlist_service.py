@@ -132,13 +132,13 @@ class WatchlistService:
     # If band releases 3 albums while we were down, we'll get all 3 as "new"
     # REFACTORED: Now uses SpotifyPlugin.get_artist_albums() which returns PaginatedResponse[AlbumDTO]!
     async def check_for_new_releases(
-        self, watchlist: ArtistWatchlist, access_token: str | None = None
+        self, watchlist: ArtistWatchlist, _access_token: str | None = None
     ) -> list[dict[str, Any]]:
         """Check for new releases for an artist.
 
         Args:
             watchlist: Artist watchlist
-            access_token: DEPRECATED - Plugin manages token internally
+            _access_token: DEPRECATED - Plugin manages token internally (kept for API compatibility)
 
         Returns:
             List of new releases found (as dicts for backward compat)
@@ -176,15 +176,19 @@ class WatchlistService:
                         or release_date > watchlist.last_release_date
                     ):
                         # Convert AlbumDTO to dict for backward compatibility
-                        new_releases.append({
-                            "id": album.spotify_id,
-                            "name": album.title,
-                            "release_date": album.release_date,
-                            "total_tracks": album.total_tracks,
-                            "album_type": album.album_type,
-                            "images": [{"url": album.cover.url}] if album.cover.url else [],
-                            "spotify_uri": album.spotify_uri,
-                        })
+                        new_releases.append(
+                            {
+                                "id": album.spotify_id,
+                                "name": album.title,
+                                "release_date": album.release_date,
+                                "total_tracks": album.total_tracks,
+                                "album_type": album.album_type,
+                                "images": [{"url": album.cover.url}]
+                                if album.cover.url
+                                else [],
+                                "spotify_uri": album.spotify_uri,
+                            }
+                        )
                         if (
                             watchlist.last_release_date is None
                             or release_date > watchlist.last_release_date

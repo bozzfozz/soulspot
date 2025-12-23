@@ -109,7 +109,9 @@ class NotificationService:
                     self._providers.append(provider)
                     logger.debug(f"[NOTIFICATION] Provider enabled: {provider.name}")
             except Exception as e:
-                logger.warning(f"[NOTIFICATION] Failed to check provider {provider.name}: {e}")
+                logger.warning(
+                    f"[NOTIFICATION] Failed to check provider {provider.name}: {e}"
+                )
 
         self._providers_initialized = True
         return self._providers
@@ -158,7 +160,9 @@ class NotificationService:
         )
 
         # Always log (backward compatibility)
-        logger.info(f"[NOTIFICATION] {notification_type.value}: {title} - {message[:100]}...")
+        logger.info(
+            f"[NOTIFICATION] {notification_type.value}: {title} - {message[:100]}..."
+        )
 
         # Get enabled providers
         providers = await self._init_providers()
@@ -404,13 +408,11 @@ class NotificationService:
             True if notification was sent successfully
         """
         notification_type = (
-            NotificationType.DOWNLOAD_COMPLETED if success
+            NotificationType.DOWNLOAD_COMPLETED
+            if success
             else NotificationType.DOWNLOAD_FAILED
         )
-        priority = (
-            NotificationPriority.NORMAL if success
-            else NotificationPriority.HIGH
-        )
+        priority = NotificationPriority.NORMAL if success else NotificationPriority.HIGH
         status = "completed successfully" if success else "failed"
 
         return await self.send_notification(
@@ -437,7 +439,9 @@ class NotificationService:
         Returns:
             True if notification was sent successfully
         """
-        priority = NotificationPriority.NORMAL if errors == 0 else NotificationPriority.HIGH
+        priority = (
+            NotificationPriority.NORMAL if errors == 0 else NotificationPriority.HIGH
+        )
         status = "completed" if errors == 0 else f"completed with {errors} errors"
 
         return await self.send_notification(
@@ -479,22 +483,20 @@ class NotificationService:
             album = new_albums[0]
             title = f"New Release: {album['artist_name']}"
             message = f"{album['artist_name']} - {album['album_name']}"
-            if album.get('release_date'):
+            if album.get("release_date"):
                 message += f" (Released: {album['release_date']})"
         elif total_count <= 5:
             title = f"{total_count} New Releases Detected"
             # List all albums
             album_lines = [
-                f"• {a['artist_name']} - {a['album_name']}"
-                for a in new_albums[:5]
+                f"• {a['artist_name']} - {a['album_name']}" for a in new_albums[:5]
             ]
             message = "\n".join(album_lines)
         else:
             title = f"{total_count} New Releases Detected"
             # Show first 3 and count
             album_lines = [
-                f"• {a['artist_name']} - {a['album_name']}"
-                for a in new_albums[:3]
+                f"• {a['artist_name']} - {a['album_name']}" for a in new_albums[:3]
             ]
             album_lines.append(f"...and {total_count - 3} more")
             message = "\n".join(album_lines)
@@ -502,7 +504,9 @@ class NotificationService:
         # Add source breakdown if available
         if source_counts:
             sources = ", ".join(
-                f"{source}: {count}" for source, count in source_counts.items() if count > 0
+                f"{source}: {count}"
+                for source, count in source_counts.items()
+                if count > 0
             )
             if sources:
                 message += f"\n\nSources: {sources}"

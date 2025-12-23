@@ -439,9 +439,7 @@ class AppSettingsService:
         Lower values = more API calls but fresher data.
         Higher values = fewer API calls but potentially stale New Releases.
         """
-        return await self.get_int(
-            "spotify.artist_albums_resync_hours", default=24
-        )
+        return await self.get_int("spotify.artist_albums_resync_hours", default=24)
 
     async def get_spotify_settings_summary(self) -> dict[str, Any]:
         """Get summary of all Spotify sync settings for UI display.
@@ -1140,7 +1138,9 @@ class AppSettingsService:
         - 'spotify': Spotify first, Deezer fallback (default, best quality)
         - 'deezer': Deezer only (no Spotify account needed, still good!)
         """
-        source = await self.get_string("library.enrichment_primary_source", default="spotify")
+        source = await self.get_string(
+            "library.enrichment_primary_source", default="spotify"
+        )
         if source not in ("spotify", "deezer"):
             return "spotify"
         return source
@@ -1179,7 +1179,9 @@ class AppSettingsService:
         # Default depends on provider - OAuth-requiring providers default to PRO,
         # free services default to BASIC (enabled but conservative)
         default = 2 if provider.lower() in ("spotify", "slskd") else 1
-        mode_int = await self.get_int(f"provider.{provider.lower()}_mode", default=default)
+        mode_int = await self.get_int(
+            f"provider.{provider.lower()}_mode", default=default
+        )
         # Clamp to valid range 0-2
         mode_int = max(0, min(2, mode_int))
         return self._PROVIDER_MODE_NAMES.get(mode_int, "pro")
@@ -1248,4 +1250,3 @@ class AppSettingsService:
         """
         for provider, mode in modes.items():
             await self.set_provider_mode(provider, mode)
-

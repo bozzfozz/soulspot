@@ -8,11 +8,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from soulspot.application.services.session_store import Session
-
 from sqlalchemy import Integer, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -60,15 +55,22 @@ from .models import (
     AlbumModel,
     ArtistDiscographyModel,
     ArtistModel,
+    BlocklistModel,
     DeezerSessionModel,
     DownloadModel,
     PlaylistModel,
     PlaylistTrackModel,
+    QualityProfileModel,
     SpotifySessionModel,
     SpotifyTokenModel,
     TrackModel,
     ensure_utc_aware,
 )
+
+if TYPE_CHECKING:
+    from soulspot.application.services.session_store import Session
+
+logger = logging.getLogger(__name__)
 
 # Type variable for generic repository
 T = TypeVar("T")
@@ -175,6 +177,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -202,6 +205,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -229,6 +233,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -266,6 +271,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -291,6 +297,7 @@ class ArtistRepository(IArtistRepository):
         models = result.scalars().all()
 
         from soulspot.domain.entities import ArtistSource
+
         return [
             Artist(
                 id=ArtistId.from_string(model.id),
@@ -366,6 +373,7 @@ class ArtistRepository(IArtistRepository):
         models = result.scalars().all()
 
         from soulspot.domain.entities import ArtistSource
+
         # Filter out Various Artists patterns in Python (more flexible than SQL LIKE)
         enrichable = []
         for model in models:
@@ -543,12 +551,15 @@ class ArtistRepository(IArtistRepository):
         models = result.scalars().all()
 
         from soulspot.domain.entities import ArtistSource
+
         return [
             Artist(
                 id=ArtistId.from_string(model.id),
                 name=model.name,
                 source=ArtistSource(model.source),  # Include source field
-                spotify_uri=SpotifyUri(model.spotify_uri) if model.spotify_uri else None,
+                spotify_uri=SpotifyUri(model.spotify_uri)
+                if model.spotify_uri
+                else None,
                 musicbrainz_id=model.musicbrainz_id,
                 image=ImageRef(url=model.image_url, path=model.image_path),
                 disambiguation=model.disambiguation,
@@ -587,6 +598,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -624,6 +636,7 @@ class ArtistRepository(IArtistRepository):
             return None
 
         from soulspot.domain.entities import ArtistSource
+
         return Artist(
             id=ArtistId.from_string(model.id),
             name=model.name,
@@ -733,8 +746,8 @@ class ArtistRepository(IArtistRepository):
             select(ArtistModel)
             .where(ArtistModel.deezer_id.isnot(None))
             .where(
-                (ArtistModel.albums_synced_at.is_(None)) |
-                (ArtistModel.albums_synced_at < threshold)
+                (ArtistModel.albums_synced_at.is_(None))
+                | (ArtistModel.albums_synced_at < threshold)
             )
             .order_by(ArtistModel.albums_synced_at.asc().nullsfirst())
             .limit(limit)
@@ -1252,10 +1265,12 @@ class AlbumRepository(IAlbumRepository):
             select(AlbumModel)
             .where(has_local_tracks)
             .where(
-                (AlbumModel.deezer_id.isnot(None)) | (AlbumModel.spotify_uri.isnot(None))
+                (AlbumModel.deezer_id.isnot(None))
+                | (AlbumModel.spotify_uri.isnot(None))
             )
             .where(
-                (AlbumModel.primary_type.is_(None)) | (AlbumModel.primary_type == "Album")
+                (AlbumModel.primary_type.is_(None))
+                | (AlbumModel.primary_type == "Album")
             )
             .order_by(AlbumModel.title)
             .limit(limit)
@@ -1921,9 +1936,7 @@ class TrackRepository(ITrackRepository):
             id=TrackId.from_string(model.id),
             title=model.title,
             artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id)
-            if model.album_id
-            else None,
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
@@ -1962,9 +1975,7 @@ class TrackRepository(ITrackRepository):
             id=TrackId.from_string(model.id),
             title=model.title,
             artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id)
-            if model.album_id
-            else None,
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
@@ -2029,7 +2040,9 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]
 
-    async def get_tracks_without_deezer_id_with_isrc(self, limit: int = 50) -> list[Track]:
+    async def get_tracks_without_deezer_id_with_isrc(
+        self, limit: int = 50
+    ) -> list[Track]:
         """Get tracks that have ISRC but no deezer_id yet.
 
         Hey future me - this is for LibraryDiscoveryWorker Phase 5!
@@ -4173,7 +4186,11 @@ class DuplicateCandidateRepository:
         from .models import DuplicateCandidateModel
 
         # Ensure track_id_1 < track_id_2 for consistent lookups
-        id1, id2 = (track_id_1, track_id_2) if track_id_1 < track_id_2 else (track_id_2, track_id_1)
+        id1, id2 = (
+            (track_id_1, track_id_2)
+            if track_id_1 < track_id_2
+            else (track_id_2, track_id_1)
+        )
 
         stmt = select(func.count(DuplicateCandidateModel.id)).where(
             DuplicateCandidateModel.track_id_1 == id1,
@@ -4377,7 +4394,9 @@ class SessionRepository(ISessionRepository):
         """
 
         # Get the session
-        stmt = select(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
+        stmt = select(SpotifySessionModel).where(
+            SpotifySessionModel.session_id == session_id
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -4415,7 +4434,9 @@ class SessionRepository(ISessionRepository):
             Updated session or None if not found
         """
 
-        stmt = select(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
+        stmt = select(SpotifySessionModel).where(
+            SpotifySessionModel.session_id == session_id
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -4456,7 +4477,9 @@ class SessionRepository(ISessionRepository):
         Returns:
             True if deleted, False if not found
         """
-        stmt = delete(SpotifySessionModel).where(SpotifySessionModel.session_id == session_id)
+        stmt = delete(SpotifySessionModel).where(
+            SpotifySessionModel.session_id == session_id
+        )
         result = await self.session.execute(stmt)
         rowcount = cast(int, result.rowcount)  # type: ignore[attr-defined]
         return bool(rowcount > 0)
@@ -4477,7 +4500,9 @@ class SessionRepository(ISessionRepository):
             Number of sessions deleted
         """
         cutoff_time = datetime.now(UTC) - timedelta(seconds=timeout_seconds)
-        stmt = delete(SpotifySessionModel).where(SpotifySessionModel.last_accessed_at < cutoff_time)
+        stmt = delete(SpotifySessionModel).where(
+            SpotifySessionModel.last_accessed_at < cutoff_time
+        )
         result = await self.session.execute(stmt)
         rowcount = cast(int, result.rowcount)  # type: ignore[attr-defined]
         return int(rowcount or 0)
@@ -4497,7 +4522,9 @@ class SessionRepository(ISessionRepository):
             Session dataclass or None if not found
         """
 
-        stmt = select(SpotifySessionModel).where(SpotifySessionModel.oauth_state == state)
+        stmt = select(SpotifySessionModel).where(
+            SpotifySessionModel.oauth_state == state
+        )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -4540,10 +4567,14 @@ class DeezerSessionRepository:
         """Initialize repository with database session."""
         self.session = session
 
-    async def create(self, session_id: str, access_token: str | None = None,
-                     deezer_user_id: str | None = None,
-                     deezer_username: str | None = None,
-                     oauth_state: str | None = None) -> DeezerSessionModel:
+    async def create(
+        self,
+        session_id: str,
+        access_token: str | None = None,
+        deezer_user_id: str | None = None,
+        deezer_username: str | None = None,
+        oauth_state: str | None = None,
+    ) -> DeezerSessionModel:
         """Create a new Deezer session.
 
         Args:
@@ -4679,9 +4710,7 @@ class DeezerSessionRepository:
         Returns:
             DeezerSessionModel or None if not found
         """
-        stmt = select(DeezerSessionModel).where(
-            DeezerSessionModel.oauth_state == state
-        )
+        stmt = select(DeezerSessionModel).where(DeezerSessionModel.oauth_state == state)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -4744,9 +4773,7 @@ class ProviderBrowseRepository:
         from .models import ArtistModel
 
         spotify_uri = f"spotify:artist:{spotify_id}"
-        stmt = select(ArtistModel).where(
-            ArtistModel.spotify_uri == spotify_uri
-        )
+        stmt = select(ArtistModel).where(ArtistModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -4768,9 +4795,7 @@ class ProviderBrowseRepository:
         """Count total followed artists from Spotify."""
         from .models import ArtistModel
 
-        stmt = select(func.count(ArtistModel.id)).where(
-            ArtistModel.source == "spotify"
-        )
+        stmt = select(func.count(ArtistModel.id)).where(ArtistModel.source == "spotify")
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -4913,9 +4938,7 @@ class ProviderBrowseRepository:
         spotify_uri = f"spotify:artist:{spotify_id}"
 
         # STEP 1: Check if exists by spotify_uri
-        stmt = select(ArtistModel).where(
-            ArtistModel.spotify_uri == spotify_uri
-        )
+        stmt = select(ArtistModel).where(ArtistModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -4923,7 +4946,9 @@ class ProviderBrowseRepository:
         # CRITICAL FIX: Case-insensitive + whitespace normalization!
         if not model:
             normalized_name = name.strip().lower()
-            stmt = select(ArtistModel).where(func.lower(func.trim(ArtistModel.name)) == normalized_name)
+            stmt = select(ArtistModel).where(
+                func.lower(func.trim(ArtistModel.name)) == normalized_name
+            )
             result = await self.session.execute(stmt)
             # Use first() instead of scalar_one_or_none() to handle existing duplicates gracefully
             model = result.scalars().first()
@@ -4976,9 +5001,7 @@ class ProviderBrowseRepository:
         # Convert IDs to URIs for matching
         spotify_uris = {f"spotify:artist:{sid}" for sid in spotify_ids}
 
-        stmt = delete(ArtistModel).where(
-            ArtistModel.spotify_uri.in_(spotify_uris)
-        )
+        stmt = delete(ArtistModel).where(ArtistModel.spotify_uri.in_(spotify_uris))
         result = await self.session.execute(stmt)
         return result.rowcount or 0  # type: ignore[attr-defined]
 
@@ -4998,7 +5021,9 @@ class ProviderBrowseRepository:
 
         # Find artist by Spotify ID to get internal ID
         spotify_uri = f"spotify:artist:{artist_id}"
-        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_stmt = select(ArtistModel.id).where(
+            ArtistModel.spotify_uri == spotify_uri
+        )
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
 
@@ -5023,9 +5048,7 @@ class ProviderBrowseRepository:
         from .models import AlbumModel
 
         spotify_uri = f"spotify:album:{spotify_id}"
-        stmt = select(AlbumModel).where(
-            AlbumModel.spotify_uri == spotify_uri
-        )
+        stmt = select(AlbumModel).where(AlbumModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -5033,9 +5056,7 @@ class ProviderBrowseRepository:
         """Count total saved albums from Spotify."""
         from .models import AlbumModel
 
-        stmt = select(func.count(AlbumModel.id)).where(
-            AlbumModel.source == "spotify"
-        )
+        stmt = select(func.count(AlbumModel.id)).where(AlbumModel.source == "spotify")
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -5149,7 +5170,9 @@ class ProviderBrowseRepository:
 
         # Find artist by Spotify ID
         spotify_uri = f"spotify:artist:{artist_id}"
-        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_stmt = select(ArtistModel.id).where(
+            ArtistModel.spotify_uri == spotify_uri
+        )
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
 
@@ -5186,7 +5209,9 @@ class ProviderBrowseRepository:
 
         # Find artist by Spotify ID
         spotify_uri = f"spotify:artist:{artist_id}"
-        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == spotify_uri)
+        artist_stmt = select(ArtistModel.id).where(
+            ArtistModel.spotify_uri == spotify_uri
+        )
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
 
@@ -5236,9 +5261,7 @@ class ProviderBrowseRepository:
         from .models import ArtistModel
 
         spotify_uri = f"spotify:artist:{artist_id}"
-        stmt = select(ArtistModel).where(
-            ArtistModel.spotify_uri == spotify_uri
-        )
+        stmt = select(ArtistModel).where(ArtistModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         artist = result.scalar_one_or_none()
 
@@ -5284,7 +5307,9 @@ class ProviderBrowseRepository:
         artist_spotify_uri = f"spotify:artist:{artist_id}"
 
         # Find internal artist ID
-        artist_stmt = select(ArtistModel.id).where(ArtistModel.spotify_uri == artist_spotify_uri)
+        artist_stmt = select(ArtistModel.id).where(
+            ArtistModel.spotify_uri == artist_spotify_uri
+        )
         artist_result = await self.session.execute(artist_stmt)
         internal_artist_id = artist_result.scalar_one_or_none()
 
@@ -5293,9 +5318,7 @@ class ProviderBrowseRepository:
             return
 
         # Check if album exists
-        stmt = select(AlbumModel).where(
-            AlbumModel.spotify_uri == spotify_uri
-        )
+        stmt = select(AlbumModel).where(AlbumModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -5335,9 +5358,7 @@ class ProviderBrowseRepository:
         from .models import ArtistModel
 
         spotify_uri = f"spotify:artist:{artist_id}"
-        stmt = select(ArtistModel).where(
-            ArtistModel.spotify_uri == spotify_uri
-        )
+        stmt = select(ArtistModel).where(ArtistModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         if model:
@@ -5380,9 +5401,7 @@ class ProviderBrowseRepository:
         from .models import TrackModel
 
         spotify_uri = f"spotify:track:{spotify_id}"
-        stmt = select(TrackModel).where(
-            TrackModel.spotify_uri == spotify_uri
-        )
+        stmt = select(TrackModel).where(TrackModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -5390,9 +5409,7 @@ class ProviderBrowseRepository:
         """Count total tracks from Spotify (all albums)."""
         from .models import TrackModel
 
-        stmt = select(func.count(TrackModel.id)).where(
-            TrackModel.source == "spotify"
-        )
+        stmt = select(func.count(TrackModel.id)).where(TrackModel.source == "spotify")
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
@@ -5451,9 +5468,7 @@ class ProviderBrowseRepository:
         internal_album_id, artist_id = album_row
 
         # Check if track exists
-        stmt = select(TrackModel).where(
-            TrackModel.spotify_uri == spotify_uri
-        )
+        stmt = select(TrackModel).where(TrackModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
@@ -5496,20 +5511,22 @@ class ProviderBrowseRepository:
             model.tracks_synced_at = datetime.now(UTC)
 
     async def link_track_to_local(
-        self, spotify_track_id: str, local_track_id: str
+        self, spotify_track_id: str, _local_track_id: str
     ) -> None:
         """Link a Spotify track to a local library track after download.
 
         Hey future me - nach Table Consolidation sind Spotify tracks und local tracks
         in derselben Tabelle! Diese Methode ist jetzt deprecated.
         Stattdessen: Track mit source='spotify' zu source='hybrid' ändern.
+
+        Args:
+            spotify_track_id: Spotify track ID
+            _local_track_id: DEPRECATED - Not used after table consolidation (kept for API compatibility)
         """
         from .models import TrackModel
 
         spotify_uri = f"spotify:track:{spotify_track_id}"
-        stmt = select(TrackModel).where(
-            TrackModel.spotify_uri == spotify_uri
-        )
+        stmt = select(TrackModel).where(TrackModel.spotify_uri == spotify_uri)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
         if model:
@@ -6464,15 +6481,17 @@ class ArtistDiscographyRepository:
         owned = (await self.session.execute(owned_stmt)).scalar() or 0
 
         # By type
-        type_stmt = select(
-            ArtistDiscographyModel.album_type,
-            func.count().label("count"),
-            func.sum(
-                func.cast(ArtistDiscographyModel.is_owned, Integer)
-            ).label("owned"),
-        ).where(
-            ArtistDiscographyModel.artist_id == str(artist_id.value)
-        ).group_by(ArtistDiscographyModel.album_type)
+        type_stmt = (
+            select(
+                ArtistDiscographyModel.album_type,
+                func.count().label("count"),
+                func.sum(func.cast(ArtistDiscographyModel.is_owned, Integer)).label(
+                    "owned"
+                ),
+            )
+            .where(ArtistDiscographyModel.artist_id == str(artist_id.value))
+            .group_by(ArtistDiscographyModel.album_type)
+        )
 
         type_result = await self.session.execute(type_stmt)
         by_type = {
@@ -6526,7 +6545,13 @@ class ArtistDiscographyRepository:
             is_owned = False
 
             # Match by deezer_id
-            if entry.deezer_id and entry.deezer_id in owned_deezer_ids or entry.spotify_uri and entry.spotify_uri in owned_spotify_uris or entry.title.lower() in owned_titles:
+            if (
+                entry.deezer_id
+                and entry.deezer_id in owned_deezer_ids
+                or entry.spotify_uri
+                and entry.spotify_uri in owned_spotify_uris
+                or entry.title.lower() in owned_titles
+            ):
                 is_owned = True
 
             if entry.is_owned != is_owned:
@@ -6686,9 +6711,7 @@ class BlocklistRepository(IBlocklistRepository):
         stmt = delete(BlocklistModel).where(BlocklistModel.id == entry_id)
         await self.session.execute(stmt)
 
-    async def is_blocked(
-        self, username: str | None, filepath: str | None
-    ) -> bool:
+    async def is_blocked(self, username: str | None, filepath: str | None) -> bool:
         """Check if a source is currently blocked.
 
         Hey future me - this is called during search to filter results!
@@ -6714,18 +6737,18 @@ class BlocklistRepository(IBlocklistRepository):
         if username is not None and filepath is not None:
             # Check for SPECIFIC block (exact match)
             conditions.append(
-                (BlocklistModel.username == username) &
-                (BlocklistModel.filepath == filepath)
+                (BlocklistModel.username == username)
+                & (BlocklistModel.filepath == filepath)
             )
             # Check for USERNAME block (any file from this user)
             conditions.append(
-                (BlocklistModel.username == username) &
-                (BlocklistModel.filepath.is_(None))
+                (BlocklistModel.username == username)
+                & (BlocklistModel.filepath.is_(None))
             )
             # Check for FILEPATH block (this file from anyone)
             conditions.append(
-                (BlocklistModel.username.is_(None)) &
-                (BlocklistModel.filepath == filepath)
+                (BlocklistModel.username.is_(None))
+                & (BlocklistModel.filepath == filepath)
             )
         elif username is not None:
             # Only username provided - check USERNAME blocks
@@ -6738,14 +6761,18 @@ class BlocklistRepository(IBlocklistRepository):
             return False
 
         # Query for any matching active block
-        stmt = select(BlocklistModel.id).where(
-            or_(*conditions),
-            # Only active blocks (not expired)
-            or_(
-                BlocklistModel.expires_at.is_(None),
-                BlocklistModel.expires_at > now,
-            ),
-        ).limit(1)
+        stmt = (
+            select(BlocklistModel.id)
+            .where(
+                or_(*conditions),
+                # Only active blocks (not expired)
+                or_(
+                    BlocklistModel.expires_at.is_(None),
+                    BlocklistModel.expires_at > now,
+                ),
+            )
+            .limit(1)
+        )
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none() is not None
@@ -6826,10 +6853,14 @@ class BlocklistRepository(IBlocklistRepository):
 
         now = datetime.now(UTC)
 
-        stmt = select(func.count()).select_from(BlocklistModel).where(
-            or_(
-                BlocklistModel.expires_at.is_(None),
-                BlocklistModel.expires_at > now,
+        stmt = (
+            select(func.count())
+            .select_from(BlocklistModel)
+            .where(
+                or_(
+                    BlocklistModel.expires_at.is_(None),
+                    BlocklistModel.expires_at > now,
+                )
             )
         )
 
@@ -6889,7 +6920,9 @@ class QualityProfileRepository(IQualityProfileRepository):
         # Check if name already exists
         existing = await self.get_by_name(profile.name)
         if existing is not None:
-            raise ValueError(f"QualityProfile with name '{profile.name}' already exists")
+            raise ValueError(
+                f"QualityProfile with name '{profile.name}' already exists"
+            )
 
         model = QualityProfileModel(
             id=str(profile.id),
@@ -6987,7 +7020,9 @@ class QualityProfileRepository(IQualityProfileRepository):
 
         model.name = profile.name
         model.description = profile.description
-        model.preferred_formats = json.dumps(profile.preferred_formats)  # Already strings
+        model.preferred_formats = json.dumps(
+            profile.preferred_formats
+        )  # Already strings
         model.min_bitrate = profile.min_bitrate
         model.max_bitrate = profile.max_bitrate
         model.max_file_size_mb = profile.max_file_size_mb

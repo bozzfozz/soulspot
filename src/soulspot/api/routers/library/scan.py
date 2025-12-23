@@ -215,7 +215,9 @@ async def start_import_scan(
             priority=5,  # Medium priority
         )
 
-        mode_str = "auto-detect" if incremental is None else f"incremental={incremental}"
+        mode_str = (
+            "auto-detect" if incremental is None else f"incremental={incremental}"
+        )
         return ImportScanResponse(
             job_id=job_id,
             status="pending",

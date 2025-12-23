@@ -11,6 +11,7 @@ endpoints let the UI:
 All endpoints use HTMX-compatible responses where appropriate.
 """
 
+import contextlib
 import logging
 from typing import Annotated
 
@@ -36,6 +37,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 class NotificationResponse(BaseModel):
     """Single notification response."""
+
     id: str
     type: str
     title: str
@@ -49,6 +51,7 @@ class NotificationResponse(BaseModel):
 
 class NotificationsListResponse(BaseModel):
     """List of notifications response."""
+
     notifications: list[NotificationResponse]
     total: int
     unread_count: int
@@ -56,21 +59,25 @@ class NotificationsListResponse(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     """Unread count response."""
+
     unread_count: int
 
 
 class MarkReadRequest(BaseModel):
     """Request to mark notifications as read."""
+
     notification_ids: list[str]
 
 
 class MarkReadResponse(BaseModel):
     """Response after marking notifications as read."""
+
     marked_count: int
 
 
 class DeleteResponse(BaseModel):
     """Response after deleting a notification."""
+
     success: bool
 
 
@@ -82,9 +89,15 @@ class DeleteResponse(BaseModel):
 @router.get("", response_model=NotificationsListResponse)
 async def list_notifications(
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    unread_only: Annotated[bool, Query(description="Only return unread notifications")] = False,
-    notification_type: Annotated[str | None, Query(description="Filter by type")] = None,
-    limit: Annotated[int, Query(ge=1, le=100, description="Max notifications to return")] = 20,
+    unread_only: Annotated[
+        bool, Query(description="Only return unread notifications")
+    ] = False,
+    notification_type: Annotated[
+        str | None, Query(description="Filter by type")
+    ] = None,
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="Max notifications to return")
+    ] = 20,
     offset: Annotated[int, Query(ge=0, description="Pagination offset")] = 0,
 ) -> NotificationsListResponse:
     """List notifications with filtering and pagination.
@@ -105,10 +118,8 @@ async def list_notifications(
     # Parse notification type if provided
     type_filter = None
     if notification_type:
-        try:
+        with contextlib.suppress(ValueError):
             type_filter = NotificationType(notification_type)
-        except ValueError:
-            pass  # Invalid type, ignore filter
 
     # Get notifications
     notifications = await provider.get_notifications(
@@ -238,10 +249,10 @@ async def get_notification_badge(
     else:
         # Visible badge with count
         badge_text = "99+" if count > 99 else str(count)
-        html = f'''<span id="notification-badge"
+        html = f"""<span id="notification-badge"
             class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
             hx-get="/api/notifications/badge"
-            hx-trigger="every 30s">{badge_text}</span>'''
+            hx-trigger="every 30s">{badge_text}</span>"""
 
     return HTMLResponse(content=html)
 

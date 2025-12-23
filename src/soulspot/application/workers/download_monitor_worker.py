@@ -115,10 +115,10 @@ class DownloadMonitorWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="Download Monitor",
-                interval=self._poll_interval
+                worker="Download Monitor", interval=self._poll_interval
             )
         )
 
@@ -387,7 +387,9 @@ class DownloadMonitorWorker:
                     await self._restart_stale_download(job)
 
             except Exception as e:
-                logger.error(f"Error checking job {job.id} for staleness: {e}", exc_info=True)
+                logger.error(
+                    f"Error checking job {job.id} for staleness: {e}", exc_info=True
+                )
                 continue
 
     async def _restart_stale_download(self, job: Any) -> None:
@@ -453,4 +455,6 @@ class DownloadMonitorWorker:
                 )
 
         except Exception as e:
-            logger.error(f"Failed to restart stale download {job.id}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to restart stale download {job.id}: {e}", exc_info=True
+            )

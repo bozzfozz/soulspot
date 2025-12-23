@@ -125,16 +125,16 @@ class QualityProfile:
     description: str | None = None
 
     # Format-Präferenzen (Reihenfolge = Priorität, erstes ist bestes)
-    preferred_formats: list[str] = field(
-        default_factory=lambda: ["flac", "mp3", "aac"]
-    )
+    preferred_formats: list[str] = field(default_factory=lambda: ["flac", "mp3", "aac"])
 
     # Bitrate-Filter (kbps)
     min_bitrate: int | None = None  # z.B. 256 für "mindestens 256kbps"
     max_bitrate: int | None = None  # z.B. 320 für "maximal 320kbps" (space saver)
 
     # Größenlimits (MB)
-    min_file_size_mb: float | None = None  # z.B. 3.0 für "mindestens 3MB" (filter corrupted)
+    min_file_size_mb: float | None = (
+        None  # z.B. 3.0 für "mindestens 3MB" (filter corrupted)
+    )
     max_file_size_mb: float | None = None  # z.B. 50.0 für "maximal 50MB" (mobile)
 
     # Ausschlüsse - Case-insensitive matching
@@ -255,7 +255,15 @@ def create_audiophile_profile() -> QualityProfile:
         max_bitrate=None,
         min_file_size_mb=5.0,  # Filter tiny corrupt files
         max_file_size_mb=None,  # No limit
-        exclude_keywords=["live", "remix", "karaoke", "instrumental", "cover", "demo", "bootleg"],
+        exclude_keywords=[
+            "live",
+            "remix",
+            "karaoke",
+            "instrumental",
+            "cover",
+            "demo",
+            "bootleg",
+        ],
         prefer_lossless=True,
         allow_lossy=False,  # STRICT: No MP3/AAC
         is_default=False,
@@ -395,7 +403,9 @@ class QualityMatcher:
         size_mb = size_bytes / (1024 * 1024) if size_bytes else 0
 
         # 1. Check excluded users
-        if username and username.lower() in [u.lower() for u in self.profile.exclude_users]:
+        if username and username.lower() in [
+            u.lower() for u in self.profile.exclude_users
+        ]:
             return MatchResult(False, 0, f"User '{username}' is blocked")
 
         # 2. Check excluded keywords
@@ -419,17 +429,41 @@ class QualityMatcher:
 
         # 5. Check bitrate
         if self.profile.min_bitrate and bitrate and bitrate < self.profile.min_bitrate:
-            return MatchResult(False, 0, f"Bitrate {bitrate}kbps below minimum {self.profile.min_bitrate}")
+            return MatchResult(
+                False,
+                0,
+                f"Bitrate {bitrate}kbps below minimum {self.profile.min_bitrate}",
+            )
 
         if self.profile.max_bitrate and bitrate and bitrate > self.profile.max_bitrate:
-            return MatchResult(False, 0, f"Bitrate {bitrate}kbps above maximum {self.profile.max_bitrate}")
+            return MatchResult(
+                False,
+                0,
+                f"Bitrate {bitrate}kbps above maximum {self.profile.max_bitrate}",
+            )
 
         # 6. Check file size
-        if self.profile.min_file_size_mb and size_mb and size_mb < self.profile.min_file_size_mb:
-            return MatchResult(False, 0, f"Size {size_mb:.1f}MB below minimum {self.profile.min_file_size_mb}MB")
+        if (
+            self.profile.min_file_size_mb
+            and size_mb
+            and size_mb < self.profile.min_file_size_mb
+        ):
+            return MatchResult(
+                False,
+                0,
+                f"Size {size_mb:.1f}MB below minimum {self.profile.min_file_size_mb}MB",
+            )
 
-        if self.profile.max_file_size_mb and size_mb and size_mb > self.profile.max_file_size_mb:
-            return MatchResult(False, 0, f"Size {size_mb:.1f}MB above maximum {self.profile.max_file_size_mb}MB")
+        if (
+            self.profile.max_file_size_mb
+            and size_mb
+            and size_mb > self.profile.max_file_size_mb
+        ):
+            return MatchResult(
+                False,
+                0,
+                f"Size {size_mb:.1f}MB above maximum {self.profile.max_file_size_mb}MB",
+            )
 
         # === CALCULATE SCORE ===
         score = 0

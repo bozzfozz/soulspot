@@ -54,9 +54,14 @@ async def logs_viewer_page(request: Request) -> Any:
 # Connection stays open until client disconnects or error occurs.
 @router.get("/stream")
 async def stream_logs(
-    level: str = Query("ALL", description="Filter by log level: ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL"),
+    level: str = Query(
+        "ALL",
+        description="Filter by log level: ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL",
+    ),
     search: str = Query("", description="Search filter (case-insensitive)"),
-    tail: int = Query(100, ge=0, le=1000, description="Number of lines to show initially"),
+    tail: int = Query(
+        100, ge=0, le=1000, description="Number of lines to show initially"
+    ),
 ) -> EventSourceResponse:
     """Stream Docker logs via SSE (Server-Sent Events)."""
 
@@ -81,7 +86,10 @@ async def stream_logs(
             # Send initial heartbeat
             yield {
                 "event": "connected",
-                "data": {"timestamp": datetime.now().isoformat(), "status": "streaming"},
+                "data": {
+                    "timestamp": datetime.now().isoformat(),
+                    "status": "streaming",
+                },
             }
 
             # Stream log lines as they arrive
@@ -113,7 +121,10 @@ async def stream_logs(
             await process.wait()
             yield {
                 "event": "disconnected",
-                "data": {"reason": "docker logs process ended", "exit_code": process.returncode},
+                "data": {
+                    "reason": "docker logs process ended",
+                    "exit_code": process.returncode,
+                },
             }
 
         except Exception as e:
@@ -131,7 +142,9 @@ async def stream_logs(
 # Runs `docker logs --tail <lines> soulspot` once (no streaming).
 @router.get("/download")
 async def download_logs(
-    tail: int = Query(1000, ge=100, le=10000, description="Number of lines to download"),
+    tail: int = Query(
+        1000, ge=100, le=10000, description="Number of lines to download"
+    ),
 ) -> StreamingResponse:
     """Download Docker logs as text file."""
 

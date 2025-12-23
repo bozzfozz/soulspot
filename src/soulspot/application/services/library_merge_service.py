@@ -125,16 +125,18 @@ class LibraryMergeService:
             # Build artist info list
             artist_infos = []
             for a in artists:
-                artist_infos.append({
-                    "id": a.id,
-                    "name": a.name,
-                    "spotify_uri": a.spotify_uri,
-                    "deezer_id": a.deezer_id,
-                    "image_url": a.image_url,
-                    "track_count": track_counts.get(a.id, 0),
-                    "has_spotify": a.spotify_uri is not None,
-                    "has_deezer": a.deezer_id is not None,
-                })
+                artist_infos.append(
+                    {
+                        "id": a.id,
+                        "name": a.name,
+                        "spotify_uri": a.spotify_uri,
+                        "deezer_id": a.deezer_id,
+                        "image_url": a.image_url,
+                        "track_count": track_counts.get(a.id, 0),
+                        "has_spotify": a.spotify_uri is not None,
+                        "has_deezer": a.deezer_id is not None,
+                    }
+                )
 
             # Suggest primary: prefer one with spotify_uri, then deezer_id, then most tracks
             sorted_artists = sorted(
@@ -144,12 +146,14 @@ class LibraryMergeService:
             )
             suggested_primary_id = sorted_artists[0]["id"]
 
-            duplicate_groups.append({
-                "normalized_name": normalized_name,
-                "artists": artist_infos,
-                "suggested_primary_id": suggested_primary_id,
-                "total_tracks": sum(a["track_count"] for a in artist_infos),
-            })
+            duplicate_groups.append(
+                {
+                    "normalized_name": normalized_name,
+                    "artists": artist_infos,
+                    "suggested_primary_id": suggested_primary_id,
+                    "total_tracks": sum(a["track_count"] for a in artist_infos),
+                }
+            )
 
         # Sort by total tracks (most impactful duplicates first)
         duplicate_groups.sort(key=lambda g: g["total_tracks"], reverse=True)
@@ -212,17 +216,19 @@ class LibraryMergeService:
             # Build album info list
             album_infos = []
             for album, artist_name in albums_with_artist:
-                album_infos.append({
-                    "id": album.id,
-                    "title": album.title,
-                    "artist_name": artist_name,
-                    "spotify_uri": album.spotify_uri,
-                    "deezer_id": album.deezer_id,
-                    "cover_url": album.cover_url,
-                    "track_count": track_counts.get(album.id, 0),
-                    "has_spotify": album.spotify_uri is not None,
-                    "has_deezer": album.deezer_id is not None,
-                })
+                album_infos.append(
+                    {
+                        "id": album.id,
+                        "title": album.title,
+                        "artist_name": artist_name,
+                        "spotify_uri": album.spotify_uri,
+                        "deezer_id": album.deezer_id,
+                        "cover_url": album.cover_url,
+                        "track_count": track_counts.get(album.id, 0),
+                        "has_spotify": album.spotify_uri is not None,
+                        "has_deezer": album.deezer_id is not None,
+                    }
+                )
 
             # Suggest primary: prefer one with spotify_uri, then deezer_id, then most tracks
             sorted_albums = sorted(
@@ -232,12 +238,14 @@ class LibraryMergeService:
             )
             suggested_primary_id = sorted_albums[0]["id"]
 
-            duplicate_groups.append({
-                "normalized_key": normalized_key,
-                "albums": album_infos,
-                "suggested_primary_id": suggested_primary_id,
-                "total_tracks": sum(a["track_count"] for a in album_infos),
-            })
+            duplicate_groups.append(
+                {
+                    "normalized_key": normalized_key,
+                    "albums": album_infos,
+                    "suggested_primary_id": suggested_primary_id,
+                    "total_tracks": sum(a["track_count"] for a in album_infos),
+                }
+            )
 
         # Sort by total tracks
         duplicate_groups.sort(key=lambda g: g["total_tracks"], reverse=True)
@@ -249,9 +257,7 @@ class LibraryMergeService:
     # ARTIST MERGE
     # =========================================================================
 
-    async def merge_artists(
-        self, keep_id: str, merge_ids: list[str]
-    ) -> dict[str, Any]:
+    async def merge_artists(self, keep_id: str, merge_ids: list[str]) -> dict[str, Any]:
         """Merge multiple artists into one, transferring all tracks and albums.
 
         Hey future me - the 'keep' artist absorbs all data from 'merge' artists!
@@ -375,9 +381,7 @@ class LibraryMergeService:
     # ALBUM MERGE
     # =========================================================================
 
-    async def merge_albums(
-        self, keep_id: str, merge_ids: list[str]
-    ) -> dict[str, Any]:
+    async def merge_albums(self, keep_id: str, merge_ids: list[str]) -> dict[str, Any]:
         """Merge multiple albums into one, transferring all tracks.
 
         Hey future me - the 'keep' album absorbs all data from 'merge' albums!

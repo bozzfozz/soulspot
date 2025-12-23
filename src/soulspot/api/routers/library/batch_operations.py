@@ -175,7 +175,7 @@ async def clear_entire_library(
         raise HTTPException(
             status_code=403,
             detail="This endpoint is only available in DEBUG mode. "
-                   "Set DEBUG=true in your configuration to enable it.",
+            "Set DEBUG=true in your configuration to enable it.",
         )
 
     from sqlalchemy import delete, func, select

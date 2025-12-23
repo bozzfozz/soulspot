@@ -13,6 +13,7 @@ This is the APPLICATION LAYER service that orchestrates:
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,9 @@ from soulspot.domain.ports.download_provider import (
 from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
+
+if TYPE_CHECKING:
+    from soulspot.domain.ports.download_provider import IDownloadProvider
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +155,9 @@ class DownloadManagerService:
             failed_today=failed_today,
         )
 
-    async def get_download_by_id(self, download_id: DownloadId) -> UnifiedDownload | None:
+    async def get_download_by_id(
+        self, download_id: DownloadId
+    ) -> UnifiedDownload | None:
         """Get a specific download by its SoulSpot ID.
 
         Args:
@@ -182,7 +188,9 @@ class DownloadManagerService:
                 download_model.source_url
             )
 
-        return self._create_unified_download(download_model, track_info, provider_status)
+        return self._create_unified_download(
+            download_model, track_info, provider_status
+        )
 
     # -------------------------------------------------------------------------
     # Private helper methods
@@ -196,10 +204,12 @@ class DownloadManagerService:
         result = await self._session.execute(
             select(DownloadModel)
             .where(
-                DownloadModel.status.in_([
-                    DownloadStatus.WAITING.value,
-                    DownloadStatus.PENDING.value,
-                ])
+                DownloadModel.status.in_(
+                    [
+                        DownloadStatus.WAITING.value,
+                        DownloadStatus.PENDING.value,
+                    ]
+                )
             )
             .order_by(DownloadModel.created_at.desc())
             .limit(self._config.max_active_downloads)
@@ -259,9 +269,9 @@ class DownloadManagerService:
                     LogMessages.sync_failed(
                         sync_type="provider_downloads_fetch",
                         reason=f"Failed to get downloads from {provider.provider_name}",
-                        hint="Check provider availability and connection settings"
+                        hint="Check provider availability and connection settings",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
 
         return unified
@@ -329,8 +339,9 @@ class DownloadManagerService:
     async def _count_downloads_by_status(self) -> dict[DownloadStatus, int]:
         """Count downloads by status."""
         result = await self._session.execute(
-            select(DownloadModel.status, func.count(DownloadModel.id))
-            .group_by(DownloadModel.status)
+            select(DownloadModel.status, func.count(DownloadModel.id)).group_by(
+                DownloadModel.status
+            )
         )
         rows = result.all()
 

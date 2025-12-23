@@ -122,7 +122,9 @@ async def list_automation_rules(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list automation rules: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list automation rules: {e}"
+        ) from e
 
 
 @router.get("/rules/{rule_id}")
@@ -166,7 +168,9 @@ async def get_automation_rule(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get automation rule: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get automation rule: {e}"
+        ) from e
 
 
 @router.post("/rules/{rule_id}/enable")
@@ -188,7 +192,9 @@ async def enable_automation_rule(
         return {"message": "Automation rule enabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to enable automation rule: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enable automation rule: {e}"
+        ) from e
 
 
 @router.post("/rules/{rule_id}/disable")
@@ -210,7 +216,9 @@ async def disable_automation_rule(
         return {"message": "Automation rule disabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to disable automation rule: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to disable automation rule: {e}"
+        ) from e
 
 
 @router.delete("/rules/{rule_id}")
@@ -232,4 +240,6 @@ async def delete_automation_rule(
         return {"message": "Automation rule deleted successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete automation rule: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete automation rule: {e}"
+        ) from e

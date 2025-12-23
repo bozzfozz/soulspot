@@ -193,7 +193,8 @@ def log_filesystem_operation(
 
     if success:
         logger.debug(
-            f"Filesystem {operation} succeeded: {path}" + (f" [{context_str}]" if context_str else "")
+            f"Filesystem {operation} succeeded: {path}"
+            + (f" [{context_str}]" if context_str else "")
         )
     else:
         if isinstance(error, (OSError, PermissionError)):
@@ -204,7 +205,8 @@ def log_filesystem_operation(
             logger.error(msg, exc_info=True)
         else:
             logger.error(
-                f"Filesystem {operation} failed: {path}" + (f" [{context_str}]" if context_str else ""),
+                f"Filesystem {operation} failed: {path}"
+                + (f" [{context_str}]" if context_str else ""),
                 exc_info=True,
             )
 

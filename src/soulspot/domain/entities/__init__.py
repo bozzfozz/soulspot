@@ -5,6 +5,15 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, ClassVar, Optional
 
+from soulspot.domain.entities.download_manager import (
+    DownloadProgress,
+    DownloadProvider,
+    DownloadTimestamps,
+    QueueStatistics,
+    TrackInfo,
+    UnifiedDownload,
+    UnifiedDownloadStatus,
+)
 from soulspot.domain.entities.error_codes import (
     NON_RETRYABLE_ERRORS,
     RETRYABLE_ERRORS,
@@ -263,7 +272,9 @@ class Album:
     # Hey, update_cover is a domain method! Updates the cover ImageRef AND bumps updated_at. Called
     # after post-processing downloads artwork from CoverArtArchive. Use this method instead of direct
     # field assignment so updated_at changes and cache invalidates correctly.
-    def update_cover(self, *, url: str | None = None, path: FilePath | str | None = None) -> None:
+    def update_cover(
+        self, *, url: str | None = None, path: FilePath | str | None = None
+    ) -> None:
         """Update album cover art.
 
         Args:
@@ -271,7 +282,9 @@ class Album:
             path: Local cached file path
         """
         path_str = str(path) if path is not None else None
-        self.cover = ImageRef(url=url or self.cover.url, path=path_str or self.cover.path)
+        self.cover = ImageRef(
+            url=url or self.cover.url, path=path_str or self.cover.path
+        )
         self.updated_at = datetime.now(UTC)
 
     # Backward compatibility alias
@@ -691,7 +704,9 @@ class Download:
             ValueError: If download is not in FAILED status
         """
         if self.status != DownloadStatus.FAILED:
-            raise ValueError(f"Cannot schedule retry for download in status {self.status}")
+            raise ValueError(
+                f"Cannot schedule retry for download in status {self.status}"
+            )
 
         # Reset retry count for manual retry
         self.retry_count = 0
@@ -1291,9 +1306,10 @@ class BlocklistEntry:
             raise ValueError("USERNAME scope requires username")
         if self.scope == BlocklistScope.FILEPATH and self.filepath is None:
             raise ValueError("FILEPATH scope requires filepath")
-        if self.scope == BlocklistScope.SPECIFIC:
-            if self.username is None or self.filepath is None:
-                raise ValueError("SPECIFIC scope requires both username and filepath")
+        if self.scope == BlocklistScope.SPECIFIC and (
+            self.username is None or self.filepath is None
+        ):
+            raise ValueError("SPECIFIC scope requires both username and filepath")
 
     def is_expired(self) -> bool:
         """Check if this block has expired."""
@@ -1397,17 +1413,6 @@ class BlocklistEntry:
             is_manual=True,
         )
 
-
-# Import download manager entities for re-export
-from soulspot.domain.entities.download_manager import (
-    DownloadProgress,
-    DownloadProvider,
-    DownloadTimestamps,
-    QueueStatistics,
-    TrackInfo,
-    UnifiedDownload,
-    UnifiedDownloadStatus,
-)
 
 __all__ = [
     # Existing entities

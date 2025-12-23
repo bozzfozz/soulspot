@@ -54,9 +54,12 @@ class RateLimiterConfig:
     Wenn wir das auf 60s cappen, ignorieren wir den Header und bekommen
     sofort wieder 429 → infinite loop!
     """
+
     max_tokens: int = 10  # Bucket size
     refill_rate: float = 2.0  # Tokens per second
-    max_backoff_seconds: float = 600.0  # Max wait on 429 (10 minutes! Spotify can send long waits)
+    max_backoff_seconds: float = (
+        600.0  # Max wait on 429 (10 minutes! Spotify can send long waits)
+    )
     initial_backoff_seconds: float = 1.0  # First 429 wait
     backoff_multiplier: float = 2.0  # Exponential backoff factor
 
@@ -75,6 +78,7 @@ class RateLimiter:
         _current_backoff: Current backoff delay (resets on success)
         _lock: Async lock for thread-safety
     """
+
     config: RateLimiterConfig = field(default_factory=RateLimiterConfig)
 
     # Internal state (not in __init__ signature)
@@ -102,12 +106,14 @@ class RateLimiter:
         Spotify kann lange Retry-After Header senden (5+ Minuten).
         Wir müssen diese respektieren, sonst infinite 429 loop!
         """
-        limiter = cls(config=RateLimiterConfig(
-            max_tokens=10,  # Burst capacity
-            refill_rate=2.0,  # Sustained rate
-            max_backoff_seconds=600.0,  # 10 minutes - respect long Retry-After headers!
-            initial_backoff_seconds=1.0,
-        ))
+        limiter = cls(
+            config=RateLimiterConfig(
+                max_tokens=10,  # Burst capacity
+                refill_rate=2.0,  # Sustained rate
+                max_backoff_seconds=600.0,  # 10 minutes - respect long Retry-After headers!
+                initial_backoff_seconds=1.0,
+            )
+        )
         limiter._name = "spotify"
         return limiter
 
@@ -119,12 +125,14 @@ class RateLimiter:
         - Ungefähr 50 requests / 5 seconds = 10 req/sec
         - Aber weniger Burst als Spotify
         """
-        limiter = cls(config=RateLimiterConfig(
-            max_tokens=15,  # Larger bucket for Deezer
-            refill_rate=5.0,  # 5 req/sec (half of limit for safety)
-            max_backoff_seconds=30.0,
-            initial_backoff_seconds=0.5,
-        ))
+        limiter = cls(
+            config=RateLimiterConfig(
+                max_tokens=15,  # Larger bucket for Deezer
+                refill_rate=5.0,  # 5 req/sec (half of limit for safety)
+                max_backoff_seconds=30.0,
+                initial_backoff_seconds=0.5,
+            )
+        )
         limiter._name = "deezer"
         return limiter
 
@@ -135,12 +143,14 @@ class RateLimiter:
         Hey future me – MusicBrainz ist STRENG: 1 req/sec!
         Keine Bursts erlaubt. Wir sind extra konservativ.
         """
-        limiter = cls(config=RateLimiterConfig(
-            max_tokens=1,  # No burst!
-            refill_rate=1.0,  # Exactly 1 req/sec
-            max_backoff_seconds=120.0,  # Long backoff (MB bans aggressive clients)
-            initial_backoff_seconds=2.0,
-        ))
+        limiter = cls(
+            config=RateLimiterConfig(
+                max_tokens=1,  # No burst!
+                refill_rate=1.0,  # Exactly 1 req/sec
+                max_backoff_seconds=120.0,  # Long backoff (MB bans aggressive clients)
+                initial_backoff_seconds=2.0,
+            )
+        )
         limiter._name = "musicbrainz"
         return limiter
 
@@ -259,7 +269,9 @@ class RateLimiter:
         await self.acquire()
         return self
 
-    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: object) -> None:
+    async def __aexit__(
+        self, exc_type: type | None, exc_val: Exception | None, exc_tb: object
+    ) -> None:
         """Exit async context."""
         # If no exception, reset backoff (success!)
         if exc_type is None:

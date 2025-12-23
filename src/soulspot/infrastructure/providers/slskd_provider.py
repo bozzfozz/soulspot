@@ -128,9 +128,7 @@ class SlskdDownloadProvider(IDownloadProvider):
 
         return active_downloads
 
-    async def get_download_progress(
-        self, external_id: str
-    ) -> ProviderDownload | None:
+    async def get_download_progress(self, external_id: str) -> ProviderDownload | None:
         """Get progress for a specific download.
 
         Args:
@@ -204,7 +202,9 @@ class SlskdDownloadProvider(IDownloadProvider):
 
             # Extract progress info
             percent = raw.get("progress", raw.get("percentComplete", 0)) or 0
-            bytes_transferred = raw.get("bytes_transferred", raw.get("bytesTransferred", 0)) or 0
+            bytes_transferred = (
+                raw.get("bytes_transferred", raw.get("bytesTransferred", 0)) or 0
+            )
             total_bytes = raw.get("size", 0) or 0
 
             # Calculate speed from bytes delta
@@ -239,7 +239,9 @@ class SlskdDownloadProvider(IDownloadProvider):
                 username=raw.get("username"),
                 status=status,
                 status_message=raw.get("message"),
-                error_message=raw.get("error") if status == UnifiedDownloadStatus.FAILED else None,
+                error_message=raw.get("error")
+                if status == UnifiedDownloadStatus.FAILED
+                else None,
                 progress=progress,
                 raw_data=raw,
             )

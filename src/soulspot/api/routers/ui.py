@@ -13,6 +13,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_deezer_plugin,
     get_download_repository,
+    get_image_service,
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
@@ -24,6 +25,7 @@ from soulspot.api.dependencies import (
 from soulspot.application.services.library_scanner_service import LibraryScannerService
 from soulspot.application.services.spotify_sync_service import SpotifySyncService
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.config import get_settings
 from soulspot.domain.entities import DownloadStatus
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
@@ -56,9 +58,6 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 #
 # NOTE: Using module-level instance for SYNC template methods (get_display_url).
 # For ASYNC methods (download_and_cache), use Depends(get_image_service_with_session).
-from soulspot.api.dependencies import get_image_service
-from soulspot.config import get_settings
-
 _image_service = get_image_service(get_settings())
 
 
@@ -504,7 +503,9 @@ async def playlist_detail(
             "created_at": playlist.created_at.isoformat(),
             "updated_at": playlist.updated_at.isoformat(),
             "spotify_uri": str(playlist.spotify_uri) if playlist.spotify_uri else None,
-            "cover_url": playlist.cover.url if playlist.cover else None,  # Spotify playlist cover image (ImageRef)
+            "cover_url": playlist.cover.url
+            if playlist.cover
+            else None,  # Spotify playlist cover image (ImageRef)
             "cover_path": playlist.cover.path if playlist.cover else None,
         }
 
@@ -601,7 +602,9 @@ async def _get_downloads_data(
         + await download_repository.count_by_status(DownloadStatus.PENDING.value)
         + await download_repository.count_by_status(DownloadStatus.WAITING.value)
     )
-    failed_count = await download_repository.count_by_status(DownloadStatus.FAILED.value)
+    failed_count = await download_repository.count_by_status(
+        DownloadStatus.FAILED.value
+    )
     completed_count = await download_repository.count_by_status(
         DownloadStatus.COMPLETED.value
     )
@@ -610,23 +613,31 @@ async def _get_downloads_data(
     downloads_data = []
     for dl in download_models:
         track = dl.track
-        downloads_data.append({
-            "id": dl.id,
-            "track_id": dl.track_id,
-            "status": dl.status,
-            "priority": dl.priority,
-            "progress_percent": dl.progress_percent or 0,
-            "error_message": dl.error_message,
-            "started_at": dl.started_at.isoformat() if dl.started_at else None,
-            "created_at": dl.created_at.isoformat() if dl.created_at else None,
-            # Track info for display
-            "title": track.title if track else f"Track {dl.track_id[:8]}",
-            "artist": track.artist.name if track and track.artist else "Unknown Artist",
-            "album": track.album.title if track and track.album else "Unknown Album",
-            "album_art": track.album.cover_url if track and track.album else None,
-            # Hey future me - album_art_path enables get_display_url() local cache
-            "album_art_path": track.album.cover_path if track and track.album else None,
-        })
+        downloads_data.append(
+            {
+                "id": dl.id,
+                "track_id": dl.track_id,
+                "status": dl.status,
+                "priority": dl.priority,
+                "progress_percent": dl.progress_percent or 0,
+                "error_message": dl.error_message,
+                "started_at": dl.started_at.isoformat() if dl.started_at else None,
+                "created_at": dl.created_at.isoformat() if dl.created_at else None,
+                # Track info for display
+                "title": track.title if track else f"Track {dl.track_id[:8]}",
+                "artist": track.artist.name
+                if track and track.artist
+                else "Unknown Artist",
+                "album": track.album.title
+                if track and track.album
+                else "Unknown Album",
+                "album_art": track.album.cover_url if track and track.album else None,
+                # Hey future me - album_art_path enables get_display_url() local cache
+                "album_art_path": track.album.cover_path
+                if track and track.album
+                else None,
+            }
+        )
 
     return {
         "downloads": downloads_data,
@@ -770,7 +781,7 @@ async def quick_search(
             .where(
                 or_(
                     TrackModel.title.ilike(search_term),
-                    ArtistModel.name.ilike(search_term)
+                    ArtistModel.name.ilike(search_term),
                 )
             )
             .limit(5)
@@ -779,29 +790,31 @@ async def quick_search(
         tracks = result.scalars().all()
 
         for track in tracks:
-            results.append({
-                "type": "track",
-                "name": track.title,
-                "subtitle": track.artist.name if track.artist else "Unknown Artist",
-                "url": f"/library/tracks/{track.id}",
-            })
+            results.append(
+                {
+                    "type": "track",
+                    "name": track.title,
+                    "subtitle": track.artist.name if track.artist else "Unknown Artist",
+                    "url": f"/library/tracks/{track.id}",
+                }
+            )
 
         # Search playlists by name
         stmt = (
-            select(PlaylistModel)
-            .where(PlaylistModel.name.ilike(search_term))
-            .limit(5)
+            select(PlaylistModel).where(PlaylistModel.name.ilike(search_term)).limit(5)
         )
         result = await session.execute(stmt)
         playlists = result.scalars().all()
 
         for playlist in playlists:
-            results.append({
-                "type": "playlist",
-                "name": playlist.name,
-                "subtitle": "Playlist",
-                "url": f"/playlists/{playlist.id}",
-            })
+            results.append(
+                {
+                    "type": "playlist",
+                    "name": playlist.name,
+                    "subtitle": "Playlist",
+                    "url": f"/playlists/{playlist.id}",
+                }
+            )
 
         # Sort: exact matches first, then by type (playlist > track)
         type_order = {"playlist": 0, "artist": 1, "album": 2, "track": 3}
@@ -1231,19 +1244,25 @@ async def library_artists(
             total_album_count_subq.c.total_albums,
             local_album_count_subq.c.local_albums,
         )
-        .outerjoin(total_track_count_subq, ArtistModel.id == total_track_count_subq.c.artist_id)
-        .outerjoin(local_track_count_subq, ArtistModel.id == local_track_count_subq.c.artist_id)
-        .outerjoin(total_album_count_subq, ArtistModel.id == total_album_count_subq.c.artist_id)
-        .outerjoin(local_album_count_subq, ArtistModel.id == local_album_count_subq.c.artist_id)
+        .outerjoin(
+            total_track_count_subq, ArtistModel.id == total_track_count_subq.c.artist_id
+        )
+        .outerjoin(
+            local_track_count_subq, ArtistModel.id == local_track_count_subq.c.artist_id
+        )
+        .outerjoin(
+            total_album_count_subq, ArtistModel.id == total_album_count_subq.c.artist_id
+        )
+        .outerjoin(
+            local_album_count_subq, ArtistModel.id == local_album_count_subq.c.artist_id
+        )
     )
 
     # Exclude Various Artists patterns from artist view
     # Hey future me - VA/Compilations have their own section, don't clutter artist list!
     from soulspot.domain.value_objects.album_types import VARIOUS_ARTISTS_PATTERNS
 
-    stmt = stmt.where(
-        ~func.lower(ArtistModel.name).in_(list(VARIOUS_ARTISTS_PATTERNS))
-    )
+    stmt = stmt.where(~func.lower(ArtistModel.name).in_(list(VARIOUS_ARTISTS_PATTERNS)))
 
     # Apply source filter if requested
     if source == "local":
@@ -1407,8 +1426,12 @@ async def library_albums(
             total_track_count_subq.c.total_tracks,
             local_track_count_subq.c.local_tracks,
         )
-        .outerjoin(total_track_count_subq, AlbumModel.id == total_track_count_subq.c.album_id)
-        .outerjoin(local_track_count_subq, AlbumModel.id == local_track_count_subq.c.album_id)
+        .outerjoin(
+            total_track_count_subq, AlbumModel.id == total_track_count_subq.c.album_id
+        )
+        .outerjoin(
+            local_track_count_subq, AlbumModel.id == local_track_count_subq.c.album_id
+        )
         .options(joinedload(AlbumModel.artist))
     )
 
@@ -1463,10 +1486,14 @@ async def library_albums(
     # Count albums by source for filter badges
     count_all = await session.execute(select(func.count(AlbumModel.id)))
     count_local = await session.execute(
-        select(func.count(AlbumModel.id)).where(AlbumModel.source.in_(["local", "hybrid"]))
+        select(func.count(AlbumModel.id)).where(
+            AlbumModel.source.in_(["local", "hybrid"])
+        )
     )
     count_spotify = await session.execute(
-        select(func.count(AlbumModel.id)).where(AlbumModel.source.in_(["spotify", "hybrid"]))
+        select(func.count(AlbumModel.id)).where(
+            AlbumModel.source.in_(["spotify", "hybrid"])
+        )
     )
     count_hybrid = await session.execute(
         select(func.count(AlbumModel.id)).where(AlbumModel.source == "hybrid")
@@ -1599,7 +1626,9 @@ async def library_tracks(
         .join(TrackModel.artist, isouter=True)
         .join(TrackModel.album, isouter=True)
         .order_by(
-            func.lower(func.coalesce(ArtistModel.name, "zzz")),  # Artists first, null last
+            func.lower(
+                func.coalesce(ArtistModel.name, "zzz")
+            ),  # Artists first, null last
             func.lower(func.coalesce(TrackModel.title, "")),
         )
         .offset(offset)
@@ -1678,7 +1707,9 @@ async def library_artist_detail(
     artist_name = unquote(artist_name)
 
     # Step 1: Get artist by name (case-insensitive)
-    artist_stmt = select(ArtistModel).where(func.lower(ArtistModel.name) == artist_name.lower())
+    artist_stmt = select(ArtistModel).where(
+        func.lower(ArtistModel.name) == artist_name.lower()
+    )
     artist_result = await session.execute(artist_stmt)
     artist_model = artist_result.scalar_one_or_none()
 
@@ -1729,16 +1760,24 @@ async def library_artist_detail(
             spotify_plugin = None
             access_token = None
             if hasattr(request.app.state, "db_token_manager"):
-                db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+                db_token_manager: DatabaseTokenManager = (
+                    request.app.state.db_token_manager
+                )
                 access_token = await db_token_manager.get_token_for_background()
 
             if access_token:
                 app_settings = get_settings()
                 spotify_client = SpotifyClient(app_settings.spotify)
-                spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
-                logger.debug(f"Spotify plugin available for album sync of {artist_model.name}")
+                spotify_plugin = SpotifyPlugin(
+                    client=spotify_client, access_token=access_token
+                )
+                logger.debug(
+                    f"Spotify plugin available for album sync of {artist_model.name}"
+                )
             else:
-                logger.debug(f"No Spotify token - using Deezer only for {artist_model.name}")
+                logger.debug(
+                    f"No Spotify token - using Deezer only for {artist_model.name}"
+                )
 
             # 2. Deezer is ALWAYS available (no auth needed!)
             deezer_plugin = DeezerPlugin()
@@ -1747,7 +1786,7 @@ async def library_artist_detail(
             followed_service = FollowedArtistsService(
                 session,
                 spotify_plugin=spotify_plugin,  # May be None - service handles this
-                deezer_plugin=deezer_plugin,    # Always available
+                deezer_plugin=deezer_plugin,  # Always available
             )
 
             # Sync albums using available services
@@ -1761,12 +1800,13 @@ async def library_artist_detail(
         except Exception as e:
             # Log with structured message
             from soulspot.infrastructure.observability.log_messages import LogMessages
+
             logger.warning(
                 LogMessages.sync_failed(
                     entity="Albums",
                     source="deezer/spotify",
                     error=str(e),
-                    hint=f"Artist: {artist_model.name}"
+                    hint=f"Artist: {artist_model.name}",
                 )
             )
             # Continue anyway - show empty albums list
@@ -1792,8 +1832,12 @@ async def library_artist_detail(
             "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
             "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
             "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
-            "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
-            "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
+            "primary_type": album.primary_type
+            if hasattr(album, "primary_type")
+            else "album",
+            "secondary_types": album.secondary_types
+            if hasattr(album, "secondary_types")
+            else [],
         }
 
     # Count tracks per album
@@ -1824,7 +1868,9 @@ async def library_artist_detail(
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
 
     artist_data = {
-        "id": str(artist_model.id),  # CRITICAL: Needed for /api/library/discovery/missing/{artist_id}
+        "id": str(
+            artist_model.id
+        ),  # CRITICAL: Needed for /api/library/discovery/missing/{artist_id}
         "name": artist_model.name,
         "source": artist_model.source,  # NEW: Show source badge
         "disambiguation": artist_model.disambiguation,
@@ -1926,10 +1972,16 @@ async def library_album_detail(
             "artist": artist_name,
             "artist_slug": artist_name,
             "tracks": [],
-            "year": album_model.release_year if hasattr(album_model, "release_year") else None,
+            "year": album_model.release_year
+            if hasattr(album_model, "release_year")
+            else None,
             "total_duration_ms": 0,
-            "artwork_url": album_model.cover_url if hasattr(album_model, "cover_url") else None,
-            "artwork_path": album_model.cover_path if hasattr(album_model, "cover_path") else None,
+            "artwork_url": album_model.cover_url
+            if hasattr(album_model, "cover_url")
+            else None,
+            "artwork_path": album_model.cover_path
+            if hasattr(album_model, "cover_path")
+            else None,
             "is_compilation": "compilation" in (album_model.secondary_types or []),
             "needs_sync": True,  # Flag to show "Sync required" message
             "source": album_model.source,
@@ -1953,7 +2005,9 @@ async def library_album_detail(
             "is_broken": track.is_broken,
             "source": track.source,  # 'local', 'spotify', 'deezer', 'tidal', 'hybrid'
             # Extract provider IDs for download support
-            "spotify_id": track.spotify_uri.split(":")[-1] if track.spotify_uri else None,
+            "spotify_id": track.spotify_uri.split(":")[-1]
+            if track.spotify_uri
+            else None,
             "deezer_id": track.deezer_id,
             "tidal_id": track.tidal_id,
             "is_downloaded": bool(track.file_path),
@@ -1962,7 +2016,9 @@ async def library_album_detail(
     ]
 
     # Sort by disc number, then track number, then title
-    tracks_data.sort(key=lambda x: (x["disc_number"], x["track_number"] or 999, x["title"].lower()))  # type: ignore[union-attr]
+    tracks_data.sort(
+        key=lambda x: (x["disc_number"], x["track_number"] or 999, x["title"].lower())
+    )  # type: ignore[union-attr]
 
     # Calculate total duration
     total_duration_ms = sum(t["duration_ms"] or 0 for t in tracks_data)  # type: ignore[misc]
@@ -2068,7 +2124,9 @@ async def track_metadata_editor(
             "title": track_model.title,
             "artist": track_model.artist.name if track_model.artist else None,
             "album": track_model.album.title if track_model.album else None,
-            "album_artist": track_model.album.album_artist if track_model.album else None,
+            "album_artist": track_model.album.album_artist
+            if track_model.album
+            else None,
             "genre": track_model.genre,
             "year": track_model.album.year
             if track_model.album and hasattr(track_model.album, "year")
@@ -2207,6 +2265,7 @@ async def spotify_artists_page(request: Request) -> Any:
     Use /library/artists?source=spotify for multi-provider unified view.
     """
     from starlette.responses import RedirectResponse
+
     return RedirectResponse(url="/library/artists?source=spotify", status_code=301)
 
 
@@ -2217,7 +2276,9 @@ async def browse_new_releases_page(
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     days: int = Query(default=90, ge=7, le=365, description="Days to look back"),
-    include_compilations: bool = Query(default=True, description="Include compilations"),
+    include_compilations: bool = Query(
+        default=True, description="Include compilations"
+    ),
     include_singles: bool = Query(default=True, description="Include singles"),
     force_refresh: bool = Query(default=False, description="Force refresh from API"),
 ) -> Any:
@@ -2291,7 +2352,9 @@ async def browse_new_releases_page(
                 "age_seconds": cache.get_age_seconds(),
                 "cached_at": cache.cached_at.isoformat() if cache.cached_at else None,
             }
-            logger.debug(f"New Releases: Using cached data ({cache_info['age_seconds']}s old)")
+            logger.debug(
+                f"New Releases: Using cached data ({cache_info['age_seconds']}s old)"
+            )
         else:
             logger.debug("New Releases: Cache stale or invalid, fetching live")
             cache_info = {"source": "live", "reason": "cache_stale"}
@@ -2349,21 +2412,29 @@ async def browse_new_releases_page(
                 external_url = f"https://www.deezer.com/album/{album.deezer_id}"
                 album_id = album.deezer_id
             else:
-                external_url = album.external_urls.get(album.source_service, "") if album.external_urls else ""
+                external_url = (
+                    album.external_urls.get(album.source_service, "")
+                    if album.external_urls
+                    else ""
+                )
                 album_id = album.deezer_id or album.spotify_id or ""
 
-            all_releases.append({
-                "id": album_id,
-                "name": album.title,
-                "artist_name": album.artist_name,
-                "artist_id": album.artist_deezer_id or album.artist_spotify_id or "",
-                "artwork_url": album.artwork_url,
-                "release_date": album.release_date,
-                "album_type": album.album_type or "album",
-                "total_tracks": album.total_tracks,
-                "external_url": external_url,
-                "source": album.source_service,
-            })
+            all_releases.append(
+                {
+                    "id": album_id,
+                    "name": album.title,
+                    "artist_name": album.artist_name,
+                    "artist_id": album.artist_deezer_id
+                    or album.artist_spotify_id
+                    or "",
+                    "artwork_url": album.artwork_url,
+                    "release_date": album.release_date,
+                    "album_type": album.album_type or "album",
+                    "total_tracks": album.total_tracks,
+                    "external_url": external_url,
+                    "source": album.source_service,
+                }
+            )
 
         # Log any errors from sync
         for provider, err in result.errors.items():
@@ -2505,9 +2576,7 @@ async def spotify_discover_page(
 
     # Get followed artist IDs/names for filtering
     # Extract Spotify ID from URI (format: spotify:artist:ID)
-    followed_ids = {
-        uri.split(":")[-1] for a in artists if (uri := a.spotify_uri)
-    }
+    followed_ids = {uri.split(":")[-1] for a in artists if (uri := a.spotify_uri)}
     followed_names = {a.name.lower().strip() for a in artists if a.name}
 
     # Use DiscoverService for Multi-Provider discovery!
@@ -2548,16 +2617,18 @@ async def spotify_discover_page(
                     continue
                 seen_ids.add(key)
 
-                discoveries.append({
-                    "spotify_id": discovered.spotify_id,
-                    "deezer_id": discovered.deezer_id,
-                    "name": discovered.name,
-                    "image_url": discovered.artwork_url,
-                    "genres": (discovered.genres or [])[:3],
-                    "popularity": discovered.popularity or 0,
-                    "based_on": artist.name,
-                    "source": discovered.source_service,
-                })
+                discoveries.append(
+                    {
+                        "spotify_id": discovered.spotify_id,
+                        "deezer_id": discovered.deezer_id,
+                        "name": discovered.name,
+                        "image_url": discovered.artwork_url,
+                        "genres": (discovered.genres or [])[:3],
+                        "popularity": discovered.popularity or 0,
+                        "based_on": artist.name,
+                        "source": discovered.source_service,
+                    }
+                )
 
             # Log provider errors
             for provider, err in result.errors.items():
@@ -2611,6 +2682,7 @@ async def spotify_album_detail_page(
     from urllib.parse import quote
 
     from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
     from starlette.responses import RedirectResponse
 
     from soulspot.infrastructure.persistence.models import AlbumModel
@@ -2629,7 +2701,9 @@ async def spotify_album_detail_page(
     if album_model and album_model.artist:
         # Build library album key: artist_name::album_title
         album_key = f"{album_model.artist.name}::{album_model.title}"
-        return RedirectResponse(url=f"/library/albums/{quote(album_key)}", status_code=301)
+        return RedirectResponse(
+            url=f"/library/albums/{quote(album_key)}", status_code=301
+        )
     else:
         # Album not in library yet - redirect to library albums list
         return RedirectResponse(url="/library/albums", status_code=302)
@@ -2638,7 +2712,9 @@ async def spotify_album_detail_page(
 # Hey future me, DEPRECATED route! Users should use /spotify/artists instead for auto-sync.
 # Returns HTTP 410 Gone (permanently removed) with helpful redirect message.
 # This prevents 404 confusion and guides users to the new location.
-@router.get("/automation/followed-artists", response_class=JSONResponse, status_code=410)
+@router.get(
+    "/automation/followed-artists", response_class=JSONResponse, status_code=410
+)
 async def followed_artists_page_deprecated(request: Request) -> Any:
     """Followed artists sync page - DEPRECATED.
 
@@ -2658,4 +2734,3 @@ async def followed_artists_page_deprecated(request: Request) -> Any:
         },
         headers={"Location": "/spotify/artists"},
     )
-

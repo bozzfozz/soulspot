@@ -123,9 +123,7 @@ class EnrichMetadataMultiSourceUseCase(
             logger.warning("MusicBrainz metadata fetch failed: %s", e)
             return None
 
-    async def _fetch_spotify_metadata(
-        self, track: Track
-    ) -> dict[str, Any] | None:
+    async def _fetch_spotify_metadata(self, track: Track) -> dict[str, Any] | None:
         """Fetch metadata from Spotify via Plugin.
 
         Hey future me - Plugin handles token internally! No more access_token param.
@@ -149,10 +147,16 @@ class EnrichMetadataMultiSourceUseCase(
                     "album": {
                         "id": track_dto.album.spotify_id if track_dto.album else None,
                         "name": track_dto.album.title if track_dto.album else None,
-                        "release_date": track_dto.album.release_date if track_dto.album else None,
+                        "release_date": track_dto.album.release_date
+                        if track_dto.album
+                        else None,
                         # Hey future me - AlbumDTO.cover ist ImageRef!
-                        "images": [{"url": track_dto.album.cover.url}] if track_dto.album and track_dto.album.cover.url else [],
-                    } if track_dto.album else {},
+                        "images": [{"url": track_dto.album.cover.url}]
+                        if track_dto.album and track_dto.album.cover.url
+                        else [],
+                    }
+                    if track_dto.album
+                    else {},
                     "artists": [
                         {"id": a.spotify_id, "name": a.name}
                         for a in (track_dto.artists or [])

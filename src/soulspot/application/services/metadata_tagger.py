@@ -133,9 +133,7 @@ class MetadataTaggerService:
         """Initialize the metadata tagger service."""
         self._http_client: httpx.AsyncClient | None = None
 
-    async def tag_file(
-        self, file_path: Path, metadata: AudioMetadata
-    ) -> TaggingResult:
+    async def tag_file(self, file_path: Path, metadata: AudioMetadata) -> TaggingResult:
         """Write metadata tags to an audio file.
 
         Hey future me - this is the main tagging method!
@@ -194,9 +192,7 @@ class MetadataTaggerService:
                 error=str(e),
             )
 
-    async def _tag_mp3(
-        self, file_path: Path, metadata: AudioMetadata
-    ) -> TaggingResult:
+    async def _tag_mp3(self, file_path: Path, metadata: AudioMetadata) -> TaggingResult:
         """Tag an MP3 file with ID3 tags.
 
         Hey future me - uses EasyID3 for simple tags, raw ID3 for ISRC!
@@ -312,9 +308,7 @@ class MetadataTaggerService:
             fields_written=fields_written,
         )
 
-    async def _tag_ogg(
-        self, file_path: Path, metadata: AudioMetadata
-    ) -> TaggingResult:
+    async def _tag_ogg(self, file_path: Path, metadata: AudioMetadata) -> TaggingResult:
         """Tag an OGG Vorbis file with Vorbis comments.
 
         Hey future me - same as FLAC, uses Vorbis comments!
@@ -397,9 +391,7 @@ class MetadataTaggerService:
             fields_written=fields_written,
         )
 
-    async def _tag_mp4(
-        self, file_path: Path, metadata: AudioMetadata
-    ) -> TaggingResult:
+    async def _tag_mp4(self, file_path: Path, metadata: AudioMetadata) -> TaggingResult:
         """Tag an MP4/M4A/AAC file with MP4 atoms.
 
         Hey future me - MP4 uses atoms with weird names like ©nam!
@@ -448,7 +440,10 @@ class MetadataTaggerService:
         )
 
     async def embed_artwork(
-        self, file_path: Path, artwork_url: str | None = None, artwork_data: bytes | None = None
+        self,
+        file_path: Path,
+        artwork_url: str | None = None,
+        artwork_data: bytes | None = None,
     ) -> bool:
         """Embed album artwork into an audio file.
 
@@ -484,7 +479,9 @@ class MetadataTaggerService:
             if ext == ".mp3":
                 return await self._embed_artwork_mp3(file_path, artwork_data, mime_type)
             elif ext == ".flac":
-                return await self._embed_artwork_flac(file_path, artwork_data, mime_type)
+                return await self._embed_artwork_flac(
+                    file_path, artwork_data, mime_type
+                )
             elif ext in (".m4a", ".mp4", ".aac"):
                 return await self._embed_artwork_mp4(file_path, artwork_data, mime_type)
             elif ext in (".ogg", ".oga", ".opus"):

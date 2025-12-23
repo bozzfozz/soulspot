@@ -601,9 +601,7 @@ class IBlocklistRepository(ABC):
         pass
 
     @abstractmethod
-    async def is_blocked(
-        self, username: str | None, filepath: str | None
-    ) -> bool:
+    async def is_blocked(self, username: str | None, filepath: str | None) -> bool:
         """Check if a source is currently blocked (considering expiry).
 
         This is the main method used during search to filter out blocked sources.
@@ -1045,9 +1043,7 @@ class ISpotifyClient(ABC):
     # =========================================================================
 
     @abstractmethod
-    async def follow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def follow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Follow one or more artists on Spotify.
 
         Args:
@@ -1060,9 +1056,7 @@ class ISpotifyClient(ABC):
         pass
 
     @abstractmethod
-    async def unfollow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def unfollow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Unfollow one or more artists on Spotify.
 
         Args:
@@ -1448,9 +1442,7 @@ class IEnrichmentCandidateRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_by_entity(
-        self, entity_type: str, entity_id: str
-    ) -> list[Any]:
+    async def get_by_entity(self, entity_type: str, entity_id: str) -> list[Any]:
         """Get all candidates for a specific entity (artist/album)."""
         pass
 

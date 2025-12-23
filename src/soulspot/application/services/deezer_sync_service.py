@@ -150,6 +150,7 @@ class DeezerSyncService:
             Dict with deprecated warning
         """
         import warnings
+
         warnings.warn(
             "DeezerSyncService.sync_charts() is deprecated. "
             "Charts use in-memory cache now via DeezerSyncWorker. "
@@ -201,6 +202,7 @@ class DeezerSyncService:
             Dict with deprecated warning
         """
         import warnings
+
         warnings.warn(
             "DeezerSyncService.sync_new_releases() is deprecated. "
             "New Releases use in-memory cache now via DeezerSyncWorker. "
@@ -244,7 +246,9 @@ class DeezerSyncService:
             Sync result with counts
         """
         cache_key = f"artist_albums_{deezer_artist_id}"
-        if not force and not self._should_sync(cache_key, self.ARTIST_ALBUMS_SYNC_COOLDOWN):
+        if not force and not self._should_sync(
+            cache_key, self.ARTIST_ALBUMS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -277,7 +281,9 @@ class DeezerSyncService:
             # Step 2: Sync albums with artist relationship
             for album_dto in albums:
                 try:
-                    await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
+                    await self._save_album_with_artist(
+                        album_dto, artist_id, is_chart=False
+                    )
                     result["albums_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Album {album_dto.title}: {e}")
@@ -330,7 +336,9 @@ class DeezerSyncService:
 
             if top_tracks and top_tracks[0]:
                 # Get artist_id from first track DTO
-                artist_id = await self._ensure_artist_exists(top_tracks[0], is_chart=False)
+                artist_id = await self._ensure_artist_exists(
+                    top_tracks[0], is_chart=False
+                )
 
             if not artist_id:
                 logger.warning(
@@ -341,7 +349,9 @@ class DeezerSyncService:
             # Step 2: Sync tracks with artist relationship
             for track_dto in top_tracks:
                 try:
-                    await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
+                    await self._save_track_with_artist(
+                        track_dto, artist_id, is_chart=False
+                    )
                     result["tracks_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")
@@ -456,17 +466,17 @@ class DeezerSyncService:
             dto = artist_dto
         else:
             # Build ArtistDTO from raw data
-            image = getattr(artist_dto, 'image', None)
+            image = getattr(artist_dto, "image", None)
             if image is None:
-                artwork_url = getattr(artist_dto, 'artwork_url', None)
+                artwork_url = getattr(artist_dto, "artwork_url", None)
                 image = ImageRef(url=artwork_url) if artwork_url else ImageRef()
 
             dto = ArtistDTO(
                 name=artist_dto.name,
                 deezer_id=artist_dto.deezer_id,
                 image=image,
-                genres=getattr(artist_dto, 'genres', None),
-                tags=getattr(artist_dto, 'tags', None),
+                genres=getattr(artist_dto, "genres", None),
+                tags=getattr(artist_dto, "tags", None),
             )
 
         # Use ProviderMappingService for consistent artist creation/update
@@ -519,16 +529,22 @@ class DeezerSyncService:
 
         try:
             # Extract artist data from DTO (handle both ArtistDTO and Album/TrackDTO)
-            artist_name = getattr(artist_dto, 'name', None) or getattr(artist_dto, 'artist_name', None)
-            deezer_id = getattr(artist_dto, 'deezer_id', None) or getattr(artist_dto, 'artist_deezer_id', None)
+            artist_name = getattr(artist_dto, "name", None) or getattr(
+                artist_dto, "artist_name", None
+            )
+            deezer_id = getattr(artist_dto, "deezer_id", None) or getattr(
+                artist_dto, "artist_deezer_id", None
+            )
             # Hey future me - DTOs nutzen jetzt ImageRef! ArtistDTO.image.url statt .artwork_url
-            image_attr = getattr(artist_dto, 'image', None)
-            artwork_url = getattr(image_attr, 'url', None) if image_attr else None
-            genres = getattr(artist_dto, 'genres', None)
-            tags = getattr(artist_dto, 'tags', None)
+            image_attr = getattr(artist_dto, "image", None)
+            artwork_url = getattr(image_attr, "url", None) if image_attr else None
+            genres = getattr(artist_dto, "genres", None)
+            tags = getattr(artist_dto, "tags", None)
 
             if not artist_name or not deezer_id:
-                logger.warning("Cannot ensure artist exists - missing name or deezer_id")
+                logger.warning(
+                    "Cannot ensure artist exists - missing name or deezer_id"
+                )
                 return None
 
             # Build ArtistDTO for ProviderMappingService
@@ -554,8 +570,11 @@ class DeezerSyncService:
 
                 artist = await self._artist_repo.get_by_id(ArtistId(UUID(artist_id)))
                 if artist:
-                    should_download = is_new or await self._image_service.should_redownload(
-                        artist.image.url, artwork_url, artist.image.path
+                    should_download = (
+                        is_new
+                        or await self._image_service.should_redownload(
+                            artist.image.url, artwork_url, artist.image.path
+                        )
                     )
                     if should_download:
                         image_path = await self._image_service.download_artist_image(
@@ -593,7 +612,9 @@ class DeezerSyncService:
                 .values(albums_synced_at=datetime.now(UTC))
             )
             await self._session.execute(stmt)
-            logger.debug(f"Updated albums_synced_at for Deezer artist {deezer_artist_id}")
+            logger.debug(
+                f"Updated albums_synced_at for Deezer artist {deezer_artist_id}"
+            )
         except Exception as e:
             logger.warning(f"Failed to update albums_synced_at: {e}")
 
@@ -662,15 +683,19 @@ class DeezerSyncService:
 
                 # Download album cover if URL changed or no local copy (Deezer provider)
                 # Hey future me - we use OLD values here to detect changes!
-                if self._image_service and album_dto.deezer_id and dto_cover_url:
-                    if await self._image_service.should_redownload(
+                if (
+                    self._image_service
+                    and album_dto.deezer_id
+                    and dto_cover_url
+                    and await self._image_service.should_redownload(
                         old_cover_url, dto_cover_url, old_cover_path
-                    ):
-                        cover_path = await self._image_service.download_album_image(
-                            album_dto.deezer_id, dto_cover_url, provider="deezer"
-                        )
-                        if cover_path:
-                            existing.cover_path = cover_path
+                    )
+                ):
+                    cover_path = await self._image_service.download_album_image(
+                        album_dto.deezer_id, dto_cover_url, provider="deezer"
+                    )
+                    if cover_path:
+                        existing.cover_path = cover_path
             else:
                 # Download album cover for new album (Deezer provider)
                 cover_path = None
@@ -858,7 +883,9 @@ class DeezerSyncService:
                 "message": "Deezer OAuth required for followed artists",
             }
 
-        if not force and not self._should_sync("followed_artists", self.CHARTS_SYNC_COOLDOWN):
+        if not force and not self._should_sync(
+            "followed_artists", self.CHARTS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -916,7 +943,9 @@ class DeezerSyncService:
                 "message": "Deezer OAuth required for user playlists",
             }
 
-        if not force and not self._should_sync("user_playlists", self.CHARTS_SYNC_COOLDOWN):
+        if not force and not self._should_sync(
+            "user_playlists", self.CHARTS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -973,7 +1002,9 @@ class DeezerSyncService:
                 "message": "Deezer OAuth required for saved albums",
             }
 
-        if not force and not self._should_sync("saved_albums", self.ALBUMS_SYNC_COOLDOWN):
+        if not force and not self._should_sync(
+            "saved_albums", self.ALBUMS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -992,8 +1023,13 @@ class DeezerSyncService:
             artist_id_map: dict[str, str] = {}
 
             for album_dto in paginated.items:
-                if album_dto.artist_deezer_id and album_dto.artist_deezer_id not in artist_id_map:
-                    artist_id = await self._ensure_artist_exists(album_dto, is_chart=False)
+                if (
+                    album_dto.artist_deezer_id
+                    and album_dto.artist_deezer_id not in artist_id_map
+                ):
+                    artist_id = await self._ensure_artist_exists(
+                        album_dto, is_chart=False
+                    )
                     if artist_id:
                         artist_id_map[album_dto.artist_deezer_id] = artist_id
 
@@ -1002,7 +1038,9 @@ class DeezerSyncService:
                 try:
                     artist_id = artist_id_map.get(album_dto.artist_deezer_id or "")
                     if artist_id:
-                        await self._save_album_with_artist(album_dto, artist_id, is_chart=False)
+                        await self._save_album_with_artist(
+                            album_dto, artist_id, is_chart=False
+                        )
                         result["albums_synced"] += 1
                     else:
                         logger.warning(
@@ -1083,7 +1121,9 @@ class DeezerSyncService:
                 "message": "Deezer OAuth required for saved tracks",
             }
 
-        if not force and not self._should_sync("saved_tracks", self.TRACKS_SYNC_COOLDOWN):
+        if not force and not self._should_sync(
+            "saved_tracks", self.TRACKS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -1102,8 +1142,13 @@ class DeezerSyncService:
             artist_id_map: dict[str, str] = {}
 
             for track_dto in paginated.items:
-                if track_dto.artist_deezer_id and track_dto.artist_deezer_id not in artist_id_map:
-                    artist_id = await self._ensure_artist_exists(track_dto, is_chart=False)
+                if (
+                    track_dto.artist_deezer_id
+                    and track_dto.artist_deezer_id not in artist_id_map
+                ):
+                    artist_id = await self._ensure_artist_exists(
+                        track_dto, is_chart=False
+                    )
                     if artist_id:
                         artist_id_map[track_dto.artist_deezer_id] = artist_id
 
@@ -1112,7 +1157,9 @@ class DeezerSyncService:
                 try:
                     artist_id = artist_id_map.get(track_dto.artist_deezer_id or "")
                     if artist_id:
-                        await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
+                        await self._save_track_with_artist(
+                            track_dto, artist_id, is_chart=False
+                        )
                         result["tracks_synced"] += 1
                     else:
                         logger.warning(
@@ -1183,12 +1230,18 @@ class DeezerSyncService:
                 logger.warning(
                     f"DeezerSyncService: Cannot sync tracks for album {deezer_album_id} - no artist_id"
                 )
-                return {"synced": False, "tracks_synced": 0, "error": "artist_not_found"}
+                return {
+                    "synced": False,
+                    "tracks_synced": 0,
+                    "error": "artist_not_found",
+                }
 
             # Step 2: Sync tracks with artist relationship
             for track_dto in tracks:
                 try:
-                    await self._save_track_with_artist(track_dto, artist_id, is_chart=False)
+                    await self._save_track_with_artist(
+                        track_dto, artist_id, is_chart=False
+                    )
                     result["tracks_synced"] += 1
                 except Exception as e:
                     result["errors"].append(f"Track {track_dto.title}: {e}")

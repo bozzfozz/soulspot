@@ -91,7 +91,9 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise AuthorizationError(f"File path {file_path} is not in allowed directories")
+            raise AuthorizationError(
+                f"File path {file_path} is not in allowed directories"
+            )
 
         # Use validated path for all subsequent operations
         file_path = validated_path
@@ -378,7 +380,9 @@ class ID3TaggingService:
                 file_path,
                 allowed_dirs,
             )
-            raise AuthorizationError(f"File path {file_path} is not in allowed directories")
+            raise AuthorizationError(
+                f"File path {file_path} is not in allowed directories"
+            )
 
         # Use validated path
         file_path = validated_path

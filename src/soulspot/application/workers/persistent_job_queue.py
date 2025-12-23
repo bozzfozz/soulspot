@@ -169,7 +169,9 @@ class PersistentJobQueue(JobQueue):
         self._stats.total_jobs += 1
         self._stats.pending_jobs += 1
 
-        logger.debug(f"Enqueued job {job_id} ({job_type.value}) with priority {priority}")
+        logger.debug(
+            f"Enqueued job {job_id} ({job_type.value}) with priority {priority}"
+        )
 
         return job_id
 
@@ -208,7 +210,9 @@ class PersistentJobQueue(JobQueue):
             )
             stale_count = stale_result.rowcount or 0
             if stale_count > 0:
-                logger.warning(f"Recovered {stale_count} stale jobs from crashed workers")
+                logger.warning(
+                    f"Recovered {stale_count} stale jobs from crashed workers"
+                )
                 self._stats.recovered_jobs += stale_count
 
             # Now: Load all pending jobs into memory queue
@@ -338,9 +342,11 @@ class PersistentJobQueue(JobQueue):
 
             if model.retries < model.max_retries:
                 # Schedule retry with exponential backoff
-                backoff_seconds = 2 ** model.retries  # 2, 4, 8 seconds
+                backoff_seconds = 2**model.retries  # 2, 4, 8 seconds
                 model.status = JobStatus.PENDING.value
-                model.next_run_at = datetime.now(UTC) + timedelta(seconds=backoff_seconds)
+                model.next_run_at = datetime.now(UTC) + timedelta(
+                    seconds=backoff_seconds
+                )
                 logger.info(
                     f"Job {job_id} failed (attempt {model.retries}/{model.max_retries}), "
                     f"retry in {backoff_seconds}s"
@@ -350,7 +356,9 @@ class PersistentJobQueue(JobQueue):
                 # Max retries reached - permanent failure
                 model.status = JobStatus.FAILED.value
                 model.completed_at = datetime.now(UTC)
-                logger.warning(f"Job {job_id} failed permanently after {model.retries} attempts")
+                logger.warning(
+                    f"Job {job_id} failed permanently after {model.retries} attempts"
+                )
                 should_retry = False
 
             await session.commit()
@@ -395,10 +403,12 @@ class PersistentJobQueue(JobQueue):
                 update(BackgroundJobModel)
                 .where(
                     BackgroundJobModel.id == job_id,
-                    BackgroundJobModel.status.in_([
-                        JobStatus.PENDING.value,
-                        JobStatus.RUNNING.value,
-                    ]),
+                    BackgroundJobModel.status.in_(
+                        [
+                            JobStatus.PENDING.value,
+                            JobStatus.RUNNING.value,
+                        ]
+                    ),
                 )
                 .values(
                     status=JobStatus.CANCELLED.value,
@@ -432,11 +442,13 @@ class PersistentJobQueue(JobQueue):
 
             result = await session.execute(
                 delete(BackgroundJobModel).where(
-                    BackgroundJobModel.status.in_([
-                        JobStatus.COMPLETED.value,
-                        JobStatus.FAILED.value,
-                        JobStatus.CANCELLED.value,
-                    ]),
+                    BackgroundJobModel.status.in_(
+                        [
+                            JobStatus.COMPLETED.value,
+                            JobStatus.FAILED.value,
+                            JobStatus.CANCELLED.value,
+                        ]
+                    ),
                     BackgroundJobModel.completed_at < threshold,
                 )
             )
@@ -464,7 +476,9 @@ class PersistentJobQueue(JobQueue):
             priority=model.priority,
             created_at=ensure_utc_aware(model.created_at),
             started_at=ensure_utc_aware(model.started_at) if model.started_at else None,
-            completed_at=ensure_utc_aware(model.completed_at) if model.completed_at else None,
+            completed_at=ensure_utc_aware(model.completed_at)
+            if model.completed_at
+            else None,
             error=model.error,
             result=json.loads(model.result) if model.result else None,
             retries=model.retries,

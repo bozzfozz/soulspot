@@ -59,7 +59,9 @@ class ArtistSearchResult(BaseModel):
     followers: int = Field(0, description="Number of followers")
     genres: list[str] = Field(default_factory=list, description="Artist genres")
     image_url: str | None = Field(None, description="Artist profile image URL")
-    external_url: str | None = Field(None, description="URL to artist on source provider")
+    external_url: str | None = Field(
+        None, description="URL to artist on source provider"
+    )
     source: str = Field("spotify", description="Source provider: spotify, deezer")
 
 
@@ -74,7 +76,9 @@ class AlbumSearchResult(BaseModel):
     album_type: str | None = Field(None, description="album, single, compilation")
     total_tracks: int = Field(0, description="Number of tracks")
     image_url: str | None = Field(None, description="Album artwork URL")
-    external_url: str | None = Field(None, description="URL to album on source provider")
+    external_url: str | None = Field(
+        None, description="URL to album on source provider"
+    )
     source: str = Field("spotify", description="Source provider: spotify, deezer")
 
 
@@ -90,7 +94,9 @@ class TrackSearchResult(BaseModel):
     duration_ms: int = Field(0, description="Track duration in milliseconds")
     popularity: int = Field(0, description="Popularity score (0-100)")
     preview_url: str | None = Field(None, description="30s preview URL")
-    external_url: str | None = Field(None, description="URL to track on source provider")
+    external_url: str | None = Field(
+        None, description="URL to track on source provider"
+    )
     isrc: str | None = Field(None, description="ISRC code for cross-provider matching")
     source: str = Field("spotify", description="Source provider: spotify, deezer")
 
@@ -507,7 +513,9 @@ async def search_spotify_artists(
                     )
                     spotify_count += 1
             source_counts["spotify"] = spotify_count
-            logger.debug(f"Spotify artist search: {spotify_count} results for '{query}'")
+            logger.debug(
+                f"Spotify artist search: {spotify_count} results for '{query}'"
+            )
         except Exception as e:
             logger.warning(f"Spotify artist search failed (graceful fallback): {e}")
 
@@ -828,14 +836,15 @@ async def search_soulseek(
 
     except Exception as e:
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.error(
             LogMessages.connection_failed(
                 service="slskd",
                 target="Soulseek Search",
                 error=str(e),
-                hint="Check if slskd container is running: docker ps | grep slskd"
+                hint="Check if slskd container is running: docker ps | grep slskd",
             ),
-            exc_info=True
+            exc_info=True,
         )
         raise HTTPException(
             status_code=500,
@@ -906,13 +915,20 @@ async def get_search_suggestions(
             deezer_tracks = await deezer_plugin.search_tracks(query, limit=5)
             for track_dto in deezer_tracks.items[:5]:
                 artist_name = track_dto.artist_name or ""
-                text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
+                text = (
+                    f"{track_dto.title} - {artist_name}"
+                    if artist_name
+                    else track_dto.title
+                )
                 norm_text = _normalize_name(text)
                 if norm_text not in seen_texts:
                     seen_texts.add(norm_text)
                     suggestions.append(
                         SearchSuggestion(
-                            text=text, type="track", id=track_dto.deezer_id, source="deezer"
+                            text=text,
+                            type="track",
+                            id=track_dto.deezer_id,
+                            source="deezer",
                         )
                     )
         except Exception as e:
@@ -941,13 +957,20 @@ async def get_search_suggestions(
             spotify_tracks = await spotify_plugin.search_track(query, limit=5)
             for track_dto in spotify_tracks.items[:5]:
                 artist_name = track_dto.artist_name or ""
-                text = f"{track_dto.title} - {artist_name}" if artist_name else track_dto.title
+                text = (
+                    f"{track_dto.title} - {artist_name}"
+                    if artist_name
+                    else track_dto.title
+                )
                 norm_text = _normalize_name(text)
                 if norm_text not in seen_texts:
                     seen_texts.add(norm_text)
                     suggestions.append(
                         SearchSuggestion(
-                            text=text, type="track", id=track_dto.spotify_id, source="spotify"
+                            text=text,
+                            type="track",
+                            id=track_dto.spotify_id,
+                            source="spotify",
                         )
                     )
         except Exception as e:

@@ -218,8 +218,8 @@ class EnrichMetadataUseCase(UseCase[EnrichMetadataRequest, EnrichMetadataRespons
                         if result.get("artist-credit"):
                             artist_credit = result["artist-credit"]
                             if isinstance(artist_credit, list) and artist_credit:
-                                result_artist = artist_credit[0].get("artist", {}).get(
-                                    "name", ""
+                                result_artist = (
+                                    artist_credit[0].get("artist", {}).get("name", "")
                                 )
                             elif isinstance(artist_credit, str):
                                 result_artist = artist_credit

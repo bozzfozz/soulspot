@@ -95,6 +95,7 @@ class ArtistSongsService:
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
         )
+
         self._mapping_service = ProviderMappingService(session)
 
     @property
@@ -204,7 +205,7 @@ class ArtistSongsService:
                 LogMessages.sync_failed(
                     sync_type="artist_top_tracks_fetch",
                     reason=f"No top tracks found for artist {artist.name}",
-                    hint="Neither Spotify nor Deezer returned tracks"
+                    hint="Neither Spotify nor Deezer returned tracks",
                 ).format()
             )
             return synced_tracks, stats  # type: ignore[return-value]
@@ -236,9 +237,9 @@ class ArtistSongsService:
                     LogMessages.sync_failed(
                         sync_type="track_processing",
                         reason=f"Failed to process track {track_dto.title}",
-                        hint="Check track data validity and database constraints"
+                        hint="Check track data validity and database constraints",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 stats["errors"] += 1
 
@@ -359,9 +360,9 @@ class ArtistSongsService:
                     LogMessages.sync_failed(
                         sync_type="artist_songs_bulk_sync",
                         reason=f"Failed to sync songs for artist {artist.name}",
-                        hint="Check artist Spotify URI and API connectivity"
+                        hint="Check artist Spotify URI and API connectivity",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 aggregate_stats["artist_errors"] += 1
 
@@ -381,7 +382,7 @@ class ArtistSongsService:
     # SpotifyUri is ONLY for Spotify! Don't create "deezer:track:xxx" - SpotifyUri validates prefix!
     # Check order: 1) Spotify URI (if Spotify track) 2) ISRC 3) Title+Artist (case-insensitive)
     async def _process_track_dto(
-        self, track_dto: "TrackDTO", artist_id: ArtistId, source: str = "spotify"
+        self, track_dto: "TrackDTO", artist_id: ArtistId, _source: str = "spotify"
     ) -> tuple[Track | None, bool, bool]:
         """Process a single track from SpotifyPlugin or DeezerPlugin (TrackDTO).
 
@@ -397,7 +398,7 @@ class ArtistSongsService:
         Args:
             track_dto: TrackDTO from SpotifyPlugin or DeezerPlugin
             artist_id: Artist ID to associate track with
-            source: "spotify" or "deezer" - determines URI prefix
+            _source: Reserved for future source tracking (not yet implemented)
 
         Returns:
             Tuple of (Track entity or None, was_created boolean, is_single boolean)
@@ -410,7 +411,7 @@ class ArtistSongsService:
                     operation="track_dto_validation",
                     path="<track_dto>",
                     reason="Invalid track DTO: missing id or title",
-                    hint="Check API response format"
+                    hint="Check API response format",
                 ).format()
             )
             return None, False, False
@@ -428,7 +429,9 @@ class ArtistSongsService:
         # For Deezer tracks: NO SpotifyUri - use ISRC/title dedup only
 
         # Check if this is a single - no album reference means standalone single
-        is_single = track_dto.album_spotify_id is None and track_dto.album_deezer_id is None
+        is_single = (
+            track_dto.album_spotify_id is None and track_dto.album_deezer_id is None
+        )
 
         # Extract ISRC from DTO
         isrc = track_dto.isrc

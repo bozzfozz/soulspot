@@ -133,6 +133,7 @@ class DownloadProgress:
     @property
     def size_formatted(self) -> str:
         """Human-readable size string (downloaded / total)."""
+
         def fmt(b: int) -> str:
             if b < 1024:
                 return f"{b} B"

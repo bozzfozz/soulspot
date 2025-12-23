@@ -47,7 +47,9 @@ async def identify_quality_upgrades(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to identify upgrades: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to identify upgrades: {e}"
+        ) from e
 
 
 @router.get("/quality-upgrades/unprocessed")

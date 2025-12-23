@@ -88,7 +88,9 @@ async def sync_followed_artists(
 
         # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
         deezer_plugin = DeezerPlugin()
-        service = FollowedArtistsService(session, spotify_plugin, deezer_plugin=deezer_plugin)
+        service = FollowedArtistsService(
+            session, spotify_plugin, deezer_plugin=deezer_plugin
+        )
         artists, stats = await service.sync_followed_artists()
         await session.commit()
 
@@ -164,7 +166,10 @@ async def bulk_create_watchlists(
                 )
                 created_count += 1
             except Exception as e:
-                logger.error(f"Failed to create watchlist for artist {artist_id_str}: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to create watchlist for artist {artist_id_str}: {e}",
+                    exc_info=True,
+                )
                 failed_count += 1
                 failed_artists.append(artist_id_str)
 

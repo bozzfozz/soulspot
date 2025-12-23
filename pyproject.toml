@@ -110,9 +110,17 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/**/*" = ["ARG", "S101"]
-"src/soulspot/api/routers/ui.py" = ["B007"]
+"src/soulspot/api/routers/ui.py" = ["B007", "ARG001"]
 # Plugin interface implementations - unused args are part of the contract
 "src/soulspot/infrastructure/plugins/*.py" = ["ARG002"]
+# Client stubs and implementations - unused args for future compatibility
+"src/soulspot/infrastructure/integrations/*.py" = ["ARG002"]
+# Sync services - interface implementations with optional dependencies
+"src/soulspot/application/services/*sync*.py" = ["ARG002"]
+# Use cases - command pattern implementations
+"src/soulspot/application/use_cases/*.py" = ["ARG002"]
+# Quality profiles - FastAPI route handlers with unused request objects
+"src/soulspot/api/routers/quality_profiles.py" = ["ARG001"]
 # Deprecated files (scheduled for deletion)
 "src/soulspot/api/routers/library.py" = ["E402", "F821", "ARG", "B904"]
 "src/soulspot/api/routers/artwork.py" = ["E402"]

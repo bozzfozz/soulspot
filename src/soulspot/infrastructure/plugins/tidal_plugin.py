@@ -70,7 +70,9 @@ class TidalPlugin(IMusicServicePlugin):
             error_code="not_implemented",
         )
 
-    async def handle_callback(self, _code: str, _state: str | None = None) -> AuthStatus:
+    async def handle_callback(
+        self, _code: str, _state: str | None = None
+    ) -> AuthStatus:
         """Handle OAuth callback."""
         raise PluginError(
             message="Tidal plugin not implemented yet",

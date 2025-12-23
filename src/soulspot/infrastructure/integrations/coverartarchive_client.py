@@ -173,8 +173,7 @@ class CoverArtArchiveClient:
         """
         try:
             response = await self._rate_limited_request(
-                "GET",
-                f"/release/{release_mbid}/"
+                "GET", f"/release/{release_mbid}/"
             )
 
             if response.status_code == 404:

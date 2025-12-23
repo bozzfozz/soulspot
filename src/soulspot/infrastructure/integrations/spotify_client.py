@@ -919,9 +919,7 @@ class SpotifyClient(ISpotifyClient):
     # Max 50 artist IDs per request - Spotify's limit.
     # =========================================================================
 
-    async def follow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def follow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Follow one or more artists on Spotify.
 
         This adds artists to the user's "Following" list. Great for the search page
@@ -947,9 +945,7 @@ class SpotifyClient(ISpotifyClient):
         )
         response.raise_for_status()
 
-    async def unfollow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def unfollow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Unfollow one or more artists on Spotify.
 
         This removes artists from the user's "Following" list. Use this when

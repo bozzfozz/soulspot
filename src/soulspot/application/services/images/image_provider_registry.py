@@ -81,7 +81,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
             if existing.provider_name == provider.provider_name:
                 logger.warning(
                     "Provider %s already registered, updating priority",
-                    provider.provider_name
+                    provider.provider_name,
                 )
                 self._providers.remove((existing, _))
                 break
@@ -92,7 +92,9 @@ class ImageProviderRegistry(IImageProviderRegistry):
 
         logger.info(
             "Registered image provider: %s (priority=%d, requires_auth=%s)",
-            provider.provider_name, priority, provider.requires_auth
+            provider.provider_name,
+            priority,
+            provider.requires_auth,
         )
 
     def unregister(self, provider_name: ProviderName) -> bool:
@@ -128,8 +130,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     available.append(provider)
             except Exception as e:
                 logger.warning(
-                    "Error checking availability for %s: %s",
-                    provider.provider_name, e
+                    "Error checking availability for %s: %s", provider.provider_name, e
                 )
         return available
 
@@ -168,7 +169,8 @@ class ImageProviderRegistry(IImageProviderRegistry):
                 if not await provider.is_available():
                     logger.debug(
                         "Skipping %s (not available) for artist: %s",
-                        provider.provider_name, artist_name
+                        provider.provider_name,
+                        artist_name,
                     )
                     continue
 
@@ -179,7 +181,9 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     if result:
                         logger.info(
                             "Found artist image via ID lookup: %s (provider=%s, id=%s)",
-                            artist_name, provider.provider_name, provider_id
+                            artist_name,
+                            provider.provider_name,
+                            provider_id,
                         )
                         return result
 
@@ -191,20 +195,24 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     if search_result.best_match:
                         logger.info(
                             "Found artist image via search: %s (provider=%s)",
-                            artist_name, provider.provider_name
+                            artist_name,
+                            provider.provider_name,
                         )
                         return search_result.best_match
 
                 # This provider didn't have an image, try next
                 logger.debug(
                     "No image from %s for artist: %s",
-                    provider.provider_name, artist_name
+                    provider.provider_name,
+                    artist_name,
                 )
 
             except Exception as e:
                 logger.warning(
                     "Error getting artist image from %s for %s: %s",
-                    provider.provider_name, artist_name, e
+                    provider.provider_name,
+                    artist_name,
+                    e,
                 )
                 continue
 
@@ -241,7 +249,8 @@ class ImageProviderRegistry(IImageProviderRegistry):
                 if not await provider.is_available():
                     logger.debug(
                         "Skipping %s (not available) for album: %s",
-                        provider.provider_name, album_title
+                        provider.provider_name,
+                        album_title,
                     )
                     continue
 
@@ -252,7 +261,9 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     if result:
                         logger.info(
                             "Found album image via ID lookup: %s (provider=%s, id=%s)",
-                            album_title, provider.provider_name, provider_id
+                            album_title,
+                            provider.provider_name,
+                            provider_id,
                         )
                         return result
 
@@ -264,19 +275,24 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     if search_result.best_match:
                         logger.info(
                             "Found album image via search: %s - %s (provider=%s)",
-                            artist_name, album_title, provider.provider_name
+                            artist_name,
+                            album_title,
+                            provider.provider_name,
                         )
                         return search_result.best_match
 
                 logger.debug(
                     "No image from %s for album: %s",
-                    provider.provider_name, album_title
+                    provider.provider_name,
+                    album_title,
                 )
 
             except Exception as e:
                 logger.warning(
                     "Error getting album image from %s for %s: %s",
-                    provider.provider_name, album_title, e
+                    provider.provider_name,
+                    album_title,
+                    e,
                 )
                 continue
 
@@ -291,10 +307,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
         Returns:
             List of (name, priority, requires_auth) tuples
         """
-        return [
-            (p.provider_name, prio, p.requires_auth)
-            for p, prio in self._providers
-        ]
+        return [(p.provider_name, prio, p.requires_auth) for p, prio in self._providers]
 
     def __len__(self) -> int:
         """Number of registered providers."""
@@ -302,7 +315,6 @@ class ImageProviderRegistry(IImageProviderRegistry):
 
     def __repr__(self) -> str:
         providers_str = ", ".join(
-            f"{p.provider_name}(p={prio})"
-            for p, prio in self._providers
+            f"{p.provider_name}(p={prio})" for p, prio in self._providers
         )
         return f"ImageProviderRegistry([{providers_str}])"

@@ -70,11 +70,12 @@ class TokenRefreshWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
                 worker="Token Refresh",
                 interval=self.check_interval_seconds,
-                config={"refresh_threshold_min": self.refresh_threshold_minutes}
+                config={"refresh_threshold_min": self.refresh_threshold_minutes},
             )
         )
 

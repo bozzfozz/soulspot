@@ -147,10 +147,12 @@ async def create_download(
         Created download info including ID and status
     """
     # Must provide at least one ID
-    if not any([request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]):
+    if not any(
+        [request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]
+    ):
         raise HTTPException(
             status_code=400,
-            detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id"
+            detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id",
         )
 
     try:
@@ -177,12 +179,18 @@ async def create_download(
                 from sqlalchemy import select
 
                 from soulspot.infrastructure.persistence.models import TrackModel
-                stmt = select(TrackModel).where(TrackModel.deezer_id == request.deezer_id)
+
+                stmt = select(TrackModel).where(
+                    TrackModel.deezer_id == request.deezer_id
+                )
                 result = await track_repository.session.execute(stmt)
                 model = result.scalar_one_or_none()
                 if model:
                     from soulspot.domain.value_objects import TrackId as DomainTrackId
-                    existing_track = await track_repository.get(DomainTrackId.from_string(model.id))
+
+                    existing_track = await track_repository.get(
+                        DomainTrackId.from_string(model.id)
+                    )
                 provider_name = "deezer"
                 provider_id = request.deezer_id
 
@@ -192,19 +200,25 @@ async def create_download(
                 from sqlalchemy import select
 
                 from soulspot.infrastructure.persistence.models import TrackModel
+
                 stmt = select(TrackModel).where(TrackModel.tidal_id == request.tidal_id)
                 result = await track_repository.session.execute(stmt)
                 model = result.scalar_one_or_none()
                 if model:
                     from soulspot.domain.value_objects import TrackId as DomainTrackId
-                    existing_track = await track_repository.get(DomainTrackId.from_string(model.id))
+
+                    existing_track = await track_repository.get(
+                        DomainTrackId.from_string(model.id)
+                    )
                 provider_name = "tidal"
                 provider_id = request.tidal_id
 
             if existing_track:
                 # Found track - use its ID
                 track_id_str = str(existing_track.id.value)
-                logger.debug(f"Found track by {provider_name}_id: {provider_id} -> {track_id_str}")
+                logger.debug(
+                    f"Found track by {provider_name}_id: {provider_id} -> {track_id_str}"
+                )
             else:
                 # Track not in DB - user needs to import it first
                 logger.warning(
@@ -212,20 +226,24 @@ async def create_download(
                         operation="track_lookup",
                         path=f"{provider_name}:{provider_id}",
                         reason="Track not found in database",
-                        hint="Import track first via sync or manual import"
+                        hint="Import track first via sync or manual import",
                     ).format()
                 )
                 raise HTTPException(
                     status_code=404,
                     detail=f"Track with {provider_name}_id '{provider_id}' not found in database. "
-                           "Please import the track first (via sync or manual import)."
+                    "Please import the track first (via sync or manual import).",
                 )
 
         track_id = TrackId.from_string(track_id_str)
 
         # Check if download already exists for this track
         existing = await download_repository.get_by_track(track_id)
-        if existing and existing.status not in [DownloadStatus.COMPLETED, DownloadStatus.CANCELLED, DownloadStatus.FAILED]:
+        if existing and existing.status not in [
+            DownloadStatus.COMPLETED,
+            DownloadStatus.CANCELLED,
+            DownloadStatus.FAILED,
+        ]:
             return {
                 "message": "Download already in queue",
                 "id": str(existing.id.value),
@@ -254,9 +272,9 @@ async def create_download(
                         download_id="<new>",
                         track_name="<unknown>",
                         reason="Failed to queue download immediately",
-                        hint="Download will be created in WAITING status for later retry"
+                        hint="Download will be created in WAITING status for later retry",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
 
         # slskd unavailable or error - create Download with WAITING status
@@ -275,7 +293,9 @@ async def create_download(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create download: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create download: {str(e)}"
+        ) from e
 
 
 # =========================================================================
@@ -381,9 +401,9 @@ async def create_album_download(
                     service="SpotifyPlugin",
                     target="Plugin initialization",
                     reason="Failed to create SpotifyPlugin instance",
-                    hint="Check Spotify API credentials in app settings"
+                    hint="Check Spotify API credentials in app settings",
                 ).format(),
-                exc_info=e
+                exc_info=e,
             )
 
     if request.deezer_id:
@@ -398,9 +418,9 @@ async def create_album_download(
                     service="DeezerPlugin",
                     target="Plugin initialization",
                     reason="Failed to create DeezerPlugin instance",
-                    hint="Check Deezer API availability"
+                    hint="Check Deezer API availability",
                 ).format(),
-                exc_info=e
+                exc_info=e,
             )
 
     # Create and execute use case
@@ -452,6 +472,7 @@ async def create_album_download(
 # Hey future me, this lists downloads with optional status filter and PROPER DB-LEVEL pagination!
 # Previously we loaded ALL downloads and sliced in Python - that's O(N) memory! Now we push limit/offset
 # to DB which is O(limit) memory. For large queues (1000+ downloads), this makes a HUGE difference.
+
 
 # Default limit is 100 (user requested), max is 500 to prevent abuse. Total count is fetched separately
 # for pagination UI. Status filter can be: waiting, pending, queued, downloading, completed, failed, cancelled.
@@ -567,8 +588,7 @@ async def get_download_history(
 
     # Filter by date (if repository doesn't support it)
     downloads_in_range = [
-        d for d in downloads
-        if d.completed_at and d.completed_at >= since
+        d for d in downloads if d.completed_at and d.completed_at >= since
     ]
 
     total = await download_repository.count_by_status(DownloadStatus.COMPLETED.value)
@@ -649,27 +669,49 @@ async def get_download_statistics(
     week_ago = now - timedelta(days=7)
 
     # Current queue status
-    queue_pending = await download_repository.count_by_status(DownloadStatus.WAITING.value)
-    queue_pending += await download_repository.count_by_status(DownloadStatus.PENDING.value)
-    queue_pending += await download_repository.count_by_status(DownloadStatus.QUEUED.value)
+    queue_pending = await download_repository.count_by_status(
+        DownloadStatus.WAITING.value
+    )
+    queue_pending += await download_repository.count_by_status(
+        DownloadStatus.PENDING.value
+    )
+    queue_pending += await download_repository.count_by_status(
+        DownloadStatus.QUEUED.value
+    )
 
-    active_downloading = await download_repository.count_by_status(DownloadStatus.DOWNLOADING.value)
-    total_completed = await download_repository.count_by_status(DownloadStatus.COMPLETED.value)
-    total_failed = await download_repository.count_by_status(DownloadStatus.FAILED.value)
-    total_cancelled = await download_repository.count_by_status(DownloadStatus.CANCELLED.value)
+    active_downloading = await download_repository.count_by_status(
+        DownloadStatus.DOWNLOADING.value
+    )
+    total_completed = await download_repository.count_by_status(
+        DownloadStatus.COMPLETED.value
+    )
+    total_failed = await download_repository.count_by_status(
+        DownloadStatus.FAILED.value
+    )
+    total_cancelled = await download_repository.count_by_status(
+        DownloadStatus.CANCELLED.value
+    )
 
     # Downloads today
-    stmt_today = select(func.count()).select_from(DownloadModel).where(
-        DownloadModel.status == DownloadStatus.COMPLETED.value,
-        DownloadModel.completed_at >= today_start,
+    stmt_today = (
+        select(func.count())
+        .select_from(DownloadModel)
+        .where(
+            DownloadModel.status == DownloadStatus.COMPLETED.value,
+            DownloadModel.completed_at >= today_start,
+        )
     )
     result = await session.execute(stmt_today)
     completed_today = result.scalar() or 0
 
     # Downloads this week
-    stmt_week = select(func.count()).select_from(DownloadModel).where(
-        DownloadModel.status == DownloadStatus.COMPLETED.value,
-        DownloadModel.completed_at >= week_ago,
+    stmt_week = (
+        select(func.count())
+        .select_from(DownloadModel)
+        .where(
+            DownloadModel.status == DownloadStatus.COMPLETED.value,
+            DownloadModel.completed_at >= week_ago,
+        )
     )
     result = await session.execute(stmt_week)
     completed_this_week = result.scalar() or 0
@@ -677,8 +719,10 @@ async def get_download_statistics(
     # Average download time (from completed downloads)
     stmt_avg = select(
         func.avg(
-            func.julianday(DownloadModel.completed_at) - func.julianday(DownloadModel.started_at)
-        ) * 86400  # Convert days to seconds
+            func.julianday(DownloadModel.completed_at)
+            - func.julianday(DownloadModel.started_at)
+        )
+        * 86400  # Convert days to seconds
     ).where(
         DownloadModel.status == DownloadStatus.COMPLETED.value,
         DownloadModel.started_at.isnot(None),
@@ -688,9 +732,7 @@ async def get_download_statistics(
     avg_download_time = result.scalar() or 0
 
     # Retry statistics
-    stmt_retries = select(
-        func.sum(DownloadModel.retry_count)
-    ).where(
+    stmt_retries = select(func.sum(DownloadModel.retry_count)).where(
         DownloadModel.retry_count > 0,
     )
     result = await session.execute(stmt_retries)
@@ -698,7 +740,9 @@ async def get_download_statistics(
 
     # Calculate success rate
     total_attempted = total_completed + total_failed
-    success_rate = (total_completed / total_attempted * 100) if total_attempted > 0 else 0
+    success_rate = (
+        (total_completed / total_attempted * 100) if total_attempted > 0 else 0
+    )
 
     return {
         "queue": {
@@ -836,18 +880,22 @@ async def cancel_download(
                         LogMessages.download_completed(
                             download_id=str(download.slskd_id),
                             track_name="<cancelled>",
-                            size_mb=0
-                        ).format().replace("Download Completed", "Download Cancelled in slskd")
+                            size_mb=0,
+                        )
+                        .format()
+                        .replace("Download Completed", "Download Cancelled in slskd")
                     )
         except Exception as e:
             logger.warning(
                 LogMessages.download_failed(
-                    download_id=str(download.slskd_id) if download.slskd_id else "<unknown>",
+                    download_id=str(download.slskd_id)
+                    if download.slskd_id
+                    else "<unknown>",
                     track_name="<cancelled>",
                     reason="Failed to cancel in slskd",
-                    hint="Download will still be marked cancelled in local database"
+                    hint="Download will still be marked cancelled in local database",
                 ).format(),
-                exc_info=e
+                exc_info=e,
             )
 
     # Update status in our DB
@@ -858,8 +906,10 @@ async def cancel_download(
         LogMessages.download_completed(
             download_id=str(download_id),
             track_name=f"Track {download.track_id}",
-            size_mb=0
-        ).format().replace("Download Completed", "Download Cancelled")
+            size_mb=0,
+        )
+        .format()
+        .replace("Download Completed", "Download Cancelled")
     )
 
     return {
@@ -916,9 +966,10 @@ async def retry_download(
 
     logger.info(
         LogMessages.download_started(
-            download_id=str(download_id),
-            track_name=f"Track {download.track_id}"
-        ).format().replace("Download Started", "Download Retry Queued")
+            download_id=str(download_id), track_name=f"Track {download.track_id}"
+        )
+        .format()
+        .replace("Download Started", "Download Retry Queued")
     )
 
     return {
@@ -1079,7 +1130,11 @@ async def bulk_download(
 
             # Check if already in queue
             existing = await download_repository.get_by_track(track_id)
-            if existing and existing.status not in [DownloadStatus.COMPLETED, DownloadStatus.CANCELLED, DownloadStatus.FAILED]:
+            if existing and existing.status not in [
+                DownloadStatus.COMPLETED,
+                DownloadStatus.CANCELLED,
+                DownloadStatus.FAILED,
+            ]:
                 skipped += 1
                 continue
 
@@ -1124,7 +1179,9 @@ async def bulk_download(
         message_parts.append(f"{skipped} skipped (already in queue)")
 
     return {
-        "message": f"Downloads: {', '.join(message_parts)}" if message_parts else "No tracks to download",
+        "message": f"Downloads: {', '.join(message_parts)}"
+        if message_parts
+        else "No tracks to download",
         "total": total,
         "queued": queued,
         "waiting": waiting,
@@ -1389,10 +1446,12 @@ async def batch_action(
             elif request.action == "retry":
                 # Retry failed downloads - schedules for immediate retry
                 if download.status != DownloadStatus.FAILED:
-                    errors.append({
-                        "id": download_id,
-                        "error": f"Cannot retry - status is {download.status.value}, not FAILED"
-                    })
+                    errors.append(
+                        {
+                            "id": download_id,
+                            "error": f"Cannot retry - status is {download.status.value}, not FAILED",
+                        }
+                    )
                     continue
                 download.schedule_retry()
             else:

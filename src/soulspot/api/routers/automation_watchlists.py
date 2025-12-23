@@ -82,7 +82,9 @@ async def create_watchlist(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create watchlist: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create watchlist: {e}"
+        ) from e
 
 
 # Yo future me, pagination here uses limit/offset - NOT cursor-based! For small datasets this is fine,
@@ -126,7 +128,9 @@ async def list_watchlists(
             "offset": offset,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list watchlists: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list watchlists: {e}"
+        ) from e
 
 
 # Listen up, this is a simple GET by ID. The WatchlistId.from_string can throw ValueError if the ID
@@ -164,7 +168,9 @@ async def get_watchlist(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get watchlist: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get watchlist: {e}"
+        ) from e
 
 
 # Hey, this check endpoint is the MANUAL trigger for "check this artist for new releases RIGHT NOW".
@@ -214,7 +220,9 @@ async def check_watchlist_releases(
         raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to check for releases: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check for releases: {e}"
+        ) from e
 
 
 # Yo, DELETE is destructive and PERMANENT - there's no soft delete here!
@@ -235,4 +243,6 @@ async def delete_watchlist(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete watchlist: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete watchlist: {e}"
+        ) from e

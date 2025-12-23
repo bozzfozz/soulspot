@@ -42,7 +42,8 @@ class ImageRef:
     - Both (cached from remote)
     - Neither (no image available)
     """
-    url: str | None = None   # Remote CDN URL (Spotify, Deezer, etc.)
+
+    url: str | None = None  # Remote CDN URL (Spotify, Deezer, etc.)
     path: str | None = None  # Local cached file path
 
     @property

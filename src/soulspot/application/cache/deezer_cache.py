@@ -126,9 +126,7 @@ class DeezerCache:
         key = self._make_artist_key(artist_id)
         return await self._cache.get(key)
 
-    async def cache_artist(
-        self, artist_id: int | str, artist: dict[str, Any]
-    ) -> None:
+    async def cache_artist(self, artist_id: int | str, artist: dict[str, Any]) -> None:
         """Cache artist metadata."""
         key = self._make_artist_key(artist_id)
         await self._cache.set(key, artist, self.ARTIST_TTL)
@@ -217,9 +215,7 @@ class DeezerCache:
         key = self._make_search_key(entity_type, query, limit)
         await self._cache.set(key, results, self.SEARCH_TTL)
 
-    async def invalidate_search(
-        self, entity_type: str, query: str, limit: int
-    ) -> bool:
+    async def invalidate_search(self, entity_type: str, query: str, limit: int) -> bool:
         """Invalidate cached search results.
 
         Returns:
@@ -244,9 +240,7 @@ class DeezerCache:
         key = self._make_chart_key(chart_type)
         return await self._cache.get(key)
 
-    async def cache_chart(
-        self, chart_type: str, chart_data: dict[str, Any]
-    ) -> None:
+    async def cache_chart(self, chart_type: str, chart_data: dict[str, Any]) -> None:
         """Cache chart data.
 
         Args:

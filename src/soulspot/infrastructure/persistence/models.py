@@ -154,7 +154,6 @@ class ArtistModel(Base):
             return None
         return self.spotify_uri.split(":")[-1]
 
-
     __table_args__ = (
         Index("ix_artists_name_lower", func.lower(name)),
         Index("ix_soulspot_artists_last_synced", "last_synced_at"),
@@ -187,7 +186,9 @@ class AlbumModel(Base):
     # Hey future me - release_date is full precision (YYYY-MM-DD or YYYY-MM or YYYY)
     # release_date_precision tells us which parts are valid: 'day', 'month', 'year'
     release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    release_date_precision: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    release_date_precision: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )
     spotify_uri: Mapped[str | None] = mapped_column(
         String(255), nullable=True, unique=True, index=True
     )
@@ -305,13 +306,19 @@ class ArtistDiscographyModel(Base):
 
     # Provider IDs - can have multiple if found on multiple services
     deezer_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
-    spotify_uri: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
-    musicbrainz_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    spotify_uri: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    musicbrainz_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
     tidal_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
 
     # Album metadata
     release_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    release_date_precision: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    release_date_precision: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )
     total_tracks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
@@ -351,7 +358,9 @@ class ArtistDiscographyModel(Base):
 
     __table_args__ = (
         # Unique constraint: same album shouldn't appear twice for same artist
-        sa.UniqueConstraint("artist_id", "title", "album_type", name="uq_discography_artist_title_type"),
+        sa.UniqueConstraint(
+            "artist_id", "title", "album_type", name="uq_discography_artist_title_type"
+        ),
         # Index for finding missing albums quickly
         Index("ix_discography_missing", "artist_id", "is_owned"),
     )
@@ -905,9 +914,7 @@ class DeezerSessionModel(Base):
     )
 
     # Indexes for efficient cleanup queries
-    __table_args__ = (
-        Index("ix_deezer_sessions_last_accessed", "last_accessed_at"),
-    )
+    __table_args__ = (Index("ix_deezer_sessions_last_accessed", "last_accessed_at"),)
 
 
 # =============================================================================
@@ -1348,7 +1355,9 @@ class BlocklistModel(Base):
     # Soulseek username (can be None for filepath-only blocks)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     # File path on user's share (can be None for username-only blocks)
-    filepath: Mapped[str | None] = mapped_column(String(1024), nullable=True, index=True)
+    filepath: Mapped[str | None] = mapped_column(
+        String(1024), nullable=True, index=True
+    )
     # Block scope: 'username', 'filepath', or 'specific' (both)
     scope: Mapped[str] = mapped_column(String(20), nullable=False, default="specific")
     # Error code that caused the block (e.g., "file_not_found", "user_blocked")
@@ -1418,7 +1427,9 @@ class BackgroundJobModel(Base):
     # Status: pending, running, completed, failed, cancelled
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     # Priority: Higher = processed first (default 0)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    priority: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, index=True
+    )
     # Job payload as JSON (track info, settings, etc.)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
     # Result as JSON (success data, progress, etc.)
@@ -1500,9 +1511,7 @@ class QualityProfileModel(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # JSON array of preferred formats in priority order: ["flac", "mp3", "aac"]
     # Stored as JSON string, converted to List[AudioFormat] in entity
-    preferred_formats: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]"
-    )
+    preferred_formats: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     # Minimum acceptable bitrate in kbps (NULL = no minimum)
     min_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Maximum acceptable bitrate in kbps (NULL = no maximum)
@@ -1510,9 +1519,7 @@ class QualityProfileModel(Base):
     # Maximum file size in MB (NULL = no limit)
     max_file_size_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # JSON array of keywords to exclude: ["live", "remix", "demo"]
-    exclude_keywords: Mapped[str] = mapped_column(
-        Text, nullable=False, default="[]"
-    )
+    exclude_keywords: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     # Only one profile can be active at a time
     is_active: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
     # Built-in profiles can't be deleted (AUDIOPHILE, BALANCED, SPACE_SAVER)
@@ -1522,7 +1529,10 @@ class QualityProfileModel(Base):
         sa.DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        sa.DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     __table_args__ = (

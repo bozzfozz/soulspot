@@ -117,6 +117,7 @@ def get_circuit_breaker_stats() -> dict[str, "CircuitBreakerStats"]:
     """
     return CircuitBreakerRegistry.get_all_stats()
 
+
 T = TypeVar("T")
 
 

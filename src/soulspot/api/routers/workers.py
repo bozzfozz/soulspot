@@ -575,8 +575,7 @@ def _get_service_status(request: Request) -> dict[str, Any]:
     # Can't do async in sync function, so trust the Token Worker
     spotify_worker = getattr(request.app.state, "token_refresh_worker", None)
     service_status["spotify"] = (
-        spotify_worker is not None
-        and spotify_worker.get_status().get("running", False)
+        spotify_worker is not None and spotify_worker.get_status().get("running", False)
     )
 
     # Check if slskd connection is available
@@ -739,7 +738,9 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
                 discography = worker.details.get("discography_running", False)
                 quality = worker.details.get("quality_upgrade_running", False)
                 running = sum([watchlist, discography, quality])
-                details_html = f'<div class="tooltip-detail">{running} von 3 Workern aktiv</div>'
+                details_html = (
+                    f'<div class="tooltip-detail">{running} von 3 Workern aktiv</div>'
+                )
 
             elif worker_key == "cleanup":
                 dry_run = worker.details.get("dry_run", False)

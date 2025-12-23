@@ -170,7 +170,9 @@ async def search_tracks(
             # Build artists list from DTO - primary artist + additional artists
             artists_list = [{"name": track_dto.artist_name}]
             if track_dto.additional_artists:
-                artists_list.extend([{"name": a.name} for a in track_dto.additional_artists])
+                artists_list.extend(
+                    [{"name": a.name} for a in track_dto.additional_artists]
+                )
 
             tracks.append(
                 {
@@ -179,7 +181,9 @@ async def search_tracks(
                     "artists": artists_list,
                     "album": {"name": track_dto.album_name},
                     "duration_ms": track_dto.duration_ms,
-                    "uri": f"spotify:track:{track_dto.spotify_id}" if track_dto.spotify_id else None,
+                    "uri": f"spotify:track:{track_dto.spotify_id}"
+                    if track_dto.spotify_id
+                    else None,
                 }
             )
 

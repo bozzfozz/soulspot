@@ -122,7 +122,7 @@ class DiscographyService:
                     operation="artist_lookup",
                     path=str(artist_id.value),
                     reason="Artist not found in database",
-                    hint="Artist must be synced from Spotify or imported first"
+                    hint="Artist must be synced from Spotify or imported first",
                 ).format()
             )
             return DiscographyInfo(
@@ -154,7 +154,7 @@ class DiscographyService:
                 LogMessages.sync_failed(
                     sync_type="discography_check",
                     reason=f"Artist {artist.name} has no Spotify URI",
-                    hint="Artist must be synced from Spotify to check discography"
+                    hint="Artist must be synced from Spotify to check discography",
                 ).format()
             )
             return DiscographyInfo(
@@ -194,7 +194,9 @@ class DiscographyService:
         for album in all_spotify_albums:
             if album.spotify_uri not in owned_spotify_uris:
                 # Extract spotify_id from URI: "spotify:album:xxx" -> "xxx"
-                spotify_id = album.spotify_uri.split(":")[-1] if album.spotify_uri else album.id
+                spotify_id = (
+                    album.spotify_uri.split(":")[-1] if album.spotify_uri else album.id
+                )
                 missing_albums.append(
                     {
                         "name": album.title,
@@ -254,9 +256,9 @@ class DiscographyService:
                     LogMessages.sync_failed(
                         sync_type="discography_check",
                         reason=f"Failed to check discography for artist {artist.id}",
-                        hint="Check artist data validity and Spotify sync status"
+                        hint="Check artist data validity and Spotify sync status",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 continue
 

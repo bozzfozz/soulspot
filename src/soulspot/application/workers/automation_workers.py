@@ -70,10 +70,10 @@ class WatchlistWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="Watchlist",
-                interval=self.check_interval_seconds
+                worker="Watchlist", interval=self.check_interval_seconds
             )
         )
 
@@ -172,7 +172,9 @@ class WatchlistWorker:
 
                 for watchlist in watchlists:
                     try:
-                        logger.debug(f"Checking watchlist for artist {watchlist.artist_id}")
+                        logger.debug(
+                            f"Checking watchlist for artist {watchlist.artist_id}"
+                        )
 
                         # Step 1: Get local artist to find spotify_uri
                         local_artist = await artist_repo.get_by_id(watchlist.artist_id)
@@ -204,7 +206,9 @@ class WatchlistWorker:
                                 "will be handled by background sync"
                             )
                             # Just update last_checked_at so we don't spam logs
-                            watchlist.update_check(releases_found=0, downloads_triggered=0)
+                            watchlist.update_check(
+                                releases_found=0, downloads_triggered=0
+                            )
                             await watchlist_service.repository.update(watchlist)
                             await session.commit()
                             continue
@@ -345,10 +349,10 @@ class DiscographyWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="Discography",
-                interval=self.check_interval_seconds
+                worker="Discography", interval=self.check_interval_seconds
             )
         )
 
@@ -442,7 +446,9 @@ class DiscographyWorker:
                     logger.debug("No active watchlists to check")
                     return
 
-                logger.info(f"Checking discographies for {len(active_watchlists)} artists")
+                logger.info(
+                    f"Checking discographies for {len(active_watchlists)} artists"
+                )
 
                 # Check each artist's discography
                 for watchlist in active_watchlists:
@@ -524,10 +530,10 @@ class QualityUpgradeWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="Quality Upgrade",
-                interval=self.check_interval_seconds
+                worker="Quality Upgrade", interval=self.check_interval_seconds
             )
         )
 
@@ -559,7 +565,9 @@ class QualityUpgradeWorker:
             try:
                 await self._identify_upgrades()
             except Exception as e:
-                logger.error(f"Error in quality upgrade worker loop: {e}", exc_info=True)
+                logger.error(
+                    f"Error in quality upgrade worker loop: {e}", exc_info=True
+                )
 
             # Wait for next check
             await asyncio.sleep(self.check_interval_seconds)
@@ -662,7 +670,10 @@ class QualityUpgradeWorker:
                                 upgrade_candidates_found += 1
 
                     except Exception as e:
-                        logger.error(f"Error checking upgrade for track {track.id}: {e}", exc_info=True)
+                        logger.error(
+                            f"Error checking upgrade for track {track.id}: {e}",
+                            exc_info=True,
+                        )
                         continue  # Continue with next track on error
 
                 logger.info(
@@ -670,7 +681,9 @@ class QualityUpgradeWorker:
                 )
 
             except Exception as e:
-                logger.error(f"Error in quality upgrade identification: {e}", exc_info=True)
+                logger.error(
+                    f"Error in quality upgrade identification: {e}", exc_info=True
+                )
 
 
 class AutomationWorkerManager:

@@ -195,10 +195,10 @@ class NewReleasesSyncWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="New Releases Sync",
-                interval=self.check_interval_seconds
+                worker="New Releases Sync", interval=self.check_interval_seconds
             )
         )
 
@@ -232,8 +232,12 @@ class NewReleasesSyncWorker:
                 "is_valid": self._cache.is_valid,
                 "is_fresh": self._cache.is_fresh(),
                 "age_seconds": self._cache.get_age_seconds(),
-                "album_count": len(self._cache.result.albums) if self._cache.result else 0,
-                "source_counts": self._cache.result.source_counts if self._cache.result else {},
+                "album_count": len(self._cache.result.albums)
+                if self._cache.result
+                else 0,
+                "source_counts": self._cache.result.source_counts
+                if self._cache.result
+                else {},
                 "errors": self._cache.sync_errors,
             },
             "stats": self._sync_stats,
@@ -409,8 +413,7 @@ class NewReleasesSyncWorker:
                     if access_token:
                         spotify_client = SpotifyClient(self.settings.spotify)
                         spotify_plugin = SpotifyPlugin(
-                            client=spotify_client,
-                            access_token=access_token
+                            client=spotify_client, access_token=access_token
                         )
                         logger.debug("Spotify plugin ready for New Releases sync")
                     else:
@@ -517,12 +520,14 @@ class NewReleasesSyncWorker:
 
             # Check if this is a new album (not seen before)
             if key not in self._seen_album_keys:
-                new_albums.append({
-                    "artist_name": album.artist_name,
-                    "album_name": album.title,
-                    "release_date": album.release_date or "",
-                    "source": album.source_service,
-                })
+                new_albums.append(
+                    {
+                        "artist_name": album.artist_name,
+                        "album_name": album.title,
+                        "release_date": album.release_date or "",
+                        "source": album.source_service,
+                    }
+                )
 
         # Update seen keys with current set
         self._seen_album_keys = current_keys
@@ -593,9 +598,15 @@ class NewReleasesSyncWorker:
 
         # Remove common suffixes
         for suffix in [
-            "(deluxe)", "(deluxe edition)", "(expanded edition)",
-            "(remastered)", "(remaster)", "- single", "(single)",
-            "(ep)", "- ep"
+            "(deluxe)",
+            "(deluxe edition)",
+            "(expanded edition)",
+            "(remastered)",
+            "(remaster)",
+            "- single",
+            "(single)",
+            "(ep)",
+            "- ep",
         ]:
             album_norm = album_norm.replace(suffix, "").strip()
 

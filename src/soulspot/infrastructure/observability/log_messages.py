@@ -102,10 +102,7 @@ class LogMessages:
 
     @staticmethod
     def connection_failed(
-        service: str,
-        target: str,
-        error: str | None = None,
-        hint: str | None = None
+        service: str, target: str, error: str | None = None, hint: str | None = None
     ) -> str:
         """Format a connection failure message.
 
@@ -136,15 +133,13 @@ class LogMessages:
             icon="🔴",
             title=f"{service} Connection Failed",
             fields=fields,
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
     @staticmethod
     def connection_timeout(
-        service: str,
-        timeout: float,
-        hint: str | None = None
+        service: str, timeout: float, hint: str | None = None
     ) -> str:
         """Format a connection timeout message.
 
@@ -159,7 +154,7 @@ class LogMessages:
             icon="⏱️",
             title=f"{service} Connection Timeout",
             fields={"Timeout": f"{timeout}s"},
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
@@ -167,9 +162,7 @@ class LogMessages:
 
     @staticmethod
     def worker_started(
-        worker: str,
-        interval: int | None = None,
-        config: dict[str, Any] | None = None
+        worker: str, interval: int | None = None, config: dict[str, Any] | None = None
     ) -> str:
         """Format a worker start message.
 
@@ -185,19 +178,12 @@ class LogMessages:
             for key, value in config.items():
                 fields[key] = str(value)
 
-        template = LogTemplate(
-            icon="✅",
-            title=f"{worker} Started",
-            fields=fields
-        )
+        template = LogTemplate(icon="✅", title=f"{worker} Started", fields=fields)
         return template.format()
 
     @staticmethod
     def worker_failed(
-        worker: str,
-        error: str,
-        will_retry: bool = True,
-        hint: str | None = None
+        worker: str, error: str, will_retry: bool = True, hint: str | None = None
     ) -> str:
         """Format a worker failure message.
 
@@ -213,18 +199,14 @@ class LogMessages:
             icon="❌",
             title=f"{worker} Failed",
             fields={"Reason": error, "Status": status},
-            hint=hint
+            hint=hint,
         )
         return template.format()
 
     # === Data Sync ===
 
     @staticmethod
-    def sync_started(
-        entity: str,
-        source: str,
-        count: int | None = None
-    ) -> str:
+    def sync_started(entity: str, source: str, count: int | None = None) -> str:
         """Format a sync start message.
 
         Args:
@@ -236,20 +218,12 @@ class LogMessages:
         if count is not None:
             fields["Items"] = str(count)
 
-        template = LogTemplate(
-            icon="🔄",
-            title=f"Syncing {entity}",
-            fields=fields
-        )
+        template = LogTemplate(icon="🔄", title=f"Syncing {entity}", fields=fields)
         return template.format()
 
     @staticmethod
     def sync_completed(
-        entity: str,
-        added: int = 0,
-        updated: int = 0,
-        removed: int = 0,
-        errors: int = 0
+        entity: str, added: int = 0, updated: int = 0, removed: int = 0, errors: int = 0
     ) -> str:
         """Format a sync completion message.
 
@@ -261,27 +235,18 @@ class LogMessages:
             errors: Number of errors
         """
         icon = "✅" if errors == 0 else "⚠️"
-        fields = {
-            "Added": str(added),
-            "Updated": str(updated),
-            "Removed": str(removed)
-        }
+        fields = {"Added": str(added), "Updated": str(updated), "Removed": str(removed)}
         if errors > 0:
             fields["Errors"] = str(errors)
 
         template = LogTemplate(
-            icon=icon,
-            title=f"{entity} Sync Complete",
-            fields=fields
+            icon=icon, title=f"{entity} Sync Complete", fields=fields
         )
         return template.format()
 
     @staticmethod
     def sync_failed(
-        entity: str,
-        source: str,
-        error: str,
-        hint: str | None = None
+        entity: str, source: str, error: str, hint: str | None = None
     ) -> str:
         """Format a sync failure message.
 
@@ -297,18 +262,14 @@ class LogMessages:
             icon="❌",
             title=f"{entity} Sync Failed",
             fields={"Source": source, "Reason": error},
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
     # === File Operations ===
 
     @staticmethod
-    def file_imported(
-        filename: str,
-        source: str,
-        destination: str
-    ) -> str:
+    def file_imported(filename: str, source: str, destination: str) -> str:
         """Format a file import success message.
 
         Args:
@@ -319,20 +280,12 @@ class LogMessages:
         template = LogTemplate(
             icon="📥",
             title="File Imported",
-            fields={
-                "File": filename,
-                "From": source,
-                "To": destination
-            }
+            fields={"File": filename, "From": source, "To": destination},
         )
         return template.format()
 
     @staticmethod
-    def file_skipped(
-        filename: str,
-        reason: str,
-        hint: str | None = None
-    ) -> str:
+    def file_skipped(filename: str, reason: str, hint: str | None = None) -> str:
         """Format a file skip message.
 
         Args:
@@ -344,16 +297,13 @@ class LogMessages:
             icon="⏭️",
             title="File Skipped",
             fields={"File": filename, "Reason": reason},
-            hint=hint
+            hint=hint,
         )
         return template.format()
 
     @staticmethod
     def file_operation_failed(
-        operation: str,
-        filename: str,
-        error: str,
-        hint: str | None = None
+        operation: str, filename: str, error: str, hint: str | None = None
     ) -> str:
         """Format a file operation failure message.
 
@@ -367,18 +317,14 @@ class LogMessages:
             icon="🔴",
             title=f"File {operation} Failed",
             fields={"File": filename, "Reason": error},
-            hint=hint
+            hint=hint,
         )
         return template.format()
 
     # === Authentication ===
 
     @staticmethod
-    def auth_required(
-        service: str,
-        feature: str,
-        hint: str | None = None
-    ) -> str:
+    def auth_required(service: str, feature: str, hint: str | None = None) -> str:
         """Format an authentication required message.
 
         Args:
@@ -392,15 +338,13 @@ class LogMessages:
             icon="🔑",
             title=f"{service} Authentication Required",
             fields={"Feature": feature},
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
     @staticmethod
     def token_expired(
-        service: str,
-        expires_at: str | None = None,
-        hint: str | None = None
+        service: str, expires_at: str | None = None, hint: str | None = None
     ) -> str:
         """Format a token expiration message.
 
@@ -419,18 +363,14 @@ class LogMessages:
             icon="⏰",
             title=f"{service} Token Expired",
             fields=fields,
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
     # === Download Operations ===
 
     @staticmethod
-    def download_started(
-        track: str,
-        artist: str,
-        quality: str | None = None
-    ) -> str:
+    def download_started(track: str, artist: str, quality: str | None = None) -> str:
         """Format a download start message.
 
         Args:
@@ -442,19 +382,12 @@ class LogMessages:
         if quality:
             fields["Quality"] = quality
 
-        template = LogTemplate(
-            icon="⬇️",
-            title="Download Started",
-            fields=fields
-        )
+        template = LogTemplate(icon="⬇️", title="Download Started", fields=fields)
         return template.format()
 
     @staticmethod
     def download_completed(
-        track: str,
-        artist: str,
-        file_path: str,
-        duration: float | None = None
+        track: str, artist: str, file_path: str, duration: float | None = None
     ) -> str:
         """Format a download completion message.
 
@@ -468,19 +401,12 @@ class LogMessages:
         if duration:
             fields["Duration"] = f"{duration:.1f}s"
 
-        template = LogTemplate(
-            icon="✅",
-            title="Download Complete",
-            fields=fields
-        )
+        template = LogTemplate(icon="✅", title="Download Complete", fields=fields)
         return template.format()
 
     @staticmethod
     def download_failed(
-        track: str,
-        artist: str,
-        error: str,
-        hint: str | None = None
+        track: str, artist: str, error: str, hint: str | None = None
     ) -> str:
         """Format a download failure message.
 
@@ -496,7 +422,7 @@ class LogMessages:
             icon="❌",
             title="Download Failed",
             fields={"Track": track, "Artist": artist, "Reason": error},
-            hint=hint or default_hint
+            hint=hint or default_hint,
         )
         return template.format()
 
@@ -506,7 +432,7 @@ class LogMessages:
         artist: str,
         retry_count: int,
         next_retry_at: str,
-        error_code: str | None = None
+        error_code: str | None = None,
     ) -> str:
         """Format a download retry scheduled message.
 
@@ -532,16 +458,13 @@ class LogMessages:
             icon="🔄",
             title="Download Retry Scheduled",
             fields=fields,
-            hint="Download will be retried automatically"
+            hint="Download will be retried automatically",
         )
         return template.format()
 
     @staticmethod
     def download_retry_exhausted(
-        track: str,
-        artist: str,
-        total_retries: int,
-        error_code: str | None = None
+        track: str, artist: str, total_retries: int, error_code: str | None = None
     ) -> str:
         """Format a download retries exhausted message.
 
@@ -565,7 +488,7 @@ class LogMessages:
             icon="⛔",
             title="Download Retries Exhausted",
             fields=fields,
-            hint="Manual intervention required - try different source"
+            hint="Manual intervention required - try different source",
         )
         return template.format()
 
@@ -574,7 +497,7 @@ class LogMessages:
         username: str,
         reason: str,
         scope: str = "USERNAME",
-        expires_at: str | None = None
+        expires_at: str | None = None,
     ) -> str:
         """Format a source blocked message.
 
@@ -598,7 +521,7 @@ class LogMessages:
             icon="🚫",
             title="Source Blocked",
             fields=fields,
-            hint="Source will be skipped in future searches"
+            hint="Source will be skipped in future searches",
         )
         return template.format()
 
@@ -606,10 +529,7 @@ class LogMessages:
 
     @staticmethod
     def config_invalid(
-        setting: str,
-        value: Any,
-        expected: str,
-        hint: str | None = None
+        setting: str, value: Any, expected: str, hint: str | None = None
     ) -> str:
         """Format an invalid configuration message.
 
@@ -622,11 +542,7 @@ class LogMessages:
         template = LogTemplate(
             icon="⚙️",
             title="Invalid Configuration",
-            fields={
-                "Setting": setting,
-                "Value": str(value),
-                "Expected": expected
-            },
-            hint=hint or "Update setting in Settings UI"
+            fields={"Setting": setting, "Value": str(value), "Expected": expected},
+            hint=hint or "Update setting in Settings UI",
         )
         return template.format()

@@ -462,7 +462,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_monitor_worker = download_monitor_worker
                 logger.info("Download monitor worker started (polls every 10s)")
             else:
-                logger.warning("Download monitor worker skipped - slskd client not available")
+                logger.warning(
+                    "Download monitor worker skipped - slskd client not available"
+                )
                 app.state.download_monitor_worker = None
 
             # =================================================================
@@ -487,12 +489,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
                 )
                 # Start in background task (non-blocking)
-                queue_dispatcher_task = asyncio.create_task(queue_dispatcher_worker.start())
+                queue_dispatcher_task = asyncio.create_task(
+                    queue_dispatcher_worker.start()
+                )
                 app.state.queue_dispatcher_worker = queue_dispatcher_worker
                 app.state.queue_dispatcher_task = queue_dispatcher_task
                 logger.info("Queue dispatcher worker started (checks slskd every 30s)")
             else:
-                logger.warning("Queue dispatcher worker skipped - slskd client not available")
+                logger.warning(
+                    "Queue dispatcher worker skipped - slskd client not available"
+                )
                 app.state.queue_dispatcher_worker = None
                 app.state.queue_dispatcher_task = None
 
@@ -526,7 +532,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_status_sync_task = download_status_sync_task
                 logger.info("Download status sync worker started (syncs every 5s)")
             else:
-                logger.warning("Download status sync worker skipped - slskd client not available")
+                logger.warning(
+                    "Download status sync worker skipped - slskd client not available"
+                )
                 app.state.download_status_sync_worker = None
                 app.state.download_status_sync_task = None
 
@@ -552,7 +560,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             retry_scheduler_task = asyncio.create_task(retry_scheduler_worker.start())
             app.state.retry_scheduler_worker = retry_scheduler_worker
             app.state.retry_scheduler_task = retry_scheduler_task
-            logger.info("Retry scheduler worker started (checks every 30s, max 3 retries)")
+            logger.info(
+                "Retry scheduler worker started (checks every 30s, max 3 retries)"
+            )
 
             # =================================================================
             # Start Automation Workers (optional, controlled by settings)
@@ -642,7 +652,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 track_repository=track_repository,
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
-                download_repository=DownloadRepository(worker_session),  # NEW: Filter by completed downloads
+                download_repository=DownloadRepository(
+                    worker_session
+                ),  # NEW: Filter by completed downloads
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
                 spotify_plugin=automation_spotify_plugin,  # For Spotify artwork downloads
                 app_settings_service=app_settings_service,  # For dynamic naming templates
@@ -663,7 +675,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     # Small delay to let other startup tasks finish first
                     await asyncio.sleep(10)
 
-                    logger.info("🖼️ Image backfill: Starting check for missing images...")
+                    logger.info(
+                        "🖼️ Image backfill: Starting check for missing images..."
+                    )
 
                     import hashlib
 
@@ -688,77 +702,111 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         )
 
                         if not should_download:
-                            logger.info("🖼️ Image backfill: Download images is disabled, skipping")
+                            logger.info(
+                                "🖼️ Image backfill: Download images is disabled, skipping"
+                            )
                             return
 
                         # Find artists without local images
-                        artist_stmt = select(ArtistModel).where(
-                            ArtistModel.image_url.isnot(None),
-                            ArtistModel.image_path.is_(None),
-                        ).limit(100)  # Limit to prevent overload on large libraries
+                        artist_stmt = (
+                            select(ArtistModel)
+                            .where(
+                                ArtistModel.image_url.isnot(None),
+                                ArtistModel.image_path.is_(None),
+                            )
+                            .limit(100)
+                        )  # Limit to prevent overload on large libraries
 
                         artist_results = await backfill_session.execute(artist_stmt)
                         artists = artist_results.scalars().all()
 
                         if artists:
-                            logger.info(f"🖼️ Image backfill: Found {len(artists)} artists needing images (showing first 100)")
+                            logger.info(
+                                f"🖼️ Image backfill: Found {len(artists)} artists needing images (showing first 100)"
+                            )
 
                             for artist in artists:
                                 try:
                                     provider_id = artist.spotify_id or artist.deezer_id
-                                    provider = "spotify" if artist.spotify_id else "deezer"
+                                    provider = (
+                                        "spotify" if artist.spotify_id else "deezer"
+                                    )
 
                                     if not provider_id:
                                         # Fallback: hash of artist name
-                                        provider_id = hashlib.md5(artist.name.lower().encode()).hexdigest()[:16]
+                                        provider_id = hashlib.md5(
+                                            artist.name.lower().encode()
+                                        ).hexdigest()[:16]
                                         provider = "local"
 
-                                    image_path = await image_service.download_artist_image(
-                                        provider_id=provider_id,
-                                        image_url=artist.image_url,
-                                        provider=provider,
+                                    image_path = (
+                                        await image_service.download_artist_image(
+                                            provider_id=provider_id,
+                                            image_url=artist.image_url,
+                                            provider=provider,
+                                        )
                                     )
 
                                     if image_path:
                                         artist.image_path = image_path
-                                        logger.debug(f"✅ Backfilled artist image: {artist.name}")
+                                        logger.debug(
+                                            f"✅ Backfilled artist image: {artist.name}"
+                                        )
                                 except Exception as e:
-                                    logger.warning(f"❌ Failed to backfill artist image for {artist.name}: {e}")
+                                    logger.warning(
+                                        f"❌ Failed to backfill artist image for {artist.name}: {e}"
+                                    )
 
                         # Find albums without local covers
-                        album_stmt = select(AlbumModel).where(
-                            AlbumModel.cover_url.isnot(None),
-                            AlbumModel.cover_path.is_(None),
-                        ).limit(100)  # Limit to prevent overload
+                        album_stmt = (
+                            select(AlbumModel)
+                            .where(
+                                AlbumModel.cover_url.isnot(None),
+                                AlbumModel.cover_path.is_(None),
+                            )
+                            .limit(100)
+                        )  # Limit to prevent overload
 
                         album_results = await backfill_session.execute(album_stmt)
                         albums = album_results.scalars().all()
 
                         if albums:
-                            logger.info(f"🖼️ Image backfill: Found {len(albums)} albums needing covers (showing first 100)")
+                            logger.info(
+                                f"🖼️ Image backfill: Found {len(albums)} albums needing covers (showing first 100)"
+                            )
 
                             for album in albums:
                                 try:
                                     provider_id = album.spotify_id or album.deezer_id
-                                    provider = "spotify" if album.spotify_id else "deezer"
+                                    provider = (
+                                        "spotify" if album.spotify_id else "deezer"
+                                    )
 
                                     if not provider_id:
                                         # Fallback: hash of album title + artist
                                         hash_input = f"{album.title}_{album.artist.name if album.artist else 'unknown'}".lower()
-                                        provider_id = hashlib.md5(hash_input.encode()).hexdigest()[:16]
+                                        provider_id = hashlib.md5(
+                                            hash_input.encode()
+                                        ).hexdigest()[:16]
                                         provider = "local"
 
-                                    image_path = await image_service.download_album_image(
-                                        provider_id=provider_id,
-                                        image_url=album.cover_url,
-                                        provider=provider,
+                                    image_path = (
+                                        await image_service.download_album_image(
+                                            provider_id=provider_id,
+                                            image_url=album.cover_url,
+                                            provider=provider,
+                                        )
                                     )
 
                                     if image_path:
                                         album.cover_path = image_path
-                                        logger.debug(f"✅ Backfilled album cover: {album.title}")
+                                        logger.debug(
+                                            f"✅ Backfilled album cover: {album.title}"
+                                        )
                                 except Exception as e:
-                                    logger.warning(f"❌ Failed to backfill album cover for {album.title}: {e}")
+                                    logger.warning(
+                                        f"❌ Failed to backfill album cover for {album.title}: {e}"
+                                    )
 
                         # Commit all changes
                         await backfill_session.commit()
@@ -818,7 +866,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping automation workers: %s", e)
 
         # Stop download monitor worker
-        if hasattr(app.state, "download_monitor_worker") and app.state.download_monitor_worker is not None:
+        if (
+            hasattr(app.state, "download_monitor_worker")
+            and app.state.download_monitor_worker is not None
+        ):
             try:
                 logger.info("Stopping download monitor worker...")
                 await app.state.download_monitor_worker.stop()
@@ -827,12 +878,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping download monitor worker: %s", e)
 
         # Stop queue dispatcher worker
-        if hasattr(app.state, "queue_dispatcher_worker") and app.state.queue_dispatcher_worker is not None:
+        if (
+            hasattr(app.state, "queue_dispatcher_worker")
+            and app.state.queue_dispatcher_worker is not None
+        ):
             try:
                 logger.info("Stopping queue dispatcher worker...")
                 app.state.queue_dispatcher_worker.stop()
                 # Wait for task to complete gracefully with timeout
-                if hasattr(app.state, "queue_dispatcher_task") and app.state.queue_dispatcher_task is not None:
+                if (
+                    hasattr(app.state, "queue_dispatcher_task")
+                    and app.state.queue_dispatcher_task is not None
+                ):
                     try:
                         await asyncio.wait_for(
                             app.state.queue_dispatcher_task,
@@ -847,11 +904,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping queue dispatcher worker: %s", e)
 
         # Stop download status sync worker
-        if hasattr(app.state, "download_status_sync_worker") and app.state.download_status_sync_worker is not None:
+        if (
+            hasattr(app.state, "download_status_sync_worker")
+            and app.state.download_status_sync_worker is not None
+        ):
             try:
                 logger.info("Stopping download status sync worker...")
                 app.state.download_status_sync_worker.stop()
-                if hasattr(app.state, "download_status_sync_task") and app.state.download_status_sync_task is not None:
+                if (
+                    hasattr(app.state, "download_status_sync_task")
+                    and app.state.download_status_sync_task is not None
+                ):
                     try:
                         await asyncio.wait_for(
                             app.state.download_status_sync_task,
@@ -866,11 +929,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.exception("Error stopping download status sync worker: %s", e)
 
         # Stop retry scheduler worker (auto-retry for failed downloads)
-        if hasattr(app.state, "retry_scheduler_worker") and app.state.retry_scheduler_worker is not None:
+        if (
+            hasattr(app.state, "retry_scheduler_worker")
+            and app.state.retry_scheduler_worker is not None
+        ):
             try:
                 logger.info("Stopping retry scheduler worker...")
                 app.state.retry_scheduler_worker.stop()
-                if hasattr(app.state, "retry_scheduler_task") and app.state.retry_scheduler_task is not None:
+                if (
+                    hasattr(app.state, "retry_scheduler_task")
+                    and app.state.retry_scheduler_task is not None
+                ):
                     try:
                         await asyncio.wait_for(
                             app.state.retry_scheduler_task,

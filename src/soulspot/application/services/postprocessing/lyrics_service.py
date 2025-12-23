@@ -245,9 +245,7 @@ class LyricsService:
             response.raise_for_status()
             data = response.json()
 
-            track_list = (
-                data.get("message", {}).get("body", {}).get("track_list", [])
-            )
+            track_list = data.get("message", {}).get("body", {}).get("track_list", [])
             if not track_list:
                 return None
 

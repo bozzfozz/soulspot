@@ -487,6 +487,7 @@ class RenamingService:
             from soulspot.infrastructure.observability.error_formatting import (
                 format_oserror_message,
             )
+
             if e.errno == errno.EXDEV:
                 # Cross-filesystem move - fallback to copy+delete via shutil
                 logger.info(

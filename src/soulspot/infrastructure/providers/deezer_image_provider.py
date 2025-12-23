@@ -58,11 +58,11 @@ class DeezerImageProvider(IImageProvider):
 
     # Deezer image size suffixes
     SIZE_SUFFIXES = {
-        ImageQuality.THUMBNAIL: "small",   # 56x56
-        ImageQuality.SMALL: "medium",      # 250x250
-        ImageQuality.MEDIUM: "big",        # 500x500
-        ImageQuality.LARGE: "xl",          # 1000x1000
-        ImageQuality.ORIGINAL: "xl",       # 1000x1000
+        ImageQuality.THUMBNAIL: "small",  # 56x56
+        ImageQuality.SMALL: "medium",  # 250x250
+        ImageQuality.MEDIUM: "big",  # 500x500
+        ImageQuality.LARGE: "xl",  # 1000x1000
+        ImageQuality.ORIGINAL: "xl",  # 1000x1000
     }
 
     def __init__(self, deezer_plugin: "DeezerPlugin") -> None:
@@ -210,7 +210,9 @@ class DeezerImageProvider(IImageProvider):
             return result
 
         except Exception as e:
-            logger.warning("Error searching Deezer artist images for '%s': %s", artist_name, e)
+            logger.warning(
+                "Error searching Deezer artist images for '%s': %s", artist_name, e
+            )
             return result
 
     async def search_album_image(
@@ -311,7 +313,8 @@ class DeezerImageProvider(IImageProvider):
         if "?size=" in url:
             # Replace size parameter
             import re
-            return re.sub(r'\?size=\w+', f'?size={size_suffix}', url)
+
+            return re.sub(r"\?size=\w+", f"?size={size_suffix}", url)
 
         # Handle CDN-style URLs (250x250 in path)
         # Try to replace common size patterns
@@ -327,6 +330,6 @@ class DeezerImageProvider(IImageProvider):
         target_size = size_pixels.get(size_suffix, "500x500")
 
         # Replace any dimension pattern
-        modified = re.sub(r'\d+x\d+', target_size, url)
+        modified = re.sub(r"\d+x\d+", target_size, url)
 
         return modified

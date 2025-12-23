@@ -366,6 +366,7 @@ class LibraryScannerService:
                 from soulspot.infrastructure.observability.error_formatting import (
                     format_permission_error_message,
                 )
+
                 skipped_dirs.append(root)
                 msg = format_permission_error_message(e, "scan directory", root)
                 logger.warning(msg)
@@ -551,9 +552,7 @@ class LibraryScannerService:
 
         return album.id, True
 
-    async def _find_or_create_artist(
-        self, name: str
-    ) -> tuple[ArtistId, bool, bool]:
+    async def _find_or_create_artist(self, name: str) -> tuple[ArtistId, bool, bool]:
         """Find or create artist with fuzzy matching.
 
         Hey future me - this is a wrapper around _get_or_create_artist_exact

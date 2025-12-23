@@ -28,7 +28,7 @@ by implementing the IDownloadManager interface.
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
@@ -36,6 +36,11 @@ from soulspot.application.workers.job_queue import JobQueue, JobType
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.value_objects import TrackId
 from soulspot.infrastructure.persistence.models import DownloadModel
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from soulspot.domain.ports import ISlskdClient
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +143,13 @@ class QueueDispatcherWorker:
         # Log state changes
         if self._last_available is not None and is_available != self._last_available:
             if is_available:
-                logger.info("Download manager (slskd) is now AVAILABLE - will dispatch waiting downloads")
+                logger.info(
+                    "Download manager (slskd) is now AVAILABLE - will dispatch waiting downloads"
+                )
             else:
-                logger.warning("Download manager (slskd) is now UNAVAILABLE - downloads will wait")
+                logger.warning(
+                    "Download manager (slskd) is now UNAVAILABLE - downloads will wait"
+                )
 
         self._last_available = is_available
 
@@ -150,7 +159,9 @@ class QueueDispatcherWorker:
         # Dispatch waiting downloads
         dispatched = await self._dispatch_waiting_downloads()
         if dispatched > 0:
-            logger.info("Dispatched %d waiting download(s) to download manager", dispatched)
+            logger.info(
+                "Dispatched %d waiting download(s) to download manager", dispatched
+            )
 
     async def _check_slskd_available(self) -> bool:
         """Check if slskd is available and accepting downloads.
@@ -180,7 +191,9 @@ class QueueDispatcherWorker:
                 stmt = (
                     select(DownloadModel)
                     .where(DownloadModel.status == DownloadStatus.WAITING.value)
-                    .order_by(DownloadModel.priority.desc(), DownloadModel.created_at.asc())
+                    .order_by(
+                        DownloadModel.priority.desc(), DownloadModel.created_at.asc()
+                    )
                     .limit(1)
                 )
                 result = await session.execute(stmt)
@@ -251,9 +264,8 @@ class QueueDispatcherWorker:
         async with self._session_factory() as session:
             from sqlalchemy import func
 
-            stmt = (
-                select(DownloadModel.status, func.count(DownloadModel.id))
-                .group_by(DownloadModel.status)
+            stmt = select(DownloadModel.status, func.count(DownloadModel.id)).group_by(
+                DownloadModel.status
             )
             result = await session.execute(stmt)
             stats = dict(result.all())

@@ -108,10 +108,11 @@ class CleanupWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
                 worker="Cleanup",
-                config={"daily_check": True, "disabled_by_default": True}
+                config={"daily_check": True, "disabled_by_default": True},
             )
         )
 

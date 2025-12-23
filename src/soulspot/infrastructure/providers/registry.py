@@ -67,6 +67,8 @@ class DownloadProviderRegistry(IDownloadProviderRegistry):
                 else:
                     logger.debug(f"Provider {provider.provider_name} is not available")
             except Exception as e:
-                logger.warning(f"Error checking {provider.provider_name} availability: {e}")
+                logger.warning(
+                    f"Error checking {provider.provider_name} availability: {e}"
+                )
 
         return available

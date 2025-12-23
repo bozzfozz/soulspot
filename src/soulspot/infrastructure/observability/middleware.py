@@ -84,7 +84,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             if not skip_logging:
                 status_emoji = "✓" if response.status_code < 400 else "✗"
                 logger.info(
-                    f"{status_emoji} {method} {path} → {response.status_code} ({duration*1000:.0f}ms)",
+                    f"{status_emoji} {method} {path} → {response.status_code} ({duration * 1000:.0f}ms)",
                 )
 
             # Add correlation ID to response headers
@@ -96,6 +96,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             # Log error with full context (always log errors!)
             duration = time.time() - start_time
             logger.exception(
-                f"✗ {method} {path} FAILED ({duration*1000:.0f}ms): {e}",
+                f"✗ {method} {path} FAILED ({duration * 1000:.0f}ms): {e}",
             )
             raise

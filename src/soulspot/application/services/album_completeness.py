@@ -101,13 +101,13 @@ class AlbumCompletenessService:
     # GOTCHA: Deluxe editions vs standard - Spotify might say 15 tracks, you have standard with 10
     # REFACTORED: Now uses SpotifyPlugin which returns AlbumDTO with total_tracks field!
     async def get_expected_track_count_from_spotify(
-        self, spotify_uri: str, access_token: str | None = None
+        self, spotify_uri: str, _access_token: str | None = None
     ) -> int | None:
         """Get expected track count from Spotify.
 
         Args:
             spotify_uri: Spotify album URI
-            access_token: DEPRECATED - Plugin manages token internally
+            _access_token: DEPRECATED - Plugin manages token internally (kept for API compatibility)
 
         Returns:
             Expected track count or None if not found

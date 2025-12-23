@@ -174,7 +174,9 @@ class SpotifySyncWorker:
         # Use retry_after if provided, otherwise use backoff
         if retry_after_seconds and retry_after_seconds > 0:
             # Spotify told us how long to wait
-            cooldown_seconds = max(retry_after_seconds, self._rate_limit_backoff_minutes * 60)
+            cooldown_seconds = max(
+                retry_after_seconds, self._rate_limit_backoff_minutes * 60
+            )
         else:
             # Use exponential backoff
             cooldown_seconds = self._rate_limit_backoff_minutes * 60
@@ -184,7 +186,7 @@ class SpotifySyncWorker:
         # Increase backoff for next time (exponential, max 60 min)
         self._rate_limit_backoff_minutes = min(
             self._rate_limit_backoff_minutes * 2,
-            60  # Max 60 minutes
+            60,  # Max 60 minutes
         )
 
         logger.warning(
@@ -217,10 +219,10 @@ class SpotifySyncWorker:
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.info(
             LogMessages.worker_started(
-                worker="Spotify Sync",
-                interval=self.check_interval_seconds
+                worker="Spotify Sync", interval=self.check_interval_seconds
             )
         )
 
@@ -413,13 +415,18 @@ class SpotifySyncWorker:
             except Exception as e:
                 # Check if this is a rate limit error
                 error_str = str(e).lower()
-                if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
+                if (
+                    "429" in error_str
+                    or "rate limit" in error_str
+                    or "too many requests" in error_str
+                ):
                     # Extract retry-after if present in the error message
                     retry_after = None
                     if "retry after" in error_str or "retry-after" in error_str:
                         # Try to extract number from error message
                         import re
-                        match = re.search(r'retry[- ]?after[:\s]*(\d+)', error_str)
+
+                        match = re.search(r"retry[- ]?after[:\s]*(\d+)", error_str)
                         if match:
                             retry_after = int(match.group(1))
 
@@ -476,7 +483,9 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
@@ -523,7 +532,9 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
@@ -569,7 +580,9 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
@@ -614,7 +627,9 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
@@ -705,7 +720,9 @@ class SpotifySyncWorker:
             pending_artists = await repo.get_artists_pending_album_sync(
                 limit=artists_per_cycle, source="spotify"
             )
-            pending_count = await repo.count_artists_pending_album_sync(source="spotify")
+            pending_count = await repo.count_artists_pending_album_sync(
+                source="spotify"
+            )
             artists_to_sync.extend(pending_artists)
 
             # Phase 2: If resync enabled and we have room, add artists needing resync
@@ -742,7 +759,9 @@ class SpotifySyncWorker:
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 
@@ -872,7 +891,9 @@ class SpotifySyncWorker:
 
             # Set up services
             spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+            spotify_plugin = SpotifyPlugin(
+                client=spotify_client, access_token=access_token
+            )
             image_service = _get_image_service()
             settings_service = AppSettingsService(session)
 

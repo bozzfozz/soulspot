@@ -419,7 +419,9 @@ class DatabaseTokenManager:
                 "Migrate to session_scope for better connection handling."
             )
         else:
-            raise ConfigurationError("Either session_scope or get_db_session must be provided")
+            raise ConfigurationError(
+                "Either session_scope or get_db_session must be provided"
+            )
 
     # Hey future me - THIS is the main method for background workers! Returns access_token string
     # if valid token exists, None otherwise. Workers should check for None and skip work gracefully.

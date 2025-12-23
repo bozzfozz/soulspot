@@ -208,7 +208,9 @@ class PlaylistService:
             }
         except Exception as e:
             await self._session.rollback()
-            logger.error(f"Failed to set blacklist status for playlist {playlist_id}: {e}")
+            logger.error(
+                f"Failed to set blacklist status for playlist {playlist_id}: {e}"
+            )
             raise
 
     async def delete_and_blacklist(self, playlist_id: str) -> dict[str, Any]:

@@ -178,18 +178,20 @@ class LibraryViewService:
             # Format duration as "M:SS"
             duration_str = self._format_duration(duration_ms)
 
-            track_views.append(TrackView(
-                spotify_id=track.spotify_id,
-                title=track.title,  # Model has "title", ViewModel uses "title" (standardized)
-                track_number=track.track_number or 1,
-                disc_number=track.disc_number or 1,
-                duration_ms=duration_ms,
-                duration_str=duration_str,
-                explicit=track.explicit or False,
-                preview_url=track.preview_url,
-                isrc=track.isrc,
-                is_downloaded=self._check_if_downloaded(track),
-            ))
+            track_views.append(
+                TrackView(
+                    spotify_id=track.spotify_id,
+                    title=track.title,  # Model has "title", ViewModel uses "title" (standardized)
+                    track_number=track.track_number or 1,
+                    disc_number=track.disc_number or 1,
+                    duration_ms=duration_ms,
+                    duration_str=duration_str,
+                    explicit=track.explicit or False,
+                    preview_url=track.preview_url,
+                    isrc=track.isrc,
+                    is_downloaded=self._check_if_downloaded(track),
+                )
+            )
 
         return track_views
 

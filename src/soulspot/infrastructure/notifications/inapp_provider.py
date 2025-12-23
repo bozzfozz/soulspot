@@ -79,9 +79,15 @@ class InAppNotificationProvider(INotificationProvider):
         settings_service = AppSettingsService(self._session)
 
         self._settings_cache = {
-            "enabled": await settings_service.get_bool("notification.inapp.enabled", True),
-            "max_age_days": await settings_service.get_int("notification.inapp.max_age_days", 30),
-            "max_count": await settings_service.get_int("notification.inapp.max_count", 100),
+            "enabled": await settings_service.get_bool(
+                "notification.inapp.enabled", True
+            ),
+            "max_age_days": await settings_service.get_int(
+                "notification.inapp.max_age_days", 30
+            ),
+            "max_count": await settings_service.get_int(
+                "notification.inapp.max_count", 100
+            ),
         }
         self._cache_loaded = True
 
@@ -161,6 +167,7 @@ class InAppNotificationProvider(INotificationProvider):
         import json
 
         from sqlalchemy import text
+
         data_json = json.dumps(notification.data or {})
 
         query = text("""
@@ -295,6 +302,7 @@ class InAppNotificationProvider(INotificationProvider):
         rows = result.fetchall()
 
         import json
+
         return [
             {
                 "id": row[0],
@@ -329,7 +337,9 @@ class InAppNotificationProvider(INotificationProvider):
 
         # Build IN clause with placeholders
         placeholders = ", ".join(f":id_{i}" for i in range(len(notification_ids)))
-        params: dict[str, Any] = {f"id_{i}": nid for i, nid in enumerate(notification_ids)}
+        params: dict[str, Any] = {
+            f"id_{i}": nid for i, nid in enumerate(notification_ids)
+        }
 
         if user_id:
             query = text(f"""

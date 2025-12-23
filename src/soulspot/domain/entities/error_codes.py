@@ -76,23 +76,27 @@ class DownloadErrorCode(StrEnum):
 
 # Hey future me - this set MUST match _NON_RETRYABLE_ERRORS in Download entity!
 # If you add a new non-retryable error here, add it there too!
-NON_RETRYABLE_ERRORS: frozenset[str] = frozenset({
-    DownloadErrorCode.FILE_NOT_FOUND,
-    DownloadErrorCode.USER_BLOCKED,
-    DownloadErrorCode.INVALID_FILE,
-    DownloadErrorCode.FILE_TOO_SMALL,
-})
+NON_RETRYABLE_ERRORS: frozenset[str] = frozenset(
+    {
+        DownloadErrorCode.FILE_NOT_FOUND,
+        DownloadErrorCode.USER_BLOCKED,
+        DownloadErrorCode.INVALID_FILE,
+        DownloadErrorCode.FILE_TOO_SMALL,
+    }
+)
 
-RETRYABLE_ERRORS: frozenset[str] = frozenset({
-    DownloadErrorCode.TIMEOUT,
-    DownloadErrorCode.USER_OFFLINE,
-    DownloadErrorCode.TRANSFER_FAILED,
-    DownloadErrorCode.QUEUE_TIMEOUT,
-    DownloadErrorCode.CONNECTION_ERROR,
-    DownloadErrorCode.RATE_LIMITED,
-    DownloadErrorCode.SLSKD_UNAVAILABLE,
-    DownloadErrorCode.UNKNOWN,
-})
+RETRYABLE_ERRORS: frozenset[str] = frozenset(
+    {
+        DownloadErrorCode.TIMEOUT,
+        DownloadErrorCode.USER_OFFLINE,
+        DownloadErrorCode.TRANSFER_FAILED,
+        DownloadErrorCode.QUEUE_TIMEOUT,
+        DownloadErrorCode.CONNECTION_ERROR,
+        DownloadErrorCode.RATE_LIMITED,
+        DownloadErrorCode.SLSKD_UNAVAILABLE,
+        DownloadErrorCode.UNKNOWN,
+    }
+)
 
 # Human-readable descriptions for error codes
 ERROR_DESCRIPTIONS: dict[str, str] = {

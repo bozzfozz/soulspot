@@ -41,7 +41,9 @@ from typing import Literal
 
 # === Type Definitions ===
 
-ProviderName = Literal["spotify", "deezer", "tidal", "musicbrainz", "coverartarchive", "local"]
+ProviderName = Literal[
+    "spotify", "deezer", "tidal", "musicbrainz", "coverartarchive", "local"
+]
 
 
 class ImageQuality(Enum):
@@ -50,14 +52,16 @@ class ImageQuality(Enum):
     Future me note:
     Some providers return multiple sizes. This helps choose the right one.
     """
+
     THUMBNAIL = "thumbnail"  # ~64px - for lists
-    SMALL = "small"          # ~160px - for grids
-    MEDIUM = "medium"        # ~300px - default UI
-    LARGE = "large"          # ~640px - detail pages
-    ORIGINAL = "original"    # Full resolution
+    SMALL = "small"  # ~160px - for grids
+    MEDIUM = "medium"  # ~300px - default UI
+    LARGE = "large"  # ~640px - detail pages
+    ORIGINAL = "original"  # Full resolution
 
 
 # === Result DTOs ===
+
 
 @dataclass(frozen=True)
 class ImageResult:
@@ -67,6 +71,7 @@ class ImageResult:
     Immutable (frozen) - represents a snapshot of what the provider returned.
     url is the CDN URL, not a local path!
     """
+
     url: str
     provider: ProviderName
     width: int | None = None
@@ -89,6 +94,7 @@ class ImageSearchResult:
     When searching by name, we might get multiple candidates.
     best_match is our recommendation, alternatives are fallbacks.
     """
+
     best_match: ImageResult | None = None
     alternatives: list[ImageResult] = field(default_factory=list)
     query: str = ""  # Original search query
@@ -101,6 +107,7 @@ class ImageSearchResult:
 
 
 # === Provider Interface ===
+
 
 class IImageProvider(ABC):
     """Interface for image providers.
@@ -246,6 +253,7 @@ class IImageProvider(ABC):
 
 
 # === Provider Registry ===
+
 
 class IImageProviderRegistry(ABC):
     """Registry for managing multiple image providers.

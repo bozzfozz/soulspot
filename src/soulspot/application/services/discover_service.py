@@ -161,14 +161,18 @@ class DiscoverService:
         tasks: list[asyncio.Task[list[tuple[DiscoveredArtist, str]]]] = []
 
         # Spotify Related Artists
-        if "spotify" in providers and self._spotify and spotify_id:
-            if self._spotify.can_use(PluginCapability.GET_RELATED_ARTISTS):
-                tasks.append(
-                    asyncio.create_task(
-                        self._fetch_spotify_related(spotify_id, limit),
-                        name="spotify_related"
-                    )
+        if (
+            "spotify" in providers
+            and self._spotify
+            and spotify_id
+            and self._spotify.can_use(PluginCapability.GET_RELATED_ARTISTS)
+        ):
+            tasks.append(
+                asyncio.create_task(
+                    self._fetch_spotify_related(spotify_id, limit),
+                    name="spotify_related",
                 )
+            )
 
         # Deezer Related Artists
         if "deezer" in providers and self._deezer:
@@ -182,7 +186,7 @@ class DiscoverService:
                 tasks.append(
                     asyncio.create_task(
                         self._fetch_deezer_related(deezer_artist_id, limit),
-                        name="deezer_related"
+                        name="deezer_related",
                     )
                 )
 
@@ -265,15 +269,15 @@ class DiscoverService:
             # Spotify
             if "spotify" in providers and self._spotify:
                 spotify_id = source_artist.spotify_id
-                if spotify_id and self._spotify.can_use(PluginCapability.GET_RELATED_ARTISTS):
+                if spotify_id and self._spotify.can_use(
+                    PluginCapability.GET_RELATED_ARTISTS
+                ):
                     tasks.append(
                         asyncio.create_task(
                             self._fetch_spotify_related(
-                                spotify_id,
-                                max_per_artist,
-                                based_on=source_artist.name
+                                spotify_id, max_per_artist, based_on=source_artist.name
                             ),
-                            name="spotify_related"
+                            name="spotify_related",
                         )
                     )
 
@@ -289,11 +293,9 @@ class DiscoverService:
                     tasks.append(
                         asyncio.create_task(
                             self._fetch_deezer_related(
-                                deezer_id,
-                                max_per_artist,
-                                based_on=source_artist.name
+                                deezer_id, max_per_artist, based_on=source_artist.name
                             ),
-                            name="deezer_related"
+                            name="deezer_related",
                         )
                     )
 
@@ -509,11 +511,8 @@ class DiscoverService:
         # Sort by frequency (recommendations count) then popularity
         result = list(seen_artists.values())
         result.sort(
-            key=lambda a: (
-                name_counts.get(a.name.lower().strip(), 0),
-                a.popularity
-            ),
-            reverse=True
+            key=lambda a: (name_counts.get(a.name.lower().strip(), 0), a.popularity),
+            reverse=True,
         )
 
         return result
