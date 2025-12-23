@@ -475,7 +475,7 @@ async def get_missing_tracks(
     try:
         return await service.get_missing_tracks(playlist_id)
     except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 # Yo this is basically a "refresh from Spotify" endpoint. It extracts the Spotify ID from the
@@ -684,7 +684,7 @@ async def download_missing_tracks(
             "missing_count": result["missing_count"],
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to identify missing tracks: {str(e)}"
@@ -750,7 +750,7 @@ async def blacklist_playlist(
     try:
         return await service.set_blacklist_status(playlist_id, blacklisted=True)
     except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to blacklist playlist: {str(e)}"
@@ -780,7 +780,7 @@ async def unblacklist_playlist(
     try:
         return await service.set_blacklist_status(playlist_id, blacklisted=False)
     except EntityNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to unblacklist playlist: {str(e)}"

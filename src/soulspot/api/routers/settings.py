@@ -1114,7 +1114,7 @@ async def download_all_images(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Bulk image download failed: {e}",
-        )
+        ) from e
 
     return result
 

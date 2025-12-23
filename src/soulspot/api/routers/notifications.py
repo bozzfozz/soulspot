@@ -11,6 +11,7 @@ endpoints let the UI:
 All endpoints use HTMX-compatible responses where appropriate.
 """
 
+import contextlib
 import logging
 from typing import Annotated
 
@@ -105,10 +106,8 @@ async def list_notifications(
     # Parse notification type if provided
     type_filter = None
     if notification_type:
-        try:
+        with contextlib.suppress(ValueError):
             type_filter = NotificationType(notification_type)
-        except ValueError:
-            pass  # Invalid type, ignore filter
 
     # Get notifications
     notifications = await provider.get_notifications(

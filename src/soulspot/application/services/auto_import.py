@@ -253,9 +253,6 @@ class AutoImportService:
         except Exception as e:
             logger.exception("Error processing downloads: %s", e, exc_info=True)
 
-        except Exception as e:
-            logger.exception("Error processing downloads: %s", e)
-
     # Hey future me: Recursive file discovery with completeness check
     # WHY rglob("*")? Downloads might be organized in subdirs like "Artist/Album/track.mp3"
     # WHY suffix.lower()? File extensions might be ".MP3" or ".Mp3" - normalize for comparison

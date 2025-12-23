@@ -154,14 +154,14 @@ def _validate_formats(format_strings: list[str]) -> list[str]:
     for fmt in format_strings:
         try:
             normalized.append(AudioFormat(fmt.lower()).value)
-        except ValueError:
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     f"Invalid audio format: {fmt}. "
                     f"Valid formats: {[af.value for af in AudioFormat]}"
                 ),
-            )
+            ) from e
     return normalized
 
 
