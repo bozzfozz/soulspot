@@ -70,7 +70,6 @@ __all__ = [
     "api_router",
     "artist_songs",
     "artists",
-    "artwork",
     "auth",
     "automation",
     "blocklist",
