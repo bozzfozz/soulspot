@@ -344,6 +344,7 @@ class ProviderHealthDTO(BaseModel):
     seconds_since_last_sync: int | None
     seconds_until_recovery_attempt: int | None
     error_message: str | None
+    has_successful_connection: bool = False  # True if at least one sync succeeded
 
 
 class ProvidersHealthResponse(BaseModel):
@@ -388,6 +389,7 @@ async def get_providers_health(
                     "seconds_until_recovery_attempt"
                 ),
                 error_message=None,
+                has_successful_connection=health.get("has_successful_connection", False),
             )
         )
     else:
@@ -398,13 +400,14 @@ async def get_providers_health(
         
         if settings.slskd.url:
             try:
-                # Try to create client and check connection
+                # Try to create client and test connection
                 slskd_client = SlskdClient(settings.slskd)
-                is_healthy = await slskd_client.check_connection()
+                test_result = await slskd_client.test_connection()
+                is_healthy = test_result.get("success", False)
                 if is_healthy:
                     error_message = None
                 else:
-                    error_message = "slskd not reachable"
+                    error_message = test_result.get("error", "slskd not reachable")
             except Exception as e:
                 error_message = f"Connection error: {str(e)[:50]}"
         else:
@@ -421,6 +424,7 @@ async def get_providers_health(
                 seconds_since_last_sync=None,
                 seconds_until_recovery_attempt=None,
                 error_message=error_message,
+                has_successful_connection=is_healthy,  # Direct ping success = connection works
             )
         )
 

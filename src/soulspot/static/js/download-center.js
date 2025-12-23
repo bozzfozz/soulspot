@@ -546,18 +546,26 @@ function checkConnectionStatus() {
             
             if (!indicator || !text) return;
             
+            const provider = data.providers?.[0];
+            
             if (data.overall_healthy) {
                 indicator.className = 'dc-status-indicator connected';
                 text.textContent = 'slskd Connected';
                 DCState.connectionStatus = 'connected';
             } else {
                 indicator.className = 'dc-status-indicator disconnected';
+                
                 // Show more details about the issue
-                const provider = data.providers?.[0];
                 if (provider?.error_message) {
                     text.textContent = provider.error_message;
-                } else if (provider?.circuit_state === 'OPEN') {
+                } else if (!provider?.has_successful_connection) {
+                    text.textContent = 'Waiting for connection...';
+                    indicator.className = 'dc-status-indicator connecting';
+                } else if (provider?.circuit_state === 'open') {
                     text.textContent = `Circuit Open (${provider.consecutive_failures} failures)`;
+                } else if (provider?.circuit_state === 'half_open') {
+                    text.textContent = 'Testing connection...';
+                    indicator.className = 'dc-status-indicator connecting';
                 } else {
                     text.textContent = 'slskd Disconnected';
                 }
