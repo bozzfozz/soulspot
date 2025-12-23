@@ -43,7 +43,7 @@ class MetadataService:
     """Service for downloading and processing artwork for audio file embedding.
 
     Hey future me - dieser Service ist für ID3/FLAC-Tag-Embedding!
-    
+
     NICHT verwechseln mit ArtworkService:
     - MetadataService = Artwork für AUDIO-DATEIEN (ID3 Tags)
     - ArtworkService = Bilder für UI (Webseite)
@@ -437,7 +437,7 @@ class MetadataService:
         """Process and optimize image for ID3 embedding.
 
         Hey future me - konvertiert zu JPEG weil ID3 APIC kein PNG mit Alpha unterstützt!
-        
+
         Args:
             image_data: Raw image data
 

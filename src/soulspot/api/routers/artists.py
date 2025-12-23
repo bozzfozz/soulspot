@@ -150,7 +150,7 @@ async def sync_followed_artists(
         # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
         from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
         deezer_plugin = DeezerPlugin()
-        
+
         service = FollowedArtistsService(
             session=session,
             spotify_plugin=spotify_plugin,

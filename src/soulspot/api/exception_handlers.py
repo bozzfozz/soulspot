@@ -14,19 +14,19 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from soulspot.domain.exceptions import (
-    # Old exception names (kept for backwards compatibility)
-    DuplicateEntityException,
-    EntityNotFoundException,
-    InvalidStateException,
-    ValidationException,
     # New exception names (Dec 2025)
     AuthenticationError,
     AuthorizationError,
     BusinessRuleViolation,
     ConfigurationError,
+    # Old exception names (kept for backwards compatibility)
+    DuplicateEntityException,
+    EntityNotFoundException,
     ExternalServiceError,
+    InvalidStateException,
     RateLimitExceededError,
     ValidationError,
+    ValidationException,
 )
 
 logger = logging.getLogger(__name__)

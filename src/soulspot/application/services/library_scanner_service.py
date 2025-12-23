@@ -363,7 +363,9 @@ class LibraryScannerService:
                     if ext in AUDIO_EXTENSIONS:
                         audio_files.append(Path(root) / filename)
             except PermissionError as e:
-                from soulspot.infrastructure.observability.error_formatting import format_permission_error_message
+                from soulspot.infrastructure.observability.error_formatting import (
+                    format_permission_error_message,
+                )
                 skipped_dirs.append(root)
                 msg = format_permission_error_message(e, "scan directory", root)
                 logger.warning(msg)
@@ -443,7 +445,7 @@ class LibraryScannerService:
         # Hey future me - we log new artists at INFO level so you can see what's being imported
         # from which folder. This helps catch folder naming issues (like "Ava MaxDance").
         logger.info(f"📁 New artist from folder: '{name}'")
-        
+
         artist = Artist(
             id=ArtistId.generate(),
             name=name,  # Keep original casing from folder

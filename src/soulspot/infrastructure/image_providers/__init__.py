@@ -22,7 +22,7 @@ DELETE THIS DIRECTORY when cleaning up:
 Files in this deprecated directory:
 - __init__.py (this file)
 - spotify_image_provider.py → Use providers/spotify_image_provider.py
-- deezer_image_provider.py → Use providers/deezer_image_provider.py  
+- deezer_image_provider.py → Use providers/deezer_image_provider.py
 - caa_image_provider.py → NOT in providers/ (feature not actively used)
 """
 
@@ -37,14 +37,14 @@ warnings.warn(
     stacklevel=2,
 )
 
-from soulspot.infrastructure.image_providers.spotify_image_provider import (
-    SpotifyImageProvider,
+from soulspot.infrastructure.image_providers.caa_image_provider import (
+    CoverArtArchiveImageProvider,
 )
 from soulspot.infrastructure.image_providers.deezer_image_provider import (
     DeezerImageProvider,
 )
-from soulspot.infrastructure.image_providers.caa_image_provider import (
-    CoverArtArchiveImageProvider,
+from soulspot.infrastructure.image_providers.spotify_image_provider import (
+    SpotifyImageProvider,
 )
 
 __all__ = [

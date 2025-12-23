@@ -106,10 +106,10 @@ InvalidOperationError = InvalidStateException
 
 class OperationFailedError(DomainException):
     """Operation failed due to external dependency or system error.
-    
+
     DEPRECATED: Use DomainException or a more specific exception instead.
     This is kept for backward compatibility with old code.
-    
+
     Raised when an operation fails due to file system errors, network
     errors, or other external factors.
     """
@@ -228,10 +228,10 @@ class RateLimitExceededError(DomainException):
 
 class DuplicateEntityError(DuplicateEntityException):
     """Alias for DuplicateEntityException with standardized naming.
-    
+
     HTTP Status: 409 (Conflict)
     """
-    
+
     pass
 
 

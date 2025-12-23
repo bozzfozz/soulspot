@@ -32,7 +32,7 @@ USAGE:
     registry = ImageProviderRegistry()
     registry.register(DeezerImageProvider(deezer_plugin), priority=1)
     registry.register(SpotifyImageProvider(spotify_plugin), priority=2)
-    
+
     # Get image - tries all providers in order
     result = await registry.get_artist_image(
         artist_name="Radiohead",
@@ -41,7 +41,7 @@ USAGE:
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from soulspot.domain.ports.image_provider import (
     IImageProvider,
@@ -63,34 +63,34 @@ class _ProviderEntry:
 
 class ImageProviderRegistry(IImageProviderRegistry):
     """Registry for managing image providers with fallback logic.
-    
+
     Hey future me - das ist der MULTI-PROVIDER ORCHESTRATOR!
-    
+
     Features:
     - Priority-based provider ordering
     - Automatic fallback to next provider on failure
     - Availability checking (skip unavailable providers)
     - Direct ID lookup + Search by name support
-    
+
     Typical priority setup:
     - Deezer (1): No auth, always available
     - Spotify (2): Needs OAuth, may not be available
     - MusicBrainz (3): No auth, but slower and less coverage
     """
-    
+
     def __init__(self) -> None:
         """Initialize empty registry."""
         self._providers: dict[ProviderName, _ProviderEntry] = {}
-    
+
     def register(self, provider: IImageProvider, priority: int = 10) -> None:
         """Register a provider with given priority.
-        
+
         Lower priority = checked first!
-        
+
         Args:
             provider: The image provider implementation
             priority: Ordering priority (default 10)
-            
+
         Example:
             registry.register(DeezerImageProvider(plugin), priority=1)  # First
             registry.register(SpotifyImageProvider(plugin), priority=2)  # Second
@@ -105,13 +105,13 @@ class ImageProviderRegistry(IImageProviderRegistry):
             priority,
             provider.requires_auth,
         )
-    
+
     def unregister(self, provider_name: ProviderName) -> bool:
         """Remove a provider from the registry.
-        
+
         Args:
             provider_name: Name of provider to remove
-            
+
         Returns:
             True if removed, False if not found
         """
@@ -120,7 +120,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
             logger.info("Unregistered image provider: %s", provider_name)
             return True
         return False
-    
+
     def _get_sorted_providers(self) -> list[IImageProvider]:
         """Get providers sorted by priority (lowest first)."""
         sorted_entries = sorted(
@@ -128,10 +128,10 @@ class ImageProviderRegistry(IImageProviderRegistry):
             key=lambda e: e.priority,
         )
         return [entry.provider for entry in sorted_entries]
-    
+
     async def get_available_providers(self) -> list[IImageProvider]:
         """Get list of currently available providers, sorted by priority.
-        
+
         Returns:
             List of providers where is_available() == True
         """
@@ -146,7 +146,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
                     provider.requires_auth,
                 )
         return available
-    
+
     async def get_artist_image(
         self,
         artist_name: str | None = None,
@@ -154,24 +154,24 @@ class ImageProviderRegistry(IImageProviderRegistry):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get artist image from best available provider.
-        
+
         Tries providers in priority order:
         1. Direct ID lookup (if artist_ids provided)
         2. Search by name (if artist_name provided)
-        
+
         Args:
             artist_name: Artist name for search
             artist_ids: Dict of provider → artist_id for direct lookup
             quality: Desired image quality
-            
+
         Returns:
             ImageResult from first successful provider, or None
         """
         artist_ids = artist_ids or {}
-        
+
         for provider in await self.get_available_providers():
             provider_name = provider.provider_name
-            
+
             # Try direct ID lookup first (faster, more accurate)
             if provider_name in artist_ids:
                 artist_id = artist_ids[provider_name]
@@ -188,7 +188,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
                         result.url[:50] + "..." if len(result.url) > 50 else result.url,
                     )
                     return result
-            
+
             # Fallback to search by name
             if artist_name:
                 logger.debug(
@@ -206,14 +206,14 @@ class ImageProviderRegistry(IImageProviderRegistry):
                         else search_result.best_match.url,
                     )
                     return search_result.best_match
-        
+
         logger.debug(
             "No artist image found for: name=%s, ids=%s",
             artist_name,
             artist_ids,
         )
         return None
-    
+
     async def get_album_image(
         self,
         album_title: str | None = None,
@@ -222,25 +222,25 @@ class ImageProviderRegistry(IImageProviderRegistry):
         quality: ImageQuality = ImageQuality.MEDIUM,
     ) -> ImageResult | None:
         """Get album image from best available provider.
-        
+
         Tries providers in priority order:
         1. Direct ID lookup (if album_ids provided)
         2. Search by title/artist (if album_title provided)
-        
+
         Args:
             album_title: Album title for search
             artist_name: Optional artist name for better search
             album_ids: Dict of provider → album_id for direct lookup
             quality: Desired image quality
-            
+
         Returns:
             ImageResult from first successful provider, or None
         """
         album_ids = album_ids or {}
-        
+
         for provider in await self.get_available_providers():
             provider_name = provider.provider_name
-            
+
             # Try direct ID lookup first
             if provider_name in album_ids:
                 album_id = album_ids[provider_name]
@@ -256,7 +256,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
                         provider_name,
                     )
                     return result
-            
+
             # Fallback to search
             if album_title:
                 logger.debug(
@@ -276,7 +276,7 @@ class ImageProviderRegistry(IImageProviderRegistry):
                         provider_name,
                     )
                     return search_result.best_match
-        
+
         logger.debug(
             "No album image found for: title=%s, artist=%s, ids=%s",
             album_title,
@@ -284,30 +284,30 @@ class ImageProviderRegistry(IImageProviderRegistry):
             album_ids,
         )
         return None
-    
+
     # === Convenience Methods ===
-    
+
     def get_provider(self, provider_name: ProviderName) -> IImageProvider | None:
         """Get a specific provider by name.
-        
+
         Args:
             provider_name: Name of the provider
-            
+
         Returns:
             Provider instance or None if not registered
         """
         entry = self._providers.get(provider_name)
         return entry.provider if entry else None
-    
+
     @property
     def registered_providers(self) -> list[ProviderName]:
         """Get list of registered provider names."""
         return list(self._providers.keys())
-    
+
     def __len__(self) -> int:
         """Get number of registered providers."""
         return len(self._providers)
-    
+
     def __contains__(self, provider_name: ProviderName) -> bool:
         """Check if provider is registered."""
         return provider_name in self._providers

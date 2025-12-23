@@ -108,7 +108,7 @@ class LibraryCleanupService:
                     AlbumModel.id.in_(orphan_album_ids)
                 )
                 await self._session.execute(delete_albums_stmt)
-                
+
                 logger.debug(
                     f"🗑️ Orphaned Albums Batch Deleted\n"
                     f"└─ Batch: {batch_count} albums"
@@ -146,7 +146,7 @@ class LibraryCleanupService:
                     ArtistModel.id.in_(orphan_artist_ids)
                 )
                 await self._session.execute(delete_artists_stmt)
-                
+
                 logger.debug(
                     f"🗑️ Orphaned Artists Batch Deleted\n"
                     f"└─ Batch: {batch_count} artists"

@@ -7,7 +7,7 @@ This file was a stub that never got implemented - all methods raise NotImplement
 
 USE INSTEAD:
     from soulspot.infrastructure.integrations.deezer_client import DeezerClient
-    
+
     # DeezerClient has ALL the OAuth functionality:
     # - get_user_favorites()
     # - get_user_playlists()
@@ -93,16 +93,16 @@ class DeezerOAuthNotConfiguredError(Exception):
 
 class DeezerOAuthClient(IDeezerClient):
     """⚠️ DEPRECATED - Use DeezerClient instead! ⚠️
-    
-    This class is a STUB that never got implemented. 
+
+    This class is a STUB that never got implemented.
     ALL methods raise NotImplementedError.
-    
+
     Use deezer_client.DeezerClient instead - it has all OAuth functionality!
-    
+
     Example:
         # ❌ DON'T USE:
         from soulspot.infrastructure.integrations.deezer_oauth_client import DeezerOAuthClient
-        
+
         # ✅ USE INSTEAD:
         from soulspot.infrastructure.integrations.deezer_client import DeezerClient
         client = DeezerClient()

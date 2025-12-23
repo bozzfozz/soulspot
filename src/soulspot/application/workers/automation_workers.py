@@ -5,8 +5,6 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from soulspot.application.services.automation_workflow_service import (
     AutomationWorkflowService,
 )
@@ -586,7 +584,9 @@ class QualityUpgradeWorker:
                 logger.info("Identifying quality upgrade opportunities")
 
                 # Hey - import repository to get tracks
-                from soulspot.infrastructure.persistence.repositories import TrackRepository
+                from soulspot.infrastructure.persistence.repositories import (
+                    TrackRepository,
+                )
 
                 # Create services with this session
                 quality_service = QualityUpgradeService(session)

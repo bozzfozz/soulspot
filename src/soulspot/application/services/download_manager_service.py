@@ -17,8 +17,6 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.entities.download_manager import (
     DownloadProgress,
@@ -34,6 +32,7 @@ from soulspot.domain.ports.download_provider import (
     ProviderDownload,
 )
 from soulspot.domain.value_objects import DownloadId, TrackId
+from soulspot.infrastructure.observability.log_messages import LogMessages
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
 
 logger = logging.getLogger(__name__)

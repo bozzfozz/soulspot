@@ -38,14 +38,14 @@ logger = logging.getLogger(__name__)
 
 def _get_image_service() -> "ImageService":
     """Get ImageService with correct Docker cache path.
-    
+
     Hey future me - THIS IS CRITICAL!
     ImageService() ohne Parameter nutzt default ./images (FALSCH in Docker!).
     Wir müssen den korrekten Pfad aus Settings holen.
     """
     from soulspot.application.services.images import ImageService
     from soulspot.config import get_settings
-    
+
     settings = get_settings()
     return ImageService(
         cache_base_path=str(settings.storage.image_path),
@@ -229,10 +229,10 @@ class DeezerSyncWorker:
 
                 # Get interval settings
                 # Hey future me - charts/releases can update less frequently than user data
-                charts_interval = await settings_service.get_int(
+                await settings_service.get_int(
                     "deezer.charts_sync_interval_minutes", default=60
                 )
-                releases_interval = await settings_service.get_int(
+                await settings_service.get_int(
                     "deezer.new_releases_sync_interval_minutes", default=60
                 )
                 user_sync_interval = await settings_service.get_int(
@@ -874,7 +874,7 @@ class DeezerSyncWorker:
 
         Args:
             sync_type: Specific sync to run, or None for all.
-                       Options: "artists", "playlists", "saved_albums", 
+                       Options: "artists", "playlists", "saved_albums",
                                 "saved_tracks", "artist_albums", "album_tracks"
                        NOTE: "charts" and "new_releases" removed - generic browse content
 
@@ -896,7 +896,7 @@ class DeezerSyncWorker:
 
                 # USER SYNCS (auth required)
                 if not access_token:
-                    if sync_type in ("artists", "playlists", "saved_albums", 
+                    if sync_type in ("artists", "playlists", "saved_albums",
                                      "saved_tracks", "artist_albums", "album_tracks"):
                         return {"error": "No valid Deezer token available for user syncs"}
                 else:

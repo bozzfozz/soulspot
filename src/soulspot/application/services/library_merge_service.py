@@ -13,11 +13,11 @@ prefixes (DJ, The, MC) and normalizes case for comparison.
 
 Usage:
     service = LibraryMergeService(session)
-    
+
     # Find duplicates
     artist_duplicates = await service.find_duplicate_artists()
     album_duplicates = await service.find_duplicate_albums()
-    
+
     # Merge (user picks which to keep)
     result = await service.merge_artists(keep_id="uuid1", merge_ids=["uuid2", "uuid3"])
     result = await service.merge_albums(keep_id="uuid1", merge_ids=["uuid2"])
@@ -54,11 +54,11 @@ logger = logging.getLogger(__name__)
 
 class LibraryMergeService:
     """Service for duplicate detection and entity merging.
-    
+
     Hey future me - this is a CLEAN replacement for the duplicate/merge methods
     that were in LocalLibraryEnrichmentService! Uses the new artist_normalization
     module for consistent name matching.
-    
+
     Key features:
     - Find duplicate artists by normalized name
     - Find duplicate albums by normalized artist+title
@@ -67,9 +67,9 @@ class LibraryMergeService:
     - Automatic metadata backfill (images, URIs)
     """
 
-    def __init__(self, session: "AsyncSession") -> None:
+    def __init__(self, session: AsyncSession) -> None:
         """Initialize merge service.
-        
+
         Args:
             session: Database session for queries and updates
         """
@@ -84,7 +84,7 @@ class LibraryMergeService:
 
         Hey future me - groups artists with identical normalized names!
         Uses normalize_artist_name() to strip DJ/The/MC prefixes and lowercase.
-        
+
         Example: "DJ Paul Elstak" and "Paul Elstak" would be in same group.
 
         Returns:
@@ -166,7 +166,7 @@ class LibraryMergeService:
 
         Hey future me - groups albums with identical normalized titles from same artist!
         Uses normalize_artist_name() for both artist name AND album title.
-        
+
         Example: "Greatest Hits" by "The Prodigy" and "Greatest Hits" by "Prodigy"
         would be in same group.
 
@@ -255,7 +255,7 @@ class LibraryMergeService:
         """Merge multiple artists into one, transferring all tracks and albums.
 
         Hey future me - the 'keep' artist absorbs all data from 'merge' artists!
-        
+
         What gets transferred:
         - All tracks are reassigned to keep_id
         - All albums are reassigned to keep_id
@@ -381,7 +381,7 @@ class LibraryMergeService:
         """Merge multiple albums into one, transferring all tracks.
 
         Hey future me - the 'keep' album absorbs all data from 'merge' albums!
-        
+
         What gets transferred:
         - All tracks are reassigned to keep_id
         - cover_url/cover_path is copied if keep album doesn't have one

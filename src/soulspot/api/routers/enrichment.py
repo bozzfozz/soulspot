@@ -33,8 +33,8 @@ from soulspot.api.dependencies import (
     get_settings,
     get_spotify_plugin,
 )
-from soulspot.config.settings import Settings
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
+from soulspot.config.settings import Settings
 from soulspot.infrastructure.observability.log_messages import LogMessages
 
 if TYPE_CHECKING:
@@ -402,7 +402,9 @@ async def enrich_disambiguation(
     from soulspot.application.services.musicbrainz_enrichment_service import (
         MusicBrainzEnrichmentService,
     )
-    from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
+    from soulspot.infrastructure.integrations.musicbrainz_client import (
+        MusicBrainzClient,
+    )
 
     # Create MusicBrainz client and settings service
     mb_client = MusicBrainzClient(settings.musicbrainz)

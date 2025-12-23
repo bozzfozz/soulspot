@@ -17,7 +17,7 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -66,7 +66,6 @@ class DuplicateService:
             Dict with candidates list and counts by status
         """
         from soulspot.infrastructure.persistence.models import (
-            DuplicateCandidateModel,
             TrackModel,
         )
         from soulspot.infrastructure.persistence.repositories import (
@@ -183,7 +182,6 @@ class DuplicateService:
             ValueError: If candidate not found or invalid action
         """
         from soulspot.domain.entities import DuplicateResolutionAction
-        from soulspot.infrastructure.persistence.models import TrackModel
         from soulspot.infrastructure.persistence.repositories import (
             DuplicateCandidateRepository,
         )

@@ -42,15 +42,14 @@ job_id = await queue.enqueue(JobType.DOWNLOAD, {"track_id": "..."})
 ```
 """
 
-import asyncio
 import json
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from soulspot.application.workers.job_queue import Job, JobQueue, JobStatus, JobType

@@ -77,11 +77,11 @@ class ImageRepairService:
 
     def __init__(
         self,
-        session: "AsyncSession",
-        image_service: "ImageService",
-        image_provider_registry: "ImageProviderRegistry | None" = None,
-        spotify_plugin: "SpotifyPlugin | None" = None,
-        artist_repository: "ArtistRepository | None" = None,
+        session: AsyncSession,
+        image_service: ImageService,
+        image_provider_registry: ImageProviderRegistry | None = None,
+        spotify_plugin: SpotifyPlugin | None = None,
+        artist_repository: ArtistRepository | None = None,
     ) -> None:
         """Initialize image repair service.
 
@@ -372,7 +372,7 @@ class ImageRepairService:
             select(AlbumModel)
             .where(has_local_tracks)
             .where(
-                (AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == ""))
+                AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == "")
             )
             .order_by(AlbumModel.title)
             .limit(limit)

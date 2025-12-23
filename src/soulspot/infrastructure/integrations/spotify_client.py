@@ -71,28 +71,28 @@ class SpotifyClient(ISpotifyClient):
         max_retries: int = 3,
     ) -> httpx.Response:
         """Make rate-limited API request with automatic retry on 429.
-        
+
         Hey future me - ALL Spotify API calls should use this method!
         It handles rate limiting and retries automatically.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             url: Full URL to request
             access_token: OAuth access token
             params: Query parameters
             max_retries: Max retries on 429 (default 3)
-            
+
         Returns:
             httpx.Response object
-            
+
         Raises:
             httpx.HTTPStatusError: On non-retryable HTTP errors
         """
         client = await self._get_client()
         rate_limiter = get_spotify_limiter()
-        
+
         headers = {"Authorization": f"Bearer {access_token}"}
-        
+
         for attempt in range(max_retries + 1):
             # Wait for rate limiter token
             async with rate_limiter:
@@ -102,13 +102,13 @@ class SpotifyClient(ISpotifyClient):
                     params=params,
                     headers=headers,
                 )
-            
+
             # Check for rate limit
             if response.status_code == 429:
                 # Get Retry-After header (seconds to wait)
                 retry_after_str = response.headers.get("Retry-After")
                 retry_after = int(retry_after_str) if retry_after_str else None
-                
+
                 if attempt >= max_retries:
                     # Hey future me - we include retry_after in the error message!
                     # This allows the worker to extract it and set appropriate cooldown.
@@ -122,7 +122,7 @@ class SpotifyClient(ISpotifyClient):
                         request=response.request,
                         response=response,
                     )
-                
+
                 # Wait with adaptive backoff
                 wait_time = await rate_limiter.handle_rate_limit_response(retry_after)
                 logger.warning(
@@ -130,10 +130,10 @@ class SpotifyClient(ISpotifyClient):
                     f"Waited {wait_time:.1f}s, retrying {url}"
                 )
                 continue
-            
+
             # Success or other error - don't retry
             return response
-        
+
         # Should not reach here, but just in case
         return response
 

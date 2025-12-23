@@ -22,10 +22,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
-    get_db_session,
     get_job_queue,
     get_library_scanner_service,
 )
@@ -84,7 +82,7 @@ async def start_library_scan(
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> dict[str, Any]:
     """Start a library scan (DEPRECATED - use /import/scan instead).
-    
+
     Hey future me - this endpoint is deprecated!
     Use POST /library/import/scan for new integrations.
     This exists only for backward compatibility with old clients.
@@ -99,7 +97,7 @@ async def start_library_scan(
     logger.warning(
         "DEPRECATED: /library/scan endpoint called. Use /library/import/scan instead!"
     )
-    
+
     try:
         # Queue the scan job using new JobQueue system
         job_id = await job_queue.enqueue(
@@ -134,7 +132,7 @@ async def get_scan_status(
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> ScanResponse:
     """Get library scan status (DEPRECATED - use /import/status/{job_id} instead).
-    
+
     Hey future me - this endpoint is deprecated!
     Use GET /library/import/status/{job_id} for new integrations.
 

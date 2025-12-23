@@ -18,18 +18,18 @@ Architektur:
 """
 
 # Download Providers
+from soulspot.infrastructure.providers.deezer_image_provider import (
+    DeezerImageProvider,
+)
+from soulspot.infrastructure.providers.image_registry import (
+    ImageProviderRegistry,
+)
 from soulspot.infrastructure.providers.registry import DownloadProviderRegistry
 from soulspot.infrastructure.providers.slskd_provider import SlskdDownloadProvider
 
 # Image Providers
 from soulspot.infrastructure.providers.spotify_image_provider import (
     SpotifyImageProvider,
-)
-from soulspot.infrastructure.providers.deezer_image_provider import (
-    DeezerImageProvider,
-)
-from soulspot.infrastructure.providers.image_registry import (
-    ImageProviderRegistry,
 )
 
 __all__ = [

@@ -10,6 +10,7 @@ This file will be removed in a future version.
 """
 
 import warnings
+
 warnings.warn(
     "artwork.py is deprecated. Use images.py instead.",
     DeprecationWarning,

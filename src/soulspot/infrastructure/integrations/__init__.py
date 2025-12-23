@@ -9,6 +9,7 @@ from soulspot.infrastructure.integrations.deezer_client import (
     DeezerClient,
     DeezerOAuthConfig,
 )
+
 # NOTE (Dec 2025): DeezerOAuthClient REMOVED - was a stub, DeezerClient has OAuth methods!
 from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 from soulspot.infrastructure.integrations.lastfm_client import LastfmClient

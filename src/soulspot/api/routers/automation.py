@@ -7,8 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
@@ -17,6 +15,7 @@ from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.domain.value_objects import ArtistId, WatchlistId
+from soulspot.infrastructure.observability.log_messages import LogMessages
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -1365,7 +1364,7 @@ async def bulk_create_watchlists(
                     quality_profile=request.quality_profile,
                 )
                 created_count += 1
-            except Exception as e:
+            except Exception:
                 logger.error(
                     LogMessages.sync_failed(
                         sync_type="watchlist_creation",

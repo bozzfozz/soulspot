@@ -21,7 +21,7 @@ Clean Architecture:
 
 Example:
     mapper = ProviderMappingService(session)
-    
+
     # Artist lookup with internal ID resolution
     artist_dto = await spotify_plugin.get_artist("0TnOYISbd1XYRBk9myaseg")
     mapped_dto = await mapper.map_artist_dto(artist_dto)
@@ -35,6 +35,7 @@ Key Principle:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING
 
@@ -56,10 +57,10 @@ logger = logging.getLogger(__name__)
 
 class ProviderMappingService:
     """Maps external service IDs to internal UUIDs via Repositories.
-    
+
     Hey future me – this is the SINGLE POINT for ID translation!
     All ID lookups and creations go through here.
-    
+
     CLEAN ARCHITECTURE:
     - Uses Repositories, not direct Model access
     - Creates Domain Entities, not ORM Models
@@ -68,7 +69,7 @@ class ProviderMappingService:
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize with database session for repository access.
-        
+
         Hey future me – wir erstellen Repositories hier statt sie zu injecten,
         weil dieser Service ein "Helper" ist, kein Full-Service mit eigener DI.
         Die Session wird durchgereicht, das ist der wichtige Teil.
@@ -84,15 +85,15 @@ class ProviderMappingService:
 
     async def map_artist_dto(self, dto: ArtistDTO) -> ArtistDTO:
         """Add internal_id to ArtistDTO if artist exists in database.
-        
+
         Hey future me – this does NOT create the artist, just adds the internal_id
         if we find a match. Use get_or_create_artist() to create if needed.
-        
+
         Lookup order:
         1. spotify_uri (most reliable for Spotify data)
         2. deezer_id (for Deezer data)
         3. Name matching (fallback)
-        
+
         Returns:
             Same DTO with internal_id set (or None if not found)
         """
@@ -135,14 +136,14 @@ class ProviderMappingService:
         source: str = "spotify",
     ) -> tuple[str, bool]:
         """Get existing artist UUID or create new one.
-        
+
         Hey future me – this is the CREATE-IF-NOT-EXISTS pattern via Repository.
         Returns (internal_uuid, was_created).
-        
+
         Args:
             dto: Artist data from plugin
             source: Source to use if creating ('local', 'spotify', 'deezer')
-        
+
         Returns:
             Tuple of (internal UUID string, was_created boolean)
         """
@@ -153,14 +154,12 @@ class ProviderMappingService:
 
         # Not found - create new artist via Repository
         artist_source = self._parse_source(source)
-        
+
         # Build SpotifyUri if we have spotify_id
         spotify_uri = None
         if dto.spotify_uri:
-            try:
+            with contextlib.suppress(ValueError):
                 spotify_uri = SpotifyUri.from_string(dto.spotify_uri)
-            except ValueError:
-                pass
         elif dto.spotify_id:
             spotify_uri = SpotifyUri.from_string(f"spotify:artist:{dto.spotify_id}")
 
@@ -211,11 +210,11 @@ class ProviderMappingService:
 
     async def map_album_dto(self, dto: AlbumDTO) -> AlbumDTO:
         """Add internal_id to AlbumDTO if album exists in database.
-        
+
         Lookup order:
         1. spotify_uri
         2. deezer_id
-        
+
         Returns:
             Same DTO with internal_id set (or None if not found)
         """
@@ -252,12 +251,12 @@ class ProviderMappingService:
         source: str = "spotify",
     ) -> tuple[str, bool]:
         """Get existing album UUID or create new one.
-        
+
         Args:
             dto: Album data from plugin
             artist_internal_id: Internal UUID of the artist (must exist!)
             source: Source to use if creating
-        
+
         Returns:
             Tuple of (internal UUID string, was_created boolean)
         """
@@ -269,10 +268,8 @@ class ProviderMappingService:
         # Not found - create new album via Repository
         spotify_uri = None
         if dto.spotify_uri:
-            try:
+            with contextlib.suppress(ValueError):
                 spotify_uri = SpotifyUri.from_string(dto.spotify_uri)
-            except ValueError:
-                pass
         elif dto.spotify_id:
             spotify_uri = SpotifyUri.from_string(f"spotify:album:{dto.spotify_id}")
 
@@ -327,12 +324,12 @@ class ProviderMappingService:
 
     async def map_track_dto(self, dto: TrackDTO) -> TrackDTO:
         """Add internal_id to TrackDTO if track exists in database.
-        
+
         Lookup order:
         1. ISRC (international standard, best for matching)
         2. spotify_uri
         3. deezer_id
-        
+
         Returns:
             Same DTO with internal_id set (or None if not found)
         """
@@ -376,13 +373,13 @@ class ProviderMappingService:
         source: str = "spotify",
     ) -> tuple[str, bool]:
         """Get existing track UUID or create new one.
-        
+
         Args:
             dto: Track data from plugin
             artist_internal_id: Internal UUID of the artist (must exist!)
             album_internal_id: Internal UUID of the album (optional for singles)
             source: Source to use if creating
-        
+
         Returns:
             Tuple of (internal UUID string, was_created boolean)
         """
@@ -394,10 +391,8 @@ class ProviderMappingService:
         # Not found - create new track via Repository
         spotify_uri = None
         if dto.spotify_uri:
-            try:
+            with contextlib.suppress(ValueError):
                 spotify_uri = SpotifyUri.from_string(dto.spotify_uri)
-            except ValueError:
-                pass
         elif dto.spotify_id:
             spotify_uri = SpotifyUri.from_string(f"spotify:track:{dto.spotify_id}")
 
@@ -475,7 +470,7 @@ class ProviderMappingService:
     @staticmethod
     def _parse_source(source: str) -> ArtistSource:
         """Convert source string to ArtistSource enum.
-        
+
         Hey future me – wir haben nur LOCAL, SPOTIFY, HYBRID.
         Deezer und Tidal werden als SPOTIFY behandelt (external service).
         """

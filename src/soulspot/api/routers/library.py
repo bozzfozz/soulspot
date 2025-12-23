@@ -55,8 +55,6 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.infrastructure.observability.log_messages import LogMessages
-
 from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
@@ -73,10 +71,10 @@ from soulspot.application.use_cases.re_download_broken import (
 from soulspot.application.use_cases.scan_library import (
     GetBrokenFilesUseCase,
     GetDuplicatesUseCase,
-    ScanLibraryUseCase,
 )
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.config import Settings, get_settings
+from soulspot.infrastructure.observability.log_messages import LogMessages
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -160,7 +158,7 @@ async def start_library_scan(
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> dict[str, Any]:
     """Start a library scan (DEPRECATED - use /library/import/scan instead).
-    
+
     This endpoint is deprecated and redirects to the new JobQueue-based scan.
     Use POST /library/import/scan for new integrations!
 
@@ -174,7 +172,7 @@ async def start_library_scan(
     logger.warning(
         "DEPRECATED: /library/scan endpoint called. Use /library/import/scan instead!"
     )
-    
+
     try:
         # Queue the scan job using new JobQueue system
         job_id = await job_queue.enqueue(
@@ -209,7 +207,7 @@ async def get_scan_status(
     job_queue: JobQueue = Depends(get_job_queue),
 ) -> ScanResponse:
     """Get library scan status (DEPRECATED - use /library/import/status/{job_id} instead).
-    
+
     This endpoint is deprecated and redirects to the new JobQueue-based status.
     Use GET /library/import/status/{job_id} for new integrations!
 
@@ -224,17 +222,17 @@ async def get_scan_status(
         "DEPRECATED: /library/scan/{scan_id} endpoint called. "
         "Use /library/import/status/{job_id} instead!"
     )
-    
+
     try:
         # Try to get job from queue (scan_id is actually job_id now)
         job = await job_queue.get_job(scan_id)
-        
+
         if not job:
             raise HTTPException(status_code=404, detail="Scan/Job not found")
-        
+
         result = job.result or {}
         stats = result.get("stats", {})
-        
+
         return ScanResponse(
             scan_id=scan_id,
             status=job.status,
@@ -282,7 +280,7 @@ async def get_duplicate_files(
 
     Hey future me - these are EXACT duplicates (identical file content).
     Detected during library import when file_hash matches.
-    
+
     Different from /duplicates/candidates which finds SIMILAR tracks
     (fuzzy matching by title/artist/duration).
 
@@ -300,7 +298,7 @@ async def get_duplicate_files(
     # We apply it after the query - not ideal but works for now.
     # TODO: Add pagination to GetDuplicatesUseCase for better performance.
     all_duplicates = await use_case.execute(resolved=resolved)
-    
+
     # Apply pagination
     total = len(all_duplicates)
     duplicates = all_duplicates[offset:offset + limit]
@@ -959,15 +957,15 @@ async def clear_entire_library(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """⚠️ DEV ONLY: Clear ENTIRE library (local + Spotify + Deezer + Tidal).
-    
+
     Hey future me - this is the ULTRA NUCLEAR OPTION! Only for development/testing!
     DELETES EVERYTHING:
     - ALL artists (local + Spotify + Deezer + hybrid)
     - ALL albums (local + Spotify + Deezer + hybrid)
     - ALL tracks (local + Spotify + Deezer + hybrid)
-    
+
     ⚠️ PROTECTED: Only available when DEBUG mode is enabled!
-    
+
     Returns:
         Statistics about deleted entities
     """
@@ -978,25 +976,24 @@ async def clear_entire_library(
             detail="This endpoint is only available in DEBUG mode. "
                    "Set DEBUG=true in your configuration to enable it.",
         )
-    
-    from sqlalchemy import delete, func, select
+
     from soulspot.infrastructure.persistence.models import (
-        ArtistModel,
         AlbumModel,
+        ArtistModel,
         TrackModel,
     )
-    
+
     # Count before deletion
     artists_count = await session.scalar(select(func.count(ArtistModel.id)))
     albums_count = await session.scalar(select(func.count(AlbumModel.id)))
     tracks_count = await session.scalar(select(func.count(TrackModel.id)))
-    
+
     # Nuclear option: DELETE EVERYTHING (CASCADE will handle relationships)
     await session.execute(delete(TrackModel))
     await session.execute(delete(AlbumModel))
     await session.execute(delete(ArtistModel))
     await session.commit()
-    
+
     return {
         "success": True,
         "message": "⚠️ ENTIRE library cleared (local + Spotify + Deezer + Tidal)",
@@ -1063,7 +1060,7 @@ async def list_duplicate_candidates(
 
     Hey future me - these are SIMILAR tracks (fuzzy matching)!
     Created by DuplicateDetectorWorker based on title/artist/duration.
-    
+
     Different from /duplicates/files which finds EXACT duplicates
     (same file hash = identical content).
 
@@ -1160,7 +1157,7 @@ async def trigger_duplicate_scan(
     request: Request,
 ) -> dict[str, Any]:
     """Trigger a manual duplicate candidates scan.
-    
+
     Hey future me - this scans for SIMILAR tracks using fuzzy matching
     (title, artist, duration). Different from import-time hash detection.
 
@@ -1317,7 +1314,6 @@ async def preview_batch_rename(
         )
 
     # Get tracks with file paths
-    from sqlalchemy import select
 
     stmt = (
         select(TrackModel).where(TrackModel.file_path.isnot(None)).limit(request.limit)
@@ -1452,7 +1448,6 @@ async def execute_batch_rename(
         )
 
     # Get tracks with file paths
-    from sqlalchemy import select
 
     stmt = select(TrackModel).where(TrackModel.file_path.isnot(None))
     if request.limit:
@@ -1949,7 +1944,9 @@ async def enrich_disambiguation(
     from soulspot.application.services.musicbrainz_enrichment_service import (
         MusicBrainzEnrichmentService,
     )
-    from soulspot.infrastructure.integrations.musicbrainz_client import MusicBrainzClient
+    from soulspot.infrastructure.integrations.musicbrainz_client import (
+        MusicBrainzClient,
+    )
 
     # Create MusicBrainz client and settings service
     mb_client = MusicBrainzClient(settings.musicbrainz)

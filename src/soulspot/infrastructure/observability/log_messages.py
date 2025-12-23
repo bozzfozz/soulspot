@@ -1,7 +1,7 @@
 """Structured log message templates for consistent, human-readable logging.
 
 Hey future me - This module provides standardized log message templates that make logs
-ACTUALLY USEFUL for debugging! Instead of cryptic messages like "Error: All connection 
+ACTUALLY USEFUL for debugging! Instead of cryptic messages like "Error: All connection
 attempts failed", we now have:
 
     🔴 slskd Connection Failed
@@ -17,7 +17,7 @@ The templates follow these principles:
 
 Usage:
     from soulspot.infrastructure.observability.log_messages import LogMessages
-    
+
     logger.error(LogMessages.connection_failed(
         service="slskd",
         target="http://slskd:5030",
@@ -32,43 +32,43 @@ from typing import Any
 @dataclass
 class LogTemplate:
     """A reusable log message template with placeholders.
-    
+
     Hey future me - This is a structured template that can be formatted with specific
     values. The format() method replaces {placeholders} with actual values and adds
     visual formatting (icons, tree structure, hints).
     """
-    
+
     icon: str
     title: str
     fields: dict[str, str]
     hint: str | None = None
-    
+
     def format(self, **kwargs: Any) -> str:
         """Format the template with provided values.
-        
+
         Args:
             **kwargs: Values to fill into template placeholders
-            
+
         Returns:
             Formatted multi-line log message with icon, title, fields, and optional hint
         """
         # Title line with icon
         lines = [f"{self.icon} {self.title}"]
-        
+
         # Field lines with tree structure
         field_items = list(self.fields.items())
         for i, (key, value_template) in enumerate(field_items):
             # Last field uses └─ instead of ├─
             prefix = "└─" if i == len(field_items) - 1 and not self.hint else "├─"
-            
+
             # Format value template with kwargs
             try:
                 value = value_template.format(**kwargs)
             except KeyError as e:
                 value = f"<missing: {e}>"
-            
+
             lines.append(f"{prefix} {key}: {value}")
-        
+
         # Optional hint
         if self.hint:
             try:
@@ -76,20 +76,20 @@ class LogTemplate:
             except KeyError as e:
                 hint_text = f"<missing: {e}>"
             lines.append(f"└─ 💡 {hint_text}")
-        
+
         return "\n".join(lines)
 
 
 class LogMessages:
     """Collection of standardized log message templates.
-    
+
     Hey future me - This is THE place for all log messages! Instead of scattered
     f-strings throughout the codebase, we centralize message formatting here. Benefits:
     - Consistent formatting across the app
     - Easy to update messages without touching business logic
     - Better i18n support in the future
     - Enforces including helpful context/hints
-    
+
     Template categories:
     - Connection errors (network, HTTP, database)
     - Worker lifecycle (start/stop/error)
@@ -97,9 +97,9 @@ class LogMessages:
     - File operations (import, move, delete)
     - Authentication (OAuth, tokens)
     """
-    
+
     # === Connection Errors ===
-    
+
     @staticmethod
     def connection_failed(
         service: str,
@@ -108,16 +108,16 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a connection failure message.
-        
+
         Args:
             service: Service name (e.g., "slskd", "Spotify", "MusicBrainz")
             target: Connection target (URL, host:port)
             error: Error message from exception
             hint: Custom troubleshooting hint
-            
+
         Returns:
             Formatted log message
-            
+
         Example:
             logger.error(LogMessages.connection_failed(
                 service="slskd",
@@ -129,9 +129,9 @@ class LogMessages:
         fields = {"Service": service, "Target": target}
         if error:
             fields["Reason"] = error
-        
+
         default_hint = f"Check if {service} is running and accessible"
-        
+
         template = LogTemplate(
             icon="🔴",
             title=f"{service} Connection Failed",
@@ -139,7 +139,7 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
     @staticmethod
     def connection_timeout(
         service: str,
@@ -147,14 +147,14 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a connection timeout message.
-        
+
         Args:
             service: Service name
             timeout: Timeout duration in seconds
             hint: Custom troubleshooting hint
         """
         default_hint = f"Increase timeout or check {service} performance"
-        
+
         template = LogTemplate(
             icon="⏱️",
             title=f"{service} Connection Timeout",
@@ -162,9 +162,9 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
     # === Worker Lifecycle ===
-    
+
     @staticmethod
     def worker_started(
         worker: str,
@@ -172,7 +172,7 @@ class LogMessages:
         config: dict[str, Any] | None = None
     ) -> str:
         """Format a worker start message.
-        
+
         Args:
             worker: Worker name
             interval: Check interval in seconds (if applicable)
@@ -184,14 +184,14 @@ class LogMessages:
         if config:
             for key, value in config.items():
                 fields[key] = str(value)
-        
+
         template = LogTemplate(
             icon="✅",
             title=f"{worker} Started",
             fields=fields
         )
         return template.format()
-    
+
     @staticmethod
     def worker_failed(
         worker: str,
@@ -200,7 +200,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a worker failure message.
-        
+
         Args:
             worker: Worker name
             error: Error description
@@ -208,7 +208,7 @@ class LogMessages:
             hint: Custom troubleshooting hint
         """
         status = "Will retry" if will_retry else "Stopped"
-        
+
         template = LogTemplate(
             icon="❌",
             title=f"{worker} Failed",
@@ -216,9 +216,9 @@ class LogMessages:
             hint=hint
         )
         return template.format()
-    
+
     # === Data Sync ===
-    
+
     @staticmethod
     def sync_started(
         entity: str,
@@ -226,7 +226,7 @@ class LogMessages:
         count: int | None = None
     ) -> str:
         """Format a sync start message.
-        
+
         Args:
             entity: What is being synced (e.g., "Followed Artists", "Playlists")
             source: Source service (e.g., "Spotify", "Deezer")
@@ -235,14 +235,14 @@ class LogMessages:
         fields = {"Source": source}
         if count is not None:
             fields["Items"] = str(count)
-        
+
         template = LogTemplate(
             icon="🔄",
             title=f"Syncing {entity}",
             fields=fields
         )
         return template.format()
-    
+
     @staticmethod
     def sync_completed(
         entity: str,
@@ -252,7 +252,7 @@ class LogMessages:
         errors: int = 0
     ) -> str:
         """Format a sync completion message.
-        
+
         Args:
             entity: What was synced
             added: Number of items added
@@ -268,14 +268,14 @@ class LogMessages:
         }
         if errors > 0:
             fields["Errors"] = str(errors)
-        
+
         template = LogTemplate(
             icon=icon,
             title=f"{entity} Sync Complete",
             fields=fields
         )
         return template.format()
-    
+
     @staticmethod
     def sync_failed(
         entity: str,
@@ -284,7 +284,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a sync failure message.
-        
+
         Args:
             entity: What failed to sync
             source: Source service
@@ -292,7 +292,7 @@ class LogMessages:
             hint: Custom troubleshooting hint
         """
         default_hint = f"Check {source} authentication and API status"
-        
+
         template = LogTemplate(
             icon="❌",
             title=f"{entity} Sync Failed",
@@ -300,9 +300,9 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
     # === File Operations ===
-    
+
     @staticmethod
     def file_imported(
         filename: str,
@@ -310,7 +310,7 @@ class LogMessages:
         destination: str
     ) -> str:
         """Format a file import success message.
-        
+
         Args:
             filename: File being imported
             source: Source path
@@ -326,7 +326,7 @@ class LogMessages:
             }
         )
         return template.format()
-    
+
     @staticmethod
     def file_skipped(
         filename: str,
@@ -334,7 +334,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a file skip message.
-        
+
         Args:
             filename: File being skipped
             reason: Why it was skipped
@@ -347,7 +347,7 @@ class LogMessages:
             hint=hint
         )
         return template.format()
-    
+
     @staticmethod
     def file_operation_failed(
         operation: str,
@@ -356,7 +356,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a file operation failure message.
-        
+
         Args:
             operation: Operation that failed (e.g., "Move", "Delete", "Rename")
             filename: File involved
@@ -370,9 +370,9 @@ class LogMessages:
             hint=hint
         )
         return template.format()
-    
+
     # === Authentication ===
-    
+
     @staticmethod
     def auth_required(
         service: str,
@@ -380,14 +380,14 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format an authentication required message.
-        
+
         Args:
             service: Service requiring auth
             feature: Feature that needs auth
             hint: How to authenticate
         """
         default_hint = f"Configure {service} authentication in Settings → Providers"
-        
+
         template = LogTemplate(
             icon="🔑",
             title=f"{service} Authentication Required",
@@ -395,7 +395,7 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
     @staticmethod
     def token_expired(
         service: str,
@@ -403,7 +403,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a token expiration message.
-        
+
         Args:
             service: Service with expired token
             expires_at: When it expired
@@ -412,9 +412,9 @@ class LogMessages:
         fields = {}
         if expires_at:
             fields["Expired"] = expires_at
-        
+
         default_hint = f"Re-authenticate with {service} to refresh token"
-        
+
         template = LogTemplate(
             icon="⏰",
             title=f"{service} Token Expired",
@@ -422,9 +422,9 @@ class LogMessages:
             hint=hint or default_hint
         )
         return template.format()
-    
+
     # === Download Operations ===
-    
+
     @staticmethod
     def download_started(
         track: str,
@@ -432,7 +432,7 @@ class LogMessages:
         quality: str | None = None
     ) -> str:
         """Format a download start message.
-        
+
         Args:
             track: Track title
             artist: Artist name
@@ -441,14 +441,14 @@ class LogMessages:
         fields = {"Track": track, "Artist": artist}
         if quality:
             fields["Quality"] = quality
-        
+
         template = LogTemplate(
             icon="⬇️",
             title="Download Started",
             fields=fields
         )
         return template.format()
-    
+
     @staticmethod
     def download_completed(
         track: str,
@@ -457,7 +457,7 @@ class LogMessages:
         duration: float | None = None
     ) -> str:
         """Format a download completion message.
-        
+
         Args:
             track: Track title
             artist: Artist name
@@ -467,14 +467,14 @@ class LogMessages:
         fields = {"Track": track, "Artist": artist, "Path": file_path}
         if duration:
             fields["Duration"] = f"{duration:.1f}s"
-        
+
         template = LogTemplate(
             icon="✅",
             title="Download Complete",
             fields=fields
         )
         return template.format()
-    
+
     @staticmethod
     def download_failed(
         track: str,
@@ -483,7 +483,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format a download failure message.
-        
+
         Args:
             track: Track title
             artist: Artist name
@@ -491,7 +491,7 @@ class LogMessages:
             hint: Troubleshooting hint
         """
         default_hint = "Check slskd connection and search results"
-        
+
         template = LogTemplate(
             icon="❌",
             title="Download Failed",
@@ -603,7 +603,7 @@ class LogMessages:
         return template.format()
 
     # === Configuration ===
-    
+
     @staticmethod
     def config_invalid(
         setting: str,
@@ -612,7 +612,7 @@ class LogMessages:
         hint: str | None = None
     ) -> str:
         """Format an invalid configuration message.
-        
+
         Args:
             setting: Setting name
             value: Invalid value

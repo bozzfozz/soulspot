@@ -33,14 +33,14 @@ RETRYABLE (transient issues - try again later):
 
 USAGE:
     from soulspot.domain.entities.error_codes import (
-        DownloadErrorCode, 
+        DownloadErrorCode,
         is_retryable_error,
         get_error_description,
     )
-    
+
     # In download worker:
     error_code = DownloadErrorCode.TIMEOUT
-    
+
     # In retry scheduler:
     if is_retryable_error(download.last_error_code):
         download.schedule_retry()

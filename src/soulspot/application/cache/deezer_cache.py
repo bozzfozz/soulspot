@@ -25,7 +25,7 @@ class DeezerCache:
 
     Cache keys are constructed from Deezer IDs to ensure
     unique caching per resource.
-    
+
     Hey future me - Deezer IDs are integers (unlike Spotify's alphanumeric).
     We convert to string for cache key consistency.
     """

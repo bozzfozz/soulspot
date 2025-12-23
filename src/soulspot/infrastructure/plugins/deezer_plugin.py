@@ -1359,12 +1359,12 @@ class DeezerPlugin(IMusicServicePlugin):
 
         Hey future me - DAS ist die RICHTIGE Methode für New Releases!
         Zeigt NUR Releases von Artists denen du folgst, NICHT alle Editorial/Charts!
-        
-        Wie Spotify: 
+
+        Wie Spotify:
         1. Holt alle Followed Artists
         2. Für jeden Artist: Recent Albums holen
         3. Filtert nach Release-Datum
-        
+
         WICHTIG: Braucht OAuth (User muss bei Deezer eingeloggt sein)!
         Wenn nicht authenticated, gibt leere Liste zurück mit Warning.
 
@@ -1376,7 +1376,7 @@ class DeezerPlugin(IMusicServicePlugin):
         Returns:
             List of AlbumDTOs from followed artists within timeframe
         """
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime, timedelta
 
         # Check if authenticated - New Releases from followed needs OAuth!
         if not self.is_authenticated:
@@ -1394,7 +1394,7 @@ class DeezerPlugin(IMusicServicePlugin):
             # Step 1: Get all followed artists (paginated)
             all_artists: list[ArtistDTO] = []
             after: str | None = None
-            
+
             while True:
                 result = await self.get_followed_artists(limit=50, after=after)
                 all_artists.extend(result.items)
@@ -1509,13 +1509,13 @@ class DeezerPlugin(IMusicServicePlugin):
 
         Hey future me – der zentrale Album-Konverter!
         Wird von allen Methoden genutzt die Alben zurückgeben.
-        
+
         WICHTIG: Konvertiert Deezer record_type zu standardisiertem primary_type:
         - "album" → "album"
         - "ep" → "ep"
         - "single" → "single"
         - "compile" → "album" (Deezer's "compile" is treated as regular album, not compilation)
-        
+
         NOTE: Deezer's "compile" record_type does NOT reliably indicate compilation albums
         (various artists). True compilations should be detected by checking track-level
         artist diversity, not by record_type alone.
@@ -1530,20 +1530,20 @@ class DeezerPlugin(IMusicServicePlugin):
         record_type = deezer_album.record_type or "album"
         primary_type = record_type
         secondary_types = []
-        
+
         # Deezer uses "compile" as a record_type, OFFICIALLY meaning "compilation/collection"
         # BUT in practice, Deezer marks many regular artist albums as "compile" (API inconsistency).
         # Examples: "Drokz" albums are marked "compile" but are NOT various-artists compilations.
-        # 
+        #
         # TRADE-OFF DECISION: Treat "compile" as "album" to avoid hiding regular albums.
         # Side effect: TRUE compilations marked as "compile" won't be filterable via include_compilations.
-        # 
+        #
         # TODO: Implement smart compilation detection by checking track-level artist diversity
         # instead of relying on Deezer's unreliable record_type field.
         if record_type == "compile":
             primary_type = "album"
             # Don't automatically add "compilation" to secondary_types
-        
+
         return AlbumDTO(
             title=deezer_album.title,
             artist_name=deezer_album.artist_name,
