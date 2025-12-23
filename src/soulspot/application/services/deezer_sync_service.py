@@ -662,15 +662,19 @@ class DeezerSyncService:
 
                 # Download album cover if URL changed or no local copy (Deezer provider)
                 # Hey future me - we use OLD values here to detect changes!
-                if self._image_service and album_dto.deezer_id and dto_cover_url:
-                    if await self._image_service.should_redownload(
+                if (
+                    self._image_service
+                    and album_dto.deezer_id
+                    and dto_cover_url
+                    and await self._image_service.should_redownload(
                         old_cover_url, dto_cover_url, old_cover_path
-                    ):
-                        cover_path = await self._image_service.download_album_image(
-                            album_dto.deezer_id, dto_cover_url, provider="deezer"
-                        )
-                        if cover_path:
-                            existing.cover_path = cover_path
+                    )
+                ):
+                    cover_path = await self._image_service.download_album_image(
+                        album_dto.deezer_id, dto_cover_url, provider="deezer"
+                    )
+                    if cover_path:
+                        existing.cover_path = cover_path
             else:
                 # Download album cover for new album (Deezer provider)
                 cover_path = None

@@ -1300,9 +1300,10 @@ class BlocklistEntry:
             raise ValueError("USERNAME scope requires username")
         if self.scope == BlocklistScope.FILEPATH and self.filepath is None:
             raise ValueError("FILEPATH scope requires filepath")
-        if self.scope == BlocklistScope.SPECIFIC:
-            if self.username is None or self.filepath is None:
-                raise ValueError("SPECIFIC scope requires both username and filepath")
+        if self.scope == BlocklistScope.SPECIFIC and (
+            self.username is None or self.filepath is None
+        ):
+            raise ValueError("SPECIFIC scope requires both username and filepath")
 
     def is_expired(self) -> bool:
         """Check if this block has expired."""

@@ -161,14 +161,18 @@ class DiscoverService:
         tasks: list[asyncio.Task[list[tuple[DiscoveredArtist, str]]]] = []
 
         # Spotify Related Artists
-        if "spotify" in providers and self._spotify and spotify_id:
-            if self._spotify.can_use(PluginCapability.GET_RELATED_ARTISTS):
-                tasks.append(
-                    asyncio.create_task(
-                        self._fetch_spotify_related(spotify_id, limit),
-                        name="spotify_related"
-                    )
+        if (
+            "spotify" in providers
+            and self._spotify
+            and spotify_id
+            and self._spotify.can_use(PluginCapability.GET_RELATED_ARTISTS)
+        ):
+            tasks.append(
+                asyncio.create_task(
+                    self._fetch_spotify_related(spotify_id, limit),
+                    name="spotify_related"
                 )
+            )
 
         # Deezer Related Artists
         if "deezer" in providers and self._deezer:
