@@ -60,6 +60,10 @@ class LibraryScanWorker:
         self._job_queue.register_handler(
             JobType.LIBRARY_SCAN_CLEANUP, self._handle_cleanup_job
         )
+        self._job_queue.register_handler(
+            JobType.LIBRARY_SPOTIFY_ENRICHMENT,
+            self._handle_spotify_enrichment_job,
+        )
 
     async def _handle_scan_job(self, job: Job) -> dict[str, Any]:
         """Handle a library scan job.
@@ -230,6 +234,12 @@ class LibraryScanWorker:
             logger.debug("Auto-enrichment disabled, skipping")
             return
 
+        # Hey future me - this job type is Spotify-specific.
+        # If Spotify provider is OFF, don't enqueue a job that would just skip/fail.
+        if not await settings_service.is_provider_enabled("spotify"):
+            logger.debug("Spotify provider disabled, skipping enrichment")
+            return
+
         # Check if anything was imported that needs enrichment
         new_artists = scan_stats.get("new_artists", 0)
         new_albums = scan_stats.get("new_albums", 0)
@@ -251,3 +261,43 @@ class LibraryScanWorker:
                 "new_albums": new_albums,
             },
         )
+
+    # Hey future me - this handler exists because the API and scan worker enqueue
+    # LIBRARY_SPOTIFY_ENRICHMENT jobs, but originally nobody registered a handler.
+    # Rather than failing/retrying forever, we run one discovery/enrichment cycle
+    # (which already contains all the provider-availability checks).
+    async def _handle_spotify_enrichment_job(self, job: Job) -> dict[str, Any]:
+        """Handle a Spotify library enrichment job.
+
+        Args:
+            job: The job to process
+
+        Returns:
+            Result dictionary with enrichment/discovery stats
+        """
+        from soulspot.application.workers.library_discovery_worker import (
+            LibraryDiscoveryWorker,
+        )
+
+        logger.info(
+            f"Starting library Spotify enrichment job {job.id} "
+            f"(triggered_by={job.payload.get('triggered_by')})"
+        )
+
+        discovery_worker = LibraryDiscoveryWorker(
+            db=self.db,
+            settings=self.settings,
+        )
+
+        # NOTE: We intentionally call the discovery worker's internal one-shot cycle
+        # here to reuse its multi-provider availability and merge logic.
+        stats = await discovery_worker._run_discovery_cycle()
+
+        logger.info(
+            f"Library Spotify enrichment job {job.id} complete: "
+            f"{stats.get('artists_enriched', 0)} artists, "
+            f"{stats.get('albums_enriched', 0)} albums, "
+            f"{stats.get('tracks_enriched', 0)} tracks"
+        )
+
+        return stats

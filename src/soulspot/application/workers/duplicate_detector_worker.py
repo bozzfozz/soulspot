@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     pass
 
 from soulspot.application.services.app_settings_service import AppSettingsService
-from soulspot.application.workers.job_queue import JobQueue, JobType
+from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,13 @@ class DuplicateDetectorWorker:
         """
         self._job_queue = job_queue
         self._settings = settings_service
+
+        # Hey future me - we enqueue DUPLICATE_SCAN jobs for tracking, so we must
+        # register a handler or JobQueue will fail with "No handler registered".
+        self._job_queue.register_handler(
+            JobType.DUPLICATE_SCAN,
+            self._handle_duplicate_scan_job,
+        )
 
         # Backwards compatibility: if only session_factory provided, use it as session_scope
         # Hey future me - session_factory was already a context manager in _run_scan!
@@ -678,8 +685,26 @@ class DuplicateDetectorWorker:
             payload={"trigger": "manual", "timestamp": datetime.now(UTC).isoformat()},
         )
         logger.info(f"Manual duplicate scan triggered, job_id={job_id}")
-
-        # Run scan in background
-        asyncio.create_task(self._run_scan())
-
         return job_id
+
+    # Hey future me - JobQueue calls this for DUPLICATE_SCAN jobs.
+    # We delegate to the existing _run_scan() implementation so we don't duplicate logic.
+    async def _handle_duplicate_scan_job(self, job: Job) -> dict[str, Any]:
+        """Handle a duplicate scan job from the JobQueue.
+
+        Args:
+            job: The job to process
+
+        Returns:
+            Scan summary stats
+        """
+        logger.info(
+            f"Starting duplicate scan job {job.id} "
+            f"(trigger={job.payload.get('trigger')})"
+        )
+
+        result = await self._run_scan()
+
+        if isinstance(result, dict):
+            return result
+        return {"result": result}

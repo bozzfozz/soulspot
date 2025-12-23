@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     pass
 
 from soulspot.application.services.app_settings_service import AppSettingsService
-from soulspot.application.workers.job_queue import JobQueue, JobType
+from soulspot.application.workers.job_queue import Job, JobQueue, JobType
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,10 @@ class CleanupWorker:
         self._music_path = music_path
         self._temp_path = temp_path
         self._dry_run = dry_run
+
+        # Hey future me - if we enqueue CLEANUP jobs, we MUST register a handler.
+        # Otherwise JobQueue will retry forever with "No handler registered".
+        self._job_queue.register_handler(JobType.CLEANUP, self._handle_cleanup_job)
 
         self._running = False
         self._task: asyncio.Task[None] | None = None
@@ -331,8 +335,31 @@ class CleanupWorker:
             payload={"trigger": "manual", "timestamp": datetime.now(UTC).isoformat()},
         )
         logger.info(f"Manual cleanup triggered, job_id={job_id}")
-
-        # Run cleanup in background
-        asyncio.create_task(self._run_cleanup())
-
         return job_id
+
+    # Hey future me - this handler is what JobQueue actually executes for CLEANUP jobs.
+    # We keep cleanup logic in _run_cleanup(), but expose a JobQueue entrypoint so
+    # enqueued jobs don't crash the dispatcher.
+    async def _handle_cleanup_job(self, job: Job) -> dict[str, Any]:
+        """Handle a cleanup job from the JobQueue.
+
+        Args:
+            job: The job to process
+
+        Returns:
+            Summary of what this run deleted/freed
+        """
+        before_deleted = int(self._stats.get("files_deleted") or 0)
+        before_freed = int(self._stats.get("bytes_freed") or 0)
+
+        await self._run_cleanup()
+
+        after_deleted = int(self._stats.get("files_deleted") or 0)
+        after_freed = int(self._stats.get("bytes_freed") or 0)
+
+        return {
+            "trigger": job.payload.get("trigger"),
+            "dry_run": self._dry_run,
+            "files_deleted": max(0, after_deleted - before_deleted),
+            "bytes_freed": max(0, after_freed - before_freed),
+        }
