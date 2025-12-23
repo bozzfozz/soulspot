@@ -63,7 +63,7 @@ result = await service.scan_and_import()  # Full DB import
 
 ## 🔄 Migration Path:
 
-**Old Code:**
+**Old Code (DEPRECATED - library_scanner.py removed in Dec 2025):**
 ```python
 from soulspot.application.services.library_scanner import LibraryScannerService
 ```
@@ -73,7 +73,7 @@ from soulspot.application.services.library_scanner import LibraryScannerService
 from soulspot.application.services.file_discovery_service import FileDiscoveryService
 ```
 
-**Backwards Compatibility:** Alias exists in `library_scanner.py` until next major version.
+**Note:** The backwards compatibility alias in `library_scanner.py` has been removed. Update all imports to use the new path.
 
 ---
 
