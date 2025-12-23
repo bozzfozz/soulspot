@@ -191,7 +191,7 @@ async def list_quality_profiles(
     return QualityProfileListResponse(
         profiles=[QualityProfileResponse.from_entity(p) for p in profiles],
         total=len(profiles),
-        active_id=active.id if active else None,
+        active_id=str(active.id) if active else None,
     )
 
 
