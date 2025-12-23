@@ -417,7 +417,9 @@ async def delete_all_artist_songs(
         )
     except Exception as e:
         await session.rollback()
-        logger.error(f"Failed to delete songs for artist {artist_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to delete songs for artist {artist_id}: {e}", exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete songs: {str(e)}",

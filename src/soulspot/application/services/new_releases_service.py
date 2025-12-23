@@ -148,7 +148,9 @@ class NewReleasesService:
                 )
                 tasks.append(("spotify", task))
             else:
-                logger.debug("NewReleasesService: Spotify skipped (not authenticated or capability unavailable)")
+                logger.debug(
+                    "NewReleasesService: Spotify skipped (not authenticated or capability unavailable)"
+                )
                 errors["spotify"] = "Not authenticated"
 
         # Deezer task - now uses get_new_releases() which requires auth!
@@ -169,7 +171,9 @@ class NewReleasesService:
                     "NewReleasesService: Deezer skipped (not authenticated). "
                     "User needs to connect Deezer to see releases from followed artists."
                 )
-                errors["deezer"] = "Not authenticated - connect Deezer to see releases from your followed artists"
+                errors["deezer"] = (
+                    "Not authenticated - connect Deezer to see releases from your followed artists"
+                )
 
         # Wait for all tasks
         for provider, task in tasks:
@@ -188,10 +192,7 @@ class NewReleasesService:
         deduped_albums = self._deduplicate_albums(all_albums)
 
         # Sort by release date (newest first)
-        deduped_albums.sort(
-            key=lambda a: a.release_date or "1900-01-01",
-            reverse=True
-        )
+        deduped_albums.sort(key=lambda a: a.release_date or "1900-01-01", reverse=True)
 
         logger.info(
             f"NewReleasesService: Total {total_before_dedup} → {len(deduped_albums)} after dedup"
@@ -254,9 +255,15 @@ class NewReleasesService:
 
         # Remove common suffixes that differ between services
         for suffix in [
-            "(deluxe)", "(deluxe edition)", "(expanded edition)",
-            "(remastered)", "(remaster)", "- single", "(single)",
-            "(ep)", "- ep"
+            "(deluxe)",
+            "(deluxe edition)",
+            "(expanded edition)",
+            "(remastered)",
+            "(remaster)",
+            "- single",
+            "(single)",
+            "(ep)",
+            "- ep",
         ]:
             album_norm = album_norm.replace(suffix, "").strip()
 

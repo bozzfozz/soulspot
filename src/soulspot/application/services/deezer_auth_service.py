@@ -75,9 +75,7 @@ class DeezerAuthService:
         self._client = DeezerClient(oauth_config=oauth_config)
 
     # Hey future me - simpler than Spotify! No PKCE, just state.
-    async def generate_auth_url(
-        self, state: str | None = None
-    ) -> DeezerAuthUrlResult:
+    async def generate_auth_url(self, state: str | None = None) -> DeezerAuthUrlResult:
         """Generate OAuth authorization URL.
 
         Creates a cryptographically secure state for CSRF protection.

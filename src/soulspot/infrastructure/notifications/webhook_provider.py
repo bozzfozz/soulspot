@@ -94,11 +94,19 @@ class WebhookNotificationProvider(INotificationProvider):
         settings_service = AppSettingsService(self._session)
 
         self._settings_cache = {
-            "enabled": await settings_service.get_bool("notification.webhook.enabled", False),
+            "enabled": await settings_service.get_bool(
+                "notification.webhook.enabled", False
+            ),
             "url": await settings_service.get_string("notification.webhook.url", ""),
-            "format": await settings_service.get_string("notification.webhook.format", "generic"),
-            "auth_header": await settings_service.get_string("notification.webhook.auth_header", ""),
-            "timeout": await settings_service.get_int("notification.webhook.timeout", 30),
+            "format": await settings_service.get_string(
+                "notification.webhook.format", "generic"
+            ),
+            "auth_header": await settings_service.get_string(
+                "notification.webhook.auth_header", ""
+            ),
+            "timeout": await settings_service.get_int(
+                "notification.webhook.timeout", 30
+            ),
         }
         self._cache_loaded = True
 
@@ -165,7 +173,9 @@ class WebhookNotificationProvider(INotificationProvider):
                 error=str(e),
             )
 
-    def _build_payload(self, notification: Notification, format_type: str) -> dict[str, Any]:
+    def _build_payload(
+        self, notification: Notification, format_type: str
+    ) -> dict[str, Any]:
         """Build webhook payload based on format type.
 
         Hey future me - add new formats here! Each service has its own structure.
@@ -187,9 +197,9 @@ class WebhookNotificationProvider(INotificationProvider):
         """
         # Color based on priority
         priority_colors = {
-            NotificationPriority.LOW: 0x6C757D,       # Gray
-            NotificationPriority.NORMAL: 0x0D6EFD,    # Blue
-            NotificationPriority.HIGH: 0xFD7E14,      # Orange
+            NotificationPriority.LOW: 0x6C757D,  # Gray
+            NotificationPriority.NORMAL: 0x0D6EFD,  # Blue
+            NotificationPriority.HIGH: 0xFD7E14,  # Orange
             NotificationPriority.CRITICAL: 0xDC3545,  # Red
         }
 
@@ -214,20 +224,20 @@ class WebhookNotificationProvider(INotificationProvider):
         fields = []
         for key, value in (notification.data or {}).items():
             if len(fields) < 25:  # Discord limit
-                fields.append({
-                    "name": str(key)[:256],
-                    "value": str(value)[:1024],
-                    "inline": True,
-                })
+                fields.append(
+                    {
+                        "name": str(key)[:256],
+                        "value": str(value)[:1024],
+                        "inline": True,
+                    }
+                )
 
         embed: dict[str, Any] = {
             "title": f"{emoji} {notification.title}"[:256],
             "description": notification.message[:4096],
             "color": color,
             "timestamp": (
-                notification.timestamp.isoformat()
-                if notification.timestamp
-                else None
+                notification.timestamp.isoformat() if notification.timestamp else None
             ),
             "footer": {
                 "text": f"SoulSpot • {notification.type.value}",
@@ -284,10 +294,12 @@ class WebhookNotificationProvider(INotificationProvider):
                 }
                 for k, v in list(notification.data.items())[:10]
             ]
-            blocks.append({
-                "type": "section",
-                "fields": fields,
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "fields": fields,
+                }
+            )
 
         # Add context with timestamp and type
         timestamp_str = (
@@ -295,15 +307,17 @@ class WebhookNotificationProvider(INotificationProvider):
             if notification.timestamp
             else "N/A"
         )
-        blocks.append({
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"📍 {notification.type.value} • 🕐 {timestamp_str}",
-                },
-            ],
-        })
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"📍 {notification.type.value} • 🕐 {timestamp_str}",
+                    },
+                ],
+            }
+        )
 
         return {"blocks": blocks}
 
@@ -352,9 +366,7 @@ class WebhookNotificationProvider(INotificationProvider):
             "message": notification.message,
             "priority": notification.priority.value,
             "timestamp": (
-                notification.timestamp.isoformat()
-                if notification.timestamp
-                else None
+                notification.timestamp.isoformat() if notification.timestamp else None
             ),
             "data": notification.data or {},
             "source": "soulspot",

@@ -41,14 +41,16 @@ class ImageSize(Enum):
     Phase 2 will use these for thumbnail generation.
     For now they're just for tracking what we have.
     """
+
     UNKNOWN = "unknown"
-    SMALL = "small"      # ~64x64
-    MEDIUM = "medium"    # ~300x300
-    LARGE = "large"      # ~640x640
+    SMALL = "small"  # ~64x64
+    MEDIUM = "medium"  # ~300x300
+    LARGE = "large"  # ~640x640
     ORIGINAL = "original"
 
 
 # === Data Transfer Objects ===
+
 
 @dataclass(frozen=True)
 class ImageInfo:
@@ -56,12 +58,13 @@ class ImageInfo:
 
     This is immutable (frozen) - it's a snapshot at query time.
     """
+
     entity_type: EntityType
     entity_id: str
 
     # URLs
-    display_url: str           # Best URL for frontend
-    source_url: str | None     # Original CDN URL
+    display_url: str  # Best URL for frontend
+    source_url: str | None  # Original CDN URL
 
     # Local cache
     local_path: str | None
@@ -85,6 +88,7 @@ class ImageInfo:
 @dataclass
 class SaveImageResult:
     """Result of a save_image() operation."""
+
     success: bool
     image_info: ImageInfo | None = None
     error: str | None = None
@@ -108,6 +112,7 @@ class SaveImageResult:
 
 
 # === Service Interface ===
+
 
 class IImageService(Protocol):
     """Image Service Port (Interface).
@@ -367,4 +372,3 @@ __all__ = [
     "SaveImageResult",
     "IImageService",
 ]
-

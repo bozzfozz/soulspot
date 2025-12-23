@@ -261,15 +261,17 @@ async def sync_playlist_library(
             )
 
             # Plugin returns PaginatedResponse[PlaylistDTO]
-            all_playlists.extend([
-                {
-                    "id": p.spotify_id,
-                    "name": p.name,
-                    "description": p.description,
-                    "tracks": {"total": p.total_tracks or 0},
-                }
-                for p in response.items
-            ])
+            all_playlists.extend(
+                [
+                    {
+                        "id": p.spotify_id,
+                        "name": p.name,
+                        "description": p.description,
+                        "tracks": {"total": p.total_tracks or 0},
+                    }
+                    for p in response.items
+                ]
+            )
 
             # Check if there are more pages
             if response.next_offset is None:
@@ -820,4 +822,3 @@ async def delete_and_blacklist_playlist(
             status_code=500,
             detail=f"Failed to delete and blacklist playlist: {str(e)}",
         ) from e
-

@@ -134,13 +134,13 @@ def normalize_artist_name(name: str) -> str:
     # "The DJ Shadow" -> "dj shadow" (strip "the"), NOT "shadow" (strip both)
     for prefix in ARTIST_PREFIXES:
         if normalized.startswith(prefix):
-            normalized = normalized[len(prefix):].strip()
+            normalized = normalized[len(prefix) :].strip()
             break  # Only strip one prefix
 
     # Strip suffixes (check each, strip first match only)
     for suffix in ARTIST_SUFFIXES:
         if normalized.endswith(suffix):
-            normalized = normalized[:-len(suffix)].strip()
+            normalized = normalized[: -len(suffix)].strip()
             break  # Only strip one suffix
 
     return normalized
@@ -227,8 +227,8 @@ def extract_sort_name(name: str) -> str:
     for article in articles:
         if name_lower.startswith(article):
             # Move article to end with comma
-            rest = name[len(article):]
-            article_proper = name[:len(article) - 1]  # Remove trailing space
+            rest = name[len(article) :]
+            article_proper = name[: len(article) - 1]  # Remove trailing space
             return f"{rest}, {article_proper}"
 
     return name

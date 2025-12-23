@@ -142,7 +142,9 @@ async def list_expired_blocks(
     }
 
 
-@router.post("", response_model=BlocklistEntryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=BlocklistEntryResponse, status_code=status.HTTP_201_CREATED
+)
 async def add_block(
     data: BlocklistEntryCreate,
     repository: BlocklistRepository = Depends(get_blocklist_repository),
@@ -202,7 +204,9 @@ async def add_block(
     await repository.add(entry)
     await session.commit()
 
-    logger.info(f"Manual block added: {data.username or 'N/A'} / {data.filepath or 'N/A'}")
+    logger.info(
+        f"Manual block added: {data.username or 'N/A'} / {data.filepath or 'N/A'}"
+    )
 
     return _entry_to_response(entry)
 

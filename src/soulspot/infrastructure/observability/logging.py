@@ -143,18 +143,20 @@ class CompactExceptionFormatter(logging.Formatter):
                     filepath = frame.filename
 
                     # Skip site-packages and standard library
-                    if '/site-packages/' in filepath or '/usr/lib/python' in filepath:
+                    if "/site-packages/" in filepath or "/usr/lib/python" in filepath:
                         continue
 
                     # Show only soulspot code
-                    if 'soulspot' in filepath:
+                    if "soulspot" in filepath:
                         # Get just the filename without full path
                         filename = Path(filepath).name
-                        relevant_frames.append((filename, frame.lineno, frame.name, frame.line))
+                        relevant_frames.append(
+                            (filename, frame.lineno, frame.name, frame.line)
+                        )
 
                 # Format relevant frames
                 for filename, lineno, name, line in relevant_frames:
-                    lines.append(f"    File \"{filename}\", line {lineno}, in {name}")
+                    lines.append(f'    File "{filename}", line {lineno}, in {name}')
                     if line:
                         lines.append(f"      {line.strip()}")
 

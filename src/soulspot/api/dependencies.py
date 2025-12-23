@@ -129,9 +129,6 @@ async def get_credentials_service(
     return CredentialsService(session, fallback_settings=settings)
 
 
-
-
-
 # Yo, creates NEW SpotifyClient on EVERY request! Not cached/singleton. This is fine because
 # SpotifyClient is stateless (httpx client inside is pooled). If SpotifyClient becomes expensive
 # to construct, add @lru_cache but watch out - settings changes won't take effect until restart!
@@ -328,7 +325,9 @@ async def get_spotify_plugin_optional(
         access_token = await db_token_manager.get_token_for_background()
         if not access_token:
             # MULTI-SERVICE: No exception, just return None
-            logger.debug("No Spotify token available - returning None for optional plugin")
+            logger.debug(
+                "No Spotify token available - returning None for optional plugin"
+            )
             return None
 
         return SpotifyPlugin(

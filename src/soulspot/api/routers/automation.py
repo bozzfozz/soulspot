@@ -1242,7 +1242,9 @@ async def sync_followed_artists(
 
         # Use SpotifyPlugin directly with Deezer fallback - it handles token internally!
         deezer_plugin = DeezerPlugin()  # NO AUTH NEEDED for artist albums!
-        service = FollowedArtistsService(session, spotify_plugin, deezer_plugin=deezer_plugin)
+        service = FollowedArtistsService(
+            session, spotify_plugin, deezer_plugin=deezer_plugin
+        )
 
         # No access_token param needed - plugin has it!
         artists, stats = await service.sync_followed_artists()
@@ -1304,9 +1306,9 @@ async def sync_followed_artists(
             LogMessages.sync_failed(
                 sync_type="followed_artists",
                 reason="Failed to sync followed artists from Spotify",
-                hint="Check Spotify token validity and API connectivity"
+                hint="Check Spotify token validity and API connectivity",
             ).format(),
-            exc_info=True
+            exc_info=True,
         )
         raise HTTPException(
             status_code=500, detail=f"Failed to sync followed artists: {e}"
@@ -1368,9 +1370,9 @@ async def bulk_create_watchlists(
                     LogMessages.sync_failed(
                         sync_type="watchlist_creation",
                         reason=f"Failed to create watchlist for artist {artist_id_str}",
-                        hint="Check database connection and artist ID validity"
+                        hint="Check database connection and artist ID validity",
                     ).format(),
-                    exc_info=True
+                    exc_info=True,
                 )
                 failed_count += 1
                 failed_artists.append(artist_id_str)
@@ -1388,6 +1390,3 @@ async def bulk_create_watchlists(
         raise HTTPException(
             status_code=500, detail=f"Failed to bulk create watchlists: {e}"
         ) from e
-
-
-

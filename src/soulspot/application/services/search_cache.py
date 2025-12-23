@@ -164,15 +164,15 @@ class SearchCache:
         normalized = self._normalize_query(query)
 
         # Sort options for consistent key
-        opts_str = "|".join(f"{k}={v}" for k, v in sorted(options.items()) if v is not None)
+        opts_str = "|".join(
+            f"{k}={v}" for k, v in sorted(options.items()) if v is not None
+        )
 
         # Combine and hash for compact key
         key_input = f"{normalized}|{opts_str}"
         return hashlib.sha256(key_input.encode()).hexdigest()[:16]
 
-    async def get(
-        self, query: str, **options: Any
-    ) -> list[dict[str, Any]] | None:
+    async def get(self, query: str, **options: Any) -> list[dict[str, Any]] | None:
         """Get cached search results.
 
         Hey future me - returns None if not cached or expired!
@@ -234,7 +234,9 @@ class SearchCache:
                 oldest_key = next(iter(self._cache))
                 del self._cache[oldest_key]
                 self._stats.evictions += 1
-                logger.debug(f"Evicted oldest cache entry (total: {self._stats.evictions})")
+                logger.debug(
+                    f"Evicted oldest cache entry (total: {self._stats.evictions})"
+                )
 
             # Store new entry
             self._cache[key] = CacheEntry(
@@ -323,7 +325,9 @@ class SearchCache:
                 len(e.results) for e in self._cache.values()
             )
             oldest = min(e.created_at for e in self._cache.values())
-            stats.oldest_entry_age_seconds = (datetime.now(UTC) - oldest).total_seconds()
+            stats.oldest_entry_age_seconds = (
+                datetime.now(UTC) - oldest
+            ).total_seconds()
 
         return stats
 

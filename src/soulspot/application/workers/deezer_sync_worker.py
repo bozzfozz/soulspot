@@ -115,7 +115,7 @@ class DeezerSyncWorker:
             "saved_tracks": None,
             # Gradual background syncs (auth required - needs followed artists first)
             "artist_albums": None,  # Gradual album sync for artists
-            "album_tracks": None,   # Gradual track sync for albums
+            "album_tracks": None,  # Gradual track sync for albums
         }
 
         # Track sync stats for monitoring
@@ -304,7 +304,9 @@ class DeezerSyncWorker:
                     )
                     if await settings_service.get_bool(
                         "deezer.auto_sync_artist_albums", default=True
-                    ) and self._is_sync_due("artist_albums", artist_albums_interval, now):
+                    ) and self._is_sync_due(
+                        "artist_albums", artist_albums_interval, now
+                    ):
                         await self._run_artist_albums_sync(
                             session,
                             access_token,
@@ -893,13 +895,23 @@ class DeezerSyncWorker:
 
                 # NOTE: PUBLIC SYNCS (charts, new_releases) REMOVED!
                 if sync_type in ("charts", "new_releases"):
-                    results[sync_type] = "feature removed - use NewReleasesSyncWorker for new releases"
+                    results[sync_type] = (
+                        "feature removed - use NewReleasesSyncWorker for new releases"
+                    )
 
                 # USER SYNCS (auth required)
                 if not access_token:
-                    if sync_type in ("artists", "playlists", "saved_albums",
-                                     "saved_tracks", "artist_albums", "album_tracks"):
-                        return {"error": "No valid Deezer token available for user syncs"}
+                    if sync_type in (
+                        "artists",
+                        "playlists",
+                        "saved_albums",
+                        "saved_tracks",
+                        "artist_albums",
+                        "album_tracks",
+                    ):
+                        return {
+                            "error": "No valid Deezer token available for user syncs"
+                        }
                 else:
                     if sync_type is None or sync_type == "artists":
                         try:
@@ -917,14 +929,18 @@ class DeezerSyncWorker:
 
                     if sync_type is None or sync_type == "saved_albums":
                         try:
-                            await self._run_saved_albums_sync(session, access_token, now)
+                            await self._run_saved_albums_sync(
+                                session, access_token, now
+                            )
                             results["saved_albums"] = "success"
                         except Exception as e:
                             results["saved_albums"] = f"error: {e}"
 
                     if sync_type is None or sync_type == "saved_tracks":
                         try:
-                            await self._run_saved_tracks_sync(session, access_token, now)
+                            await self._run_saved_tracks_sync(
+                                session, access_token, now
+                            )
                             results["saved_tracks"] = "success"
                         except Exception as e:
                             results["saved_tracks"] = f"error: {e}"

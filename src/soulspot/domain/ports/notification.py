@@ -24,6 +24,7 @@ class NotificationType(str, Enum):
     Hey future me - add new types here when you add new notification events!
     The type is used for filtering and provider routing.
     """
+
     NEW_RELEASE = "new_release"
     MISSING_ALBUM = "missing_album"
     QUALITY_UPGRADE = "quality_upgrade"
@@ -45,6 +46,7 @@ class NotificationPriority(str, Enum):
     - HIGH: Send immediately
     - CRITICAL: Wake up the user (push with sound)
     """
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -67,6 +69,7 @@ class Notification:
             data={"artist_id": 123, "album_id": 456}
         )
     """
+
     type: NotificationType
     title: str
     message: str
@@ -82,6 +85,7 @@ class Notification:
         """Set timestamp if not provided."""
         if self.timestamp is None:
             from datetime import UTC
+
             self.timestamp = datetime.now(UTC)
 
 
@@ -92,6 +96,7 @@ class NotificationResult:
     Hey future me - providers return this to indicate success/failure!
     The error field contains details if success=False.
     """
+
     success: bool
     provider_name: str
     notification_type: NotificationType

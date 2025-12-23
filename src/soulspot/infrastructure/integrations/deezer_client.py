@@ -494,9 +494,7 @@ class DeezerClient:
     # ALBUM METHODS
     # =========================================================================
 
-    async def search_albums(
-        self, query: str, limit: int = 25
-    ) -> list[DeezerAlbum]:
+    async def search_albums(self, query: str, limit: int = 25) -> list[DeezerAlbum]:
         """Search for albums on Deezer.
 
         Hey future me - this is PERFECT for Various Artists compilations!
@@ -612,7 +610,9 @@ class DeezerClient:
         release_date = data.get("release_date")
         if not release_date:
             release_date = "1900-01-01"  # Sentinel value for "unknown date"
-            logger.debug(f"Album {data.get('title')} missing release_date, using fallback")
+            logger.debug(
+                f"Album {data.get('title')} missing release_date, using fallback"
+            )
 
         return DeezerAlbum(
             id=data["id"],
@@ -636,9 +636,7 @@ class DeezerClient:
     # ARTIST METHODS
     # =========================================================================
 
-    async def search_artists(
-        self, query: str, limit: int = 25
-    ) -> list[DeezerArtist]:
+    async def search_artists(self, query: str, limit: int = 25) -> list[DeezerArtist]:
         """Search for artists on Deezer.
 
         Args:
@@ -778,9 +776,7 @@ class DeezerClient:
     # TRACK METHODS
     # =========================================================================
 
-    async def search_tracks(
-        self, query: str, limit: int = 25
-    ) -> list[DeezerTrack]:
+    async def search_tracks(self, query: str, limit: int = 25) -> list[DeezerTrack]:
         """Search for tracks on Deezer.
 
         Hey future me - track search returns ISRC codes! Use these for
@@ -1032,7 +1028,12 @@ class DeezerClient:
         """
         # Build search query
         if artist_name and artist_name.lower() not in [
-            "various artists", "va", "v.a.", "various", "compilation", "soundtrack"
+            "various artists",
+            "va",
+            "v.a.",
+            "various",
+            "compilation",
+            "soundtrack",
         ]:
             query = f'"{artist_name}" "{album_title}"'
         else:
@@ -1128,10 +1129,7 @@ class DeezerClient:
 
             for i, (local_title, local_num) in enumerate(extra):
                 # Score by title similarity
-                score = fuzz.ratio(
-                    deezer_track.title.lower(),
-                    local_title.lower()
-                )
+                score = fuzz.ratio(deezer_track.title.lower(), local_title.lower())
 
                 # Bonus if track number matches
                 if local_num and deezer_track.track_position == local_num:
@@ -1142,20 +1140,24 @@ class DeezerClient:
                     best_score = score
 
             if best_match is not None:
-                matched.append({
-                    "deezer_title": deezer_track.title,
-                    "local_title": extra[best_match][0],
-                    "position": deezer_track.track_position,
-                    "score": best_score,
-                })
+                matched.append(
+                    {
+                        "deezer_title": deezer_track.title,
+                        "local_title": extra[best_match][0],
+                        "position": deezer_track.track_position,
+                        "score": best_score,
+                    }
+                )
                 extra.pop(best_match)
             else:
-                missing.append({
-                    "title": deezer_track.title,
-                    "position": deezer_track.track_position,
-                    "isrc": deezer_track.isrc,
-                    "duration": deezer_track.duration,
-                })
+                missing.append(
+                    {
+                        "title": deezer_track.title,
+                        "position": deezer_track.track_position,
+                        "isrc": deezer_track.isrc,
+                        "duration": deezer_track.duration,
+                    }
+                )
 
         return {
             "success": True,
@@ -1513,15 +1515,17 @@ class DeezerClient:
 
             genres = []
             for genre_data in data.get("data", []):
-                genres.append({
-                    "id": genre_data.get("id"),
-                    "name": genre_data.get("name"),
-                    "picture": genre_data.get("picture"),
-                    "picture_small": genre_data.get("picture_small"),
-                    "picture_medium": genre_data.get("picture_medium"),
-                    "picture_big": genre_data.get("picture_big"),
-                    "picture_xl": genre_data.get("picture_xl"),
-                })
+                genres.append(
+                    {
+                        "id": genre_data.get("id"),
+                        "name": genre_data.get("name"),
+                        "picture": genre_data.get("picture"),
+                        "picture_small": genre_data.get("picture_small"),
+                        "picture_medium": genre_data.get("picture_medium"),
+                        "picture_big": genre_data.get("picture_big"),
+                        "picture_xl": genre_data.get("picture_xl"),
+                    }
+                )
 
             logger.debug(f"Fetched {len(genres)} genres from Deezer")
             return genres
@@ -1589,16 +1593,18 @@ class DeezerClient:
 
             radios = []
             for radio_data in data.get("data", []):
-                radios.append({
-                    "id": radio_data.get("id"),
-                    "title": radio_data.get("title"),
-                    "description": radio_data.get("description"),
-                    "picture": radio_data.get("picture"),
-                    "picture_medium": radio_data.get("picture_medium"),
-                    "picture_big": radio_data.get("picture_big"),
-                    "picture_xl": radio_data.get("picture_xl"),
-                    "tracklist_url": radio_data.get("tracklist"),
-                })
+                radios.append(
+                    {
+                        "id": radio_data.get("id"),
+                        "title": radio_data.get("title"),
+                        "description": radio_data.get("description"),
+                        "picture": radio_data.get("picture"),
+                        "picture_medium": radio_data.get("picture_medium"),
+                        "picture_big": radio_data.get("picture_big"),
+                        "picture_xl": radio_data.get("picture_xl"),
+                        "tracklist_url": radio_data.get("tracklist"),
+                    }
+                )
 
             logger.debug(f"Fetched {len(radios)} radios for genre {genre_id}")
             return radios
@@ -1658,31 +1664,39 @@ class DeezerClient:
                             if enriched and enriched.release_date != "1900-01-01":
                                 album = enriched  # Use enriched version
                                 enriched_count += 1
-                                logger.debug(f"Enriched album {album.title} with date {album.release_date}")
+                                logger.debug(
+                                    f"Enriched album {album.title} with date {album.release_date}"
+                                )
                         except Exception as enrich_err:
-                            logger.warning(f"Failed to enrich album {album.id}: {enrich_err}")
+                            logger.warning(
+                                f"Failed to enrich album {album.id}: {enrich_err}"
+                            )
                             # Continue with fallback date
 
-                    albums.append({
-                        "deezer_id": album.id,
-                        "title": album.title,
-                        "artist_name": album.artist_name,
-                        "artist_id": album.artist_id,
-                        "release_date": album.release_date,
-                        "total_tracks": album.nb_tracks,
-                        "record_type": album.record_type,
-                        "cover_small": album.cover_small,
-                        "cover_medium": album.cover_medium,
-                        "cover_big": album.cover_big,
-                        "cover_xl": album.cover_xl,
-                        "link": album.link,
-                        "explicit": album.explicit_lyrics,
-                    })
+                    albums.append(
+                        {
+                            "deezer_id": album.id,
+                            "title": album.title,
+                            "artist_name": album.artist_name,
+                            "artist_id": album.artist_id,
+                            "release_date": album.release_date,
+                            "total_tracks": album.nb_tracks,
+                            "record_type": album.record_type,
+                            "cover_small": album.cover_small,
+                            "cover_medium": album.cover_medium,
+                            "cover_big": album.cover_big,
+                            "cover_xl": album.cover_xl,
+                            "link": album.link,
+                            "explicit": album.explicit_lyrics,
+                        }
+                    )
 
                     if len(albums) >= limit:
                         break
 
-            logger.info(f"Deezer new releases: {len(albums)} total, {enriched_count} enriched with dates")
+            logger.info(
+                f"Deezer new releases: {len(albums)} total, {enriched_count} enriched with dates"
+            )
 
             return {
                 "success": True,

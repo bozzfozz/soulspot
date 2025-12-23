@@ -679,6 +679,7 @@ class Settings(BaseSettings):
     def ensure_directories(self) -> None:
         """Ensure all storage directories exist, including database parent directory."""
         import logging
+
         logger = logging.getLogger(__name__)
 
         # Ensure storage directories exist with logging

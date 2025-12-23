@@ -128,7 +128,9 @@ class SpotifyImageProvider(IImageProvider):
             )
 
         except Exception as e:
-            logger.warning("Error getting Spotify artist image for %s: %s", artist_id, e)
+            logger.warning(
+                "Error getting Spotify artist image for %s: %s", artist_id, e
+            )
             return None
 
     async def get_album_image(
@@ -226,7 +228,9 @@ class SpotifyImageProvider(IImageProvider):
             return result
 
         except Exception as e:
-            logger.warning("Error searching Spotify artist images for '%s': %s", artist_name, e)
+            logger.warning(
+                "Error searching Spotify artist images for '%s': %s", artist_name, e
+            )
             return result
 
     async def search_album_image(
@@ -301,7 +305,9 @@ class SpotifyImageProvider(IImageProvider):
             return result
 
         except Exception as e:
-            logger.warning("Error searching Spotify album images for '%s': %s", query, e)
+            logger.warning(
+                "Error searching Spotify album images for '%s': %s", query, e
+            )
             return result
 
     # === Helper Methods ===

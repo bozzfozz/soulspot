@@ -192,7 +192,9 @@ class SlskdClient(ISlskdClient):
             ValidationError: If download_id format is invalid
         """
         if "/" not in download_id:
-            raise ValidationError("Invalid download_id format. Expected: username/filename")
+            raise ValidationError(
+                "Invalid download_id format. Expected: username/filename"
+            )
 
         username, filename = download_id.split("/", 1)
         client = await self._get_client()
@@ -283,7 +285,9 @@ class SlskdClient(ISlskdClient):
             ValidationError: If download_id format is invalid
         """
         if "/" not in download_id:
-            raise ValidationError("Invalid download_id format. Expected: username/filename")
+            raise ValidationError(
+                "Invalid download_id format. Expected: username/filename"
+            )
 
         username, filename = download_id.split("/", 1)
         client = await self._get_client()

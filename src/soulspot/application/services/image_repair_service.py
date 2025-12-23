@@ -141,7 +141,9 @@ class ImageRepairService:
 
             try:
                 # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
-                spotify_id = artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
+                spotify_id = (
+                    artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
+                )
 
                 image_url: str | None = None
                 provider = "spotify"
@@ -173,10 +175,12 @@ class ImageRepairService:
 
                 # Download image via ImageService
                 provider_id = spotify_id or str(artist.id)
-                download_result = await self._image_service.download_artist_image_with_result(
-                    provider_id=provider_id,
-                    image_url=image_url,
-                    provider=provider,
+                download_result = (
+                    await self._image_service.download_artist_image_with_result(
+                        provider_id=provider_id,
+                        image_url=image_url,
+                        provider=provider,
+                    )
                 )
 
                 # Update database
@@ -187,10 +191,12 @@ class ImageRepairService:
                     stats["repaired"] += 1
                     logger.info(f"Repaired image for artist: {artist.name}")
                 else:
-                    stats["errors"].append({
-                        "name": artist.name,
-                        "error": download_result.error_message or "Download failed",
-                    })
+                    stats["errors"].append(
+                        {
+                            "name": artist.name,
+                            "error": download_result.error_message or "Download failed",
+                        }
+                    )
 
                 # Rate limiting
                 await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
@@ -200,7 +206,9 @@ class ImageRepairService:
                 stats["errors"].append({"name": artist.name, "error": str(e)})
 
         await self._session.commit()
-        logger.info(f"Image repair complete: {stats['repaired']}/{stats['processed']} artists repaired")
+        logger.info(
+            f"Image repair complete: {stats['repaired']}/{stats['processed']} artists repaired"
+        )
 
         return stats
 
@@ -293,10 +301,12 @@ class ImageRepairService:
 
                 # Download image via ImageService
                 provider_id = spotify_id or deezer_id or str(album.id)
-                download_result = await self._image_service.download_album_image_with_result(
-                    provider_id=provider_id,
-                    image_url=image_url,
-                    provider=provider,
+                download_result = (
+                    await self._image_service.download_album_image_with_result(
+                        provider_id=provider_id,
+                        image_url=image_url,
+                        provider=provider,
+                    )
                 )
 
                 # Update database
@@ -307,10 +317,12 @@ class ImageRepairService:
                     stats["repaired"] += 1
                     logger.info(f"Repaired image for album: {album.title}")
                 else:
-                    stats["errors"].append({
-                        "title": album.title,
-                        "error": download_result.error_message or "Download failed",
-                    })
+                    stats["errors"].append(
+                        {
+                            "title": album.title,
+                            "error": download_result.error_message or "Download failed",
+                        }
+                    )
 
                 # Rate limiting
                 await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
@@ -371,9 +383,7 @@ class ImageRepairService:
         stmt = (
             select(AlbumModel)
             .where(has_local_tracks)
-            .where(
-                AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == "")
-            )
+            .where(AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == ""))
             .order_by(AlbumModel.title)
             .limit(limit)
         )

@@ -104,9 +104,7 @@ class SpotifySyncService:
     # FOLLOWED ARTISTS SYNC
     # =========================================================================
 
-    async def sync_followed_artists(
-        self, force: bool = False
-    ) -> dict[str, Any]:
+    async def sync_followed_artists(self, force: bool = False) -> dict[str, Any]:
         """Sync followed artists from Spotify with diff logic.
 
         Hey future me - refactored to use SpotifyPlugin!
@@ -141,7 +139,10 @@ class SpotifySyncService:
         try:
             # Hey future me - PROVIDER LEVEL CHECK FIRST!
             # If Spotify provider is disabled in Settings, skip ALL Spotify operations.
-            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+            if (
+                self._settings_service
+                and not await self._settings_service.is_provider_enabled("spotify")
+            ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping artists sync")
                 return stats
@@ -149,6 +150,7 @@ class SpotifySyncService:
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
             # If user is not authenticated with Spotify, skip operations that need auth.
             from soulspot.domain.ports.plugin import PluginCapability
+
             if not self.spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping artists sync")
@@ -244,8 +246,7 @@ class SpotifySyncService:
             # This makes followed artists appear on /library/artists page.
             try:
                 library_stats = await self._sync_to_unified_library(
-                    spotify_artists,
-                    removed_ids=to_remove if should_remove else None
+                    spotify_artists, removed_ids=to_remove if should_remove else None
                 )
                 logger.info(
                     f"Unified library sync: {library_stats['created']} created, "
@@ -255,7 +256,9 @@ class SpotifySyncService:
                 stats["library_created"] = library_stats["created"]
                 stats["library_updated"] = library_stats["updated"]
             except Exception as lib_error:
-                logger.warning(f"Unified library sync failed (non-blocking): {lib_error}")
+                logger.warning(
+                    f"Unified library sync failed (non-blocking): {lib_error}"
+                )
                 # Don't fail the whole sync if library sync fails
 
             # Update sync status
@@ -359,7 +362,9 @@ class SpotifySyncService:
         if download_images and image_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_artist_by_id(spotify_id)
-            existing_url = existing.image_url if existing else None  # Model uses image_url
+            existing_url = (
+                existing.image_url if existing else None
+            )  # Model uses image_url
             existing_path = existing.image_path if existing else None
 
             if await self._image_service.should_redownload(
@@ -446,7 +451,9 @@ class SpotifySyncService:
                 # Hey future me - DTO und Entity nutzen beide ImageRef!
                 # dto.image.url und existing.image.url für Zugriff
                 if dto.image.url and existing.image.url != dto.image.url:
-                    existing.image = ImageRef(url=dto.image.url, path=existing.image.path)
+                    existing.image = ImageRef(
+                        url=dto.image.url, path=existing.image.path
+                    )
                     needs_update = True
                 if dto.genres and existing.genres != dto.genres:
                     existing.genres = dto.genres
@@ -459,7 +466,9 @@ class SpotifySyncService:
                 # Artist wurde bereits vom MappingService erstellt
                 # Wir müssen nur noch source auf SPOTIFY setzen
                 if mapped_dto.internal_id:
-                    new_artist = await artist_repo.get_by_id(ArtistId(mapped_dto.internal_id))
+                    new_artist = await artist_repo.get_by_id(
+                        ArtistId(mapped_dto.internal_id)
+                    )
                     if new_artist and new_artist.source != ArtistSource.SPOTIFY:
                         new_artist.source = ArtistSource.SPOTIFY
                         await artist_repo.update(new_artist)
@@ -544,7 +553,7 @@ class SpotifySyncService:
 
             # Fetch albums with multi-provider fallback
             # Pass artist name for Deezer search fallback
-            artist_name = artist.name if hasattr(artist, 'name') else None
+            artist_name = artist.name if hasattr(artist, "name") else None
             album_dtos = await self._fetch_artist_albums(artist_id, artist_name)
 
             for album_dto in album_dtos:
@@ -555,7 +564,7 @@ class SpotifySyncService:
 
             # Track source for stats/debugging
             if album_dtos:
-                stats["source"] = getattr(album_dtos[0], 'source_service', 'unknown')
+                stats["source"] = getattr(album_dtos[0], "source_service", "unknown")
 
             # Mark albums as synced
             await self.repo.set_albums_synced(artist_id)
@@ -629,9 +638,7 @@ class SpotifySyncService:
         # For multi-provider aggregation, use ProviderSyncOrchestrator (Phase 3)
 
         if not albums:
-            logger.warning(
-                f"No albums found for artist {artist_id} from Spotify"
-            )
+            logger.warning(f"No albums found for artist {artist_id} from Spotify")
         else:
             logger.debug(f"Artist albums source: {source_used}")
 
@@ -695,8 +702,10 @@ class SpotifySyncService:
 
         # NEW: Auto-sync tracks if AlbumDTO contains them!
         # This prevents the "album loaded but no tracks" problem.
-        if hasattr(album_dto, 'tracks') and album_dto.tracks:
-            logger.debug(f"Auto-syncing {len(album_dto.tracks)} tracks for album {unique_id}")
+        if hasattr(album_dto, "tracks") and album_dto.tracks:
+            logger.debug(
+                f"Auto-syncing {len(album_dto.tracks)} tracks for album {unique_id}"
+            )
             for track_dto in album_dto.tracks:
                 try:
                     await self._upsert_track_from_dto(track_dto, unique_id)
@@ -849,7 +858,9 @@ class SpotifySyncService:
                     )
                     stats["artists_synced"] += 1
                 except Exception as e:
-                    logger.warning(f"Failed to save related artist {artist_dto.name}: {e}")
+                    logger.warning(
+                        f"Failed to save related artist {artist_dto.name}: {e}"
+                    )
 
             # TODO: Store the relationship (artist_id -> related_artist_id)
             # This requires a new table: artist_relations
@@ -908,6 +919,7 @@ class SpotifySyncService:
             Warning dict indicating deprecation
         """
         import warnings
+
         warnings.warn(
             "sync_new_releases() is deprecated. "
             "Use NewReleasesSyncWorker with NewReleasesCache instead. "
@@ -992,7 +1004,11 @@ class SpotifySyncService:
                 return stats
 
             # Album DTO contains tracks list
-            track_dtos = album_dto.tracks if hasattr(album_dto, 'tracks') and album_dto.tracks else []
+            track_dtos = (
+                album_dto.tracks
+                if hasattr(album_dto, "tracks") and album_dto.tracks
+                else []
+            )
 
             for track_dto in track_dtos:
                 await self._upsert_track_from_dto(track_dto, album_id)
@@ -1103,9 +1119,7 @@ class SpotifySyncService:
     # - The spotify_uri column identifies them uniquely
     # =========================================================================
 
-    async def sync_user_playlists(
-        self, force: bool = False
-    ) -> dict[str, Any]:
+    async def sync_user_playlists(self, force: bool = False) -> dict[str, Any]:
         """Sync user's playlists from Spotify with diff logic.
 
         Hey future me - refactored for SpotifyPlugin!
@@ -1134,13 +1148,17 @@ class SpotifySyncService:
 
         try:
             # Hey future me - PROVIDER LEVEL CHECK FIRST!
-            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+            if (
+                self._settings_service
+                and not await self._settings_service.is_provider_enabled("spotify")
+            ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping playlists sync")
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
             from soulspot.domain.ports.plugin import PluginCapability
+
             if not self.spotify_plugin.can_use(PluginCapability.USER_PLAYLISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping playlists sync")
@@ -1171,7 +1189,11 @@ class SpotifySyncService:
 
             # Fetch all playlists from Spotify
             spotify_playlists = await self._fetch_all_user_playlists()
-            spotify_uris = {f"spotify:playlist:{p.spotify_id}" for p in spotify_playlists if p.spotify_id}
+            spotify_uris = {
+                f"spotify:playlist:{p.spotify_id}"
+                for p in spotify_playlists
+                if p.spotify_id
+            }
 
             # Get existing Spotify playlist URIs from DB
             db_uris = await self.repo.get_spotify_playlist_uris()
@@ -1355,9 +1377,7 @@ class SpotifySyncService:
     # - Tracks come from GET /me/tracks endpoint
     # =========================================================================
 
-    async def sync_liked_songs(
-        self, force: bool = False
-    ) -> dict[str, Any]:
+    async def sync_liked_songs(self, force: bool = False) -> dict[str, Any]:
         """Sync user's Liked Songs from Spotify.
 
         Hey future me - refactored for SpotifyPlugin!
@@ -1385,13 +1405,17 @@ class SpotifySyncService:
 
         try:
             # Hey future me - PROVIDER LEVEL CHECK FIRST!
-            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+            if (
+                self._settings_service
+                and not await self._settings_service.is_provider_enabled("spotify")
+            ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Liked Songs sync")
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
             from soulspot.domain.ports.plugin import PluginCapability
+
             if not self.spotify_plugin.can_use(PluginCapability.USER_SAVED_TRACKS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Liked Songs sync")
@@ -1451,14 +1475,15 @@ class SpotifySyncService:
 
         except Exception as e:
             from soulspot.infrastructure.observability.log_messages import LogMessages
+
             logger.error(
                 LogMessages.sync_failed(
                     entity="Liked Songs",
                     source="Spotify",
                     error=str(e),
-                    hint="Check if liked tracks have valid album/artist data in Spotify"
+                    hint="Check if liked tracks have valid album/artist data in Spotify",
                 ),
-                exc_info=True
+                exc_info=True,
             )
             stats["error"] = str(e)
             await self.repo.update_sync_status(
@@ -1511,8 +1536,7 @@ class SpotifySyncService:
                 # Include artists info if available
                 if track_dto.artists:
                     track_dict["artists"] = [
-                        {"id": a.spotify_id, "name": a.name}
-                        for a in track_dto.artists
+                        {"id": a.spotify_id, "name": a.name} for a in track_dto.artists
                     ]
                 # Include album info if available
                 if track_dto.album:
@@ -1543,9 +1567,7 @@ class SpotifySyncService:
     # This requires ensuring the artist exists first (create if not followed).
     # =========================================================================
 
-    async def sync_saved_albums(
-        self, force: bool = False
-    ) -> dict[str, Any]:
+    async def sync_saved_albums(self, force: bool = False) -> dict[str, Any]:
         """Sync user's Saved Albums from Spotify.
 
         Hey future me - refactored for SpotifyPlugin!
@@ -1573,13 +1595,17 @@ class SpotifySyncService:
 
         try:
             # Hey future me - PROVIDER LEVEL CHECK FIRST!
-            if self._settings_service and not await self._settings_service.is_provider_enabled("spotify"):
+            if (
+                self._settings_service
+                and not await self._settings_service.is_provider_enabled("spotify")
+            ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Saved Albums sync")
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
             from soulspot.domain.ports.plugin import PluginCapability
+
             if not self.spotify_plugin.can_use(PluginCapability.USER_SAVED_ALBUMS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Saved Albums sync")
@@ -1873,9 +1899,7 @@ class SpotifySyncService:
     # FULL SYNC (ALL ENABLED SYNCS)
     # =========================================================================
 
-    async def run_full_sync(
-        self, force: bool = False
-    ) -> dict[str, Any]:
+    async def run_full_sync(self, force: bool = False) -> dict[str, Any]:
         """Run all enabled sync operations.
 
         Hey future me - refactored for SpotifyPlugin!

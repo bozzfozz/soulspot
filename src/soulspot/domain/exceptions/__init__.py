@@ -113,6 +113,7 @@ class OperationFailedError(DomainException):
     Raised when an operation fails due to file system errors, network
     errors, or other external factors.
     """
+
     pass
 
 

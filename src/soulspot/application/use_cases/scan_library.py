@@ -83,6 +83,7 @@ class ScanLibraryUseCase:
                 allowed_dirs,
             )
             from soulspot.domain.exceptions import AuthorizationError
+
             raise AuthorizationError(
                 f"Scan path {scan_path} is not in allowed directories. "
                 f"Allowed: {', '.join(str(d) for d in allowed_dirs)}"

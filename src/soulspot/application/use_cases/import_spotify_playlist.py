@@ -123,7 +123,9 @@ class ImportSpotifyPlaylistUseCase(
             spotify_playlist = {
                 "name": playlist_dto.name,
                 "description": playlist_dto.description,
-                "images": [{"url": playlist_dto.cover.url}] if playlist_dto.cover.url else [],
+                "images": [{"url": playlist_dto.cover.url}]
+                if playlist_dto.cover.url
+                else [],
                 "tracks": {
                     "items": [
                         {
@@ -140,10 +142,18 @@ class ImportSpotifyPlaylistUseCase(
                                 ],
                                 "album": {
                                     "name": t.album.title if t.album else None,
-                                    "uri": f"spotify:album:{t.album.spotify_id}" if t.album else None,
-                                    "images": [{"url": t.album.cover.url}] if t.album and t.album.cover.url else [],
-                                    "release_date": t.album.release_date if t.album else None,
-                                } if t.album else None,
+                                    "uri": f"spotify:album:{t.album.spotify_id}"
+                                    if t.album
+                                    else None,
+                                    "images": [{"url": t.album.cover.url}]
+                                    if t.album and t.album.cover.url
+                                    else [],
+                                    "release_date": t.album.release_date
+                                    if t.album
+                                    else None,
+                                }
+                                if t.album
+                                else None,
                             }
                         }
                         for t in (playlist_dto.tracks or [])
@@ -152,7 +162,10 @@ class ImportSpotifyPlaylistUseCase(
             }
         except Exception as e:
             from soulspot.domain.exceptions import ExternalServiceError
-            raise ExternalServiceError(f"Failed to fetch playlist from Spotify: {e}") from e
+
+            raise ExternalServiceError(
+                f"Failed to fetch playlist from Spotify: {e}"
+            ) from e
 
         # 2. Create or update playlist entity
         playlist_id = PlaylistId.generate()
@@ -164,6 +177,7 @@ class ImportSpotifyPlaylistUseCase(
 
         # Hey future me - Playlist.cover ist jetzt ImageRef!
         from soulspot.domain.value_objects import ImageRef
+
         playlist = Playlist(
             id=playlist_id,
             name=spotify_playlist["name"],

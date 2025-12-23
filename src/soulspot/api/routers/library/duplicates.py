@@ -106,7 +106,7 @@ async def get_duplicate_files(
 
     # Apply pagination
     total = len(all_duplicates)
-    duplicates = all_duplicates[offset:offset + limit]
+    duplicates = all_duplicates[offset : offset + limit]
 
     return {
         "duplicates": duplicates,

@@ -357,9 +357,7 @@ class CircuitBreakerSpotifyClient(ISpotifyClient):
     # USER FOLLOWS: FOLLOW/UNFOLLOW ARTISTS
     # =========================================================================
 
-    async def follow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def follow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Follow one or more artists on Spotify."""
         await self._circuit_breaker.call(
             self._client.follow_artist,
@@ -367,9 +365,7 @@ class CircuitBreakerSpotifyClient(ISpotifyClient):
             access_token=access_token,
         )
 
-    async def unfollow_artist(
-        self, artist_ids: list[str], access_token: str
-    ) -> None:
+    async def unfollow_artist(self, artist_ids: list[str], access_token: str) -> None:
         """Unfollow one or more artists on Spotify."""
         await self._circuit_breaker.call(
             self._client.unfollow_artist,

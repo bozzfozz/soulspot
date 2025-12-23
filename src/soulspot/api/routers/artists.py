@@ -149,6 +149,7 @@ async def sync_followed_artists(
     try:
         # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
         from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
         deezer_plugin = DeezerPlugin()
 
         service = FollowedArtistsService(
@@ -179,14 +180,15 @@ async def sync_followed_artists(
     except Exception as e:
         await session.rollback()
         from soulspot.infrastructure.observability.log_messages import LogMessages
+
         logger.error(
             LogMessages.sync_failed(
                 entity="Followed Artists",
                 source="Spotify",
                 error=str(e),
-                hint="Check Spotify authentication in Settings → Providers → Spotify"
+                hint="Check Spotify authentication in Settings → Providers → Spotify",
             ),
-            exc_info=True
+            exc_info=True,
         )
         raise HTTPException(
             status_code=500,
@@ -717,7 +719,9 @@ async def get_related_artists(
                     image_url=artist_dto.image.url,  # ArtistDTO.image is ImageRef
                     genres=artist_dto.genres[:3] if artist_dto.genres else [],
                     popularity=artist_dto.popularity or 0,
-                    is_following=following_statuses.get(artist_dto.spotify_id or "", False),
+                    is_following=following_statuses.get(
+                        artist_dto.spotify_id or "", False
+                    ),
                 )
             )
 
@@ -729,7 +733,9 @@ async def get_related_artists(
         )
 
     except Exception as e:
-        logger.error(f"Failed to get related artists for {spotify_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to get related artists for {spotify_id}: {e}", exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get related artists: {str(e)}",

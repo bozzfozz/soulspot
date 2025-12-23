@@ -278,7 +278,8 @@ class PostProcessingWorker:
                     except Exception as e:
                         self._stats["total_errors"] += 1
                         logger.error(
-                            f"Error processing download {download.id}: {e}", exc_info=True
+                            f"Error processing download {download.id}: {e}",
+                            exc_info=True,
                         )
 
                 # Commit all changes
@@ -414,9 +415,7 @@ class PostProcessingWorker:
         result.final_path = str(target_path)
         return result
 
-    async def _validate_quality(
-        self, file_path: Path, profile: QualityProfile
-    ) -> dict:
+    async def _validate_quality(self, file_path: Path, profile: QualityProfile) -> dict:
         """Validate file quality against profile.
 
         Hey future me - this checks if the file meets quality requirements!

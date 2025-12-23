@@ -176,15 +176,19 @@ class WatchlistService:
                         or release_date > watchlist.last_release_date
                     ):
                         # Convert AlbumDTO to dict for backward compatibility
-                        new_releases.append({
-                            "id": album.spotify_id,
-                            "name": album.title,
-                            "release_date": album.release_date,
-                            "total_tracks": album.total_tracks,
-                            "album_type": album.album_type,
-                            "images": [{"url": album.cover.url}] if album.cover.url else [],
-                            "spotify_uri": album.spotify_uri,
-                        })
+                        new_releases.append(
+                            {
+                                "id": album.spotify_id,
+                                "name": album.title,
+                                "release_date": album.release_date,
+                                "total_tracks": album.total_tracks,
+                                "album_type": album.album_type,
+                                "images": [{"url": album.cover.url}]
+                                if album.cover.url
+                                else [],
+                                "spotify_uri": album.spotify_uri,
+                            }
+                        )
                         if (
                             watchlist.last_release_date is None
                             or release_date > watchlist.last_release_date

@@ -131,7 +131,9 @@ class DownloadStatusSyncWorker:
                     # Check if timeout has passed to try recovery
                     if await self._should_attempt_recovery():
                         self._circuit_state = self.STATE_HALF_OPEN
-                        logger.info("Circuit breaker half-open, testing slskd connection")
+                        logger.info(
+                            "Circuit breaker half-open, testing slskd connection"
+                        )
                     else:
                         # Still in cooldown, skip this cycle
                         await asyncio.sleep(self._sync_interval)
@@ -230,11 +232,13 @@ class DownloadStatusSyncWorker:
                 logger.error(
                     LogMessages.connection_failed(
                         service="slskd",
-                        target=f"{self._slskd_client._base_url}/api/v0/transfers/downloads" if hasattr(self._slskd_client, '_base_url') else "slskd API",
+                        target=f"{self._slskd_client._base_url}/api/v0/transfers/downloads"
+                        if hasattr(self._slskd_client, "_base_url")
+                        else "slskd API",
                         error=str(e),
-                        hint="Persistent connection failure. Check slskd container health."
+                        hint="Persistent connection failure. Check slskd container health.",
                     ),
-                    exc_info=True
+                    exc_info=True,
                 )
 
             self._last_sync_stats = stats
@@ -444,9 +448,7 @@ class DownloadStatusSyncWorker:
         test request in half-open, and if it succeeds, we fully reset.
         """
         if self._circuit_state == self.STATE_HALF_OPEN:
-            logger.info(
-                "Circuit breaker: Recovery confirmed, transitioning to CLOSED"
-            )
+            logger.info("Circuit breaker: Recovery confirmed, transitioning to CLOSED")
 
         self._consecutive_failures = 0
         self._circuit_state = self.STATE_CLOSED

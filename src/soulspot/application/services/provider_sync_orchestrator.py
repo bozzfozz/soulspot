@@ -33,6 +33,7 @@ class AggregatedSyncResult:
     Hey future me - dieses Result zeigt was von welchem Provider kam!
     Wichtig für UI: User sieht "12 from Spotify, 8 from Deezer".
     """
+
     synced: bool = False
     total: int = 0
     added: int = 0
@@ -167,12 +168,15 @@ class ProviderSyncOrchestrator:
                     pass  # Will use artist_name parameter
 
                 deezer_result = await self._deezer_sync.sync_artist_albums(
-                    artist_id=deezer_id or artist_id,  # Fallback to Spotify ID for lookup
+                    artist_id=deezer_id
+                    or artist_id,  # Fallback to Spotify ID for lookup
                     artist_name=artist_name,
                     force=force,
                 )
                 if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get("albums_synced", 0)
+                    result.source_counts["deezer"] = deezer_result.get(
+                        "albums_synced", 0
+                    )
                     result.added += deezer_result.get("albums_synced", 0)
                 elif deezer_result.get("skipped_cooldown"):
                     result.skipped_providers.append("deezer")
@@ -229,6 +233,7 @@ class ProviderSyncOrchestrator:
             AggregatedSyncResult with deprecation warning
         """
         import warnings
+
         warnings.warn(
             "ProviderSyncOrchestrator.sync_new_releases() is deprecated. "
             "Use NewReleasesSyncWorker with NewReleasesCache instead. "
@@ -288,7 +293,9 @@ class ProviderSyncOrchestrator:
                     force=force,
                 )
                 if spotify_result.get("synced"):
-                    result.source_counts["spotify"] = spotify_result.get("tracks_synced", 0)
+                    result.source_counts["spotify"] = spotify_result.get(
+                        "tracks_synced", 0
+                    )
                     result.added += spotify_result.get("tracks_synced", 0)
             except Exception as e:
                 logger.warning(f"Spotify artist top tracks sync failed: {e}")
@@ -307,7 +314,9 @@ class ProviderSyncOrchestrator:
                     force=force,
                 )
                 if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get("tracks_synced", 0)
+                    result.source_counts["deezer"] = deezer_result.get(
+                        "tracks_synced", 0
+                    )
                     result.added += deezer_result.get("tracks_synced", 0)
             except Exception as e:
                 logger.warning(f"Deezer artist top tracks sync failed: {e}")
@@ -358,7 +367,9 @@ class ProviderSyncOrchestrator:
                     force=force,
                 )
                 if spotify_result.get("synced"):
-                    result.source_counts["spotify"] = spotify_result.get("artists_synced", 0)
+                    result.source_counts["spotify"] = spotify_result.get(
+                        "artists_synced", 0
+                    )
                     result.added += spotify_result.get("artists_synced", 0)
             except Exception as e:
                 logger.warning(f"Spotify related artists sync failed: {e}")
@@ -377,7 +388,9 @@ class ProviderSyncOrchestrator:
                     force=force,
                 )
                 if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get("artists_synced", 0)
+                    result.source_counts["deezer"] = deezer_result.get(
+                        "artists_synced", 0
+                    )
                     result.added += deezer_result.get("artists_synced", 0)
             except Exception as e:
                 logger.warning(f"Deezer related artists sync failed: {e}")
@@ -408,6 +421,7 @@ class ProviderSyncOrchestrator:
         User's Library soll nicht mit Browse-Content gemischt werden.
         """
         import warnings
+
         warnings.warn(
             "sync_charts() is deprecated. Charts use in-memory cache now. "
             "Use ChartsService directly or DeezerSyncWorker.get_cached_charts().",
@@ -476,7 +490,9 @@ class ProviderSyncOrchestrator:
                     force=force,
                 )
                 if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get("tracks_synced", 0)
+                    result.source_counts["deezer"] = deezer_result.get(
+                        "tracks_synced", 0
+                    )
                     result.added += deezer_result.get("tracks_synced", 0)
             except Exception as e:
                 logger.warning(f"Deezer album tracks sync failed: {e}")

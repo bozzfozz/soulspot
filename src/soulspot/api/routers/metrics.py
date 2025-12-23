@@ -53,10 +53,16 @@ async def get_prometheus_metrics(
 
     # Update gauges with current queue state from DB
     try:
-        waiting = await download_repository.count_by_status(DownloadStatus.WAITING.value)
-        pending = await download_repository.count_by_status(DownloadStatus.PENDING.value)
+        waiting = await download_repository.count_by_status(
+            DownloadStatus.WAITING.value
+        )
+        pending = await download_repository.count_by_status(
+            DownloadStatus.PENDING.value
+        )
         queued = await download_repository.count_by_status(DownloadStatus.QUEUED.value)
-        downloading = await download_repository.count_by_status(DownloadStatus.DOWNLOADING.value)
+        downloading = await download_repository.count_by_status(
+            DownloadStatus.DOWNLOADING.value
+        )
 
         metrics.set_queue_size(waiting, status="waiting")
         metrics.set_queue_size(pending, status="pending")
@@ -93,10 +99,18 @@ async def get_metrics_json(
 
     # Update gauges with current state
     try:
-        waiting = await download_repository.count_by_status(DownloadStatus.WAITING.value)
-        pending = await download_repository.count_by_status(DownloadStatus.PENDING.value)
-        downloading = await download_repository.count_by_status(DownloadStatus.DOWNLOADING.value)
-        completed = await download_repository.count_by_status(DownloadStatus.COMPLETED.value)
+        waiting = await download_repository.count_by_status(
+            DownloadStatus.WAITING.value
+        )
+        pending = await download_repository.count_by_status(
+            DownloadStatus.PENDING.value
+        )
+        downloading = await download_repository.count_by_status(
+            DownloadStatus.DOWNLOADING.value
+        )
+        completed = await download_repository.count_by_status(
+            DownloadStatus.COMPLETED.value
+        )
         failed = await download_repository.count_by_status(DownloadStatus.FAILED.value)
 
         metrics.set_queue_size(waiting, status="waiting")

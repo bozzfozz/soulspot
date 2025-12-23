@@ -197,18 +197,16 @@ class LibraryDiscoveryWorker:
                 # Phase 1: Enrich artists without provider IDs
                 phase1_stats = await self._phase1_enrich_artists(session)
                 stats["phase1_artist_enrichment"] = phase1_stats
-                stats["artists_enriched"] = (
-                    phase1_stats.get("deezer_enriched", 0) +
-                    phase1_stats.get("spotify_enriched", 0)
-                )
+                stats["artists_enriched"] = phase1_stats.get(
+                    "deezer_enriched", 0
+                ) + phase1_stats.get("spotify_enriched", 0)
 
                 # Phase 2: Fetch discography for artists with IDs
                 phase2_stats = await self._phase2_fetch_discography(session)
                 stats["phase2_discography"] = phase2_stats
-                stats["albums_discovered"] = (
-                    phase2_stats.get("deezer_albums_added", 0) +
-                    phase2_stats.get("spotify_albums_added", 0)
-                )
+                stats["albums_discovered"] = phase2_stats.get(
+                    "deezer_albums_added", 0
+                ) + phase2_stats.get("spotify_albums_added", 0)
 
                 # Phase 3: Update is_owned flags
                 phase3_stats = await self._phase3_update_ownership(session)
@@ -217,18 +215,16 @@ class LibraryDiscoveryWorker:
                 # Phase 4: Enrich albums without provider IDs
                 phase4_stats = await self._phase4_enrich_albums(session)
                 stats["phase4_album_enrichment"] = phase4_stats
-                stats["albums_enriched"] = (
-                    phase4_stats.get("deezer_enriched", 0) +
-                    phase4_stats.get("spotify_enriched", 0)
-                )
+                stats["albums_enriched"] = phase4_stats.get(
+                    "deezer_enriched", 0
+                ) + phase4_stats.get("spotify_enriched", 0)
 
                 # Phase 5: Enrich tracks via ISRC lookup
                 phase5_stats = await self._phase5_enrich_tracks(session)
                 stats["phase5_track_enrichment"] = phase5_stats
-                stats["tracks_enriched"] = (
-                    phase5_stats.get("deezer_enriched", 0) +
-                    phase5_stats.get("spotify_enriched", 0)
-                )
+                stats["tracks_enriched"] = phase5_stats.get(
+                    "deezer_enriched", 0
+                ) + phase5_stats.get("spotify_enriched", 0)
 
                 # Commit all changes
                 await session.commit()
@@ -337,12 +333,16 @@ class LibraryDiscoveryWorker:
             return stats
 
         # Initialize plugins using centralized helper
-        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(session)
+        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(
+            session
+        )
         stats["sources_used"] = sources_used
 
         # Log which sources we're using
         if deezer_plugin and spotify_plugin:
-            logger.info(f"Phase 1: Enriching {len(artists)} artists via Deezer + Spotify")
+            logger.info(
+                f"Phase 1: Enriching {len(artists)} artists via Deezer + Spotify"
+            )
         elif deezer_plugin:
             logger.info(f"Phase 1: Enriching {len(artists)} artists via Deezer only")
         elif spotify_plugin:
@@ -362,7 +362,9 @@ class LibraryDiscoveryWorker:
             try:
                 # === DEEZER (if available and artist missing deezer_id) ===
                 if deezer_plugin and not artist.deezer_id:
-                    search_result = await deezer_plugin.search_artists(artist.name, limit=5)
+                    search_result = await deezer_plugin.search_artists(
+                        artist.name, limit=5
+                    )
 
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
@@ -371,7 +373,9 @@ class LibraryDiscoveryWorker:
                             deezer_id=best_match.deezer_id,
                         )
                         stats["deezer_enriched"] += 1
-                        logger.debug(f"Deezer enriched '{artist.name}' → deezer_id={best_match.deezer_id}")
+                        logger.debug(
+                            f"Deezer enriched '{artist.name}' → deezer_id={best_match.deezer_id}"
+                        )
 
                     # Rate limit
                     await asyncio.sleep(0.05)
@@ -379,7 +383,9 @@ class LibraryDiscoveryWorker:
                 # === SPOTIFY (if available and artist missing spotify_uri) ===
                 if spotify_plugin and not artist.spotify_uri:
                     try:
-                        spotify_result = await spotify_plugin.search_artists(artist.name, limit=5)
+                        spotify_result = await spotify_plugin.search_artists(
+                            artist.name, limit=5
+                        )
 
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
@@ -388,7 +394,9 @@ class LibraryDiscoveryWorker:
                                 spotify_uri=best_match.spotify_uri,
                             )
                             stats["spotify_enriched"] += 1
-                            logger.debug(f"Spotify enriched '{artist.name}' → spotify_uri={best_match.spotify_uri}")
+                            logger.debug(
+                                f"Spotify enriched '{artist.name}' → spotify_uri={best_match.spotify_uri}"
+                            )
 
                         # Rate limit
                         await asyncio.sleep(0.05)
@@ -398,10 +406,12 @@ class LibraryDiscoveryWorker:
 
             except Exception as e:
                 stats["failed"] += 1
-                stats["errors"].append({
-                    "artist": artist.name,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "artist": artist.name,
+                        "error": str(e),
+                    }
+                )
                 logger.warning(f"Failed to enrich artist '{artist.name}': {e}")
 
         return stats
@@ -442,23 +452,33 @@ class LibraryDiscoveryWorker:
         discography_repo = ArtistDiscographyRepository(session)
 
         # Get artists with deezer_id that haven't been synced recently
-        artists = await artist_repo.get_with_deezer_id_needing_discography_sync(limit=20)
+        artists = await artist_repo.get_with_deezer_id_needing_discography_sync(
+            limit=20
+        )
 
         if not artists:
             logger.debug("No artists need discography sync")
             return stats
 
         # Initialize plugins using centralized helper
-        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(session)
+        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(
+            session
+        )
         stats["sources_used"] = sources_used
 
         # Log which sources we're using
         if deezer_plugin and spotify_plugin:
-            logger.info(f"Phase 2: Fetching discography for {len(artists)} artists via Deezer + Spotify")
+            logger.info(
+                f"Phase 2: Fetching discography for {len(artists)} artists via Deezer + Spotify"
+            )
         elif deezer_plugin:
-            logger.info(f"Phase 2: Fetching discography for {len(artists)} artists via Deezer only")
+            logger.info(
+                f"Phase 2: Fetching discography for {len(artists)} artists via Deezer only"
+            )
         elif spotify_plugin:
-            logger.info(f"Phase 2: Fetching discography for {len(artists)} artists via Spotify only")
+            logger.info(
+                f"Phase 2: Fetching discography for {len(artists)} artists via Spotify only"
+            )
         else:
             logger.warning("Phase 2: No providers available for discography fetch!")
             return stats
@@ -519,10 +539,14 @@ class LibraryDiscoveryWorker:
                                 artist_id=artist.id,
                                 title=album_dto.title,
                                 album_type=album_type,
-                                spotify_uri=SpotifyUri(album_dto.spotify_uri) if album_dto.spotify_uri else None,
+                                spotify_uri=SpotifyUri(album_dto.spotify_uri)
+                                if album_dto.spotify_uri
+                                else None,
                                 release_date=album_dto.release_date,
                                 total_tracks=album_dto.total_tracks,
-                                cover_url=album_dto.cover.url if album_dto.cover else None,
+                                cover_url=album_dto.cover.url
+                                if album_dto.cover
+                                else None,
                                 source="spotify",
                             )
 
@@ -531,16 +555,20 @@ class LibraryDiscoveryWorker:
 
                         await asyncio.sleep(0.1)
                     except Exception as e:
-                        logger.debug(f"Spotify discography failed for '{artist.name}': {e}")
+                        logger.debug(
+                            f"Spotify discography failed for '{artist.name}': {e}"
+                        )
 
                 # Update artist's discography sync timestamp
                 await artist_repo.update_albums_synced_at(artist.id)
 
             except Exception as e:
-                stats["errors"].append({
-                    "artist": artist.name,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "artist": artist.name,
+                        "error": str(e),
+                    }
+                )
                 logger.warning(f"Failed to fetch discography for '{artist.name}': {e}")
 
         return stats
@@ -586,10 +614,12 @@ class LibraryDiscoveryWorker:
                 stats["entries_updated"] += updated
 
             except Exception as e:
-                stats["errors"].append({
-                    "artist": artist.name,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "artist": artist.name,
+                        "error": str(e),
+                    }
+                )
                 logger.warning(f"Failed to update ownership for '{artist.name}': {e}")
 
         return stats
@@ -630,14 +660,18 @@ class LibraryDiscoveryWorker:
             return stats
 
         # Initialize plugins
-        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(session)
+        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(
+            session
+        )
         stats["sources_used"] = sources_used
 
         if not deezer_plugin and not spotify_plugin:
             logger.warning("Phase 4: No providers available for album enrichment!")
             return stats
 
-        logger.info(f"Phase 4: Enriching {len(albums)} albums via {', '.join(sources_used)}")
+        logger.info(
+            f"Phase 4: Enriching {len(albums)} albums via {', '.join(sources_used)}"
+        )
 
         for album in albums:
             stats["processed"] += 1
@@ -655,13 +689,17 @@ class LibraryDiscoveryWorker:
                 # === DEEZER (if available and album missing deezer_id) ===
                 if deezer_plugin and not album.deezer_id:
                     search_query = f"{artist_name} {album.title}"
-                    search_result = await deezer_plugin.search_albums(search_query, limit=5)
+                    search_result = await deezer_plugin.search_albums(
+                        search_query, limit=5
+                    )
 
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
 
                         # Check if deezer_id already exists on another album (avoid duplicates)
-                        existing = await album_repo.get_by_deezer_id(best_match.deezer_id)
+                        existing = await album_repo.get_by_deezer_id(
+                            best_match.deezer_id
+                        )
                         if existing and existing.id != album.id:
                             logger.debug(
                                 f"Deezer ID {best_match.deezer_id} already assigned to album "
@@ -684,7 +722,9 @@ class LibraryDiscoveryWorker:
                                     f"Set primary_type='{best_match.album_type}' for album '{album.title}'"
                                 )
                             stats["deezer_enriched"] += 1
-                            logger.debug(f"Deezer enriched album '{album.title}' → deezer_id={best_match.deezer_id}")
+                            logger.debug(
+                                f"Deezer enriched album '{album.title}' → deezer_id={best_match.deezer_id}"
+                            )
 
                     await asyncio.sleep(0.05)
 
@@ -692,13 +732,17 @@ class LibraryDiscoveryWorker:
                 if spotify_plugin and not album.spotify_uri:
                     try:
                         search_query = f"{artist_name} {album.title}"
-                        spotify_result = await spotify_plugin.search_album(search_query, limit=5)
+                        spotify_result = await spotify_plugin.search_album(
+                            search_query, limit=5
+                        )
 
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
 
                             # Check if spotify_uri already exists on another album (avoid duplicates)
-                            existing = await album_repo.get_by_spotify_uri(str(best_match.spotify_uri))
+                            existing = await album_repo.get_by_spotify_uri(
+                                str(best_match.spotify_uri)
+                            )
                             if existing and existing.id != album.id:
                                 logger.debug(
                                     f"Spotify URI {best_match.spotify_uri} already assigned to album "
@@ -721,27 +765,37 @@ class LibraryDiscoveryWorker:
                                         f"Set primary_type='{best_match.album_type}' for album '{album.title}'"
                                     )
                                 stats["spotify_enriched"] += 1
-                                logger.debug(f"Spotify enriched album '{album.title}' → spotify_uri={best_match.spotify_uri}")
+                                logger.debug(
+                                    f"Spotify enriched album '{album.title}' → spotify_uri={best_match.spotify_uri}"
+                                )
 
                         await asyncio.sleep(0.05)
                     except Exception as e:
-                        logger.debug(f"Spotify search failed for album '{album.title}': {e}")
+                        logger.debug(
+                            f"Spotify search failed for album '{album.title}': {e}"
+                        )
 
             except Exception as e:
                 stats["failed"] += 1
-                stats["errors"].append({
-                    "album": album.title,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "album": album.title,
+                        "error": str(e),
+                    }
+                )
                 logger.warning(f"Failed to enrich album '{album.title}': {e}")
 
         # === PHASE 4B: Update primary_type for albums that already have IDs ===
         # Hey future me - this is for albums that got IDs before we added primary_type!
         # We fetch the album data from Deezer/Spotify and extract the album_type.
-        albums_needing_type = await album_repo.get_albums_without_primary_type(limit=100)
+        albums_needing_type = await album_repo.get_albums_without_primary_type(
+            limit=100
+        )
 
         if albums_needing_type and (deezer_plugin or spotify_plugin):
-            logger.info(f"Phase 4B: Updating primary_type for {len(albums_needing_type)} albums with existing IDs")
+            logger.info(
+                f"Phase 4B: Updating primary_type for {len(albums_needing_type)} albums with existing IDs"
+            )
             stats["primary_type_updated"] = 0
 
             for album in albums_needing_type:
@@ -749,7 +803,9 @@ class LibraryDiscoveryWorker:
                     # Try Deezer first (if album has deezer_id)
                     if album.deezer_id and deezer_plugin:
                         try:
-                            album_details = await deezer_plugin.get_album(str(album.deezer_id))
+                            album_details = await deezer_plugin.get_album(
+                                str(album.deezer_id)
+                            )
                             if album_details and album_details.album_type:
                                 await album_repo.update_primary_type(
                                     album_id=album.id,
@@ -761,12 +817,16 @@ class LibraryDiscoveryWorker:
                                 )
                                 continue  # Skip Spotify if Deezer worked
                         except Exception as e:
-                            logger.debug(f"Deezer album fetch failed for '{album.title}': {e}")
+                            logger.debug(
+                                f"Deezer album fetch failed for '{album.title}': {e}"
+                            )
 
                     # Fallback to Spotify (if album has spotify_uri)
                     if album.spotify_uri and spotify_plugin:
                         try:
-                            album_details = await spotify_plugin.get_album(str(album.spotify_uri))
+                            album_details = await spotify_plugin.get_album(
+                                str(album.spotify_uri)
+                            )
                             if album_details and album_details.album_type:
                                 await album_repo.update_primary_type(
                                     album_id=album.id,
@@ -777,11 +837,15 @@ class LibraryDiscoveryWorker:
                                     f"Updated primary_type='{album_details.album_type}' for album '{album.title}' via Spotify"
                                 )
                         except Exception as e:
-                            logger.debug(f"Spotify album fetch failed for '{album.title}': {e}")
+                            logger.debug(
+                                f"Spotify album fetch failed for '{album.title}': {e}"
+                            )
 
                     await asyncio.sleep(0.05)
                 except Exception as e:
-                    logger.debug(f"Failed to update primary_type for album '{album.title}': {e}")
+                    logger.debug(
+                        f"Failed to update primary_type for album '{album.title}': {e}"
+                    )
 
         return stats
 
@@ -820,14 +884,18 @@ class LibraryDiscoveryWorker:
             return stats
 
         # Initialize plugins
-        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(session)
+        deezer_plugin, spotify_plugin, sources_used = await self._initialize_plugins(
+            session
+        )
         stats["sources_used"] = sources_used
 
         if not deezer_plugin and not spotify_plugin:
             logger.warning("Phase 5: No providers available for track enrichment!")
             return stats
 
-        logger.info(f"Phase 5: Enriching {len(tracks)} tracks via ISRC lookup using {', '.join(sources_used)}")
+        logger.info(
+            f"Phase 5: Enriching {len(tracks)} tracks via ISRC lookup using {', '.join(sources_used)}"
+        )
 
         for track in tracks:
             stats["processed"] += 1
@@ -849,7 +917,9 @@ class LibraryDiscoveryWorker:
                             deezer_id=deezer_track.deezer_id,
                         )
                         stats["deezer_enriched"] += 1
-                        logger.debug(f"Deezer enriched track '{track.title}' via ISRC → deezer_id={deezer_track.deezer_id}")
+                        logger.debug(
+                            f"Deezer enriched track '{track.title}' via ISRC → deezer_id={deezer_track.deezer_id}"
+                        )
 
                     await asyncio.sleep(0.05)
 
@@ -857,7 +927,9 @@ class LibraryDiscoveryWorker:
                 if spotify_plugin and not track.spotify_uri:
                     try:
                         # Spotify ISRC search via track search with ISRC filter
-                        spotify_result = await spotify_plugin.search_track(f"isrc:{track.isrc}", limit=1)
+                        spotify_result = await spotify_plugin.search_track(
+                            f"isrc:{track.isrc}", limit=1
+                        )
 
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
@@ -866,19 +938,25 @@ class LibraryDiscoveryWorker:
                                 spotify_uri=str(best_match.spotify_uri),
                             )
                             stats["spotify_enriched"] += 1
-                            logger.debug(f"Spotify enriched track '{track.title}' via ISRC → spotify_uri={best_match.spotify_uri}")
+                            logger.debug(
+                                f"Spotify enriched track '{track.title}' via ISRC → spotify_uri={best_match.spotify_uri}"
+                            )
 
                         await asyncio.sleep(0.05)
                     except Exception as e:
-                        logger.debug(f"Spotify ISRC search failed for track '{track.title}': {e}")
+                        logger.debug(
+                            f"Spotify ISRC search failed for track '{track.title}': {e}"
+                        )
 
             except Exception as e:
                 stats["failed"] += 1
-                stats["errors"].append({
-                    "track": track.title,
-                    "isrc": track.isrc,
-                    "error": str(e),
-                })
+                stats["errors"].append(
+                    {
+                        "track": track.title,
+                        "isrc": track.isrc,
+                        "error": str(e),
+                    }
+                )
                 logger.warning(f"Failed to enrich track '{track.title}' via ISRC: {e}")
 
         return stats

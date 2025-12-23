@@ -84,10 +84,7 @@ class DeezerCredentials:
     def is_configured(self) -> bool:
         """Check if credentials are complete."""
         return bool(
-            self.app_id
-            and self.app_id.strip()
-            and self.secret
-            and self.secret.strip()
+            self.app_id and self.app_id.strip() and self.secret and self.secret.strip()
         )
 
 
@@ -125,8 +122,12 @@ class CredentialsService:
             SpotifyCredentials with client_id, client_secret, redirect_uri
         """
         # Try DB first
-        client_id = await self._settings_service.get_string("spotify.client_id", default="")
-        client_secret = await self._settings_service.get_string("spotify.client_secret", default="")
+        client_id = await self._settings_service.get_string(
+            "spotify.client_id", default=""
+        )
+        client_secret = await self._settings_service.get_string(
+            "spotify.client_secret", default=""
+        )
         redirect_uri = await self._settings_service.get_string(
             "spotify.redirect_uri",
             default="http://localhost:8000/api/auth/callback",
@@ -161,7 +162,9 @@ class CredentialsService:
             SlskdCredentials with url, api_key, username, password
         """
         # Try DB first
-        url = await self._settings_service.get_string("slskd.url", default="http://localhost:5030")
+        url = await self._settings_service.get_string(
+            "slskd.url", default="http://localhost:5030"
+        )
         api_key = await self._settings_service.get_string("slskd.api_key", default="")
         username = await self._settings_service.get_string("slskd.username", default="")
         password = await self._settings_service.get_string("slskd.password", default="")

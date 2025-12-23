@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class _ProviderEntry:
     """Internal entry for registered provider with priority."""
+
     provider: IImageProvider
     priority: int
 

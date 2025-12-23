@@ -206,9 +206,9 @@ class FollowedArtistsService:
                             LogMessages.sync_failed(
                                 sync_type="artist_processing",
                                 reason=f"Failed to process artist {artist_dto.name}",
-                                hint="Check database constraints and artist data validity"
+                                hint="Check database constraints and artist data validity",
                             ).format(),
-                            exc_info=e
+                            exc_info=e,
                         )
                         stats["errors"] += 1
 
@@ -226,9 +226,9 @@ class FollowedArtistsService:
                     LogMessages.sync_failed(
                         sync_type="followed_artists_pagination",
                         reason=f"Error fetching followed artists page {page}",
-                        hint="Returning partial results - check Spotify API status"
+                        hint="Returning partial results - check Spotify API status",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 # Return partial results if pagination fails mid-sync
                 break
@@ -274,7 +274,9 @@ class FollowedArtistsService:
 
         # 1. Sync from Spotify (if plugin available AND authenticated)
         # Hey future me - spotify_plugin can be None if user isn't logged in!
-        if self.spotify_plugin and self.spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
+        if self.spotify_plugin and self.spotify_plugin.can_use(
+            PluginCapability.USER_FOLLOWED_ARTISTS
+        ):
             try:
                 spotify_artists, spotify_stats = await self.sync_followed_artists()
                 aggregate_stats["providers"]["spotify"] = spotify_stats
@@ -299,7 +301,9 @@ class FollowedArtistsService:
             aggregate_stats["providers"]["spotify"] = {"skipped": "not_authenticated"}
 
         # 2. Sync from Deezer (if authenticated)
-        if self._deezer_plugin and self._deezer_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
+        if self._deezer_plugin and self._deezer_plugin.can_use(
+            PluginCapability.USER_FOLLOWED_ARTISTS
+        ):
             try:
                 deezer_artists, deezer_stats = await self._sync_deezer_followed_artists(
                     seen_names=seen_names
@@ -393,7 +397,9 @@ class FollowedArtistsService:
                         else:
                             stats["updated"] += 1
                     except Exception as e:
-                        logger.error(f"Failed to process Deezer artist {artist_dto.name}: {e}")
+                        logger.error(
+                            f"Failed to process Deezer artist {artist_dto.name}: {e}"
+                        )
                         stats["errors"] += 1
 
                 # Deezer uses index-based pagination
@@ -486,10 +492,14 @@ class FollowedArtistsService:
         # Validate based on source
         if source == "spotify":
             if not artist_dto.spotify_id or not artist_dto.name:
-                raise ValidationError("Invalid Spotify artist DTO: missing spotify_id or name")
+                raise ValidationError(
+                    "Invalid Spotify artist DTO: missing spotify_id or name"
+                )
         elif source == "deezer":
             if not artist_dto.deezer_id or not artist_dto.name:
-                raise ValidationError("Invalid Deezer artist DTO: missing deezer_id or name")
+                raise ValidationError(
+                    "Invalid Deezer artist DTO: missing deezer_id or name"
+                )
         else:
             raise ValidationError(f"Unknown source: {source}")
 
@@ -538,6 +548,7 @@ class FollowedArtistsService:
             # Entity now uses ImageRef for image
             if artist.image.url != image_url and image_url:
                 from soulspot.domain.value_objects import ImageRef
+
                 artist.image = ImageRef(url=image_url)
                 artist.metadata_sources["image"] = source
                 needs_update = True
@@ -557,7 +568,8 @@ class FollowedArtistsService:
         return artist, was_created
 
     async def sync_artist_albums(
-        self, artist_id: str,
+        self,
+        artist_id: str,
     ) -> dict[str, int]:
         """Sync albums for an artist into unified albums table with MULTI-PROVIDER support.
 
@@ -587,7 +599,12 @@ class FollowedArtistsService:
         from soulspot.domain.ports.plugin import PluginCapability
         from soulspot.infrastructure.persistence.repositories import AlbumRepository
 
-        stats: dict[str, int | str] = {"total": 0, "added": 0, "skipped": 0, "source": "none"}
+        stats: dict[str, int | str] = {
+            "total": 0,
+            "added": 0,
+            "skipped": 0,
+            "source": "none",
+        }
 
         # Get artist by ID
         artist = await self.artist_repo.get(artist_id)
@@ -597,7 +614,7 @@ class FollowedArtistsService:
                     operation="artist_lookup",
                     path=str(artist_id),
                     reason="Artist not found",
-                    hint="Sync followed artists first to populate artist data"
+                    hint="Sync followed artists first to populate artist data",
                 ).format()
             )
             return stats  # type: ignore[return-value]
@@ -621,7 +638,9 @@ class FollowedArtistsService:
                     )
                     albums_dtos = response.items
                     source = "spotify"
-                    logger.debug(f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}")
+                    logger.debug(
+                        f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}"
+                    )
             except Exception as e:
                 logger.warning(
                     f"Spotify album fetch failed for {artist.name}: {e}. "
@@ -651,7 +670,7 @@ class FollowedArtistsService:
                 LogMessages.sync_failed(
                     sync_type="artist_albums_fetch",
                     reason=f"No albums found for artist {artist.name}",
-                    hint="Neither Spotify nor Deezer returned albums"
+                    hint="Neither Spotify nor Deezer returned albums",
                 ).format()
             )
             return stats  # type: ignore[return-value]
@@ -710,9 +729,7 @@ class FollowedArtistsService:
             )
             if existing_by_title:
                 stats["skipped"] += 1
-                logger.debug(
-                    f"Skipping duplicate (by title/artist): {album_dto.title}"
-                )
+                logger.debug(f"Skipping duplicate (by title/artist): {album_dto.title}")
                 continue
 
             # Create new album using ProviderMappingService
@@ -812,9 +829,7 @@ class FollowedArtistsService:
     # This is a simple utility to get a preview of followed artists WITHOUT syncing to DB!
     # Useful for "show me who I follow on Spotify" without persisting data.
     # Returns list of ArtistDTOs for quick display.
-    async def preview_followed_artists(
-        self, limit: int = 50
-    ) -> list["ArtistDTO"]:
+    async def preview_followed_artists(self, limit: int = 50) -> list["ArtistDTO"]:
         """Get a preview of followed artists without syncing to database.
 
         Hey future me - refactored to use SpotifyPlugin!

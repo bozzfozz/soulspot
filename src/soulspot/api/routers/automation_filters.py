@@ -72,7 +72,9 @@ async def create_filter(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create filter: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create filter: {e}"
+        ) from e
 
 
 @router.get("/filters")
@@ -117,7 +119,9 @@ async def list_filters(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list filters: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to list filters: {e}"
+        ) from e
 
 
 @router.get("/filters/{filter_id}")
@@ -172,7 +176,9 @@ async def enable_filter(
         return {"message": "Filter enabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to enable filter: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to enable filter: {e}"
+        ) from e
 
 
 @router.post("/filters/{filter_id}/disable")
@@ -192,7 +198,9 @@ async def disable_filter(
         return {"message": "Filter disabled successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to disable filter: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to disable filter: {e}"
+        ) from e
 
 
 @router.patch("/filters/{filter_id}")
@@ -237,4 +245,6 @@ async def delete_filter(
         return {"message": "Filter deleted successfully"}
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete filter: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete filter: {e}"
+        ) from e

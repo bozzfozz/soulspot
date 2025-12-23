@@ -332,7 +332,11 @@ class SpotifyPlugin(IMusicServicePlugin):
         """
         # Extract artist name (first artist)
         artists = data.get("artists", [])
-        artist_name = (artists[0].get("name") or "Unknown Artist") if artists else "Unknown Artist"
+        artist_name = (
+            (artists[0].get("name") or "Unknown Artist")
+            if artists
+            else "Unknown Artist"
+        )
         artist_spotify_id = artists[0].get("id") if artists else None
 
         # Pick best artwork (first is usually highest quality)
@@ -385,9 +389,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         if include_tracks and "tracks" in data:
             tracks_data = data.get("tracks", {})
             items = tracks_data.get("items", [])
-            album.tracks = [
-                self._convert_track(t, album_data=data) for t in items if t
-            ]
+            album.tracks = [self._convert_track(t, album_data=data) for t in items if t]
 
         return album
 
@@ -406,7 +408,11 @@ class SpotifyPlugin(IMusicServicePlugin):
         """
         # Extract primary artist
         artists = data.get("artists", [])
-        artist_name = (artists[0].get("name") or "Unknown Artist") if artists else "Unknown Artist"
+        artist_name = (
+            (artists[0].get("name") or "Unknown Artist")
+            if artists
+            else "Unknown Artist"
+        )
         artist_spotify_id = artists[0].get("id") if artists else None
 
         # Album info (from track or parent album_data)
@@ -457,7 +463,11 @@ class SpotifyPlugin(IMusicServicePlugin):
                     source_service="spotify",
                     spotify_id=album.get("id"),
                     spotify_uri=album.get("uri"),
-                    cover=ImageRef.from_url(album.get("images", [{}])[0].get("url") if album.get("images") else None),
+                    cover=ImageRef.from_url(
+                        album.get("images", [{}])[0].get("url")
+                        if album.get("images")
+                        else None
+                    ),
                     release_date=album.get("release_date"),
                     album_type=album.get("album_type", "album"),
                     total_tracks=album.get("total_tracks"),
@@ -717,9 +727,7 @@ class SpotifyPlugin(IMusicServicePlugin):
             response.raise_for_status()
             data = response.json()
 
-            items = [
-                self._convert_album(a) for a in data.get("items", []) if a
-            ]
+            items = [self._convert_album(a) for a in data.get("items", []) if a]
             total = data.get("total", len(items))
             next_url = data.get("next")
             next_offset = offset + len(items) if next_url else None
@@ -820,9 +828,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         try:
             data = await self._client.get_album_tracks(album_id, token, limit, offset)
 
-            items = [
-                self._convert_track(t) for t in data.get("items", []) if t
-            ]
+            items = [self._convert_track(t) for t in data.get("items", []) if t]
             total = data.get("total", len(items))
             next_url = data.get("next")
             next_offset = offset + len(items) if next_url else None
@@ -885,9 +891,7 @@ class SpotifyPlugin(IMusicServicePlugin):
                 data = response.json()
 
                 tracks = data.get("tracks", [])
-                results.extend([
-                    self._convert_track(t) for t in tracks if t
-                ])
+                results.extend([self._convert_track(t) for t in tracks if t])
 
             return results
 
@@ -970,9 +974,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         try:
             data = await self._client.get_user_playlists(token, limit, offset)
 
-            items = [
-                self._convert_playlist(p) for p in data.get("items", []) if p
-            ]
+            items = [self._convert_playlist(p) for p in data.get("items", []) if p]
             total = data.get("total", len(items))
             next_url = data.get("next")
             next_offset = offset + len(items) if next_url else None
@@ -1269,7 +1271,8 @@ class SpotifyPlugin(IMusicServicePlugin):
             offset=offset,
             limit=limit,
             next_offset=offset + len(result.artists or [])
-            if result.total_artists and offset + len(result.artists or []) < result.total_artists
+            if result.total_artists
+            and offset + len(result.artists or []) < result.total_artists
             else None,
         )
 
@@ -1298,7 +1301,8 @@ class SpotifyPlugin(IMusicServicePlugin):
             offset=offset,
             limit=limit,
             next_offset=offset + len(result.tracks or [])
-            if result.total_tracks and offset + len(result.tracks or []) < result.total_tracks
+            if result.total_tracks
+            and offset + len(result.tracks or []) < result.total_tracks
             else None,
         )
 
@@ -1327,7 +1331,8 @@ class SpotifyPlugin(IMusicServicePlugin):
             offset=offset,
             limit=limit,
             next_offset=offset + len(result.albums or [])
-            if result.total_albums and offset + len(result.albums or []) < result.total_albums
+            if result.total_albums
+            and offset + len(result.albums or []) < result.total_albums
             else None,
         )
 
@@ -1356,7 +1361,8 @@ class SpotifyPlugin(IMusicServicePlugin):
             offset=offset,
             limit=limit,
             next_offset=offset + len(result.playlists or [])
-            if result.total_playlists and offset + len(result.playlists or []) < result.total_playlists
+            if result.total_playlists
+            and offset + len(result.playlists or []) < result.total_playlists
             else None,
         )
 
@@ -1416,7 +1422,9 @@ class SpotifyPlugin(IMusicServicePlugin):
                     break
                 after = result.next_offset
 
-            logger.info(f"SpotifyPlugin: Fetching new releases for {len(all_artists)} followed artists")
+            logger.info(
+                f"SpotifyPlugin: Fetching new releases for {len(all_artists)} followed artists"
+            )
 
             # Step 2: Get recent albums for each artist
             all_albums: list[AlbumDTO] = []
@@ -1448,13 +1456,17 @@ class SpotifyPlugin(IMusicServicePlugin):
 
                 except Exception as e:
                     # Log error but continue with other artists
-                    logger.warning(f"SpotifyPlugin: Failed to get albums for artist {artist.spotify_id}: {e}")
+                    logger.warning(
+                        f"SpotifyPlugin: Failed to get albums for artist {artist.spotify_id}: {e}"
+                    )
                     continue
 
             # Sort by release date (newest first)
             all_albums.sort(key=lambda a: a.release_date or "1900-01-01", reverse=True)
 
-            logger.info(f"SpotifyPlugin: Found {len(all_albums)} new releases from Spotify")
+            logger.info(
+                f"SpotifyPlugin: Found {len(all_albums)} new releases from Spotify"
+            )
             return all_albums
 
         except Exception as e:

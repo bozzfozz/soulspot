@@ -63,7 +63,9 @@ api_router.include_router(workers.router, prefix="/workers", tags=["Workers"])
 api_router.include_router(download_manager.router, tags=["Download Manager"])
 api_router.include_router(logs.router, tags=["Logs"])
 api_router.include_router(metrics.router, tags=["Metrics"])
-api_router.include_router(quality_profiles.router, prefix="/quality-profiles", tags=["Quality Profiles"])
+api_router.include_router(
+    quality_profiles.router, prefix="/quality-profiles", tags=["Quality Profiles"]
+)
 api_router.include_router(blocklist.router, prefix="/blocklist", tags=["Blocklist"])
 
 __all__ = [

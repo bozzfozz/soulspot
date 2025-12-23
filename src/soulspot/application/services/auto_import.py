@@ -131,12 +131,13 @@ class AutoImportService:
         # Validate directories exist
         if not self._download_path.exists():
             from soulspot.infrastructure.observability.log_messages import LogMessages
+
             logger.error(
                 LogMessages.config_invalid(
                     setting="Download Path",
                     value=self._download_path,
                     expected="Valid directory path",
-                    hint="Check docker-compose.yml volumes: /downloads should be mounted"
+                    hint="Check docker-compose.yml volumes: /downloads should be mounted",
                 )
             )
             self._running = False
@@ -144,12 +145,13 @@ class AutoImportService:
 
         if not self._music_path.exists():
             from soulspot.infrastructure.observability.log_messages import LogMessages
+
             logger.error(
                 LogMessages.config_invalid(
                     setting="Music Path",
                     value=self._music_path,
                     expected="Valid directory path",
-                    hint="Check docker-compose.yml volumes: /music should be mounted"
+                    hint="Check docker-compose.yml volumes: /music should be mounted",
                 )
             )
             self._running = False
@@ -208,11 +210,20 @@ class AutoImportService:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    completed_track_ids = await self._download_repository.get_completed_track_ids()
+                    completed_track_ids = (
+                        await self._download_repository.get_completed_track_ids()
+                    )
                     break
                 except Exception as e:
-                    if "provisioning a new connection" in str(e) and attempt < max_retries - 1:
-                        logger.debug("Session busy, retrying in 0.5s (attempt %d/%d)", attempt + 1, max_retries)
+                    if (
+                        "provisioning a new connection" in str(e)
+                        and attempt < max_retries - 1
+                    ):
+                        logger.debug(
+                            "Session busy, retrying in 0.5s (attempt %d/%d)",
+                            attempt + 1,
+                            max_retries,
+                        )
                         await asyncio.sleep(0.5)
                         continue
                     raise
@@ -248,7 +259,9 @@ class AutoImportService:
                             file_path.name,
                         )
                 except Exception as e:
-                    logger.exception("Error importing file %s: %s", file_path, e, exc_info=True)
+                    logger.exception(
+                        "Error importing file %s: %s", file_path, e, exc_info=True
+                    )
 
         except Exception as e:
             logger.exception("Error processing downloads: %s", e, exc_info=True)

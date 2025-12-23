@@ -366,6 +366,7 @@ class TrackView:
     - Use `title` (not `name`) to match TrackDTO
     - Use `cover` (ImageRef) for album art
     """
+
     spotify_id: str | None
     title: str  # Consistent with TrackDTO
     track_number: int
@@ -391,6 +392,7 @@ class AlbumDetailView:
     - `cover` (ImageRef) for cover art (matches AlbumDTO)
     - `name` only for legacy compatibility where absolutely necessary
     """
+
     # Album info (required fields first - no defaults)
     spotify_id: str | None
     title: str  # Consistent with AlbumDTO

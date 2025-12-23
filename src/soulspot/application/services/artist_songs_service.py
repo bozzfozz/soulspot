@@ -95,6 +95,7 @@ class ArtistSongsService:
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
         )
+
         self._mapping_service = ProviderMappingService(session)
 
     @property
@@ -204,7 +205,7 @@ class ArtistSongsService:
                 LogMessages.sync_failed(
                     sync_type="artist_top_tracks_fetch",
                     reason=f"No top tracks found for artist {artist.name}",
-                    hint="Neither Spotify nor Deezer returned tracks"
+                    hint="Neither Spotify nor Deezer returned tracks",
                 ).format()
             )
             return synced_tracks, stats  # type: ignore[return-value]
@@ -236,9 +237,9 @@ class ArtistSongsService:
                     LogMessages.sync_failed(
                         sync_type="track_processing",
                         reason=f"Failed to process track {track_dto.title}",
-                        hint="Check track data validity and database constraints"
+                        hint="Check track data validity and database constraints",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 stats["errors"] += 1
 
@@ -359,9 +360,9 @@ class ArtistSongsService:
                     LogMessages.sync_failed(
                         sync_type="artist_songs_bulk_sync",
                         reason=f"Failed to sync songs for artist {artist.name}",
-                        hint="Check artist Spotify URI and API connectivity"
+                        hint="Check artist Spotify URI and API connectivity",
                     ).format(),
-                    exc_info=e
+                    exc_info=e,
                 )
                 aggregate_stats["artist_errors"] += 1
 
@@ -410,7 +411,7 @@ class ArtistSongsService:
                     operation="track_dto_validation",
                     path="<track_dto>",
                     reason="Invalid track DTO: missing id or title",
-                    hint="Check API response format"
+                    hint="Check API response format",
                 ).format()
             )
             return None, False, False
@@ -428,7 +429,9 @@ class ArtistSongsService:
         # For Deezer tracks: NO SpotifyUri - use ISRC/title dedup only
 
         # Check if this is a single - no album reference means standalone single
-        is_single = track_dto.album_spotify_id is None and track_dto.album_deezer_id is None
+        is_single = (
+            track_dto.album_spotify_id is None and track_dto.album_deezer_id is None
+        )
 
         # Extract ISRC from DTO
         isrc = track_dto.isrc

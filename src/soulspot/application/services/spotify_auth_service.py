@@ -77,9 +77,7 @@ class SpotifyAuthService:
     # Hey future me - this generates BOTH the URL AND the PKCE verifier!
     # The verifier is critical - without it, token exchange fails.
     # Store the verifier securely (session cookie or DB) before redirecting user.
-    async def generate_auth_url(
-        self, state: str | None = None
-    ) -> AuthUrlResult:
+    async def generate_auth_url(self, state: str | None = None) -> AuthUrlResult:
         """Generate OAuth authorization URL with PKCE.
 
         Creates a cryptographically secure state and code_verifier.
@@ -114,9 +112,7 @@ class SpotifyAuthService:
     # Hey future me - this is the CRITICAL part of OAuth!
     # The code_verifier MUST match what was used for the auth URL.
     # If they don't match, Spotify rejects the request (PKCE security).
-    async def exchange_code(
-        self, code: str, code_verifier: str
-    ) -> TokenResult:
+    async def exchange_code(self, code: str, code_verifier: str) -> TokenResult:
         """Exchange authorization code for tokens.
 
         This is the second step of OAuth PKCE flow.

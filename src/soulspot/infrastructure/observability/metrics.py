@@ -290,9 +290,7 @@ class DownloadMetrics:
                 ({"format": audio_format}, duration_seconds)
             )
 
-    def observe_file_size(
-        self, size_bytes: int, audio_format: str = "unknown"
-    ) -> None:
+    def observe_file_size(self, size_bytes: int, audio_format: str = "unknown") -> None:
         """Record a file size observation.
 
         Args:

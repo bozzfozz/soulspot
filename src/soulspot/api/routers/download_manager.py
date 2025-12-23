@@ -305,7 +305,9 @@ async def download_events(
                             UnifiedDownloadDTO.from_entity(d).model_dump(mode="json")
                             for d in downloads
                         ],
-                        "stats": QueueStatsDTO.from_entity(stats).model_dump(mode="json"),
+                        "stats": QueueStatsDTO.from_entity(stats).model_dump(
+                            mode="json"
+                        ),
                         "timestamp": datetime.now().isoformat(),
                     }
 

@@ -110,8 +110,7 @@ class LibraryCleanupService:
                 await self._session.execute(delete_albums_stmt)
 
                 logger.debug(
-                    f"🗑️ Orphaned Albums Batch Deleted\n"
-                    f"└─ Batch: {batch_count} albums"
+                    f"🗑️ Orphaned Albums Batch Deleted\n└─ Batch: {batch_count} albums"
                 )
 
                 if batch_count < batch_size:
@@ -130,7 +129,10 @@ class LibraryCleanupService:
                     .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
                     .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
                     .group_by(ArtistModel.id)
-                    .having((func.count(TrackModel.id) == 0) & (func.count(AlbumModel.id) == 0))
+                    .having(
+                        (func.count(TrackModel.id) == 0)
+                        & (func.count(AlbumModel.id) == 0)
+                    )
                     .limit(batch_size)
                 )
                 orphan_artists_result = await self._session.execute(orphan_artists_stmt)
@@ -148,8 +150,7 @@ class LibraryCleanupService:
                 await self._session.execute(delete_artists_stmt)
 
                 logger.debug(
-                    f"🗑️ Orphaned Artists Batch Deleted\n"
-                    f"└─ Batch: {batch_count} artists"
+                    f"🗑️ Orphaned Artists Batch Deleted\n└─ Batch: {batch_count} artists"
                 )
 
                 if batch_count < batch_size:

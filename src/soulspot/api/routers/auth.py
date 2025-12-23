@@ -461,7 +461,9 @@ async def get_token_status(
     # The user hasn't set up Spotify credentials yet, so there's nothing to re-auth.
     # Now we check DB-first via CredentialsService (falls back to .env for migration period).
     spotify_creds = await credentials_service.get_spotify_credentials()
-    spotify_configured = bool(spotify_creds.client_id and spotify_creds.client_id.strip())
+    spotify_configured = bool(
+        spotify_creds.client_id and spotify_creds.client_id.strip()
+    )
 
     if not spotify_configured:
         # Spotify not configured - no banner needed

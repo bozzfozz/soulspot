@@ -242,14 +242,15 @@ class EnrichmentService:
         """
         try:
             logger.info(
-                f"🎯 Apply Enrichment Candidate\n"
-                f"└─ Candidate ID: {candidate_id}"
+                f"🎯 Apply Enrichment Candidate\n└─ Candidate ID: {candidate_id}"
             )
 
             # Get candidate
             candidate = await self._repo.get_by_id(candidate_id)
             if not candidate:
-                raise EntityNotFoundError(f"Enrichment candidate {candidate_id} not found")
+                raise EntityNotFoundError(
+                    f"Enrichment candidate {candidate_id} not found"
+                )
 
             if candidate.is_selected or candidate.is_rejected:
                 raise InvalidOperationError(

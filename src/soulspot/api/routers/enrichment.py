@@ -423,25 +423,25 @@ async def enrich_disambiguation(
 
         if result.get("skipped"):
             return HTMLResponse(
-                '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+                """<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                     <i class="bi bi-info-circle"></i>
                     <span>MusicBrainz provider is disabled in Settings.</span>
-                </div>'''
+                </div>"""
             )
 
         if artists_enriched == 0 and albums_enriched == 0:
             return HTMLResponse(
-                '''<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+                """<div class="musicbrainz-result" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                     <i class="bi bi-check-circle"></i>
                     <span>All items already have disambiguation data or no matches found.</span>
-                </div>'''
+                </div>"""
             )
 
         return HTMLResponse(
-            f'''<div class="musicbrainz-result" style="background: rgba(186, 83, 45, 0.1); border: 1px solid rgba(186, 83, 45, 0.2); color: #e69d3c; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+            f"""<div class="musicbrainz-result" style="background: rgba(186, 83, 45, 0.1); border: 1px solid rgba(186, 83, 45, 0.2); color: #e69d3c; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-check-circle-fill"></i>
                 <span>Enriched <strong>{artists_enriched}</strong> artists and <strong>{albums_enriched}</strong> albums with disambiguation data.</span>
-            </div>'''
+            </div>"""
         )
 
     except Exception as e:
@@ -454,9 +454,9 @@ async def enrich_disambiguation(
             exc_info=True,
         )
         return HTMLResponse(
-            f'''<div class="musicbrainz-result" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
+            f"""<div class="musicbrainz-result" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem;">
                 <i class="bi bi-exclamation-triangle"></i>
                 <span>Error: {str(e)}</span>
-            </div>''',
+            </div>""",
             status_code=500,
         )

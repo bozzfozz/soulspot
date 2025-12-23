@@ -346,9 +346,7 @@ class MusicBrainzClient(IMusicBrainzClient):
 
         return cast(list[dict[str, Any]], data.get("artists", []))
 
-    async def get_artist_disambiguation(
-        self, artist_name: str
-    ) -> str | None:
+    async def get_artist_disambiguation(self, artist_name: str) -> str | None:
         """Get disambiguation string for an artist by name.
 
         Hey future me - this is a convenience method! Searches MB and returns

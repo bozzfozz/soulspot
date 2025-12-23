@@ -427,7 +427,9 @@ class ProviderMappingService:
         source: str = "spotify",
     ) -> str:
         """Alias for get_or_create_track (returns just UUID for backwards compat)."""
-        uuid_str, _ = await self.get_or_create_track(dto, artist_internal_id, album_internal_id, source)
+        uuid_str, _ = await self.get_or_create_track(
+            dto, artist_internal_id, album_internal_id, source
+        )
         return uuid_str
 
     async def get_track_uuid_by_isrc(self, isrc: str) -> str | None:

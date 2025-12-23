@@ -130,7 +130,9 @@ class MetadataService:
             logger.info(
                 "Using cached artwork URL for album: %s (%s)",
                 album.title,
-                album.cover.url[:50] + "..." if len(album.cover.url) > 50 else album.cover.url,
+                album.cover.url[:50] + "..."
+                if len(album.cover.url) > 50
+                else album.cover.url,
             )
             artwork_data = await self._download_from_url(album.cover.url)
             if artwork_data:

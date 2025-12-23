@@ -109,9 +109,7 @@ class IDownloadProvider(ABC):
         pass
 
     @abstractmethod
-    async def get_download_progress(
-        self, external_id: str
-    ) -> ProviderDownload | None:
+    async def get_download_progress(self, external_id: str) -> ProviderDownload | None:
         """Get progress for a specific download by provider's ID.
 
         Args:

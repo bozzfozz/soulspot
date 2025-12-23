@@ -272,7 +272,9 @@ class Album:
     # Hey, update_cover is a domain method! Updates the cover ImageRef AND bumps updated_at. Called
     # after post-processing downloads artwork from CoverArtArchive. Use this method instead of direct
     # field assignment so updated_at changes and cache invalidates correctly.
-    def update_cover(self, *, url: str | None = None, path: FilePath | str | None = None) -> None:
+    def update_cover(
+        self, *, url: str | None = None, path: FilePath | str | None = None
+    ) -> None:
         """Update album cover art.
 
         Args:
@@ -280,7 +282,9 @@ class Album:
             path: Local cached file path
         """
         path_str = str(path) if path is not None else None
-        self.cover = ImageRef(url=url or self.cover.url, path=path_str or self.cover.path)
+        self.cover = ImageRef(
+            url=url or self.cover.url, path=path_str or self.cover.path
+        )
         self.updated_at = datetime.now(UTC)
 
     # Backward compatibility alias
@@ -700,7 +704,9 @@ class Download:
             ValueError: If download is not in FAILED status
         """
         if self.status != DownloadStatus.FAILED:
-            raise ValueError(f"Cannot schedule retry for download in status {self.status}")
+            raise ValueError(
+                f"Cannot schedule retry for download in status {self.status}"
+            )
 
         # Reset retry count for manual retry
         self.retry_count = 0

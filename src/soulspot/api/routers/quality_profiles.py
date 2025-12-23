@@ -239,7 +239,9 @@ async def get_quality_profile(
     return QualityProfileResponse.from_entity(profile)
 
 
-@router.post("", response_model=QualityProfileResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=QualityProfileResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_quality_profile(
     data: QualityProfileCreate,
     request: Request,
@@ -425,7 +427,11 @@ async def get_available_formats(
     Hey future me - useful for populating format dropdown in UI!
     """
     formats = [
-        {"value": af.value, "label": af.value.upper(), "lossless": af.value in ("flac", "alac", "wav")}
+        {
+            "value": af.value,
+            "label": af.value.upper(),
+            "lossless": af.value in ("flac", "alac", "wav"),
+        }
         for af in AudioFormat
     ]
     return formats

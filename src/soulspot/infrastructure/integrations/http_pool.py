@@ -161,7 +161,9 @@ class HttpClientPool:
             }
 
         # httpx doesn't expose detailed pool stats, but we can check basic state
-        pool = cls._client._transport._pool if hasattr(cls._client, "_transport") else None
+        pool = (
+            cls._client._transport._pool if hasattr(cls._client, "_transport") else None
+        )
 
         return {
             "initialized": True,

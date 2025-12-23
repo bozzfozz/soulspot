@@ -99,7 +99,9 @@ class DuplicateService:
             .options(joinedload(TrackModel.artist))
         )
         tracks_result = await self._session.execute(tracks_query)
-        tracks_map = {track.id: track for track in tracks_result.unique().scalars().all()}
+        tracks_map = {
+            track.id: track for track in tracks_result.unique().scalars().all()
+        }
 
         # Build candidates list using pre-loaded tracks (no more queries!)
         candidates = []
@@ -198,7 +200,9 @@ class DuplicateService:
             # Get candidate
             candidate = await repo.get_by_id(candidate_id)
             if not candidate:
-                raise EntityNotFoundError(f"Duplicate candidate {candidate_id} not found")
+                raise EntityNotFoundError(
+                    f"Duplicate candidate {candidate_id} not found"
+                )
 
             action_lower = action.lower()
             deleted_track_id: str | None = None
@@ -207,12 +211,16 @@ class DuplicateService:
                 await repo.dismiss(candidate_id)
             elif action_lower == "keep_both":
                 # Mark as dismissed with keep_both action
-                await repo.resolve(candidate_id, DuplicateResolutionAction.KEEP_BOTH.value)
+                await repo.resolve(
+                    candidate_id, DuplicateResolutionAction.KEEP_BOTH.value
+                )
             elif action_lower == "keep_first":
                 # Delete track 2, keep track 1
                 deleted_track_id = candidate.track_id_2
                 await self._delete_track_file(candidate.track_id_2)
-                await repo.resolve(candidate_id, DuplicateResolutionAction.KEEP_FIRST.value)
+                await repo.resolve(
+                    candidate_id, DuplicateResolutionAction.KEEP_FIRST.value
+                )
             elif action_lower == "keep_second":
                 # Delete track 1, keep track 2
                 deleted_track_id = candidate.track_id_1

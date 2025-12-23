@@ -39,7 +39,9 @@ async def check_discography(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check discography: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check discography: {e}"
+        ) from e
 
 
 # Hey future me, this is the "collector's dream" endpoint - show me ALL missing albums across ALL artists!
@@ -57,4 +59,6 @@ async def get_missing_albums(
             "count": len(infos),
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get missing albums: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get missing albums: {e}"
+        ) from e
