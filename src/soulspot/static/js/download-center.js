@@ -193,7 +193,7 @@ function applyFilters() {
     const provider = document.getElementById('provider-filter')?.value || '';
     
     // Build URL with filters
-    let url = '/api/downloads/center/htmx/queue';
+    let url = '/api/downloads/manager/center/htmx/queue';
     const params = new URLSearchParams();
     if (status) params.set('status', status);
     if (provider) params.set('provider', provider);
@@ -289,6 +289,72 @@ function updateBatchBar() {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// GLOBAL BATCH ACTIONS (Header buttons)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Hey future me - pauseAll pauses ALL active downloads, not just selected ones!
+// Uses batch-action endpoint with all download IDs from the page.
+async function pauseAll() {
+    if (!confirm('Pause all active downloads?')) return;
+    
+    // Get all download IDs that are currently downloading
+    const ids = Array.from(document.querySelectorAll('.dc-download-card.dc-status-downloading, .dc-download-card.dc-status-queued'))
+        .map(card => card.dataset.downloadId)
+        .filter(id => id);
+    
+    if (ids.length === 0) {
+        showToast('No active downloads to pause', 'info');
+        return;
+    }
+    
+    await performBatchAction('pause', ids);
+    showToast(`Paused ${ids.length} downloads`, 'success');
+}
+
+// Hey future me - resumeAll resumes ALL paused downloads!
+async function resumeAll() {
+    // Get all download IDs that are currently paused or stalled
+    const ids = Array.from(document.querySelectorAll('.dc-download-card.dc-status-paused, .dc-download-card.dc-status-stalled'))
+        .map(card => card.dataset.downloadId)
+        .filter(id => id);
+    
+    if (ids.length === 0) {
+        showToast('No paused downloads to resume', 'info');
+        return;
+    }
+    
+    await performBatchAction('resume', ids);
+    showToast(`Resumed ${ids.length} downloads`, 'success');
+}
+
+// Hey future me - clearCompleted removes all completed downloads from DB!
+async function clearCompleted() {
+    if (!confirm('Remove all completed downloads from history?')) return;
+    
+    try {
+        const response = await fetch('/api/downloads/manager/history/clear?days=0', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showToast(`Cleared ${data.deleted || 0} completed downloads`, 'success');
+            htmx.trigger('#downloads-list', 'load');
+        } else {
+            showToast('Failed to clear completed downloads', 'error');
+        }
+    } catch (error) {
+        console.error('Clear completed error:', error);
+        showToast('Error clearing downloads', 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECTION BATCH ACTIONS (for selected items)
+// ═══════════════════════════════════════════════════════════════════════════
+
 async function batchPause() {
     await performBatchAction('pause');
 }
@@ -302,30 +368,41 @@ async function batchCancel() {
     await performBatchAction('cancel');
 }
 
-async function performBatchAction(action) {
-    const ids = Array.from(DCState.selectedDownloads);
+async function performBatchAction(action, ids = null) {
+    // Use provided ids or selected downloads
+    const downloadIds = ids || Array.from(DCState.selectedDownloads);
+    
+    if (downloadIds.length === 0) {
+        showToast('No downloads selected', 'info');
+        return;
+    }
     
     try {
-        const response = await fetch('/api/downloads/batch', {
+        const response = await fetch('/api/downloads/batch-action', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action, download_ids: ids })
+            body: JSON.stringify({ action, download_ids: downloadIds })
         });
         
         if (response.ok) {
-            // Clear selection
-            DCState.selectedDownloads.clear();
-            document.querySelectorAll('.dc-row-select').forEach(cb => cb.checked = false);
-            document.getElementById('select-all').checked = false;
-            updateBatchBar();
+            // Clear selection if using selected downloads
+            if (!ids) {
+                DCState.selectedDownloads.clear();
+                document.querySelectorAll('.dc-row-select').forEach(cb => cb.checked = false);
+                const selectAll = document.getElementById('select-all');
+                if (selectAll) selectAll.checked = false;
+                updateBatchBar();
+            }
             
             // Refresh list
             htmx.trigger('#downloads-list', 'load');
         } else {
             console.error('Batch action failed:', await response.text());
+            showToast('Batch action failed', 'error');
         }
     } catch (error) {
         console.error('Batch action error:', error);
+        showToast('Error performing batch action', 'error');
     }
 }
 
@@ -681,7 +758,7 @@ function retryAllFailed() {
         return;
     }
     
-    fetch('/api/downloads/retry-all-failed', {
+    fetch('/api/downloads/manager/retry-all-failed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
     })
@@ -698,7 +775,7 @@ function clearAllFailed() {
         return;
     }
     
-    fetch('/api/downloads/clear-failed', {
+    fetch('/api/downloads/manager/clear-failed', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
     })
@@ -826,10 +903,15 @@ window.DownloadCenter = {
     cancelDownload,
     retryDownload,
     
-    // Batch Actions
+    // Batch Actions (header buttons)
     pauseAll,
     resumeAll,
-    cancelAll,
+    clearCompleted,
+    
+    // Selection Batch Actions
+    batchPause,
+    batchResume,
+    batchCancel,
     selectAll,
     
     // History Actions

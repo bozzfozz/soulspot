@@ -56,22 +56,20 @@
             <!-- Batch Actions -->
             <div class="dc-batch-actions">
                 <button class="btn btn-outline btn-sm" 
-                        hx-post="/api/downloads/pause-all" 
-                        hx-swap="none"
-                        hx-confirm="Pause all active downloads?">
+                        onclick="DownloadCenter.pauseAll()"
+                        title="Pause all active downloads">
                     <i class="bi bi-pause-fill"></i>
                     <span class="btn-text">Pause All</span>
                 </button>
                 <button class="btn btn-outline btn-sm btn-success-outline" 
-                        hx-post="/api/downloads/resume-all" 
-                        hx-swap="none">
+                        onclick="DownloadCenter.resumeAll()"
+                        title="Resume all paused downloads">
                     <i class="bi bi-play-fill"></i>
                     <span class="btn-text">Resume All</span>
                 </button>
                 <button class="btn btn-outline btn-sm" 
-                        hx-post="/api/downloads/clear-completed" 
-                        hx-swap="none"
-                        hx-confirm="Clear all completed downloads from view?">
+                        onclick="DownloadCenter.clearCompleted()"
+                        title="Clear completed downloads from view">
                     <i class="bi bi-check2-all"></i>
                     <span class="btn-text">Clear Done</span>
                 </button>
@@ -171,7 +169,7 @@
                 </h3>
                 
                 <button class="dc-quick-action" 
-                        hx-post="/api/downloads/retry-all-failed" 
+                        hx-post="/api/downloads/manager/retry-all-failed" 
                         hx-swap="none"
                         hx-confirm="Retry all failed downloads?">
                     <i class="bi bi-arrow-repeat"></i>
@@ -179,7 +177,7 @@
                 </button>
                 
                 <button class="dc-quick-action" 
-                        hx-delete="/api/downloads/failed" 
+                        hx-delete="/api/downloads/manager/clear-failed" 
                         hx-swap="none"
                         hx-confirm="Remove all failed downloads?">
                     <i class="bi bi-trash3"></i>
@@ -237,7 +235,7 @@
                 <div id="downloads-list"
                      class="dc-downloads-list"
                      data-view="cards"
-                     hx-get="/api/downloads/center/htmx/queue"
+                     hx-get="/api/downloads/manager/center/htmx/queue"
                      hx-trigger="load, every 3s [auto-refresh-enabled]"
                      hx-swap="innerHTML">
                     {% include "partials/download_center_queue.html" %}
@@ -249,7 +247,7 @@
                 <div id="history-list"
                      class="dc-downloads-list"
                      data-view="cards"
-                     hx-get="/api/downloads/center/htmx/history"
+                     hx-get="/api/downloads/manager/center/htmx/history"
                      hx-trigger="revealed"
                      hx-swap="innerHTML">
                     <div class="dc-loading">
@@ -264,7 +262,7 @@
                 <div id="failed-list"
                      class="dc-downloads-list"
                      data-view="cards"
-                     hx-get="/api/downloads/center/htmx/failed"
+                     hx-get="/api/downloads/manager/center/htmx/failed"
                      hx-trigger="revealed"
                      hx-swap="innerHTML">
                     <div class="dc-loading">
