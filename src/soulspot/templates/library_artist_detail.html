@@ -67,122 +67,144 @@
     </div>
 </div>
 
-<!-- Albums Section -->
+<!-- Albums Section - UNIFIED VIEW (owned + missing with availability badges) -->
+{# Hey future me - UNIFIED album view! Shows ALL albums from artist_discography.
+   Each album has:
+   - Availability badge: "X/Y" tracks (green if complete, orange if partial, red if 0)
+   - is_owned flag: determines if album is clickable to view tracks
+   - Download button: shown for albums user doesn't have yet
+   This replaces the old split "Albums" + "Missing from Collection" sections. #}
 <div class="card" style="padding: var(--space-6); margin-bottom: var(--space-6);">
-    <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin-bottom: var(--space-5);">Albums</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5);">
+        <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0;">
+            <i class="bi bi-disc" style="color: var(--accent-primary); margin-right: var(--space-2);"></i>
+            Discography
+        </h2>
+        <div style="display: flex; gap: var(--space-3); align-items: center;">
+            {# Sync Discography Button - fetches ALL albums + tracks from providers #}
+            <button id="sync-discography-btn"
+                    onclick="syncDiscography('{{ artist.id }}')"
+                    class="btn btn-outline btn-sm"
+                    style="display: flex; align-items: center; gap: var(--space-2);"
+                    title="Fetch complete discography (albums + tracks) from Spotify/Deezer">
+                <i class="bi bi-cloud-download"></i>
+                <span>Sync Discography</span>
+            </button>
+            {# Album type filter #}
+            <select id="album-type-filter" 
+                    style="padding: var(--space-2); border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: var(--font-size-sm);"
+                    onchange="filterAlbumsByType(this.value)">
+                <option value="all" selected>All Types</option>
+                <option value="album">Albums Only</option>
+                <option value="ep">EPs Only</option>
+                <option value="single">Singles Only</option>
+                <option value="compilation">Compilations Only</option>
+            </select>
+        </div>
+    </div>
     {% if artist.albums %}
-    <div class="albums-grid">
+    <div class="albums-grid" id="albums-grid">
         {% for album in artist.albums %}
-        <a href="/library/albums/{{ album.id }}" class="album-card">
-            <div class="album-cover">
-                {# ImageService provides: local cache > CDN > placeholder #}
-                <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
-                {# Hey future me - Multi-badge system! Shows ALL relevant types (primary + secondary).
-                   Examples: [Album], [EP] [Remix], [Album] [Live] [Compilation]
-                   Badges stack horizontally, color-coded by type. #}
-                <div class="album-type-badges">
-                    {# Primary type badge - always show #}
-                    {% if album.primary_type|lower == 'single' %}
-                    <span class="album-type-badge album-type-single">Single</span>
-                    {% elif album.primary_type|lower == 'ep' %}
-                    <span class="album-type-badge album-type-ep">EP</span>
-                    {% else %}
-                    <span class="album-type-badge album-type-album">Album</span>
-                    {% endif %}
-                    
-                    {# Secondary type badges - show all if present #}
-                    {% if album.secondary_types %}
-                        {% for secondary in album.secondary_types %}
-                            {% set secondary_lower = secondary|lower %}
-                            {% if secondary_lower == 'compilation' %}
-                            <span class="album-type-badge album-type-compilation">Compilation</span>
-                            {% elif secondary_lower == 'live' %}
-                            <span class="album-type-badge album-type-live">Live</span>
-                            {% elif secondary_lower == 'remix' %}
-                            <span class="album-type-badge album-type-remix">Remix</span>
-                            {% elif secondary_lower == 'soundtrack' %}
-                            <span class="album-type-badge album-type-soundtrack">Soundtrack</span>
-                            {% else %}
-                            <span class="album-type-badge album-type-other">{{ secondary|title }}</span>
-                            {% endif %}
-                        {% endfor %}
+        {# Hey future me - album card styling based on ownership status!
+           - is_owned=True + tracks > 0: Clickable, normal styling
+           - is_owned=True + tracks = 0: Clickable but grayed out (metadata only)
+           - is_owned=False: Semi-transparent, shows download button #}
+        <div class="album-card-wrapper" data-album-type="{{ album.primary_type|lower }}" style="{% if not album.is_owned %}opacity: 0.7;{% endif %}">
+            {% if album.is_owned and album.track_count > 0 %}
+            <a href="/library/albums/{{ album.id }}" class="album-card">
+            {% else %}
+            <div class="album-card" style="cursor: {% if album.is_owned %}pointer{% else %}default{% endif %};">
+            {% endif %}
+                <div class="album-cover">
+                    <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
+                    {# Album type badge #}
+                    <div class="album-type-badges">
+                        {% if album.primary_type|lower == 'single' %}
+                        <span class="album-type-badge album-type-single">Single</span>
+                        {% elif album.primary_type|lower == 'ep' %}
+                        <span class="album-type-badge album-type-ep">EP</span>
+                        {% elif album.primary_type|lower == 'compilation' %}
+                        <span class="album-type-badge album-type-compilation">Compilation</span>
+                        {% else %}
+                        <span class="album-type-badge album-type-album">Album</span>
+                        {% endif %}
+                    </div>
+                    {# Download overlay for albums user doesn't have #}
+                    {% if not album.is_owned %}
+                    <div class="album-download-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: var(--space-2); display: flex; justify-content: center;">
+                        <a href="/search?q={{ (artist.name ~ ' ' ~ album.title)|urlencode }}" 
+                           class="btn btn-primary btn-sm"
+                           onclick="event.stopPropagation();"
+                           title="Search to download">
+                            <i class="bi bi-download"></i> Get
+                        </a>
+                    </div>
                     {% endif %}
                 </div>
+                <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
+                <div class="album-meta">
+                    {# Hey future me - Availability badge showing X/Y tracks!
+                       - Green (complete): track_count >= total_tracks
+                       - Orange (partial): track_count > 0 but < total_tracks
+                       - Red (none): track_count = 0 #}
+                    {% if album.total_tracks and album.total_tracks > 0 %}
+                        {% if album.track_count >= album.total_tracks %}
+                        <span class="availability-badge-small availability-complete">
+                            <i class="bi bi-check-circle-fill"></i> {{ album.track_count }}/{{ album.total_tracks }}
+                        </span>
+                        {% elif album.track_count > 0 %}
+                        <span class="availability-badge-small availability-partial">
+                            <i class="bi bi-music-note"></i> {{ album.track_count }}/{{ album.total_tracks }}
+                        </span>
+                        {% else %}
+                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;">
+                            <i class="bi bi-x-circle"></i> 0/{{ album.total_tracks }}
+                        </span>
+                        {% endif %}
+                    {% else %}
+                        {# No total_tracks info - just show what we have #}
+                        {% if album.track_count > 0 %}
+                        <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
+                        {% else %}
+                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;">
+                            <i class="bi bi-x-circle"></i> 0
+                        </span>
+                        {% endif %}
+                    {% endif %}
+                    {% if album.year %}<span>{{ album.year }}</span>{% endif %}
+                </div>
+            {% if album.is_owned and album.track_count > 0 %}
+            </a>
+            {% else %}
             </div>
-            <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
-            <div class="album-meta">
-                {# Hey future me - X/Y track availability badge!
-                   track_count = local tracks owned, total_tracks = from provider API.
-                   If total_tracks not available, just show count. #}
-                {% if album.total_tracks and album.total_tracks > 0 %}
-                <span class="availability-badge-small {% if album.track_count >= album.total_tracks %}availability-complete{% else %}availability-partial{% endif %}">
-                    <i class="bi bi-music-note"></i> {{ album.track_count }}/{{ album.total_tracks }}
-                </span>
-                {% else %}
-                <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
-                {% endif %}
-                {% if album.year %}<span>{{ album.year }}</span>{% endif %}
-            </div>
-        </a>
+            {% endif %}
+        </div>
         {% endfor %}
     </div>
     {% else %}
     <div class="empty-state-small">
         <i class="bi bi-disc"></i>
-        <p>No albums found for this artist.</p>
+        <p>No albums found. Run Library Discovery to fetch discography.</p>
+        <a href="/settings/library" class="btn btn-primary btn-sm" style="margin-top: var(--space-3);">
+            <i class="bi bi-search"></i> Library Settings
+        </a>
     </div>
     {% endif %}
 </div>
 
-<!-- Missing Albums Section (from discography discovery) -->
-{# Hey future me - diese Section zeigt Alben die der User NICHT hat!
-   Geladen via HTMX von /api/library/discovery/missing/{artist_id}.
-   Nur anzeigen wenn der Artist eine ID hat (sonst wurde noch keine Discovery gemacht).
-   Die Karten haben Download-Buttons die zur Search mit artist+album title führen.
-   Filter: album_types kann album,ep,single,compilation sein (Default: alle) #}
-<div class="card" style="padding: var(--space-6); margin-bottom: var(--space-6);">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
-        <h2 style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0;">
-            <i class="bi bi-collection" style="color: var(--accent-secondary); margin-right: var(--space-2);"></i>
-            Missing from Collection
-        </h2>
-        <div style="display: flex; gap: var(--space-2); align-items: center;">
-            {# Album type filter #}
-            <select id="missing-album-types" 
-                    style="padding: var(--space-2); border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: var(--font-size-sm);"
-                    onchange="refreshMissingAlbums()">
-                <option value="album,ep,single,compilation" selected>All Types</option>
-                <option value="album,ep">Albums & EPs</option>
-                <option value="album">Albums Only</option>
-                <option value="single">Singles Only</option>
-                <option value="compilation">Compilations Only</option>
-            </select>
-            <button class="btn btn-ghost btn-sm" 
-                    onclick="refreshMissingAlbums()"
-                    title="Refresh">
-                <i class="bi bi-arrow-clockwise"></i>
-            </button>
-        </div>
-    </div>
-    
-    <div id="missing-albums-loading" class="htmx-indicator" style="text-align: center; padding: var(--space-4);">
-        <i class="bi bi-arrow-repeat spin" style="font-size: 1.5rem;"></i>
-        <span style="margin-left: var(--space-2);">Loading discography...</span>
-    </div>
-    
-    <div id="missing-albums-container"
-         hx-get="/api/library/discovery/missing/{{ artist.id }}?album_types=album,ep,single,compilation"
-         hx-trigger="load"
-         hx-swap="innerHTML">
-        <!-- Content loaded via HTMX -->
-    </div>
-</div>
-
 <script>
-function refreshMissingAlbums() {
-    const types = document.getElementById('missing-album-types').value;
-    const container = document.getElementById('missing-albums-container');
-    htmx.ajax('GET', '/api/library/discovery/missing/{{ artist.id }}?album_types=' + types, {target: container, swap: 'innerHTML'});
+{# Hey future me - client-side filter for album types!
+   Hides/shows album cards based on selected type. Fast, no server round-trip. #}
+function filterAlbumsByType(type) {
+    const cards = document.querySelectorAll('.album-card-wrapper');
+    cards.forEach(card => {
+        const cardType = card.dataset.albumType;
+        if (type === 'all' || cardType === type) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
 }
 </script>
 
@@ -332,6 +354,26 @@ function refreshMissingAlbums() {
         color: var(--warning);
         border: 1px solid rgba(245, 158, 11, 0.3);
     }
+    .availability-none {
+        background: rgba(239, 68, 68, 0.15);  /* Red tint */
+        color: var(--danger, #ef4444);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    /* Album card wrapper for unified view */
+    .album-card-wrapper {
+        position: relative;
+    }
+    .album-cover {
+        position: relative;
+    }
+    .album-download-overlay {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .album-card-wrapper:hover .album-download-overlay {
+        opacity: 1;
+    }
     
     .album-title {
         font-size: var(--font-size-sm);
@@ -413,4 +455,83 @@ function refreshMissingAlbums() {
         transform: translateY(-1px);
     }
 </style>
+
+<script>
+// Hey future me - Sync Discography function!
+// Calls POST /artists/{id}/sync-discography to fetch ALL albums + tracks from providers.
+// Shows loading state on button, then reloads page to show new data.
+async function syncDiscography(artistId) {
+    const btn = document.getElementById('sync-discography-btn');
+    const originalContent = btn.innerHTML;
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat spinning"></i> <span>Syncing...</span>';
+    
+    try {
+        const response = await fetch(`/artists/${artistId}/sync-discography`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Sync failed');
+        }
+        
+        const result = await response.json();
+        
+        // Show success message
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> <span>Done!</span>';
+        btn.classList.add('btn-success');
+        
+        // Show toast notification
+        if (window.showToast) {
+            window.showToast(result.message, 'success');
+        } else {
+            console.log('Sync result:', result.message);
+        }
+        
+        // Reload page after short delay to show new data
+        setTimeout(() => {
+            window.location.reload();
+        }, 1500);
+        
+    } catch (error) {
+        console.error('Discography sync failed:', error);
+        
+        // Show error state
+        btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> <span>Error</span>';
+        btn.classList.add('btn-danger');
+        
+        if (window.showToast) {
+            window.showToast(`Sync failed: ${error.message}`, 'error');
+        } else {
+            alert(`Sync failed: ${error.message}`);
+        }
+        
+        // Reset button after delay
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+            btn.classList.remove('btn-danger');
+        }, 3000);
+    }
+}
+
+// Spinning animation for loading state
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spinning {
+        animation: spin 1s linear infinite;
+    }
+`;
+document.head.appendChild(style);
+</script>
 {% endblock %}

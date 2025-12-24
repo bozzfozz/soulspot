@@ -823,6 +823,251 @@ class FollowedArtistsService:
             logger.warning(f"Deezer artist albums lookup failed: {e}")
             return []
 
+    async def sync_artist_discography_complete(
+        self,
+        artist_id: str,
+        include_tracks: bool = True,
+    ) -> dict[str, Any]:
+        """Sync complete discography for an artist: Albums AND Tracks.
+
+        Hey future me - THIS IS THE COMPLETE SYNC METHOD!
+        Fetches Albums from providers AND for each Album fetches ALL Tracks.
+        Everything gets stored in DB so the UI can load from DB only.
+
+        MULTI-PROVIDER (Dec 2025):
+        1. Try Spotify first (if authenticated)
+        2. Fall back to Deezer (NO AUTH NEEDED!)
+
+        Flow:
+        1. Get artist from DB
+        2. Fetch all albums from provider(s)
+        3. For each album: fetch tracks from provider
+        4. Store albums in soulspot_albums
+        5. Store tracks in soulspot_tracks with album_id FK
+
+        Args:
+            artist_id: Our internal artist ID
+            include_tracks: Whether to also sync tracks (default: True)
+
+        Returns:
+            Dict with sync stats:
+            - albums_total, albums_added, albums_skipped
+            - tracks_total, tracks_added, tracks_skipped
+            - source: "spotify", "deezer", or "none"
+        """
+        from uuid import uuid4
+
+        from soulspot.domain.entities import Album, Track
+        from soulspot.domain.ports.plugin import PluginCapability
+        from soulspot.domain.value_objects import AlbumId, ArtistId, ImageRef, TrackId
+        from soulspot.infrastructure.persistence.repositories import (
+            AlbumRepository,
+            TrackRepository,
+        )
+
+        stats: dict[str, Any] = {
+            "albums_total": 0,
+            "albums_added": 0,
+            "albums_skipped": 0,
+            "tracks_total": 0,
+            "tracks_added": 0,
+            "tracks_skipped": 0,
+            "source": "none",
+        }
+
+        # Get artist
+        artist = await self.artist_repo.get(artist_id)
+        if not artist:
+            logger.warning(f"Artist not found: {artist_id}")
+            return stats
+
+        spotify_artist_id = artist.spotify_id
+        albums_dtos: list[Any] = []
+        source = "none"
+
+        # 1. Try Spotify first
+        if spotify_artist_id and self.spotify_plugin:
+            try:
+                if self.spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS):
+                    response = await self.spotify_plugin.get_artist_albums(
+                        artist_id=spotify_artist_id,
+                        limit=50,
+                    )
+                    albums_dtos = response.items
+                    source = "spotify"
+                    logger.info(f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}")
+            except Exception as e:
+                logger.warning(f"Spotify album fetch failed for {artist.name}: {e}")
+
+        # 2. Fallback to Deezer
+        if not albums_dtos and self._deezer_plugin and artist.name:
+            try:
+                albums_dtos = await self._fetch_albums_from_deezer(
+                    artist_name=artist.name,
+                    deezer_artist_id=artist.deezer_id,
+                )
+                if albums_dtos:
+                    source = "deezer"
+                    logger.info(f"Fetched {len(albums_dtos)} albums from Deezer for {artist.name}")
+            except Exception as e:
+                logger.warning(f"Deezer album fetch failed for {artist.name}: {e}")
+
+        if not albums_dtos:
+            logger.warning(f"No albums found for artist {artist.name}")
+            return stats
+
+        stats["source"] = source
+        album_repo = AlbumRepository(self._session)
+        track_repo = TrackRepository(self._session)
+
+        # Track seen albums and tracks to avoid duplicates
+        seen_album_keys: set[str] = set()
+        seen_track_keys: set[str] = set()
+
+        for album_dto in albums_dtos:
+            stats["albums_total"] += 1
+
+            # Normalize album key for deduplication
+            norm_key = _normalize_album_key(
+                album_dto.artist_name or artist.name,
+                album_dto.title,
+                album_dto.release_year,
+            )
+
+            if norm_key in seen_album_keys:
+                stats["albums_skipped"] += 1
+                continue
+            seen_album_keys.add(norm_key)
+
+            # Check if album already exists
+            existing_album = await album_repo.get_by_title_and_artist(
+                title=album_dto.title,
+                artist_id=artist.id,
+            )
+
+            if existing_album:
+                # Album exists - use its ID for track linking
+                album_id = existing_album.id
+                stats["albums_skipped"] += 1
+            else:
+                # Create new album
+                spotify_uri = None
+                if album_dto.spotify_uri:
+                    spotify_uri = SpotifyUri.from_string(album_dto.spotify_uri)
+                elif album_dto.spotify_id:
+                    spotify_uri = SpotifyUri.from_string(f"spotify:album:{album_dto.spotify_id}")
+
+                album = Album(
+                    id=AlbumId(str(uuid4())),
+                    title=album_dto.title,
+                    artist_id=artist.id,
+                    source=source,
+                    release_year=album_dto.release_year,
+                    release_date=album_dto.release_date,
+                    spotify_uri=spotify_uri,
+                    deezer_id=album_dto.deezer_id,
+                    total_tracks=album_dto.total_tracks,
+                    cover=ImageRef(url=album_dto.cover.url if album_dto.cover else None),
+                    primary_type=(album_dto.album_type or "album").title(),
+                )
+                await album_repo.add(album)
+                album_id = album.id
+                stats["albums_added"] += 1
+                logger.debug(f"Added album: {album_dto.title}")
+
+            # Now fetch tracks for this album (if enabled)
+            if include_tracks:
+                track_dtos = await self._fetch_album_tracks(
+                    album_dto, source, spotify_artist_id, artist.deezer_id
+                )
+
+                for track_dto in track_dtos:
+                    stats["tracks_total"] += 1
+
+                    # Normalize track key for deduplication
+                    track_key = f"{album_dto.title.lower()}|{track_dto.title.lower()}|{track_dto.track_number or 0}"
+
+                    if track_key in seen_track_keys:
+                        stats["tracks_skipped"] += 1
+                        continue
+                    seen_track_keys.add(track_key)
+
+                    # Check if track exists (by ISRC or title+album)
+                    existing_track = None
+                    if track_dto.isrc:
+                        existing_track = await track_repo.get_by_isrc(track_dto.isrc)
+
+                    if not existing_track:
+                        existing_track = await track_repo.get_by_title_and_album(
+                            title=track_dto.title,
+                            album_id=album_id,
+                        )
+
+                    if existing_track:
+                        stats["tracks_skipped"] += 1
+                        continue
+
+                    # Create new track
+                    spotify_track_uri = None
+                    if track_dto.spotify_uri:
+                        spotify_track_uri = SpotifyUri.from_string(track_dto.spotify_uri)
+                    elif track_dto.spotify_id:
+                        spotify_track_uri = SpotifyUri.from_string(f"spotify:track:{track_dto.spotify_id}")
+
+                    track = Track(
+                        id=TrackId(str(uuid4())),
+                        title=track_dto.title,
+                        artist_id=artist.id,
+                        album_id=album_id,
+                        duration_ms=track_dto.duration_ms or 0,
+                        track_number=track_dto.track_number,
+                        disc_number=track_dto.disc_number or 1,
+                        spotify_uri=spotify_track_uri,
+                        deezer_id=track_dto.deezer_id,
+                        isrc=track_dto.isrc,
+                    )
+                    await track_repo.add(track)
+                    stats["tracks_added"] += 1
+
+        logger.info(
+            f"Complete discography sync for {artist.name}: "
+            f"Albums {stats['albums_added']}/{stats['albums_total']}, "
+            f"Tracks {stats['tracks_added']}/{stats['tracks_total']} (source={source})"
+        )
+        return stats
+
+    async def _fetch_album_tracks(
+        self,
+        album_dto: Any,
+        source: str,
+        spotify_artist_id: str | None,
+        deezer_artist_id: str | None,
+    ) -> list[Any]:
+        """Fetch tracks for an album from the appropriate provider.
+
+        Hey future me - this is a helper for sync_artist_discography_complete!
+        Uses the same provider that gave us the album.
+        """
+        from soulspot.domain.ports.plugin import PluginCapability
+
+        try:
+            if source == "spotify" and self.spotify_plugin and album_dto.spotify_id:
+                if self.spotify_plugin.can_use(PluginCapability.GET_ALBUM_TRACKS):
+                    response = await self.spotify_plugin.get_album_tracks(
+                        album_id=album_dto.spotify_id,
+                        limit=50,
+                    )
+                    return response.items if hasattr(response, 'items') else response
+            elif source == "deezer" and self._deezer_plugin and album_dto.deezer_id:
+                tracks = await self._deezer_plugin.get_album_tracks(
+                    album_id=album_dto.deezer_id,
+                )
+                return tracks
+        except Exception as e:
+            logger.warning(f"Failed to fetch tracks for album {album_dto.title}: {e}")
+
+        return []
+
     # Hey future me, REFACTORED to use SpotifyPlugin!
     # This is a simple utility to get a preview of followed artists WITHOUT syncing to DB!
     # Useful for "show me who I follow on Spotify" without persisting data.

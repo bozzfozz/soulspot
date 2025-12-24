@@ -1047,3 +1047,118 @@ async def get_spotify_plugin_optional(
         return None
     except Exception:
         return None
+
+
+# =============================================================================
+# COMPLETE DISCOGRAPHY SYNC ENDPOINT
+# =============================================================================
+
+
+class DiscographySyncResponse(BaseModel):
+    """Response model for complete discography sync."""
+
+    albums_total: int = Field(..., description="Total albums fetched from provider")
+    albums_added: int = Field(..., description="New albums added to DB")
+    albums_skipped: int = Field(..., description="Albums already in DB (skipped)")
+    tracks_total: int = Field(..., description="Total tracks fetched from provider")
+    tracks_added: int = Field(..., description="New tracks added to DB")
+    tracks_skipped: int = Field(..., description="Tracks already in DB (skipped)")
+    source: str = Field(..., description="Provider source: spotify, deezer, or none")
+    message: str = Field(..., description="Status message")
+
+
+# Hey future me - THIS IS THE COMPLETE DISCOGRAPHY SYNC ENDPOINT!
+# Syncs ALL albums AND ALL tracks for a single artist from providers to DB.
+# After this, the UI can load everything from DB without API calls!
+#
+# MULTI-PROVIDER (Dec 2025):
+# 1. Try Spotify first (if authenticated)
+# 2. Fall back to Deezer (NO AUTH NEEDED!)
+#
+# Flow:
+# POST /artists/{artist_id}/sync-discography
+#   → FollowedArtistsService.sync_artist_discography_complete()
+#   → For each album: fetch tracks from provider
+#   → Store in soulspot_albums + soulspot_tracks
+@router.post(
+    "/{artist_id}/sync-discography",
+    response_model=DiscographySyncResponse,
+    summary="Sync complete discography (albums + tracks) for an artist",
+)
+async def sync_artist_discography_complete(
+    artist_id: str,
+    include_tracks: bool = Query(True, description="Also sync tracks for each album"),
+    session: AsyncSession = Depends(get_db_session),
+    spotify_plugin: "SpotifyPlugin | None" = None,
+) -> DiscographySyncResponse:
+    """Sync complete discography (albums AND tracks) for an artist.
+
+    Hey future me - this syncs EVERYTHING from providers to DB!
+    After this call, the artist detail page can show all albums + tracks
+    without making any more API calls. Everything is in soulspot_albums
+    and soulspot_tracks tables.
+
+    Multi-provider: Tries Spotify first, falls back to Deezer (no auth needed!).
+
+    Args:
+        artist_id: Our internal artist UUID
+        include_tracks: Whether to also fetch tracks for each album (default: True)
+        session: Database session
+
+    Returns:
+        Sync statistics (albums/tracks added/skipped)
+    """
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+    try:
+        # Try to get Spotify plugin if available
+        spotify_plugin = await get_spotify_plugin_optional(session)
+
+        # Always create Deezer plugin (no auth needed for album/track lookup!)
+        deezer_plugin = DeezerPlugin()
+
+        service = FollowedArtistsService(
+            session=session,
+            spotify_plugin=spotify_plugin,
+            deezer_plugin=deezer_plugin,
+        )
+
+        stats = await service.sync_artist_discography_complete(
+            artist_id=artist_id,
+            include_tracks=include_tracks,
+        )
+
+        # Commit the transaction
+        await session.commit()
+
+        source_msg = {
+            "spotify": "Spotify (full album + track metadata)",
+            "deezer": "Deezer (fallback, no auth needed)",
+            "none": "No provider data available",
+        }
+
+        return DiscographySyncResponse(
+            albums_total=stats["albums_total"],
+            albums_added=stats["albums_added"],
+            albums_skipped=stats["albums_skipped"],
+            tracks_total=stats["tracks_total"],
+            tracks_added=stats["tracks_added"],
+            tracks_skipped=stats["tracks_skipped"],
+            source=stats["source"],
+            message=(
+                f"Synced discography from {source_msg.get(stats['source'], stats['source'])}. "
+                f"Albums: {stats['albums_added']} added / {stats['albums_skipped']} skipped. "
+                f"Tracks: {stats['tracks_added']} added / {stats['tracks_skipped']} skipped."
+            ),
+        )
+
+    except Exception as e:
+        await session.rollback()
+        logger.error(
+            f"Failed to sync complete discography for artist {artist_id}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync discography: {str(e)}",
+        ) from e

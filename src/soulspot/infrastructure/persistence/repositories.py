@@ -1846,6 +1846,62 @@ class TrackRepository(ITrackRepository):
             updated_at=model.updated_at,
         )
 
+    # Hey future me - ALBUM-BASED track lookup for discography sync!
+    # When syncing complete discographies with tracks, we need to check if a track
+    # already exists for a specific album. Title + Album ID is unique enough for this.
+    async def get_by_title_and_album(
+        self, title: str, album_id: AlbumId | str
+    ) -> Track | None:
+        """Find a track by title and album ID (case-insensitive title).
+
+        Used during discography sync to check if a track already exists
+        for a specific album before adding it.
+
+        Args:
+            title: Track title to search for
+            album_id: Internal album ID to filter by (AlbumId or string)
+
+        Returns:
+            Track entity or None if not found
+        """
+        # Convert AlbumId to string if needed
+        album_id_str = str(album_id.value) if isinstance(album_id, AlbumId) else str(album_id)
+
+        stmt = (
+            select(TrackModel)
+            .where(
+                func.lower(TrackModel.title) == func.lower(title),
+                TrackModel.album_id == album_id_str,
+            )
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     # Hey future me - fuzzy title/artist search for fallback matching!
     # When ISRC is not available, we try to match by title and artist name.
     # Uses LIKE queries with case-insensitive matching. Not perfect but better than nothing!

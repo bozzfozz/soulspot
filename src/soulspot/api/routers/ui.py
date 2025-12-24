@@ -1834,38 +1834,81 @@ async def library_artist_detail(
     tracks_result = await session.execute(tracks_stmt)
     track_models = tracks_result.unique().scalars().all()
 
-    # Build albums list with track counts
-    albums_dict: dict[str, dict[str, Any]] = {}
-    for album in album_models:
-        album_key = album.title
-        albums_dict[album_key] = {
-            "id": f"{artist_name}::{album.title}",
-            "title": album.title,
-            "track_count": 0,  # Will be updated from tracks (LOCAL tracks owned)
-            # Hey future me - total_tracks comes from provider API (Deezer/Spotify)!
-            # Shows "X/Y tracks" where X=owned, Y=total from album metadata.
-            "total_tracks": album.total_tracks if hasattr(album, "total_tracks") else None,
-            "year": album.release_year,
-            "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
-            "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
-            "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
-            "primary_type": album.primary_type
-            if hasattr(album, "primary_type")
-            else "album",
-            "secondary_types": album.secondary_types
-            if hasattr(album, "secondary_types")
-            else [],
-        }
+    # Hey future me - UNIFIED ALBUM VIEW from artist_discography!
+    # Shows ALL albums (owned + missing) with availability badges.
+    # We merge data from:
+    # - artist_discography: all known albums from providers (source of truth for "what exists")
+    # - soulspot_albums: local albums (for artwork paths and extra metadata)
+    # - tracks: count of locally available tracks per album
+    from soulspot.domain.value_objects import ArtistId
+    from soulspot.infrastructure.persistence.repositories import (
+        ArtistDiscographyRepository,
+    )
 
-    # Count tracks per album
+    discography_repo = ArtistDiscographyRepository(session)
+    artist_id_obj = ArtistId(artist_model.id)
+
+    # Get complete discography (all albums from all providers)
+    all_discography = await discography_repo.get_all_for_artist(artist_id_obj)
+    discography_stats = await discography_repo.get_stats_for_artist(artist_id_obj)
+
+    # Build a lookup for local albums (from soulspot_albums) by title
+    local_albums_by_title: dict[str, Any] = {}
+    for album in album_models:
+        key = album.title.lower().strip()
+        local_albums_by_title[key] = album
+
+    # Count local tracks per album title
+    tracks_per_album: dict[str, int] = {}
     for track in track_models:
         if track.album:
-            album_key = track.album.title
-            if album_key in albums_dict:
-                albums_dict[album_key]["track_count"] += 1
+            key = track.album.title.lower().strip()
+            tracks_per_album[key] = tracks_per_album.get(key, 0) + 1
 
-    # Convert to list (already sorted by SQL query)
-    albums = list(albums_dict.values())
+    # Build unified albums list from discography
+    albums: list[dict[str, Any]] = []
+    for disc_entry in all_discography:
+        title_key = disc_entry.title.lower().strip()
+        local_album = local_albums_by_title.get(title_key)
+        owned_tracks = tracks_per_album.get(title_key, 0)
+
+        album_data = {
+            "id": f"{artist_name}::{disc_entry.title}",
+            "title": disc_entry.title,
+            "track_count": owned_tracks,  # Locally available tracks
+            "total_tracks": disc_entry.total_tracks or 0,
+            "year": int(disc_entry.release_date[:4]) if disc_entry.release_date and len(disc_entry.release_date) >= 4 else None,
+            "artwork_url": disc_entry.cover_url,
+            "artwork_path": local_album.cover_path if local_album and hasattr(local_album, "cover_path") else None,
+            "spotify_id": str(disc_entry.spotify_uri) if disc_entry.spotify_uri else None,
+            "deezer_id": disc_entry.deezer_id,
+            "primary_type": disc_entry.album_type.title() if disc_entry.album_type else "Album",
+            "secondary_types": [],  # Discography doesn't track secondary types
+            "is_owned": disc_entry.is_owned,
+            "source": disc_entry.source,
+        }
+        albums.append(album_data)
+
+    # If no discography entries, fall back to local albums (backward compat)
+    if not albums and album_models:
+        for album in album_models:
+            title_key = album.title.lower().strip()
+            owned_tracks = tracks_per_album.get(title_key, 0)
+            albums.append({
+                "id": f"{artist_name}::{album.title}",
+                "title": album.title,
+                "track_count": owned_tracks,
+                "total_tracks": album.total_tracks if hasattr(album, "total_tracks") else None,
+                "year": album.release_year,
+                "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
+                "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
+                "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
+                "deezer_id": album.deezer_id if hasattr(album, "deezer_id") else None,
+                "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
+                "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
+                "is_owned": True,  # If in local albums, user owns it
+                "source": album.source if hasattr(album, "source") else "local",
+            })
 
     # Convert tracks to template format
     tracks_data = [
@@ -1883,19 +1926,6 @@ async def library_artist_detail(
 
     # Sort tracks by album, then track number/title
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
-
-    # Hey future me - load DISCOGRAPHY STATS for "X/Y albums" availability badge!
-    # owned = albums in soulspot_albums, total = all albums in artist_discography
-    # This shows users how complete their collection is vs what exists.
-    from soulspot.domain.value_objects import ArtistId
-    from soulspot.infrastructure.persistence.repositories import (
-        ArtistDiscographyRepository,
-    )
-
-    discography_repo = ArtistDiscographyRepository(session)
-    discography_stats = await discography_repo.get_stats_for_artist(
-        ArtistId(artist_model.id)
-    )
 
     artist_data = {
         "id": str(

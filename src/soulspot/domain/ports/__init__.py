@@ -355,6 +355,24 @@ class ITrackRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_title_and_album(
+        self, title: str, album_id: AlbumId | str
+    ) -> Track | None:
+        """Find a track by title and album ID.
+
+        Used during discography sync to check if a track already exists
+        for a specific album before adding it.
+
+        Args:
+            title: Track title to search for (case-insensitive)
+            album_id: Internal album ID to filter by (AlbumId or string)
+
+        Returns:
+            Track entity or None if not found
+        """
+        pass
+
+    @abstractmethod
     async def count_with_spotify_uri(self) -> int:
         """Count tracks that have a Spotify URI (synced from Spotify).
 
