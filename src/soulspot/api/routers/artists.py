@@ -322,6 +322,113 @@ async def count_artists(
     return {"total_count": total}
 
 
+# Hey future me - this is the "Add to Library" endpoint from Discovery page!
+# It creates an artist in the local DB from discovered/related artist data.
+# Deduplication: If artist with same spotify_id or deezer_id exists, returns existing.
+# If artist with same name exists (fuzzy match), returns existing to avoid duplicates.
+# Source is set to 'local' since user is explicitly adding to their library.
+class AddArtistRequest(BaseModel):
+    """Request model for adding an artist to the library."""
+
+    name: str = Field(..., description="Artist name")
+    spotify_id: str | None = Field(None, description="Spotify artist ID (not full URI)")
+    deezer_id: str | None = Field(None, description="Deezer artist ID")
+    image_url: str | None = Field(None, description="Artist image URL")
+
+
+class AddArtistResponse(BaseModel):
+    """Response model for add artist operation."""
+
+    artist: ArtistResponse
+    created: bool = Field(..., description="True if new artist created, False if existing returned")
+    message: str
+
+
+@router.post("", response_model=AddArtistResponse, status_code=201)
+async def add_artist_to_library(
+    request: AddArtistRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> AddArtistResponse:
+    """Add an artist to the local library from Discovery/Similar Artists.
+
+    Hey future me - this endpoint is called when user clicks "Add to Library" on
+    Discovery page. It creates a LOCAL artist entry (not synced from streaming service).
+    
+    Deduplication logic:
+    1. If spotify_id provided, check for existing artist with that spotify_uri
+    2. If deezer_id provided, check for existing artist with that deezer_id
+    3. Otherwise, check by normalized name (case-insensitive)
+    
+    If duplicate found, returns existing artist with created=False.
+    If new, creates artist with source='local' and returns with created=True.
+
+    Args:
+        request: Artist data from discovery
+        session: Database session
+
+    Returns:
+        Created or existing artist with status indicator
+    """
+    from soulspot.domain.entities import Artist, ArtistSource
+    from soulspot.domain.value_objects import ImageRef, SpotifyUri
+
+    repo = ArtistRepository(session)
+
+    # Check for existing artist by spotify_uri
+    if request.spotify_id:
+        spotify_uri = SpotifyUri.for_artist(request.spotify_id)
+        existing = await repo.get_by_spotify_uri(spotify_uri)
+        if existing:
+            logger.info(f"Artist already exists (spotify_uri): {existing.name}")
+            return AddArtistResponse(
+                artist=_artist_to_response(existing),
+                created=False,
+                message=f"Artist '{existing.name}' already in library",
+            )
+
+    # Check for existing artist by deezer_id
+    if request.deezer_id:
+        existing = await repo.get_by_deezer_id(request.deezer_id)
+        if existing:
+            logger.info(f"Artist already exists (deezer_id): {existing.name}")
+            return AddArtistResponse(
+                artist=_artist_to_response(existing),
+                created=False,
+                message=f"Artist '{existing.name}' already in library",
+            )
+
+    # Check for existing artist by name (normalized)
+    existing = await repo.get_by_name(request.name)
+    if existing:
+        logger.info(f"Artist already exists (name): {existing.name}")
+        return AddArtistResponse(
+            artist=_artist_to_response(existing),
+            created=False,
+            message=f"Artist '{existing.name}' already in library",
+        )
+
+    # Create new artist
+    artist = Artist(
+        id=ArtistId.generate(),
+        name=request.name,
+        source=ArtistSource.LOCAL,  # User is adding to LOCAL library
+        spotify_uri=SpotifyUri.for_artist(request.spotify_id) if request.spotify_id else None,
+        deezer_id=request.deezer_id,
+        image=ImageRef(url=request.image_url) if request.image_url else ImageRef(),
+    )
+
+    await repo.add(artist)
+    await session.commit()
+
+    logger.info(f"Added artist to library: {artist.name} (id={artist.id})")
+
+    return AddArtistResponse(
+        artist=_artist_to_response(artist),
+        created=True,
+        message=f"Artist '{artist.name}' added to library",
+    )
+
+
 @router.get("/{artist_id}", response_model=ArtistResponse)
 async def get_artist(
     artist_id: str,

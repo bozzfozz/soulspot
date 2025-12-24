@@ -59,14 +59,14 @@
     <i class="bi bi-lightbulb"></i> Found <strong>{{ total_discoveries }}</strong> artists you might like
 </div>
 
-<div class="artist-grid">
+<div class="artists-grid">
     {% for artist in discoveries %}
-    <div class="artist-card discover-card" data-spotify-id="{{ artist.spotify_id }}" data-deezer-id="{{ artist.deezer_id }}">
-        <a href="/library/artists/{{ artist.name }}" class="artist-card-link">
+    <div class="artist-card blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 % 12 }};" data-spotify-id="{{ artist.spotify_id }}" data-deezer-id="{{ artist.deezer_id }}" data-artist-name="{{ artist.name }}">
+        <a href="/library/artists/{{ artist.name|urlencode }}" class="artist-card-link">
             <div class="artist-avatar">
                 {# ImageService - provides placeholder SVG if no URL #}
                 <img src="{{ get_display_url(artist.image_url, none, 'artist') }}" alt="{{ artist.name }}" loading="lazy">
-                {# Source badge #}
+                {# Source badge on avatar #}
                 <span class="source-badge source-{{ artist.source }}" title="Found via {{ artist.source|capitalize }}">
                     {% if artist.source == 'deezer' %}
                     <i class="bi bi-music-note"></i>
@@ -77,25 +77,19 @@
                     {% endif %}
                 </span>
             </div>
-            <div class="artist-info">
-                <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
-                <div class="artist-meta">
-                    {% if artist.genres %}
-                    <span class="artist-genres">{{ artist.genres | join(', ') }}</span>
-                    {% endif %}
-                </div>
-                <div class="discover-based-on">
-                    <i class="bi bi-diagram-2"></i> Similar to {{ artist.based_on }}
-                </div>
+            <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
+            {% if artist.genres %}
+            <div class="artist-genres">{{ artist.genres | join(', ') }}</div>
+            {% endif %}
+            <div class="discover-based-on">
+                <i class="bi bi-diagram-2"></i> Similar to {{ artist.based_on }}
             </div>
         </a>
-        <div class="artist-actions">
-            <button class="btn btn-follow btn-sm"
-                    onclick="followArtist('{{ artist.spotify_id }}', this)"
-                    title="Follow on Spotify">
-                <i class="bi bi-person-plus"></i> Follow
-            </button>
-        </div>
+        <button class="btn btn-add-library" 
+                onclick="event.stopPropagation(); addToLibrary(this, '{{ artist.name }}', '{{ artist.spotify_id }}', '{{ artist.deezer_id }}', '{{ artist.image_url }}')"
+                title="Add to your library watchlist">
+            <i class="bi bi-plus-circle"></i> Add to Library
+        </button>
     </div>
     {% endfor %}
 </div>
@@ -185,95 +179,130 @@
     gap: 0.75rem;
 }
 
-.artist-grid {
+/* Artists Grid - same as library_artists.html */
+.artists-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-4);
 }
 
-.discover-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-.discover-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.2);
-}
-
-.artist-card-link {
-    display: flex;
-    padding: 1.25rem;
-    gap: 1rem;
+/* Artist Card - centered layout with large avatar */
+.artist-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    text-align: center;
     text-decoration: none;
-    color: inherit;
+    color: var(--text-primary);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    display: block;
 }
 
+.artist-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+/* Large centered avatar - same as library_artists */
 .artist-avatar {
-    width: 64px;
-    height: 64px;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--space-4);
     border-radius: 50%;
-    flex-shrink: 0;
-    overflow: hidden;
-    background: linear-gradient(135deg, #1DB954, #1ed760);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: white;
+    transition: transform var(--transition-fast);
+    overflow: hidden;
     position: relative;
+    background: linear-gradient(135deg, #1DB954, #1ed760);
 }
+
 .artist-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
-.artist-initial {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: white;
+
+.artist-card:hover .artist-avatar {
+    transform: scale(1.1);
 }
 
-.artist-info {
-    flex: 1;
-    min-width: 0;
+/* Card link - takes full card except button */
+.artist-card-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
 }
+
+/* Artist name - centered and bold */
 .artist-name {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 0.25rem;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.artist-genres {
-    font-size: 0.8rem;
-    color: var(--text-muted);
+
+.artist-card:hover .artist-name {
+    color: #1DB954;
 }
+
+/* Genres - muted text */
+.artist-genres {
+    font-size: var(--font-size-sm);
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Based on info - accent color */
 .discover-based-on {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
     color: var(--accent-primary);
-    margin-top: 0.5rem;
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-3);
     opacity: 0.8;
 }
 
-.artist-actions {
-    padding: 0 1.25rem 1.25rem;
-}
-.btn-follow {
+/* Add to Library button */
+.btn-add-library {
     width: 100%;
+    padding: var(--space-2) var(--space-3);
     background: transparent;
     border: 1px solid var(--accent-primary);
     color: var(--accent-primary);
-    transition: all 0.2s;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
 }
-.btn-follow:hover {
+
+.btn-add-library:hover {
     background: var(--accent-primary);
     color: white;
 }
-.btn-follow.following {
-    background: var(--accent-primary);
+
+.btn-add-library.added {
+    background: #22c55e;
+    border-color: #22c55e;
     color: white;
+    pointer-events: none;
+}
+
+.btn-add-library.adding {
+    opacity: 0.7;
     pointer-events: none;
 }
 
@@ -433,6 +462,62 @@ async function triggerEnrichment(button) {
         button.innerHTML = originalHTML;
         button.disabled = false;
         alert('Failed to start enrichment: ' + error.message);
+    }
+}
+
+// Hey future me - this adds a discovered artist to the library watchlist!
+// Creates a new artist entry in the database with the streaming service IDs.
+// The artist will appear in the Library > Artists section after being added.
+// Later, the user can queue albums/tracks for download from this artist.
+async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<span class="spinner-small"></span>';
+    button.classList.add('adding');
+
+    try {
+        const response = await fetch('/api/artists', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: artistName,
+                spotify_id: spotifyId || null,
+                deezer_id: deezerId || null,
+                image_url: imageUrl || null,
+            }),
+        });
+
+        if (response.ok || response.status === 201) {
+            const data = await response.json();
+            
+            if (data.created) {
+                // New artist added
+                button.innerHTML = '<i class="bi bi-check-circle-fill"></i> Added';
+                if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
+                    SoulSpot.showNotification(`${artistName} added to library`, 'success');
+                }
+            } else {
+                // Artist already existed
+                button.innerHTML = '<i class="bi bi-check-circle"></i> Already in Library';
+                if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
+                    SoulSpot.showNotification(`${artistName} is already in your library`, 'info');
+                }
+            }
+            
+            button.classList.remove('adding');
+            button.classList.add('added');
+        } else {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to add artist');
+        }
+    } catch (error) {
+        console.error('Add to library error:', error);
+        button.innerHTML = originalHTML;
+        button.classList.remove('adding');
+        
+        // Show error
+        alert('Failed to add artist: ' + error.message);
     }
 }
 </script>
