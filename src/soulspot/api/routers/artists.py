@@ -376,7 +376,7 @@ async def add_artist_to_library(
 
     # Check for existing artist by spotify_uri
     if request.spotify_id:
-        spotify_uri = SpotifyUri.for_artist(request.spotify_id)
+        spotify_uri = SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
         existing = await repo.get_by_spotify_uri(spotify_uri)
         if existing:
             logger.info(f"Artist already exists (spotify_uri): {existing.name}")
@@ -412,7 +412,7 @@ async def add_artist_to_library(
         id=ArtistId.generate(),
         name=request.name,
         source=ArtistSource.LOCAL,  # User is adding to LOCAL library
-        spotify_uri=SpotifyUri.for_artist(request.spotify_id) if request.spotify_id else None,
+        spotify_uri=SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}") if request.spotify_id else None,
         deezer_id=request.deezer_id,
         image=ImageRef(url=request.image_url) if request.image_url else ImageRef(),
     )
