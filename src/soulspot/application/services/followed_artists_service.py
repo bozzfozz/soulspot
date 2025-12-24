@@ -1047,6 +1047,7 @@ class FollowedArtistsService:
 
         Hey future me - this is a helper for sync_artist_discography_complete!
         Uses the same provider that gave us the album.
+        Both Spotify and Deezer return PaginatedResponse with .items!
         """
         from soulspot.domain.ports.plugin import PluginCapability
 
@@ -1057,12 +1058,14 @@ class FollowedArtistsService:
                         album_id=album_dto.spotify_id,
                         limit=50,
                     )
-                    return response.items if hasattr(response, 'items') else response
+                    # PaginatedResponse has .items
+                    return response.items if hasattr(response, 'items') else []
             elif source == "deezer" and self._deezer_plugin and album_dto.deezer_id:
-                tracks = await self._deezer_plugin.get_album_tracks(
+                # Deezer also returns PaginatedResponse!
+                response = await self._deezer_plugin.get_album_tracks(
                     album_id=album_dto.deezer_id,
                 )
-                return tracks
+                return response.items if hasattr(response, 'items') else []
         except Exception as e:
             logger.warning(f"Failed to fetch tracks for album {album_dto.title}: {e}")
 
