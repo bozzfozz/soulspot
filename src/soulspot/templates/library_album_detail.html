@@ -217,6 +217,26 @@
             </button>
         </div>
     </div>
+    
+    {# Hey future me - STREAMING-ONLY BANNER!
+       Shows when album has no local files, tracks are from Deezer/Spotify API.
+       User can then download individual tracks or the whole album. #}
+    {% if album.is_streaming_only %}
+    <div class="streaming-only-banner" style="margin-bottom: var(--space-4); padding: var(--space-4); background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-lg); display: flex; align-items: center; gap: var(--space-3);">
+        <i class="bi bi-cloud" style="font-size: 1.5rem; color: var(--accent-primary);"></i>
+        <div>
+            <div style="font-weight: var(--font-weight-semibold); color: var(--text-primary);">
+                Streaming-Only Album
+            </div>
+            <div style="font-size: var(--font-size-sm); color: var(--text-muted);">
+                Diese Tracks sind nicht lokal vorhanden. Tracklist von 
+                {% if album.source == 'deezer' %}Deezer{% elif album.source == 'spotify' %}Spotify{% else %}Provider{% endif %} 
+                geladen. Klicke auf "Download" um Tracks herunterzuladen.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     {% if album.tracks %}
     <div style="overflow-x: auto;">
         <table class="data-table">

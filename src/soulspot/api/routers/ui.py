@@ -1841,7 +1841,10 @@ async def library_artist_detail(
         albums_dict[album_key] = {
             "id": f"{artist_name}::{album.title}",
             "title": album.title,
-            "track_count": 0,  # Will be updated from tracks
+            "track_count": 0,  # Will be updated from tracks (LOCAL tracks owned)
+            # Hey future me - total_tracks comes from provider API (Deezer/Spotify)!
+            # Shows "X/Y tracks" where X=owned, Y=total from album metadata.
+            "total_tracks": album.total_tracks if hasattr(album, "total_tracks") else None,
             "year": album.release_year,
             "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
             "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
@@ -1881,6 +1884,19 @@ async def library_artist_detail(
     # Sort tracks by album, then track number/title
     tracks_data.sort(key=lambda x: (x["album"] or "", x["title"].lower()))  # type: ignore[union-attr]
 
+    # Hey future me - load DISCOGRAPHY STATS for "X/Y albums" availability badge!
+    # owned = albums in soulspot_albums, total = all albums in artist_discography
+    # This shows users how complete their collection is vs what exists.
+    from soulspot.domain.value_objects import ArtistId
+    from soulspot.infrastructure.persistence.repositories import (
+        ArtistDiscographyRepository,
+    )
+
+    discography_repo = ArtistDiscographyRepository(session)
+    discography_stats = await discography_repo.get_stats_for_artist(
+        ArtistId(artist_model.id)
+    )
+
     artist_data = {
         "id": str(
             artist_model.id
@@ -1892,6 +1908,11 @@ async def library_artist_detail(
         "tracks": tracks_data,
         "track_count": len(tracks_data),
         "album_count": len(albums),
+        # Hey future me - discography_stats for "X/Y albums" badge!
+        # total_albums = ALL known releases from providers (artist_discography table)
+        # owned_albums = how many of those the user has (is_owned=true)
+        "total_albums": discography_stats.get("total", 0),
+        "owned_albums": discography_stats.get("owned", 0),
         "image_url": artist_model.image_url,  # Spotify CDN URL or None
         "image_path": artist_model.image_path,  # Local cached image path or None
         "genres": artist_model.genres,  # Spotify genres
@@ -1976,10 +1997,46 @@ async def library_album_detail(
     result = await session.execute(stmt)
     track_models = result.unique().scalars().all()
 
-    # If no tracks found, show empty album with sync prompt instead of 404
-    # (Album exists in DB but tracks not synced yet)
-    if not track_models:
-        # Return album page with empty tracks and sync prompt
+    # Hey future me - AUTO-FETCH TRACKS FROM PROVIDER!
+    # If album exists in DB but has no local tracks, we fetch the track list
+    # from Deezer/Spotify so users can see what's on the album before downloading.
+    streaming_tracks: list[dict[str, Any]] = []
+    if not track_models and album_model.deezer_id:
+        # Try to fetch tracks from Deezer (NO AUTH REQUIRED!)
+        try:
+            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+            deezer_plugin = DeezerPlugin()
+            response = await deezer_plugin.get_album_tracks(album_model.deezer_id)
+            streaming_tracks = [
+                {
+                    "id": f"deezer:{track.deezer_id}",
+                    "title": track.title,
+                    "artist": track.artist_name,
+                    "album": album_title,
+                    "track_number": track.track_number,
+                    "disc_number": track.disc_number,
+                    "duration_ms": track.duration_ms,
+                    "file_path": None,  # No local file
+                    "is_broken": False,
+                    "source": "deezer",
+                    "spotify_id": None,
+                    "deezer_id": track.deezer_id,
+                    "tidal_id": None,
+                    "is_downloaded": False,  # Not downloaded yet
+                    "is_streaming": True,  # Flag for UI styling
+                }
+                for track in response.items
+            ]
+            logger.info(
+                f"Fetched {len(streaming_tracks)} tracks from Deezer for album '{album_title}'"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to fetch tracks from Deezer: {e}")
+            streaming_tracks = []
+
+    # If no tracks found (neither local nor streaming), show empty album with sync prompt
+    if not track_models and not streaming_tracks:
         album_data = {
             "id": str(album_model.id),
             "title": album_title,
@@ -2000,12 +2057,55 @@ async def library_album_detail(
             "needs_sync": True,  # Flag to show "Sync required" message
             "source": album_model.source,
             "spotify_uri": album_model.spotify_uri,
+            "deezer_id": album_model.deezer_id,
         }
         return templates.TemplateResponse(
             request, "library_album_detail.html", context={"album": album_data}
         )
 
-    # Convert tracks to template format
+    # Hey future me - Use streaming tracks if we have them (no local files)
+    # This allows users to see the track list before downloading!
+    if streaming_tracks and not track_models:
+        # Sort streaming tracks by disc/track number
+        streaming_tracks.sort(
+            key=lambda x: (
+                x["disc_number"],
+                x["track_number"] or 999,
+                x["title"].lower(),
+            )
+        )
+
+        # Calculate total duration
+        total_duration_ms = sum(t["duration_ms"] or 0 for t in streaming_tracks)
+
+        album_data = {
+            "id": str(album_model.id),
+            "title": album_title,
+            "artist": artist_name,
+            "artist_slug": artist_name,
+            "tracks": streaming_tracks,
+            "year": album_model.release_year
+            if hasattr(album_model, "release_year")
+            else None,
+            "total_duration_ms": total_duration_ms,
+            "artwork_url": album_model.cover_url
+            if hasattr(album_model, "cover_url")
+            else None,
+            "artwork_path": album_model.cover_path
+            if hasattr(album_model, "cover_path")
+            else None,
+            "is_compilation": "compilation" in (album_model.secondary_types or []),
+            "needs_sync": False,  # We HAVE tracks from provider!
+            "source": album_model.source,
+            "spotify_uri": album_model.spotify_uri,
+            "deezer_id": album_model.deezer_id,
+            "is_streaming_only": True,  # Flag: all tracks from provider, none local
+        }
+        return templates.TemplateResponse(
+            request, "library_album_detail.html", context={"album": album_data}
+        )
+
+    # Convert tracks to template format (local tracks from DB)
     tracks_data = [
         {
             "id": track.id,
@@ -2025,6 +2125,7 @@ async def library_album_detail(
             "deezer_id": track.deezer_id,
             "tidal_id": track.tidal_id,
             "is_downloaded": bool(track.file_path),
+            "is_streaming": not bool(track.file_path),  # True if no local file
         }
         for track in track_models
     ]

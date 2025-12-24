@@ -30,7 +30,16 @@
         <div style="font-size: var(--font-size-sm); color: var(--text-muted); opacity: 0.7; margin-bottom: var(--space-2);">{{ artist.disambiguation }}</div>
         {% endif %}
         <div style="display: flex; gap: var(--space-4); color: var(--text-muted); font-size: var(--font-size-sm); margin-bottom: var(--space-3);">
+            {# Hey future me - X/Y availability badge! Shows owned/total from discography.
+               If discography not synced (total_albums=0), fall back to just showing count.
+               Green = complete (X=Y), Orange = partial (X<Y) #}
+            {% if artist.total_albums > 0 %}
+            <span class="availability-badge {% if artist.owned_albums >= artist.total_albums %}availability-complete{% else %}availability-partial{% endif %}">
+                <i class="bi bi-disc" style="margin-right: var(--space-2);"></i>{{ artist.owned_albums }}/{{ artist.total_albums }} album{{ 's' if artist.total_albums != 1 else '' }}
+            </span>
+            {% else %}
             <span><i class="bi bi-disc" style="margin-right: var(--space-2);"></i>{{ artist.albums|length }} album{{ 's' if artist.albums|length != 1 else '' }}</span>
+            {% endif %}
             <span><i class="bi bi-music-note" style="margin-right: var(--space-2);"></i>{{ artist.track_count }} track{{ 's' if artist.track_count != 1 else '' }}</span>
         </div>
         {# Hey future me - External service links! MusicBrainz and Spotify. 
@@ -102,7 +111,16 @@
             </div>
             <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
             <div class="album-meta">
+                {# Hey future me - X/Y track availability badge!
+                   track_count = local tracks owned, total_tracks = from provider API.
+                   If total_tracks not available, just show count. #}
+                {% if album.total_tracks and album.total_tracks > 0 %}
+                <span class="availability-badge-small {% if album.track_count >= album.total_tracks %}availability-complete{% else %}availability-partial{% endif %}">
+                    <i class="bi bi-music-note"></i> {{ album.track_count }}/{{ album.total_tracks }}
+                </span>
+                {% else %}
                 <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
+                {% endif %}
                 {% if album.year %}<span>{{ album.year }}</span>{% endif %}
             </div>
         </a>
@@ -284,6 +302,37 @@ function refreshMissingAlbums() {
         background: rgba(107, 114, 128, 0.9);  /* Gray */
         color: white;
     }
+    
+    /* Hey future me - Availability badges for X/Y format (owned/total)!
+       .availability-complete = green (user owns all)
+       .availability-partial = orange (user missing some)
+       Used for both artist albums and album tracks. */
+    .availability-badge {
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-1);
+    }
+    .availability-badge-small {
+        font-size: var(--font-size-xs);
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+    }
+    .availability-complete {
+        background: rgba(34, 197, 94, 0.15);  /* Green tint */
+        color: var(--success);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .availability-partial {
+        background: rgba(245, 158, 11, 0.15);  /* Orange tint */
+        color: var(--warning);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    
     .album-title {
         font-size: var(--font-size-sm);
         font-weight: var(--font-weight-semibold);
