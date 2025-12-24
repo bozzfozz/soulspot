@@ -317,6 +317,55 @@ class ArtistRepository(IArtistRepository):
             for model in models
         ]
 
+    async def list_by_source(
+        self, sources: list[str], limit: int = 100, offset: int = 0
+    ) -> list[Artist]:
+        """List artists filtered by source(s).
+
+        Hey future me - this is for Discovery page!
+        Get only LOCAL artists (source='local' or 'hybrid') to find similar artists
+        based on the user's actual music collection.
+
+        Args:
+            sources: List of sources to include (e.g., ['local', 'hybrid'])
+            limit: Maximum number of artists to return
+            offset: Offset for pagination
+
+        Returns:
+            List of Artist entities matching the source filter
+        """
+        stmt = (
+            select(ArtistModel)
+            .where(ArtistModel.source.in_(sources))
+            .order_by(ArtistModel.name)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        from soulspot.domain.entities import ArtistSource
+
+        return [
+            Artist(
+                id=ArtistId.from_string(model.id),
+                name=model.name,
+                source=ArtistSource(model.source),
+                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+                if model.spotify_uri
+                else None,
+                musicbrainz_id=model.musicbrainz_id,
+                deezer_id=model.deezer_id,
+                image=ImageRef(url=model.image_url, path=model.image_path),
+                disambiguation=model.disambiguation,
+                genres=json.loads(model.genres) if model.genres else [],
+                tags=json.loads(model.tags) if model.tags else [],
+                created_at=model.created_at,
+                updated_at=model.updated_at,
+            )
+            for model in models
+        ]
+
     # Hey future me - this counts ALL artists in the DB using SQL COUNT (efficient!).
     # Used for pagination total_count and stats. Returns 0 if no artists exist (not None).
     async def count_all(self) -> int:

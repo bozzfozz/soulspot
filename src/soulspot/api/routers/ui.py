@@ -2565,12 +2565,16 @@ async def spotify_discover_page(
             },
         )
 
-    # Get all artists directly from DB (no Spotify auth required!)
-    # Hey future me - this replaces sync_service.get_artists()
-    repo = SpotifyBrowseRepository(session)
-    artists = await repo.get_all_artists(limit=1000)
+    # Get LOCAL artists only (from library scan) - not Spotify synced!
+    # Hey future me - we want discovery based on user's LOCAL music collection!
+    # This makes sense: "Find artists similar to the music I actually own"
+    from soulspot.infrastructure.persistence.repositories import ArtistRepository
+    
+    artist_repo = ArtistRepository(session)
+    # Filter by source='local' or 'hybrid' (hybrid = local + streaming match)
+    artists = await artist_repo.list_by_source(sources=["local", "hybrid"], limit=1000)
 
-    logger.info(f"Discover page: Found {len(artists) if artists else 0} artists in DB")
+    logger.info(f"Discover page: Found {len(artists) if artists else 0} LOCAL artists in DB")
 
     if not artists:
         return templates.TemplateResponse(
@@ -2581,7 +2585,7 @@ async def spotify_discover_page(
                 "based_on_count": 0,
                 "total_discoveries": 0,
                 "source_counts": {},
-                "error": "No followed artists found. Sync your Spotify artists first in Settings!",
+                "error": "No local artists found. Scan your music library first! (Settings → Library Scanner)",
             },
         )
 
@@ -2590,14 +2594,22 @@ async def spotify_discover_page(
     sample_artists = random.sample(artists, sample_size)
 
     logger.info(
-        f"Discover page (Multi-Provider): Sampling {sample_size} artists: "
+        f"Discover page (Multi-Provider): Sampling {sample_size} LOCAL artists: "
         f"{[a.name for a in sample_artists]}"
     )
 
-    # Get followed artist IDs/names for filtering
-    # Extract Spotify ID from URI (format: spotify:artist:ID)
-    followed_ids = {uri.split(":")[-1] for a in artists if (uri := a.spotify_uri)}
-    followed_names = {a.name.lower().strip() for a in artists if a.name}
+    # Get artist IDs/names for filtering (exclude artists we already have)
+    # Works for both spotify URIs and deezer IDs
+    followed_ids: set[str] = set()
+    followed_names: set[str] = set()
+    for a in artists:
+        if a.spotify_uri:
+            # Extract Spotify ID from URI: "spotify:artist:ID" -> "ID"
+            followed_ids.add(a.spotify_uri.split(":")[-1])
+        if a.deezer_id:
+            followed_ids.add(a.deezer_id)
+        if a.name:
+            followed_names.add(a.name.lower().strip())
 
     # Use DiscoverService for Multi-Provider discovery!
     service = DiscoverService(
