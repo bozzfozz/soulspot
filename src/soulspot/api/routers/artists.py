@@ -374,37 +374,79 @@ async def add_artist_to_library(
 
     repo = ArtistRepository(session)
 
-    # Check for existing artist by spotify_uri
+    # Hey future me - ONLY check if artist exists as LOCAL or HYBRID source!
+    # Spotify-only synced artists (source='spotify') should NOT block adding!
+    # User wants to add artist to their LOCAL library, not check streaming follows.
+    
+    # Check for existing LOCAL/HYBRID artist by spotify_uri
     if request.spotify_id:
         spotify_uri = SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
         existing = await repo.get_by_spotify_uri(spotify_uri)
-        if existing:
-            logger.info(f"Artist already exists (spotify_uri): {existing.name}")
+        if existing and existing.source in (ArtistSource.LOCAL, ArtistSource.HYBRID):
+            logger.info(f"Artist already exists locally (spotify_uri): {existing.name}")
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
                 message=f"Artist '{existing.name}' already in library",
             )
+        elif existing:
+            # Artist exists but only from Spotify sync - upgrade to HYBRID
+            logger.info(f"Upgrading artist from spotify to hybrid: {existing.name}")
+            existing.source = ArtistSource.HYBRID
+            await repo.update(existing)
+            await session.commit()
+            return AddArtistResponse(
+                artist=_artist_to_response(existing),
+                created=False,
+                message=f"Artist '{existing.name}' upgraded to local library",
+            )
 
-    # Check for existing artist by deezer_id
+    # Check for existing LOCAL/HYBRID artist by deezer_id
     if request.deezer_id:
         existing = await repo.get_by_deezer_id(request.deezer_id)
-        if existing:
-            logger.info(f"Artist already exists (deezer_id): {existing.name}")
+        if existing and existing.source in (ArtistSource.LOCAL, ArtistSource.HYBRID):
+            logger.info(f"Artist already exists locally (deezer_id): {existing.name}")
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
                 message=f"Artist '{existing.name}' already in library",
             )
+        elif existing:
+            # Artist exists but only from Deezer sync - upgrade to HYBRID
+            logger.info(f"Upgrading artist from deezer to hybrid: {existing.name}")
+            existing.source = ArtistSource.HYBRID
+            await repo.update(existing)
+            await session.commit()
+            return AddArtistResponse(
+                artist=_artist_to_response(existing),
+                created=False,
+                message=f"Artist '{existing.name}' upgraded to local library",
+            )
 
-    # Check for existing artist by name (normalized)
+    # Check for existing LOCAL/HYBRID artist by name (normalized)
     existing = await repo.get_by_name(request.name)
-    if existing:
-        logger.info(f"Artist already exists (name): {existing.name}")
+    if existing and existing.source in (ArtistSource.LOCAL, ArtistSource.HYBRID):
+        logger.info(f"Artist already exists locally (name): {existing.name}")
         return AddArtistResponse(
             artist=_artist_to_response(existing),
             created=False,
             message=f"Artist '{existing.name}' already in library",
+        )
+    elif existing:
+        # Artist exists but only from streaming sync - upgrade to HYBRID
+        logger.info(f"Upgrading artist from streaming to hybrid: {existing.name}")
+        existing.source = ArtistSource.HYBRID
+        # Also update spotify_id/deezer_id if provided
+        if request.spotify_id and not existing.spotify_uri:
+            existing.spotify_uri = SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
+        if request.deezer_id and not existing.deezer_id:
+            existing.deezer_id = request.deezer_id
+        await repo.update(existing)
+        await session.commit()
+        return AddArtistResponse(
+            artist=_artist_to_response(existing),
+            created=False,
+            message=f"Artist '{existing.name}' upgraded to local library",
         )
 
     # Create new artist

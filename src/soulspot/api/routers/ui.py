@@ -2780,20 +2780,16 @@ async def spotify_discover_page(
         f"{[a.name for a in sample_artists]}"
     )
 
-    # Get artist IDs/names for filtering (exclude artists we already have in library)
-    # IMPORTANT: Check ALL artists in library, not just local/hybrid!
-    # This prevents showing artists that are already in library from ANY source
-    # (Spotify sync, Deezer sync, manual add, etc.)
+    # Get artist IDs/names for filtering (exclude artists we already have LOCALLY)
+    # IMPORTANT: Only exclude LOCAL/HYBRID artists - not pure Spotify-synced ones!
+    # User can add artists to local library even if they follow them on Spotify.
     # Hey future me - Artist.spotify_uri is a SpotifyUri VALUE OBJECT, not a string!
     # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
     followed_ids: set[str] = set()
     followed_names: set[str] = set()
     
-    # Get ALL artists for exclusion filtering (not just local/hybrid!)
-    # This ensures we don't suggest artists already added via Spotify sync, etc.
-    all_library_artists = await artist_repo.list_all(limit=5000)
-    
-    for a in all_library_artists:
+    # Use the same local_artists for exclusion - only exclude what user has locally!
+    for a in local_artists:
         if a.spotify_uri:
             # SpotifyUri is a value object with .resource_id property
             followed_ids.add(a.spotify_uri.resource_id)
@@ -2802,7 +2798,7 @@ async def spotify_discover_page(
         if a.name:
             followed_names.add(a.name.lower().strip())
     
-    logger.debug(f"Discover filter: {len(followed_names)} artist names to exclude")
+    logger.debug(f"Discover filter: {len(followed_names)} LOCAL artist names to exclude")
 
     # Use DiscoverService for Multi-Provider discovery!
     service = DiscoverService(
