@@ -2000,9 +2000,12 @@ async def library_album_detail(
     # Hey future me - AUTO-FETCH TRACKS FROM PROVIDER!
     # If album exists in DB but has no local tracks, we fetch the track list
     # from Deezer/Spotify so users can see what's on the album before downloading.
+    # PRIORITY: Deezer first (no auth), then Spotify (requires auth).
     streaming_tracks: list[dict[str, Any]] = []
+    provider_used = None
+
+    # 1. TRY DEEZER FIRST (no auth required!)
     if not track_models and album_model.deezer_id:
-        # Try to fetch tracks from Deezer (NO AUTH REQUIRED!)
         try:
             from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
@@ -2028,11 +2031,57 @@ async def library_album_detail(
                 }
                 for track in response.items
             ]
+            provider_used = "deezer"
             logger.info(
                 f"Fetched {len(streaming_tracks)} tracks from Deezer for album '{album_title}'"
             )
         except Exception as e:
             logger.warning(f"Failed to fetch tracks from Deezer: {e}")
+            streaming_tracks = []
+
+    # 2. FALLBACK TO SPOTIFY (requires auth!)
+    # Only try if Deezer failed AND album has spotify_uri
+    if not track_models and not streaming_tracks and album_model.spotify_uri:
+        try:
+            from soulspot.api.dependencies import (
+                get_credentials_service,
+                get_spotify_plugin_optional,
+            )
+
+            # Get credentials service first, then spotify plugin
+            credentials_service = await get_credentials_service(session)
+            spotify_plugin = await get_spotify_plugin_optional(request, credentials_service)
+
+            if spotify_plugin and spotify_plugin.is_authenticated:
+                # Extract Spotify album ID from URI
+                spotify_album_id = album_model.spotify_uri.split(":")[-1]
+                response = await spotify_plugin.get_album_tracks(spotify_album_id)
+                streaming_tracks = [
+                    {
+                        "id": f"spotify:{track.spotify_id}",
+                        "title": track.title,
+                        "artist": track.artist_name,
+                        "album": album_title,
+                        "track_number": track.track_number,
+                        "disc_number": track.disc_number,
+                        "duration_ms": track.duration_ms,
+                        "file_path": None,  # No local file
+                        "is_broken": False,
+                        "source": "spotify",
+                        "spotify_id": track.spotify_id,
+                        "deezer_id": None,
+                        "tidal_id": None,
+                        "is_downloaded": False,
+                        "is_streaming": True,
+                    }
+                    for track in response.items
+                ]
+                provider_used = "spotify"
+                logger.info(
+                    f"Fetched {len(streaming_tracks)} tracks from Spotify for album '{album_title}'"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to fetch tracks from Spotify: {e}")
             streaming_tracks = []
 
     # If no tracks found (neither local nor streaming), show empty album with sync prompt
@@ -2100,6 +2149,7 @@ async def library_album_detail(
             "spotify_uri": album_model.spotify_uri,
             "deezer_id": album_model.deezer_id,
             "is_streaming_only": True,  # Flag: all tracks from provider, none local
+            "streaming_provider": provider_used,  # Which provider we got tracks from
         }
         return templates.TemplateResponse(
             request, "library_album_detail.html", context={"album": album_data}

@@ -230,7 +230,7 @@
             </div>
             <div style="font-size: var(--font-size-sm); color: var(--text-muted);">
                 Diese Tracks sind nicht lokal vorhanden. Tracklist von 
-                {% if album.source == 'deezer' %}Deezer{% elif album.source == 'spotify' %}Spotify{% else %}Provider{% endif %} 
+                {% if album.streaming_provider == 'deezer' %}Deezer{% elif album.streaming_provider == 'spotify' %}Spotify{% else %}Provider{% endif %} 
                 geladen. Klicke auf "Download" um Tracks herunterzuladen.
             </div>
         </div>
