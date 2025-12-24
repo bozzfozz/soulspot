@@ -619,10 +619,8 @@ class FollowedArtistsService:
             )
             return stats  # type: ignore[return-value]
 
-        # Extract Spotify ID from spotify_uri if available
-        spotify_artist_id = None
-        if artist.spotify_uri:
-            spotify_artist_id = str(artist.spotify_uri).split(":")[-1]
+        # Use spotify_id property (extracts ID from SpotifyUri value object)
+        spotify_artist_id = artist.spotify_id
 
         albums_dtos = []
         source = "none"

@@ -520,8 +520,8 @@ async def sync_playlist(
                 detail="Playlist has no Spotify URI. Cannot sync.",
             )
 
-        # Extract Spotify playlist ID from URI (format: spotify:playlist:ID)
-        spotify_playlist_id = str(playlist.spotify_uri.value).split(":")[-1]
+        # Use spotify_id property (extracts ID from SpotifyUri value object)
+        spotify_playlist_id = playlist.spotify_id
 
         # Re-import the playlist (SpotifyPlugin handles token internally)
         request = ImportSpotifyPlaylistRequest(
@@ -596,8 +596,8 @@ async def sync_all_playlists(
                 continue
 
             try:
-                # Extract Spotify playlist ID from URI
-                spotify_playlist_id = str(playlist.spotify_uri.value).split(":")[-1]
+                # Use spotify_id property (extracts ID from SpotifyUri value object)
+                spotify_playlist_id = playlist.spotify_id
 
                 # Re-import the playlist (SpotifyPlugin handles token internally)
                 request = ImportSpotifyPlaylistRequest(

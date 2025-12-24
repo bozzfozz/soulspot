@@ -101,9 +101,34 @@ class Artist:
 
 **⚠️ REGELN für Entities:**
 - KEIN Import von SQLAlchemy, httpx, oder Infrastructure Code
-- Verwende `spotify_uri` (vollständiger URI), NICHT `spotify_id`
+- Verwende `spotify_uri: SpotifyUri | None` (Value Object), NICHT raw string
 - Dataclass mit Validierung in `__post_init__`
 - Werden NUR in Application Layer und Domain Layer verwendet
+- **Nutze `.spotify_id` Property für ID-Extraktion!**
+
+### 2.1.1 SpotifyUri ID-Extraktion (WICHTIG!)
+
+**Es gibt EINE kanonische Art, die Spotify ID zu bekommen:**
+
+| Klasse | Richtiger Zugriff | ❌ FALSCH |
+|--------|------------------|-----------|
+| `SpotifyUri` (Value Object) | `.resource_id` | `.split(":")[-1]` |
+| `Artist`, `Album`, `Track`, `Playlist` (Entity) | `.spotify_id` | `.spotify_uri.split()` |
+| `ArtistModel`, `AlbumModel`, etc. (Model) | `.spotify_id` (property) | - |
+
+```python
+# ✅ RICHTIG: Nutze .spotify_id Property auf Entities
+artist: Artist = await repo.get_by_id(artist_id)
+spotify_id = artist.spotify_id  # → "3TV0qLgjEYM0STMlmI05U3"
+
+# ✅ RICHTIG: Nutze .resource_id auf SpotifyUri Value Object
+uri = SpotifyUri("spotify:artist:3TV0qLgjEYM0STMlmI05U3")
+spotify_id = uri.resource_id  # → "3TV0qLgjEYM0STMlmI05U3"
+
+# ❌ FALSCH: Manuelles String-Splitting
+spotify_id = artist.spotify_uri.split(":")[-1]  # CRASH! SpotifyUri hat kein .split()
+spotify_id = str(artist.spotify_uri).split(":")[-1]  # Funktioniert, aber INKONSISTENT
+```
 
 ### 2.2 DTOs (Domain Layer)
 **Ort:** `src/soulspot/domain/dtos/`

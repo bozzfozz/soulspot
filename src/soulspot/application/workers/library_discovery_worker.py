@@ -521,8 +521,8 @@ class LibraryDiscoveryWorker:
                 # === SPOTIFY DISCOGRAPHY (if available and artist has spotify_uri) ===
                 if spotify_plugin and artist.spotify_uri:
                     try:
-                        # Extract Spotify ID from URI
-                        spotify_id = str(artist.spotify_uri).split(":")[-1]
+                        # Use spotify_id property (extracts ID from SpotifyUri value object)
+                        spotify_id = artist.spotify_id
 
                         spotify_response = await spotify_plugin.get_artist_albums(
                             artist_id=spotify_id,

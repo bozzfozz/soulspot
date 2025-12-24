@@ -166,6 +166,20 @@ class Artist:
         self.name = name
         self.updated_at = datetime.now(UTC)
 
+    # Hey future me - spotify_id is THE canonical way to get the Spotify ID!
+    # Don't use .spotify_uri.split(":")[-1] or str(spotify_uri).split() - use this property!
+    # Works with SpotifyUri value object via .resource_id internally.
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri.
+
+        Returns the bare ID (e.g., '3TV0qLgjEYM0STMlmI05U3') from
+        URI format 'spotify:artist:3TV0qLgjEYM0STMlmI05U3'.
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.resource_id
+
 
 # Yo, Album entity! Similar to Artist but tied to an artist via artist_id FK. release_year is
 # optional (some albums don't have clear release dates, compilations, etc). artwork_path points to
@@ -236,6 +250,20 @@ class Album:
     def is_compilation(self) -> bool:
         """Check if album is a compilation (Various Artists, etc.)."""
         return "compilation" in [t.lower() for t in (self.secondary_types or [])]
+
+    # Hey future me - spotify_id is THE canonical way to get the Spotify ID!
+    # Don't use .spotify_uri.split(":")[-1] or str(spotify_uri).split() - use this property!
+    # Works with SpotifyUri value object via .resource_id internally.
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri.
+
+        Returns the bare ID (e.g., '4aawyAB9vmqN3uQ7FjRGTy') from
+        URI format 'spotify:album:4aawyAB9vmqN3uQ7FjRGTy'.
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.resource_id
 
     @property
     def album_type_display(self) -> str:
@@ -357,10 +385,14 @@ class ArtistDiscography:
 
     @property
     def spotify_id(self) -> str | None:
-        """Extract Spotify ID from spotify_uri."""
+        """Extract Spotify ID from spotify_uri.
+
+        Hey future me - use .resource_id from SpotifyUri value object!
+        Don't use str().split() - that's inconsistent!
+        """
         if not self.spotify_uri:
             return None
-        return str(self.spotify_uri).split(":")[-1]
+        return self.spotify_uri.resource_id
 
     @property
     def release_year(self) -> int | None:
@@ -437,6 +469,20 @@ class Track:
         """Check if track has been downloaded."""
         return self.file_path is not None and self.file_path.exists()
 
+    # Hey future me - spotify_id is THE canonical way to get the Spotify ID!
+    # Don't use .spotify_uri.split(":")[-1] or str(spotify_uri).split() - use this property!
+    # Works with SpotifyUri value object via .resource_id internally.
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri.
+
+        Returns the bare ID (e.g., '3n3Ppam7vgaVa1iaRUc9Lp') from
+        URI format 'spotify:track:3n3Ppam7vgaVa1iaRUc9Lp'.
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.resource_id
+
 
 # Hey future me, PlaylistSource tracks whether playlist came from Spotify sync or was manually
 # created by user! SPOTIFY playlists auto-sync (we periodically fetch updates from Spotify).
@@ -497,6 +543,20 @@ class Playlist:
     def track_count(self) -> int:
         """Get the number of tracks in the playlist."""
         return len(self.track_ids)
+
+    # Hey future me - spotify_id is THE canonical way to get the Spotify ID!
+    # Don't use .spotify_uri.split(":")[-1] or str(spotify_uri).split() - use this property!
+    # Works with SpotifyUri value object via .resource_id internally.
+    @property
+    def spotify_id(self) -> str | None:
+        """Extract Spotify ID from spotify_uri.
+
+        Returns the bare ID (e.g., '37i9dQZF1DXcBWIGoYBM5M') from
+        URI format 'spotify:playlist:37i9dQZF1DXcBWIGoYBM5M'.
+        """
+        if not self.spotify_uri:
+            return None
+        return self.spotify_uri.resource_id
 
 
 # Yo, DownloadStatus is the STATE MACHINE for downloads! Transitions: PENDING → QUEUED → DOWNLOADING

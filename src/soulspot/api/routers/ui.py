@@ -2751,12 +2751,14 @@ async def spotify_discover_page(
 
     # Get artist IDs/names for filtering (exclude artists we already have)
     # Works for both spotify URIs and deezer IDs
+    # Hey future me - Artist.spotify_uri is a SpotifyUri VALUE OBJECT, not a string!
+    # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
     followed_ids: set[str] = set()
     followed_names: set[str] = set()
     for a in artists:
         if a.spotify_uri:
-            # Extract Spotify ID from URI: "spotify:artist:ID" -> "ID"
-            followed_ids.add(a.spotify_uri.split(":")[-1])
+            # SpotifyUri is a value object with .resource_id property
+            followed_ids.add(a.spotify_uri.resource_id)
         if a.deezer_id:
             followed_ids.add(a.deezer_id)
         if a.name:

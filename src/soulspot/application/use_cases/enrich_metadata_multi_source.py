@@ -134,7 +134,8 @@ class EnrichMetadataMultiSourceUseCase(
 
         try:
             if track.spotify_uri:
-                track_id = track.spotify_uri.value.split(":")[-1]
+                # Use spotify_id property (extracts ID from SpotifyUri value object)
+                track_id = track.spotify_id
                 # Plugin returns TrackDTO - convert to dict for merger
                 track_dto = await self._spotify_plugin.get_track(track_id)
                 return {

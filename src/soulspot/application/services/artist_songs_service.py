@@ -161,10 +161,8 @@ class ArtistSongsService:
         if not artist:
             raise EntityNotFoundError(f"Artist not found: {artist_id.value}")
 
-        # Extract Spotify artist ID from URI if available
-        spotify_artist_id = None
-        if artist.spotify_uri:
-            spotify_artist_id = str(artist.spotify_uri).split(":")[-1]
+        # Use spotify_id property (extracts ID from SpotifyUri value object)
+        spotify_artist_id = artist.spotify_id
 
         synced_tracks: list[Track] = []
         track_dtos: list[TrackDTO] = []

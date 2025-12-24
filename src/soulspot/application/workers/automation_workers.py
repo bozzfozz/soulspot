@@ -190,8 +190,8 @@ class WatchlistWorker:
                             )
                             continue
 
-                        # Extract Spotify ID from URI (spotify:artist:XXXXX)
-                        spotify_artist_id = str(local_artist.spotify_uri).split(":")[-1]
+                        # Use spotify_id property (extracts ID from SpotifyUri value object)
+                        spotify_artist_id = local_artist.spotify_id
 
                         # Step 2: Check if albums are synced for this artist
                         sync_status = await spotify_repo.get_artist_albums_sync_status(
