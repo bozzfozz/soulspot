@@ -890,6 +890,50 @@ async def get_spotify_sync_service(
     )
 
 
+async def get_spotify_sync_service_optional(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> AsyncGenerator:
+    """Get Spotify sync service if authenticated, or None.
+
+    Hey future me - this is for routes that work WITHOUT Spotify!
+    Use this for multi-provider features like Discover where Deezer can
+    provide data even if Spotify is not connected.
+
+    Unlike get_spotify_sync_service, this DOES NOT raise 401 if no token.
+    Instead, it yields a service that may have limited functionality.
+    """
+    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.spotify_sync_service import SpotifySyncService
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+    # Create SpotifyPlugin for the sync service
+    spotify_client = SpotifyClient(settings.spotify)
+    db_token_manager: DatabaseTokenManager = request.app.state.db_token_manager
+
+    # Get access token from token manager - DON'T FAIL if not authenticated!
+    access_token = await db_token_manager.get_token_for_background()
+    
+    spotify_plugin: SpotifyPlugin | None = None
+    if access_token:
+        spotify_plugin = SpotifyPlugin(
+            client=spotify_client,
+            access_token=access_token,
+        )
+
+    image_service = ImageService(
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/api/images",
+    )
+
+    yield SpotifySyncService(
+        session=session,
+        spotify_plugin=spotify_plugin,  # May be None if not authenticated!
+        image_service=image_service,
+    )
+
+
 # Hey future me - this creates LibraryScannerService for scanning local music files!
 # Used by /api/library/scan endpoints to start/check scans.
 # The service itself handles file discovery, metadata extraction, fuzzy matching.

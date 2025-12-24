@@ -740,3 +740,203 @@ async def get_related_artists(
             status_code=500,
             detail=f"Failed to get related artists: {str(e)}",
         ) from e
+
+
+# =============================================================================
+# MULTI-PROVIDER RELATED ARTISTS (Similar Artists from ALL sources)
+# Hey future me - this is the NEW endpoint that aggregates from Spotify AND Deezer!
+# Unlike /spotify/{id}/related (Spotify-only), this endpoint:
+# 1. Queries BOTH Spotify and Deezer for related artists
+# 2. Works even without Spotify auth (Deezer public API is auth-free!)
+# 3. Deduplicates results from multiple sources
+# 4. Returns source info so UI knows where each suggestion came from
+# =============================================================================
+
+
+class MultiProviderRelatedArtistResponse(BaseModel):
+    """Response model for a related artist from multiple providers."""
+
+    name: str = Field(..., description="Artist name")
+    spotify_id: str | None = Field(None, description="Spotify artist ID (if known)")
+    deezer_id: str | None = Field(None, description="Deezer artist ID (if known)")
+    image_url: str | None = Field(None, description="Artist profile image URL")
+    genres: list[str] = Field(default_factory=list, description="Artist genres")
+    popularity: int = Field(0, description="Popularity score (0-100)")
+    source: str = Field(..., description="Source service: spotify, deezer, or merged")
+    based_on: str | None = Field(None, description="Which artist this was discovered from")
+
+
+class MultiProviderRelatedArtistsResponse(BaseModel):
+    """Response model for multi-provider related artists list."""
+
+    artist_name: str = Field(..., description="Source artist name")
+    spotify_id: str | None = Field(None, description="Source artist Spotify ID")
+    deezer_id: str | None = Field(None, description="Source artist Deezer ID")
+    related_artists: list[MultiProviderRelatedArtistResponse] = Field(
+        default_factory=list, description="List of similar artists from all providers"
+    )
+    total: int = Field(0, description="Number of related artists returned")
+    source_counts: dict[str, int] = Field(
+        default_factory=dict, description="How many from each provider"
+    )
+    errors: dict[str, str] = Field(
+        default_factory=dict, description="Errors from providers that failed"
+    )
+
+
+@router.get(
+    "/related/{artist_name}",
+    response_model=MultiProviderRelatedArtistsResponse,
+    summary="Get similar artists from all providers (Spotify + Deezer)",
+)
+async def get_multi_provider_related_artists(
+    artist_name: str,
+    spotify_id: str | None = Query(None, description="Spotify artist ID (optional)"),
+    deezer_id: str | None = Query(None, description="Deezer artist ID (optional)"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum artists to return"),
+    session: AsyncSession = Depends(get_db_session),
+) -> MultiProviderRelatedArtistsResponse:
+    """Get artists similar to the given artist from ALL available providers.
+
+    Hey future me - this is the "Works without Spotify" version of related artists!
+
+    Features:
+    - Aggregates from Spotify + Deezer
+    - Works with Deezer ONLY if Spotify is not authenticated
+    - Deduplicates artists that appear on multiple services
+    - Returns source info for UI badges
+
+    Strategy:
+    1. If spotify_id provided AND Spotify authenticated → Query Spotify
+    2. If deezer_id provided OR can search by name → Query Deezer
+    3. Merge and deduplicate results
+    4. Return with source metadata
+
+    Args:
+        artist_name: Artist name (used for display and Deezer search fallback)
+        spotify_id: Optional Spotify artist ID
+        deezer_id: Optional Deezer artist ID
+        limit: Max artists to return (default 20)
+        session: Database session
+
+    Returns:
+        Related artists from all available providers
+
+    Note:
+        Unlike /spotify/{id}/related, this endpoint NEVER fails if one provider
+        is unavailable. It gracefully returns results from whichever providers work.
+    """
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.discover_service import (
+        DiscoverResult,
+        DiscoverService,
+    )
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+    # Initialize plugins
+    app_settings = AppSettingsService(session)
+    spotify_plugin = None
+    deezer_plugin = None
+    enabled_providers: list[str] = []
+
+    # Check which providers are available
+    # Spotify - only if authenticated
+    try:
+        from soulspot.api.dependencies import get_spotify_plugin_optional
+
+        spotify_plugin = await get_spotify_plugin_optional(session)
+        if (
+            spotify_plugin
+            and spotify_plugin.is_authenticated
+            and await app_settings.is_provider_enabled("spotify")
+        ):
+            enabled_providers.append("spotify")
+    except Exception as e:
+        logger.debug(f"Spotify not available for related artists: {e}")
+
+    # Deezer - always available (public API, no auth needed)
+    try:
+        if await app_settings.is_provider_enabled("deezer"):
+            # Hey future me - DeezerPlugin is initialized via dependency but also works standalone!
+            from soulspot.config.settings import get_settings
+
+            settings = get_settings()
+            deezer_plugin = DeezerPlugin(settings.deezer)
+            enabled_providers.append("deezer")
+    except Exception as e:
+        logger.debug(f"Deezer not available for related artists: {e}")
+
+    if not enabled_providers:
+        raise HTTPException(
+            status_code=503,
+            detail="No providers available. Enable Spotify or Deezer in settings.",
+        )
+
+    # Use DiscoverService for multi-provider aggregation
+    discover_service = DiscoverService(
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
+
+    try:
+        result: DiscoverResult = await discover_service.get_related_artists(
+            spotify_id=spotify_id,
+            deezer_id=deezer_id,
+            artist_name=artist_name,
+            limit=limit,
+            enabled_providers=enabled_providers,
+        )
+
+        # Convert to response format
+        related_artists: list[MultiProviderRelatedArtistResponse] = []
+        for artist in result.artists:
+            related_artists.append(
+                MultiProviderRelatedArtistResponse(
+                    name=artist.name,
+                    spotify_id=artist.spotify_id,
+                    deezer_id=artist.deezer_id,
+                    image_url=artist.image_url,
+                    genres=artist.genres[:3] if artist.genres else [],
+                    popularity=artist.popularity,
+                    source=artist.source_service,
+                    based_on=artist.based_on,
+                )
+            )
+
+        return MultiProviderRelatedArtistsResponse(
+            artist_name=artist_name,
+            spotify_id=spotify_id,
+            deezer_id=deezer_id,
+            related_artists=related_artists,
+            total=len(related_artists),
+            source_counts=result.source_counts,
+            errors=result.errors,
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to get multi-provider related artists for {artist_name}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get related artists: {str(e)}",
+        ) from e
+
+
+async def get_spotify_plugin_optional(
+    session: AsyncSession,
+) -> "SpotifyPlugin | None":
+    """Get Spotify plugin if available, or None.
+
+    Hey future me - this is a helper that doesn't throw if Spotify is not configured!
+    Use this when Spotify is OPTIONAL (like multi-provider endpoints).
+    """
+    try:
+        from soulspot.api.dependencies import get_spotify_plugin
+
+        return await get_spotify_plugin(session)
+    except HTTPException:
+        return None
+    except Exception:
+        return None

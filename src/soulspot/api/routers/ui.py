@@ -2508,22 +2508,23 @@ async def browse_new_releases_page(
 @router.get("/spotify/discover", response_class=HTMLResponse)
 async def spotify_discover_page(
     request: Request,
-    sync_service: SpotifySyncService = Depends(get_spotify_sync_service),
     spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Discover Similar Artists page - MULTI-PROVIDER!
 
-    Hey future me - REFACTORED to use DiscoverService for Multi-Provider discovery!
-    Now aggregates related artists from BOTH Spotify AND Deezer.
-
-    MULTI-SERVICE PATTERN: Works WITHOUT Spotify login!
-    Uses get_spotify_plugin_optional → returns None if not authenticated.
-    Falls back to Deezer (NO AUTH NEEDED) for artist discovery.
+    Hey future me - REFACTORED to work WITHOUT Spotify auth (Dec 2025)!
+    
+    Removed dependency on SpotifySyncService - now uses direct DB access.
+    This allows the page to work even if:
+    - Spotify is not configured
+    - User hasn't authenticated with Spotify
+    - Only Deezer is available
 
     Architecture:
-        Route → DiscoverService
+        Route → Direct DB Query for artists
+              → DiscoverService (Multi-Provider)
                      ↓
         [SpotifyPlugin, DeezerPlugin] (parallel fetch)
                      ↓
@@ -2538,6 +2539,9 @@ async def spotify_discover_page(
 
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.discover_service import DiscoverService
+    from soulspot.infrastructure.persistence.repositories import (
+        SpotifyBrowseRepository,
+    )
 
     settings = AppSettingsService(session)
 
@@ -2561,8 +2565,10 @@ async def spotify_discover_page(
             },
         )
 
-    # Get all followed artists (limit to 1000 for performance)
-    artists = await sync_service.get_artists(limit=1000)
+    # Get all artists directly from DB (no Spotify auth required!)
+    # Hey future me - this replaces sync_service.get_artists()
+    repo = SpotifyBrowseRepository(session)
+    artists = await repo.get_all_artists(limit=1000)
 
     logger.info(f"Discover page: Found {len(artists) if artists else 0} artists in DB")
 
