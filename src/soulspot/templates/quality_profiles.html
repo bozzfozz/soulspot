@@ -254,6 +254,21 @@
     background: var(--bg-tertiary);
     border-radius: var(--radius-md);
     cursor: grab;
+    user-select: none;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+}
+
+.format-item:hover {
+    background: var(--bg-secondary);
+    border-color: var(--border-hover);
+}
+
+.format-item.dragging {
+    opacity: 0.5;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    transform: scale(1.02);
 }
 
 .format-item:active {
@@ -263,6 +278,12 @@
 .format-item .drag-handle {
     color: var(--text-muted);
     cursor: grab;
+}
+
+.format-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
 }
 
 .format-item label {
@@ -290,22 +311,48 @@
 
 <script>
 // Hey future me - Quality Profiles JS!
+// Fixed issues:
+// 1. showNotification now uses SoulSpot.showNotification (global function in base)
+// 2. Added proper drag-and-drop for format ordering
+// 3. Fixed modal freeze by proper event handling
 
 let profiles = [];
 let editingId = null;
+let draggedItem = null;
 
 // Load profiles on page load
-document.addEventListener('DOMContentLoaded', loadProfiles);
+document.addEventListener('DOMContentLoaded', function() {
+    loadProfiles();
+    initDragAndDrop();
+});
 
 async function loadProfiles() {
     try {
         const response = await fetch('/api/quality-profiles');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         profiles = data.profiles || [];
         renderProfiles();
     } catch (error) {
         console.error('Failed to load profiles:', error);
-        showNotification('Failed to load profiles', 'error');
+        showToast('Failed to load profiles: ' + error.message, 'error');
+    }
+}
+
+// Use global toast function (from base.html/app.js)
+function showToast(message, type = 'info') {
+    if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
+        SoulSpot.showNotification(message, type);
+    } else if (typeof showNotification !== 'undefined') {
+        showNotification(message, type);
+    } else {
+        // Fallback: simple alert
+        console.log(`[${type}] ${message}`);
+        if (type === 'error') {
+            alert(message);
+        }
     }
 }
 
@@ -399,20 +446,44 @@ function renderProfiles() {
 function showCreateModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Create Quality Profile';
-    document.getElementById('profile-form').reset();
+    
+    // Reset form
+    const form = document.getElementById('profile-form');
+    form.reset();
     document.getElementById('profile-id').value = '';
     
-    // Reset format checkboxes
-    document.querySelectorAll('#formats-container input[type="checkbox"]').forEach((cb, i) => {
-        cb.checked = i < 2; // Check first two (FLAC, MP3)
+    // Reset format checkboxes - check first two (FLAC, MP3)
+    const checkboxes = document.querySelectorAll('#formats-container input[type="checkbox"]');
+    checkboxes.forEach((cb, i) => {
+        cb.checked = i < 2;
     });
+    
+    // Reset format order to default
+    resetFormatOrder();
     
     openModal();
 }
 
+function resetFormatOrder() {
+    const container = document.getElementById('formats-container');
+    const defaultOrder = ['flac', 'mp3', 'aac', 'ogg', 'wav'];
+    const items = Array.from(container.querySelectorAll('.format-item'));
+    
+    // Sort items by default order
+    items.sort((a, b) => {
+        return defaultOrder.indexOf(a.dataset.format) - defaultOrder.indexOf(b.dataset.format);
+    });
+    
+    // Re-append in sorted order
+    items.forEach(item => container.appendChild(item));
+}
+
 function editProfile(id) {
     const profile = profiles.find(p => p.id === id);
-    if (!profile) return;
+    if (!profile) {
+        showToast('Profile not found', 'error');
+        return;
+    }
     
     editingId = id;
     document.getElementById('modal-title').textContent = 'Edit Quality Profile';
@@ -424,29 +495,117 @@ function editProfile(id) {
     document.getElementById('profile-max-size').value = profile.max_file_size_mb || '';
     document.getElementById('profile-exclude').value = (profile.exclude_keywords || []).join(', ');
     
-    // Set format checkboxes
+    // Set format checkboxes and reorder
     const formats = profile.preferred_formats || [];
-    document.querySelectorAll('#formats-container input[type="checkbox"]').forEach(cb => {
-        const format = cb.id.replace('format-', '');
-        cb.checked = formats.includes(format);
+    const container = document.getElementById('formats-container');
+    const items = Array.from(container.querySelectorAll('.format-item'));
+    
+    // First, uncheck all
+    items.forEach(item => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        checkbox.checked = false;
+    });
+    
+    // Check and reorder based on profile's preferred formats
+    // Selected formats first in their order, then unselected
+    const selectedItems = [];
+    const unselectedItems = [];
+    
+    formats.forEach(fmt => {
+        const item = items.find(i => i.dataset.format === fmt);
+        if (item) {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            checkbox.checked = true;
+            selectedItems.push(item);
+        }
+    });
+    
+    items.forEach(item => {
+        if (!selectedItems.includes(item)) {
+            unselectedItems.push(item);
+        }
+    });
+    
+    // Reorder: selected first, then unselected
+    [...selectedItems, ...unselectedItems].forEach(item => {
+        container.appendChild(item);
     });
     
     openModal();
 }
 
+// Drag and Drop functionality
+function initDragAndDrop() {
+    const container = document.getElementById('formats-container');
+    if (!container) return;
+    
+    container.addEventListener('dragstart', handleDragStart);
+    container.addEventListener('dragover', handleDragOver);
+    container.addEventListener('drop', handleDrop);
+    container.addEventListener('dragend', handleDragEnd);
+    
+    // Make format items draggable
+    container.querySelectorAll('.format-item').forEach(item => {
+        item.setAttribute('draggable', 'true');
+    });
+}
+
+function handleDragStart(e) {
+    if (!e.target.classList.contains('format-item')) return;
+    draggedItem = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const target = e.target.closest('.format-item');
+    if (target && target !== draggedItem) {
+        const container = document.getElementById('formats-container');
+        const items = Array.from(container.querySelectorAll('.format-item'));
+        const draggedIndex = items.indexOf(draggedItem);
+        const targetIndex = items.indexOf(target);
+        
+        if (draggedIndex < targetIndex) {
+            target.after(draggedItem);
+        } else {
+            target.before(draggedItem);
+        }
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+}
+
+function handleDragEnd(e) {
+    if (draggedItem) {
+        draggedItem.classList.remove('dragging');
+        draggedItem = null;
+    }
+}
+
 async function saveProfile(event) {
     event.preventDefault();
+    event.stopPropagation();
     
-    // Collect preferred formats in order
+    // Collect preferred formats in current order (only checked ones)
     const formatItems = document.querySelectorAll('#formats-container .format-item');
     const preferredFormats = [];
     formatItems.forEach(item => {
         const format = item.dataset.format;
         const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox.checked) {
+        if (checkbox && checkbox.checked) {
             preferredFormats.push(format);
         }
     });
+    
+    if (preferredFormats.length === 0) {
+        showToast('Please select at least one format', 'error');
+        return;
+    }
     
     // Collect exclude keywords
     const excludeInput = document.getElementById('profile-exclude').value;
@@ -454,15 +613,28 @@ async function saveProfile(event) {
         ? excludeInput.split(',').map(k => k.trim()).filter(k => k)
         : [];
     
+    const name = document.getElementById('profile-name').value.trim();
+    if (!name) {
+        showToast('Please enter a profile name', 'error');
+        return;
+    }
+    
     const data = {
-        name: document.getElementById('profile-name').value,
-        description: document.getElementById('profile-description').value || null,
+        name: name,
+        description: document.getElementById('profile-description').value.trim() || null,
         preferred_formats: preferredFormats,
         min_bitrate: parseInt(document.getElementById('profile-min-bitrate').value) || null,
         max_bitrate: parseInt(document.getElementById('profile-max-bitrate').value) || null,
         max_file_size_mb: parseInt(document.getElementById('profile-max-size').value) || null,
         exclude_keywords: excludeKeywords
     };
+    
+    // Disable submit button to prevent double-click
+    const submitBtn = document.querySelector('#profile-form button[type="submit"], .modal-footer button.btn-primary');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    }
     
     try {
         const url = editingId 
@@ -478,16 +650,22 @@ async function saveProfile(event) {
         
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.detail || 'Failed to save profile');
+            throw new Error(error.detail || `HTTP ${response.status}`);
         }
         
-        showNotification(`Profile ${editingId ? 'updated' : 'created'} successfully`, 'success');
+        showToast(`Profile ${editingId ? 'updated' : 'created'} successfully`, 'success');
         closeModal();
-        loadProfiles();
+        await loadProfiles();
         
     } catch (error) {
         console.error('Save error:', error);
-        showNotification(error.message, 'error');
+        showToast(error.message || 'Failed to save profile', 'error');
+    } finally {
+        // Re-enable submit button
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Save Profile';
+        }
     }
 }
 
@@ -497,14 +675,17 @@ async function activateProfile(id) {
             method: 'PUT'
         });
         
-        if (!response.ok) throw new Error('Failed to activate profile');
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to activate profile');
+        }
         
-        showNotification('Profile activated', 'success');
-        loadProfiles();
+        showToast('Profile activated', 'success');
+        await loadProfiles();
         
     } catch (error) {
         console.error('Activate error:', error);
-        showNotification(error.message, 'error');
+        showToast(error.message || 'Failed to activate profile', 'error');
     }
 }
 
@@ -521,26 +702,40 @@ async function deleteProfile(id, name) {
             throw new Error(error.detail || 'Failed to delete profile');
         }
         
-        showNotification('Profile deleted', 'success');
-        loadProfiles();
+        showToast('Profile deleted', 'success');
+        await loadProfiles();
         
     } catch (error) {
         console.error('Delete error:', error);
-        showNotification(error.message, 'error');
+        showToast(error.message || 'Failed to delete profile', 'error');
     }
 }
 
 function openModal() {
-    document.getElementById('profile-modal').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
+    const modal = document.getElementById('profile-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Focus the name field
+        setTimeout(() => {
+            const nameInput = document.getElementById('profile-name');
+            if (nameInput) nameInput.focus();
+        }, 100);
+    }
 }
 
 function closeModal() {
-    document.getElementById('profile-modal').style.display = 'none';
-    document.body.style.overflow = '';
+    const modal = document.getElementById('profile-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    editingId = null;
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -549,6 +744,17 @@ function escapeHtml(text) {
 // Close modal on Escape
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
+});
+
+// Prevent form from submitting on Enter in text fields (except textarea)
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.closest('#profile-form')) {
+        e.preventDefault();
+        // Submit form on Enter in last field
+        if (e.target.id === 'profile-exclude') {
+            saveProfile(e);
+        }
+    }
 });
 </script>
 {% endblock %}
