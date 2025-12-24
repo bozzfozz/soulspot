@@ -2669,7 +2669,7 @@ async def spotify_discover_page(
                         "spotify_id": discovered.spotify_id,
                         "deezer_id": discovered.deezer_id,
                         "name": discovered.name,
-                        "image_url": discovered.artwork_url,
+                        "image_url": discovered.image_url,
                         "genres": (discovered.genres or [])[:3],
                         "popularity": discovered.popularity or 0,
                         "based_on": artist.name,
