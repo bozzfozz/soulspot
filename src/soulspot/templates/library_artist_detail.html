@@ -469,7 +469,7 @@ async function syncDiscography(artistId) {
     btn.innerHTML = '<i class="bi bi-arrow-repeat spinning"></i> <span>Syncing...</span>';
     
     try {
-        const response = await fetch(`/artists/${artistId}/sync-discography`, {
+        const response = await fetch(`/api/artists/${artistId}/sync-discography`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
