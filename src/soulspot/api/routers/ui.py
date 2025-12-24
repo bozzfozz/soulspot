@@ -2753,11 +2753,12 @@ async def spotify_discover_page(
     
     artist_repo = ArtistRepository(session)
     # Filter by source='local' or 'hybrid' (hybrid = local + streaming match)
-    artists = await artist_repo.list_by_source(sources=["local", "hybrid"], limit=1000)
+    # These are used as SEEDS for discovery (find similar artists to these)
+    local_artists = await artist_repo.list_by_source(sources=["local", "hybrid"], limit=1000)
 
-    logger.info(f"Discover page: Found {len(artists) if artists else 0} LOCAL artists in DB")
+    logger.info(f"Discover page: Found {len(local_artists) if local_artists else 0} LOCAL artists in DB")
 
-    if not artists:
+    if not local_artists:
         return templates.TemplateResponse(
             request,
             "discover.html",
@@ -2770,22 +2771,29 @@ async def spotify_discover_page(
             },
         )
 
-    # Pick random artists to base discovery on (max 5 to avoid rate limits)
-    sample_size = min(5, len(artists))
-    sample_artists = random.sample(artists, sample_size)
+    # Pick random LOCAL artists to base discovery on (max 5 to avoid rate limits)
+    sample_size = min(5, len(local_artists))
+    sample_artists = random.sample(local_artists, sample_size)
 
     logger.info(
         f"Discover page (Multi-Provider): Sampling {sample_size} LOCAL artists: "
         f"{[a.name for a in sample_artists]}"
     )
 
-    # Get artist IDs/names for filtering (exclude artists we already have)
-    # Works for both spotify URIs and deezer IDs
+    # Get artist IDs/names for filtering (exclude artists we already have in library)
+    # IMPORTANT: Check ALL artists in library, not just local/hybrid!
+    # This prevents showing artists that are already in library from ANY source
+    # (Spotify sync, Deezer sync, manual add, etc.)
     # Hey future me - Artist.spotify_uri is a SpotifyUri VALUE OBJECT, not a string!
     # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
     followed_ids: set[str] = set()
     followed_names: set[str] = set()
-    for a in artists:
+    
+    # Get ALL artists for exclusion filtering (not just local/hybrid!)
+    # This ensures we don't suggest artists already added via Spotify sync, etc.
+    all_library_artists = await artist_repo.list_all(limit=5000)
+    
+    for a in all_library_artists:
         if a.spotify_uri:
             # SpotifyUri is a value object with .resource_id property
             followed_ids.add(a.spotify_uri.resource_id)
@@ -2793,6 +2801,8 @@ async def spotify_discover_page(
             followed_ids.add(a.deezer_id)
         if a.name:
             followed_names.add(a.name.lower().strip())
+    
+    logger.debug(f"Discover filter: {len(followed_names)} artist names to exclude")
 
     # Use DiscoverService for Multi-Provider discovery!
     service = DiscoverService(
