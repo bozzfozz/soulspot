@@ -527,6 +527,7 @@ class DiscoverService:
         self,
         seed_artist_name: str,
         seed_artist_spotify_id: str | None = None,
+        seed_artist_deezer_id: str | None = None,
         limit: int = 20,
         enabled_providers: list[str] | None = None,
     ) -> DiscoverResult:
@@ -535,9 +536,15 @@ class DiscoverService:
         Hey future me - this is an alias for get_related_artists()!
         The ui.py route expects this method name and parameter structure.
 
+        Now supports BOTH Spotify ID AND Deezer ID for better multi-provider discovery!
+        - If only deezer_id: Deezer can directly query related artists
+        - If only spotify_id: Spotify can directly query, Deezer searches by name
+        - If both: Best of both worlds
+
         Args:
             seed_artist_name: Name of the seed artist
             seed_artist_spotify_id: Optional Spotify ID of the seed artist
+            seed_artist_deezer_id: Optional Deezer ID of the seed artist
             limit: Max artists to return
             enabled_providers: List of providers to use (["spotify", "deezer"])
 
@@ -546,6 +553,7 @@ class DiscoverService:
         """
         return await self.get_related_artists(
             spotify_id=seed_artist_spotify_id,
+            deezer_id=seed_artist_deezer_id,
             artist_name=seed_artist_name,
             limit=limit,
             enabled_providers=enabled_providers,

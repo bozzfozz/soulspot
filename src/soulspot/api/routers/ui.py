@@ -2624,9 +2624,24 @@ async def spotify_discover_page(
 
     for artist in sample_artists:
         try:
+            # Extract Spotify ID from URI if available
+            # Artist Entity has spotify_uri (SpotifyUri object), not spotify_id!
+            spotify_id: str | None = None
+            if artist.spotify_uri:
+                # SpotifyUri.value is "spotify:artist:ID" → extract ID
+                spotify_id = str(artist.spotify_uri).split(":")[-1]
+            
+            # Get Deezer ID directly from entity (string or None)
+            deezer_id: str | None = artist.deezer_id
+            
+            logger.debug(
+                f"Discovery for {artist.name}: spotify_id={spotify_id}, deezer_id={deezer_id}"
+            )
+            
             result = await service.discover_similar_artists(
                 seed_artist_name=artist.name,
-                seed_artist_spotify_id=artist.spotify_id,
+                seed_artist_spotify_id=spotify_id,
+                seed_artist_deezer_id=deezer_id,
                 limit=20,
                 enabled_providers=enabled_providers,
             )

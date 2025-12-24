@@ -1,6 +1,6 @@
 {# Hey future me - Discover Similar Artists page!
-   Shows artists similar to your followed artists. Based on Spotify's "Fans Also Like" data.
-   Users can follow artists directly from here to grow their collection. #}
+   Shows artists similar to your LOCAL library artists.
+   Uses Deezer/Spotify to find related artists based on your collection. #}
 
 {% extends "base.html" %}
 
@@ -18,12 +18,12 @@
         </div>
         <div>
             <h1>Discover Artists</h1>
-            <p class="subtitle">Artists similar to your favorites • Based on {{ based_on_count }} of your followed artists</p>
+            <p class="subtitle">Artists similar to your local collection • Based on {{ based_on_count }} of your library artists</p>
         </div>
     </div>
     <div class="header-actions">
-        <a href="/library/artists?source=spotify" class="btn btn-outline">
-            <i class="bi bi-people"></i> My Artists
+        <a href="/library/artists?source=local" class="btn btn-outline">
+            <i class="bi bi-folder-check"></i> My Library
         </a>
         <button class="btn btn-primary" onclick="window.location.reload()">
             <i class="bi bi-shuffle"></i> Shuffle
@@ -34,6 +34,23 @@
 {% if error %}
 <div class="alert alert-warning" style="margin-bottom: 2rem;">
     <i class="bi bi-exclamation-triangle"></i> {{ error }}
+    {% if 'No local artists found' in error %}
+    <div style="margin-top: 1rem;">
+        <a href="/settings#library-scanner" class="btn btn-sm btn-primary">
+            <i class="bi bi-folder-plus"></i> Scan Music Library
+        </a>
+    </div>
+    {% elif 'Could not find recommendations' in error %}
+    <div style="margin-top: 1rem;">
+        <p style="font-size: 0.85rem;">Your local artists might need Deezer/Spotify IDs for better discovery.</p>
+        <button class="btn btn-sm btn-outline" 
+                hx-post="/api/library/discovery/trigger"
+                hx-swap="none"
+                onclick="this.disabled=true; this.innerHTML='<i class=\'bi bi-hourglass-split\'></i> Running...'">
+            <i class="bi bi-search"></i> Run ID Discovery
+        </button>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -44,11 +61,21 @@
 
 <div class="artist-grid">
     {% for artist in discoveries %}
-    <div class="artist-card discover-card" data-spotify-id="{{ artist.spotify_id }}">
+    <div class="artist-card discover-card" data-spotify-id="{{ artist.spotify_id }}" data-deezer-id="{{ artist.deezer_id }}">
         <a href="/library/artists/{{ artist.name }}" class="artist-card-link">
             <div class="artist-avatar">
                 {# ImageService - provides placeholder SVG if no URL #}
                 <img src="{{ get_display_url(artist.image_url, none, 'artist') }}" alt="{{ artist.name }}" loading="lazy">
+                {# Source badge #}
+                <span class="source-badge source-{{ artist.source }}" title="Found via {{ artist.source|capitalize }}">
+                    {% if artist.source == 'deezer' %}
+                    <i class="bi bi-music-note"></i>
+                    {% elif artist.source == 'spotify' %}
+                    <i class="bi bi-spotify"></i>
+                    {% else %}
+                    <i class="bi bi-globe"></i>
+                    {% endif %}
+                </span>
             </div>
             <div class="artist-info">
                 <h3 class="artist-name" title="{{ artist.name }}">{{ artist.name }}</h3>
@@ -72,14 +99,41 @@
     </div>
     {% endfor %}
 </div>
+
+{# Source Stats #}
+{% if source_counts %}
+<div class="source-stats" style="margin-top: 2rem; padding: 1rem; background: var(--card-bg); border-radius: 8px;">
+    <small style="color: var(--text-muted);">
+        <i class="bi bi-info-circle"></i> Sources: 
+        {% if source_counts.get('deezer', 0) > 0 %}
+            <span style="color: #FEAA2D;"><i class="bi bi-music-note"></i> Deezer: {{ source_counts.deezer }}</span>
+        {% endif %}
+        {% if source_counts.get('spotify', 0) > 0 %}
+            <span style="color: #1DB954; margin-left: 1rem;"><i class="bi bi-spotify"></i> Spotify: {{ source_counts.spotify }}</span>
+        {% endif %}
+    </small>
+</div>
+{% endif %}
+
 {% else %}
 <div class="empty-state">
     <i class="bi bi-heart-pulse" style="font-size: 4rem; color: var(--text-muted); opacity: 0.5;"></i>
     <h3>No discoveries yet</h3>
-    <p>Follow some artists on Spotify to get personalized recommendations!</p>
-    <a href="/library/artists?source=spotify" class="btn btn-primary">
-        <i class="bi bi-people"></i> Browse Artists
-    </a>
+    <p>
+        Discovery needs artists with Spotify/Deezer IDs to find similar artists.<br>
+        <small style="color: var(--text-muted);">Run enrichment to add service IDs to your local artists.</small>
+    </p>
+    <div class="btn-group">
+        <button onclick="triggerEnrichment(this)" class="btn btn-enrich">
+            <i class="bi bi-magic"></i> Enrich Artists
+        </button>
+        <a href="/library/artists?source=local" class="btn btn-outline">
+            <i class="bi bi-folder-check"></i> View Library Artists
+        </a>
+        <a href="/settings#library-scanner" class="btn btn-primary">
+            <i class="bi bi-folder-plus"></i> Scan Music
+        </a>
+    </div>
 </div>
 {% endif %}
 {% endblock %}
@@ -167,6 +221,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
 }
 .artist-avatar img {
     width: 100%;
@@ -222,6 +277,63 @@
     pointer-events: none;
 }
 
+/* Source badges for discovered artists */
+.source-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    color: white;
+    border: 2px solid var(--bg-card);
+}
+.source-badge.source-spotify {
+    background: #1DB954;
+}
+.source-badge.source-deezer {
+    background: #FF0092;
+}
+
+/* Source stats in header */
+.source-stats {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.source-stats .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.source-stats .stat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.source-stats .stat-dot.spotify {
+    background: #1DB954;
+}
+.source-stats .stat-dot.deezer {
+    background: #FF0092;
+}
+
+/* Enrichment button */
+.btn-enrich {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+}
+.btn-enrich:hover {
+    background: linear-gradient(135deg, #5a67d8, #6b46c1);
+}
+
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
@@ -232,6 +344,12 @@
 .empty-state p {
     color: var(--text-muted);
     margin-bottom: 1.5rem;
+}
+.empty-state .btn-group {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 @media (max-width: 768px) {
@@ -248,6 +366,9 @@
 </style>
 
 <script>
+// Hey future me - this function follows discovered artists on Spotify.
+// Only works for Spotify-sourced artists since we need their spotify_id for the API.
+// Deezer artists can't be followed via API without their own ID system.
 async function followArtist(spotifyId, button) {
     const originalHTML = button.innerHTML;
     button.innerHTML = '<span class="spinner-small"></span>';
@@ -271,6 +392,47 @@ async function followArtist(spotifyId, button) {
         button.disabled = false;
         // Show toast error if you have a toast system
         alert('Failed to follow artist: ' + error.message);
+    }
+}
+
+// Hey future me - this triggers the LibraryDiscoveryWorker to enrich local artists
+// with deezer_id and spotify_uri. Without these IDs, discovery can't find related
+// artists from the respective services. Phase 1 of the worker handles artist ID discovery.
+async function triggerEnrichment(button) {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<span class="spinner-small"></span> Running...';
+    button.disabled = true;
+
+    try {
+        const response = await fetch('/api/library/discovery/trigger', {
+            method: 'POST',
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            button.innerHTML = '<i class="bi bi-check"></i> Started!';
+            
+            // Show user-friendly message
+            if (typeof showToast === 'function') {
+                showToast('Library discovery started! Artists will be enriched in the background.', 'success');
+            } else {
+                alert('Library discovery started! Artists will be enriched in background. Refresh in a few minutes.');
+            }
+            
+            // Re-enable after delay
+            setTimeout(() => {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }, 5000);
+        } else {
+            const data = await response.json();
+            throw new Error(data.detail || 'Failed to trigger enrichment');
+        }
+    } catch (error) {
+        console.error('Enrichment error:', error);
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+        alert('Failed to start enrichment: ' + error.message);
     }
 }
 </script>
