@@ -1060,6 +1060,7 @@ class MultiProviderRelatedArtistsResponse(BaseModel):
     summary="Get similar artists from all providers (Spotify + Deezer)",
 )
 async def get_multi_provider_related_artists(
+    request: Request,
     artist_name: str,
     spotify_id: str | None = Query(None, description="Spotify artist ID (optional)"),
     deezer_id: str | None = Query(None, description="Deezer artist ID (optional)"),
@@ -1112,9 +1113,15 @@ async def get_multi_provider_related_artists(
     # Check which providers are available
     # Spotify - only if authenticated
     try:
-        from soulspot.api.dependencies import get_spotify_plugin_optional
+        from soulspot.api.dependencies import (
+            get_credentials_service,
+            get_spotify_plugin_optional,
+        )
+        from soulspot.config.settings import get_settings
 
-        spotify_plugin = await get_spotify_plugin_optional(session)
+        settings = get_settings()
+        credentials_service = await get_credentials_service(session, settings)
+        spotify_plugin = await get_spotify_plugin_optional(request, credentials_service)
         if (
             spotify_plugin
             and spotify_plugin.is_authenticated
@@ -1128,9 +1135,7 @@ async def get_multi_provider_related_artists(
     try:
         if await app_settings.is_provider_enabled("deezer"):
             # Hey future me - DeezerPlugin is initialized via dependency but also works standalone!
-            from soulspot.config.settings import get_settings
-
-            settings = get_settings()
+            # settings already imported above
             deezer_plugin = DeezerPlugin(settings.deezer)
             enabled_providers.append("deezer")
     except Exception as e:
