@@ -499,7 +499,7 @@ async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
         artistName,
         spotifyId, 
         deezerId,
-        imageUrl: imageUrl ? imageUrl.substring(0, 50) + '...' : null
+        imageUrl: imageUrl ? String(imageUrl).substring(0, 50) : null
     });
     
     const originalHTML = button.innerHTML;
