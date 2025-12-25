@@ -1209,7 +1209,7 @@ async def get_multi_provider_related_artists(
 
 
 async def get_spotify_plugin_optional(
-    session: AsyncSession,
+    session: AsyncSession = Depends(get_db_session),
 ) -> "SpotifyPlugin | None":
     """Get Spotify plugin if available, or None.
 
