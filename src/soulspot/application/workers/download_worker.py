@@ -2,8 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Callable
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Callable
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +20,13 @@ from soulspot.domain.ports import ISlskdClient
 from soulspot.domain.value_objects import TrackId
 
 logger = logging.getLogger(__name__)
+
+
+# Type alias for session factory - returns an async context manager yielding AsyncSession
+# Hey future me - we use Callable returning AsyncGenerator because that's what
+# @asynccontextmanager decorated functions return. Can't use AsyncContextManager
+# directly because db.session_scope is a method, not a class.
+SessionFactory = Callable[[], AsyncGenerator[AsyncSession, None]]
 
 
 class DownloadWorker:
@@ -52,7 +58,7 @@ class DownloadWorker:
         self,
         job_queue: JobQueue,
         slskd_client: ISlskdClient,
-        session_factory: Callable[[], asynccontextmanager[AsyncSession]],
+        session_factory: SessionFactory,
     ) -> None:
         """Initialize download worker.
 
