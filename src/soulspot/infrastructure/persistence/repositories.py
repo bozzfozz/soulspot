@@ -6069,8 +6069,6 @@ class ProviderBrowseRepository:
             spotify_uri=spotify_uri,
         )
         self.session.add(model)
-        # Hey future me - flush here so the UUID gets generated before we use it as FK!
-        await self.session.flush()
         # CRITICAL: Return the UUID (model.id), NOT the Spotify ID!
         return model.id
 
