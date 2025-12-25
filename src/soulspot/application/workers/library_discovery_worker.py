@@ -192,7 +192,10 @@ class LibraryDiscoveryWorker:
             "errors": [],
         }
 
-        async with self.db.session_scope() as session:
+        # Hey future me - using session_scope_with_retry because discovery does LOTS of writes!
+        # It enriches artists, albums, tracks with provider IDs - all concurrent with other workers.
+        # The retry logic handles temporary "database is locked" errors gracefully.
+        async with self.db.session_scope_with_retry(max_attempts=3) as session:
             try:
                 # Phase 1: Enrich artists without provider IDs
                 phase1_stats = await self._phase1_enrich_artists(session)

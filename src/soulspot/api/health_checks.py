@@ -247,3 +247,60 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
     async def liveness_check() -> dict[str, str]:
         """Liveness check endpoint - returns OK if application is running."""
         return {"status": "alive"}
+
+    # Hey future me - this is THE endpoint for monitoring SQLite lock health!
+    # Shows how often "database is locked" errors occur and how the retry logic performs.
+    # Use this to:
+    # 1. Detect if lock contention is increasing (failure_rate going up)
+    # 2. See if retry logic is working (retry_rate > 0 but failure_rate low = good!)
+    # 3. Identify slow operations (max_wait_time_ms high = something holds lock too long)
+    #
+    # Ideal metrics:
+    # - failure_rate: < 0.01 (less than 1% failures after retries)
+    # - avg_wait_time_ms: < 100ms (retries complete quickly)
+    # - retry_rate: < 0.05 (less than 5% operations need retries)
+    #
+    # If metrics are bad, investigate:
+    # - Which workers are running? (check /ready)
+    # - Is Library Scan active? (long transactions)
+    # - Are many downloads queued? (concurrent writes)
+    @app.get(
+        "/health/db-metrics",
+        tags=["Health"],
+        summary="Database lock metrics",
+        description="Returns metrics about database lock events and retry performance. "
+        "Useful for monitoring SQLite concurrency health.",
+    )
+    async def db_metrics() -> dict[str, Any]:
+        """Get database lock metrics for monitoring.
+
+        Returns:
+            dict: Lock metrics including attempt/success/failure counts,
+                  wait times, and retry statistics.
+
+        Example response:
+            {
+                "lock_attempts": 1000,
+                "lock_successes": 998,
+                "lock_failures": 2,
+                "lock_retries": 15,
+                "total_wait_time_ms": 450.5,
+                "max_wait_time_ms": 125.3,
+                "avg_wait_time_ms": 30.0,
+                "failure_rate": 0.002,
+                "retry_rate": 0.015,
+                "last_lock_event_timestamp": 1735120000.0
+            }
+        """
+        from soulspot.infrastructure.persistence.retry import DatabaseLockMetrics
+
+        metrics = DatabaseLockMetrics.get_instance()
+        stats = metrics.get_stats()
+
+        # Add DB pool stats if available
+        if hasattr(app.state, "db"):
+            pool_stats = app.state.db.get_pool_stats()
+            stats["connection_pool"] = pool_stats
+
+        return stats
+

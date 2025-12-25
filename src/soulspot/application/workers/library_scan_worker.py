@@ -89,9 +89,11 @@ class LibraryScanWorker:
             f"(incremental={incremental}, defer_cleanup={defer_cleanup})"
         )
 
-        # Create fresh session for this job using session_scope context manager
-        # Hey future me - using session_scope ensures proper connection cleanup!
-        async with self.db.session_scope() as session:
+        # Create fresh session for this job using session_scope_with_retry
+        # Hey future me - using session_scope_with_retry automatically retries on "database is locked"!
+        # Library scan does heavy writes that can conflict with other workers (downloads, enrichment).
+        # The retry logic uses exponential backoff (0.5s → 1s → 2s) to handle temporary locks.
+        async with self.db.session_scope_with_retry(max_attempts=3) as session:
             try:
                 service = LibraryScannerService(
                     session=session,
@@ -163,7 +165,9 @@ class LibraryScanWorker:
             f"({len(file_paths)} existing files to check against)"
         )
 
-        async with self.db.session_scope() as session:
+        # Hey future me - cleanup also uses retry because it does DELETE operations
+        # that can conflict with concurrent writes (new scans, enrichment).
+        async with self.db.session_scope_with_retry(max_attempts=3) as session:
             try:
                 service = LibraryScannerService(
                     session=session,

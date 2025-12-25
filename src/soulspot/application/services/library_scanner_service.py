@@ -229,7 +229,14 @@ class LibraryScannerService:
             # Process structured data: Artist → Album → Tracks
             # Hey future me - this is the BIG CHANGE! We iterate by structure, not by file.
             # Artist/Album are created ONCE per folder, then tracks are added.
-            BATCH_SIZE = 250  # Increased from 100 for fewer DB round-trips
+            #
+            # LOCK OPTIMIZATION (Dec 2025):
+            # Reduced BATCH_SIZE from 250 to 10 to minimize SQLite lock contention!
+            # Also commit after EACH ALBUM (natural transaction boundary).
+            # Why: SQLite locks entire DB during writes. With 250 tracks per commit,
+            # other workers (downloads, enrichment) get "database is locked" errors.
+            # With smaller batches + album commits, lock is released frequently.
+            BATCH_SIZE = 10  # Small batches to release DB lock frequently
             processed = 0
             total_tracks = scan_result.total_tracks
 
@@ -317,6 +324,15 @@ class LibraryScannerService:
                                 exc_info=False,
                             )
                             processed += 1
+
+                    # LOCK OPTIMIZATION: Commit after EACH album!
+                    # This is a natural transaction boundary - all tracks for one album.
+                    # Releases SQLite lock so other workers can proceed.
+                    await self._session.commit()
+                    logger.debug(
+                        f"Committed album '{scanned_album.title}' "
+                        f"({len(scanned_album.tracks)} tracks)"
+                    )
 
             # Final commit
             await self._session.commit()
@@ -1581,11 +1597,15 @@ class LibraryScannerService:
                 f"Removing {len(tracks_to_remove)} tracks with missing files..."
             )
 
-            # Delete tracks in batches
+            # Delete tracks in batches with COMMITS after each batch
+            # Hey future me - LOCK OPTIMIZATION! Commit after each batch to release lock.
+            # This allows other workers to proceed during large cleanup operations.
             for i in range(0, len(tracks_to_remove), 500):
                 batch = tracks_to_remove[i : i + 500]
                 delete_stmt = delete(TrackModel).where(TrackModel.id.in_(batch))
                 await self._session.execute(delete_stmt)
+                await self._session.commit()  # Commit each batch to release lock
+                logger.debug(f"Deleted batch {i // 500 + 1} ({len(batch)} tracks)")
 
                 # Yield to event loop every few batches
                 if i % 2000 == 0 and i > 0:
@@ -1622,6 +1642,7 @@ class LibraryScannerService:
                 )
             )
             await self._session.execute(delete_albums_stmt)
+            await self._session.commit()  # Commit after album cleanup to release lock
             stats["removed_albums"] = orphan_album_count
             logger.info(f"Removed {orphan_album_count} orphaned albums")
         else:
@@ -1661,13 +1682,14 @@ class LibraryScannerService:
                 )
             )
             await self._session.execute(delete_artists_stmt)
+            await self._session.commit()  # Commit after artist cleanup to release lock
             stats["removed_artists"] = orphan_artist_count
             logger.info(f"Removed {orphan_artist_count} orphaned artists")
         else:
             logger.info("No orphaned artists found")
 
-        # Commit cleanup changes
-        await self._session.commit()
+        # Note: No final commit needed - each operation commits immediately
+        # (LOCK OPTIMIZATION: shorter transactions, fewer lock conflicts)
 
         logger.info(
             f"Cleanup complete: {stats['removed_tracks']} tracks, "

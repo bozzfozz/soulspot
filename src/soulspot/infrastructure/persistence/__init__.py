@@ -1,5 +1,11 @@
 """Infrastructure persistence layer."""
 
+from .batch_utils import (
+    IncrementalCommitter,
+    batch_insert,
+    batch_process,
+    batch_update,
+)
 from .database import Database
 from .models import (
     AlbumModel,
@@ -27,10 +33,18 @@ from .repositories import (
     QualityUpgradeCandidateRepository,
     TrackRepository,
 )
+from .retry import (
+    DatabaseLockMetrics,
+    execute_with_retry,
+    is_lock_error,
+    with_db_retry,
+)
 
 __all__ = [
+    # Database
     "Database",
     "Base",
+    # Models
     "ArtistModel",
     "AlbumModel",
     "TrackModel",
@@ -42,6 +56,7 @@ __all__ = [
     "AutomationRuleModel",
     "QualityUpgradeCandidateModel",
     "DeezerSessionModel",
+    # Repositories
     "ArtistRepository",
     "AlbumRepository",
     "TrackRepository",
@@ -52,4 +67,14 @@ __all__ = [
     "FilterRuleRepository",
     "AutomationRuleRepository",
     "QualityUpgradeCandidateRepository",
+    # Retry utilities
+    "with_db_retry",
+    "execute_with_retry",
+    "is_lock_error",
+    "DatabaseLockMetrics",
+    # Batch utilities
+    "batch_process",
+    "batch_insert",
+    "batch_update",
+    "IncrementalCommitter",
 ]

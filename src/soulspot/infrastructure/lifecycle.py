@@ -362,26 +362,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         #
         # The context manager ensures the session is properly closed on app shutdown.
         async with db.session_scope() as worker_session:
-            # Initialize download worker with repositories
-            track_repository = TrackRepository(worker_session)
-            download_repository = DownloadRepository(worker_session)
-
             # =================================================================
             # Initialize SLSKD-dependent workers (conditional on slskd_client)
             # =================================================================
             # Hey future me - these workers REQUIRE slskd to be configured!
             # If slskd_client is None (failed validation), we skip them.
             # The app will still start but download features will be disabled.
+            #
+            # REFACTORED (Dec 2025) - Lock Optimization!
+            # DownloadWorker now uses session_factory instead of shared repositories.
+            # This prevents SQLite "database is locked" errors by giving each job
+            # its own short-lived session.
             if slskd_client is not None:
                 download_worker = DownloadWorker(
                     job_queue=job_queue,
                     slskd_client=slskd_client,
-                    track_repository=track_repository,
-                    download_repository=download_repository,
+                    session_factory=db.session_scope,  # Session-per-job for lock optimization!
                 )
                 download_worker.register()
                 app.state.download_worker = download_worker
-                logger.info("Download worker registered")
+                logger.info("Download worker registered (session-per-job mode)")
             else:
                 logger.warning("Download worker skipped - slskd client not available")
                 app.state.download_worker = None
@@ -651,17 +651,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 AlbumRepository,
                 ArtistRepository,
                 DownloadRepository,
+                TrackRepository,
             )
 
             # Create auto-import service using the worker session
+            # Hey future me - AutoImportService still uses shared session because:
+            # 1. It mostly does READS (finding tracks, getting metadata)
+            # 2. The actual file operations (moving files) don't need DB
+            # 3. The WRITES it does (updating file paths) are quick and isolated
+            # For now this is acceptable - full refactor to session_factory later if needed.
             auto_import_service = AutoImportService(
                 settings=settings,
-                track_repository=track_repository,
+                track_repository=TrackRepository(worker_session),
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
                 download_repository=DownloadRepository(
                     worker_session
-                ),  # NEW: Filter by completed downloads
+                ),  # Filter by completed downloads
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
                 spotify_plugin=automation_spotify_plugin,  # For Spotify artwork downloads
                 app_settings_service=app_settings_service,  # For dynamic naming templates

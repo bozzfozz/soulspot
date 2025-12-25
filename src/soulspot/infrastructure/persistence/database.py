@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from soulspot.config import Settings
 
@@ -21,8 +22,14 @@ class Database:
     # apply to Postgres - SQLite doesn't pool connections! If you try to set pool_size on SQLite,
     # it'll silently ignore it or blow up depending on the driver version. The "check_same_thread":
     # False is CRITICAL for SQLite + async - without it, you get cryptic "objects created in a
-    # thread can only be used in that same thread" errors. The 30s timeout helps with "database
+    # thread can only be used in that same thread" errors. The 60s timeout helps with "database
     # is locked" errors when multiple workers hit SQLite simultaneously. Don't reduce it!
+    #
+    # UPDATE (Dec 2025): SQLite now uses NullPool instead of QueuePool!
+    # NullPool = no connection caching, each session gets its own connection that's closed immediately.
+    # This eliminates connection sharing issues that cause "database is locked" errors.
+    # QueuePool was reusing connections across sessions, which SQLite doesn't handle well with
+    # multiple concurrent async operations.
     def __init__(self, settings: Settings) -> None:
         """Initialize database with settings."""
         self.settings = settings
@@ -45,16 +52,25 @@ class Database:
             )
         elif "sqlite" in settings.database.url:
             # SQLite-specific configuration
-            # Hey future me - increased timeout from 30s to 60s (Dec 2025)!
-            # Multiple workers (Spotify sync, Deezer sync, library discovery, image backfill)
-            # can all try to write at once. 30s wasn't always enough for heavy operations.
-            # Combined with WAL mode and PRAGMA busy_timeout, this should handle most cases.
+            # Hey future me - NullPool is CRITICAL for SQLite + async (Dec 2025)!
+            # 
+            # Problem: SQLite only allows ONE writer at a time. With QueuePool, multiple
+            # sessions might share the same connection, causing "database is locked" errors
+            # when one session tries to write while another is already writing.
+            #
+            # Solution: NullPool creates a fresh connection for each session and closes it
+            # immediately after use. No connection sharing = no lock contention between sessions.
+            # Each operation gets exclusive access to the database during its transaction.
+            #
+            # Trade-off: Slightly more overhead from opening/closing connections, but SQLite
+            # opens are fast (~1ms) and the reliability gain is worth it.
             engine_kwargs.update(
                 {
+                    "poolclass": NullPool,  # No connection caching - each session gets fresh connection
                     "connect_args": {
                         "check_same_thread": False,
-                        "timeout": 60,  # Wait up to 60s for lock (increased from 30s)
-                    }
+                        "timeout": 60,  # Wait up to 60s for lock
+                    },
                 }
             )
 
@@ -85,27 +101,63 @@ class Database:
     # the UI is loading data (reads). WAL creates -wal and -shm files next to the .db file.
     # IMPORTANT: WAL mode persists in the database file, so this only needs to run once per DB
     # but running it every connection is safe (just a no-op if already set).
+    #
+    # UPDATE (Dec 2025 v2): Added MORE optimizations for lock reduction!
+    # - synchronous=NORMAL: Safe enough for most use cases, faster than FULL
+    # - cache_size=-64000: 64MB cache reduces disk I/O significantly
+    # - temp_store=MEMORY: Temp tables in RAM instead of disk
+    # - mmap_size=268435456: 256MB memory-mapped I/O for faster reads
+    # These combined with WAL mode should eliminate most "database is locked" errors.
     def _enable_sqlite_foreign_keys(self) -> None:
-        """Enable foreign key constraints and WAL mode for SQLite.
+        """Enable foreign key constraints, WAL mode, and performance optimizations for SQLite.
 
         SQLite has foreign keys disabled by default. This method enables them
-        for all connections. Also enables WAL mode for better concurrency.
+        for all connections. Also enables WAL mode and performance optimizations
+        for better concurrency and reduced lock contention.
         """
 
         @event.listens_for(self._engine.sync_engine, "connect")
         def set_sqlite_pragma(dbapi_conn: Any, _connection_record: Any) -> None:
             """Set SQLite pragmas on connection."""
             cursor = dbapi_conn.cursor()
+
+            # === REQUIRED FOR DATA INTEGRITY ===
             # Enable foreign keys (required for cascade deletes to work)
             cursor.execute("PRAGMA foreign_keys=ON")
+
+            # === CONCURRENCY OPTIMIZATIONS ===
             # Enable WAL mode for better concurrency (readers don't block writers)
             # This prevents "database is locked" errors during library scans
             cursor.execute("PRAGMA journal_mode=WAL")
+
             # Set busy timeout to 60s (increased from 30s, Dec 2025)
             # Matches connect_args timeout - needed for heavy concurrent writes
             cursor.execute("PRAGMA busy_timeout=60000")
+
+            # === PERFORMANCE OPTIMIZATIONS (Dec 2025 v2) ===
+            # synchronous=NORMAL: Faster than FULL, safe with WAL mode
+            # FULL syncs on every transaction - overkill for most use cases
+            # NORMAL syncs on checkpoint only - good balance of safety/speed
+            cursor.execute("PRAGMA synchronous=NORMAL")
+
+            # cache_size=-64000: 64MB cache (negative = KB, positive = pages)
+            # More cache = less disk I/O = faster operations = shorter lock time
+            cursor.execute("PRAGMA cache_size=-64000")
+
+            # temp_store=MEMORY: Temp tables/indexes in RAM instead of disk
+            # Faster for sorting, grouping, and complex queries
+            cursor.execute("PRAGMA temp_store=MEMORY")
+
+            # mmap_size: Memory-mapped I/O for faster reads
+            # 256MB = 268435456 bytes - good for databases up to 1GB
+            # Reads bypass the page cache and go directly to mapped memory
+            cursor.execute("PRAGMA mmap_size=268435456")
+
             cursor.close()
-            logger.debug("Enabled foreign keys, WAL mode, and busy timeout for SQLite")
+            logger.debug(
+                "SQLite optimizations enabled: foreign_keys, WAL, "
+                "busy_timeout=60s, cache=64MB, mmap=256MB"
+            )
 
     # Listen future me, this is a GENERATOR (note the yield!), not a regular async function.
     # Use it with "async for session in db.get_session():" - NOT "session = await db.get_session()".
@@ -182,6 +234,128 @@ class Database:
                 # transaction integrity. All exceptions are re-raised for proper handling.
                 await session.rollback()
                 raise
+
+    # Hey future me - this is THE FIX for "database is locked" errors!
+    # Same as session_scope() but with AUTOMATIC RETRY on SQLite lock errors.
+    # Use this for operations that might conflict with concurrent writers.
+    # The retry logic uses exponential backoff: 0.5s → 1s → 2s (capped at 5s).
+    #
+    # When to use:
+    # - Background workers doing bulk writes
+    # - Library scanner operations
+    # - Any operation that might run during heavy DB activity
+    #
+    # When NOT to use:
+    # - Interactive UI requests (use regular session_scope, user shouldn't wait 5s)
+    # - Read-only operations (they don't lock in WAL mode)
+    @asynccontextmanager
+    async def session_scope_with_retry(
+        self,
+        max_attempts: int = 3,
+        initial_delay: float = 0.5,
+    ) -> AsyncGenerator[AsyncSession, None]:
+        """Provide a transactional scope with automatic retry on lock errors.
+
+        This is like session_scope() but automatically retries on "database is locked"
+        errors. Perfect for background workers and bulk operations that might conflict
+        with concurrent writers.
+
+        Args:
+            max_attempts: Maximum retry attempts (default: 3)
+            initial_delay: Initial delay between retries in seconds (default: 0.5)
+
+        Yields:
+            Database session with auto-commit on success
+
+        Example:
+            async with db.session_scope_with_retry() as session:
+                repo = TrackRepository(session)
+                await repo.add(track)
+                # If "database is locked", automatically retries up to 3 times
+        """
+        import asyncio
+        import time
+
+        from sqlalchemy.exc import OperationalError
+
+        from soulspot.infrastructure.persistence.retry import DatabaseLockMetrics
+
+        metrics = DatabaseLockMetrics.get_instance()
+        last_exception: Exception | None = None
+        delay = initial_delay
+        start_time = time.monotonic()
+
+        metrics.record_attempt()
+
+        for attempt in range(max_attempts):
+            try:
+                async with self._session_factory() as session:
+                    try:
+                        yield session
+                        await session.commit()
+                        # Success!
+                        wait_time_ms = (time.monotonic() - start_time) * 1000
+                        if attempt > 0:
+                            metrics.record_success(wait_time_ms)
+                        else:
+                            metrics.record_success(0)
+                        return
+                    except OperationalError as e:
+                        error_msg = str(e).lower()
+                        if "locked" not in error_msg and "busy" not in error_msg:
+                            metrics.record_failure()
+                            raise
+                        last_exception = e
+                        await session.rollback()
+                    except Exception:
+                        await session.rollback()
+                        raise
+
+                # Retry logic for lock errors
+                if attempt < max_attempts - 1:
+                    metrics.record_retry()
+                    logger.warning(
+                        "Database locked (attempt %d/%d), retrying in %.1fs",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 5.0)
+                else:
+                    metrics.record_failure()
+                    logger.error(
+                        "Database locked after %d attempts, giving up",
+                        max_attempts,
+                    )
+
+            except OperationalError as e:
+                error_msg = str(e).lower()
+                if "locked" not in error_msg and "busy" not in error_msg:
+                    metrics.record_failure()
+                    raise
+
+                last_exception = e
+
+                if attempt < max_attempts - 1:
+                    metrics.record_retry()
+                    logger.warning(
+                        "Database locked on commit (attempt %d/%d), retrying in %.1fs",
+                        attempt + 1,
+                        max_attempts,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 5.0)
+                else:
+                    metrics.record_failure()
+                    logger.error(
+                        "Database locked after %d attempts, giving up",
+                        max_attempts,
+                    )
+
+        if last_exception:
+            raise last_exception
 
     # Yo future me, dispose() closes ALL connections in the pool and shuts down the engine. CRITICAL on
     # shutdown or you'll leave dangling connections! Postgres might complain about "too many

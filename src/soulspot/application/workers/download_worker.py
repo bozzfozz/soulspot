@@ -2,7 +2,11 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Hey future me - TYPE_CHECKING is a CRITICAL circular import fix! This block is:
 # - TRUE during mypy/pylance type checking (so types resolve correctly)
@@ -13,7 +17,7 @@ if TYPE_CHECKING:
     pass
 
 from soulspot.application.workers.job_queue import Job, JobQueue, JobType
-from soulspot.domain.ports import IDownloadRepository, ISlskdClient, ITrackRepository
+from soulspot.domain.ports import ISlskdClient
 from soulspot.domain.value_objects import TrackId
 
 logger = logging.getLogger(__name__)
@@ -22,46 +26,44 @@ logger = logging.getLogger(__name__)
 class DownloadWorker:
     """Worker for processing download jobs in the background.
 
+    REFACTORED (Dec 2025) - Session Factory Pattern for SQLite Lock Optimization!
+    
+    Previously: Received pre-instantiated repositories with a shared session.
+    Problem: Shared session caused "database is locked" errors when concurrent
+    jobs tried to write to SQLite.
+    
+    Now: Receives a session_factory and creates fresh session + repositories
+    for each job. This ensures each job has its own transaction scope and
+    releases locks quickly after completion.
+
     This worker:
     1. Monitors download queue
-    2. Searches for tracks on Soulseek
-    3. Initiates downloads via slskd
-    4. Updates download status in repository
-    5. Handles retries for failed downloads
+    2. Creates fresh DB session per job (lock optimization!)
+    3. Searches for tracks on Soulseek
+    4. Initiates downloads via slskd
+    5. Updates download status in repository
+    6. Handles retries for failed downloads
     """
 
-    # Hey future me, this init sets up the download worker with all its dependencies injected. We create
-    # the SearchAndDownloadTrackUseCase HERE with the injected clients/repos - this is the "composition root"
-    # pattern. Don't call register() in __init__ - that's a separate step so caller controls WHEN the worker
-    # starts processing jobs! If you auto-register, tests become impossible (worker starts immediately).
-    # NOTE: We do LAZY IMPORT here to avoid circular import! The use_cases package imports workers.job_queue,
-    # so if workers imports use_cases at module level, BOOM circular import.
+    # Hey future me - REFACTORED to use session_factory instead of shared repositories!
+    # This prevents SQLite "database is locked" errors by giving each job its own session.
+    # The session is created fresh for each job and committed/rolled back immediately.
     def __init__(
         self,
         job_queue: JobQueue,
         slskd_client: ISlskdClient,
-        track_repository: ITrackRepository,
-        download_repository: IDownloadRepository,
+        session_factory: Callable[[], asynccontextmanager[AsyncSession]],
     ) -> None:
         """Initialize download worker.
 
         Args:
             job_queue: Job queue for background processing
             slskd_client: Client for Soulseek operations
-            track_repository: Repository for track persistence
-            download_repository: Repository for download persistence
+            session_factory: Factory to create new DB sessions (e.g., db.session_scope)
         """
-        # Lazy import to break circular dependency: use_cases → workers.job_queue → download_worker → use_cases
-        from soulspot.application.use_cases.search_and_download import (
-            SearchAndDownloadTrackUseCase,
-        )
-
         self._job_queue = job_queue
-        self._use_case = SearchAndDownloadTrackUseCase(
-            slskd_client=slskd_client,
-            track_repository=track_repository,
-            download_repository=download_repository,
-        )
+        self._slskd_client = slskd_client
+        self._session_factory = session_factory
 
     # Yo, this is the registration step - tells the job queue "when you see a DOWNLOAD job, call my
     # _handle_download_job method". This is separate from __init__ so you can create the worker without
@@ -71,12 +73,21 @@ class DownloadWorker:
         """Register handler with job queue."""
         self._job_queue.register_handler(JobType.DOWNLOAD, self._handle_download_job)
 
-    # Listen up future me, this is the actual job handler that processes each download job. It extracts
-    # the payload (track_id, search params), builds a SearchAndDownloadTrackRequest, and executes the use
-    # case. If track_id is missing, we raise ValueError which marks the job as FAILED (don't retry - bad data!).
-    # If the use case returns an error_message, we raise Exception which triggers a RETRY (network issues etc).
-    # The return value gets stored in job.result - other code can check download_id/status later. This is
-    # called by the job queue worker pool, NOT directly by your code!
+    # Listen up future me, this is the actual job handler that processes each download job.
+    # 
+    # REFACTORED (Dec 2025) - Session-per-Job Pattern!
+    # Each job now gets its OWN database session, created fresh and committed/rolled back
+    # immediately after the operation. This prevents SQLite lock contention when multiple
+    # download jobs run concurrently.
+    #
+    # The flow is:
+    # 1. Create fresh session via session_factory
+    # 2. Create fresh repositories with that session
+    # 3. Create use case with those repositories
+    # 4. Execute download
+    # 5. Session auto-commits on success / rollback on error (via context manager)
+    #
+    # This is called by the job queue worker pool, NOT directly by your code!
     async def _handle_download_job(self, job: Job) -> Any:
         """Handle a download job.
 
@@ -97,33 +108,53 @@ class DownloadWorker:
         timeout_seconds = job.payload.get("timeout_seconds", 30)
         quality_preference = job.payload.get("quality_preference", "best")
 
-        # Execute use case
-        from soulspot.application.use_cases.search_and_download import (
-            SearchAndDownloadTrackRequest,
-        )
+        # LOCK OPTIMIZATION: Create fresh session and repositories for THIS job only!
+        # This ensures short-lived transactions that release SQLite locks quickly.
+        async with self._session_factory() as session:
+            # Lazy imports to avoid circular dependencies
+            from soulspot.application.use_cases.search_and_download import (
+                SearchAndDownloadTrackRequest,
+                SearchAndDownloadTrackUseCase,
+            )
+            from soulspot.infrastructure.persistence.repositories import (
+                DownloadRepository,
+                TrackRepository,
+            )
 
-        request = SearchAndDownloadTrackRequest(
-            track_id=track_id,
-            search_query=search_query,
-            max_results=max_results,
-            timeout_seconds=timeout_seconds,
-            quality_preference=quality_preference,
-        )
+            # Create fresh repositories with this job's session
+            track_repository = TrackRepository(session)
+            download_repository = DownloadRepository(session)
 
-        response = await self._use_case.execute(request)
+            # Create use case with fresh repositories
+            use_case = SearchAndDownloadTrackUseCase(
+                slskd_client=self._slskd_client,
+                track_repository=track_repository,
+                download_repository=download_repository,
+            )
 
-        # Check if download was successful
-        if response.error_message:
-            raise Exception(response.error_message)
+            # Execute use case
+            request = SearchAndDownloadTrackRequest(
+                track_id=track_id,
+                search_query=search_query,
+                max_results=max_results,
+                timeout_seconds=timeout_seconds,
+                quality_preference=quality_preference,
+            )
 
-        return {
-            "download_id": str(response.download.id.value)
-            if response.download
-            else None,
-            "slskd_download_id": response.slskd_download_id,
-            "search_results_count": response.search_results_count,
-            "status": response.status.value,
-        }
+            response = await use_case.execute(request)
+
+            # Check if download was successful
+            if response.error_message:
+                raise Exception(response.error_message)
+
+            return {
+                "download_id": str(response.download.id.value)
+                if response.download
+                else None,
+                "slskd_download_id": response.slskd_download_id,
+                "search_results_count": response.search_results_count,
+                "status": response.status.value,
+            }
 
     # Hey, this is the PUBLIC API for queueing downloads - controllers call this, not _handle_download_job!
     # It packages up all the download params into a job payload and enqueues it. The job gets picked up
