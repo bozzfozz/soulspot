@@ -1137,6 +1137,102 @@ class SpotifyClient(ISpotifyClient):
         response.raise_for_status()
         return cast(dict[str, Any], response.json())
 
+    # Hey future me, this hits /me to fetch the current user profile with all flags.
+    # This MUST go through _api_request so we keep rate limiting consistent and avoid
+    # random 429s on login-heavy flows. Caller converts the raw dict to DTOs.
+    async def get_current_user(self, access_token: str) -> dict[str, Any]:
+        """Get current authenticated user's profile (raw Spotify JSON)."""
+
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/me",
+            access_token=access_token,
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
+    # Hey future me, central search endpoint wrapper so every search goes through
+    # rate limiting + retry. Supports multiple types (artist, album, track, playlist)
+    # and clamps limit to Spotify's 50. Keep this as the single choke point for search.
+    async def search(
+        self,
+        query: str,
+        types: list[str],
+        access_token: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Search across Spotify resource types (raw JSON)."""
+
+        limit = min(limit, 50)
+
+        params: dict[str, str | int] = {
+            "q": query,
+            "type": ",".join(types),
+            "limit": limit,
+            "offset": offset,
+        }
+
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/search",
+            access_token=access_token,
+            params=params,
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
+    # Hey future me, this is the paginated artist albums fetcher using _api_request
+    # so we keep retries + rate limiting. Use include_groups to mirror Spotify API
+    # semantics; plugin will handle defaults/pagination math.
+    async def get_artist_albums_page(
+        self,
+        artist_id: str,
+        access_token: str,
+        include_groups: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Get a single page of albums for an artist (raw JSON)."""
+
+        limit = min(limit, 50)
+
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/artists/{artist_id}/albums",
+            access_token=access_token,
+            params={
+                "include_groups": include_groups,
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
+    # Hey future me, playlist tracks pagination now lives here so we centralize
+    # rate limiting/retry logic. This returns the raw paginated JSON; caller handles
+    # DTO conversion and pagination math.
+    async def get_playlist_tracks(
+        self,
+        playlist_id: str,
+        access_token: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Get a page of tracks for a playlist (raw JSON)."""
+
+        limit = min(limit, 100)
+
+        response = await self._api_request(
+            method="GET",
+            url=f"{self.API_BASE_URL}/playlists/{playlist_id}/tracks",
+            access_token=access_token,
+            params={"limit": limit, "offset": offset},
+        )
+        response.raise_for_status()
+        return cast(dict[str, Any], response.json())
+
     # Hey future me, these context manager methods let you use this client with
     # "async with SpotifyClient(...) as client:" syntax. This is THE preferred way
     # to use this client - it guarantees cleanup even if exceptions happen. Use it!

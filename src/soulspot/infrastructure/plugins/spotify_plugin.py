@@ -557,13 +557,7 @@ class SpotifyPlugin(IMusicServicePlugin):
         token = self._ensure_token()
 
         try:
-            client = await self._client._get_client()
-            response = await client.get(
-                f"{self._client.API_BASE_URL}/me",
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            response.raise_for_status()
-            data = response.json()
+            data = await self._client.get_current_user(token)
 
             # Pick best image
             image_url = None
@@ -608,21 +602,13 @@ class SpotifyPlugin(IMusicServicePlugin):
             types = ["artist", "album", "track", "playlist"]
 
         try:
-            client = await self._client._get_client()
-            params: dict[str, Any] = {
-                "q": query,
-                "type": ",".join(types),
-                "limit": min(limit, 50),
-                "offset": offset,
-            }
-
-            response = await client.get(
-                f"{self._client.API_BASE_URL}/search",
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
+            data = await self._client.search(
+                query=query,
+                types=types,
+                access_token=token,
+                limit=limit,
+                offset=offset,
             )
-            response.raise_for_status()
-            data = response.json()
 
             result = SearchResultDTO(
                 query=query,
@@ -705,27 +691,19 @@ class SpotifyPlugin(IMusicServicePlugin):
         token = self._ensure_token()
 
         try:
-            # SpotifyClient.get_artist_albums returns list directly
-            # We need to use the raw endpoint for proper pagination
-            client = await self._client._get_client()
-
-            params: dict[str, Any] = {
-                "limit": min(limit, 50),
-                "offset": offset,
-            }
-
-            if include_groups:
-                params["include_groups"] = ",".join(include_groups)
-            else:
-                params["include_groups"] = "album,single,compilation"
-
-            response = await client.get(
-                f"{self._client.API_BASE_URL}/artists/{artist_id}/albums",
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
+            include_groups_param = (
+                ",".join(include_groups)
+                if include_groups
+                else "album,single,compilation"
             )
-            response.raise_for_status()
-            data = response.json()
+
+            data = await self._client.get_artist_albums_page(
+                artist_id=artist_id,
+                access_token=token,
+                include_groups=include_groups_param,
+                limit=limit,
+                offset=offset,
+            )
 
             items = [self._convert_album(a) for a in data.get("items", []) if a]
             total = data.get("total", len(items))
@@ -959,15 +937,12 @@ class SpotifyPlugin(IMusicServicePlugin):
         token = self._ensure_token()
 
         try:
-            client = await self._client._get_client()
-
-            response = await client.get(
-                f"{self._client.API_BASE_URL}/playlists/{playlist_id}/tracks",
-                params={"limit": min(limit, 100), "offset": offset},
-                headers={"Authorization": f"Bearer {token}"},
+            data = await self._client.get_playlist_tracks(
+                playlist_id=playlist_id,
+                access_token=token,
+                limit=limit,
+                offset=offset,
             )
-            response.raise_for_status()
-            data = response.json()
 
             items = [
                 self._convert_track(item.get("track", {}))
