@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
-from sqlalchemy import Integer, delete, func, select, update
+from sqlalchemy import Integer, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -387,10 +387,13 @@ class ArtistRepository(IArtistRepository):
     # =========================================================================
 
     async def get_unenriched(self, limit: int = 50) -> list[Artist]:
-        """Get artists that have local files but no Spotify enrichment yet.
+        """Get artists that have local files but need enrichment.
+
+        UPDATED (Dec 2025): Now returns artists missing EITHER deezer_id OR spotify_uri!
+        LibraryDiscoveryWorker uses this to enrich via both Deezer and Spotify.
 
         Returns artists where:
-        - spotify_uri is NULL (not linked to Spotify yet)
+        - deezer_id is NULL OR spotify_uri is NULL (needs enrichment from at least one provider)
         - Artist has at least one track with file_path (local file exists)
         - Artist name is NOT "Various Artists" etc (those can't be enriched)
 
@@ -411,9 +414,16 @@ class ArtistRepository(IArtistRepository):
             .exists()
         )
 
+        # UPDATED: Include artists missing EITHER deezer_id OR spotify_uri
+        # So we can enrich via Deezer (no OAuth needed) AND Spotify (if token available)
         stmt = (
             select(ArtistModel)
-            .where(ArtistModel.spotify_uri.is_(None))  # Not enriched yet
+            .where(
+                or_(
+                    ArtistModel.deezer_id.is_(None),
+                    ArtistModel.spotify_uri.is_(None),
+                )
+            )
             .where(has_local_tracks)  # Has local files
             .order_by(ArtistModel.name)
             .limit(limit)
@@ -451,7 +461,8 @@ class ArtistRepository(IArtistRepository):
     async def count_unenriched(self) -> int:
         """Count artists that need enrichment.
 
-        Returns count of artists with local files but no Spotify URI.
+        UPDATED (Dec 2025): Counts artists missing EITHER deezer_id OR spotify_uri.
+        Returns count of artists with local files but missing provider IDs.
         """
         has_local_tracks = (
             select(TrackModel.id)
@@ -462,7 +473,12 @@ class ArtistRepository(IArtistRepository):
 
         stmt = (
             select(func.count(ArtistModel.id))
-            .where(ArtistModel.spotify_uri.is_(None))
+            .where(
+                or_(
+                    ArtistModel.deezer_id.is_(None),
+                    ArtistModel.spotify_uri.is_(None),
+                )
+            )
             .where(has_local_tracks)
         )
         result = await self.session.execute(stmt)
@@ -711,20 +727,39 @@ class ArtistRepository(IArtistRepository):
     # They manage deezer_id enrichment and discography sync tracking.
     # =======================================================================
 
-    async def update_deezer_id(self, artist_id: ArtistId, deezer_id: str) -> bool:
-        """Update artist's deezer_id (from LibraryDiscoveryWorker Phase 1).
+    async def update_deezer_id(
+        self,
+        artist_id: ArtistId,
+        deezer_id: str,
+        image_url: str | None = None,
+    ) -> bool:
+        """Update artist's deezer_id and optionally image_url (from LibraryDiscoveryWorker Phase 1).
+
+        Hey future me - this now also saves image_url from Deezer enrichment!
+        The image_url is the remote URL from Deezer API, not the local path.
+        Local path is set by ImageService.download_artist_image() later.
 
         Args:
             artist_id: Artist to update
             deezer_id: Deezer artist ID (e.g., "123456")
+            image_url: Optional image URL from Deezer API
 
         Returns:
             True if updated, False if artist not found
         """
+        values: dict[str, Any] = {
+            "deezer_id": deezer_id,
+            "updated_at": datetime.now(UTC),
+        }
+        # Only set image_url if provided AND artist doesn't have one yet
+        # (avoid overwriting better quality images)
+        if image_url:
+            values["image_url"] = image_url
+
         stmt = (
             update(ArtistModel)
             .where(ArtistModel.id == str(artist_id.value))
-            .values(deezer_id=deezer_id, updated_at=datetime.now(UTC))
+            .values(**values)
         )
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
@@ -749,23 +784,38 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
 
-    async def update_spotify_uri(self, artist_id: ArtistId, spotify_uri: str) -> bool:
-        """Update artist's spotify_uri (from LibraryDiscoveryWorker Phase 1).
+    async def update_spotify_uri(
+        self,
+        artist_id: ArtistId,
+        spotify_uri: str,
+        image_url: str | None = None,
+    ) -> bool:
+        """Update artist's spotify_uri and optionally image_url (from LibraryDiscoveryWorker Phase 1).
 
         Hey future me - this complements update_deezer_id for multi-source enrichment!
         Artist can have BOTH deezer_id AND spotify_uri.
+        Now also saves image_url from Spotify enrichment!
 
         Args:
             artist_id: Artist to update
             spotify_uri: Spotify URI (e.g., "spotify:artist:xxx")
+            image_url: Optional image URL from Spotify API
 
         Returns:
             True if updated, False if artist not found
         """
+        values: dict[str, Any] = {
+            "spotify_uri": spotify_uri,
+            "updated_at": datetime.now(UTC),
+        }
+        # Only set image_url if provided
+        if image_url:
+            values["image_url"] = image_url
+
         stmt = (
             update(ArtistModel)
             .where(ArtistModel.id == str(artist_id.value))
-            .values(spotify_uri=spotify_uri, updated_at=datetime.now(UTC))
+            .values(**values)
         )
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
@@ -1085,10 +1135,13 @@ class AlbumRepository(IAlbumRepository):
         limit: int = 50,
         include_compilations: bool = True,
     ) -> list[Album]:
-        """Get albums that have local files but no Spotify enrichment yet.
+        """Get albums that have local files but need enrichment.
+
+        UPDATED (Dec 2025): Returns albums missing EITHER deezer_id OR spotify_uri!
+        LibraryDiscoveryWorker uses this to enrich via both Deezer and Spotify.
 
         Returns albums where:
-        - spotify_uri is NULL (not linked to Spotify yet)
+        - deezer_id is NULL OR spotify_uri is NULL (needs enrichment from at least one provider)
         - Album has at least one track with file_path (local file exists)
 
         Args:
@@ -1106,9 +1159,15 @@ class AlbumRepository(IAlbumRepository):
             .exists()
         )
 
+        # UPDATED: Include albums missing EITHER deezer_id OR spotify_uri
         stmt = (
             select(AlbumModel)
-            .where(AlbumModel.spotify_uri.is_(None))  # Not enriched yet
+            .where(
+                or_(
+                    AlbumModel.deezer_id.is_(None),
+                    AlbumModel.spotify_uri.is_(None),
+                )
+            )
             .where(has_local_tracks)  # Has local files
             .order_by(AlbumModel.title)
             .limit(limit)
@@ -1129,7 +1188,8 @@ class AlbumRepository(IAlbumRepository):
     async def count_unenriched(self, include_compilations: bool = True) -> int:
         """Count albums that need enrichment.
 
-        Returns count of albums with local files but no Spotify URI.
+        UPDATED (Dec 2025): Counts albums missing EITHER deezer_id OR spotify_uri.
+        Returns count of albums with local files but missing provider IDs.
         """
         has_local_tracks = (
             select(TrackModel.id)
@@ -1140,7 +1200,12 @@ class AlbumRepository(IAlbumRepository):
 
         stmt = (
             select(func.count(AlbumModel.id))
-            .where(AlbumModel.spotify_uri.is_(None))
+            .where(
+                or_(
+                    AlbumModel.deezer_id.is_(None),
+                    AlbumModel.spotify_uri.is_(None),
+                )
+            )
             .where(has_local_tracks)
         )
 
@@ -1209,43 +1274,72 @@ class AlbumRepository(IAlbumRepository):
     # =========================================================================
     # Hey future me - these methods support Album ID discovery!
     # Similar pattern to ArtistRepository.update_deezer_id / update_spotify_uri
+    # Now also saves cover_url from Deezer/Spotify enrichment!
 
-    async def update_deezer_id(self, album_id: AlbumId, deezer_id: str) -> bool:
-        """Update album's deezer_id (from LibraryDiscoveryWorker Phase 4).
+    async def update_deezer_id(
+        self,
+        album_id: AlbumId,
+        deezer_id: str,
+        cover_url: str | None = None,
+    ) -> bool:
+        """Update album's deezer_id and optionally cover_url (from LibraryDiscoveryWorker Phase 4).
 
         Hey future me - this sets deezer_id after we found the album on Deezer!
+        Now also saves cover_url for later local download via ImageService.
 
         Args:
             album_id: ID of the album to update
             deezer_id: Deezer album ID to set
+            cover_url: Optional cover image URL from Deezer API
 
         Returns:
             True if updated, False if album not found
         """
+        values: dict[str, Any] = {
+            "deezer_id": deezer_id,
+            "updated_at": datetime.now(UTC),
+        }
+        if cover_url:
+            values["cover_url"] = cover_url
+
         stmt = (
             update(AlbumModel)
             .where(AlbumModel.id == str(album_id.value))
-            .values(deezer_id=deezer_id, updated_at=datetime.now(UTC))
+            .values(**values)
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]
 
-    async def update_spotify_uri(self, album_id: AlbumId, spotify_uri: str) -> bool:
-        """Update album's spotify_uri (from LibraryDiscoveryWorker Phase 4).
+    async def update_spotify_uri(
+        self,
+        album_id: AlbumId,
+        spotify_uri: str,
+        cover_url: str | None = None,
+    ) -> bool:
+        """Update album's spotify_uri and optionally cover_url (from LibraryDiscoveryWorker Phase 4).
 
         Hey future me - this complements update_deezer_id for multi-source!
+        Now also saves cover_url for later local download via ImageService.
 
         Args:
             album_id: ID of the album to update
             spotify_uri: Spotify URI to set (spotify:album:xxx)
+            cover_url: Optional cover image URL from Spotify API
 
         Returns:
             True if updated, False if album not found
         """
+        values: dict[str, Any] = {
+            "spotify_uri": spotify_uri,
+            "updated_at": datetime.now(UTC),
+        }
+        if cover_url:
+            values["cover_url"] = cover_url
+
         stmt = (
             update(AlbumModel)
             .where(AlbumModel.id == str(album_id.value))
-            .values(spotify_uri=spotify_uri, updated_at=datetime.now(UTC))
+            .values(**values)
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]

@@ -13,7 +13,6 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_deezer_plugin,
     get_download_repository,
-    get_image_service,
     get_job_queue,
     get_library_scanner_service,
     get_playlist_repository,
@@ -35,6 +34,7 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 if TYPE_CHECKING:
+    from soulspot.application.services.images import ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -56,9 +56,33 @@ templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 # This replaces scattered inline logic with a single source of truth.
 # See: docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
 #
-# NOTE: Using module-level instance for SYNC template methods (get_display_url).
-# For ASYNC methods (download_and_cache), use Depends(get_image_service_with_session).
-_image_service = get_image_service(get_settings())
+# NOTE: Using lazy-loaded instance for SYNC template methods (get_display_url).
+# Hey future me - DO NOT use module-level get_settings()! In Docker, the settings
+# are set via environment variables by docker-entrypoint.sh, which happens AFTER
+# Python modules are imported. If we call get_settings() at import time, we get
+# wrong paths (./images instead of /config/images). This lazy getter ensures we
+# get the correct settings when the function is actually called.
+_image_service: "ImageService | None" = None
+
+
+def _get_image_service_lazy() -> "ImageService":
+    """Lazy-load ImageService to ensure settings are loaded at runtime, not import time.
+
+    Hey future me - this fixes the Docker path issue!
+    Before: _image_service = get_image_service(get_settings())  # At import time = wrong path!
+    Now: _get_image_service_lazy() called at runtime = correct /config/images path.
+    """
+    global _image_service
+    if _image_service is None:
+        from soulspot.application.services.images import ImageService
+
+        settings = get_settings()
+        _image_service = ImageService(
+            cache_base_path=str(settings.storage.image_path),
+            local_serve_prefix="/api/images",
+        )
+        logger.info(f"ImageService initialized with cache_base_path: {_image_service.cache_base_path}")
+    return _image_service
 
 
 def _get_display_url(
@@ -68,17 +92,27 @@ def _get_display_url(
 ) -> str:
     """Template helper for image URL resolution.
 
+    Hey future me - now uses lazy-loaded ImageService to ensure correct Docker paths!
+
     Usage in Jinja2:
         {{ get_display_url(album.cover_url, album.cover_path, 'album') }}
         {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
         {{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}
     """
-    return _image_service.get_display_url(source_url, local_path, entity_type)  # type: ignore[arg-type]
+    return _get_image_service_lazy().get_display_url(source_url, local_path, entity_type)  # type: ignore[arg-type]
+
+
+def _get_placeholder(entity_type: str = "album") -> str:
+    """Template helper for placeholder image URL.
+
+    Hey future me - also lazy-loaded for consistent Docker path behavior.
+    """
+    return _get_image_service_lazy().get_placeholder(entity_type)  # type: ignore[arg-type]
 
 
 # Register as global template function
 templates.env.globals["get_display_url"] = _get_display_url
-templates.env.globals["get_placeholder"] = _image_service.get_placeholder
+templates.env.globals["get_placeholder"] = _get_placeholder
 
 router = APIRouter()
 

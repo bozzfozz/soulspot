@@ -200,6 +200,71 @@ class IArtistRepository(ABC):
         """
         pass
 
+    # =========================================================================
+    # LIBRARY DISCOVERY WORKER METHODS
+    # =========================================================================
+    # Hey future me - these methods support LibraryDiscoveryWorker enrichment!
+    # They update service IDs and optionally image URLs from external APIs.
+    # =========================================================================
+
+    @abstractmethod
+    async def update_deezer_id(
+        self,
+        artist_id: ArtistId,
+        deezer_id: str,
+        image_url: str | None = None,
+    ) -> bool:
+        """Update artist's deezer_id and optionally image_url.
+
+        Used by LibraryDiscoveryWorker Phase 1 to enrich local artists
+        with Deezer metadata.
+
+        Args:
+            artist_id: Artist to update
+            deezer_id: Deezer artist ID
+            image_url: Optional image URL from Deezer API
+
+        Returns:
+            True if updated, False if artist not found
+        """
+        pass
+
+    @abstractmethod
+    async def update_spotify_uri(
+        self,
+        artist_id: ArtistId,
+        spotify_uri: str,
+        image_url: str | None = None,
+    ) -> bool:
+        """Update artist's spotify_uri and optionally image_url.
+
+        Used by LibraryDiscoveryWorker Phase 1 to enrich local artists
+        with Spotify metadata.
+
+        Args:
+            artist_id: Artist to update
+            spotify_uri: Spotify URI (e.g., "spotify:artist:xxx")
+            image_url: Optional image URL from Spotify API
+
+        Returns:
+            True if updated, False if artist not found
+        """
+        pass
+
+    @abstractmethod
+    async def update_albums_synced_at(self, artist_id: ArtistId) -> bool:
+        """Update artist's albums_synced_at timestamp.
+
+        Called after fetching artist's complete discography.
+
+        Args:
+            artist_id: Artist to update
+
+        Returns:
+            True if updated, False if artist not found
+        """
+        pass
+
 
 class IAlbumRepository(ABC):
     """Repository interface for Album entities."""
@@ -297,6 +362,55 @@ class IAlbumRepository(ABC):
 
         Returns:
             Album entity if found, None otherwise
+        """
+        pass
+
+    # =========================================================================
+    # DISCOVERY WORKER METHODS
+    # =========================================================================
+    # Hey future me - these methods support Album ID discovery!
+    # Now also save cover_url from external APIs.
+    # =========================================================================
+
+    @abstractmethod
+    async def update_deezer_id(
+        self,
+        album_id: AlbumId,
+        deezer_id: str,
+        cover_url: str | None = None,
+    ) -> bool:
+        """Update album's deezer_id and optionally cover_url.
+
+        Used by LibraryDiscoveryWorker Phase 4 to enrich local albums.
+
+        Args:
+            album_id: Album to update
+            deezer_id: Deezer album ID
+            cover_url: Optional cover image URL from Deezer API
+
+        Returns:
+            True if updated, False if album not found
+        """
+        pass
+
+    @abstractmethod
+    async def update_spotify_uri(
+        self,
+        album_id: AlbumId,
+        spotify_uri: str,
+        cover_url: str | None = None,
+    ) -> bool:
+        """Update album's spotify_uri and optionally cover_url.
+
+        Used by LibraryDiscoveryWorker Phase 4 to enrich local albums.
+
+        Args:
+            album_id: Album to update
+            spotify_uri: Spotify URI (spotify:album:xxx)
+            cover_url: Optional cover image URL from Spotify API
+
+        Returns:
+            True if updated, False if album not found
         """
         pass
 

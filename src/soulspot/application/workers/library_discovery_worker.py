@@ -371,9 +371,15 @@ class LibraryDiscoveryWorker:
 
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
+                        # Hey future me - now also saving image_url from Deezer!
+                        # This enables local image download via ImageService later.
+                        image_url = (
+                            best_match.image.url if best_match.image else None
+                        )
                         await artist_repo.update_deezer_id(
                             artist_id=artist.id,
                             deezer_id=best_match.deezer_id,
+                            image_url=image_url,
                         )
                         stats["deezer_enriched"] += 1
                         logger.debug(
@@ -392,9 +398,15 @@ class LibraryDiscoveryWorker:
 
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
+                            # Hey future me - now also saving image_url from Spotify!
+                            # Spotify images are often higher quality than Deezer.
+                            image_url = (
+                                best_match.image.url if best_match.image else None
+                            )
                             await artist_repo.update_spotify_uri(
                                 artist_id=artist.id,
                                 spotify_uri=best_match.spotify_uri,
+                                image_url=image_url,
                             )
                             stats["spotify_enriched"] += 1
                             logger.debug(
@@ -709,9 +721,14 @@ class LibraryDiscoveryWorker:
                                 f"'{existing.title}', skipping duplicate for '{album.title}'"
                             )
                         else:
+                            # Hey future me - now also saving cover_url from Deezer!
+                            cover_url = (
+                                best_match.cover.url if best_match.cover else None
+                            )
                             await album_repo.update_deezer_id(
                                 album_id=album.id,
                                 deezer_id=best_match.deezer_id,
+                                cover_url=cover_url,
                             )
                             # Hey future me - SET PRIMARY_TYPE from Deezer's album_type!
                             # This is critical for Album/EP/Single classification.
@@ -752,9 +769,14 @@ class LibraryDiscoveryWorker:
                                     f"'{existing.title}', skipping duplicate for '{album.title}'"
                                 )
                             else:
+                                # Hey future me - now also saving cover_url from Spotify!
+                                cover_url = (
+                                    best_match.cover.url if best_match.cover else None
+                                )
                                 await album_repo.update_spotify_uri(
                                     album_id=album.id,
                                     spotify_uri=str(best_match.spotify_uri),
+                                    cover_url=cover_url,
                                 )
                                 # Hey future me - SET PRIMARY_TYPE from Spotify's album_type!
                                 # Only set if not already set by Deezer (Deezer is processed first).
