@@ -2883,11 +2883,22 @@ async def spotify_discover_page(
                 
                 # Skip if already in LOCAL library (source='local' or 'hybrid')
                 # These artists are already in user's local collection!
+                # Hey future me - Debug logging to understand filter misses!
+                should_skip = False
+                skip_reason = ""
+                
                 if d_name_norm in local_artist_names:
-                    continue
-                if discovered.spotify_id and discovered.spotify_id in local_artist_ids:
-                    continue
-                if discovered.deezer_id and discovered.deezer_id in local_artist_ids:
+                    should_skip = True
+                    skip_reason = f"name match: '{d_name_norm}'"
+                elif discovered.spotify_id and discovered.spotify_id in local_artist_ids:
+                    should_skip = True
+                    skip_reason = f"spotify_id match: '{discovered.spotify_id}'"
+                elif discovered.deezer_id and discovered.deezer_id in local_artist_ids:
+                    should_skip = True
+                    skip_reason = f"deezer_id match: '{discovered.deezer_id}'"
+                
+                if should_skip:
+                    logger.debug(f"Discover: Skipping '{discovered.name}' - {skip_reason}")
                     continue
 
                 # Skip duplicates in this batch

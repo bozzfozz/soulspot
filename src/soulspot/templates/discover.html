@@ -514,17 +514,28 @@ async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
         if (response.ok || response.status === 201) {
             const data = await response.json();
             
+            // Hey future me - the API returns different messages:
+            // - "Artist 'X' added to library" → New artist (created=true)
+            // - "Artist 'X' upgraded to local library" → Was spotify-only, now hybrid (created=false)
+            // - "Artist 'X' already in library" → Was local/hybrid already (created=false)
+            // Use the message to show appropriate feedback!
             if (data.created) {
                 // New artist added
-                button.innerHTML = '<i class="bi bi-check-circle-fill"></i> Added';
+                button.innerHTML = '<i class="bi bi-check-circle-fill"></i> Added!';
                 if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
                     SoulSpot.showNotification(`${artistName} added to library`, 'success');
                 }
-            } else {
-                // Artist already existed
-                button.innerHTML = '<i class="bi bi-check-circle"></i> Already in Library';
+            } else if (data.message && data.message.includes('upgraded')) {
+                // Artist was spotify-synced, now upgraded to hybrid (local + streaming)
+                button.innerHTML = '<i class="bi bi-arrow-up-circle-fill"></i> Upgraded!';
                 if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
-                    SoulSpot.showNotification(`${artistName} is already in your library`, 'info');
+                    SoulSpot.showNotification(`${artistName} upgraded to local library`, 'success');
+                }
+            } else {
+                // Artist already in local/hybrid library
+                button.innerHTML = '<i class="bi bi-check-circle"></i> In Library';
+                if (typeof SoulSpot !== 'undefined' && SoulSpot.showNotification) {
+                    SoulSpot.showNotification(data.message || `${artistName} is already in your library`, 'info');
                 }
             }
             
