@@ -105,16 +105,12 @@
     {% if artist.albums %}
     <div class="albums-grid" id="albums-grid">
         {% for album in artist.albums %}
-        {# Hey future me - album card styling based on ownership status!
-           - is_owned=True + tracks > 0: Clickable, normal styling
-           - is_owned=True + tracks = 0: Clickable but grayed out (metadata only)
-           - is_owned=False: Semi-transparent, shows download button #}
+        {# Hey future me - ALL albums are now clickable!
+           Album Detail page loads tracks from DB or fetches from provider (Deezer/Spotify).
+           - is_owned=True: Normal styling, tracks from DB
+           - is_owned=False: Semi-transparent with download overlay, tracks from provider #}
         <div class="album-card-wrapper" data-album-type="{{ album.primary_type|lower }}" style="{% if not album.is_owned %}opacity: 0.7;{% endif %}">
-            {% if album.is_owned and album.track_count > 0 %}
             <a href="/library/albums/{{ album.id }}" class="album-card">
-            {% else %}
-            <div class="album-card" style="cursor: {% if album.is_owned %}pointer{% else %}default{% endif %};">
-            {% endif %}
                 <div class="album-cover">
                     <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
                     {# Album type badge #}
@@ -177,11 +173,7 @@
                     {% endif %}
                     {% if album.year %}<span>{{ album.year }}</span>{% endif %}
                 </div>
-            {% if album.is_owned and album.track_count > 0 %}
             </a>
-            {% else %}
-            </div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
