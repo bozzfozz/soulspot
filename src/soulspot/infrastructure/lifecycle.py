@@ -434,10 +434,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Library discovery worker started (runs every 6h)")
 
             # Start job queue workers
-            await job_queue.start(num_workers=settings.download.num_workers)
+            # Hey future me - SQLite needs fewer workers to avoid "database is locked" errors!
+            # Multiple concurrent workers all trying to write to SQLite causes lock contention.
+            # For SQLite: use max 1 worker to serialize DB writes.
+            # For PostgreSQL: use configured num_workers (default 3).
+            is_sqlite = "sqlite" in settings.database.url
+            effective_workers = 1 if is_sqlite else settings.download.num_workers
+            await job_queue.start(num_workers=effective_workers)
             logger.info(
-                "Job queue started with %d workers, max concurrent downloads: %d",
-                settings.download.num_workers,
+                "Job queue started with %d workers%s, max concurrent downloads: %d",
+                effective_workers,
+                " (SQLite mode - serialized)" if is_sqlite else "",
                 settings.download.max_concurrent_downloads,
             )
 
@@ -672,8 +679,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             async def backfill_missing_images():
                 """Background task to download images for entities without local paths."""
                 try:
-                    # Small delay to let other startup tasks finish first
-                    await asyncio.sleep(10)
+                    # Longer delay to let other startup tasks finish first
+                    # Hey future me - increased from 10s to 60s (Dec 2025)!
+                    # SQLite can't handle many concurrent writers. By waiting longer,
+                    # we let library scan, discovery, and sync workers finish their
+                    # initial burst of activity before we start writing image paths.
+                    await asyncio.sleep(60)
 
                     logger.info(
                         "🖼️ Image backfill: Starting check for missing images..."

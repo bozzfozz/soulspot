@@ -45,11 +45,15 @@ class Database:
             )
         elif "sqlite" in settings.database.url:
             # SQLite-specific configuration
+            # Hey future me - increased timeout from 30s to 60s (Dec 2025)!
+            # Multiple workers (Spotify sync, Deezer sync, library discovery, image backfill)
+            # can all try to write at once. 30s wasn't always enough for heavy operations.
+            # Combined with WAL mode and PRAGMA busy_timeout, this should handle most cases.
             engine_kwargs.update(
                 {
                     "connect_args": {
                         "check_same_thread": False,
-                        "timeout": 30,  # Wait up to 30s for lock
+                        "timeout": 60,  # Wait up to 60s for lock (increased from 30s)
                     }
                 }
             )
@@ -97,8 +101,9 @@ class Database:
             # Enable WAL mode for better concurrency (readers don't block writers)
             # This prevents "database is locked" errors during library scans
             cursor.execute("PRAGMA journal_mode=WAL")
-            # Set busy timeout to 30s (matches connect_args timeout)
-            cursor.execute("PRAGMA busy_timeout=30000")
+            # Set busy timeout to 60s (increased from 30s, Dec 2025)
+            # Matches connect_args timeout - needed for heavy concurrent writes
+            cursor.execute("PRAGMA busy_timeout=60000")
             cursor.close()
             logger.debug("Enabled foreign keys, WAL mode, and busy timeout for SQLite")
 
