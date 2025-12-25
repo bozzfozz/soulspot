@@ -87,16 +87,17 @@
         </a>
         {# Hey future me - is_in_db means artist exists in DB (any source)! 
            If source='spotify' → User follows but doesn't have locally → Can upgrade to 'hybrid'
-           If source='local'/'hybrid' → Already filtered out, shouldn't appear here #}
+           If source='local'/'hybrid' → Already filtered out, shouldn't appear here 
+           IMPORTANT: Use |tojson filter for JS-safe strings (handles quotes, backslashes, etc.) #}
         {% if artist.is_in_db %}
         <button class="btn btn-add-library btn-in-db" 
-                onclick="event.stopPropagation(); addToLibrary(this, '{{ artist.name }}', '{{ artist.spotify_id }}', '{{ artist.deezer_id }}', '{{ artist.image_url }}')"
+                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson }}, {{ artist.spotify_id|tojson }}, {{ artist.deezer_id|tojson }}, {{ artist.image_url|tojson }})"
                 title="Already in your followed artists - Add to upgrade to local library">
             <i class="bi bi-check-circle"></i> In Database
         </button>
         {% else %}
         <button class="btn btn-add-library" 
-                onclick="event.stopPropagation(); addToLibrary(this, '{{ artist.name }}', '{{ artist.spotify_id }}', '{{ artist.deezer_id }}', '{{ artist.image_url }}')"
+                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson }}, {{ artist.spotify_id|tojson }}, {{ artist.deezer_id|tojson }}, {{ artist.image_url|tojson }})"
                 title="Add to your library watchlist">
             <i class="bi bi-plus-circle"></i> Add to Library
         </button>
@@ -493,22 +494,33 @@ async function triggerEnrichment(button) {
 // The artist will appear in the Library > Artists section after being added.
 // Later, the user can queue albums/tracks for download from this artist.
 async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
+    // DEBUG: Log what we're sending to help diagnose "wrong artist" issues
+    console.log('[AddToLibrary] Called with:', {
+        artistName,
+        spotifyId, 
+        deezerId,
+        imageUrl: imageUrl ? imageUrl.substring(0, 50) + '...' : null
+    });
+    
     const originalHTML = button.innerHTML;
     button.innerHTML = '<span class="spinner-small"></span>';
     button.classList.add('adding');
 
     try {
+        const payload = {
+            name: artistName,
+            spotify_id: spotifyId || null,
+            deezer_id: deezerId || null,
+            image_url: imageUrl || null,
+        };
+        console.log('[AddToLibrary] Sending payload:', payload);
+        
         const response = await fetch('/api/artists', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                name: artistName,
-                spotify_id: spotifyId || null,
-                deezer_id: deezerId || null,
-                image_url: imageUrl || null,
-            }),
+            body: JSON.stringify(payload),
         });
 
         if (response.ok || response.status === 201) {
