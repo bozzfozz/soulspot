@@ -505,6 +505,25 @@ class IMusicServicePlugin(ABC):
         ...
 
     @abstractmethod
+    async def get_albums(self, album_ids: list[str]) -> list[AlbumDTO]:
+        """
+        Get multiple albums by IDs (batch request).
+
+        Hey future me – Spotify erlaubt max 20 IDs pro Request!
+        Plugin sollte automatisch chunken wenn nötig.
+
+        Args:
+            album_ids: List of service-specific album IDs
+
+        Returns:
+            List of AlbumDTOs
+
+        Raises:
+            PluginError: If request fails
+        """
+        ...
+
+    @abstractmethod
     async def get_album_tracks(
         self, album_id: str, limit: int = 50, offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:

@@ -750,6 +750,20 @@ class DeezerPlugin(IMusicServicePlugin):
                 original_error=e,
             ) from e
 
+    async def get_albums(self, album_ids: list[str]) -> list[AlbumDTO]:
+        """Get multiple albums by Deezer IDs (batch request).
+
+        Hey future me – Interface-compliant alias for get_several_albums!
+        Deezer hat keine echte Batch-API, wir holen einzeln mit Rate-Limiting.
+
+        Args:
+            album_ids: List of Deezer album IDs
+
+        Returns:
+            List of AlbumDTOs (failed lookups filtered out)
+        """
+        return await self.get_several_albums(album_ids)
+
     async def get_several_albums(self, album_ids: list[str]) -> list[AlbumDTO]:
         """Get multiple albums by Deezer IDs.
 

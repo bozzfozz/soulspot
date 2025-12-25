@@ -179,6 +179,14 @@ class TidalPlugin(IMusicServicePlugin):
             error_code="not_implemented",
         )
 
+    async def get_albums(self, _album_ids: list[str]) -> list[AlbumDTO]:
+        """Get multiple albums."""
+        raise PluginError(
+            message="Tidal plugin not implemented yet",
+            service=ServiceType.TIDAL,
+            error_code="not_implemented",
+        )
+
     async def get_album_tracks(
         self, _album_id: str, _limit: int = 50, _offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:

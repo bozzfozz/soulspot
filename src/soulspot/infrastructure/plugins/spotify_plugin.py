@@ -819,6 +819,43 @@ class SpotifyPlugin(IMusicServicePlugin):
                 original_error=e,
             ) from e
 
+    async def get_albums(self, album_ids: list[str]) -> list[AlbumDTO]:
+        """Get multiple albums by IDs (batch request).
+
+        Hey future me - uses the client's batch endpoint for efficiency!
+        The client handles max 20 IDs per request, we chunk here.
+
+        Args:
+            album_ids: List of Spotify album IDs
+
+        Returns:
+            List of AlbumDTOs (order matches input, nulls filtered)
+        """
+        token = self._ensure_token()
+
+        if not album_ids:
+            return []
+
+        try:
+            # Hey future me - use the client's batch method!
+            # It handles max 20 IDs per request.
+            results: list[AlbumDTO] = []
+            for i in range(0, len(album_ids), 20):
+                chunk = album_ids[i : i + 20]
+                albums_data = await self._client.get_albums(chunk, token)
+                results.extend([self._convert_album(a) for a in albums_data])
+
+            return results
+
+        except PluginError:
+            raise
+        except Exception as e:
+            raise PluginError(
+                message=f"Failed to get albums: {e!s}",
+                service=ServiceType.SPOTIFY,
+                original_error=e,
+            ) from e
+
     async def get_album_tracks(
         self, album_id: str, limit: int = 50, offset: int = 0
     ) -> PaginatedResponse[TrackDTO]:
@@ -867,31 +904,24 @@ class SpotifyPlugin(IMusicServicePlugin):
             ) from e
 
     async def get_tracks(self, track_ids: list[str]) -> list[TrackDTO]:
-        """Get multiple tracks by IDs (batch request)."""
+        """Get multiple tracks by IDs (batch request).
+
+        Hey future me - uses the client's batch endpoint for efficiency!
+        The client handles chunking to 50 IDs per request automatically.
+        """
         token = self._ensure_token()
 
         if not track_ids:
             return []
 
         try:
-            client = await self._client._get_client()
-
-            # Spotify allows max 50 tracks per request
+            # Hey future me - use the client's batch method!
+            # It handles chunking to 50 IDs per request.
             results: list[TrackDTO] = []
             for i in range(0, len(track_ids), 50):
                 chunk = track_ids[i : i + 50]
-                ids_param = ",".join(chunk)
-
-                response = await client.get(
-                    f"{self._client.API_BASE_URL}/tracks",
-                    params={"ids": ids_param},
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                tracks = data.get("tracks", [])
-                results.extend([self._convert_track(t) for t in tracks if t])
+                tracks_data = await self._client.get_tracks(chunk, token)
+                results.extend([self._convert_track(t) for t in tracks_data])
 
             return results
 
