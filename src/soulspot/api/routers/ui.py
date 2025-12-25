@@ -2145,12 +2145,16 @@ async def library_album_detail(
             if not album_model.spotify_uri:
                 return ("spotify", [], None)
             try:
+                # Hey future me - get_credentials_service needs BOTH session AND settings!
+                # Calling it with just session leaves settings as an unresolved Depends object.
+                # We get settings via get_settings() which is synchronous.
                 from soulspot.api.dependencies import (
                     get_credentials_service,
                     get_spotify_plugin_optional,
                 )
 
-                credentials_service = await get_credentials_service(session)
+                settings = get_settings()
+                credentials_service = await get_credentials_service(session, settings)
                 spotify_plugin = await get_spotify_plugin_optional(request, credentials_service)
 
                 if not spotify_plugin or not spotify_plugin.is_authenticated:

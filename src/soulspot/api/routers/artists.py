@@ -12,13 +12,14 @@ import logging
 # Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
+    get_spotify_plugin_optional,
 )
 from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
@@ -1265,7 +1266,7 @@ async def sync_artist_discography_complete(
     artist_id: str,
     include_tracks: bool = Query(True, description="Also sync tracks for each album"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_plugin: "SpotifyPlugin | None" = None,
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
 ) -> DiscographySyncResponse:
     """Sync complete discography (albums AND tracks) for an artist.
 
@@ -1280,6 +1281,7 @@ async def sync_artist_discography_complete(
         artist_id: Our internal artist UUID
         include_tracks: Whether to also fetch tracks for each album (default: True)
         session: Database session
+        spotify_plugin: Spotify plugin (optional, from Depends)
 
     Returns:
         Sync statistics (albums/tracks added/skipped)
@@ -1287,10 +1289,9 @@ async def sync_artist_discography_complete(
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
     try:
-        # Try to get Spotify plugin if available
-        spotify_plugin = await get_spotify_plugin_optional(session)
-
-        # Always create Deezer plugin (no auth needed for album/track lookup!)
+        # Hey future me - spotify_plugin is now properly injected via Depends!
+        # It's None if user is not authenticated with Spotify.
+        # DeezerPlugin doesn't need auth for album/track lookup.
         deezer_plugin = DeezerPlugin()
 
         service = FollowedArtistsService(

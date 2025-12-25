@@ -5997,12 +5997,14 @@ class ProviderBrowseRepository:
                 return existing.id
 
         # Create new album with minimal data
+        # Hey future me - AlbumModel uses cover_url, NOT artwork_url!
+        # The column was renamed for consistency with ImageRef pattern.
         new_album = AlbumModel(
             title=album_name,
             artist_id=artist_id,
             release_year=release_year,
             spotify_uri=spotify_uri,
-            artwork_url=artwork_url,
+            cover_url=artwork_url,  # artwork_url → cover_url (column rename)
         )
         self.session.add(new_album)
         await self.session.flush()  # Get the generated ID

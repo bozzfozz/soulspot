@@ -15,6 +15,7 @@ from soulspot.domain.ports.plugin import IMusicServicePlugin
 from soulspot.domain.value_objects import (
     AlbumId,
     ArtistId,
+    ImageRef,
     PlaylistId,
     SpotifyUri,
     TrackId,
@@ -284,13 +285,15 @@ class ImportSpotifyPlaylistUseCase(
                                 album_data.get("release_date")
                             )
 
+                            # Hey future me - Album entity uses cover: ImageRef, not artwork_url!
+                            # ImageRef combines URL (streaming CDN) + path (local cache)
                             album = Album(
                                 id=AlbumId.generate(),
                                 title=album_data["name"],
                                 artist_id=artist.id,
                                 release_year=release_year,
                                 spotify_uri=album_spotify_uri,
-                                artwork_url=artwork_url,  # NEW: Store album cover!
+                                cover=ImageRef(url=artwork_url),  # ImageRef not artwork_url!
                                 created_at=datetime.now(UTC),
                                 updated_at=datetime.now(UTC),
                             )

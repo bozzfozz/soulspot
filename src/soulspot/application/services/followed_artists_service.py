@@ -940,10 +940,34 @@ class FollowedArtistsService:
             seen_album_keys.add(norm_key)
 
             # Check if album already exists
-            existing_album = await album_repo.get_by_title_and_artist(
-                title=album_dto.title,
-                artist_id=artist.id,
-            )
+            # Hey future me - CRITICAL: Check by deezer_id FIRST if available!
+            # This prevents UNIQUE constraint errors when album was already synced.
+            existing_album = None
+
+            # 1. Check by Deezer ID (most specific)
+            if album_dto.deezer_id:
+                existing_album = await album_repo.get_by_deezer_id(album_dto.deezer_id)
+
+            # 2. Check by Spotify URI
+            if not existing_album and album_dto.spotify_uri:
+                try:
+                    spotify_uri = SpotifyUri.from_string(album_dto.spotify_uri)
+                    existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
+                except ValueError:
+                    pass
+            elif not existing_album and album_dto.spotify_id:
+                try:
+                    spotify_uri = SpotifyUri.from_string(f"spotify:album:{album_dto.spotify_id}")
+                    existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
+                except ValueError:
+                    pass
+
+            # 3. Fallback to title+artist (least specific)
+            if not existing_album:
+                existing_album = await album_repo.get_by_title_and_artist(
+                    title=album_dto.title,
+                    artist_id=artist.id,
+                )
 
             if existing_album:
                 # Album exists - use its ID for track linking
