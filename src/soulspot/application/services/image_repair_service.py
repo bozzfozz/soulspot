@@ -73,6 +73,7 @@ class ImageRepairService:
     """
 
     # Rate limit between API calls (50ms = 20 requests/second)
+    # NOTE: This is ONLY for API calls, NOT for CDN downloads!
     API_RATE_LIMIT_SECONDS = 0.05
 
     def __init__(
@@ -101,6 +102,29 @@ class ImageRepairService:
         self._image_provider_registry = image_provider_registry
         self._spotify_plugin = spotify_plugin
         self._artist_repo = artist_repository
+
+    def _guess_provider_from_url(self, url: str) -> str:
+        """Guess provider from CDN URL.
+
+        Hey future me - simple heuristic to determine image source from URL.
+        Used when we already have an image_url in DB and skip API calls.
+
+        Args:
+            url: CDN URL like "https://i.scdn.co/image/..." or "https://cdns-images.dzcdn.net/..."
+
+        Returns:
+            Provider name: "spotify", "deezer", or "unknown"
+        """
+        url_lower = url.lower()
+        if "scdn.co" in url_lower or "spotify" in url_lower:
+            return "spotify"
+        elif "dzcdn.net" in url_lower or "deezer" in url_lower:
+            return "deezer"
+        elif "coverartarchive" in url_lower or "musicbrainz" in url_lower:
+            return "caa"
+        elif "tidal" in url_lower:
+            return "tidal"
+        return "unknown"
 
     async def repair_artist_images(
         self,
@@ -144,19 +168,36 @@ class ImageRepairService:
                 spotify_id = (
                     artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
                 )
+                deezer_id = artist.deezer_id
 
                 image_url: str | None = None
                 provider = "spotify"
 
+                # Strategy 0: Use existing image_url from DB (NO API call needed!)
+                # Hey future me - LibraryDiscoveryWorker saves CDN URLs, use them!
+                # This path is FAST because we skip API calls entirely.
+                if artist.image_url:
+                    image_url = artist.image_url
+                    provider = self._guess_provider_from_url(artist.image_url)
+                    logger.debug(
+                        f"Using existing image_url for '{artist.name}' (no API call)"
+                    )
+
                 # Strategy 1: Use ImageProviderRegistry (multi-provider fallback)
-                if self._image_provider_registry:
+                # Only if we don't have an image_url yet - needs API calls!
+                if not image_url and self._image_provider_registry:
                     image_result = await self._image_provider_registry.get_artist_image(
                         artist_name=artist.name,
-                        artist_ids={"spotify": spotify_id} if spotify_id else {},
+                        artist_ids={
+                            "spotify": spotify_id,
+                            "deezer": deezer_id,
+                        } if spotify_id or deezer_id else {},
                     )
                     if image_result:
                         image_url = image_result.url
                         provider = image_result.provider
+                    # Rate limit only when we made an API call
+                    await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
 
                 # Strategy 2: Direct Spotify plugin call (legacy fallback)
                 if not image_url and self._spotify_plugin and spotify_id:
@@ -166,6 +207,8 @@ class ImageRepairService:
                         )
                         if artist_dto and artist_dto.image and artist_dto.image.url:
                             image_url = artist_dto.image.url
+                        # Rate limit only when we made an API call
+                        await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
                     except Exception as e:
                         logger.debug(f"Spotify fallback failed for {artist.name}: {e}")
 
@@ -198,8 +241,10 @@ class ImageRepairService:
                         }
                     )
 
-                # Rate limiting
-                await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
+                # NOTE: NO rate limit here for CDN downloads!
+                # Hey future me - CDN downloads (i.scdn.co, cdns-images.dzcdn.net)
+                # have NO rate limits! Rate limiting only happens when we make
+                # API calls above (ImageProviderRegistry, SpotifyPlugin).
 
             except Exception as e:
                 logger.warning(f"Failed to repair image for {artist.name}: {e}")
@@ -265,8 +310,19 @@ class ImageRepairService:
                 image_url: str | None = None
                 provider = "unknown"
 
+                # Strategy 0: Use existing cover_url from DB (NO API call needed!)
+                # Hey future me - LibraryDiscoveryWorker saves CDN URLs, use them!
+                # This path is FAST because we skip API calls entirely.
+                if album.cover_url:
+                    image_url = album.cover_url
+                    provider = self._guess_provider_from_url(album.cover_url)
+                    logger.debug(
+                        f"Using existing cover_url for '{album.title}' (no API call)"
+                    )
+
                 # Strategy 1: Use ImageProviderRegistry (multi-provider fallback)
-                if self._image_provider_registry:
+                # Only if we don't have a cover_url yet - needs API calls!
+                if not image_url and self._image_provider_registry:
                     # Get artist name for better search matching
                     artist_name = album.artist.name if album.artist else None
 
@@ -281,6 +337,8 @@ class ImageRepairService:
                     if image_result:
                         image_url = image_result.url
                         provider = image_result.provider
+                    # Rate limit only when we made an API call
+                    await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
 
                 # Strategy 2: Direct Spotify plugin call (legacy fallback)
                 if not image_url and self._spotify_plugin and spotify_id:
@@ -291,6 +349,8 @@ class ImageRepairService:
                         if album_dto and album_dto.image and album_dto.image.url:
                             image_url = album_dto.image.url
                             provider = "spotify"
+                        # Rate limit only when we made an API call
+                        await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
                     except Exception as e:
                         logger.debug(f"Spotify fallback failed for {album.title}: {e}")
 
@@ -324,8 +384,10 @@ class ImageRepairService:
                         }
                     )
 
-                # Rate limiting
-                await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
+                # NOTE: NO rate limit here for CDN downloads!
+                # Hey future me - CDN downloads (i.scdn.co, cdns-images.dzcdn.net)
+                # have NO rate limits! Rate limiting only happens when we make
+                # API calls above (ImageProviderRegistry, SpotifyPlugin).
 
             except Exception as e:
                 logger.warning(f"Failed to repair image for {album.title}: {e}")

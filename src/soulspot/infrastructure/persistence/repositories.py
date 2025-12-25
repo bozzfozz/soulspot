@@ -820,6 +820,32 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         return (result.rowcount or 0) > 0
 
+    async def update_image_path(
+        self,
+        artist_id: ArtistId,
+        image_path: str,
+    ) -> bool:
+        """Update artist's image_path after downloading image locally.
+
+        Hey future me - this is called after ImageService.download_artist_image()!
+        The image_path is the LOCAL path (e.g., "artists/deezer/12345.webp").
+        This enables get_display_url() to serve local images instead of CDN.
+
+        Args:
+            artist_id: Artist to update
+            image_path: Local path to downloaded image
+
+        Returns:
+            True if updated, False if artist not found
+        """
+        stmt = (
+            update(ArtistModel)
+            .where(ArtistModel.id == str(artist_id.value))
+            .values(image_path=image_path, updated_at=datetime.now(UTC))
+        )
+        result = await self.session.execute(stmt)
+        return (result.rowcount or 0) > 0
+
     async def get_with_deezer_id_needing_discography_sync(
         self, limit: int = 20, max_age_hours: int = 24
     ) -> list[Artist]:
@@ -1340,6 +1366,32 @@ class AlbumRepository(IAlbumRepository):
             update(AlbumModel)
             .where(AlbumModel.id == str(album_id.value))
             .values(**values)
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0  # type: ignore[union-attr]
+
+    async def update_cover_path(
+        self,
+        album_id: AlbumId,
+        cover_path: str,
+    ) -> bool:
+        """Update album's cover_path after downloading cover locally.
+
+        Hey future me - this is called after ImageService.download_album_image()!
+        The cover_path is the LOCAL path (e.g., "albums/deezer/12345.webp").
+        This enables get_display_url() to serve local covers instead of CDN.
+
+        Args:
+            album_id: Album to update
+            cover_path: Local path to downloaded cover
+
+        Returns:
+            True if updated, False if album not found
+        """
+        stmt = (
+            update(AlbumModel)
+            .where(AlbumModel.id == str(album_id.value))
+            .values(cover_path=cover_path, updated_at=datetime.now(UTC))
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0  # type: ignore[union-attr]

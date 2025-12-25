@@ -304,12 +304,17 @@ class LibraryDiscoveryWorker:
     async def _phase1_enrich_artists(self, session: AsyncSession) -> dict[str, Any]:
         """Phase 1: Find provider IDs for artists without them.
 
-        Hey future me - MULTI-SOURCE ENRICHMENT using EXISTING availability functions!
+        Hey future me - This is for ID DISCOVERY only, NOT image downloads!
         Uses _initialize_plugins() which checks:
         1. AppSettingsService.is_provider_enabled() for provider ON/OFF status
         2. SpotifyTokenRepository for OAuth token (Spotify requires auth)
 
         Each source adds its own ID, so artist can have BOTH deezer_id AND spotify_uri.
+        CDN image URLs are saved via update_deezer_id/update_spotify_uri.
+
+        Actual image downloads happen separately via:
+        - ImageRepairService.repair_artist_images() (on-demand via UI)
+        - lifecycle.py backfill_image_cache() (at app startup)
 
         Returns:
             Stats dict with processed/enriched/failed counts per source
@@ -371,8 +376,6 @@ class LibraryDiscoveryWorker:
 
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
-                        # Hey future me - now also saving image_url from Deezer!
-                        # This enables local image download via ImageService later.
                         image_url = (
                             best_match.image.url if best_match.image else None
                         )
@@ -386,7 +389,7 @@ class LibraryDiscoveryWorker:
                             f"Deezer enriched '{artist.name}' → deezer_id={best_match.deezer_id}"
                         )
 
-                    # Rate limit
+                    # Rate limit for API calls
                     await asyncio.sleep(0.05)
 
                 # === SPOTIFY (if available and artist missing spotify_uri) ===
@@ -398,8 +401,6 @@ class LibraryDiscoveryWorker:
 
                         if spotify_result.items and spotify_result.items[0].spotify_uri:
                             best_match = spotify_result.items[0]
-                            # Hey future me - now also saving image_url from Spotify!
-                            # Spotify images are often higher quality than Deezer.
                             image_url = (
                                 best_match.image.url if best_match.image else None
                             )
@@ -413,11 +414,18 @@ class LibraryDiscoveryWorker:
                                 f"Spotify enriched '{artist.name}' → spotify_uri={best_match.spotify_uri}"
                             )
 
-                        # Rate limit
+                        # Rate limit for API calls
                         await asyncio.sleep(0.05)
                     except Exception as e:
                         # Don't fail entire artist if Spotify fails
                         logger.debug(f"Spotify search failed for '{artist.name}': {e}")
+
+                # NOTE: Image downloads are NOT done here!
+                # Hey future me - Worker is for DISCOVERY only, not downloads!
+                # Image downloads happen via:
+                # 1. ImageRepairService.repair_artist_images() (on-demand via UI)
+                # 2. lifecycle.py backfill_image_cache() (at app startup)
+                # The CDN URLs are already saved above via update_deezer_id/update_spotify_uri!
 
             except Exception as e:
                 stats["failed"] += 1
@@ -428,6 +436,12 @@ class LibraryDiscoveryWorker:
                     }
                 )
                 logger.warning(f"Failed to enrich artist '{artist.name}': {e}")
+
+        # Log summary
+        logger.info(
+            f"Phase 1 complete: {stats['deezer_enriched']} Deezer, "
+            f"{stats['spotify_enriched']} Spotify enriched"
+        )
 
         return stats
 
@@ -642,9 +656,14 @@ class LibraryDiscoveryWorker:
     async def _phase4_enrich_albums(self, session: AsyncSession) -> dict[str, Any]:
         """Phase 4: Find provider IDs for albums without them.
 
-        Hey future me - ALBUM ID DISCOVERY!
+        Hey future me - This is for ALBUM ID DISCOVERY only, NOT cover downloads!
         Similar to Phase 1 but for albums instead of artists.
         Uses album title + artist name to search Deezer/Spotify.
+        CDN cover URLs are saved via update_deezer_id/update_spotify_uri.
+
+        Actual cover downloads happen separately via:
+        - ImageRepairService.repair_album_images() (on-demand via UI)
+        - lifecycle.py backfill_image_cache() (at app startup)
 
         Returns:
             Stats dict with processed/enriched/failed counts per source
@@ -721,7 +740,6 @@ class LibraryDiscoveryWorker:
                                 f"'{existing.title}', skipping duplicate for '{album.title}'"
                             )
                         else:
-                            # Hey future me - now also saving cover_url from Deezer!
                             cover_url = (
                                 best_match.cover.url if best_match.cover else None
                             )
@@ -730,9 +748,6 @@ class LibraryDiscoveryWorker:
                                 deezer_id=best_match.deezer_id,
                                 cover_url=cover_url,
                             )
-                            # Hey future me - SET PRIMARY_TYPE from Deezer's album_type!
-                            # This is critical for Album/EP/Single classification.
-                            # Deezer uses: album, ep, single, compile
                             if best_match.album_type:
                                 await album_repo.update_primary_type(
                                     album_id=album.id,
@@ -769,7 +784,6 @@ class LibraryDiscoveryWorker:
                                     f"'{existing.title}', skipping duplicate for '{album.title}'"
                                 )
                             else:
-                                # Hey future me - now also saving cover_url from Spotify!
                                 cover_url = (
                                     best_match.cover.url if best_match.cover else None
                                 )
@@ -778,9 +792,7 @@ class LibraryDiscoveryWorker:
                                     spotify_uri=str(best_match.spotify_uri),
                                     cover_url=cover_url,
                                 )
-                                # Hey future me - SET PRIMARY_TYPE from Spotify's album_type!
-                                # Only set if not already set by Deezer (Deezer is processed first).
-                                # Spotify uses: album, single, compilation
+                                # Only set primary_type if not already set by Deezer
                                 if best_match.album_type and not album.deezer_id:
                                     await album_repo.update_primary_type(
                                         album_id=album.id,
@@ -799,6 +811,13 @@ class LibraryDiscoveryWorker:
                         logger.debug(
                             f"Spotify search failed for album '{album.title}': {e}"
                         )
+
+                # NOTE: Cover downloads are NOT done here!
+                # Hey future me - Worker is for DISCOVERY only, not downloads!
+                # Cover downloads happen via:
+                # 1. ImageRepairService.repair_album_images() (on-demand via UI)
+                # 2. lifecycle.py backfill_image_cache() (at app startup)
+                # The CDN URLs are already saved above via update_deezer_id/update_spotify_uri!
 
             except Exception as e:
                 stats["failed"] += 1

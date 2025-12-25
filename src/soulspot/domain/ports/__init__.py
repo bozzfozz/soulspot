@@ -265,6 +265,21 @@ class IArtistRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def update_image_path(self, artist_id: ArtistId, image_path: str) -> bool:
+        """Update artist's image_path after downloading image locally.
+
+        Called after ImageService.download_artist_image() downloads the image.
+
+        Args:
+            artist_id: Artist to update
+            image_path: Local path to downloaded image (e.g., "artists/deezer/12345.webp")
+
+        Returns:
+            True if updated, False if artist not found
+        """
+        pass
+
 
 class IAlbumRepository(ABC):
     """Repository interface for Album entities."""
@@ -408,6 +423,21 @@ class IAlbumRepository(ABC):
             album_id: Album to update
             spotify_uri: Spotify URI (spotify:album:xxx)
             cover_url: Optional cover image URL from Spotify API
+
+        Returns:
+            True if updated, False if album not found
+        """
+        pass
+
+    @abstractmethod
+    async def update_cover_path(self, album_id: AlbumId, cover_path: str) -> bool:
+        """Update album's cover_path after downloading cover locally.
+
+        Called after ImageService.download_album_image() downloads the cover.
+
+        Args:
+            album_id: Album to update
+            cover_path: Local path to downloaded cover (e.g., "albums/deezer/12345.webp")
 
         Returns:
             True if updated, False if album not found
