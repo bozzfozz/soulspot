@@ -1858,24 +1858,32 @@ async def library_artist_detail(
         key = album.title.lower().strip()
         local_albums_by_title[key] = album
 
-    # Count local tracks per album title
-    tracks_per_album: dict[str, int] = {}
+    # Count LOCAL tracks per album title (only tracks with file_path = downloaded files)
+    # Hey future me - tracks_per_album counts TOTAL tracks in DB, local_tracks_per_album
+    # counts only tracks WITH file_path (actually downloaded). This powers the "X/Y local" badge!
+    tracks_per_album: dict[str, int] = {}  # Total tracks in DB
+    local_tracks_per_album: dict[str, int] = {}  # Only with file_path (local files)
     for track in track_models:
         if track.album:
             key = track.album.title.lower().strip()
             tracks_per_album[key] = tracks_per_album.get(key, 0) + 1
+            # Count only if track has a local file
+            if track.file_path:
+                local_tracks_per_album[key] = local_tracks_per_album.get(key, 0) + 1
 
     # Build unified albums list from discography
     albums: list[dict[str, Any]] = []
     for disc_entry in all_discography:
         title_key = disc_entry.title.lower().strip()
         local_album = local_albums_by_title.get(title_key)
-        owned_tracks = tracks_per_album.get(title_key, 0)
+        owned_tracks = tracks_per_album.get(title_key, 0)  # Total in DB
+        local_tracks = local_tracks_per_album.get(title_key, 0)  # Only with file_path
 
         album_data = {
             "id": f"{artist_name}::{disc_entry.title}",
             "title": disc_entry.title,
-            "track_count": owned_tracks,  # Locally available tracks
+            "track_count": owned_tracks,  # Total tracks in DB for this album
+            "local_tracks": local_tracks,  # Tracks with file_path (downloaded)
             "total_tracks": disc_entry.total_tracks or 0,
             "year": int(disc_entry.release_date[:4]) if disc_entry.release_date and len(disc_entry.release_date) >= 4 else None,
             "artwork_url": disc_entry.cover_url,
@@ -1894,10 +1902,12 @@ async def library_artist_detail(
         for album in album_models:
             title_key = album.title.lower().strip()
             owned_tracks = tracks_per_album.get(title_key, 0)
+            local_tracks = local_tracks_per_album.get(title_key, 0)
             albums.append({
                 "id": f"{artist_name}::{album.title}",
                 "title": album.title,
-                "track_count": owned_tracks,
+                "track_count": owned_tracks,  # Total tracks in DB
+                "local_tracks": local_tracks,  # Tracks with file_path
                 "total_tracks": album.total_tracks if hasattr(album, "total_tracks") else None,
                 "year": album.release_year,
                 "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,

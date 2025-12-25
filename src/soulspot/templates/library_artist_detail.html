@@ -143,31 +143,35 @@
                 </div>
                 <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
                 <div class="album-meta">
-                    {# Hey future me - Availability badge showing X/Y tracks!
-                       - Green (complete): track_count >= total_tracks
-                       - Orange (partial): track_count > 0 but < total_tracks
-                       - Red (none): track_count = 0 #}
-                    {% if album.total_tracks and album.total_tracks > 0 %}
-                        {% if album.track_count >= album.total_tracks %}
-                        <span class="availability-badge-small availability-complete">
-                            <i class="bi bi-check-circle-fill"></i> {{ album.track_count }}/{{ album.total_tracks }}
+                    {# Hey future me - LOCAL availability badge showing X/Y tracks!
+                       X = local_tracks (tracks with file_path = downloaded files)
+                       Y = total_tracks (total tracks from provider)
+                       - Green (complete): local_tracks >= total_tracks
+                       - Orange (partial): local_tracks > 0 but < total_tracks
+                       - Red (none): local_tracks = 0 #}
+                    {% set local = album.local_tracks|default(0) %}
+                    {% set total = album.total_tracks|default(0) %}
+                    {% if total > 0 %}
+                        {% if local >= total %}
+                        <span class="availability-badge-small availability-complete" title="{{ local }} of {{ total }} tracks have local files">
+                            <i class="bi bi-check-circle-fill"></i> {{ local }}/{{ total }} local
                         </span>
-                        {% elif album.track_count > 0 %}
-                        <span class="availability-badge-small availability-partial">
-                            <i class="bi bi-music-note"></i> {{ album.track_count }}/{{ album.total_tracks }}
+                        {% elif local > 0 %}
+                        <span class="availability-badge-small availability-partial" title="{{ local }} of {{ total }} tracks have local files">
+                            <i class="bi bi-music-note"></i> {{ local }}/{{ total }} local
                         </span>
                         {% else %}
-                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;">
-                            <i class="bi bi-x-circle"></i> 0/{{ album.total_tracks }}
+                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;" title="No local files yet">
+                            <i class="bi bi-x-circle"></i> 0/{{ total }} local
                         </span>
                         {% endif %}
                     {% else %}
-                        {# No total_tracks info - just show what we have #}
-                        {% if album.track_count > 0 %}
-                        <span><i class="bi bi-music-note"></i> {{ album.track_count }}</span>
+                        {# No total_tracks info - just show what we have locally #}
+                        {% if local > 0 %}
+                        <span title="{{ local }} tracks with local files"><i class="bi bi-music-note"></i> {{ local }} local</span>
                         {% else %}
-                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;">
-                            <i class="bi bi-x-circle"></i> 0
+                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;" title="No local files">
+                            <i class="bi bi-x-circle"></i> 0 local
                         </span>
                         {% endif %}
                     {% endif %}
