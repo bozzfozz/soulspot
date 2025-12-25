@@ -2785,20 +2785,49 @@ async def spotify_discover_page(
     # User can add artists to local library even if they follow them on Spotify.
     # Hey future me - Artist.spotify_uri is a SpotifyUri VALUE OBJECT, not a string!
     # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
-    followed_ids: set[str] = set()
-    followed_names: set[str] = set()
+    local_artist_ids: set[str] = set()  # LOCAL/HYBRID only
+    local_artist_names: set[str] = set()  # LOCAL/HYBRID only
     
     # Use the same local_artists for exclusion - only exclude what user has locally!
     for a in local_artists:
         if a.spotify_uri:
             # SpotifyUri is a value object with .resource_id property
-            followed_ids.add(a.spotify_uri.resource_id)
+            local_artist_ids.add(a.spotify_uri.resource_id)
         if a.deezer_id:
-            followed_ids.add(a.deezer_id)
+            local_artist_ids.add(a.deezer_id)
         if a.name:
-            followed_names.add(a.name.lower().strip())
+            local_artist_names.add(a.name.lower().strip())
     
-    logger.debug(f"Discover filter: {len(followed_names)} LOCAL artist names to exclude")
+    logger.debug(f"Discover filter: {len(local_artist_names)} LOCAL artist names to exclude")
+
+    # Hey future me - Also get ALL artists in DB (any source) for "is_in_db" badge!
+    # This lets UI show if an artist exists in DB (even if only spotify-synced).
+    # We do a direct query to get only the IDs we need (more efficient than loading full entities).
+    from sqlalchemy import select
+    from soulspot.infrastructure.persistence.models import ArtistModel
+    
+    stmt = select(
+        ArtistModel.spotify_uri, 
+        ArtistModel.deezer_id, 
+        ArtistModel.name
+    )
+    db_result = await session.execute(stmt)
+    all_db_rows = db_result.all()
+    
+    all_db_artist_ids: set[str] = set()
+    all_db_artist_names: set[str] = set()
+    for row in all_db_rows:
+        if row.spotify_uri:
+            # spotify_uri is "spotify:artist:ID" → extract ID
+            parts = row.spotify_uri.split(":")
+            if len(parts) == 3:
+                all_db_artist_ids.add(parts[2])
+        if row.deezer_id:
+            all_db_artist_ids.add(row.deezer_id)
+        if row.name:
+            all_db_artist_names.add(row.name.lower().strip())
+    
+    logger.debug(f"Discover: {len(all_db_artist_names)} total artists in DB (for is_in_db badge)")
 
     # Use DiscoverService for Multi-Provider discovery!
     service = DiscoverService(
@@ -2840,11 +2869,15 @@ async def spotify_discover_page(
                 source_counts[src] = source_counts.get(src, 0) + count
 
             for discovered in result.artists:
-                # Skip if already following
                 d_name_norm = discovered.name.lower().strip()
-                if d_name_norm in followed_names:
+                
+                # Skip if already in LOCAL library (source='local' or 'hybrid')
+                # These artists are already in user's local collection!
+                if d_name_norm in local_artist_names:
                     continue
-                if discovered.spotify_id and discovered.spotify_id in followed_ids:
+                if discovered.spotify_id and discovered.spotify_id in local_artist_ids:
+                    continue
+                if discovered.deezer_id and discovered.deezer_id in local_artist_ids:
                     continue
 
                 # Skip duplicates in this batch
@@ -2852,6 +2885,16 @@ async def spotify_discover_page(
                 if key in seen_ids:
                     continue
                 seen_ids.add(key)
+
+                # Hey future me - Check if artist exists in DB AT ALL (any source)!
+                # If artist has source='spotify' (followed but not local), user can still
+                # "Add to Library" which will upgrade them to 'hybrid'.
+                # This flag helps UI show appropriate button/badge.
+                is_in_db = (
+                    d_name_norm in all_db_artist_names
+                    or (discovered.spotify_id and discovered.spotify_id in all_db_artist_ids)
+                    or (discovered.deezer_id and discovered.deezer_id in all_db_artist_ids)
+                )
 
                 discoveries.append(
                     {
@@ -2863,6 +2906,7 @@ async def spotify_discover_page(
                         "popularity": discovered.popularity or 0,
                         "based_on": artist.name,
                         "source": discovered.source_service,
+                        "is_in_db": is_in_db,  # True if artist exists in DB (any source)
                     }
                 )
 

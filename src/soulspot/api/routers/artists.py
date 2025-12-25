@@ -98,6 +98,44 @@ def _artist_to_response(artist: Any) -> ArtistResponse:
     )
 
 
+# Hey future me - DEBUG endpoint to check what artists are in DB by name.
+# Useful for debugging "already in library" issues.
+# Usage: GET /api/artists/debug/search?name=Nosferatu
+@router.get("/debug/search")
+async def debug_search_artists(
+    name: str = Query(..., description="Artist name to search for"),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Debug endpoint: Search artists by name in DB.
+    
+    Returns all matching artists with their source info.
+    Case-insensitive partial match.
+    """
+    from sqlalchemy import select, func
+    from soulspot.infrastructure.persistence.models import ArtistModel
+    
+    stmt = select(ArtistModel).where(
+        func.lower(ArtistModel.name).contains(name.lower())
+    )
+    result = await session.execute(stmt)
+    artists = result.scalars().all()
+    
+    return {
+        "query": name,
+        "count": len(artists),
+        "artists": [
+            {
+                "id": str(a.id),
+                "name": a.name,
+                "source": a.source,
+                "spotify_uri": a.spotify_uri,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in artists
+        ]
+    }
+
+
 # Yo, this is the MAIN sync endpoint! It fetches ALL followed artists from Spotify (paginated
 # internally) and creates/updates them in our DB. Uses shared server-side token so any device
 # can trigger sync. Returns the full list of synced artists plus stats (created/updated counts).
@@ -778,6 +816,9 @@ class RelatedArtistResponse(BaseModel):
     genres: list[str] = Field(default_factory=list, description="Artist genres")
     popularity: int = Field(..., description="Spotify popularity score 0-100")
     is_following: bool = Field(..., description="Whether user follows this artist")
+    is_in_library: bool = Field(
+        False, description="Whether artist is in local library (LOCAL or HYBRID source)"
+    )
 
 
 class RelatedArtistsResponse(BaseModel):
@@ -789,6 +830,67 @@ class RelatedArtistsResponse(BaseModel):
         ..., description="List of similar artists"
     )
     total: int = Field(..., description="Number of related artists returned")
+
+
+# Hey future me - Helper function to check which artists are in LOCAL library!
+# Returns a dict of spotify_id -> bool (True if LOCAL or HYBRID source).
+# This is used for "is_in_library" badges on Similar Artists / Discovery pages.
+async def _check_artists_in_library(
+    session: AsyncSession,
+    spotify_ids: list[str],
+    deezer_ids: list[str] | None = None,
+) -> dict[str, bool]:
+    """Check which artists are in local library (LOCAL or HYBRID source).
+    
+    Args:
+        session: Database session
+        spotify_ids: List of Spotify artist IDs to check
+        deezer_ids: Optional list of Deezer artist IDs to check
+        
+    Returns:
+        Dict mapping spotify_id/deezer_id -> True if in library
+    """
+    from sqlalchemy import select, or_
+    from soulspot.infrastructure.persistence.models import ArtistModel
+    
+    result: dict[str, bool] = {}
+    
+    if not spotify_ids and not deezer_ids:
+        return result
+    
+    # Build query conditions
+    conditions = []
+    
+    # Check by spotify_uri (format: "spotify:artist:ID")
+    if spotify_ids:
+        spotify_uris = [f"spotify:artist:{sid}" for sid in spotify_ids]
+        conditions.append(ArtistModel.spotify_uri.in_(spotify_uris))
+    
+    # Check by deezer_id
+    if deezer_ids:
+        conditions.append(ArtistModel.deezer_id.in_(deezer_ids))
+    
+    # Query artists with LOCAL or HYBRID source
+    stmt = select(ArtistModel.spotify_uri, ArtistModel.deezer_id).where(
+        or_(*conditions),
+        ArtistModel.source.in_(["local", "hybrid"]),
+    )
+    
+    db_result = await session.execute(stmt)
+    rows = db_result.all()
+    
+    # Build result dict
+    for row in rows:
+        # Extract spotify_id from URI if present
+        if row.spotify_uri:
+            # spotify_uri is "spotify:artist:ID" → extract ID
+            parts = row.spotify_uri.split(":")
+            if len(parts) == 3:
+                result[parts[2]] = True
+        if row.deezer_id:
+            result[row.deezer_id] = True
+    
+    return result
 
 
 @router.get(
@@ -858,19 +960,25 @@ async def get_related_artists(
                 related_ids
             )
 
-        # Build response with following status
+        # Hey future me - Batch check which related artists are in LOCAL library!
+        # This shows "Already in Library" badges on Similar Artists pages.
+        library_statuses: dict[str, bool] = {}
+        if related_ids:
+            library_statuses = await _check_artists_in_library(session, related_ids)
+
+        # Build response with following status AND library status
         related_artists: list[RelatedArtistResponse] = []
         for artist_dto in related_dtos:
+            artist_spotify_id = artist_dto.spotify_id or ""
             related_artists.append(
                 RelatedArtistResponse(
-                    spotify_id=artist_dto.spotify_id or "",
+                    spotify_id=artist_spotify_id,
                     name=artist_dto.name,
                     image_url=artist_dto.image.url,  # ArtistDTO.image is ImageRef
                     genres=artist_dto.genres[:3] if artist_dto.genres else [],
                     popularity=artist_dto.popularity or 0,
-                    is_following=following_statuses.get(
-                        artist_dto.spotify_id or "", False
-                    ),
+                    is_following=following_statuses.get(artist_spotify_id, False),
+                    is_in_library=library_statuses.get(artist_spotify_id, False),
                 )
             )
 
@@ -913,6 +1021,9 @@ class MultiProviderRelatedArtistResponse(BaseModel):
     popularity: int = Field(0, description="Popularity score (0-100)")
     source: str = Field(..., description="Source service: spotify, deezer, or merged")
     based_on: str | None = Field(None, description="Which artist this was discovered from")
+    is_in_library: bool = Field(
+        False, description="Whether artist is in local library (LOCAL or HYBRID source)"
+    )
 
 
 class MultiProviderRelatedArtistsResponse(BaseModel):
@@ -1036,9 +1147,22 @@ async def get_multi_provider_related_artists(
             enabled_providers=enabled_providers,
         )
 
+        # Hey future me - Batch check which related artists are in LOCAL library!
+        # Collect all spotify_ids and deezer_ids for library lookup
+        all_spotify_ids: list[str] = [a.spotify_id for a in result.artists if a.spotify_id]
+        all_deezer_ids: list[str] = [a.deezer_id for a in result.artists if a.deezer_id]
+        library_statuses = await _check_artists_in_library(
+            session, all_spotify_ids, all_deezer_ids
+        )
+
         # Convert to response format
         related_artists: list[MultiProviderRelatedArtistResponse] = []
         for artist in result.artists:
+            # Check if in library by spotify_id OR deezer_id
+            is_in_lib = (
+                library_statuses.get(artist.spotify_id or "", False)
+                or library_statuses.get(artist.deezer_id or "", False)
+            )
             related_artists.append(
                 MultiProviderRelatedArtistResponse(
                     name=artist.name,
@@ -1049,6 +1173,7 @@ async def get_multi_provider_related_artists(
                     popularity=artist.popularity,
                     source=artist.source_service,
                     based_on=artist.based_on,
+                    is_in_library=is_in_lib,
                 )
             )
 

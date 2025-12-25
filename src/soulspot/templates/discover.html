@@ -85,11 +85,22 @@
                 <i class="bi bi-diagram-2"></i> Similar to {{ artist.based_on }}
             </div>
         </a>
+        {# Hey future me - is_in_db means artist exists in DB (any source)! 
+           If source='spotify' → User follows but doesn't have locally → Can upgrade to 'hybrid'
+           If source='local'/'hybrid' → Already filtered out, shouldn't appear here #}
+        {% if artist.is_in_db %}
+        <button class="btn btn-add-library btn-in-db" 
+                onclick="event.stopPropagation(); addToLibrary(this, '{{ artist.name }}', '{{ artist.spotify_id }}', '{{ artist.deezer_id }}', '{{ artist.image_url }}')"
+                title="Already in your followed artists - Add to upgrade to local library">
+            <i class="bi bi-check-circle"></i> In Database
+        </button>
+        {% else %}
         <button class="btn btn-add-library" 
                 onclick="event.stopPropagation(); addToLibrary(this, '{{ artist.name }}', '{{ artist.spotify_id }}', '{{ artist.deezer_id }}', '{{ artist.image_url }}')"
                 title="Add to your library watchlist">
             <i class="bi bi-plus-circle"></i> Add to Library
         </button>
+        {% endif %}
     </div>
     {% endfor %}
 </div>
@@ -304,6 +315,18 @@
 .btn-add-library.adding {
     opacity: 0.7;
     pointer-events: none;
+}
+
+/* In Database button - artist exists in DB (spotify-synced) but not local yet */
+.btn-add-library.btn-in-db {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+    color: #22c55e;
+}
+
+.btn-add-library.btn-in-db:hover {
+    background: #22c55e;
+    color: white;
 }
 
 /* Source badges for discovered artists */
