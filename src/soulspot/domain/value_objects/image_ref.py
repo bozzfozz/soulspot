@@ -55,13 +55,14 @@ class ImageRef:
     def display_url(self) -> str | None:
         """Get the best URL for display (prefer local cache, fallback to remote).
 
-        Hey future me - Template verwendet diese Property!
+        Hey future me - Template verwendet get_display_url() aus ImageService statt dieser Property!
+        Diese Property ist für programmatischen Zugriff, nicht für Templates.
         Zuerst lokale Datei (schneller, offline-fähig), dann CDN.
-        Lokale Dateien werden über /api/artwork/ Endpoint serviert.
+        Lokale Dateien werden über /api/images/ Endpoint serviert.
         """
         # If we have a local path, construct a local URL
         if self.path:
-            return f"/api/artwork/{self.path}"
+            return f"/api/images/{self.path}"
         return self.url
 
     @classmethod

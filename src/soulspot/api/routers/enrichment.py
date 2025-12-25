@@ -222,9 +222,12 @@ async def repair_missing_artwork(
         )
 
     # Create dependencies for ImageRepairService
+    # Hey future me - use SAME paths as all other ImageService instances!
+    # settings.storage.image_path is the configured image cache directory
+    # /api/images is the endpoint that serves local images (see routers/images.py)
     image_service = ImageService(
-        cache_base_path=settings.artwork_cache_path,
-        local_serve_prefix="/artwork/local",
+        cache_base_path=str(settings.storage.image_path),
+        local_serve_prefix="/api/images",
     )
 
     service = ImageRepairService(
