@@ -409,9 +409,11 @@ async def add_artist_to_library(
     """
     # Hey future me - DEBUG LOGGING to catch wrong artist issues!
     # If all Add clicks show same artist name (e.g. "Nosferatu"), check these values!
-    logger.info(
-        f"ADD ARTIST REQUEST: name='{request.name}', "
-        f"spotify_id='{request.spotify_id}', deezer_id='{request.deezer_id}'"
+    logger.debug(
+        "ADD ARTIST REQUEST: name=%r, spotify_id=%r, deezer_id=%r",
+        request.name,
+        request.spotify_id,
+        request.deezer_id,
     )
     
     from soulspot.domain.entities import Artist, ArtistSource

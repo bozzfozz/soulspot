@@ -91,13 +91,13 @@
            IMPORTANT: Use |tojson filter for JS-safe strings (handles quotes, backslashes, etc.) #}
         {% if artist.is_in_db %}
         <button class="btn btn-add-library btn-in-db" 
-                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson }}, {{ artist.spotify_id|tojson }}, {{ artist.deezer_id|tojson }}, {{ artist.image_url|tojson }})"
+                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson|forceescape }}, {{ artist.spotify_id|tojson|forceescape }}, {{ artist.deezer_id|tojson|forceescape }}, {{ artist.image_url|tojson|forceescape }})"
                 title="Already in your followed artists - Add to upgrade to local library">
             <i class="bi bi-check-circle"></i> In Database
         </button>
         {% else %}
         <button class="btn btn-add-library" 
-                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson }}, {{ artist.spotify_id|tojson }}, {{ artist.deezer_id|tojson }}, {{ artist.image_url|tojson }})"
+                onclick="event.stopPropagation(); addToLibrary(this, {{ artist.name|tojson|forceescape }}, {{ artist.spotify_id|tojson|forceescape }}, {{ artist.deezer_id|tojson|forceescape }}, {{ artist.image_url|tojson|forceescape }})"
                 title="Add to your library watchlist">
             <i class="bi bi-plus-circle"></i> Add to Library
         </button>
@@ -494,14 +494,6 @@ async function triggerEnrichment(button) {
 // The artist will appear in the Library > Artists section after being added.
 // Later, the user can queue albums/tracks for download from this artist.
 async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
-    // DEBUG: Log what we're sending to help diagnose "wrong artist" issues
-    console.log('[AddToLibrary] Called with:', {
-        artistName,
-        spotifyId, 
-        deezerId,
-        imageUrl: imageUrl ? String(imageUrl).substring(0, 50) : null
-    });
-    
     const originalHTML = button.innerHTML;
     button.innerHTML = '<span class="spinner-small"></span>';
     button.classList.add('adding');
@@ -513,8 +505,7 @@ async function addToLibrary(button, artistName, spotifyId, deezerId, imageUrl) {
             deezer_id: deezerId || null,
             image_url: imageUrl || null,
         };
-        console.log('[AddToLibrary] Sending payload:', payload);
-        
+
         const response = await fetch('/api/artists', {
             method: 'POST',
             headers: {
