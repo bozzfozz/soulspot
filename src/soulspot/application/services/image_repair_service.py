@@ -130,16 +130,18 @@ class ImageRepairService:
         self,
         limit: int = 50,
     ) -> dict[str, Any]:
-        """Re-download images for artists that have Spotify URI but missing image.
+        """Download images for artists that have CDN URL but missing local file.
 
-        Hey future me - this is for fixing artists whose initial enrichment succeeded
-        (got Spotify URI) but image download failed (network issues, rate limits).
+        Hey future me - REFACTORED (Dec 2025) to work with ANY provider!
+        Previously required spotify_uri, now works with:
+        - Deezer-enriched artists (have deezer_id + image_url)
+        - Spotify-enriched artists (have spotify_uri + image_url)
+        - Any artist with image_url (CDN URL)
 
         Strategy:
-        1. Find artists with spotify_uri but no image_path
-        2. Use ImageProviderRegistry for multi-provider fallback
-        3. Download and cache via ImageService
-        4. Update database with new paths
+        1. Find artists with image_url but no image_path (CDN URL exists, local file missing)
+        2. Download from CDN URL (no API calls needed!)
+        3. Update database with local path
 
         Args:
             limit: Maximum number of artists to process
@@ -150,6 +152,7 @@ class ImageRepairService:
         stats: dict[str, Any] = {
             "processed": 0,
             "repaired": 0,
+            "no_image_url": 0,
             "errors": [],
         }
 
@@ -158,63 +161,30 @@ class ImageRepairService:
         logger.info(f"Found {len(artists)} artists with missing images")
 
         for artist in artists:
-            if not artist.spotify_uri:
+            # FIXED: Don't skip Deezer-only artists!
+            # Previously: if not artist.spotify_uri: continue
+            # Now: We only need image_url to download
+            if not artist.image_url:
+                stats["no_image_url"] += 1
                 continue
 
             stats["processed"] += 1
 
             try:
-                # Extract Spotify ID from URI (spotify:artist:XXXXX -> XXXXX)
+                # Get provider IDs for filename generation
                 spotify_id = (
                     artist.spotify_uri.split(":")[-1] if artist.spotify_uri else None
                 )
                 deezer_id = artist.deezer_id
 
-                image_url: str | None = None
-                provider = "spotify"
-
-                # Strategy 0: Use existing image_url from DB (NO API call needed!)
+                # Use existing image_url from DB (NO API call needed!)
                 # Hey future me - LibraryDiscoveryWorker saves CDN URLs, use them!
                 # This path is FAST because we skip API calls entirely.
-                if artist.image_url:
-                    image_url = artist.image_url
-                    provider = self._guess_provider_from_url(artist.image_url)
-                    logger.debug(
-                        f"Using existing image_url for '{artist.name}' (no API call)"
-                    )
-
-                # Strategy 1: Use ImageProviderRegistry (multi-provider fallback)
-                # Only if we don't have an image_url yet - needs API calls!
-                if not image_url and self._image_provider_registry:
-                    image_result = await self._image_provider_registry.get_artist_image(
-                        artist_name=artist.name,
-                        artist_ids={
-                            "spotify": spotify_id,
-                            "deezer": deezer_id,
-                        } if spotify_id or deezer_id else {},
-                    )
-                    if image_result:
-                        image_url = image_result.url
-                        provider = image_result.provider
-                    # Rate limit only when we made an API call
-                    await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
-
-                # Strategy 2: Direct Spotify plugin call (legacy fallback)
-                if not image_url and self._spotify_plugin and spotify_id:
-                    try:
-                        artist_dto = await self._spotify_plugin.get_artist(
-                            artist_id=spotify_id,
-                        )
-                        if artist_dto and artist_dto.image and artist_dto.image.url:
-                            image_url = artist_dto.image.url
-                        # Rate limit only when we made an API call
-                        await asyncio.sleep(self.API_RATE_LIMIT_SECONDS)
-                    except Exception as e:
-                        logger.debug(f"Spotify fallback failed for {artist.name}: {e}")
-
-                if not image_url:
-                    logger.debug(f"No image URL found for artist: {artist.name}")
-                    continue
+                image_url = artist.image_url
+                provider = self._guess_provider_from_url(artist.image_url)
+                logger.debug(
+                    f"Using existing image_url for '{artist.name}' (no API call)"
+                )
 
                 # Download image via ImageService
                 # Hey future me - use deezer_id OR spotify_id OR artist.id!
@@ -245,12 +215,107 @@ class ImageRepairService:
 
                 # NOTE: NO rate limit here for CDN downloads!
                 # Hey future me - CDN downloads (i.scdn.co, cdns-images.dzcdn.net)
-                # have NO rate limits! Rate limiting only happens when we make
-                # API calls above (ImageProviderRegistry, SpotifyPlugin).
+                # have NO rate limits!
 
             except Exception as e:
                 logger.warning(f"Failed to repair image for {artist.name}: {e}")
                 stats["errors"].append({"name": artist.name, "error": str(e)})
+
+        # Phase 2: Try to fetch images for artists that have provider ID but no image_url
+        # Hey future me - this handles artists where enrichment found a match but
+        # the provider didn't return an image at that time. We try again!
+        artists_without_url = await self._get_artists_with_provider_id_but_no_image(
+            limit=limit
+        )
+        stats["artists_without_url_found"] = len(artists_without_url)
+
+        if artists_without_url:
+            logger.info(
+                f"Found {len(artists_without_url)} enriched artists without image_url, "
+                f"attempting to fetch images via API"
+            )
+
+            # Create DeezerPlugin for API lookups (NO AUTH NEEDED!)
+            from soulspot.infrastructure.plugins import DeezerPlugin
+
+            deezer_plugin = DeezerPlugin()
+
+            for artist in artists_without_url:
+                try:
+                    image_url = None
+                    provider = "unknown"
+
+                    # Try Deezer first (no auth needed!)
+                    if artist.deezer_id:
+                        try:
+                            artist_dto = await deezer_plugin.get_artist(
+                                artist.deezer_id
+                            )
+                            if artist_dto and artist_dto.image and artist_dto.image.url:
+                                image_url = artist_dto.image.url
+                                provider = "deezer"
+                                logger.debug(
+                                    f"Found image for '{artist.name}' via Deezer API"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"Deezer API lookup failed for {artist.name}: {e}"
+                            )
+                        await asyncio.sleep(0.05)  # Rate limit
+
+                    # Try Spotify if we have plugin and spotify_uri
+                    if not image_url and self._spotify_plugin and artist.spotify_uri:
+                        spotify_id = artist.spotify_uri.split(":")[-1]
+                        try:
+                            artist_dto = await self._spotify_plugin.get_artist(
+                                spotify_id
+                            )
+                            if artist_dto and artist_dto.image and artist_dto.image.url:
+                                image_url = artist_dto.image.url
+                                provider = "spotify"
+                                logger.debug(
+                                    f"Found image for '{artist.name}' via Spotify API"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"Spotify API lookup failed for {artist.name}: {e}"
+                            )
+                        await asyncio.sleep(0.05)  # Rate limit
+
+                    if not image_url:
+                        stats["api_lookup_no_image"] = (
+                            stats.get("api_lookup_no_image", 0) + 1
+                        )
+                        continue
+
+                    # Download the image
+                    provider_id = artist.deezer_id or (
+                        artist.spotify_uri.split(":")[-1] if artist.spotify_uri else str(artist.id)
+                    )
+                    download_result = (
+                        await self._image_service.download_artist_image_with_result(
+                            provider_id=provider_id,
+                            image_url=image_url,
+                            provider=provider,
+                        )
+                    )
+
+                    if download_result.success:
+                        artist.image_url = image_url
+                        artist.image_path = download_result.path
+                        artist.updated_at = datetime.now(UTC)
+                        stats["repaired"] += 1
+                        stats["api_lookup_success"] = (
+                            stats.get("api_lookup_success", 0) + 1
+                        )
+                        logger.info(
+                            f"Repaired image for artist '{artist.name}' via {provider} API"
+                        )
+
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to fetch image via API for {artist.name}: {e}"
+                    )
 
         await self._session.commit()
         logger.info(
@@ -434,6 +499,45 @@ class ImageRepairService:
                 or_(
                     ArtistModel.image_path.is_(None),
                     ArtistModel.image_path == "",
+                ),
+            )
+            .order_by(ArtistModel.name)
+            .limit(limit)
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def _get_artists_with_provider_id_but_no_image(
+        self,
+        limit: int = 50,
+    ) -> list[ArtistModel]:
+        """Get artists that have deezer_id/spotify_uri but no image_url.
+
+        Hey future me - this is for artists where enrichment found a match
+        but the provider didn't return an image at that time!
+
+        We can try fetching the image again via:
+        1. Deezer API (using deezer_id)
+        2. Spotify API (using spotify_uri)
+
+        The key criteria:
+        - Artist has deezer_id OR spotify_uri (was successfully enriched)
+        - Artist does NOT have image_url (provider had no image at enrichment time)
+        """
+        from sqlalchemy import or_
+
+        stmt = (
+            select(ArtistModel)
+            .where(
+                # Was enriched (has at least one provider ID)
+                or_(
+                    ArtistModel.deezer_id.isnot(None),
+                    ArtistModel.spotify_uri.isnot(None),
+                ),
+                # But has no image URL yet
+                or_(
+                    ArtistModel.image_url.is_(None),
+                    ArtistModel.image_url == "",
                 ),
             )
             .order_by(ArtistModel.name)
