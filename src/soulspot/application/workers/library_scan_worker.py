@@ -273,12 +273,17 @@ class LibraryScanWorker:
     async def _handle_spotify_enrichment_job(self, job: Job) -> dict[str, Any]:
         """Handle a Spotify library enrichment job.
 
+        Hey future me - ENHANCED (Dec 2025) to also repair images!
+        After discovery saves CDN URLs, we download them locally.
+
         Args:
             job: The job to process
 
         Returns:
-            Result dictionary with enrichment/discovery stats
+            Result dictionary with enrichment/discovery stats + image repair stats
         """
+        from soulspot.application.services.image_repair_service import ImageRepairService
+        from soulspot.application.services.images import ImageService
         from soulspot.application.workers.library_discovery_worker import (
             LibraryDiscoveryWorker,
         )
@@ -288,6 +293,7 @@ class LibraryScanWorker:
             f"(triggered_by={job.payload.get('triggered_by')})"
         )
 
+        # Phase 1: Run discovery cycle to find IDs and save CDN URLs
         discovery_worker = LibraryDiscoveryWorker(
             db=self.db,
             settings=self.settings,
@@ -298,10 +304,47 @@ class LibraryScanWorker:
         stats = await discovery_worker._run_discovery_cycle()
 
         logger.info(
-            f"Library Spotify enrichment job {job.id} complete: "
+            f"Library Spotify enrichment job {job.id} discovery complete: "
             f"{stats.get('artists_enriched', 0)} artists, "
             f"{stats.get('albums_enriched', 0)} albums, "
             f"{stats.get('tracks_enriched', 0)} tracks"
         )
+
+        # Phase 2: Download images from CDN URLs saved during discovery
+        # Hey future me - CDN URLs are already saved in DB by discovery worker!
+        # ImageRepairService just downloads them locally (no API calls needed).
+        try:
+            async with self.db.session_scope_with_retry(max_attempts=3) as session:
+                image_service = ImageService(
+                    cache_base_path=str(self.settings.storage.image_path),
+                    local_serve_prefix="/api/images",
+                )
+
+                repair_service = ImageRepairService(
+                    session=session,
+                    image_service=image_service,
+                    image_provider_registry=None,  # CDN URLs already in DB
+                    spotify_plugin=None,  # No plugin needed for CDN downloads
+                )
+
+                # Repair artist images
+                artist_repair_stats = await repair_service.repair_artist_images(limit=100)
+                stats["image_repair_artists"] = artist_repair_stats
+
+                # Repair album images
+                album_repair_stats = await repair_service.repair_album_images(limit=100)
+                stats["image_repair_albums"] = album_repair_stats
+
+                await session.commit()
+
+                logger.info(
+                    f"Library enrichment job {job.id} image repair: "
+                    f"{artist_repair_stats.get('repaired', 0)} artist images, "
+                    f"{album_repair_stats.get('repaired', 0)} album covers"
+                )
+
+        except Exception as e:
+            logger.warning(f"Image repair phase failed (non-critical): {e}")
+            stats["image_repair_error"] = str(e)
 
         return stats

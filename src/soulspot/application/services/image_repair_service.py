@@ -217,7 +217,9 @@ class ImageRepairService:
                     continue
 
                 # Download image via ImageService
-                provider_id = spotify_id or str(artist.id)
+                # Hey future me - use deezer_id OR spotify_id OR artist.id!
+                # Deezer-enriched artists might not have spotify_id.
+                provider_id = deezer_id or spotify_id or str(artist.id)
                 download_result = (
                     await self._image_service.download_artist_image_with_result(
                         provider_id=provider_id,
@@ -408,16 +410,31 @@ class ImageRepairService:
         self,
         limit: int = 50,
     ) -> list[ArtistModel]:
-        """Get artists with Spotify URI but missing image.
+        """Get artists that have a CDN URL but missing local image file.
 
-        Hey future me - we only repair artists that have a Spotify URI!
-        These are artists we've already matched, so they should have images available.
+        Hey future me - FIXED (Dec 2025) to include Deezer-only artists!
+        Previously this ONLY looked at spotify_uri, excluding artists enriched via Deezer.
+        Now we check for EITHER:
+        - Has image_url (CDN URL exists from enrichment) → download needed
+        - Has deezer_id or spotify_uri (was enriched) → might have image_url
+
+        The key criteria:
+        - Artist has image_url (CDN URL from Deezer/Spotify)
+        - Artist does NOT have image_path (local file missing)
         """
+        from sqlalchemy import or_
+
         stmt = (
             select(ArtistModel)
             .where(
-                ArtistModel.spotify_uri.isnot(None),
-                (ArtistModel.image_path.is_(None) | (ArtistModel.image_path == "")),
+                # Has CDN URL from enrichment (Deezer OR Spotify)
+                ArtistModel.image_url.isnot(None),
+                ArtistModel.image_url != "",
+                # But missing local file
+                or_(
+                    ArtistModel.image_path.is_(None),
+                    ArtistModel.image_path == "",
+                ),
             )
             .order_by(ArtistModel.name)
             .limit(limit)

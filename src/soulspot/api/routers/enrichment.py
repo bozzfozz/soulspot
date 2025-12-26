@@ -20,7 +20,7 @@ Route prefix: /api/enrichment/* (NOT /api/library/enrichment/*)
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -31,14 +31,10 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_job_queue,
     get_settings,
-    get_spotify_plugin,
 )
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.config.settings import Settings
 from soulspot.infrastructure.observability.log_messages import LogMessages
-
-if TYPE_CHECKING:
-    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
 
@@ -191,35 +187,29 @@ async def trigger_enrichment(
 @router.post("/repair-artwork")
 async def repair_missing_artwork(
     session: AsyncSession = Depends(get_db_session),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    """Re-download artwork for artists that have Spotify URI but missing artwork.
+    """Download missing local artwork for artists that have CDN URLs.
 
-    Hey future me - this fixes artists whose initial enrichment succeeded (got Spotify URI)
-    but artwork download failed (network issues, rate limits, etc.).
+    Hey future me - REFACTORED (Dec 2025) to work with ANY provider!
+    Previously this required Spotify auth, but now:
+    1. LibraryDiscoveryWorker saves CDN URLs from Deezer/Spotify
+    2. This endpoint just downloads from those CDN URLs
+    3. NO API calls needed - just HTTP GET from CDN!
 
-    Use case: "DJ Paul Elstak" was enriched to "Paul Elstak" but has no image.
+    This works for artists enriched via:
+    - Deezer (no auth needed)
+    - Spotify (if user was authenticated when enriching)
+    - Any provider that saved an image_url
+
+    The key insight: CDN URLs are public! Once saved in DB, we can
+    download them anytime without re-authenticating.
 
     Returns:
         Statistics about repaired artwork
     """
-    from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.image_repair_service import ImageRepairService
     from soulspot.application.services.images import ImageService
-    from soulspot.domain.ports.plugin import PluginCapability
-
-    app_settings = AppSettingsService(session)
-    if not await app_settings.is_provider_enabled("spotify"):
-        raise HTTPException(
-            status_code=503,
-            detail="Spotify provider is disabled in settings.",
-        )
-    if not spotify_plugin.can_use(PluginCapability.GET_ARTIST):
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated with Spotify. Please connect your account first.",
-        )
 
     # Create dependencies for ImageRepairService
     # Hey future me - use SAME paths as all other ImageService instances!
@@ -233,8 +223,8 @@ async def repair_missing_artwork(
     service = ImageRepairService(
         session=session,
         image_service=image_service,
-        image_provider_registry=None,  # Use direct plugin fallback
-        spotify_plugin=spotify_plugin,
+        image_provider_registry=None,  # CDN URLs already in DB, no registry needed
+        spotify_plugin=None,  # CDN URLs already in DB, no plugin needed
     )
 
     result = await service.repair_artist_images(limit=100)
