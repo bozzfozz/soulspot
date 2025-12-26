@@ -230,9 +230,12 @@ class ImageRepairService:
         stats["artists_without_url_found"] = len(artists_without_url)
 
         if artists_without_url:
+            # Log summary of what IDs we have
+            has_deezer = sum(1 for a in artists_without_url if a.deezer_id)
+            has_spotify = sum(1 for a in artists_without_url if a.spotify_uri)
             logger.info(
-                f"Found {len(artists_without_url)} enriched artists without image_url, "
-                f"attempting to fetch images via API"
+                f"Found {len(artists_without_url)} enriched artists without image_url: "
+                f"{has_deezer} have deezer_id, {has_spotify} have spotify_uri"
             )
 
             # Create DeezerPlugin for API lookups (NO AUTH NEEDED!)
@@ -244,22 +247,64 @@ class ImageRepairService:
                 try:
                     image_url = None
                     provider = "unknown"
+                    
+                    logger.debug(
+                        f"Processing '{artist.name}': deezer_id={artist.deezer_id}, "
+                        f"spotify_uri={artist.spotify_uri}"
+                    )
 
                     # Try Deezer first (no auth needed!)
                     if artist.deezer_id:
                         try:
+                            logger.info(
+                                f"Fetching image for '{artist.name}' via Deezer API (deezer_id={artist.deezer_id})"
+                            )
                             artist_dto = await deezer_plugin.get_artist(
                                 artist.deezer_id
                             )
-                            if artist_dto and artist_dto.image and artist_dto.image.url:
-                                image_url = artist_dto.image.url
-                                provider = "deezer"
-                                logger.debug(
-                                    f"Found image for '{artist.name}' via Deezer API"
+                            if artist_dto:
+                                logger.info(
+                                    f"Deezer returned artist_dto for '{artist.name}': "
+                                    f"has_image={artist_dto.image is not None}, "
+                                    f"image_url={artist_dto.image.url if artist_dto.image else 'None'}"
+                                )
+                                if artist_dto.image and artist_dto.image.url:
+                                    image_url = artist_dto.image.url
+                                    provider = "deezer"
+                            else:
+                                logger.warning(
+                                    f"Deezer returned None for artist '{artist.name}' (deezer_id={artist.deezer_id})"
                                 )
                         except Exception as e:
-                            logger.debug(
+                            logger.warning(
                                 f"Deezer API lookup failed for {artist.name}: {e}"
+                            )
+                        await asyncio.sleep(0.05)  # Rate limit
+
+                    # Fallback: If no deezer_id, search Deezer by artist name
+                    # Hey future me - this handles Spotify-only artists when Spotify isn't authenticated!
+                    if not image_url and not artist.deezer_id:
+                        try:
+                            logger.info(
+                                f"No deezer_id for '{artist.name}', searching Deezer by name"
+                            )
+                            search_result = await deezer_plugin.search_artists(
+                                artist.name, limit=1
+                            )
+                            if search_result.items and search_result.items[0].image:
+                                best_match = search_result.items[0]
+                                if best_match.image.url:
+                                    image_url = best_match.image.url
+                                    provider = "deezer"
+                                    # Also save the deezer_id for future lookups
+                                    if best_match.deezer_id:
+                                        artist.deezer_id = best_match.deezer_id
+                                    logger.info(
+                                        f"Found image for '{artist.name}' via Deezer name search"
+                                    )
+                        except Exception as e:
+                            logger.debug(
+                                f"Deezer name search failed for {artist.name}: {e}"
                             )
                         await asyncio.sleep(0.05)  # Rate limit
 
