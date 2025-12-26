@@ -49,10 +49,7 @@
                 <i class="bi bi-list-ul sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Playlists</span>
             </a>
-            <a href="/library/artists?source=spotify" class="sidebar-item {% if '/spotify/artists' in request.url.path %}active{% endif %}">
-                <i class="bi bi-heart sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Followed Artists</span>
-            </a>
+            {# NOTE: "Followed Artists" removed - users access via Library Artists with source filter #}
         </div>
 
         <!-- Discover Section (no auth required!) -->
@@ -64,10 +61,7 @@
                 <i class="bi bi-vinyl-fill sidebar-item-icon"></i>
                 <span class="sidebar-item-text">New Releases</span>
             </a>
-            <a href="/browse/charts" class="sidebar-item {% if '/browse/charts' in request.url.path %}active{% endif %}">
-                <i class="bi bi-graph-up-arrow sidebar-item-icon"></i>
-                <span class="sidebar-item-text">Charts</span>
-            </a>
+            {# NOTE: /browse/charts REMOVED! Deezer Charts showed random trending content, not user's music. #}
             <a href="/spotify/discover" class="sidebar-item {% if '/spotify/discover' in request.url.path %}active{% endif %}">
                 <i class="bi bi-heart-pulse sidebar-item-icon"></i>
                 <span class="sidebar-item-text">Similar Artists</span>
