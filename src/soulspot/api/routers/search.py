@@ -26,7 +26,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_deezer_plugin,
     get_slskd_client,
-    get_spotify_plugin,
+    get_spotify_plugin_optional,
 )
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
 
@@ -155,7 +155,7 @@ class SoulseekSearchResponse(BaseModel):
 async def unified_search(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(10, ge=1, le=25, description="Number of results per type"),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> UnifiedSearchResponse:
@@ -297,6 +297,12 @@ async def unified_search(
     async def search_spotify() -> None:
         """Search Spotify for all types."""
         nonlocal artists, albums, tracks, sources_queried
+        
+        # MULTI-SERVICE: spotify_plugin can be None if not authenticated
+        if spotify_plugin is None:
+            logger.debug("Spotify plugin not available (not authenticated)")
+            return
+            
         spotify_enabled = await settings.is_provider_enabled("spotify")
         if not spotify_enabled:
             return
@@ -430,7 +436,7 @@ def _normalize_name(name: str) -> str:
 async def search_spotify_artists(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> UnifiedSearchResponse:
@@ -487,9 +493,9 @@ async def search_spotify_artists(
         except Exception as e:
             logger.warning(f"Deezer artist search failed (graceful fallback): {e}")
 
-    # 2. Spotify Search (requires auth)
+    # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
         try:
             spotify_result = await spotify_plugin.search_artist(query, limit=limit)
             sources_queried.append("spotify")
@@ -541,7 +547,7 @@ async def search_spotify_artists(
 async def search_spotify_tracks(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> UnifiedSearchResponse:
@@ -610,9 +616,9 @@ async def search_spotify_tracks(
         except Exception as e:
             logger.warning(f"Deezer track search failed (graceful fallback): {e}")
 
-    # 2. Spotify Search (requires auth)
+    # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
         try:
             spotify_result = await spotify_plugin.search_track(query, limit=limit)
             sources_queried.append("spotify")
@@ -674,7 +680,7 @@ async def search_spotify_tracks(
 async def search_spotify_albums(
     query: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(20, ge=1, le=50, description="Number of results"),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> UnifiedSearchResponse:
@@ -734,9 +740,9 @@ async def search_spotify_albums(
         except Exception as e:
             logger.warning(f"Deezer album search failed (graceful fallback): {e}")
 
-    # 2. Spotify Search (requires auth)
+    # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
         try:
             spotify_result = await spotify_plugin.search_album(query, limit=limit)
             sources_queried.append("spotify")
