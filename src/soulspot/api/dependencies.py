@@ -573,10 +573,12 @@ async def get_slskd_client(
     slskd_creds = await credentials_service.get_slskd_credentials()
 
     # Create SlskdSettings from DB credentials
+    # Hey future me - username/password can be None if not configured in DB!
+    # Use defaults to prevent Pydantic validation errors.
     slskd_settings = SlskdSettings(
         url=slskd_creds.url,
-        username=slskd_creds.username,
-        password=slskd_creds.password,
+        username=slskd_creds.username or "admin",
+        password=slskd_creds.password or "changeme",
         api_key=slskd_creds.api_key,
     )
     return SlskdClient(slskd_settings)
