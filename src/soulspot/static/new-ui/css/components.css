@@ -2144,6 +2144,47 @@
 .spotify-result-meta {
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+}
+
+/* Source Provider Badge - zeigt an welcher Provider (Spotify, Deezer) das Ergebnis liefert */
+.source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.source-badge.spotify,
+.source-badge-spotify {
+    background: rgba(29, 185, 84, 0.15);
+    color: #1DB954;
+}
+
+.source-badge.deezer,
+.source-badge-deezer {
+    background: rgba(239, 86, 43, 0.15);
+    color: #EF562B;
+}
+
+.source-badge.tidal,
+.source-badge-tidal {
+    background: rgba(0, 0, 0, 0.15);
+    color: var(--text-primary);
+}
+
+.source-badge.musicbrainz,
+.source-badge-musicbrainz {
+    background: rgba(186, 83, 45, 0.15);
+    color: #BA532D;
 }
 
 .spotify-result-actions {

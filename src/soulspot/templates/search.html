@@ -1,8 +1,12 @@
-{# Hey future me - Search page with Spotify + Soulseek tabs!
-   Tab 1: Spotify Search (artists, albums, tracks) with Follow button
-   Tab 2: Soulseek Search (downloadable files)
+{# Hey future me - Search page with multi-source Music Search + Soulseek tabs!
+   Tab 1: Music Search (artists, albums, tracks) - combines Deezer + Spotify
+   Tab 2: Soulseek Search (downloadable files from P2P network)
    The filter sections are collapsible using pure CSS transitions.
-   SearchManager JS handles the actual search logic via fetch. #}
+   SearchManager JS handles the actual search logic via fetch.
+   
+   CRITICAL: The /api/search/spotify/* endpoints are MULTI-SOURCE!
+   They query BOTH Deezer (no auth) AND Spotify (if connected), deduplicate,
+   and return combined results with 'source' field per item. #}
 
 {% extends "base.html" %}
 
@@ -36,8 +40,8 @@
                         <label class="filter-option">
                             <input type="radio" name="searchSource" value="spotify" checked onchange="SearchManager.setSearchSource('spotify')">
                             <span>
-                                <i class="bi bi-spotify icon-spotify"></i>
-                                Spotify
+                                <i class="bi bi-music-note-beamed text-primary"></i>
+                                Music Search
                             </span>
                         </label>
                         <label class="filter-option">
@@ -50,12 +54,12 @@
                     </div>
                 </div>
 
-                <!-- Spotify Type Filter (only for Spotify search) -->
+                <!-- Search Type Filter (only for Music search) -->
                 <div id="spotify-type-filter-group" class="filter-group">
                     <button class="filter-header" onclick="toggleFilter('spotifyType')">
                         <span>
-                            <i class="bi bi-filter icon-spotify"></i>
-                            Spotify Type
+                            <i class="bi bi-filter text-primary"></i>
+                            Search Type
                         </span>
                         <i class="bi bi-chevron-down filter-icon" id="spotifyType-icon"></i>
                     </button>
@@ -135,7 +139,7 @@
                 <div>
                     <h1>Search Music</h1>
                     <p class="subtitle">
-                        Search <span id="search-source-label" class="icon-spotify font-semibold">Spotify</span> for artists, albums, and tracks
+                        Search <span id="search-source-label" class="text-primary font-semibold">Deezer + Spotify</span> for artists, albums, and tracks
                     </p>
                 </div>
             </div>
@@ -174,7 +178,7 @@
                 <i class="bi bi-search"></i>
                 <h3>Start Your Search</h3>
                 <p>
-                    Search Spotify for artists to follow, or find downloadable tracks on Soulseek
+                    Search for artists, albums, or tracks from Deezer + Spotify, or find downloadable files on Soulseek
                 </p>
             </div>
         </div>

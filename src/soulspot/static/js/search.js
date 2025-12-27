@@ -1,6 +1,8 @@
 // Advanced Search Manager
-// Handles search functionality for Spotify + Soulseek, autocomplete, filters, and history
-// Hey future me - this was extended to support Spotify artist search with Follow button!
+// Handles search functionality for multi-provider (Deezer + Spotify) + Soulseek
+// Hey future me - the backend /api/search/spotify/* endpoints are MULTI-SOURCE!
+// They query both Deezer (no auth) and Spotify (if connected), deduplicate by name,
+// and return combined results with 'source' field per item. UI shows source badges.
 
 const SearchManager = {
     // State management
@@ -8,7 +10,7 @@ const SearchManager = {
         currentQuery: '',
         results: [],
         selectedTracks: new Set(),
-        searchSource: 'spotify',  // 'spotify' or 'soulseek'
+        searchSource: 'spotify',  // 'spotify' (actually multi-source!) or 'soulseek'
         spotifyType: 'artists',   // 'artists', 'albums', or 'tracks'
         followingStatus: {},      // Map of artistId -> isFollowing
         filters: {
@@ -28,46 +30,46 @@ const SearchManager = {
         this.loadSearchHistory();
         this.setupEventListeners();
         this.updateUIForSearchSource();
-        console.log('SearchManager initialized with Spotify+Soulseek support');
+        console.log('SearchManager initialized with multi-provider (Deezer+Spotify) + Soulseek support');
     },
 
-    // Set search source (spotify or soulseek)
+    // Set search source (spotify=multi-provider or soulseek)
     setSearchSource(source) {
         this.state.searchSource = source;
         this.updateUIForSearchSource();
         console.log(`Search source set to: ${source}`);
     },
 
-    // Set Spotify search type (artists, albums, tracks)
+    // Set search type (artists, albums, tracks)
     setSpotifyType(type) {
         this.state.spotifyType = type;
-        console.log(`Spotify type set to: ${type}`);
+        console.log(`Search type set to: ${type}`);
     },
 
     // Update UI based on search source
     updateUIForSearchSource() {
-        const isSpotify = this.state.searchSource === 'spotify';
+        const isMusic = this.state.searchSource === 'spotify';
         const sourceLabel = document.getElementById('search-source-label');
         const spotifyTypeGroup = document.getElementById('spotify-type-filter-group');
         const qualityGroup = document.getElementById('quality-filter-group');
         const searchInput = document.getElementById('search-input');
 
         if (sourceLabel) {
-            sourceLabel.textContent = isSpotify ? 'Spotify' : 'Soulseek';
-            sourceLabel.style.color = isSpotify ? '#1DB954' : '#3b82f6';
+            sourceLabel.textContent = isMusic ? 'Deezer + Spotify' : 'Soulseek';
+            sourceLabel.className = isMusic ? 'text-primary font-semibold' : 'text-blue-500 font-semibold';
         }
 
         if (spotifyTypeGroup) {
-            spotifyTypeGroup.style.display = isSpotify ? 'block' : 'none';
+            spotifyTypeGroup.style.display = isMusic ? 'block' : 'none';
         }
 
         if (qualityGroup) {
-            qualityGroup.style.display = isSpotify ? 'none' : 'block';
+            qualityGroup.style.display = isMusic ? 'none' : 'block';
         }
 
         if (searchInput) {
-            searchInput.placeholder = isSpotify 
-                ? 'Search for artists, albums, or tracks on Spotify...'
+            searchInput.placeholder = isMusic 
+                ? 'Search for artists, albums, or tracks...'
                 : 'Search for downloadable files on Soulseek...';
         }
     },
@@ -225,14 +227,14 @@ const SearchManager = {
         }
     },
 
-    // Perform Spotify search
+    // Perform music search (multi-provider: Deezer + Spotify)
     async performSpotifySearch(query) {
         // Show loading state
         document.getElementById('search-results').innerHTML = `
             <div class="card" style="text-align: center; padding: 4rem var(--space-6);">
                 <div style="display: flex; align-items: center; justify-content: center; gap: var(--space-3);">
-                    <div class="spinner" style="border-color: #1DB954; border-top-color: transparent;"></div>
-                    <span style="color: var(--text-muted);">Searching Spotify...</span>
+                    <div class="spinner" style="border-color: var(--primary); border-top-color: transparent;"></div>
+                    <span style="color: var(--text-muted);">Searching Deezer + Spotify...</span>
                 </div>
             </div>
         `;
@@ -327,7 +329,7 @@ const SearchManager = {
         }
     },
 
-    // Display Spotify artist results
+    // Display artist results (multi-provider: Deezer + Spotify)
     displaySpotifyArtists(artists) {
         const resultsEl = document.getElementById('search-results');
         
@@ -336,12 +338,17 @@ const SearchManager = {
             return;
         }
 
+        // Count sources for header display
+        const sourceCounts = this.countSources(artists);
+        const sourceInfo = this.formatSourceInfo(sourceCounts);
+
         const html = `
             <div class="card">
                 <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
                     <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
-                        <i class="bi bi-spotify" style="color: #1DB954;"></i>
+                        <i class="bi bi-person" style="color: var(--primary);"></i>
                         Artists (${artists.length})
+                        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">${sourceInfo}</span>
                     </h3>
                 </div>
                 <div>
@@ -353,19 +360,57 @@ const SearchManager = {
         resultsEl.innerHTML = html;
     },
 
-    // Render single artist card
+    // Count results per source
+    countSources(items) {
+        const counts = {};
+        for (const item of items) {
+            const source = item.source || 'unknown';
+            counts[source] = (counts[source] || 0) + 1;
+        }
+        return counts;
+    },
+
+    // Format source counts for display
+    formatSourceInfo(counts) {
+        const parts = [];
+        if (counts.deezer) parts.push(`${counts.deezer} from Deezer`);
+        if (counts.spotify) parts.push(`${counts.spotify} from Spotify`);
+        return parts.join(', ') || '';
+    },
+
+    // Get source badge HTML
+    getSourceBadge(source) {
+        if (source === 'deezer') {
+            return `<span class="source-badge source-badge-deezer" title="From Deezer">
+                <i class="bi bi-music-note"></i> Deezer
+            </span>`;
+        } else if (source === 'spotify') {
+            return `<span class="source-badge source-badge-spotify" title="From Spotify">
+                <i class="bi bi-spotify"></i> Spotify
+            </span>`;
+        }
+        return '';
+    },
+
+    // Render single artist card with source badge
     renderArtistCard(artist) {
         const isFollowing = this.state.followingStatus[artist.id] || false;
         const imageUrl = artist.image_url || '/static/images/artist-placeholder.svg';
         const genres = (artist.genres || []).slice(0, 3).join(', ') || 'No genres';
         const followers = this.formatNumber(artist.followers || 0);
+        const source = artist.source || 'unknown';
+        const sourceBadge = this.getSourceBadge(source);
+        const externalUrl = artist.external_url || '#';
 
         return `
-            <div class="spotify-result-card" data-artist-id="${artist.id}">
+            <div class="spotify-result-card" data-artist-id="${artist.id}" data-source="${source}">
                 <img src="${imageUrl}" alt="${this.escapeHtml(artist.name)}" class="spotify-result-image"
                      onerror="this.src='/static/images/artist-placeholder.svg'">
                 <div class="spotify-result-info">
-                    <div class="spotify-result-name">${this.escapeHtml(artist.name)}</div>
+                    <div class="spotify-result-name">
+                        ${this.escapeHtml(artist.name)}
+                        ${sourceBadge}
+                    </div>
                     <div class="spotify-result-meta">
                         <span>${genres}</span>
                         <span style="margin: 0 var(--space-2);">•</span>
@@ -374,13 +419,13 @@ const SearchManager = {
                 </div>
                 <div class="spotify-result-actions">
                     <button class="btn btn-sm ${isFollowing ? 'btn-following' : 'btn-follow'}"
-                            onclick="SearchManager.toggleFollow('${artist.id}', ${isFollowing})"
+                            onclick="SearchManager.toggleFollow('${artist.id}', ${isFollowing}, '${source}')"
                             id="follow-btn-${artist.id}">
                         <i class="bi ${isFollowing ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
                         ${isFollowing ? 'Following' : 'Follow'}
                     </button>
-                    <a href="${artist.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm"
-                       title="Open in Spotify">
+                    <a href="${externalUrl}" target="_blank" class="btn btn-ghost btn-sm"
+                       title="Open on ${source === 'spotify' ? 'Spotify' : 'Deezer'}">
                         <i class="bi bi-box-arrow-up-right"></i>
                     </a>
                 </div>
@@ -436,7 +481,7 @@ const SearchManager = {
         }
     },
 
-    // Display Spotify album results
+    // Display album results (multi-provider)
     displaySpotifyAlbums(albums) {
         const resultsEl = document.getElementById('search-results');
         
@@ -445,12 +490,17 @@ const SearchManager = {
             return;
         }
 
+        // Count sources for header display
+        const sourceCounts = this.countSources(albums);
+        const sourceInfo = this.formatSourceInfo(sourceCounts);
+
         const html = `
             <div class="card">
                 <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
                     <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
-                        <i class="bi bi-disc" style="color: #1DB954;"></i>
+                        <i class="bi bi-disc" style="color: var(--primary);"></i>
                         Albums (${albums.length})
+                        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">${sourceInfo}</span>
                     </h3>
                 </div>
                 <div>
@@ -462,18 +512,24 @@ const SearchManager = {
         resultsEl.innerHTML = html;
     },
 
-    // Render single album card
+    // Render single album card with source badge
     renderAlbumCard(album) {
         const imageUrl = album.image_url || '/static/images/album-placeholder.svg';
         const releaseYear = album.release_date ? album.release_date.substring(0, 4) : '';
         const albumType = album.album_type ? album.album_type.charAt(0).toUpperCase() + album.album_type.slice(1) : '';
+        const source = album.source || 'unknown';
+        const sourceBadge = this.getSourceBadge(source);
+        const externalUrl = album.external_url || '#';
 
         return `
-            <div class="spotify-result-card" data-album-id="${album.id}">
+            <div class="spotify-result-card" data-album-id="${album.id}" data-source="${source}">
                 <img src="${imageUrl}" alt="${this.escapeHtml(album.name)}" class="spotify-result-image"
                      onerror="this.src='/static/images/album-placeholder.svg'">
                 <div class="spotify-result-info">
-                    <div class="spotify-result-name">${this.escapeHtml(album.name)}</div>
+                    <div class="spotify-result-name">
+                        ${this.escapeHtml(album.name)}
+                        ${sourceBadge}
+                    </div>
                     <div class="spotify-result-meta">
                         <span>${this.escapeHtml(album.artist_name)}</span>
                         <span style="margin: 0 var(--space-2);">•</span>
@@ -488,7 +544,7 @@ const SearchManager = {
                         <i class="bi bi-download"></i>
                         Find Downloads
                     </button>
-                    <a href="${album.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm" title="Open in Spotify">
+                    <a href="${externalUrl}" target="_blank" class="btn btn-ghost btn-sm" title="Open on ${source === 'spotify' ? 'Spotify' : 'Deezer'}">
                         <i class="bi bi-box-arrow-up-right"></i>
                     </a>
                 </div>
@@ -496,7 +552,7 @@ const SearchManager = {
         `;
     },
 
-    // Display Spotify track results
+    // Display track results (multi-provider)
     displaySpotifyTracks(tracks) {
         const resultsEl = document.getElementById('search-results');
         
@@ -505,12 +561,17 @@ const SearchManager = {
             return;
         }
 
+        // Count sources for header display
+        const sourceCounts = this.countSources(tracks);
+        const sourceInfo = this.formatSourceInfo(sourceCounts);
+
         const html = `
             <div class="card">
                 <div style="padding: var(--space-4); border-bottom: 1px solid var(--border-primary);">
                     <h3 style="font-weight: var(--font-weight-semibold); display: flex; align-items: center; gap: var(--space-2);">
-                        <i class="bi bi-music-note" style="color: #1DB954;"></i>
+                        <i class="bi bi-music-note" style="color: var(--primary);"></i>
                         Tracks (${tracks.length})
+                        <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">${sourceInfo}</span>
                     </h3>
                 </div>
                 <div>
@@ -522,17 +583,23 @@ const SearchManager = {
         resultsEl.innerHTML = html;
     },
 
-    // Render single track card for Spotify search
+    // Render single track card for search results with source badge
     renderTrackSearchCard(track) {
         const duration = this.formatDuration(track.duration_ms);
+        const source = track.source || 'unknown';
+        const sourceBadge = this.getSourceBadge(source);
+        const externalUrl = track.external_url || '#';
 
         return `
-            <div class="spotify-result-card" data-track-id="${track.id}">
+            <div class="spotify-result-card" data-track-id="${track.id}" data-source="${source}">
                 <div style="width: 40px; height: 40px; background: var(--bg-tertiary); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                     <i class="bi bi-music-note" style="color: var(--text-muted);"></i>
                 </div>
                 <div class="spotify-result-info">
-                    <div class="spotify-result-name">${this.escapeHtml(track.name)}</div>
+                    <div class="spotify-result-name">
+                        ${this.escapeHtml(track.name)}
+                        ${sourceBadge}
+                    </div>
                     <div class="spotify-result-meta">
                         <span>${this.escapeHtml(track.artist_name)}</span>
                         ${track.album_name ? `<span style="margin: 0 var(--space-2);">•</span><span>${this.escapeHtml(track.album_name)}</span>` : ''}
@@ -545,7 +612,7 @@ const SearchManager = {
                         <i class="bi bi-download"></i>
                         Find Downloads
                     </button>
-                    <a href="${track.spotify_url || '#'}" target="_blank" class="btn btn-ghost btn-sm" title="Open in Spotify">
+                    <a href="${externalUrl}" target="_blank" class="btn btn-ghost btn-sm" title="Open on ${source === 'spotify' ? 'Spotify' : 'Deezer'}">
                         <i class="bi bi-box-arrow-up-right"></i>
                     </a>
                 </div>
