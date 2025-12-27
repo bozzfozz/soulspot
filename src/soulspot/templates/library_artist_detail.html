@@ -81,15 +81,10 @@
             Discography
         </h2>
         <div style="display: flex; gap: var(--space-3); align-items: center;">
-            {# Sync Discography Button - fetches ALL albums + tracks from providers #}
-            <button id="sync-discography-btn"
-                    onclick="syncDiscography('{{ artist.id }}')"
-                    class="btn btn-outline btn-sm"
-                    style="display: flex; align-items: center; gap: var(--space-2);"
-                    title="Fetch complete discography (albums + tracks) from Spotify/Deezer">
-                <i class="bi bi-cloud-download"></i>
-                <span>Sync Discography</span>
-            </button>
+            {# REMOVED: Sync Discography Button (Dec 2025)
+               LibraryDiscoveryWorker now handles this automatically every 6 hours!
+               Phase 2 fetches complete discography for all artists with deezer_id.
+               See: src/soulspot/application/workers/library_discovery_worker.py #}
             {# Album type filter #}
             <select id="album-type-filter" 
                     style="padding: var(--space-2); border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: var(--font-size-sm);"
@@ -452,82 +447,13 @@ function filterAlbumsByType(type) {
     }
 </style>
 
-<script>
-// Hey future me - Sync Discography function!
-// Calls POST /artists/{id}/sync-discography to fetch ALL albums + tracks from providers.
-// Shows loading state on button, then reloads page to show new data.
-async function syncDiscography(artistId) {
-    const btn = document.getElementById('sync-discography-btn');
-    const originalContent = btn.innerHTML;
+<!-- 
+    Hey future me - syncDiscography() JS function REMOVED!
     
-    // Show loading state
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-arrow-repeat spinning"></i> <span>Syncing...</span>';
+    LibraryDiscoveryWorker now handles this automatically every 6 hours:
+    - Phase 2: Discography Fetch - fetches ALL albums + tracks for each artist
+    - Runs via _phase2_fetch_discography() in library_discovery_worker.py
     
-    try {
-        const response = await fetch(`/api/artists/${artistId}/sync-discography`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Sync failed');
-        }
-        
-        const result = await response.json();
-        
-        // Show success message
-        btn.innerHTML = '<i class="bi bi-check-circle"></i> <span>Done!</span>';
-        btn.classList.add('btn-success');
-        
-        // Show toast notification
-        if (window.showToast) {
-            window.showToast(result.message, 'success');
-        } else {
-            console.log('Sync result:', result.message);
-        }
-        
-        // Reload page after short delay to show new data
-        setTimeout(() => {
-            window.location.reload();
-        }, 1500);
-        
-    } catch (error) {
-        console.error('Discography sync failed:', error);
-        
-        // Show error state
-        btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> <span>Error</span>';
-        btn.classList.add('btn-danger');
-        
-        if (window.showToast) {
-            window.showToast(`Sync failed: ${error.message}`, 'error');
-        } else {
-            alert(`Sync failed: ${error.message}`);
-        }
-        
-        // Reset button after delay
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.innerHTML = originalContent;
-            btn.classList.remove('btn-danger');
-        }, 3000);
-    }
-}
-
-// Spinning animation for loading state
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    .spinning {
-        animation: spin 1s linear infinite;
-    }
-`;
-document.head.appendChild(style);
-</script>
+    No manual button/JS needed - it's all automatic now!
+-->
 {% endblock %}

@@ -132,8 +132,13 @@ class FollowedArtistsService:
     # for UI to display. The sync operation is idempotent - safe to call multiple times.
     # The plugin handles auth internally - no more access_token parameter needed!
     # Progress is logged. Commits are caller's responsibility (service doesn't commit).
+    #
+    # AUTO-DISCOGRAPHY (Jan 2025):
+    # If auto_sync_discography=True, we also sync discography for all NEWLY CREATED artists.
+    # This means new artists get their albums + tracks immediately, not after 6h wait.
     async def sync_followed_artists(
         self,
+        auto_sync_discography: bool = True,
     ) -> tuple[list[Artist], dict[str, int]]:
         """Fetch all followed artists from Spotify and sync to database.
 
@@ -143,6 +148,14 @@ class FollowedArtistsService:
         IMPORTANT: This method REQUIRES spotify_plugin to be set!
         If you need album sync without Spotify, use sync_artist_albums()
         which falls back to Deezer.
+        
+        AUTO-DISCOGRAPHY (Jan 2025):
+        New artists automatically get their discography synced (albums + tracks)
+        so they're immediately useful in the library. Set auto_sync_discography=False
+        to disable this (e.g., for bulk imports where LibraryDiscoveryWorker will handle it).
+
+        Args:
+            auto_sync_discography: If True, sync discography for newly created artists
 
         Returns:
             Tuple of (list of Artist entities, sync statistics dict)
@@ -159,6 +172,8 @@ class FollowedArtistsService:
             )
 
         all_artists: list[Artist] = []
+        # Hey future me - track newly created artists for auto-discography sync!
+        newly_created_artists: list[Artist] = []
         after_cursor: str | None = None
         page = 1
         stats = {
@@ -166,6 +181,7 @@ class FollowedArtistsService:
             "created": 0,
             "updated": 0,
             "errors": 0,
+            "discography_synced": 0,  # Track how many got auto-discography
             "source": "spotify",  # Track which provider was used
         }
 
@@ -199,6 +215,8 @@ class FollowedArtistsService:
                         stats["total_fetched"] += 1
                         if was_created:
                             stats["created"] += 1
+                            # Hey future me - track new artists for auto-discography!
+                            newly_created_artists.append(artist)
                         else:
                             stats["updated"] += 1
                     except Exception as e:
@@ -237,6 +255,34 @@ class FollowedArtistsService:
             f"Followed artists sync complete: {stats['total_fetched']} fetched, "
             f"{stats['created']} created, {stats['updated']} updated, {stats['errors']} errors"
         )
+
+        # Hey future me - AUTO-DISCOGRAPHY SYNC for new artists!
+        # This ensures new artists get their albums + tracks immediately.
+        # Without this, users would wait 6h for LibraryDiscoveryWorker.
+        if auto_sync_discography and newly_created_artists:
+            logger.info(
+                f"🎵 Starting auto-discography sync for {len(newly_created_artists)} new artists..."
+            )
+            for artist in newly_created_artists:
+                try:
+                    disco_stats = await self.sync_artist_discography_complete(
+                        artist_id=str(artist.id.value),
+                        include_tracks=True,
+                    )
+                    stats["discography_synced"] += 1
+                    logger.info(
+                        f"✅ Auto-synced discography for {artist.name}: "
+                        f"{disco_stats['albums_added']} albums, {disco_stats['tracks_added']} tracks"
+                    )
+                except Exception as e:
+                    # Log but continue - one failure shouldn't stop others
+                    logger.warning(
+                        f"⚠️ Auto-discography sync failed for {artist.name}: {e}"
+                    )
+
+            logger.info(
+                f"Auto-discography sync complete: {stats['discography_synced']}/{len(newly_created_artists)} artists"
+            )
 
         return all_artists, stats
 
@@ -337,7 +383,7 @@ class FollowedArtistsService:
     # Deezer calls them "favorite artists" but it's the same concept.
     # This is separate from Spotify because Deezer has different pagination.
     async def _sync_deezer_followed_artists(
-        self, seen_names: set[str] | None = None
+        self, seen_names: set[str] | None = None, auto_sync_discography: bool = True,
     ) -> tuple[list[Artist], dict[str, int]]:
         """Sync followed artists from Deezer to unified library.
 
@@ -346,6 +392,7 @@ class FollowedArtistsService:
 
         Args:
             seen_names: Set of artist names already synced (for dedup)
+            auto_sync_discography: If True, sync discography for newly created artists
 
         Returns:
             Tuple of (list of Artist entities, sync stats)
@@ -354,6 +401,8 @@ class FollowedArtistsService:
             return [], {"total_fetched": 0, "created": 0, "updated": 0, "errors": 0}
 
         all_artists: list[Artist] = []
+        # Hey future me - track newly created artists for auto-discography!
+        newly_created_artists: list[Artist] = []
         seen_names = seen_names or set()
         after_cursor: str | None = None
         stats = {
@@ -362,6 +411,7 @@ class FollowedArtistsService:
             "updated": 0,
             "skipped_duplicate": 0,
             "errors": 0,
+            "discography_synced": 0,
             "source": "deezer",
         }
 
@@ -394,6 +444,8 @@ class FollowedArtistsService:
                         stats["total_fetched"] += 1
                         if was_created:
                             stats["created"] += 1
+                            # Hey future me - track new artists for auto-discography!
+                            newly_created_artists.append(artist)
                         else:
                             stats["updated"] += 1
                     except Exception as e:
@@ -411,6 +463,31 @@ class FollowedArtistsService:
             except Exception as e:
                 logger.error(f"Deezer followed artists fetch failed: {e}")
                 break
+
+        # Hey future me - AUTO-DISCOGRAPHY SYNC for new Deezer artists!
+        if auto_sync_discography and newly_created_artists:
+            logger.info(
+                f"🎵 Starting auto-discography sync for {len(newly_created_artists)} new Deezer artists..."
+            )
+            for artist in newly_created_artists:
+                try:
+                    disco_stats = await self.sync_artist_discography_complete(
+                        artist_id=str(artist.id.value),
+                        include_tracks=True,
+                    )
+                    stats["discography_synced"] += 1
+                    logger.info(
+                        f"✅ Auto-synced discography for {artist.name}: "
+                        f"{disco_stats['albums_added']} albums, {disco_stats['tracks_added']} tracks"
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Auto-discography sync failed for {artist.name}: {e}"
+                    )
+
+            logger.info(
+                f"Deezer auto-discography sync complete: {stats['discography_synced']}/{len(newly_created_artists)} artists"
+            )
 
         return all_artists, stats
 

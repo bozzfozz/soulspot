@@ -244,6 +244,7 @@ class SpotifySyncService:
 
             # UNIFIED LIBRARY SYNC: Also sync to soulspot_artists table!
             # This makes followed artists appear on /library/artists page.
+            newly_created_ids: list[str] = []
             try:
                 library_stats = await self._sync_to_unified_library(
                     spotify_artists, removed_ids=to_remove if should_remove else None
@@ -255,11 +256,49 @@ class SpotifySyncService:
                 )
                 stats["library_created"] = library_stats["created"]
                 stats["library_updated"] = library_stats["updated"]
+                newly_created_ids = library_stats.get("newly_created_ids", [])
             except Exception as lib_error:
                 logger.warning(
                     f"Unified library sync failed (non-blocking): {lib_error}"
                 )
                 # Don't fail the whole sync if library sync fails
+
+            # AUTO-DISCOGRAPHY SYNC (Jan 2025):
+            # Sync discography for newly created artists immediately!
+            # This way users don't have to wait 6 hours for LibraryDiscoveryWorker.
+            if newly_created_ids:
+                logger.info(
+                    f"🎵 Starting auto-discography sync for {len(newly_created_ids)} new artists..."
+                )
+                stats["discography_synced"] = 0
+                for artist_id in newly_created_ids:
+                    try:
+                        # Use sync_artist_albums with spotify_id from DTO
+                        # We need to get the spotify_id from the artist
+                        from soulspot.domain.value_objects import ArtistId
+                        from soulspot.infrastructure.persistence.repositories import (
+                            ArtistRepository,
+                        )
+                        
+                        artist_repo = ArtistRepository(self._session)
+                        artist = await artist_repo.get_by_id(ArtistId(artist_id))
+                        if artist and artist.spotify_uri:
+                            spotify_id = artist.spotify_uri.artist_id
+                            result = await self.sync_artist_albums(spotify_id, force=True)
+                            if result.get("synced"):
+                                stats["discography_synced"] += 1
+                                logger.info(
+                                    f"✅ Auto-synced {result.get('total', 0)} albums for {artist.name}"
+                                )
+                    except Exception as disco_error:
+                        logger.warning(
+                            f"⚠️ Auto-discography sync failed for {artist_id}: {disco_error}"
+                        )
+                        # Continue with next artist
+
+                logger.info(
+                    f"Auto-discography sync complete: {stats.get('discography_synced', 0)}/{len(newly_created_ids)} artists"
+                )
 
             # Update sync status
             await self.repo.update_sync_status(
@@ -390,9 +429,12 @@ class SpotifySyncService:
     # Statt manuell SpotifyUri.from_string() + ArtistId.generate() zu machen,
     # nutzen wir jetzt den zentralen MappingService für konsistente UUID-Vergabe.
     # Das DTO bekommt die internal_id gesetzt und wir können sie direkt nutzen.
+    #
+    # AUTO-DISCOGRAPHY (Jan 2025):
+    # Returns list of newly created artist IDs so caller can trigger discography sync.
     async def _sync_to_unified_library(
         self, artist_dtos: list[Any], removed_ids: set[str] | None = None
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """Sync followed artists to unified library (soulspot_artists).
 
         Hey future me - REFACTORED to use ProviderMappingService!
@@ -408,13 +450,18 @@ class SpotifySyncService:
             removed_ids: Set of Spotify IDs that were unfollowed (for source downgrade)
 
         Returns:
-            Dict with counts: created, updated, downgraded
+            Dict with counts (created, updated, downgraded) AND newly_created_ids list
         """
         from soulspot.domain.entities import ArtistSource
         from soulspot.domain.value_objects import ArtistId, SpotifyUri
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
-        stats = {"created": 0, "updated": 0, "downgraded": 0}
+        stats: dict[str, Any] = {
+            "created": 0,
+            "updated": 0,
+            "downgraded": 0,
+            "newly_created_ids": [],  # Hey future me - list of new artist IDs for auto-discography!
+        }
         artist_repo = ArtistRepository(self._session)
 
         for dto in artist_dtos:
@@ -472,6 +519,8 @@ class SpotifySyncService:
                     if new_artist and new_artist.source != ArtistSource.SPOTIFY:
                         new_artist.source = ArtistSource.SPOTIFY
                         await artist_repo.update(new_artist)
+                    # Hey future me - track new artist for auto-discography!
+                    stats["newly_created_ids"].append(mapped_dto.internal_id)
                 stats["created"] += 1
 
         # Handle unfollowed artists - downgrade from 'spotify'/'hybrid' if needed

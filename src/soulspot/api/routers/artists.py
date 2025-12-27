@@ -5,6 +5,11 @@ Hey future me - this router handles syncing followed artists from Spotify to our
 The flow is: User clicks "sync" → we fetch all followed artists from Spotify → create/update
 them in our artists table → return the list. Artists can also be deleted individually.
 This is separate from watchlists (which track NEW releases) - this is just the artist catalog!
+
+AUTOMATIC DISCOGRAPHY SYNC (Jan 2025):
+When a new artist is added via add_artist_to_library(), we automatically trigger
+a background discography sync. This fetches all albums + tracks from providers
+immediately, so user doesn't have to wait 6 hours for the LibraryDiscoveryWorker.
 """
 
 import logging
@@ -12,7 +17,7 @@ import logging
 # Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +38,74 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/artists", tags=["Artists"])
+
+
+# =============================================================================
+# BACKGROUND DISCOGRAPHY SYNC HELPER
+# Hey future me - this runs in the background after a new artist is added!
+# It syncs all albums + tracks immediately so user doesn't wait 6 hours.
+# Uses its own DB session (independent of the request session).
+# =============================================================================
+async def _background_discography_sync(artist_id: str, artist_name: str) -> None:
+    """Background task to sync discography for a newly added artist.
+    
+    Hey future me - AUTOMATIC DISCOGRAPHY SYNC!
+    When user clicks "Add to Library", this runs in the background to fetch
+    all albums + tracks from providers (Spotify/Deezer) immediately.
+    
+    GOTCHA: Must create own DB session! The request session is already closed
+    when this runs in background. Use db.session_scope() for proper cleanup.
+    
+    Args:
+        artist_id: The artist UUID (string format)
+        artist_name: Artist name for logging
+    """
+    from soulspot.infrastructure.database.db import session_scope
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+    
+    logger.info(f"🎵 Background discography sync starting for: {artist_name}")
+    
+    try:
+        async with session_scope() as session:
+            # Create plugins - DeezerPlugin doesn't need auth for album lookup
+            # SpotifyPlugin will be None if user not authenticated
+            deezer_plugin = DeezerPlugin()
+            
+            # Try to create SpotifyPlugin from stored session tokens
+            spotify_plugin = None
+            try:
+                spotify_plugin = SpotifyPlugin()
+            except Exception:
+                # No Spotify auth available, Deezer fallback will be used
+                pass
+            
+            service = FollowedArtistsService(
+                session=session,
+                spotify_plugin=spotify_plugin,
+                deezer_plugin=deezer_plugin,
+            )
+            
+            stats = await service.sync_artist_discography_complete(
+                artist_id=artist_id,
+                include_tracks=True,
+            )
+            
+            await session.commit()
+            
+            logger.info(
+                f"✅ Background discography sync complete for {artist_name}: "
+                f"albums={stats['albums_added']}/{stats['albums_total']}, "
+                f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
+                f"(source: {stats['source']})"
+            )
+            
+    except Exception as e:
+        # Log but don't fail - this is a background task
+        logger.error(
+            f"❌ Background discography sync failed for {artist_name}: {e}",
+            exc_info=True,
+        )
 
 
 # Hey future me - these are the response DTOs for the artists API. ArtistResponse maps
@@ -386,12 +459,18 @@ class AddArtistResponse(BaseModel):
 @router.post("", response_model=AddArtistResponse, status_code=201)
 async def add_artist_to_library(
     request: AddArtistRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ) -> AddArtistResponse:
     """Add an artist to the local library from Discovery/Similar Artists.
 
     Hey future me - this endpoint is called when user clicks "Add to Library" on
     Discovery page. It creates a LOCAL artist entry (not synced from streaming service).
+    
+    AUTOMATIC DISCOGRAPHY SYNC (Jan 2025):
+    After adding a new artist, we automatically start a background task to sync
+    their complete discography (albums + tracks) from providers. This way the
+    user doesn't have to wait 6 hours for LibraryDiscoveryWorker!
     
     Deduplication logic:
     1. If spotify_id provided, check for existing artist with that spotify_uri
@@ -403,6 +482,7 @@ async def add_artist_to_library(
 
     Args:
         request: Artist data from discovery
+        background_tasks: FastAPI background tasks for async discography sync
         session: Database session
 
     Returns:
@@ -443,10 +523,19 @@ async def add_artist_to_library(
             existing.source = ArtistSource.HYBRID
             await repo.update(existing)
             await session.commit()
+            
+            # Hey future me - also trigger discography sync on upgrade!
+            # The artist may have been synced without full discography.
+            background_tasks.add_task(
+                _background_discography_sync,
+                artist_id=str(existing.id.value),
+                artist_name=existing.name,
+            )
+            
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
-                message=f"Artist '{existing.name}' upgraded to local library",
+                message=f"Artist '{existing.name}' upgraded to local library (discography syncing...)",
             )
 
     # Check for existing LOCAL/HYBRID artist by deezer_id
@@ -465,10 +554,18 @@ async def add_artist_to_library(
             existing.source = ArtistSource.HYBRID
             await repo.update(existing)
             await session.commit()
+            
+            # Hey future me - also trigger discography sync on upgrade!
+            background_tasks.add_task(
+                _background_discography_sync,
+                artist_id=str(existing.id.value),
+                artist_name=existing.name,
+            )
+            
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
-                message=f"Artist '{existing.name}' upgraded to local library",
+                message=f"Artist '{existing.name}' upgraded to local library (discography syncing...)",
             )
 
     # Check for existing LOCAL/HYBRID artist by name (normalized)
@@ -491,10 +588,18 @@ async def add_artist_to_library(
             existing.deezer_id = request.deezer_id
         await repo.update(existing)
         await session.commit()
+        
+        # Hey future me - also trigger discography sync on upgrade!
+        background_tasks.add_task(
+            _background_discography_sync,
+            artist_id=str(existing.id.value),
+            artist_name=existing.name,
+        )
+        
         return AddArtistResponse(
             artist=_artist_to_response(existing),
             created=False,
-            message=f"Artist '{existing.name}' upgraded to local library",
+            message=f"Artist '{existing.name}' upgraded to local library (discography syncing...)",
         )
 
     # Create new artist
@@ -512,10 +617,21 @@ async def add_artist_to_library(
 
     logger.info(f"Added artist to library: {artist.name} (id={artist.id})")
 
+    # Hey future me - AUTOMATIC DISCOGRAPHY SYNC!
+    # Start background task to fetch all albums + tracks from providers.
+    # This runs independently of the response - user doesn't wait for it.
+    # The task creates its own DB session so it works after this response returns.
+    background_tasks.add_task(
+        _background_discography_sync,
+        artist_id=str(artist.id.value),
+        artist_name=artist.name,
+    )
+    logger.info(f"Queued background discography sync for: {artist.name}")
+
     return AddArtistResponse(
         artist=_artist_to_response(artist),
         created=True,
-        message=f"Artist '{artist.name}' added to library",
+        message=f"Artist '{artist.name}' added to library (discography syncing...)",
     )
 
 
