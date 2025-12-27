@@ -40,37 +40,12 @@
     </div>
 </div>
 
-<!-- Enrichment Banner - shows when artists need artwork -->
-{% if enrichment_needed %}
-<div id="enrichment-banner" class="enrichment-banner blur-fade-in">
-    <div class="enrichment-banner-content">
-        <div class="enrichment-banner-icon">
-            <i class="bi bi-image"></i>
-        </div>
-        <div class="enrichment-banner-text">
-            <strong>
-                {{ artists_without_image }} artist{{ 's' if artists_without_image != 1 else '' }} +
-                {{ albums_without_cover }} album{{ 's' if albums_without_cover != 1 else '' }} missing artwork
-            </strong>
-            <span>Click to fetch artist images and album covers</span>
-        </div>
-        <button id="enrich-btn" 
-                class="btn btn-primary btn-sm"
-                hx-post="/api/enrichment/trigger"
-                hx-swap="none"
-                hx-on::after-request="startEnrichmentPolling()">
-            <i class="bi bi-cloud-download"></i>
-            Fetch Artwork
-        </button>
-    </div>
-    <div id="enrichment-progress" class="enrichment-progress" style="display: none;">
-        <div class="enrichment-progress-bar">
-            <div class="enrichment-progress-fill"></div>
-        </div>
-        <span class="enrichment-progress-text">Enriching...</span>
-    </div>
-</div>
-{% endif %}
+<!-- Enrichment Banner - REMOVED (Dec 2025)
+    Hey future me - the "Fetch Artwork" button has been replaced by ImageBackfillWorker!
+    The worker runs every 30 minutes and automatically downloads missing images.
+    Settings: library.auto_fetch_artwork (default: true)
+    See: src/soulspot/application/workers/image_backfill_worker.py
+-->
 
 <!-- Artists Grid -->
 <div id="artists-list">
@@ -217,84 +192,10 @@
         margin-bottom: var(--space-6);
     }
     
-    /* Enrichment Banner Styles */
-    .enrichment-banner {
-        background: linear-gradient(135deg, rgba(168, 85, 247, 0.1), rgba(124, 58, 237, 0.1));
-        border: 1px solid rgba(168, 85, 247, 0.3);
-        border-radius: var(--radius-xl);
-        padding: var(--space-4);
-        margin-bottom: var(--space-6);
-    }
-    .enrichment-banner-content {
-        display: flex;
-        align-items: center;
-        gap: var(--space-4);
-    }
-    .enrichment-banner-icon {
-        width: 48px;
-        height: 48px;
-        background: linear-gradient(135deg, #a855f7, #7c3aed);
-        border-radius: var(--radius-lg);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: var(--font-size-xl);
-        color: white;
-        flex-shrink: 0;
-    }
-    .enrichment-banner-text {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-1);
-    }
-    .enrichment-banner-text strong {
-        color: var(--text-primary);
-    }
-    .enrichment-banner-text span {
-        font-size: var(--font-size-sm);
-        color: var(--text-muted);
-    }
-    .enrichment-progress {
-        margin-top: var(--space-3);
-        padding-top: var(--space-3);
-        border-top: 1px solid rgba(168, 85, 247, 0.2);
-    }
-    .enrichment-progress-bar {
-        height: 6px;
-        background: var(--bg-tertiary);
-        border-radius: var(--radius-full);
-        overflow: hidden;
-    }
-    .enrichment-progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #a855f7, #7c3aed);
-        width: 0%;
-        transition: width 0.3s ease;
-        animation: progressPulse 1.5s ease-in-out infinite;
-    }
-    @keyframes progressPulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
-    }
-    .enrichment-progress-text {
-        display: block;
-        text-align: center;
-        font-size: var(--font-size-sm);
-        color: var(--text-muted);
-        margin-top: var(--space-2);
-    }
-    .enrichment-banner.is-enriching .enrichment-banner-content {
-        opacity: 0.6;
-        pointer-events: none;
-    }
-    .enrichment-banner.is-complete {
-        background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(22, 163, 74, 0.1));
-        border-color: rgba(34, 197, 94, 0.3);
-    }
-    .enrichment-banner.is-complete .enrichment-banner-icon {
-        background: linear-gradient(135deg, #22c55e, #16a34a);
-    }
+    /* REMOVED: Enrichment Banner Styles - Dec 2025
+       Replaced by ImageBackfillWorker which runs automatically every 30 minutes.
+       See: src/soulspot/application/workers/image_backfill_worker.py
+    */
 </style>
 <script>
 // Hey future me - simple client-side search. Filters artist cards by name.
@@ -318,67 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Enrichment polling - polls status after triggering enrichment
-let enrichmentPollInterval = null;
-
-function startEnrichmentPolling() {
-    const banner = document.getElementById('enrichment-banner');
-    const progress = document.getElementById('enrichment-progress');
-    const btn = document.getElementById('enrich-btn');
-    
-    if (!banner) return;
-    
-    // Show progress, disable button
-    banner.classList.add('is-enriching');
-    progress.style.display = 'block';
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enriching...';
-    
-    // Start polling for status
-    enrichmentPollInterval = setInterval(async () => {
-        try {
-            const response = await fetch('/api/enrichment/status');
-            const data = await response.json();
-            
-            // Update progress text
-            const progressText = progress.querySelector('.enrichment-progress-text');
-            const progressFill = progress.querySelector('.enrichment-progress-fill');
-            
-            // Hey future me - check is_running, not just unenriched count!
-            // Job might complete with some artists still unenriched (not found on Spotify)
-            if (!data.is_running) {
-                // Job finished (either completed or failed)
-                clearInterval(enrichmentPollInterval);
-                
-                if (data.last_job_completed === true) {
-                    // Success!
-                    banner.classList.remove('is-enriching');
-                    banner.classList.add('is-complete');
-                    progressFill.style.width = '100%';
-                    progressText.textContent = 'Complete! Refreshing...';
-                } else if (data.last_job_completed === false) {
-                    // Failed
-                    banner.classList.remove('is-enriching');
-                    banner.classList.add('is-error');
-                    progressFill.style.width = '100%';
-                    progressFill.style.backgroundColor = 'var(--color-error, #ef4444)';
-                    progressText.textContent = 'Enrichment failed. Refreshing...';
-                }
-                
-                // Reload page after short delay
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                // Still in progress - show remaining count
-                progressText.textContent = `${data.artists_unenriched} artists remaining...`;
-                // Animate progress bar (indeterminate)
-                progressFill.style.width = '60%';
-            }
-        } catch (err) {
-            console.error('Enrichment status poll error:', err);
-        }
-    }, 2000); // Poll every 2 seconds
-}
+// REMOVED: Enrichment polling - no longer needed with ImageBackfillWorker
+// The worker runs automatically every 30 minutes and downloads missing images.
 </script>
 {% endblock %}

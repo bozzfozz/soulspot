@@ -471,6 +471,9 @@ class AppSettingsService:
             "download_images": await self.get_bool(
                 "library.download_images", default=True
             ),
+            "auto_fetch_artwork": await self.get_bool(
+                "library.auto_fetch_artwork", default=True
+            ),
             "remove_unfollowed_artists": await self.get_bool(
                 "spotify.remove_unfollowed_artists", default=True
             ),

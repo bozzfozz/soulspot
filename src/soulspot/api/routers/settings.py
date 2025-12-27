@@ -496,6 +496,9 @@ class SpotifySyncSettings(BaseModel):
     download_images: bool = Field(
         default=True, description="Download and store images locally"
     )
+    auto_fetch_artwork: bool = Field(
+        default=True, description="Automatically fetch missing artwork in background"
+    )
     remove_unfollowed_artists: bool = Field(
         default=True, description="Remove artists when unfollowed on Spotify"
     )
@@ -649,6 +652,12 @@ async def update_spotify_sync_settings(
         settings_update.download_images,
         value_type="boolean",
         category="spotify",
+    )
+    await settings_service.set(
+        "library.auto_fetch_artwork",
+        settings_update.auto_fetch_artwork,
+        value_type="boolean",
+        category="library",
     )
     await settings_service.set(
         "spotify.remove_unfollowed_artists",
