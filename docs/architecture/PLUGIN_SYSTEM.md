@@ -377,13 +377,13 @@ The SpotifyPlugin handles token management internally.
 **Before:**
 ```python
 service = FollowedArtistsService(session, spotify_client)
-await service.sync_followed_artists(access_token)
+await service._sync_spotify_followed_artists(access_token)
 ```
 
 **After:**
 ```python
 service = FollowedArtistsService(session, spotify_plugin)  # Plugin has token
-await service.sync_followed_artists()  # No token param!
+await service._sync_spotify_followed_artists()  # No token param! Renamed for symmetry with _sync_deezer_followed_artists
 ```
 
 **SpotifySyncService Example:**

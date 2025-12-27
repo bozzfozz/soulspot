@@ -1246,8 +1246,8 @@ async def sync_followed_artists(
             session, spotify_plugin, deezer_plugin=deezer_plugin
         )
 
-        # No access_token param needed - plugin has it!
-        artists, stats = await service.sync_followed_artists()
+        # Hey future me - using the renamed Spotify-specific method!
+        artists, stats = await service._sync_spotify_followed_artists()
         await session.commit()
 
         # Check if this is an HTMX request

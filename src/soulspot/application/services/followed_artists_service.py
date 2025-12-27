@@ -126,7 +126,9 @@ class FollowedArtistsService:
         self._deezer_plugin = deezer_plugin
         self._mapping_service = ProviderMappingService(session)
 
-    # Hey future me, this is the MAIN method! REFACTORED to use SpotifyPlugin!
+    # Hey future me, this is the SPOTIFY-specific followed artists sync!
+    # REFACTORED to use SpotifyPlugin! Now named _sync_spotify_followed_artists
+    # for symmetry with _sync_deezer_followed_artists.
     # It fetches ALL followed artists from Spotify (handling pagination automatically via
     # PaginatedResponse) and creates/updates Artist entities in DB. Returns list of Artists
     # for UI to display. The sync operation is idempotent - safe to call multiple times.
@@ -136,14 +138,15 @@ class FollowedArtistsService:
     # AUTO-DISCOGRAPHY (Jan 2025):
     # If auto_sync_discography=True, we also sync discography for all NEWLY CREATED artists.
     # This means new artists get their albums + tracks immediately, not after 6h wait.
-    async def sync_followed_artists(
+    async def _sync_spotify_followed_artists(
         self,
         auto_sync_discography: bool = True,
     ) -> tuple[list[Artist], dict[str, int]]:
         """Fetch all followed artists from Spotify and sync to database.
 
-        Hey future me - refactored to use SpotifyPlugin!
-        No more access_token parameter - plugin handles auth internally.
+        Hey future me - SPOTIFY-specific sync method!
+        This is symmetric with _sync_deezer_followed_artists().
+        Use sync_followed_artists_all_providers() for multi-provider sync.
 
         IMPORTANT: This method REQUIRES spotify_plugin to be set!
         If you need album sync without Spotify, use sync_artist_albums()
@@ -164,7 +167,7 @@ class FollowedArtistsService:
             PluginError: If Spotify API request fails
             ValidationError: If spotify_plugin is not configured
         """
-        # Hey future me - early validation! sync_followed_artists needs Spotify OAuth
+        # Hey future me - early validation! _sync_spotify_followed_artists needs Spotify OAuth
         if not self.spotify_plugin:
             raise ValidationError(
                 "Spotify plugin required for followed artists sync. "
@@ -324,7 +327,7 @@ class FollowedArtistsService:
             PluginCapability.USER_FOLLOWED_ARTISTS
         ):
             try:
-                spotify_artists, spotify_stats = await self.sync_followed_artists()
+                spotify_artists, spotify_stats = await self._sync_spotify_followed_artists()
                 aggregate_stats["providers"]["spotify"] = spotify_stats
                 aggregate_stats["total_fetched"] += spotify_stats["total_fetched"]
                 aggregate_stats["total_created"] += spotify_stats["created"]

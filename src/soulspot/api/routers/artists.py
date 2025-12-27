@@ -270,7 +270,8 @@ async def sync_followed_artists(
             deezer_plugin=deezer_plugin,
         )
 
-        artists, stats = await service.sync_followed_artists()
+        # Hey future me - using the renamed Spotify-specific method!
+        artists, stats = await service._sync_spotify_followed_artists()
 
         # Commit the transaction to persist changes
         await session.commit()

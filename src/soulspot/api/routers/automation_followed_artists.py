@@ -91,7 +91,8 @@ async def sync_followed_artists(
         service = FollowedArtistsService(
             session, spotify_plugin, deezer_plugin=deezer_plugin
         )
-        artists, stats = await service.sync_followed_artists()
+        # Hey future me - using the renamed Spotify-specific method!
+        artists, stats = await service._sync_spotify_followed_artists()
         await session.commit()
 
         is_htmx = request.headers.get("HX-Request") == "true"

@@ -105,7 +105,8 @@ async def test_sync_followed_artists_with_pagination(service, mock_spotify_clien
     mock_artist_repo.get_by_spotify_uri.return_value = None  # No existing artists
     
     # Act
-    artists, stats = await service.sync_followed_artists(access_token="valid_token")
+    # NOTE: Method renamed to _sync_spotify_followed_artists for symmetry with _sync_deezer_followed_artists
+    artists, stats = await service._sync_spotify_followed_artists()
     
     # Assert: Should fetch both pages
     assert mock_spotify_client.get_followed_artists.call_count == 2
@@ -152,7 +153,8 @@ async def test_sync_followed_artists_updates_existing(service, mock_spotify_clie
     mock_artist_repo.get_by_spotify_uri.return_value = existing_artist
     
     # Act
-    artists, stats = await service.sync_followed_artists(access_token="valid_token")
+    # NOTE: Method renamed to _sync_spotify_followed_artists for symmetry with _sync_deezer_followed_artists
+    artists, stats = await service._sync_spotify_followed_artists()
     
     # Assert: Should update, not create
     assert stats["created"] == 0
@@ -175,7 +177,8 @@ async def test_sync_followed_artists_empty_response(service, mock_spotify_client
     }
     
     # Act
-    artists, stats = await service.sync_followed_artists(access_token="valid_token")
+    # NOTE: Method renamed to _sync_spotify_followed_artists
+    artists, stats = await service._sync_spotify_followed_artists()
     
     # Assert
     assert len(artists) == 0

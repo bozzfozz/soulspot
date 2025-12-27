@@ -2036,14 +2036,17 @@ async def library_album_detail(
     artist_name, album_title = album_key.split("::", 1)
 
     # Get album first to check if we need to sync tracks
-    from soulspot.infrastructure.persistence.models import AlbumModel
+    # Hey future me - use CASE-INSENSITIVE matching!
+    # Album titles in URLs may have different casing than in DB.
+    from sqlalchemy import func
+    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
     album_stmt = (
         select(AlbumModel)
-        .join(AlbumModel.artist)
+        .join(ArtistModel, AlbumModel.artist_id == ArtistModel.id)
         .where(
-            AlbumModel.artist.has(name=artist_name),
-            AlbumModel.title == album_title,
+            func.lower(ArtistModel.name) == artist_name.lower(),
+            func.lower(AlbumModel.title) == album_title.lower(),
         )
         .options(joinedload(AlbumModel.artist))
     )
@@ -2051,12 +2054,20 @@ async def library_album_detail(
     album_model = album_result.unique().scalar_one_or_none()
 
     if not album_model:
+        # Hey future me - instead of 404, redirect to search!
+        # This happens when user clicks a link to an album that hasn't been synced yet.
+        # Better UX: redirect to search page with the album query prefilled.
+        from urllib.parse import quote
+        search_query = f"{artist_name} {album_title}"
         return templates.TemplateResponse(
             request,
             "error.html",
             context={
                 "error_code": 404,
-                "error_message": f"Album '{album_title}' by '{artist_name}' not found",
+                "error_message": f"Album '{album_title}' by '{artist_name}' not found in library",
+                "suggestion": f"Try searching for it: ",
+                "search_url": f"/search?q={quote(search_query)}",
+                "search_query": search_query,
             },
             status_code=404,
         )
