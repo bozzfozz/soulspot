@@ -259,12 +259,19 @@ class ImageBackfillWorker:
             "errors": [],
         }
 
-        # Find artists with CDN URL but no local path
+        # Find artists with CDN URL but no local path (exclude FAILED variants)
+        # Hey future me - "FAILED|reason|timestamp" means we already tried!
+        # ImageRepairService handles the 24h retry logic, this worker just skips them.
+        from sqlalchemy import or_
+        
         stmt = (
             select(ArtistModel)
             .where(
                 ArtistModel.image_url.isnot(None),
-                ArtistModel.image_path.is_(None),
+                or_(
+                    ArtistModel.image_path.is_(None),
+                    ArtistModel.image_path == "",
+                ),
             )
             .limit(self.batch_size)
         )
@@ -304,18 +311,28 @@ class ImageBackfillWorker:
                     stats["downloaded"] += 1
                     logger.debug(f"✅ Downloaded artist image: {artist.name}")
                 else:
+                    # Hey future me - Mark as FAILED with reason and timestamp!
+                    # Format: FAILED|download_error|{ISO timestamp}
+                    timestamp = datetime.now(UTC).isoformat()
+                    artist.image_path = f"FAILED|download_error|{timestamp}"
+                    artist.updated_at = datetime.now(UTC)
                     stats["failed"] += 1
                     stats["errors"].append(
-                        {"type": "artist", "name": artist.name, "error": "Download returned None"}
+                        {"type": "artist", "name": artist.name, "error": "Download returned None", "reason": "download_error"}
                     )
+                    logger.warning(f"⚠️ Marked artist '{artist.name}' image as FAILED (download_error)")
 
                 # Throttle to be CDN-friendly
                 await asyncio.sleep(0.1)
 
             except Exception as e:
+                # Hey future me - Also mark exceptions as FAILED with reason!
+                timestamp = datetime.now(UTC).isoformat()
+                artist.image_path = f"FAILED|download_error|{timestamp}"
+                artist.updated_at = datetime.now(UTC)
                 stats["failed"] += 1
                 stats["errors"].append(
-                    {"type": "artist", "name": artist.name, "error": str(e)}
+                    {"type": "artist", "name": artist.name, "error": str(e), "reason": "download_error"}
                 )
                 logger.warning(f"❌ Failed to download artist image for {artist.name}: {e}")
 
@@ -342,12 +359,19 @@ class ImageBackfillWorker:
             "errors": [],
         }
 
-        # Find albums with CDN URL but no local path
+        # Find albums with CDN URL but no local path (exclude FAILED variants)
+        # Hey future me - "FAILED|reason|timestamp" means we already tried!
+        # ImageRepairService handles the 24h retry logic, this worker just skips them.
+        from sqlalchemy import or_
+        
         stmt = (
             select(AlbumModel)
             .where(
                 AlbumModel.cover_url.isnot(None),
-                AlbumModel.cover_path.is_(None),
+                or_(
+                    AlbumModel.cover_path.is_(None),
+                    AlbumModel.cover_path == "",
+                ),
             )
             .limit(self.batch_size)
         )
@@ -387,18 +411,27 @@ class ImageBackfillWorker:
                     stats["downloaded"] += 1
                     logger.debug(f"✅ Downloaded album cover: {album.title}")
                 else:
+                    # Hey future me - Mark as FAILED with reason and timestamp!
+                    timestamp = datetime.now(UTC).isoformat()
+                    album.cover_path = f"FAILED|download_error|{timestamp}"
+                    album.updated_at = datetime.now(UTC)
                     stats["failed"] += 1
                     stats["errors"].append(
-                        {"type": "album", "name": album.title, "error": "Download returned None"}
+                        {"type": "album", "name": album.title, "error": "Download returned None", "reason": "download_error"}
                     )
+                    logger.warning(f"⚠️ Marked album '{album.title}' cover as FAILED (download_error)")
 
                 # Throttle to be CDN-friendly
                 await asyncio.sleep(0.1)
 
             except Exception as e:
+                # Hey future me - Also mark exceptions as FAILED with reason!
+                timestamp = datetime.now(UTC).isoformat()
+                album.cover_path = f"FAILED|download_error|{timestamp}"
+                album.updated_at = datetime.now(UTC)
                 stats["failed"] += 1
                 stats["errors"].append(
-                    {"type": "album", "name": album.title, "error": str(e)}
+                    {"type": "album", "name": album.title, "error": str(e), "reason": "download_error"}
                 )
                 logger.warning(f"❌ Failed to download album cover for {album.title}: {e}")
 

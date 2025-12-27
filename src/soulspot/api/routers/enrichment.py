@@ -231,6 +231,63 @@ async def repair_missing_artwork(
     return result
 
 
+@router.post("/reset-failed-images")
+async def reset_failed_images(
+    entity_type: str | None = Query(
+        None,
+        description="Filter by 'artist' or 'album', or omit for both",
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Reset FAILED image markers to allow retry.
+
+    Hey future me - when image downloads fail, we mark them as "FAILED|reason|timestamp"
+    to prevent retrying forever. This endpoint clears those markers
+    so the user can trigger another repair attempt.
+
+    The marker format is: FAILED|{reason}|{ISO timestamp}
+    Example: FAILED|not_available|2025-01-15T10:30:00Z
+
+    Args:
+        entity_type: 'artist', 'album', or None for both
+
+    Returns:
+        Count of reset records
+    """
+    from sqlalchemy import update
+
+    from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
+
+    result: dict[str, Any] = {"reset_artists": 0, "reset_albums": 0}
+
+    if entity_type in (None, "artist"):
+        # Match all FAILED variants: "FAILED" and "FAILED|reason|timestamp"
+        stmt = (
+            update(ArtistModel)
+            .where(ArtistModel.image_path.like("FAILED%"))
+            .values(image_path=None)
+        )
+        res = await session.execute(stmt)
+        result["reset_artists"] = res.rowcount  # type: ignore[attr-defined]
+
+    if entity_type in (None, "album"):
+        # Match all FAILED variants: "FAILED" and "FAILED|reason|timestamp"
+        stmt = (
+            update(AlbumModel)
+            .where(AlbumModel.cover_path.like("FAILED%"))
+            .values(cover_path=None)
+        )
+        res = await session.execute(stmt)
+        result["reset_albums"] = res.rowcount  # type: ignore[attr-defined]
+
+    await session.commit()
+    logger.info(
+        f"Reset FAILED images: {result['reset_artists']} artists, {result['reset_albums']} albums"
+    )
+
+    return result
+
+
 # =============================================================================
 # CANDIDATE REVIEW ENDPOINTS
 # =============================================================================

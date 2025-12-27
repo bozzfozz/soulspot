@@ -188,7 +188,7 @@ async def create_download(
                 if model:
                     from soulspot.domain.value_objects import TrackId as DomainTrackId
 
-                    existing_track = await track_repository.get(
+                    existing_track = await track_repository.get_by_id(
                         DomainTrackId.from_string(model.id)
                     )
                 provider_name = "deezer"
@@ -207,7 +207,7 @@ async def create_download(
                 if model:
                     from soulspot.domain.value_objects import TrackId as DomainTrackId
 
-                    existing_track = await track_repository.get(
+                    existing_track = await track_repository.get_by_id(
                         DomainTrackId.from_string(model.id)
                     )
                 provider_name = "tidal"

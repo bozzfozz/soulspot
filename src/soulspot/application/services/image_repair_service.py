@@ -76,6 +76,16 @@ class ImageRepairService:
     # NOTE: This is ONLY for API calls, NOT for CDN downloads!
     API_RATE_LIMIT_SECONDS = 0.05
 
+    # Retry failed images after this many hours
+    FAILED_RETRY_HOURS = 24
+
+    # Failure reason codes
+    FAIL_REASON_DOWNLOAD_ERROR = "download_error"
+    FAIL_REASON_NOT_AVAILABLE = "not_available"  # Provider has no image
+    FAIL_REASON_INVALID_URL = "invalid_url"
+    FAIL_REASON_TIMEOUT = "timeout"
+    FAIL_REASON_HTTP_ERROR = "http_error"
+
     def __init__(
         self,
         session: AsyncSession,
@@ -102,6 +112,98 @@ class ImageRepairService:
         self._image_provider_registry = image_provider_registry
         self._spotify_plugin = spotify_plugin
         self._artist_repo = artist_repository
+
+    def _make_failed_marker(self, reason: str) -> str:
+        """Create a FAILED marker with reason and timestamp.
+
+        Hey future me - Format: FAILED|{reason}|{ISO timestamp}
+        This allows us to:
+        1. Know WHY it failed (not_available, download_error, etc.)
+        2. Know WHEN it failed (for 24h retry logic)
+        3. Keep backward compatibility (still starts with FAILED)
+
+        Args:
+            reason: One of the FAIL_REASON_* constants
+
+        Returns:
+            Marker string like "FAILED|not_available|2025-01-15T10:30:00Z"
+        """
+        timestamp = datetime.now(UTC).isoformat()
+        return f"FAILED|{reason}|{timestamp}"
+
+    def _parse_failed_marker(self, marker: str | None) -> tuple[bool, str | None, datetime | None]:
+        """Parse a FAILED marker to extract reason and timestamp.
+
+        Args:
+            marker: The image_path/cover_path value
+
+        Returns:
+            Tuple of (is_failed, reason, failed_at)
+        """
+        if not marker or not marker.startswith("FAILED"):
+            return (False, None, None)
+
+        parts = marker.split("|")
+        if len(parts) >= 3:
+            reason = parts[1]
+            try:
+                failed_at = datetime.fromisoformat(parts[2].replace("Z", "+00:00"))
+            except ValueError:
+                failed_at = None
+            return (True, reason, failed_at)
+
+        # Legacy format: just "FAILED"
+        return (True, "unknown", None)
+
+    def _should_retry_failed(self, marker: str | None) -> bool:
+        """Check if a FAILED marker is old enough to retry.
+
+        Hey future me - we retry after FAILED_RETRY_HOURS (default 24h).
+        This gives CDN issues time to resolve, but doesn't give up permanently.
+
+        Args:
+            marker: The image_path/cover_path value
+
+        Returns:
+            True if we should retry this failed image
+        """
+        is_failed, _, failed_at = self._parse_failed_marker(marker)
+        if not is_failed:
+            return False
+
+        if failed_at is None:
+            # Legacy FAILED marker without timestamp - retry it
+            return True
+
+        # Check if enough time has passed
+        hours_since_failure = (datetime.now(UTC) - failed_at).total_seconds() / 3600
+        return hours_since_failure >= self.FAILED_RETRY_HOURS
+
+    def _classify_error(self, error_message: str) -> str:
+        """Classify an error message into a failure reason code.
+
+        Hey future me - this maps error messages to standardized reason codes.
+        This helps UI show meaningful info and helps us track failure types.
+
+        Args:
+            error_message: The error message from download attempt
+
+        Returns:
+            One of the FAIL_REASON_* constants
+        """
+        error_lower = error_message.lower()
+
+        # Check for specific error patterns
+        if "404" in error_lower or "not found" in error_lower:
+            return self.FAIL_REASON_NOT_AVAILABLE
+        elif "timeout" in error_lower or "timed out" in error_lower:
+            return self.FAIL_REASON_TIMEOUT
+        elif "invalid url" in error_lower or "url" in error_lower and "invalid" in error_lower:
+            return self.FAIL_REASON_INVALID_URL
+        elif any(code in error_lower for code in ["500", "502", "503", "http"]):
+            return self.FAIL_REASON_HTTP_ERROR
+        else:
+            return self.FAIL_REASON_DOWNLOAD_ERROR
 
     def _guess_provider_from_url(self, url: str) -> str:
         """Guess provider from CDN URL.
@@ -149,16 +251,61 @@ class ImageRepairService:
         Returns:
             Stats dict with repaired count, processed count, and errors
         """
+        # Hey future me - get TOTAL counts before processing to show progress!
+        from sqlalchemy import func, or_
+
+        # Count all artists still needing images (not limited)
+        total_missing_query = (
+            select(func.count())
+            .select_from(ArtistModel)
+            .where(
+                ArtistModel.image_url.isnot(None),
+                ArtistModel.image_url != "",
+                or_(
+                    ArtistModel.image_path.is_(None),
+                    ArtistModel.image_path == "",
+                ),
+                ArtistModel.image_path.notlike("FAILED%"),  # Exclude all FAILED variants
+            )
+        )
+        total_missing_result = await self._session.execute(total_missing_query)
+        total_missing = total_missing_result.scalar() or 0
+
+        # Count FAILED artists (all FAILED variants)
+        failed_query = (
+            select(func.count())
+            .select_from(ArtistModel)
+            .where(ArtistModel.image_path.like("FAILED%"))
+        )
+        failed_result = await self._session.execute(failed_query)
+        total_failed = failed_result.scalar() or 0
+
+        # Get breakdown by failure reason
+        failed_breakdown: dict[str, int] = {}
+        failed_reasons_query = (
+            select(ArtistModel.image_path)
+            .where(ArtistModel.image_path.like("FAILED%"))
+        )
+        failed_reasons_result = await self._session.execute(failed_reasons_query)
+        for row in failed_reasons_result.scalars().all():
+            is_failed, reason, _ = self._parse_failed_marker(row)
+            if is_failed and reason:
+                failed_breakdown[reason] = failed_breakdown.get(reason, 0) + 1
+
         stats: dict[str, Any] = {
             "processed": 0,
             "repaired": 0,
             "no_image_url": 0,
             "errors": [],
+            "total_missing_before": total_missing,
+            "total_failed": total_failed,
+            "failed_breakdown": failed_breakdown,  # Shows WHY images failed
+            "limit": limit,
         }
 
         # Get artists with missing images
         artists = await self._get_artists_missing_images(limit=limit)
-        logger.info(f"Found {len(artists)} artists with missing images")
+        logger.info(f"Found {len(artists)} artists with missing images (total: {total_missing})")
 
         for artist in artists:
             # FIXED: Don't skip Deezer-only artists!
@@ -206,20 +353,34 @@ class ImageRepairService:
                     stats["repaired"] += 1
                     logger.info(f"Repaired image for artist: {artist.name}")
                 else:
+                    # Hey future me - Mark as FAILED with reason and timestamp!
+                    # Format: FAILED|{reason}|{ISO timestamp}
+                    # This allows 24h retry and shows WHY it failed.
+                    error_msg = download_result.error_message or "Download failed"
+                    reason = self._classify_error(error_msg)
+                    artist.image_path = self._make_failed_marker(reason)
+                    artist.updated_at = datetime.now(UTC)
                     stats["errors"].append(
                         {
                             "name": artist.name,
-                            "error": download_result.error_message or "Download failed",
+                            "error": error_msg,
+                            "reason": reason,
                         }
                     )
+                    logger.warning(f"Marked artist '{artist.name}' image as FAILED ({reason})")
 
                 # NOTE: NO rate limit here for CDN downloads!
                 # Hey future me - CDN downloads (i.scdn.co, cdns-images.dzcdn.net)
                 # have NO rate limits!
 
             except Exception as e:
-                logger.warning(f"Failed to repair image for {artist.name}: {e}")
-                stats["errors"].append({"name": artist.name, "error": str(e)})
+                # Hey future me - Also mark exceptions as FAILED with reason!
+                error_msg = str(e)
+                reason = self._classify_error(error_msg)
+                artist.image_path = self._make_failed_marker(reason)
+                artist.updated_at = datetime.now(UTC)
+                logger.warning(f"Failed to repair image for {artist.name}: {e} ({reason})")
+                stats["errors"].append({"name": artist.name, "error": error_msg, "reason": reason})
 
         # Phase 2: Try to fetch images for artists that have provider ID but no image_url
         # Hey future me - this handles artists where enrichment found a match but
@@ -363,8 +524,13 @@ class ImageRepairService:
                     )
 
         await self._session.commit()
+
+        # Calculate remaining after this run
+        stats["total_remaining"] = stats["total_missing_before"] - stats["repaired"]
+        
         logger.info(
-            f"Image repair complete: {stats['repaired']}/{stats['processed']} artists repaired"
+            f"Image repair complete: {stats['repaired']}/{stats['processed']} artists repaired, "
+            f"{stats['total_remaining']} still missing, {stats['total_failed']} previously failed"
         )
 
         return stats
@@ -394,17 +560,43 @@ class ImageRepairService:
         Returns:
             Stats dict with repaired count, processed count, and errors
         """
+        # Hey future me - get TOTAL counts before processing to show progress!
+        from sqlalchemy import func
+
+        # Count all albums still needing images (not limited)
+        total_missing_query = (
+            select(func.count())
+            .select_from(AlbumModel)
+            .where(
+                AlbumModel.cover_url.is_(None) | (AlbumModel.cover_url == ""),
+            )
+        )
+        total_missing_result = await self._session.execute(total_missing_query)
+        total_missing = total_missing_result.scalar() or 0
+
+        # Count FAILED albums
+        failed_query = (
+            select(func.count())
+            .select_from(AlbumModel)
+            .where(AlbumModel.cover_path == "FAILED")
+        )
+        failed_result = await self._session.execute(failed_query)
+        total_failed = failed_result.scalar() or 0
+
         stats: dict[str, Any] = {
             "processed": 0,
             "repaired": 0,
             "already_has_image": 0,
             "no_image_found": 0,
             "errors": [],
+            "total_missing_before": total_missing,
+            "total_failed": total_failed,
+            "limit": limit,
         }
 
         # Get albums with missing images that have local tracks
         albums = await self._get_albums_missing_images(limit=limit)
-        logger.info(f"Found {len(albums)} albums with missing images")
+        logger.info(f"Found {len(albums)} albums with missing images (total: {total_missing})")
 
         for album in albums:
             stats["processed"] += 1
@@ -489,12 +681,19 @@ class ImageRepairService:
                     stats["repaired"] += 1
                     logger.info(f"Repaired image for album: {album.title}")
                 else:
+                    # Hey future me - Mark as FAILED with reason and timestamp!
+                    error_msg = download_result.error_message or "Download failed"
+                    reason = self._classify_error(error_msg)
+                    album.cover_path = self._make_failed_marker(reason)
+                    album.updated_at = datetime.now(UTC)
                     stats["errors"].append(
                         {
                             "title": album.title,
-                            "error": download_result.error_message or "Download failed",
+                            "error": error_msg,
+                            "reason": reason,
                         }
                     )
+                    logger.warning(f"Marked album '{album.title}' cover as FAILED ({reason})")
 
                 # NOTE: NO rate limit here for CDN downloads!
                 # Hey future me - CDN downloads (i.scdn.co, cdns-images.dzcdn.net)
@@ -502,13 +701,22 @@ class ImageRepairService:
                 # API calls above (ImageProviderRegistry, SpotifyPlugin).
 
             except Exception as e:
-                logger.warning(f"Failed to repair image for {album.title}: {e}")
-                stats["errors"].append({"title": album.title, "error": str(e)})
+                # Hey future me - Also mark exceptions as FAILED with reason!
+                error_msg = str(e)
+                reason = self._classify_error(error_msg)
+                album.cover_path = self._make_failed_marker(reason)
+                album.updated_at = datetime.now(UTC)
+                logger.warning(f"Failed to repair image for {album.title}: {e} ({reason})")
+                stats["errors"].append({"title": album.title, "error": error_msg, "reason": reason})
 
         await self._session.commit()
+
+        # Calculate remaining after this run
+        stats["total_remaining"] = stats["total_missing_before"] - stats["repaired"]
+
         logger.info(
             f"Album image repair complete: {stats['repaired']}/{stats['processed']} albums repaired, "
-            f"{stats['no_image_found']} without image source"
+            f"{stats['no_image_found']} without image source, {stats['total_remaining']} still missing"
         )
 
         return stats
@@ -530,17 +738,19 @@ class ImageRepairService:
 
         The key criteria:
         - Artist has image_url (CDN URL from Deezer/Spotify)
-        - Artist does NOT have image_path (local file missing)
+        - Artist does NOT have image_path (local file missing or empty)
+        - OR Artist image_path is FAILED but older than 24h (retry after cooldown)
         """
         from sqlalchemy import or_
 
+        # First get artists with no image_path at all
         stmt = (
             select(ArtistModel)
             .where(
                 # Has CDN URL from enrichment (Deezer OR Spotify)
                 ArtistModel.image_url.isnot(None),
                 ArtistModel.image_url != "",
-                # But missing local file
+                # Missing local file (NULL or empty)
                 or_(
                     ArtistModel.image_path.is_(None),
                     ArtistModel.image_path == "",
@@ -550,7 +760,33 @@ class ImageRepairService:
             .limit(limit)
         )
         result = await self._session.execute(stmt)
-        return list(result.scalars().all())
+        artists_no_path = list(result.scalars().all())
+
+        # Also get artists with FAILED markers that are old enough to retry
+        remaining_slots = limit - len(artists_no_path)
+        if remaining_slots > 0:
+            stmt_failed = (
+                select(ArtistModel)
+                .where(
+                    ArtistModel.image_url.isnot(None),
+                    ArtistModel.image_url != "",
+                    ArtistModel.image_path.like("FAILED%"),  # Includes FAILED|reason|timestamp
+                )
+                .order_by(ArtistModel.name)
+                .limit(remaining_slots * 2)  # Get more, filter in Python
+            )
+            result_failed = await self._session.execute(stmt_failed)
+            failed_artists = list(result_failed.scalars().all())
+
+            # Filter to only those old enough to retry
+            for artist in failed_artists:
+                if self._should_retry_failed(artist.image_path):
+                    artists_no_path.append(artist)
+                    logger.debug(f"Retrying FAILED artist after 24h: {artist.name}")
+                    if len(artists_no_path) >= limit:
+                        break
+
+        return artists_no_path[:limit]
 
     async def _get_artists_with_provider_id_but_no_image(
         self,
