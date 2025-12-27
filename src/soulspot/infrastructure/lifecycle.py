@@ -651,9 +651,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Hey future me - dieser Worker ERSETZT den manuellen "Fetch Artwork" Button!
             # Er läuft alle 30 Minuten und downloadet fehlende Artist/Album Images.
             # - LibraryDiscoveryWorker findet CDN URLs → speichert in image_url
-            # - ImageBackfillWorker downloadet CDN URLs → speichert in image_path
+            # - ImageWorker downloadet CDN URLs → speichert in image_path
             # Controlled by: library.auto_fetch_artwork and library.download_images
-            from soulspot.application.workers.image_backfill_worker import (
+            from soulspot.application.workers.ImageWorker import (
                 ImageBackfillWorker,
             )
 
