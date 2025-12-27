@@ -255,3 +255,7 @@ class ImageBackfillWorker:
         """
         logger.info("🖼️ Manual image backfill triggered")
         return await self._run_backfill_cycle()
+
+
+# Alias for new naming convention
+ImageWorker = ImageBackfillWorker
