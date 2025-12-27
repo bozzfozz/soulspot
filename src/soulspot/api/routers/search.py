@@ -875,7 +875,7 @@ class SearchSuggestion(BaseModel):
 @router.get("/suggestions", response_model=list[SearchSuggestion])
 async def get_search_suggestions(
     query: str = Query(..., min_length=2, description="Partial search query"),
-    spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
     deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> list[SearchSuggestion]:
@@ -942,7 +942,11 @@ async def get_search_suggestions(
 
     # 2. Spotify Suggestions (requires auth)
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+    if (
+        spotify_enabled
+        and spotify_plugin is not None
+        and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS)
+    ):
         try:
             # Artists from Spotify
             spotify_artists = await spotify_plugin.search_artist(query, limit=3)
