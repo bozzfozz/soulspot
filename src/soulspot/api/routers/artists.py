@@ -626,6 +626,73 @@ class FollowingStatusResponse(BaseModel):
     )
 
 
+# =========================================================================
+# LIBRARY STATUS CHECK ENDPOINT
+# =========================================================================
+# Hey future me - this endpoint checks if artists are in the LOCAL library!
+# Used by Search Page to show "In Library" vs "Add to Library" buttons.
+# Does NOT require Spotify auth - just checks our local database.
+# =========================================================================
+
+
+class LibraryStatusRequest(BaseModel):
+    """Request model for checking library status."""
+
+    spotify_ids: list[str] = Field(
+        default_factory=list,
+        description="List of Spotify artist IDs to check",
+        max_length=100,
+    )
+    deezer_ids: list[str] = Field(
+        default_factory=list,
+        description="List of Deezer artist IDs to check",
+        max_length=100,
+    )
+
+
+class LibraryStatusResponse(BaseModel):
+    """Response model for library status check."""
+
+    statuses: dict[str, bool] = Field(
+        ..., description="Map of artist_id → is_in_library (LOCAL or HYBRID source)"
+    )
+
+
+@router.post(
+    "/library-status",
+    response_model=LibraryStatusResponse,
+    summary="Check if artists are in local library",
+)
+async def check_library_status(
+    request: LibraryStatusRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> LibraryStatusResponse:
+    """Check if artists are in the local library (LOCAL or HYBRID source).
+
+    Hey future me - this does NOT require Spotify auth! Just checks our local DB.
+    Used by Search Page to show "In Library" vs "Add to Library" buttons.
+    Accepts both spotify_ids and deezer_ids for multi-provider support.
+
+    Args:
+        request: List of Spotify and/or Deezer artist IDs to check
+        session: Database session
+
+    Returns:
+        Map of artist_id → is_in_library status
+    """
+    if not request.spotify_ids and not request.deezer_ids:
+        return LibraryStatusResponse(statuses={})
+
+    # Use the existing helper function
+    statuses = await _check_artists_in_library(
+        session=session,
+        spotify_ids=request.spotify_ids,
+        deezer_ids=request.deezer_ids or [],
+    )
+
+    return LibraryStatusResponse(statuses=statuses)
+
+
 @router.post(
     "/spotify/{spotify_id}/follow",
     response_model=FollowArtistResponse,

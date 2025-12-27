@@ -2214,6 +2214,29 @@
     background: rgba(29, 185, 84, 0.1);
 }
 
+/* Add to Library Button States */
+.btn-add-library {
+    background: var(--primary);
+    color: white;
+    border: none;
+}
+
+.btn-add-library:hover {
+    background: var(--primary-hover);
+    filter: brightness(1.1);
+}
+
+.btn-in-library {
+    background: transparent;
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
+    cursor: default;
+}
+
+.btn-in-library:hover {
+    background: rgba(16, 185, 129, 0.1);
+}
+
 /* Search Page Responsive */
 @media (max-width: 1024px) {
     .search-layout {

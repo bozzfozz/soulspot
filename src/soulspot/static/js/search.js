@@ -12,7 +12,7 @@ const SearchManager = {
         selectedTracks: new Set(),
         searchSource: 'spotify',  // 'spotify' (actually multi-source!) or 'soulseek'
         spotifyType: 'artists',   // 'artists', 'albums', or 'tracks'
-        followingStatus: {},      // Map of artistId -> isFollowing
+        libraryStatus: {},        // Map of artistId -> isInLibrary (local library check)
         filters: {
             quality: 'any',
             artist: '',
@@ -250,10 +250,10 @@ const SearchManager = {
 
             const data = await response.json();
             
-            // Store results and check following status for artists
+            // Store results and check library status for artists
             if (type === 'artists' && data.artists && data.artists.length > 0) {
                 this.state.results = data.artists;
-                await this.checkFollowingStatus(data.artists.map(a => a.id));
+                await this.checkLibraryStatus(data.artists);
                 this.displaySpotifyArtists(data.artists);
             } else if (type === 'albums' && data.albums) {
                 this.state.results = data.albums;
@@ -309,23 +309,53 @@ const SearchManager = {
         }
     },
 
-    // Check following status for artists
-    async checkFollowingStatus(artistIds) {
-        if (!artistIds || artistIds.length === 0) return;
+    // Check library status for artists (local library, no Spotify auth needed)
+    async checkLibraryStatus(artists) {
+        if (!artists || artists.length === 0) return;
+        
+        // Separate by source to get correct IDs
+        const spotifyIds = artists
+            .filter(a => a.source === 'spotify' && a.id)
+            .map(a => a.id);
+        const deezerIds = artists
+            .filter(a => a.source === 'deezer' && a.id)
+            .map(a => a.id);
+        
+        if (spotifyIds.length === 0 && deezerIds.length === 0) return;
         
         try {
-            const response = await fetch('/api/artists/spotify/following-status', {
+            const response = await fetch('/api/artists/library-status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ artist_ids: artistIds })
+                body: JSON.stringify({ 
+                    spotify_ids: spotifyIds,
+                    deezer_ids: deezerIds 
+                })
             });
             
             if (response.ok) {
                 const data = await response.json();
-                this.state.followingStatus = data.statuses || {};
+                this.state.libraryStatus = data.statuses || {};
+                // Update UI for artists that are already in library
+                this.updateLibraryButtons();
             }
         } catch (error) {
-            console.warn('Could not check following status:', error);
+            console.warn('Could not check library status:', error);
+        }
+    },
+
+    // Update library buttons based on current libraryStatus
+    updateLibraryButtons() {
+        for (const [artistId, isInLibrary] of Object.entries(this.state.libraryStatus)) {
+            const button = document.getElementById(`library-btn-${artistId}`);
+            if (button && isInLibrary) {
+                button.className = 'btn btn-sm btn-in-library';
+                button.innerHTML = `
+                    <i class="bi bi-check-circle-fill"></i>
+                    In Library
+                `;
+                button.disabled = true;
+            }
         }
     },
 
@@ -394,7 +424,7 @@ const SearchManager = {
 
     // Render single artist card with source badge
     renderArtistCard(artist) {
-        const isFollowing = this.state.followingStatus[artist.id] || false;
+        const isInLibrary = this.state.libraryStatus[artist.id] || false;
         const imageUrl = artist.image_url || '/static/images/artist-placeholder.svg';
         const genres = (artist.genres || []).slice(0, 3).join(', ') || 'No genres';
         const followers = this.formatNumber(artist.followers || 0);
@@ -418,11 +448,12 @@ const SearchManager = {
                     </div>
                 </div>
                 <div class="spotify-result-actions">
-                    <button class="btn btn-sm ${isFollowing ? 'btn-following' : 'btn-follow'}"
-                            onclick="SearchManager.toggleFollow('${artist.id}', ${isFollowing}, '${source}')"
-                            id="follow-btn-${artist.id}">
-                        <i class="bi ${isFollowing ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
-                        ${isFollowing ? 'Following' : 'Follow'}
+                    <button class="btn btn-sm ${isInLibrary ? 'btn-in-library' : 'btn-add-library'}"
+                            onclick="SearchManager.addToLibrary('${artist.id}', '${this.escapeHtml(artist.name)}', '${artist.image_url || ''}', '${source}')"
+                            id="library-btn-${artist.id}"
+                            ${isInLibrary ? 'disabled' : ''}>
+                        <i class="bi ${isInLibrary ? 'bi-check-circle-fill' : 'bi-plus-circle'}"></i>
+                        ${isInLibrary ? 'In Library' : 'Add to Library'}
                     </button>
                     <a href="${externalUrl}" target="_blank" class="btn btn-ghost btn-sm"
                        title="Open on ${source === 'spotify' ? 'Spotify' : 'Deezer'}">
@@ -433,51 +464,68 @@ const SearchManager = {
         `;
     },
 
-    // Toggle follow/unfollow artist
-    async toggleFollow(artistId, isCurrentlyFollowing) {
-        const button = document.getElementById(`follow-btn-${artistId}`);
+    // Add artist to local library
+    async addToLibrary(artistId, artistName, imageUrl, source) {
+        const button = document.getElementById(`library-btn-${artistId}`);
         if (!button) return;
 
-        // Optimistic UI update
+        // Optimistic UI update - show loading
         button.disabled = true;
         button.innerHTML = '<div class="spinner spinner-sm"></div>';
 
         try {
-            const method = isCurrentlyFollowing ? 'DELETE' : 'POST';
-            const response = await fetch(`/api/artists/spotify/${artistId}/follow`, { method });
+            // Build request body based on source
+            const requestBody = {
+                name: artistName,
+                image_url: imageUrl || null,
+            };
+            
+            // Set the correct ID field based on source
+            if (source === 'spotify') {
+                requestBody.spotify_id = artistId;
+            } else if (source === 'deezer') {
+                requestBody.deezer_id = artistId;
+            }
+
+            const response = await fetch('/api/artists', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.detail || 'Operation failed');
+                throw new Error(errorData.detail || 'Failed to add artist');
             }
 
+            const data = await response.json();
+            
             // Update state and UI
-            const newStatus = !isCurrentlyFollowing;
-            this.state.followingStatus[artistId] = newStatus;
+            this.state.libraryStatus[artistId] = true;
 
-            button.className = `btn btn-sm ${newStatus ? 'btn-following' : 'btn-follow'}`;
+            button.className = 'btn btn-sm btn-in-library';
             button.innerHTML = `
-                <i class="bi ${newStatus ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
-                ${newStatus ? 'Following' : 'Follow'}
+                <i class="bi bi-check-circle-fill"></i>
+                In Library
             `;
-            button.onclick = () => this.toggleFollow(artistId, newStatus);
+            // Keep disabled since artist is now in library
 
             if (typeof ToastManager !== 'undefined') {
-                ToastManager.success(newStatus ? 'Artist followed!' : 'Artist unfollowed');
+                ToastManager.success(data.message || `${artistName} added to library!`);
             }
         } catch (error) {
-            console.error('Follow/unfollow error:', error);
+            console.error('Add to library error:', error);
             // Revert button state
-            button.className = `btn btn-sm ${isCurrentlyFollowing ? 'btn-following' : 'btn-follow'}`;
+            button.className = 'btn btn-sm btn-add-library';
             button.innerHTML = `
-                <i class="bi ${isCurrentlyFollowing ? 'bi-check-lg' : 'bi-plus-lg'}"></i>
-                ${isCurrentlyFollowing ? 'Following' : 'Follow'}
+                <i class="bi bi-plus-circle"></i>
+                Add to Library
             `;
-            if (typeof ToastManager !== 'undefined') {
-                ToastManager.error(error.message || 'Failed to update follow status');
-            }
-        } finally {
             button.disabled = false;
+            
+            if (typeof ToastManager !== 'undefined') {
+                ToastManager.error(error.message || 'Failed to add artist to library');
+            }
         }
     },
 
