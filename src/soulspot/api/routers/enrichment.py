@@ -186,24 +186,37 @@ async def trigger_enrichment(
 
 @router.post("/repair-artwork")
 async def repair_missing_artwork(
+    entity_type: str | None = Query(
+        None,
+        description="Filter by 'artist' or 'album', or omit for both",
+    ),
+    use_api: bool = Query(
+        False,
+        description="If True, use Deezer API to find missing images (slower, but finds more)",
+    ),
+    limit: int = Query(100, ge=1, le=500),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    """Download missing local artwork for artists that have CDN URLs.
+    """Download missing local artwork for artists and albums.
 
-    Hey future me - REFACTORED (Dec 2025) to work with ANY provider!
-    Previously this required Spotify auth, but now:
-    1. LibraryDiscoveryWorker saves CDN URLs from Deezer/Spotify
-    2. This endpoint just downloads from those CDN URLs
-    3. NO API calls needed - just HTTP GET from CDN!
+    Hey future me - TWO MODES:
+    1. CDN-only (default): Fast! Just downloads from URLs already in DB
+    2. API mode (use_api=true): Slower, but searches Deezer for missing images
 
-    This works for artists enriched via:
+    CDN mode works for entities enriched via:
     - Deezer (no auth needed)
     - Spotify (if user was authenticated when enriching)
     - Any provider that saved an image_url
 
-    The key insight: CDN URLs are public! Once saved in DB, we can
-    download them anytime without re-authenticating.
+    API mode uses Deezer to find images for entities that:
+    - Have no cover_url/image_url in DB yet
+    - Were imported from local files without enrichment
+
+    Args:
+        entity_type: 'artist', 'album', or None for both
+        use_api: If True, search Deezer for missing images
+        limit: Maximum number of entities to process
 
     Returns:
         Statistics about repaired artwork
@@ -211,23 +224,64 @@ async def repair_missing_artwork(
     from soulspot.application.services.image_repair_service import ImageRepairService
     from soulspot.application.services.images import ImageService
 
-    # Create dependencies for ImageRepairService
-    # Hey future me - use SAME paths as all other ImageService instances!
-    # settings.storage.image_path is the configured image cache directory
-    # /api/images is the endpoint that serves local images (see routers/images.py)
+    # Create ImageService for downloading
     image_service = ImageService(
         cache_base_path=str(settings.storage.image_path),
         local_serve_prefix="/api/images",
     )
 
+    # Create ImageProviderRegistry if API mode enabled
+    image_provider_registry = None
+    if use_api:
+        from soulspot.application.services.images.image_provider_registry import (
+            ImageProviderRegistry,
+        )
+        from soulspot.infrastructure.providers.deezer_image_provider import (
+            DeezerImageProvider,
+        )
+        from soulspot.infrastructure.plugins import DeezerPlugin
+
+        # Create Deezer provider (NO AUTH NEEDED!)
+        deezer_plugin = DeezerPlugin()
+        deezer_provider = DeezerImageProvider(deezer_plugin)
+
+        # Create registry with Deezer provider
+        image_provider_registry = ImageProviderRegistry()
+        image_provider_registry.register(deezer_provider, priority=1)
+        logger.info("Image repair using Deezer API for missing images")
+
     service = ImageRepairService(
         session=session,
         image_service=image_service,
-        image_provider_registry=None,  # CDN URLs already in DB, no registry needed
-        spotify_plugin=None,  # CDN URLs already in DB, no plugin needed
+        image_provider_registry=image_provider_registry,
+        spotify_plugin=None,  # Not needed, Deezer works without auth
     )
 
-    result = await service.repair_artist_images(limit=100)
+    result: dict[str, Any] = {}
+
+    if entity_type in (None, "artist"):
+        artist_result = await service.repair_artist_images(limit=limit)
+        result["artists"] = artist_result
+
+    if entity_type in (None, "album"):
+        album_result = await service.repair_album_images(limit=limit)
+        result["albums"] = album_result
+
+    # Summary stats
+    total_repaired = (
+        result.get("artists", {}).get("repaired", 0) +
+        result.get("albums", {}).get("repaired", 0)
+    )
+    total_processed = (
+        result.get("artists", {}).get("processed", 0) +
+        result.get("albums", {}).get("processed", 0)
+    )
+    result["summary"] = {
+        "total_processed": total_processed,
+        "total_repaired": total_repaired,
+        "mode": "api" if use_api else "cdn_only",
+    }
+
     return result
 
 
