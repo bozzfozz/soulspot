@@ -18,7 +18,6 @@ from soulspot.application.workers.duplicate_detector_worker import (
 )
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.application.workers.library_discovery_worker import LibraryDiscoveryWorker
-from soulspot.application.workers.metadata_worker import MetadataWorker
 from soulspot.application.workers.new_releases_sync_worker import (
     NewReleasesCache,
     NewReleasesSyncWorker,
@@ -28,7 +27,6 @@ from soulspot.application.workers.persistent_job_queue import (
     PersistentJobQueueStats,
     create_persistent_job_queue,
 )
-from soulspot.application.workers.playlist_sync_worker import PlaylistSyncWorker
 from soulspot.application.workers.queue_dispatcher_worker import (
     QueueDispatcherWorker,
     create_queue_dispatcher_worker,
@@ -39,6 +37,13 @@ from soulspot.application.workers.retry_scheduler_worker import (
 )
 from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
+from soulspot.application.workers.ImageWorker import ImageWorker
+
+# ⚠️ DEPRECATED Workers - Import triggers deprecation warning
+# These are kept for backwards compatibility only and will be removed
+# from soulspot.application.workers.metadata_worker import MetadataWorker
+# from soulspot.application.workers.playlist_sync_worker import PlaylistSyncWorker
+# from soulspot.application.workers.post_processing_worker import PostProcessingWorker
 
 __all__ = [
     # Job Queue
@@ -53,8 +58,6 @@ __all__ = [
     "DeezerSyncWorker",
     "DownloadWorker",
     "DownloadMonitorWorker",
-    "MetadataWorker",
-    "PlaylistSyncWorker",
     "SpotifySyncWorker",
     "TokenRefreshWorker",
     "QueueDispatcherWorker",
@@ -75,4 +78,9 @@ __all__ = [
     "CleanupWorker",
     "DuplicateDetectorWorker",
     "LibraryDiscoveryWorker",  # NEW: Unified enrichment + discography discovery
+    "ImageWorker",  # Image repair/backfill worker
+    # ⚠️ DEPRECATED - these exports are removed, use replacements:
+    # "MetadataWorker" → Use LibraryDiscoveryWorker
+    # "PlaylistSyncWorker" → Use SpotifySyncWorker or API endpoints
+    # "PostProcessingWorker" → Use AutoImportService
 ]

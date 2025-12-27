@@ -1,6 +1,10 @@
 # Future me note:
 # This module is the CENTRAL place for all image-related logic.
-# ArtworkService (legacy) is being deprecated - its logic moves here.
+#
+# REFACTORED (Dec 2025):
+# - Added failed_markers.py for FAILED|reason|timestamp handling
+# - Added repair.py for batch repair operations (from ImageRepairService)
+# - ImageRepairService is now DEPRECATED - use ImageService instead
 #
 # Clean Architecture: DTOs are defined in domain/ports/image_service.py
 # and re-exported here for convenience. This keeps:
@@ -12,6 +16,8 @@
 #   - download_and_cache(): Download from CDN, convert to WebP, cache locally
 #   - validate_image(): Check if CDN URL is still valid
 #   - optimize_cache(): Clean up old/orphaned cached images
+#   - repair_artist_images(): Batch fix artists with missing images (NEW!)
+#   - repair_album_images(): Batch fix albums with missing covers (NEW!)
 #
 # What Plugins do (NOT ImageService):
 #   - Provide image URLs (spotify_plugin.get_artist() → ArtistDTO.image_url)
@@ -44,11 +50,21 @@ Usage:
         entity_id="abc123",
     )
 
-    # Validate URL (async - for batch validation)
-    is_valid = await image_service.validate_image("https://i.scdn.co/image/abc123")
+    # Batch repair (async - for background jobs)
+    stats = await image_service.repair_artist_images(limit=50)
 """
 
-# Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
+# FAILED marker utilities (shared by repair operations)
+from soulspot.application.services.images.failed_markers import (
+    FAILED_RETRY_HOURS,
+    FailedMarkerReason,
+    classify_error,
+    guess_provider_from_url,
+    make_failed_marker,
+    parse_failed_marker,
+    should_retry_failed,
+)
+
 # Provider Registry (Multi-Source Image System)
 from soulspot.application.services.images.image_provider_registry import (
     ImageProviderRegistry,
@@ -62,6 +78,14 @@ from soulspot.application.services.images.image_service import (
     ImageDownloadResult,
     ImageService,
 )
+
+# Batch repair operations (extracted from deprecated ImageRepairService)
+from soulspot.application.services.images.repair import (
+    repair_album_images,
+    repair_artist_images,
+)
+
+# Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
 from soulspot.domain.ports.image_service import (
     EntityType,
     IImageService,
@@ -87,4 +111,15 @@ __all__ = [
     "WEBP_QUALITY",
     # Multi-Source Provider Registry
     "ImageProviderRegistry",
+    # FAILED marker utilities
+    "FailedMarkerReason",
+    "FAILED_RETRY_HOURS",
+    "make_failed_marker",
+    "parse_failed_marker",
+    "should_retry_failed",
+    "classify_error",
+    "guess_provider_from_url",
+    # Batch repair operations
+    "repair_artist_images",
+    "repair_album_images",
 ]
