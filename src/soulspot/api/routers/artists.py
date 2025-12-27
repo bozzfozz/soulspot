@@ -54,20 +54,26 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
     all albums + tracks from providers (Spotify/Deezer) immediately.
     
     GOTCHA: Must create own DB session! The request session is already closed
-    when this runs in background. Use db.session_scope() for proper cleanup.
+    when this runs in background. Create fresh Database instance with settings
+    and use session_scope() for proper cleanup.
     
     Args:
         artist_id: The artist UUID (string format)
         artist_name: Artist name for logging
     """
-    from soulspot.infrastructure.database.db import session_scope
+    from soulspot.config import get_settings
+    from soulspot.infrastructure.persistence.database import Database
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
     
     logger.info(f"🎵 Background discography sync starting for: {artist_name}")
     
     try:
-        async with session_scope() as session:
+        # Create fresh Database instance for background task
+        # Hey future me - background tasks run AFTER the request is complete,
+        # so we can't use the request's session. Create our own!
+        db = Database(get_settings())
+        async with db.session_scope() as session:
             # Create plugins - DeezerPlugin doesn't need auth for album lookup
             # SpotifyPlugin will be None if user not authenticated
             deezer_plugin = DeezerPlugin()
