@@ -310,9 +310,9 @@ class LibraryScanWorker:
             f"{stats.get('tracks_enriched', 0)} tracks"
         )
 
-        # Phase 2: Download images from CDN URLs saved during discovery
-        # Hey future me - CDN URLs are already saved in DB by discovery worker!
-        # ImageRepairService just downloads them locally (no API calls needed).
+        # Phase 2: Download images from CDN URLs or fetch via API
+        # Hey future me - some albums may not have cover_url from enrichment!
+        # We use DeezerPlugin as fallback to search for missing images.
         try:
             async with self.db.session_scope_with_retry(max_attempts=3) as session:
                 image_service = ImageService(
@@ -320,11 +320,25 @@ class LibraryScanWorker:
                     local_serve_prefix="/api/images",
                 )
 
+                # Create DeezerPlugin for API fallback (NO AUTH NEEDED!)
+                from soulspot.application.services.images.image_provider_registry import (
+                    ImageProviderRegistry,
+                )
+                from soulspot.infrastructure.plugins import DeezerPlugin
+                from soulspot.infrastructure.providers.deezer_image_provider import (
+                    DeezerImageProvider,
+                )
+
+                deezer_plugin = DeezerPlugin()
+                deezer_provider = DeezerImageProvider(deezer_plugin)
+                image_registry = ImageProviderRegistry()
+                image_registry.register(deezer_provider, priority=1)
+
                 repair_service = ImageRepairService(
                     session=session,
                     image_service=image_service,
-                    image_provider_registry=None,  # CDN URLs already in DB
-                    spotify_plugin=None,  # No plugin needed for CDN downloads
+                    image_provider_registry=image_registry,  # Use Deezer for missing images!
+                    spotify_plugin=None,  # Spotify needs auth, skip
                 )
 
                 # Repair artist images
