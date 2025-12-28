@@ -143,12 +143,12 @@ class DownloadStatusSyncWorker:
                 success = await self._sync_cycle()
 
                 if success:
-                    self._on_sync_success()
+                    self._handle_sync_success()
                 else:
-                    await self._on_sync_failure("Sync cycle returned failure")
+                    self._handle_sync_failure(Exception("Sync cycle returned failure"))
 
             except Exception as e:
-                await self._on_sync_failure(str(e))
+                self._handle_sync_failure(e)
                 # Only log full exception details after multiple failures
                 if self._consecutive_failures > 2:
                     logger.exception("DownloadStatusSyncWorker persistent error: %s", e)

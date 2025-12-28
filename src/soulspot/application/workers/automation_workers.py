@@ -751,6 +751,14 @@ class AutomationWorkerManager:
     # Each worker.start() creates an async task that runs forever in background
     # WHY await each start()? To ensure all workers actually started before returning
     # GOTCHA: If any start() fails, others might already be running - no rollback!
+    async def start(self) -> None:
+        """Start all automation workers (alias for start_all).
+        
+        Hey future me - Orchestrator calls start() on all workers.
+        This is the interface-compatible alias.
+        """
+        await self.start_all()
+
     async def start_all(self) -> None:
         """Start all automation workers."""
         await self.watchlist_worker.start()
@@ -761,6 +769,14 @@ class AutomationWorkerManager:
     # Listen, graceful shutdown - stop all workers and wait for their loops to exit
     # WHY await each stop()? To ensure tasks actually cancelled before app shutdown
     # Order doesn't matter - workers are independent. Stops are idempotent (safe to call twice).
+    async def stop(self) -> None:
+        """Stop all automation workers (alias for stop_all).
+        
+        Hey future me - Orchestrator calls stop() on all workers.
+        This is the interface-compatible alias.
+        """
+        await self.stop_all()
+
     async def stop_all(self) -> None:
         """Stop all automation workers."""
         await self.watchlist_worker.stop()

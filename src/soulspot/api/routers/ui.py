@@ -2095,7 +2095,12 @@ async def library_album_detail(
     provider_used = None
     discovered_deezer_id: str | None = None  # To save if we find one via search
 
-    if not track_models:
+    # Hey future me - ALWAYS fetch streaming tracks!
+    # This enables track merging to show which tracks are downloaded vs available.
+    # Even if we have local tracks, we want the FULL tracklist from the provider.
+    # If no provider ID exists, we'll search by artist+album name.
+    
+    if True:  # Always try to fetch streaming tracks
         import asyncio
 
         from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
@@ -2298,55 +2303,149 @@ async def library_album_detail(
             "source": album_model.source,
             "spotify_uri": album_model.spotify_uri,
             "deezer_id": album_model.deezer_id,
+            "is_streaming_only": False,
+            "is_hybrid": False,
+            "is_complete": False,
+            "streaming_provider": None,
+            "downloaded_count": 0,
+            "total_count": 0,
         }
         return templates.TemplateResponse(
             request, "library_album_detail.html", context={"album": album_data}
         )
 
-    # Hey future me - Use streaming tracks if we have them (no local files)
-    # This allows users to see the track list before downloading!
-    if streaming_tracks and not track_models:
-        # Sort streaming tracks by disc/track number
-        streaming_tracks.sort(
+    # Hey future me - MERGE streaming tracks with local tracks!
+    # This shows which tracks are downloaded AND which are available for download.
+    # Uses track_number + disc_number for matching (more reliable than title fuzzy match).
+    
+    # Helper to normalize title for fuzzy matching
+    def normalize_title(title: str) -> str:
+        """Normalize title for comparison (lowercase, strip punctuation)."""
+        import re
+        return re.sub(r"[^\w\s]", "", title.lower()).strip()
+    
+    # Build lookup from local tracks by (disc, track_number) AND normalized title
+    local_by_position: dict[tuple[int, int], Any] = {}
+    local_by_title: dict[str, Any] = {}
+    
+    for track in track_models:
+        disc = track.disc_number if hasattr(track, "disc_number") and track.disc_number else 1
+        track_num = track.track_number or 0
+        if track_num > 0:
+            local_by_position[(disc, track_num)] = track
+        local_by_title[normalize_title(track.title)] = track
+    
+    # If we have streaming tracks, merge with local info
+    if streaming_tracks:
+        merged_tracks = []
+        matched_local_ids = set()
+        
+        for streaming_track in streaming_tracks:
+            disc = streaming_track.get("disc_number") or 1
+            track_num = streaming_track.get("track_number") or 0
+            
+            # Try to find matching local track
+            local_track = None
+            
+            # 1. Match by position (disc + track_number)
+            if track_num > 0:
+                local_track = local_by_position.get((disc, track_num))
+            
+            # 2. Fallback: Match by normalized title
+            if not local_track:
+                norm_title = normalize_title(streaming_track["title"])
+                local_track = local_by_title.get(norm_title)
+            
+            if local_track:
+                # Found matching local track - merge info
+                matched_local_ids.add(local_track.id)
+                merged_tracks.append({
+                    "id": local_track.id,
+                    "title": local_track.title,
+                    "artist": local_track.artist.name if local_track.artist else streaming_track.get("artist", "Unknown"),
+                    "album": album_title,
+                    "track_number": track_num or local_track.track_number,
+                    "disc_number": disc,
+                    "duration_ms": local_track.duration_ms or streaming_track.get("duration_ms"),
+                    "file_path": local_track.file_path,
+                    "is_broken": local_track.is_broken if hasattr(local_track, "is_broken") else False,
+                    "source": local_track.source if hasattr(local_track, "source") else "local",
+                    "spotify_id": streaming_track.get("spotify_id") or (local_track.spotify_uri.split(":")[-1] if local_track.spotify_uri else None),
+                    "deezer_id": streaming_track.get("deezer_id") or local_track.deezer_id,
+                    "tidal_id": local_track.tidal_id if hasattr(local_track, "tidal_id") else None,
+                    "is_downloaded": bool(local_track.file_path),
+                    "is_streaming": False,  # We have local file!
+                })
+            else:
+                # No local match - show as streaming-only (available for download)
+                merged_tracks.append({
+                    **streaming_track,
+                    "is_downloaded": False,
+                    "is_streaming": True,
+                })
+        
+        # Add any local tracks that weren't matched (orphan local files)
+        for track in track_models:
+            if track.id not in matched_local_ids:
+                merged_tracks.append({
+                    "id": track.id,
+                    "title": track.title,
+                    "artist": track.artist.name if track.artist else "Unknown Artist",
+                    "album": album_title,
+                    "track_number": track.track_number,
+                    "disc_number": track.disc_number if hasattr(track, "disc_number") else 1,
+                    "duration_ms": track.duration_ms,
+                    "file_path": track.file_path,
+                    "is_broken": track.is_broken if hasattr(track, "is_broken") else False,
+                    "source": "local",
+                    "spotify_id": track.spotify_uri.split(":")[-1] if track.spotify_uri else None,
+                    "deezer_id": track.deezer_id if hasattr(track, "deezer_id") else None,
+                    "tidal_id": track.tidal_id if hasattr(track, "tidal_id") else None,
+                    "is_downloaded": bool(track.file_path),
+                    "is_streaming": False,
+                })
+        
+        # Sort merged tracks
+        merged_tracks.sort(
             key=lambda x: (
-                x["disc_number"],
-                x["track_number"] or 999,
-                x["title"].lower(),
+                x.get("disc_number") or 1,
+                x.get("track_number") or 999,
+                (x.get("title") or "").lower(),
             )
         )
-
-        # Calculate total duration
-        total_duration_ms = sum(t["duration_ms"] or 0 for t in streaming_tracks)
-
+        
+        # Calculate stats
+        total_duration_ms = sum(t.get("duration_ms") or 0 for t in merged_tracks)
+        downloaded_count = sum(1 for t in merged_tracks if t.get("is_downloaded"))
+        total_count = len(merged_tracks)
+        
         album_data = {
             "id": str(album_model.id),
             "title": album_title,
             "artist": artist_name,
             "artist_slug": artist_name,
-            "tracks": streaming_tracks,
-            "year": album_model.release_year
-            if hasattr(album_model, "release_year")
-            else None,
+            "tracks": merged_tracks,
+            "year": album_model.release_year if hasattr(album_model, "release_year") else None,
             "total_duration_ms": total_duration_ms,
-            "artwork_url": album_model.cover_url
-            if hasattr(album_model, "cover_url")
-            else None,
-            "artwork_path": album_model.cover_path
-            if hasattr(album_model, "cover_path")
-            else None,
+            "artwork_url": album_model.cover_url if hasattr(album_model, "cover_url") else None,
+            "artwork_path": album_model.cover_path if hasattr(album_model, "cover_path") else None,
             "is_compilation": "compilation" in (album_model.secondary_types or []),
-            "needs_sync": False,  # We HAVE tracks from provider!
+            "needs_sync": False,
             "source": album_model.source,
             "spotify_uri": album_model.spotify_uri,
             "deezer_id": album_model.deezer_id,
-            "is_streaming_only": True,  # Flag: all tracks from provider, none local
-            "streaming_provider": provider_used,  # Which provider we got tracks from
+            "is_streaming_only": downloaded_count == 0,  # All streaming, none local
+            "is_hybrid": 0 < downloaded_count < total_count,  # Some downloaded, some not
+            "is_complete": downloaded_count == total_count,  # All downloaded
+            "streaming_provider": provider_used,
+            "downloaded_count": downloaded_count,
+            "total_count": total_count,
         }
         return templates.TemplateResponse(
             request, "library_album_detail.html", context={"album": album_data}
         )
 
-    # Convert tracks to template format (local tracks from DB)
+    # Convert tracks to template format (local tracks from DB, no streaming available)
     tracks_data = [
         {
             "id": track.id,
@@ -2428,6 +2527,15 @@ async def library_album_detail(
         "artwork_url": artwork_url,  # Spotify CDN URL or None
         "artwork_path": artwork_path,  # Local cached image path or None
         "is_compilation": is_compilation,  # For compilation badge and override UI
+        "source": album_model.source if hasattr(album_model, "source") else "local",
+        "spotify_uri": album_model.spotify_uri if hasattr(album_model, "spotify_uri") else None,
+        "deezer_id": album_model.deezer_id if hasattr(album_model, "deezer_id") else None,
+        "is_streaming_only": False,  # We have local tracks
+        "is_hybrid": False,  # No streaming tracks fetched
+        "is_complete": True,  # All local (no comparison to streaming possible)
+        "streaming_provider": None,
+        "downloaded_count": len(tracks_data),
+        "total_count": len(tracks_data),
     }
 
     return templates.TemplateResponse(

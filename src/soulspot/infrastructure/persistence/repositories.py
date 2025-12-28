@@ -1532,8 +1532,8 @@ class AlbumRepository(IAlbumRepository):
             .where(AlbumModel.deezer_id.isnot(None))  # Has Deezer ID
             .where(
                 or_(
-                    AlbumModel.artwork_url.is_(None),
-                    AlbumModel.artwork_url == "",
+                    AlbumModel.cover_url.is_(None),
+                    AlbumModel.cover_url == "",
                 )
             )  # Missing cover URL
             .where(has_local_tracks)
@@ -1561,7 +1561,7 @@ class AlbumRepository(IAlbumRepository):
         stmt = (
             update(AlbumModel)
             .where(AlbumModel.id == str(album_id))
-            .values(artwork_url=cover_url)
+            .values(cover_url=cover_url)
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0
