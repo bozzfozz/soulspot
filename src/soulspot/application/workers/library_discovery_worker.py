@@ -156,8 +156,10 @@ class LibraryDiscoveryWorker:
 
                 logger.info(
                     f"🔍 Discovery cycle complete: "
-                    f"{stats.get('artists_enriched', 0)} artists enriched, "
-                    f"{stats.get('albums_discovered', 0)} albums discovered"
+                    f"{stats.get('artists_enriched', 0)} artists, "
+                    f"{stats.get('albums_discovered', 0)} albums discovered, "
+                    f"{stats.get('albums_enriched', 0)} albums enriched, "
+                    f"{stats.get('covers_backfilled', 0)} covers backfilled"
                 )
             except Exception as e:
                 logger.error(f"Error in discovery worker loop: {e}", exc_info=True)
@@ -174,6 +176,7 @@ class LibraryDiscoveryWorker:
         3. Update is_owned flags
         4. Enrich albums without provider IDs (search Deezer/Spotify)
         5. Enrich tracks without provider IDs (via ISRC lookup)
+        6. Backfill cover URLs for albums that have deezer_id but missing cover
 
         Returns:
             Stats dict with counts for each phase
@@ -185,10 +188,12 @@ class LibraryDiscoveryWorker:
             "phase3_ownership": {},
             "phase4_album_enrichment": {},
             "phase5_track_enrichment": {},
+            "phase6_cover_backfill": {},
             "artists_enriched": 0,
             "albums_discovered": 0,
             "albums_enriched": 0,
             "tracks_enriched": 0,
+            "covers_backfilled": 0,
             "errors": [],
         }
 
@@ -228,6 +233,11 @@ class LibraryDiscoveryWorker:
                 stats["tracks_enriched"] = phase5_stats.get(
                     "deezer_enriched", 0
                 ) + phase5_stats.get("spotify_enriched", 0)
+
+                # Phase 6: Backfill cover URLs for albums with deezer_id but no cover
+                phase6_stats = await self._phase6_backfill_cover_urls(session)
+                stats["phase6_cover_backfill"] = phase6_stats
+                stats["covers_backfilled"] = phase6_stats.get("backfilled", 0)
 
                 # Commit all changes
                 await session.commit()
@@ -1002,6 +1012,100 @@ class LibraryDiscoveryWorker:
                     }
                 )
                 logger.warning(f"Failed to enrich track '{track.title}' via ISRC: {e}")
+
+        return stats
+
+    async def _phase6_backfill_cover_urls(
+        self, session: AsyncSession
+    ) -> dict[str, Any]:
+        """Phase 6: Backfill cover URLs for albums that have deezer_id but no cover.
+
+        Hey future me - this fixes the 318 albums problem!
+        Albums got deezer_id during initial enrichment but cover_url was None
+        (Deezer API returned no cover at the time). Now we use the deezer_id
+        to directly fetch album info and get the cover URL.
+
+        This is MORE RELIABLE than Phase 4 search because:
+        - We have the exact deezer_id (no fuzzy matching!)
+        - Direct API call to get_album(deezer_id) returns fresh cover URLs
+
+        Returns:
+            Stats dict with processed/backfilled/failed counts
+        """
+        from soulspot.infrastructure.persistence.repositories import AlbumRepository
+
+        stats = {
+            "processed": 0,
+            "backfilled": 0,
+            "no_cover_in_api": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+        album_repo = AlbumRepository(session)
+
+        # Get albums WITH deezer_id but WITHOUT cover_url
+        albums = await album_repo.get_albums_without_cover_url(limit=50)
+
+        if not albums:
+            logger.debug("No albums need cover URL backfill")
+            return stats
+
+        # Initialize Deezer plugin (no auth needed!)
+        deezer_plugin, _, sources_used = await self._initialize_plugins(session)
+
+        if not deezer_plugin:
+            logger.warning("Phase 6: Deezer not available for cover backfill!")
+            return stats
+
+        logger.info(f"Phase 6: Backfilling cover URLs for {len(albums)} albums")
+
+        for album in albums:
+            stats["processed"] += 1
+
+            if not album.deezer_id:
+                # Shouldn't happen (query filters for deezer_id) but just in case
+                continue
+
+            try:
+                # Direct API call with exact deezer_id - no search needed!
+                album_dto = await deezer_plugin.get_album(album.deezer_id)
+
+                if album_dto and album_dto.cover and album_dto.cover.url:
+                    await album_repo.update_cover_url(
+                        album_id=album.id,
+                        cover_url=album_dto.cover.url,
+                    )
+                    stats["backfilled"] += 1
+                    logger.debug(
+                        f"Backfilled cover for '{album.title}' → {album_dto.cover.url}"
+                    )
+                else:
+                    stats["no_cover_in_api"] += 1
+                    logger.debug(
+                        f"No cover in Deezer API for '{album.title}' (deezer_id={album.deezer_id})"
+                    )
+
+                # Rate limiting
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                stats["failed"] += 1
+                stats["errors"].append(
+                    {
+                        "album": album.title,
+                        "deezer_id": album.deezer_id,
+                        "error": str(e),
+                    }
+                )
+                logger.warning(
+                    f"Failed to backfill cover for '{album.title}': {e}"
+                )
+
+        logger.info(
+            f"Phase 6 complete: {stats['backfilled']} covers backfilled, "
+            f"{stats['no_cover_in_api']} no cover in API, {stats['failed']} failed"
+        )
 
         return stats
 

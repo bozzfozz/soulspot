@@ -1506,6 +1506,66 @@ class AlbumRepository(IAlbumRepository):
         models = result.scalars().all()
         return [self._model_to_entity(model) for model in models]
 
+    async def get_albums_without_cover_url(self, limit: int = 50) -> list[Album]:
+        """Get albums that have deezer_id but missing cover_url (backfill).
+
+        Hey future me - this is for LibraryDiscoveryWorker Phase 6!
+        These albums got deezer_id during initial enrichment, but cover_url
+        was None (API returned no cover at the time). Now we retry to fetch covers.
+
+        Args:
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of Album entities needing cover URL backfill
+        """
+        has_local_tracks = (
+            select(TrackModel.id)
+            .where(TrackModel.album_id == AlbumModel.id)
+            .where(TrackModel.file_path.isnot(None))
+            .exists()
+        )
+
+        # Albums WITH deezer_id but WITHOUT cover_url
+        stmt = (
+            select(AlbumModel)
+            .where(AlbumModel.deezer_id.isnot(None))  # Has Deezer ID
+            .where(
+                or_(
+                    AlbumModel.artwork_url.is_(None),
+                    AlbumModel.artwork_url == "",
+                )
+            )  # Missing cover URL
+            .where(has_local_tracks)
+            .order_by(AlbumModel.title)
+            .limit(limit)
+        )
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        return [self._model_to_entity(model) for model in models]
+
+    async def update_cover_url(self, album_id: AlbumId, cover_url: str) -> bool:
+        """Update album's cover_url only (backfill for albums missing cover).
+
+        Hey future me - this is for Phase 6 Cover URL Backfill!
+        We already have deezer_id, just need to fetch and save cover URL.
+
+        Args:
+            album_id: Album to update
+            cover_url: Cover image URL from Deezer API
+
+        Returns:
+            True if updated, False if album not found
+        """
+        stmt = (
+            update(AlbumModel)
+            .where(AlbumModel.id == str(album_id))
+            .values(artwork_url=cover_url)
+        )
+        result = await self.session.execute(stmt)
+        return result.rowcount > 0
+
 
 class TrackRepository(ITrackRepository):
     """SQLAlchemy implementation of Track repository."""
