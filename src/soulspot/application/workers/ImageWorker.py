@@ -114,10 +114,13 @@ class ImageBackfillWorker:
         contention during the busy startup phase.
         """
         # Initial delay to let app start up and other workers finish first
+        logger.info("🖼️ ImageBackfillWorker: Waiting 2 minutes for startup to complete...")
         await asyncio.sleep(120)
+        logger.info("🖼️ ImageBackfillWorker: Starting main loop")
 
         while self._running:
             try:
+                logger.info(f"🖼️ ImageBackfillWorker: Starting backfill cycle (batch_size={self.batch_size})")
                 stats = await self._run_backfill_cycle()
                 self._last_run_at = datetime.now(UTC)
                 self._last_run_stats = stats
@@ -125,17 +128,24 @@ class ImageBackfillWorker:
                 total_repaired = stats.get("artists_repaired", 0) + stats.get(
                     "albums_repaired", 0
                 )
-                if total_repaired > 0:
-                    logger.info(
-                        f"🖼️ Image backfill complete: "
-                        f"{stats.get('artists_repaired', 0)} artist images, "
-                        f"{stats.get('albums_repaired', 0)} album covers"
-                    )
-                else:
-                    logger.debug("🖼️ Image backfill: No missing images found")
+                total_processed = stats.get("artists_processed", 0) + stats.get(
+                    "albums_processed", 0
+                )
+                total_errors = len(stats.get("errors", []))
+                
+                logger.info("=" * 50)
+                logger.info("🖼️ IMAGE BACKFILL CYCLE COMPLETE")
+                logger.info("=" * 50)
+                logger.info(f"  ✅ Repaired: {total_repaired} (artists: {stats.get('artists_repaired', 0)}, albums: {stats.get('albums_repaired', 0)})")
+                logger.info(f"  📊 Processed: {total_processed}")
+                logger.info(f"  ❌ Errors: {total_errors}")
+                if stats.get("skipped_disabled"):
+                    logger.info("  ⏭️ Skipped: Image downloads disabled in settings")
+                logger.info(f"  ⏱️ Next run in: {self.check_interval_seconds // 60} minutes")
+                logger.info("=" * 50)
 
             except Exception as e:
-                logger.error(f"Error in image backfill worker loop: {e}", exc_info=True)
+                logger.error(f"💥 Error in image backfill worker loop: {e}", exc_info=True)
 
             # Wait for next cycle
             await asyncio.sleep(self.check_interval_seconds)
@@ -210,10 +220,11 @@ class ImageBackfillWorker:
             # Create ImageProviderRegistry with Deezer (no auth needed!)
             # Hey future me - DeezerImageProvider allows API fallback
             # when CDN URL is missing or invalid.
+            # NOTE: register(provider, priority) - provider first, priority second!
             deezer_plugin = DeezerPlugin()
             deezer_provider = DeezerImageProvider(deezer_plugin)
             image_provider_registry = ImageProviderRegistry()
-            image_provider_registry.register("deezer", deezer_provider)
+            image_provider_registry.register(deezer_provider, priority=2)
 
             # Create ImageRepairService
             repair_service = ImageRepairService(
