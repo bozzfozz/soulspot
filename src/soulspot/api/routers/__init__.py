@@ -20,6 +20,7 @@ from soulspot.api.routers import (
     download_manager,
     downloads,
     enrichment,
+    health,
     images,
     library,
     logs,
@@ -60,6 +61,7 @@ api_router.include_router(automation.router, tags=["Automation"])
 api_router.include_router(notifications.router, tags=["Notifications"])
 api_router.include_router(sse.router, tags=["SSE"])
 api_router.include_router(workers.router, prefix="/workers", tags=["Workers"])
+api_router.include_router(health.router, prefix="/health", tags=["Health"])
 api_router.include_router(download_manager.router, tags=["Download Manager"])
 api_router.include_router(logs.router, tags=["Logs"])
 api_router.include_router(metrics.router, tags=["Metrics"])
@@ -79,6 +81,7 @@ __all__ = [
     "download_manager",
     "downloads",
     "enrichment",
+    "health",
     "library",
     "logs",
     "metadata",

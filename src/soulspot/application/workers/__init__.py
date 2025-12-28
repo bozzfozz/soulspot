@@ -22,6 +22,12 @@ from soulspot.application.workers.new_releases_sync_worker import (
     NewReleasesCache,
     NewReleasesSyncWorker,
 )
+from soulspot.application.workers.orchestrator import (
+    WorkerOrchestrator,
+    WorkerState,
+    get_orchestrator,
+    reset_orchestrator,
+)
 from soulspot.application.workers.persistent_job_queue import (
     PersistentJobQueue,
     PersistentJobQueueStats,
@@ -50,6 +56,11 @@ __all__ = [
     "JobQueue",
     "JobStatus",
     "JobType",
+    # Worker Orchestrator (NEW!)
+    "WorkerOrchestrator",
+    "WorkerState",
+    "get_orchestrator",
+    "reset_orchestrator",
     # Persistent Job Queue (survives restarts!)
     "PersistentJobQueue",
     "PersistentJobQueueStats",

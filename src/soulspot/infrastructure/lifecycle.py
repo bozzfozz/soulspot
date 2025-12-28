@@ -2,6 +2,21 @@
 
 This module handles the FastAPI lifespan context manager that orchestrates
 application initialization and cleanup.
+
+REFACTORED (Dec 2025): Now uses WorkerOrchestrator for centralized worker management!
+- All workers are registered with the orchestrator
+- Priority-based startup (lower number = starts first)
+- Dependency tracking (worker A needs worker B)
+- Graceful shutdown with timeouts
+- Health status API via orchestrator.get_status()
+
+Worker Categories:
+- critical (1-9): Token refresh, session store - must succeed
+- sync (10-19): Spotify/Deezer/NewReleases sync
+- download (20-29): Download worker, monitor, dispatcher
+- enrichment (30-39): Library discovery, image backfill
+- maintenance (40-49): Cleanup, duplicate detection
+- automation (50-59): Watchlist, discography, quality
 """
 
 import asyncio
@@ -181,6 +196,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
         from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
+        # =================================================================
+        # Track startup time for uptime monitoring
+        # =================================================================
+        from datetime import UTC, datetime
+        app.state.startup_time = datetime.now(UTC)
+
+        # =================================================================
+        # Initialize Worker Orchestrator (for tracking & status API)
+        # =================================================================
+        # Hey future me - the orchestrator tracks all workers for status monitoring!
+        # Workers still start/stop via their own code, but orchestrator provides:
+        # - Central status API (get_orchestrator().get_status())
+        # - Health checks (is_healthy())
+        # - Worker discovery (get_worker(name))
+        # Full migration to orchestrator-managed start/stop is planned for v2.
+        from soulspot.application.workers.orchestrator import (
+            WorkerOrchestrator,
+            WorkerState,
+            get_orchestrator,
+        )
+        
+        orchestrator = get_orchestrator()
+        app.state.orchestrator = orchestrator
+        logger.info("Worker orchestrator initialized (tracking mode)")
+
         spotify_client = SpotifyClient(settings.spotify)
 
         # Hey future me - same pattern as session_store: pass session_scope context manager factory!
@@ -191,22 +231,38 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.db_token_manager = db_token_manager
         logger.info("Database token manager initialized for background workers")
 
-        # Start token refresh worker (proactively refreshes tokens before expiry)
+        # =================================================================
+        # CREATE ALL WORKERS (Orchestrator will start them in correct order)
+        # =================================================================
+        # Hey future me - REFACTORED Dec 2025!
+        # Workers are now CREATED but NOT STARTED here.
+        # Instead, we register them with the orchestrator which will:
+        # 1. Start them in priority order (lower priority = starts first)
+        # 2. Check dependencies (e.g., token_refresh before spotify_sync)
+        # 3. Handle errors gracefully (required vs optional workers)
+        # At the end: await orchestrator.start_all() starts everything!
+
+        # Token refresh worker (proactively refreshes tokens before expiry)
         token_refresh_worker = TokenRefreshWorker(
             token_manager=db_token_manager,
             check_interval_seconds=300,  # Check every 5 minutes
             refresh_threshold_minutes=10,  # Refresh if expires within 10 minutes
         )
-        await token_refresh_worker.start()
+        orchestrator.register(
+            name="token_refresh",
+            worker=token_refresh_worker,
+            category="critical",
+            priority=1,
+            required=True,
+        )
         app.state.token_refresh_worker = token_refresh_worker
-        logger.info("Token refresh worker started (checks every 5 min)")
 
         # =================================================================
-        # Start Spotify Sync Worker (automatic background syncing)
+        # Spotify Sync Worker (automatic background syncing)
         # =================================================================
         # Hey future me - this worker automatically syncs Spotify data based on settings!
         # It respects the app_settings table for enable/disable and intervals.
-        # Runs after token_refresh_worker so tokens are always fresh.
+        # Depends on token_refresh_worker so tokens are always fresh.
         from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 
         spotify_sync_worker = SpotifySyncWorker(
@@ -215,17 +271,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings=settings,
             check_interval_seconds=60,  # Check every minute if syncs are due
         )
-        await spotify_sync_worker.start()
+        orchestrator.register(
+            name="spotify_sync",
+            worker=spotify_sync_worker,
+            category="sync",
+            priority=10,
+            depends_on=["token_refresh"],
+        )
         app.state.spotify_sync_worker = spotify_sync_worker
-        logger.info("Spotify sync worker started (checks every 60s)")
 
         # =================================================================
-        # Start Deezer Sync Worker (automatic background syncing for Deezer)
+        # Deezer Sync Worker (automatic background syncing for Deezer)
         # =================================================================
         # Hey future me - this worker syncs Deezer data (charts, releases, user data)!
         # Unlike Spotify, Deezer has public APIs that don't need auth (charts, releases).
         # User data (favorites, playlists) needs auth from deezer_sessions table.
-        # Runs slightly offset from Spotify worker (35s delay) to spread load.
         from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
 
         deezer_sync_worker = DeezerSyncWorker(
@@ -233,17 +293,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings=settings,
             check_interval_seconds=60,  # Check every minute if syncs are due
         )
-        await deezer_sync_worker.start()
+        orchestrator.register(
+            name="deezer_sync",
+            worker=deezer_sync_worker,
+            category="sync",
+            priority=11,
+        )
         app.state.deezer_sync_worker = deezer_sync_worker
-        logger.info("Deezer sync worker started (checks every 60s)")
 
         # =================================================================
-        # Start New Releases Sync Worker (caches new releases from all providers)
+        # New Releases Sync Worker (caches new releases from all providers)
         # =================================================================
         # Hey future me - dieser Worker cached New Releases im Hintergrund!
         # Das vermeidet langsame API-Calls bei jedem Page Load.
-        # Er respektiert app_settings für enable/disable und Intervall.
-        # Runs after token_refresh_worker so Spotify tokens are fresh.
+        # Depends on token_refresh for Spotify token access.
         from soulspot.application.workers.new_releases_sync_worker import (
             NewReleasesSyncWorker,
         )
@@ -254,9 +317,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings=settings,
             check_interval_seconds=60,  # Check every minute if sync is due
         )
-        await new_releases_sync_worker.start()
+        orchestrator.register(
+            name="new_releases_sync",
+            worker=new_releases_sync_worker,
+            category="sync",
+            priority=12,
+            depends_on=["token_refresh"],
+        )
         app.state.new_releases_sync_worker = new_releases_sync_worker
-        logger.info("New Releases sync worker started (syncs every 30min by default)")
 
         # Initialize PERSISTENT job queue (survives restarts!)
         # Hey future me - PersistentJobQueue wraps JobQueue with DB persistence.
@@ -429,9 +497,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 settings=settings,
                 run_interval_hours=6,  # Run every 6 hours
             )
-            await library_discovery_worker.start()
+            orchestrator.register(
+                name="library_discovery",
+                worker=library_discovery_worker,
+                category="enrichment",
+                priority=50,
+            )
             app.state.library_discovery_worker = library_discovery_worker
-            logger.info("Library discovery worker started (runs every 6h)")
 
             # Start job queue workers
             # Hey future me - SQLite needs fewer workers to avoid "database is locked" errors!
@@ -449,12 +521,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
             # =================================================================
-            # Start Download Monitor Worker (tracks slskd download progress)
+            # Download Monitor Worker (tracks slskd download progress)
             # =================================================================
             # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
-            # Er pollt slskd alle X Sekunden und updated Job.result mit Progress.
-            # Ohne ihn bleiben Jobs ewig in RUNNING Status ohne echten Progress.
-            # REQUIRES slskd_client to be configured!
+            # Requires slskd_client to be configured.
             if slskd_client is not None:
                 from soulspot.application.workers.download_monitor_worker import (
                     DownloadMonitorWorker,
@@ -465,9 +535,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     slskd_client=slskd_client,
                     poll_interval_seconds=10,  # Poll every 10 seconds
                 )
-                await download_monitor_worker.start()
+                orchestrator.register(
+                    name="download_monitor",
+                    worker=download_monitor_worker,
+                    category="download",
+                    priority=31,
+                    required=False,  # Optional if slskd not configured
+                )
                 app.state.download_monitor_worker = download_monitor_worker
-                logger.info("Download monitor worker started (polls every 10s)")
             else:
                 logger.warning(
                     "Download monitor worker skipped - slskd client not available"
@@ -475,13 +550,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_monitor_worker = None
 
             # =================================================================
-            # Start Queue Dispatcher Worker (dispatches WAITING downloads)
+            # Queue Dispatcher Worker (dispatches WAITING downloads)
             # =================================================================
-            # Hey future me - dieser Worker löst das "slskd offline" Problem!
-            # Wenn slskd nicht läuft, gehen Downloads in WAITING status statt zu failen.
-            # Dieser Worker checkt alle 30s ob slskd wieder da ist und dispatcht dann
-            # wartende Downloads nach und nach zur Job Queue.
-            # REQUIRES slskd_client to be configured!
+            # Hey future me - dieser Worker ist TASK-BASIERT!
+            # Er läuft als blocking coroutine in eigenem Task.
+            # Wird NICHT über orchestrator.start_all() gestartet, sondern manuell.
+            # Der Task wird aber beim Orchestrator registriert für Tracking.
             if slskd_client is not None:
                 from soulspot.application.workers.queue_dispatcher_worker import (
                     QueueDispatcherWorker,
@@ -495,9 +569,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     dispatch_delay=2.0,  # 2s between dispatches
                     max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
                 )
-                # Start in background task (non-blocking)
+                # Start in background task (blocking coroutine)
                 queue_dispatcher_task = asyncio.create_task(
                     queue_dispatcher_worker.start()
+                )
+                # Register with orchestrator for tracking (already started!)
+                orchestrator.register_running_task(
+                    name="queue_dispatcher",
+                    task=queue_dispatcher_task,
+                    worker=queue_dispatcher_worker,
+                    priority=32,
+                    category="download",
+                    required=False,
                 )
                 app.state.queue_dispatcher_worker = queue_dispatcher_worker
                 app.state.queue_dispatcher_task = queue_dispatcher_task
@@ -510,15 +593,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.queue_dispatcher_task = None
 
             # =================================================================
-            # Start Download Status Sync Worker (syncs slskd status to DB)
+            # Download Status Sync Worker (syncs slskd status to DB)
             # =================================================================
-            # Hey future me - dieser Worker FIXT den "stuck status" Bug!
-            # SearchAndDownloadUseCase erstellt Downloads mit QUEUED status, aber updated
-            # nie zu DOWNLOADING/COMPLETED. Dieser Worker pollt slskd alle 5s und
-            # synchronisiert den Status in die SoulSpot DB. KRITISCH für Download Manager UI!
-            # CIRCUIT BREAKER: Nach 3 Fehlern pausiert der Worker für 60s bevor er wieder
-            # versucht slskd zu erreichen (vermeidet Hammering wenn slskd offline).
-            # REQUIRES slskd_client to be configured!
+            # Hey future me - TASK-BASIERT wie queue_dispatcher.
             if slskd_client is not None:
                 from soulspot.application.workers.download_status_sync_worker import (
                     DownloadStatusSyncWorker,
@@ -535,6 +612,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 download_status_sync_task = asyncio.create_task(
                     download_status_sync_worker.start()
                 )
+                # Register for tracking (already started!)
+                orchestrator.register_running_task(
+                    name="download_status_sync",
+                    task=download_status_sync_task,
+                    worker=download_status_sync_worker,
+                    priority=33,
+                    category="download",
+                    required=False,
+                )
                 app.state.download_status_sync_worker = download_status_sync_worker
                 app.state.download_status_sync_task = download_status_sync_task
                 logger.info("Download status sync worker started (syncs every 5s)")
@@ -546,15 +632,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_status_sync_task = None
 
             # =================================================================
-            # Start Retry Scheduler Worker (auto-retries failed downloads)
+            # Retry Scheduler Worker (auto-retries failed downloads)
             # =================================================================
-            # Hey future me - dieser Worker RETRIED fehlgeschlagene Downloads automatisch!
-            # Er checkt alle 30s ob Downloads bereit für Retry sind (basierend auf
+            # Hey future me - TASK-BASIERT.
             # next_retry_at timestamp und retry_count < max_retries).
             # Exponential backoff: 1min, 5min, 15min zwischen Retries.
             # NON-RETRYABLE errors (file_not_found, user_blocked) werden NICHT retried!
             # Dieser Worker braucht KEINEN slskd_client - er ändert nur DB Status
             # von FAILED → WAITING. QueueDispatcherWorker macht den Rest.
+            # TASK-BASIERT.
             from soulspot.application.workers.retry_scheduler_worker import (
                 RetrySchedulerWorker,
             )
@@ -565,6 +651,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 max_retries_per_cycle=10,  # Max 10 retries per cycle to prevent flooding
             )
             retry_scheduler_task = asyncio.create_task(retry_scheduler_worker.start())
+            orchestrator.register_running_task(
+                name="retry_scheduler",
+                task=retry_scheduler_task,
+                worker=retry_scheduler_worker,
+                priority=34,
+                category="download",
+                required=False,
+            )
             app.state.retry_scheduler_worker = retry_scheduler_worker
             app.state.retry_scheduler_task = retry_scheduler_task
             logger.info(
@@ -572,19 +666,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
             # =================================================================
-            # Start Automation Workers (optional, controlled by settings)
+            # Automation Workers (optional, controlled by settings)
             # =================================================================
             # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
-            # Sie laufen im Hintergrund und checken nur, ob enabled via AppSettingsService.
-            # Wenn disabled, loggen sie nur "skipping" und warten auf nächsten Interval.
-            # REFACTORED (Dec 2025): Now uses SpotifyPlugin instead of SpotifyClient!
             from soulspot.application.workers.automation_workers import (
                 AutomationWorkerManager,
             )
             from soulspot.infrastructure.plugins import SpotifyPlugin
 
             # Create SpotifyPlugin for automation workers
-            # Token will be set dynamically before each operation via token_manager
             automation_spotify_plugin = SpotifyPlugin(
                 client=spotify_client,
                 access_token=None,  # Token set via set_token() by workers
@@ -598,15 +688,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 discography_interval=86400,  # 24 hours
                 quality_interval=86400,  # 24 hours
             )
+            # AutomationWorkerManager has its own start_all() - creates internal tasks
             await automation_manager.start_all()
+            # Register the manager itself (not individual workers)
+            orchestrator.register(
+                name="automation_manager",
+                worker=automation_manager,
+                category="automation",
+                priority=80,
+                required=False,
+            )
             app.state.automation_manager = automation_manager
             logger.info("Automation workers started (watchlist/discography/quality)")
 
             # =================================================================
-            # Start Cleanup Worker (optional, default disabled)
+            # Cleanup Worker (optional, default disabled)
             # =================================================================
             # Hey future me - dieser Worker ist GEFÄHRLICH weil er Dateien LÖSCHT!
-            # Deswegen ist er per Default disabled. User muss explizit enablen.
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
@@ -620,15 +718,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 music_path=settings.storage.music_path,
                 dry_run=False,  # Set to True for testing
             )
-            await cleanup_worker.start()
+            orchestrator.register(
+                name="cleanup",
+                worker=cleanup_worker,
+                category="maintenance",
+                priority=70,
+                required=False,
+            )
             app.state.cleanup_worker = cleanup_worker
-            logger.info("Cleanup worker started (checks daily, disabled by default)")
 
             # =================================================================
-            # Start Duplicate Detector Worker (optional, default disabled)
+            # Duplicate Detector Worker (optional, default disabled)
             # =================================================================
             # Hey future me - dieser Worker findet Duplikate via Metadata-Hash.
-            # Er ist CPU-intensiv, deswegen läuft er nur 1x pro Woche default.
             from soulspot.application.workers.duplicate_detector_worker import (
                 DuplicateDetectorWorker,
             )
@@ -639,20 +741,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 settings_service=app_settings_service,
                 session_scope=db.session_scope,
             )
-            await duplicate_detector_worker.start()
-            app.state.duplicate_detector_worker = duplicate_detector_worker
-            logger.info(
-                "Duplicate detector worker started (weekly scan, disabled by default)"
+            orchestrator.register(
+                name="duplicate_detector",
+                worker=duplicate_detector_worker,
+                category="maintenance",
+                priority=71,
+                required=False,
             )
+            app.state.duplicate_detector_worker = duplicate_detector_worker
 
             # =================================================================
-            # Start Image Backfill Worker (automatic artwork downloading)
+            # Image Backfill Worker (automatic artwork downloading)
             # =================================================================
-            # Hey future me - dieser Worker ERSETZT den manuellen "Fetch Artwork" Button!
-            # Er läuft alle 30 Minuten und downloadet fehlende Artist/Album Images.
-            # - LibraryDiscoveryWorker findet CDN URLs → speichert in image_url
-            # - ImageWorker downloadet CDN URLs → speichert in image_path
-            # Controlled by: library.auto_fetch_artwork and library.download_images
             from soulspot.application.workers.ImageWorker import (
                 ImageBackfillWorker,
             )
@@ -663,11 +763,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 run_interval_minutes=30,  # Run every 30 minutes
                 batch_size=50,  # Max 50 artists + 50 albums per cycle
             )
-            await image_backfill_worker.start()
+            orchestrator.register(
+                name="image_backfill",
+                worker=image_backfill_worker,
+                category="enrichment",
+                priority=51,
+                required=False,
+            )
             app.state.image_backfill_worker = image_backfill_worker
-            logger.info("Image backfill worker started (runs every 30min)")
 
-            # Start auto-import service in the background
+            # Auto-import service
             from soulspot.application.services import AutoImportService
             from soulspot.infrastructure.persistence.repositories import (
                 AlbumRepository,
@@ -676,39 +781,50 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 TrackRepository,
             )
 
-            # Create auto-import service using the worker session
-            # Hey future me - AutoImportService still uses shared session because:
-            # 1. It mostly does READS (finding tracks, getting metadata)
-            # 2. The actual file operations (moving files) don't need DB
-            # 3. The WRITES it does (updating file paths) are quick and isolated
-            # For now this is acceptable - full refactor to session_factory later if needed.
             auto_import_service = AutoImportService(
                 settings=settings,
                 track_repository=TrackRepository(worker_session),
                 artist_repository=ArtistRepository(worker_session),
                 album_repository=AlbumRepository(worker_session),
-                download_repository=DownloadRepository(
-                    worker_session
-                ),  # Filter by completed downloads
+                download_repository=DownloadRepository(worker_session),
                 poll_interval=settings.postprocessing.auto_import_poll_interval,
-                spotify_plugin=automation_spotify_plugin,  # For Spotify artwork downloads
-                app_settings_service=app_settings_service,  # For dynamic naming templates
+                spotify_plugin=automation_spotify_plugin,
+                app_settings_service=app_settings_service,
             )
             app.state.auto_import = auto_import_service
+            # AutoImportService runs as blocking coroutine
             auto_import_task = asyncio.create_task(auto_import_service.start())
+            orchestrator.register_running_task(
+                name="auto_import",
+                task=auto_import_task,
+                worker=auto_import_service,
+                priority=90,
+                category="automation",
+                required=False,
+            )
             logger.info("Auto-import service started")
 
             # =================================================================
-            # DEPRECATED: Fire-and-forget image backfill removed (Dec 2025)
+            # START ALL ORCHESTRATOR-MANAGED WORKERS
             # =================================================================
-            # Hey future me - the old backfill_missing_images() function has been
-            # REPLACED by ImageBackfillWorker! The worker:
-            # - Runs every 30 minutes (configurable)
-            # - Processes max 50 artists + 50 albums per cycle
-            # - Respects library.auto_fetch_artwork and library.download_images
-            # - Has graceful shutdown support
-            # The old fire-and-forget was limited to 100 items and only ran once.
-            # =================================================================
+            # Hey future me - THIS IS WHERE THE MAGIC HAPPENS!
+            # All workers registered with orchestrator.register() (not register_running_task)
+            # will be started here in priority order!
+            logger.info("Starting all orchestrator-managed workers...")
+            start_success = await orchestrator.start_all()
+            if not start_success:
+                logger.error("Some required workers failed to start!")
+                # Don't raise - let app continue with degraded functionality
+            else:
+                logger.info("All orchestrator-managed workers started successfully")
+
+            # Log orchestrator summary
+            status = orchestrator.get_status()
+            logger.info(
+                "Worker orchestrator tracking %d workers: %s",
+                status["total_workers"],
+                ", ".join(status["workers"].keys()),
+            )
 
             # Yield to keep the app running - session stays open during app lifetime
             yield
@@ -717,179 +833,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.exception("Error during application startup: %s", e)
         raise
     finally:
-        # Shutdown - always attempt cleanup
+        # =================================================================
+        # SHUTDOWN via Worker Orchestrator (Refactored Dec 2025)
+        # =================================================================
+        # Hey future me - der Orchestrator stoppt ALLE Worker in einer Zeile!
+        # Früher waren das 160+ Zeilen mit try/except für jeden Worker.
+        # Der Orchestrator:
+        # - Stoppt Worker in umgekehrter Priority-Reihenfolge
+        # - Hat Timeout per Worker (default 10s)
+        # - Loggt jeden Stop-Vorgang
+        # - Fängt Exceptions pro Worker, bricht nicht ab
+        #
+        # Worker die NICHT beim Orchestrator registriert sind:
+        # - job_queue: Wird separat gestoppt (ist kein "Worker")
+        # - auto_import: Wird separat gestoppt (task-basiert)
+        # - database: Wird separat geschlossen
+        # - http_pool: Wird separat geschlossen
+        
         logger.info("Shutting down application")
 
-        # Stop duplicate detector worker first (least critical)
-        if hasattr(app.state, "duplicate_detector_worker"):
-            try:
-                logger.info("Stopping duplicate detector worker...")
-                await app.state.duplicate_detector_worker.stop()
-                logger.info("Duplicate detector worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping duplicate detector worker: %s", e)
-
-        # Stop image backfill worker
-        if hasattr(app.state, "image_backfill_worker"):
-            try:
-                logger.info("Stopping image backfill worker...")
-                await app.state.image_backfill_worker.stop()
-                logger.info("Image backfill worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping image backfill worker: %s", e)
-
-        # Stop cleanup worker
-        if hasattr(app.state, "cleanup_worker"):
-            try:
-                logger.info("Stopping cleanup worker...")
-                await app.state.cleanup_worker.stop()
-                logger.info("Cleanup worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping cleanup worker: %s", e)
-
-        # Stop library discovery worker
-        if hasattr(app.state, "library_discovery_worker"):
-            try:
-                logger.info("Stopping library discovery worker...")
-                await app.state.library_discovery_worker.stop()
-                logger.info("Library discovery worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping library discovery worker: %s", e)
-
-        # Stop automation workers
-        if hasattr(app.state, "automation_manager"):
-            try:
-                logger.info("Stopping automation workers...")
-                await app.state.automation_manager.stop_all()
-                logger.info("Automation workers stopped")
-            except Exception as e:
-                logger.exception("Error stopping automation workers: %s", e)
-
-        # Stop download monitor worker
-        if (
-            hasattr(app.state, "download_monitor_worker")
-            and app.state.download_monitor_worker is not None
-        ):
-            try:
-                logger.info("Stopping download monitor worker...")
-                await app.state.download_monitor_worker.stop()
-                logger.info("Download monitor worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping download monitor worker: %s", e)
-
-        # Stop queue dispatcher worker
-        if (
-            hasattr(app.state, "queue_dispatcher_worker")
-            and app.state.queue_dispatcher_worker is not None
-        ):
-            try:
-                logger.info("Stopping queue dispatcher worker...")
-                app.state.queue_dispatcher_worker.stop()
-                # Wait for task to complete gracefully with timeout
-                if (
-                    hasattr(app.state, "queue_dispatcher_task")
-                    and app.state.queue_dispatcher_task is not None
-                ):
+        # 1. Stop ALL workers via orchestrator (replaces 160+ lines of try/except!)
+        orchestrator = getattr(app.state, "orchestrator", None)
+        if orchestrator is not None:
+            await orchestrator.stop_all()
+        else:
+            logger.warning("Orchestrator not found - workers may not be stopped properly")
+            # Fallback: Stop critical workers manually if orchestrator missing
+            for worker_name in ["token_refresh_worker", "spotify_sync_worker", "deezer_sync_worker"]:
+                worker = getattr(app.state, worker_name, None)
+                if worker is not None:
                     try:
-                        await asyncio.wait_for(
-                            app.state.queue_dispatcher_task,
-                            timeout=5.0,
-                        )
-                    except TimeoutError:
-                        app.state.queue_dispatcher_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await app.state.queue_dispatcher_task
-                logger.info("Queue dispatcher worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping queue dispatcher worker: %s", e)
+                        await worker.stop()
+                        logger.info(f"{worker_name} stopped (fallback)")
+                    except Exception as e:
+                        logger.exception(f"Error stopping {worker_name}: {e}")
 
-        # Stop download status sync worker
-        if (
-            hasattr(app.state, "download_status_sync_worker")
-            and app.state.download_status_sync_worker is not None
-        ):
-            try:
-                logger.info("Stopping download status sync worker...")
-                app.state.download_status_sync_worker.stop()
-                if (
-                    hasattr(app.state, "download_status_sync_task")
-                    and app.state.download_status_sync_task is not None
-                ):
-                    try:
-                        await asyncio.wait_for(
-                            app.state.download_status_sync_task,
-                            timeout=5.0,
-                        )
-                    except TimeoutError:
-                        app.state.download_status_sync_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await app.state.download_status_sync_task
-                logger.info("Download status sync worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping download status sync worker: %s", e)
-
-        # Stop retry scheduler worker (auto-retry for failed downloads)
-        if (
-            hasattr(app.state, "retry_scheduler_worker")
-            and app.state.retry_scheduler_worker is not None
-        ):
-            try:
-                logger.info("Stopping retry scheduler worker...")
-                app.state.retry_scheduler_worker.stop()
-                if (
-                    hasattr(app.state, "retry_scheduler_task")
-                    and app.state.retry_scheduler_task is not None
-                ):
-                    try:
-                        await asyncio.wait_for(
-                            app.state.retry_scheduler_task,
-                            timeout=5.0,
-                        )
-                    except TimeoutError:
-                        app.state.retry_scheduler_task.cancel()
-                        with suppress(asyncio.CancelledError):
-                            await app.state.retry_scheduler_task
-                logger.info("Retry scheduler worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping retry scheduler worker: %s", e)
-
-        # Stop Spotify sync worker first (depends on token manager)
-        if hasattr(app.state, "spotify_sync_worker"):
-            try:
-                logger.info("Stopping Spotify sync worker...")
-                await app.state.spotify_sync_worker.stop()
-                logger.info("Spotify sync worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping Spotify sync worker: %s", e)
-
-        # Stop Deezer sync worker
-        if hasattr(app.state, "deezer_sync_worker"):
-            try:
-                logger.info("Stopping Deezer sync worker...")
-                await app.state.deezer_sync_worker.stop()
-                logger.info("Deezer sync worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping Deezer sync worker: %s", e)
-
-        # Stop New Releases sync worker
-        if hasattr(app.state, "new_releases_sync_worker"):
-            try:
-                logger.info("Stopping New Releases sync worker...")
-                await app.state.new_releases_sync_worker.stop()
-                logger.info("New Releases sync worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping New Releases sync worker: %s", e)
-
-        # Stop token refresh worker
-        if token_refresh_worker is not None:
-            try:
-                logger.info("Stopping token refresh worker...")
-                await token_refresh_worker.stop()
-                logger.info("Token refresh worker stopped")
-            except Exception as e:
-                logger.exception("Error stopping token refresh worker: %s", e)
-
-        # Stop job queue
+        # 2. Stop job queue (not a worker, manages download jobs)
         if job_queue is not None:
             try:
                 logger.info("Stopping job queue...")
@@ -898,19 +877,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as e:
                 logger.exception("Error stopping job queue: %s", e)
 
-        # Stop auto-import service
+        # 3. Stop auto-import service (task-based, special handling)
         if auto_import_task is not None:
             try:
                 if hasattr(app.state, "auto_import"):
                     await app.state.auto_import.stop()
-                    # Wait for task to complete gracefully with timeout
                     try:
                         await asyncio.wait_for(
                             auto_import_task,
                             timeout=settings.observability.shutdown_timeout,
                         )
                     except TimeoutError:
-                        # If timeout, cancel forcefully
                         auto_import_task.cancel()
                         with suppress(asyncio.CancelledError):
                             await auto_import_task
@@ -918,7 +895,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception as e:
                 logger.exception("Error stopping auto-import service: %s", e)
 
-        # Close database
+        # 4. Close database connection
         try:
             if hasattr(app.state, "db"):
                 await app.state.db.close()
@@ -926,7 +903,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as e:
             logger.exception("Error closing database: %s", e)
 
-        # Close HTTP client pool (release all TCP connections)
+        # 5. Close HTTP client pool (release all TCP connections)
         try:
             from soulspot.infrastructure.integrations.http_pool import HttpClientPool
 

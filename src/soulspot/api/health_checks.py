@@ -188,49 +188,59 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
             ):
                 overall_status = HealthStatus.DEGRADED
 
-        # Worker health checks
-        workers_status = {}
-        workers_healthy = True
-
-        # Download Worker
-        download_worker = getattr(app.state, "download_worker", None)
-        if download_worker:
-            worker_status = download_worker.get_status()
-            workers_status["download_worker"] = {
-                "running": worker_status.get("running", False),
-                "queue_size": worker_status.get("queue_size", 0),
+        # Worker health checks via Orchestrator (refactored Dec 2025)
+        # Hey future me - we now use the centralized orchestrator for worker health!
+        # This replaces 50+ lines of individual worker checks with one orchestrator call.
+        # The orchestrator tracks all workers and knows if required workers are healthy.
+        orchestrator = getattr(app.state, "orchestrator", None)
+        if orchestrator is not None:
+            orchestrator_status = orchestrator.get_status()
+            workers_healthy = orchestrator.is_healthy()
+            
+            # Simplified worker status for health endpoint
+            workers_summary = {
+                "total": orchestrator_status.get("total_workers", 0),
+                "by_state": orchestrator_status.get("by_state", {}),
+                "healthy": workers_healthy,
             }
-            if not worker_status.get("running"):
-                workers_healthy = False
-
-        # Download Status Sync Worker
-        status_sync_worker = getattr(app.state, "download_status_sync_worker", None)
-        if status_sync_worker:
-            worker_status = status_sync_worker.get_status()
-            workers_status["download_status_sync"] = {
-                "running": worker_status.get("running", False),
-                "last_poll": worker_status.get("stats", {}).get("last_poll_at"),
+            
+            # Add individual worker states for debugging
+            workers_detail = {}
+            for name, info in orchestrator_status.get("workers", {}).items():
+                workers_detail[name] = {
+                    "state": info.get("state", "unknown"),
+                    "category": info.get("category", "general"),
+                }
+            
+            checks["workers"] = {
+                "summary": workers_summary,
+                "workers": workers_detail,
             }
-            if not worker_status.get("running"):
-                workers_healthy = False
+        else:
+            # Fallback: check workers manually if orchestrator not available
+            workers_healthy = True
+            workers_status = {}
+            
+            # Download Worker
+            download_worker = getattr(app.state, "download_worker", None)
+            if download_worker:
+                worker_status = download_worker.get_status()
+                workers_status["download_worker"] = {
+                    "running": worker_status.get("running", False),
+                }
+                if not worker_status.get("running"):
+                    workers_healthy = False
+    
+            # Token Refresh Worker
+            token_worker = getattr(app.state, "token_refresh_worker", None)
+            if token_worker:
+                worker_status = token_worker.get_status()
+                workers_status["token_refresh"] = {
+                    "running": worker_status.get("running", False),
+                }
+            
+            checks["workers"] = workers_status
 
-        # Retry Scheduler Worker
-        retry_scheduler = getattr(app.state, "retry_scheduler_worker", None)
-        if retry_scheduler:
-            worker_status = retry_scheduler.get_status()
-            workers_status["retry_scheduler"] = {
-                "running": worker_status.get("running", False),
-            }
-
-        # Token Refresh Worker
-        token_worker = getattr(app.state, "token_refresh_worker", None)
-        if token_worker:
-            worker_status = token_worker.get_status()
-            workers_status["token_refresh"] = {
-                "running": worker_status.get("running", False),
-            }
-
-        checks["workers"] = workers_status
         if not workers_healthy and overall_status == HealthStatus.HEALTHY:
             overall_status = HealthStatus.DEGRADED
 
