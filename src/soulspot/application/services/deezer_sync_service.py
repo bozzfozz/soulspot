@@ -25,6 +25,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.infrastructure.persistence.repositories import (
@@ -603,12 +604,10 @@ class DeezerSyncService:
 
         from soulspot.infrastructure.persistence.models import ArtistModel
 
-        deezer_uri = f"deezer:artist:{deezer_artist_id}"
-
         try:
             stmt = (
                 update(ArtistModel)
-                .where(ArtistModel.deezer_uri == deezer_uri)
+                .where(ArtistModel.deezer_id == deezer_artist_id)
                 .values(albums_synced_at=datetime.now(UTC))
             )
             await self._session.execute(stmt)
@@ -631,12 +630,10 @@ class DeezerSyncService:
 
         from soulspot.infrastructure.persistence.models import AlbumModel
 
-        deezer_uri = f"deezer:album:{deezer_album_id}"
-
         try:
             stmt = (
                 update(AlbumModel)
-                .where(AlbumModel.deezer_uri == deezer_uri)
+                .where(AlbumModel.deezer_id == deezer_album_id)
                 .values(tracks_synced_at=datetime.now(UTC))
             )
             await self._session.execute(stmt)
@@ -726,6 +723,7 @@ class DeezerSyncService:
         self,
         track_dto: Any,
         artist_id: str,
+        album_id: str | None = None,
         is_chart: bool = False,
     ) -> None:
         """Save track DTO with artist relationship.
@@ -735,6 +733,7 @@ class DeezerSyncService:
         Args:
             track_dto: Track DTO from plugin
             artist_id: Internal artist ID to link to
+            album_id: Optional internal album UUID to link to (set by album track sync)
             is_chart: Whether this is from charts
         """
         import uuid
@@ -742,24 +741,41 @@ class DeezerSyncService:
         from soulspot.infrastructure.persistence.models import TrackModel
 
         try:
-            # Check if track exists (by deezer_id or ISRC)
-            existing = None
+            # Hey future me - use ORM lookup here (NOT TrackRepository), because we want
+            # a persistent TrackModel instance we can update in-place.
+            existing: TrackModel | None = None
             if track_dto.deezer_id:
-                existing = await self._track_repo.get_by_deezer_id(track_dto.deezer_id)
-            if not existing and track_dto.isrc:
-                existing = await self._track_repo.get_by_isrc(track_dto.isrc)
+                result = await self._session.execute(
+                    select(TrackModel).where(TrackModel.deezer_id == track_dto.deezer_id)
+                )
+                existing = result.scalar_one_or_none()
 
-            if existing:
+            if existing is None and track_dto.isrc:
+                result = await self._session.execute(
+                    select(TrackModel).where(TrackModel.isrc == track_dto.isrc)
+                )
+                existing = result.scalar_one_or_none()
+
+            if existing is not None:
                 # Update existing
                 existing.title = track_dto.title
                 existing.deezer_id = track_dto.deezer_id or existing.deezer_id
                 existing.isrc = track_dto.isrc or existing.isrc
+                existing.duration_ms = track_dto.duration_ms or existing.duration_ms
+                existing.track_number = track_dto.track_number or existing.track_number
+                existing.disc_number = track_dto.disc_number or existing.disc_number
+                existing.explicit = track_dto.explicit if track_dto.explicit is not None else existing.explicit
+
+                # Link to album if this is an album-track sync and the track isn't linked yet.
+                if album_id and existing.album_id is None:
+                    existing.album_id = album_id
             else:
                 # Create new with artist relationship
                 new_track = TrackModel(
                     id=str(uuid.uuid4()),
                     title=track_dto.title,
                     artist_id=artist_id,  # CRITICAL: Link to artist
+                    album_id=album_id,
                     deezer_id=track_dto.deezer_id,
                     isrc=track_dto.isrc,
                     duration_ms=track_dto.duration_ms or 0,
@@ -1217,6 +1233,17 @@ class DeezerSyncService:
         }
 
         try:
+            # Ensure the album exists so we can link tracks to it.
+            album = await self._album_repo.get_by_deezer_id(deezer_album_id)
+            if not album:
+                return {
+                    "synced": False,
+                    "tracks_synced": 0,
+                    "error": "album_not_found",
+                }
+
+            album_internal_id = str(album.id.value)
+
             # Get album tracks from Deezer (NO OAuth needed!)
             tracks = await self._plugin.get_album_tracks(deezer_album_id, limit=100)
 
@@ -1240,7 +1267,10 @@ class DeezerSyncService:
             for track_dto in tracks:
                 try:
                     await self._save_track_with_artist(
-                        track_dto, artist_id, is_chart=False
+                        track_dto,
+                        artist_id,
+                        album_id=album_internal_id,
+                        is_chart=False,
                     )
                     result["tracks_synced"] += 1
                 except Exception as e:

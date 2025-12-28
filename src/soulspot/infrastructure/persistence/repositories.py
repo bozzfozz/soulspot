@@ -1560,8 +1560,8 @@ class AlbumRepository(IAlbumRepository):
         """
         stmt = (
             update(AlbumModel)
-            .where(AlbumModel.id == str(album_id))
-            .values(cover_url=cover_url)
+            .where(AlbumModel.id == str(album_id.value))
+            .values(cover_url=cover_url, updated_at=datetime.now(UTC))
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0

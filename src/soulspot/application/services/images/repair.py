@@ -149,8 +149,13 @@ async def get_albums_with_provider_id_but_no_cover_url(
     Important: We intentionally require a provider ID here to avoid fuzzy matching
     wrong covers for unknown albums.
     """
+    # Hey future me - we eagerly load AlbumModel.artist so Phase 2 can pass artist_name
+    # to provider lookups without triggering async-unsafe lazy loads.
+    from sqlalchemy.orm import selectinload
+
     stmt = (
         select(AlbumModel)
+        .options(selectinload(AlbumModel.artist))
         .where(
             or_(
                 AlbumModel.deezer_id.isnot(None),
@@ -577,8 +582,12 @@ async def get_albums_missing_covers(
     
     SQL Logic Fix (Dec 2025): Same NULL handling fix as artist queries.
     """
+    # Hey future me - eagerly load artist to avoid lazy-load surprises in async code.
+    from sqlalchemy.orm import selectinload
+
     stmt = (
         select(AlbumModel)
+        .options(selectinload(AlbumModel.artist))
         .where(
             AlbumModel.cover_url.isnot(None),
             AlbumModel.cover_url != "",
@@ -793,7 +802,7 @@ async def repair_album_images(
 
                     image_result = await image_provider_registry.get_album_image(
                         album_title=album.title,
-                        artist_name=None,
+                        artist_name=album.artist.name if getattr(album, "artist", None) else None,
                         album_ids=album_ids,
                     )
                     await asyncio.sleep(API_RATE_LIMIT_SECONDS)
