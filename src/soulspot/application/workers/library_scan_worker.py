@@ -276,14 +276,21 @@ class LibraryScanWorker:
         Hey future me - ENHANCED (Dec 2025) to also repair images!
         After discovery saves CDN URLs, we download them locally.
 
+        REFACTORED (Dec 2025): Now uses modern repair functions directly,
+        not the deprecated ImageRepairService wrapper!
+
         Args:
             job: The job to process
 
         Returns:
             Result dictionary with enrichment/discovery stats + image repair stats
         """
-        from soulspot.application.services.image_repair_service import ImageRepairService
+        # Use modern repair functions directly (not deprecated wrapper!)
         from soulspot.application.services.images import ImageService
+        from soulspot.application.services.images.repair import (
+            repair_album_images,
+            repair_artist_images,
+        )
         from soulspot.application.workers.library_discovery_worker import (
             LibraryDiscoveryWorker,
         )
@@ -334,19 +341,23 @@ class LibraryScanWorker:
                 image_registry = ImageProviderRegistry()
                 image_registry.register(deezer_provider, priority=1)
 
-                repair_service = ImageRepairService(
+                # Repair artist images (modern function!)
+                artist_repair_stats = await repair_artist_images(
                     session=session,
                     image_service=image_service,
-                    image_provider_registry=image_registry,  # Use Deezer for missing images!
-                    spotify_plugin=None,  # Spotify needs auth, skip
+                    image_provider_registry=image_registry,
+                    spotify_plugin=None,
+                    limit=100,
                 )
-
-                # Repair artist images
-                artist_repair_stats = await repair_service.repair_artist_images(limit=100)
                 stats["image_repair_artists"] = artist_repair_stats
 
-                # Repair album images
-                album_repair_stats = await repair_service.repair_album_images(limit=100)
+                # Repair album images (modern function!)
+                album_repair_stats = await repair_album_images(
+                    session=session,
+                    image_service=image_service,
+                    image_provider_registry=image_registry,
+                    limit=100,
+                )
                 stats["image_repair_albums"] = album_repair_stats
 
                 await session.commit()

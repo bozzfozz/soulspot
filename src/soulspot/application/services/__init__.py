@@ -1,6 +1,11 @@
 """Application services - Token management and business logic services."""
 
 from soulspot.application.services.app_settings_service import AppSettingsService
+
+# Hey future me - AutoFetchService centralizes all background auto-fetching!
+# Replaces inline auto-fetch logic that was scattered across UI routes.
+# Architecture: Routes → AutoFetchService → repair_artist_images() / repair_album_images()
+from soulspot.application.services.auto_fetch_service import AutoFetchService
 from soulspot.application.services.auto_import import AutoImportService
 from soulspot.application.services.compilation_analyzer_service import (
     AlbumAnalysisResult,
@@ -24,13 +29,10 @@ from soulspot.application.services.discover_service import (
     DiscoverService,
 )
 
-# Hey future me - ImageRepairService handles batch image repair!
-# Replaces repair_missing_artwork methods from LocalLibraryEnrichmentService (deprecated).
-# Named ImageRepairService (not ArtworkRepairService) for consistency with ImageService!
-from soulspot.application.services.image_repair_service import ImageRepairService
-
 # Hey future me – ImageService ist der NEUE zentrale Ort für Bildoperationen!
 # Ersetzt nach und nach artwork_service.py (Legacy)
+# Batch repair operations are now in images/repair.py:
+#   from soulspot.application.services.images.repair import repair_artist_images, repair_album_images
 # Siehe docs/architecture/IMAGE_SERVICE_DETAILED_PLAN.md
 from soulspot.application.services.images import (
     ImageDownloadErrorCode,
@@ -77,6 +79,7 @@ __all__ = [
     "AlbumAnalysisResult",
     "AppSettingsService",
     "AuthUrlResult",
+    "AutoFetchService",
     "AutoImportService",
     "CompilationAnalyzerService",
     "CredentialsService",
@@ -91,7 +94,6 @@ __all__ = [
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "ImageInfo",
-    "ImageRepairService",
     "ImageService",
     "LibraryMergeService",
     "LibraryViewService",

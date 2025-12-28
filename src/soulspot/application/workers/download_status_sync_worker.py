@@ -492,6 +492,53 @@ class DownloadStatusSyncWorker:
             )
             self._circuit_state = self.STATE_OPEN
 
+    def _calculate_backoff_interval(self) -> float:
+        """Calculate sleep interval with exponential backoff based on failures.
+
+        Returns:
+            Sleep interval in seconds (capped at max_interval)
+
+        Hey future me – this implements exponential backoff for the sync loop.
+        When slskd is having issues but circuit isn't fully open yet, we slow
+        down our retry rate to avoid hammering a struggling service.
+
+        Formula: base_interval * (2 ** failures), capped at 60 seconds
+        - 0 failures: 5s (normal)
+        - 1 failure: 10s
+        - 2 failures: 20s
+        - 3 failures: 40s
+        - 4+ failures: 60s (max)
+
+        Why cap at 60s? Because the circuit breaker opens after max_consecutive_failures
+        (default 5), and at that point we switch to circuit_breaker_timeout which is
+        also 60s by default. So this keeps the behavior consistent.
+        """
+        if self._consecutive_failures == 0:
+            return float(self._sync_interval)
+
+        # Exponential backoff: base * 2^failures
+        backoff = self._sync_interval * (2**self._consecutive_failures)
+
+        # Cap at circuit_breaker_timeout (default 60s)
+        max_interval = float(self._circuit_breaker_timeout)
+
+        return min(float(backoff), max_interval)
+
+    async def _should_attempt_recovery(self) -> bool:
+        """Check if enough time has passed to attempt recovery from OPEN state.
+
+        Returns:
+            True if recovery attempt should be made, False otherwise
+
+        Hey future me – this is called when circuit is OPEN to check if we've
+        waited long enough to try again. It's async to match the await in start().
+        The actual logic is simple: check if circuit_breaker_timeout has elapsed
+        since last failure.
+
+        This wraps the sync version _check_circuit_recovery() for async context.
+        """
+        return self._check_circuit_recovery()
+
     def _check_circuit_recovery(self) -> bool:
         """Check if circuit breaker should transition to HALF_OPEN for recovery test.
 

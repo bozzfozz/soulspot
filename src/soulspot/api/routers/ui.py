@@ -1387,6 +1387,25 @@ async def library_artists(
 
     enrichment_needed = (artists_without_image + albums_without_cover) > 0
 
+    # ==========================================================================
+    # AUTO-FETCH: Background image fetch via AutoFetchService (Application Layer)
+    # Hey future me - business logic lives in Service, not in Route!
+    # ==========================================================================
+    if artists_without_image > 0:
+        try:
+            from soulspot.application.services import AutoFetchService
+            from soulspot.config import get_settings
+
+            app_settings = get_settings()
+            auto_fetch = AutoFetchService(session, app_settings)
+            result = await auto_fetch.fetch_missing_artist_images(limit=10)
+            repaired = result.get("repaired", 0)
+            if repaired > 0:
+                artists_without_image = max(0, artists_without_image - repaired)
+        except Exception as e:
+            # Fail silently - this is a background optimization
+            logger.debug(f"[AUTO_FETCH_ARTISTS] Background fetch failed: {e}")
+
     # Count ALL artists by source for filter badges (not just current page!)
     # Hey future me - these counts come from DB, not from current page data
     count_all = await session.execute(select(func.count(ArtistModel.id)))
@@ -1552,6 +1571,23 @@ async def library_albums(
         "spotify": count_spotify.scalar() or 0,
         "hybrid": count_hybrid.scalar() or 0,
     }
+
+    # ==========================================================================
+    # AUTO-FETCH: Background cover fetch via AutoFetchService (Application Layer)
+    # Hey future me - business logic lives in Service, not in Route!
+    # ==========================================================================
+    albums_without_cover = sum(1 for a in albums if not a["artwork_url"])
+    if albums_without_cover > 0:
+        try:
+            from soulspot.application.services import AutoFetchService
+            from soulspot.config import get_settings
+
+            app_settings = get_settings()
+            auto_fetch = AutoFetchService(session, app_settings)
+            await auto_fetch.fetch_missing_album_covers(limit=10)
+        except Exception as e:
+            # Fail silently - this is a background optimization
+            logger.debug(f"[AUTO_FETCH_ALBUMS] Background fetch failed: {e}")
 
     return templates.TemplateResponse(
         request,
@@ -1781,13 +1817,16 @@ async def library_artist_detail(
     albums_result = await session.execute(albums_stmt)
     album_models = albums_result.scalars().all()
 
-    # Hey future me - AUTO-SYNC albums using MULTI-SERVICE PATTERN!
+    # Hey future me - AUTO-SYNC albums + tracks using MULTI-SERVICE PATTERN!
     # If artist has NO albums in DB, fetch from available services:
     # 1. Try Spotify (if authenticated + artist has spotify_uri)
     # 2. Fallback to Deezer (NO AUTH NEEDED - public API)
     #
     # This enables album browsing EVEN WITHOUT Spotify login!
     # Deezer can fetch albums by artist name for any artist.
+    #
+    # Dec 2025 UPDATE: Now uses sync_artist_discography_complete(include_tracks=True)
+    # which fetches BOTH albums AND tracks - so clicking an album shows tracks immediately!
     if not album_models:
         try:
             # MULTI-SERVICE PATTERN: Try available services
@@ -1837,10 +1876,22 @@ async def library_artist_detail(
                 deezer_plugin=deezer_plugin,  # Always available
             )
 
-            # Sync albums using available services
-            # Service will try Spotify if available, fall back to Deezer
-            await followed_service.sync_artist_albums(artist_model.id)
-            await session.commit()  # Commit new albums
+            # Sync albums AND tracks using available services
+            # Hey future me - This is the KEY CHANGE! We now use sync_artist_discography_complete
+            # with include_tracks=True so ALL album tracks are fetched and stored in DB.
+            # When user clicks an album, tracks load from DB (no API call needed)!
+            sync_stats = await followed_service.sync_artist_discography_complete(
+                artist_id=str(artist_model.id),
+                include_tracks=True,  # CRITICAL: Fetch tracks for ALL albums!
+            )
+            await session.commit()  # Commit new albums + tracks
+            
+            logger.info(
+                f"[ARTIST_DETAIL_SYNC] Synced discography for {artist_model.name}: "
+                f"albums={sync_stats.get('albums_added', 0)}, "
+                f"tracks={sync_stats.get('tracks_added', 0)}, "
+                f"source={sync_stats.get('source', 'none')}"
+            )
 
             # Re-query albums after sync
             albums_result = await session.execute(albums_stmt)
@@ -1860,6 +1911,7 @@ async def library_artist_detail(
             # Continue anyway - show empty albums list
 
     # Step 3: Get tracks for these albums (for LOCAL/HYBRID artists)
+    # Hey future me - This runs AFTER sync so it includes freshly fetched tracks!
     tracks_stmt = (
         select(TrackModel)
         .where(TrackModel.artist_id == artist_model.id)
@@ -1867,6 +1919,11 @@ async def library_artist_detail(
     )
     tracks_result = await session.execute(tracks_stmt)
     track_models = tracks_result.unique().scalars().all()
+    
+    # Log track count for debugging
+    logger.debug(
+        f"[ARTIST_DETAIL] Loaded {len(track_models)} tracks for {artist_model.name}"
+    )
 
     # Hey future me - UNIFIED ALBUM VIEW from artist_discography!
     # Shows ALL albums (owned + missing) with availability badges.
@@ -2306,6 +2363,27 @@ async def library_album_detail(
                 )
             except Exception:
                 pass  # Don't fail if we can't save
+
+        # ==========================================================================
+        # AUTO-SAVE: Persist streaming tracks via AutoFetchService (Application Layer)
+        # Hey future me - business logic lives in Service, not in Route!
+        # ==========================================================================
+        if streaming_tracks and provider_used:
+            try:
+                from soulspot.application.services import AutoFetchService
+                from soulspot.config import get_settings
+
+                app_settings = get_settings()
+                auto_fetch = AutoFetchService(session, app_settings)
+                await auto_fetch.save_streaming_tracks_to_db(
+                    album_id=str(album_model.id),
+                    artist_id=str(album_model.artist_id),
+                    tracks=streaming_tracks,
+                    source=provider_used,
+                )
+            except Exception as e:
+                logger.warning(f"[AUTO_SAVE_TRACKS] Failed to save tracks: {e}")
+                # Don't fail the page load if saving fails
 
     # If no tracks found (neither local nor streaming), show empty album with sync prompt
     logger.info(

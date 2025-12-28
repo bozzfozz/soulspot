@@ -323,7 +323,7 @@ class LibraryDiscoveryWorker:
         CDN image URLs are saved via update_deezer_id/update_spotify_uri.
 
         Actual image downloads happen separately via:
-        - ImageRepairService.repair_artist_images() (on-demand via UI)
+        - repair_artist_images() from images/repair.py (on-demand via UI)
         - lifecycle.py backfill_image_cache() (at app startup)
 
         Returns:
@@ -433,7 +433,7 @@ class LibraryDiscoveryWorker:
                 # NOTE: Image downloads are NOT done here!
                 # Hey future me - Worker is for DISCOVERY only, not downloads!
                 # Image downloads happen via:
-                # 1. ImageRepairService.repair_artist_images() (on-demand via UI)
+                # 1. repair_artist_images() from images/repair.py (on-demand via UI)
                 # 2. lifecycle.py backfill_image_cache() (at app startup)
                 # The CDN URLs are already saved above via update_deezer_id/update_spotify_uri!
 

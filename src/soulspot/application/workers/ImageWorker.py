@@ -1,13 +1,14 @@
-# Hey future me - ImageBackfillWorker is a THIN WRAPPER around ImageRepairService!
+# Hey future me - ImageBackfillWorker is a THIN WRAPPER around repair functions!
 #
-# REFACTORED (Dec 2025): Removed duplicate download logic, now delegates to ImageRepairService.
+# REFACTORED (Dec 2025): Now uses modern repair functions directly from images/repair.py,
+# not the deprecated ImageRepairService wrapper!
 #
 # What this worker does:
 # - Runs periodically (default: every 30 minutes)
 # - Checks settings (library.auto_fetch_artwork, library.download_images)
-# - Calls ImageRepairService.repair_artist_images() and repair_album_images()
+# - Calls repair_artist_images() and repair_album_images() directly
 #
-# What ImageRepairService handles:
+# What repair functions handle:
 # - Finding entities with missing images
 # - FAILED marker logic (24h retry)
 # - API fallback (Deezer → Spotify → MusicBrainz)
@@ -15,7 +16,7 @@
 #
 # This design avoids code duplication and ensures consistent behavior
 # between manual repair (API) and automatic backfill (background).
-"""Image Backfill Worker - Thin wrapper around ImageRepairService."""
+"""Image Backfill Worker - Thin wrapper around repair functions."""
 
 from __future__ import annotations
 
@@ -199,13 +200,15 @@ class ImageBackfillWorker:
                 stats["skipped_disabled"] = True
                 return stats
 
-            # Initialize services for ImageRepairService
-            from soulspot.application.services.image_repair_service import (
-                ImageRepairService,
-            )
+            # Use modern repair functions directly (not deprecated wrapper!)
+            # REFACTORED (Dec 2025): No more ImageRepairService wrapper!
             from soulspot.application.services.images import ImageService
             from soulspot.application.services.images.image_provider_registry import (
                 ImageProviderRegistry,
+            )
+            from soulspot.application.services.images.repair import (
+                repair_album_images,
+                repair_artist_images,
             )
             from soulspot.infrastructure.plugins import DeezerPlugin
             from soulspot.infrastructure.providers.deezer_image_provider import (
@@ -226,24 +229,24 @@ class ImageBackfillWorker:
             image_provider_registry = ImageProviderRegistry()
             image_provider_registry.register(deezer_provider, priority=2)
 
-            # Create ImageRepairService
-            repair_service = ImageRepairService(
+            # Phase 1: Repair artist images (modern function!)
+            artist_result = await repair_artist_images(
                 session=session,
                 image_service=image_service,
                 image_provider_registry=image_provider_registry,
-            )
-
-            # Phase 1: Repair artist images
-            artist_result = await repair_service.repair_artist_images(
-                limit=self.batch_size
+                spotify_plugin=None,
+                limit=self.batch_size,
             )
             stats["artists_processed"] = artist_result.get("processed", 0)
             stats["artists_repaired"] = artist_result.get("repaired", 0)
             stats["errors"].extend(artist_result.get("errors", []))
 
-            # Phase 2: Repair album images
-            album_result = await repair_service.repair_album_images(
-                limit=self.batch_size
+            # Phase 2: Repair album images (modern function!)
+            album_result = await repair_album_images(
+                session=session,
+                image_service=image_service,
+                image_provider_registry=image_provider_registry,
+                limit=self.batch_size,
             )
             stats["albums_processed"] = album_result.get("processed", 0)
             stats["albums_repaired"] = album_result.get("repaired", 0)

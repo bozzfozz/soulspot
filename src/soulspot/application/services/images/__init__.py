@@ -3,8 +3,9 @@
 #
 # REFACTORED (Dec 2025):
 # - Added failed_markers.py for FAILED|reason|timestamp handling
-# - Added repair.py for batch repair operations (from ImageRepairService)
-# - ImageRepairService is now DEPRECATED - use ImageService instead
+# - Added repair.py for batch repair operations (modern functions!)
+# - ImageRepairService wrapper is REMOVED - use repair functions directly:
+#   from soulspot.application.services.images.repair import repair_artist_images, repair_album_images
 #
 # Clean Architecture: DTOs are defined in domain/ports/image_service.py
 # and re-exported here for convenience. This keeps:
@@ -16,8 +17,10 @@
 #   - download_and_cache(): Download from CDN, convert to WebP, cache locally
 #   - validate_image(): Check if CDN URL is still valid
 #   - optimize_cache(): Clean up old/orphaned cached images
-#   - repair_artist_images(): Batch fix artists with missing images (NEW!)
-#   - repair_album_images(): Batch fix albums with missing covers (NEW!)
+#
+# Batch repair operations (in images/repair.py):
+#   - repair_artist_images(): Batch fix artists with missing images
+#   - repair_album_images(): Batch fix albums with missing covers
 #
 # What Plugins do (NOT ImageService):
 #   - Provide image URLs (spotify_plugin.get_artist() → ArtistDTO.image_url)

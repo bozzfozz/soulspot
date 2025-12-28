@@ -473,7 +473,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # The following services replace LocalLibraryEnrichmentService:
             # - LibraryMergeService: Duplicate detection & merging
             # - MusicBrainzEnrichmentService: Disambiguation enrichment
-            # - ImageRepairService: Artwork repair operations
+            # - repair_artist_images() / repair_album_images(): Artwork repair (images/repair.py)
             # - LibraryDiscoveryWorker: Automatic ID discovery (5 phases)
             # =================================================================
 

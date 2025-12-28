@@ -213,6 +213,9 @@ async def repair_missing_artwork(
     - Have no cover_url/image_url in DB yet
     - Were imported from local files without enrichment
 
+    REFACTORED (Dec 2025): Now uses modern repair functions directly,
+    not the deprecated ImageRepairService wrapper!
+
     Args:
         entity_type: 'artist', 'album', or None for both
         use_api: If True, search Deezer for missing images
@@ -221,8 +224,12 @@ async def repair_missing_artwork(
     Returns:
         Statistics about repaired artwork
     """
-    from soulspot.application.services.image_repair_service import ImageRepairService
+    # Use modern repair functions directly (not deprecated wrapper!)
     from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images.repair import (
+        repair_album_images,
+        repair_artist_images,
+    )
 
     # Create ImageService for downloading
     image_service = ImageService(
@@ -250,21 +257,26 @@ async def repair_missing_artwork(
         image_provider_registry.register(deezer_provider, priority=1)
         logger.info("Image repair using Deezer API for missing images")
 
-    service = ImageRepairService(
-        session=session,
-        image_service=image_service,
-        image_provider_registry=image_provider_registry,
-        spotify_plugin=None,  # Not needed, Deezer works without auth
-    )
-
     result: dict[str, Any] = {}
 
+    # Call modern functions directly (no deprecated wrapper!)
     if entity_type in (None, "artist"):
-        artist_result = await service.repair_artist_images(limit=limit)
+        artist_result = await repair_artist_images(
+            session=session,
+            image_service=image_service,
+            image_provider_registry=image_provider_registry,
+            spotify_plugin=None,
+            limit=limit,
+        )
         result["artists"] = artist_result
 
     if entity_type in (None, "album"):
-        album_result = await service.repair_album_images(limit=limit)
+        album_result = await repair_album_images(
+            session=session,
+            image_service=image_service,
+            image_provider_registry=image_provider_registry,
+            limit=limit,
+        )
         result["albums"] = album_result
 
     # Summary stats
@@ -564,3 +576,163 @@ async def enrich_disambiguation(
             </div>""",
             status_code=500,
         )
+
+
+# =============================================================================
+# AUTO-FETCH ENDPOINTS (Background fetch on page load)
+# Hey future me - these endpoints are called via HTMX on page load to
+# auto-fetch missing images in the background without blocking the UI!
+# =============================================================================
+
+
+@router.post("/auto-fetch-images", response_class=HTMLResponse)
+async def auto_fetch_images(
+    entity_type: str | None = Query(
+        None,
+        description="Filter by 'artist' or 'album', or omit for both",
+    ),
+    limit: int = Query(20, ge=1, le=100),
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> Any:
+    """Auto-fetch missing images in background (HTMX endpoint).
+
+    Hey future me - this is the AUTO-MAGIC endpoint!
+    Called via HTMX on page load to silently fetch missing images.
+    Returns an empty response or minimal status update for the UI.
+
+    Uses Deezer API (NO AUTH NEEDED!) to find images for entities
+    that have deezer_id but no local image cached yet.
+
+    Args:
+        entity_type: 'artist', 'album', or None for both
+        limit: Maximum entities to process (keep low for fast response)
+
+    Returns:
+        HTMX partial with status (empty if nothing to do)
+    """
+    from soulspot.application.services.image_repair_service import ImageRepairService
+    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images.image_provider_registry import (
+        ImageProviderRegistry,
+    )
+    from soulspot.infrastructure.plugins import DeezerPlugin
+    from soulspot.infrastructure.providers.deezer_image_provider import (
+        DeezerImageProvider,
+    )
+
+    try:
+        # Create ImageService for downloading
+        image_service = ImageService(
+            cache_base_path=str(settings.storage.image_path),
+            local_serve_prefix="/api/images",
+        )
+
+        # Create Deezer provider (NO AUTH NEEDED!)
+        deezer_plugin = DeezerPlugin()
+        deezer_provider = DeezerImageProvider(deezer_plugin)
+
+        # Create registry with Deezer provider
+        image_provider_registry = ImageProviderRegistry()
+        image_provider_registry.register(deezer_provider, priority=1)
+
+        service = ImageRepairService(
+            session=session,
+            image_service=image_service,
+            image_provider_registry=image_provider_registry,
+            spotify_plugin=None,
+        )
+
+        total_repaired = 0
+
+        if entity_type in (None, "artist"):
+            artist_result = await service.repair_artist_images(limit=limit)
+            total_repaired += artist_result.get("repaired", 0)
+
+        if entity_type in (None, "album"):
+            album_result = await service.repair_album_images(limit=limit)
+            total_repaired += album_result.get("repaired", 0)
+
+        if total_repaired > 0:
+            logger.info(f"[AUTO_FETCH_IMAGES] Repaired {total_repaired} images in background")
+            # Return a subtle notification that can trigger a page refresh
+            return HTMLResponse(
+                f"""<div id="auto-fetch-result" data-repaired="{total_repaired}"
+                     hx-trigger="load" hx-get="" hx-swap="none"
+                     style="display:none;">
+                    <!-- Auto-fetched {total_repaired} images -->
+                </div>"""
+            )
+        else:
+            # Nothing to fetch - return empty
+            return HTMLResponse("")
+
+    except Exception as e:
+        logger.warning(f"[AUTO_FETCH_IMAGES] Background fetch failed: {e}")
+        # Fail silently - this is a background operation
+        return HTMLResponse("")
+
+
+@router.post("/auto-fetch-discography", response_class=HTMLResponse)
+async def auto_fetch_discography(
+    artist_id: str = Query(..., description="Artist ID to fetch discography for"),
+    include_tracks: bool = Query(True, description="Also fetch tracks for each album"),
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+) -> Any:
+    """Auto-fetch complete discography for an artist (HTMX endpoint).
+
+    Hey future me - this is the AUTO-ALBUM-FETCH endpoint!
+    Called when user views an artist that has no albums yet.
+    Fetches ALL albums + tracks from Deezer (or Spotify if authenticated).
+
+    Args:
+        artist_id: Our internal artist ID
+        include_tracks: Whether to also fetch tracks (default: True)
+
+    Returns:
+        HTMX partial with status
+    """
+    from soulspot.application.services.followed_artists_service import (
+        FollowedArtistsService,
+    )
+    from soulspot.infrastructure.plugins import DeezerPlugin
+
+    try:
+        # Deezer is ALWAYS available (no auth needed!)
+        deezer_plugin = DeezerPlugin()
+
+        # Create service (without Spotify - Deezer is sufficient)
+        service = FollowedArtistsService(
+            session,
+            spotify_plugin=None,
+            deezer_plugin=deezer_plugin,
+        )
+
+        # Sync discography with tracks
+        stats = await service.sync_artist_discography_complete(
+            artist_id=artist_id,
+            include_tracks=include_tracks,
+        )
+
+        albums_added = stats.get("albums_added", 0)
+        tracks_added = stats.get("tracks_added", 0)
+
+        if albums_added > 0 or tracks_added > 0:
+            logger.info(
+                f"[AUTO_FETCH_DISCOGRAPHY] artist={artist_id}: "
+                f"albums={albums_added}, tracks={tracks_added}"
+            )
+            return HTMLResponse(
+                f"""<div id="auto-fetch-result"
+                     data-albums="{albums_added}" data-tracks="{tracks_added}"
+                     style="display:none;">
+                    <!-- Auto-fetched {albums_added} albums, {tracks_added} tracks -->
+                </div>"""
+            )
+        else:
+            return HTMLResponse("")
+
+    except Exception as e:
+        logger.warning(f"[AUTO_FETCH_DISCOGRAPHY] Failed for artist {artist_id}: {e}")
+        return HTMLResponse("")
