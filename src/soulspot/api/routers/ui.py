@@ -2100,6 +2100,13 @@ async def library_album_detail(
     # Even if we have local tracks, we want the FULL tracklist from the provider.
     # If no provider ID exists, we'll search by artist+album name.
     
+    # DEBUG: Log album info for tracking
+    logger.info(
+        f"[ALBUM_DETAIL] Album: '{album_title}' by '{artist_name}' | "
+        f"deezer_id={album_model.deezer_id}, spotify_uri={album_model.spotify_uri}, "
+        f"local_tracks={len(track_models)}"
+    )
+    
     if True:  # Always try to fetch streaming tracks
         import asyncio
 
@@ -2108,11 +2115,14 @@ async def library_album_detail(
         # Define async fetchers for each source
         async def fetch_deezer_by_id() -> tuple[str, list[dict[str, Any]], str | None]:
             """Fetch tracks from Deezer using album ID."""
+            logger.info(f"[FETCH_DEEZER_ID] Attempting with deezer_id={album_model.deezer_id}")
             if not album_model.deezer_id:
+                logger.info("[FETCH_DEEZER_ID] Skipped - no deezer_id")
                 return ("deezer_id", [], None)
             try:
                 deezer_plugin = DeezerPlugin()
                 response = await deezer_plugin.get_album_tracks(album_model.deezer_id)
+                logger.info(f"[FETCH_DEEZER_ID] Got {len(response.items)} tracks from Deezer")
                 tracks = [
                     {
                         "id": f"deezer:{track.deezer_id}",
@@ -2135,34 +2145,42 @@ async def library_album_detail(
                 ]
                 return ("deezer_id", tracks, None)
             except Exception as e:
-                logger.debug(f"Deezer by ID failed: {e}")
+                logger.warning(f"[FETCH_DEEZER_ID] Failed: {e}")
                 return ("deezer_id", [], None)
 
         async def fetch_deezer_by_search() -> tuple[str, list[dict[str, Any]], str | None]:
             """Fetch tracks from Deezer by searching artist + album."""
             # Skip if we already have deezer_id (fetch_deezer_by_id will handle it)
             if album_model.deezer_id:
+                logger.info("[FETCH_DEEZER_SEARCH] Skipped - already have deezer_id")
                 return ("deezer_search", [], None)
             try:
                 deezer_plugin = DeezerPlugin()
                 search_query = f"{artist_name} {album_title}"
+                logger.info(f"[FETCH_DEEZER_SEARCH] Searching: '{search_query}'")
                 search_results = await deezer_plugin.search(
                     query=search_query,
                     types=["album"],
                     limit=5,
                 )
+                logger.info(f"[FETCH_DEEZER_SEARCH] Got {len(search_results.albums)} albums from search")
 
                 # Find best matching album
                 matched_album = None
                 for album in search_results.albums:
+                    logger.info(f"[FETCH_DEEZER_SEARCH] Checking album: '{album.title}' (deezer_id={album.deezer_id})")
                     if album.title.lower().strip() == album_title.lower().strip():
                         matched_album = album
+                        logger.info(f"[FETCH_DEEZER_SEARCH] EXACT MATCH: '{album.title}'")
                         break
                     if album_title.lower() in album.title.lower():
                         matched_album = album
+                        logger.info(f"[FETCH_DEEZER_SEARCH] PARTIAL MATCH: '{album.title}'")
 
                 if matched_album and matched_album.deezer_id:
+                    logger.info(f"[FETCH_DEEZER_SEARCH] Fetching tracks for matched album: deezer_id={matched_album.deezer_id}")
                     response = await deezer_plugin.get_album_tracks(matched_album.deezer_id)
+                    logger.info(f"[FETCH_DEEZER_SEARCH] Got {len(response.items)} tracks")
                     tracks = [
                         {
                             "id": f"deezer:{track.deezer_id}",
@@ -2185,14 +2203,17 @@ async def library_album_detail(
                     ]
                     # Return discovered deezer_id to save later
                     return ("deezer_search", tracks, matched_album.deezer_id)
+                logger.info("[FETCH_DEEZER_SEARCH] No matching album found")
                 return ("deezer_search", [], None)
             except Exception as e:
-                logger.debug(f"Deezer by search failed: {e}")
+                logger.warning(f"[FETCH_DEEZER_SEARCH] Failed: {e}")
                 return ("deezer_search", [], None)
 
         async def fetch_spotify() -> tuple[str, list[dict[str, Any]], str | None]:
             """Fetch tracks from Spotify (requires auth)."""
+            logger.info(f"[FETCH_SPOTIFY] Attempting with spotify_uri={album_model.spotify_uri}")
             if not album_model.spotify_uri:
+                logger.info("[FETCH_SPOTIFY] Skipped - no spotify_uri")
                 return ("spotify", [], None)
             try:
                 # Hey future me - get_credentials_service needs BOTH session AND settings!
@@ -2208,10 +2229,13 @@ async def library_album_detail(
                 spotify_plugin = await get_spotify_plugin_optional(request, credentials_service)
 
                 if not spotify_plugin or not spotify_plugin.is_authenticated:
+                    logger.info("[FETCH_SPOTIFY] Skipped - not authenticated")
                     return ("spotify", [], None)
 
                 spotify_album_id = album_model.spotify_uri.split(":")[-1]
+                logger.info(f"[FETCH_SPOTIFY] Fetching tracks for album_id={spotify_album_id}")
                 response = await spotify_plugin.get_album_tracks(spotify_album_id)
+                logger.info(f"[FETCH_SPOTIFY] Got {len(response.items)} tracks")
                 tracks = [
                     {
                         "id": f"spotify:{track.spotify_id}",
@@ -2234,12 +2258,13 @@ async def library_album_detail(
                 ]
                 return ("spotify", tracks, None)
             except Exception as e:
-                logger.debug(f"Spotify fetch failed: {e}")
+                logger.warning(f"[FETCH_SPOTIFY] Failed: {e}")
                 return ("spotify", [], None)
 
         # Run ALL fetchers in parallel!
         # Hey future me - this is the magic! All providers query simultaneously.
         # asyncio.gather returns results in same order as input tasks.
+        logger.info("[ALBUM_DETAIL] Running parallel fetchers...")
         results = await asyncio.gather(
             fetch_deezer_by_id(),
             fetch_deezer_by_search(),
@@ -2253,9 +2278,11 @@ async def library_album_detail(
         results_by_source = {}
         for r in results:
             if isinstance(r, Exception):
+                logger.warning(f"[ALBUM_DETAIL] Fetcher exception: {r}")
                 continue
             source, tracks, found_deezer_id = r
             results_by_source[source] = (tracks, found_deezer_id)
+            logger.info(f"[ALBUM_DETAIL] Result from {source}: {len(tracks)} tracks")
 
         for source in priority_order:
             if source in results_by_source:
@@ -2281,6 +2308,10 @@ async def library_album_detail(
                 pass  # Don't fail if we can't save
 
     # If no tracks found (neither local nor streaming), show empty album with sync prompt
+    logger.info(
+        f"[ALBUM_DETAIL] Final state: local_tracks={len(track_models)}, "
+        f"streaming_tracks={len(streaming_tracks)}, provider={provider_used}"
+    )
     if not track_models and not streaming_tracks:
         album_data = {
             "id": str(album_model.id),
