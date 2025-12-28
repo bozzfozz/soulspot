@@ -5376,8 +5376,15 @@ class ProviderBrowseRepository:
     ) -> list[Any]:
         """Get albums whose tracks haven't been synced yet.
 
-        Hey future me - this is for gradual background TRACK sync!
-        When we sync artist albums via get_artist_albums(), the API only returns
+        Hey future me - this is for gradual background track sync!
+        IMPORTANT: We *don't* filter by AlbumModel.source anymore.
+        After dedup/consolidation, a library album can be source='local' or
+        source='hybrid' but still have spotify_uri / deezer_id. Those still need
+        track sync, and filtering by source would silently skip them.
+
+        Instead, we filter by the provider identifier being present:
+        - source='spotify' -> spotify_uri IS NOT NULL
+        - source='deezer'  -> deezer_id IS NOT NULL
         simplified album objects WITHOUT tracks. This method finds albums where
         tracks_synced_at IS NULL so the background worker can gradually fill in
         the tracks without hitting API rate limits.
@@ -5388,6 +5395,12 @@ class ProviderBrowseRepository:
             limit: Maximum number of albums to return (default 10)
             source: Provider source filter ('spotify' or 'deezer')
 
+        provider_filter = AlbumModel.source == source
+        if source == "spotify":
+            provider_filter = AlbumModel.spotify_uri.isnot(None)
+        elif source == "deezer":
+            provider_filter = AlbumModel.deezer_id.isnot(None)
+
         Returns:
             List of AlbumModel objects without synced tracks
         """
@@ -5396,7 +5409,7 @@ class ProviderBrowseRepository:
         stmt = (
             select(AlbumModel)
             .where(
-                AlbumModel.source == source,
+                provider_filter,
                 AlbumModel.tracks_synced_at.is_(None),
             )
             .order_by(AlbumModel.release_date.desc())  # Newest albums first
@@ -5410,6 +5423,9 @@ class ProviderBrowseRepository:
 
         Useful for progress tracking in UI and logging.
 
+        Hey future me - see get_albums_pending_track_sync() for why we filter by
+        provider ID presence (spotify_uri/deezer_id) instead of AlbumModel.source.
+
         Args:
             source: Provider source filter ('spotify' or 'deezer')
 
@@ -5418,8 +5434,14 @@ class ProviderBrowseRepository:
         """
         from .models import AlbumModel
 
+        provider_filter = AlbumModel.source == source
+        if source == "spotify":
+            provider_filter = AlbumModel.spotify_uri.isnot(None)
+        elif source == "deezer":
+            provider_filter = AlbumModel.deezer_id.isnot(None)
+
         stmt = select(func.count(AlbumModel.id)).where(
-            AlbumModel.source == source,
+            provider_filter,
             AlbumModel.tracks_synced_at.is_(None),
         )
         result = await self.session.execute(stmt)
