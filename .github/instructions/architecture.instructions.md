@@ -372,6 +372,121 @@ Tracks werden gespeichert, aber `TrackModel.album_id` zeigt auf die falsche ID-A
         **wenn** die Repo-Methode intern die Album-UUID auflöst und `TrackModel.album_id` korrekt setzt.
     - ✅ Alles, was direkt `TrackModel.album_id = ...` setzt, MUSS eine Album-UUID verwenden.
 
+### 4.5 ID-Typen Referenz (VOLLSTÄNDIG!)
+
+Hey future me - hier ist die KOMPLETTE Referenz aller ID-Typen im System.
+Wenn du nicht weißt, welchen ID-Typ eine Methode erwartet, schau HIER nach!
+
+#### 4.5.1 Interne IDs (SoulSpot-generiert)
+
+| ID-Typ | Format | Beispiel | Wo gespeichert |
+|--------|--------|----------|----------------|
+| **Artist-UUID** | UUID v4 | `"550e8400-e29b-41d4-a716-446655440000"` | `ArtistModel.id`, `TrackModel.artist_id` |
+| **Album-UUID** | UUID v4 | `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"` | `AlbumModel.id`, `TrackModel.album_id` |
+| **Track-UUID** | UUID v4 | `"f47ac10b-58cc-4372-a567-0e02b2c3d479"` | `TrackModel.id`, `DownloadModel.track_id` |
+| **Playlist-UUID** | UUID v4 | `"a1b2c3d4-e5f6-7890-abcd-ef1234567890"` | `PlaylistModel.id` |
+
+**Wann interne UUIDs verwenden:**
+- Alle Foreign Keys (FK) in der Datenbank
+- Parameter mit Namen: `artist_id`, `album_id`, `track_id` (ohne Provider-Präfix!)
+- Repository-Methoden: `get_by_id()`, `delete()`, `update()`
+
+#### 4.5.2 Provider-IDs (von Spotify/Deezer/Tidal)
+
+| Provider | ID-Typ | Format | Beispiel | Wo gespeichert |
+|----------|--------|--------|----------|----------------|
+| **Spotify** | URI | `spotify:{type}:{id}` | `"spotify:artist:3TV0qLgjEYM0ST..."` | `*.spotify_uri` Column |
+| **Spotify** | ID only | Base62 string | `"3TV0qLgjEYM0STMlmI05U3"` | DTOs, API-Requests |
+| **Deezer** | ID | Integer als String | `"27"` (Daft Punk) | `*.deezer_id` Column |
+| **Tidal** | ID | Integer als String | `"3575680"` | `*.tidal_id` Column |
+| **MusicBrainz** | UUID | UUID v4 | `"078a9376-3c04-4280-b7d7-6d37..."` | `*.musicbrainz_id` Column |
+| **ISRC** | Code | `XX-YYY-ZZ-NNNNN` | `"USWB10903159"` | `TrackModel.isrc` |
+
+**Wann Provider-IDs verwenden:**
+- API-Calls zu externen Services (Spotify API erwartet `spotify_id`)
+- DTOs: `ArtistDTO.spotify_id`, `TrackDTO.deezer_id`
+- Parameter mit Präfix: `spotify_album_id`, `deezer_artist_id`
+- Plugin-Methoden: `get_artist(artist_id)` erwartet Provider-ID
+
+#### 4.5.3 ID-Konvertierung Cheat Sheet
+
+```python
+# ===============================================
+# Von Provider-ID zu internem UUID
+# ===============================================
+
+# Option A: ProviderMappingService (BEVORZUGT!)
+from soulspot.application.services.provider_mapping_service import ProviderMappingService
+
+mapping_service = ProviderMappingService(session)
+internal_artist_id, created = await mapping_service.get_or_create_artist(artist_dto, source="deezer")
+internal_album_id, created = await mapping_service.get_or_create_album(album_dto, artist_id=internal_artist_id)
+
+# Option B: Direktes Repository-Lookup
+artist = await artist_repo.get_by_deezer_id("27")  # → Artist Entity oder None
+if artist:
+    internal_uuid = str(artist.id.value)
+
+
+# ===============================================
+# Von internem UUID zu Entity
+# ===============================================
+
+from soulspot.domain.value_objects import ArtistId, AlbumId, TrackId
+
+artist_id = ArtistId.from_string("550e8400-e29b-41d4-a716-446655440000")
+artist = await artist_repo.get_by_id(artist_id)
+
+
+# ===============================================
+# Von Spotify URI zu Spotify ID (nur die ID)
+# ===============================================
+
+# Option A: Auf Entity nutze .spotify_id Property
+artist: Artist = await repo.get_by_id(artist_id)
+spotify_id = artist.spotify_id  # → "3TV0qLgjEYM0STMlmI05U3"
+
+# Option B: Auf SpotifyUri Value Object nutze .resource_id
+from soulspot.domain.value_objects import SpotifyUri
+uri = SpotifyUri("spotify:artist:3TV0qLgjEYM0STMlmI05U3")
+spotify_id = uri.resource_id  # → "3TV0qLgjEYM0STMlmI05U3"
+
+# ❌ FALSCH: Manuelles Splitting (fragil!)
+spotify_id = str(uri).split(":")[-1]  # Funktioniert, aber inkonsistent
+```
+
+#### 4.5.4 Unified Track Persistence (TrackRepository Pattern)
+
+Hey future me - alle Tracks von externen Providern MÜSSEN über diese Methode gehen:
+
+```python
+# ✅ RICHTIG: TrackRepository.upsert_from_provider()
+track = await track_repo.upsert_from_provider(
+    title="Song Title",
+    artist_id="550e8400-...",     # ← INTERNE UUID!
+    album_id="6ba7b810-...",      # ← INTERNE UUID!
+    source="deezer",
+    duration_ms=240000,
+    track_number=1,
+    disc_number=1,
+    isrc="USWB10903159",
+    deezer_id="12345678",         # ← PROVIDER-ID
+    spotify_uri="spotify:track:xyz",  # ← PROVIDER-URI (optional)
+)
+
+# ❌ FALSCH: Direktes ORM mit Provider-ID als album_id
+TrackModel(
+    title="Song Title",
+    artist_id=deezer_artist_id,   # ← CRASH! Erwartet UUID
+    album_id=deezer_album_id,     # ← CRASH! Erwartet UUID
+)
+```
+
+**Deduplication Priority:**
+1. **ISRC** (global einzigartig - beste Match!)
+2. **Provider-ID** (spotify_uri, deezer_id, tidal_id)
+3. **Title + Album** (case-insensitive Fallback)
+
 ---
 
 ## 5. RATE LIMITER SYSTEM (PFLICHT für externe APIs!)
