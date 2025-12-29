@@ -801,7 +801,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
             # Create ImageService for the queue worker
             queue_image_service = ImageService(
-                cache_base_path=str(settings.storage.images),
+                cache_base_path=str(settings.storage.image_path),
                 local_serve_prefix="/api/images",
             )
 
