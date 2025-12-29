@@ -22,8 +22,8 @@ from soulspot.api.dependencies import (
     get_track_repository,
 )
 from soulspot.api.routers.ui._shared import templates
-from soulspot.application.services.job_queue import JobQueue, JobStatus, JobType
 from soulspot.application.services.library_scanner import LibraryScannerService
+from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
     ArtistModel,
