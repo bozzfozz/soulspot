@@ -332,7 +332,9 @@ class AutoFetchService:
                         disc_number=track.get("disc_number", 1),
                         isrc=track.get("isrc"),
                         deezer_id=track.get("deezer_id"),
-                        spotify_id=track.get("spotify_id"),  # Converts to URI internally
+                        spotify_id=track.get(
+                            "spotify_id"
+                        ),  # Converts to URI internally
                     )
                     stats["saved"] += 1
 

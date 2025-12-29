@@ -497,9 +497,9 @@ async def library_album_detail(
                 logger.warning(f"[FETCH_DEEZER_ID] Failed: {e}")
                 return ("deezer_id", [], None)
 
-        async def fetch_deezer_by_search() -> (
-            tuple[str, list[dict[str, Any]], str | None]
-        ):
+        async def fetch_deezer_by_search() -> tuple[
+            str, list[dict[str, Any]], str | None
+        ]:
             """Fetch tracks from Deezer by searching artist + album."""
             # Skip if we already have deezer_id (fetch_deezer_by_id will handle it)
             if album_model.deezer_id:
@@ -543,7 +543,9 @@ async def library_album_detail(
                     response = await deezer_plugin.get_album_tracks(
                         matched_album.deezer_id
                     )
-                    logger.info(f"[FETCH_DEEZER_SEARCH] Got {len(response.items)} tracks")
+                    logger.info(
+                        f"[FETCH_DEEZER_SEARCH] Got {len(response.items)} tracks"
+                    )
                     tracks = [
                         {
                             "id": f"deezer:{track.deezer_id}",
@@ -744,7 +746,9 @@ async def library_album_detail(
 
     for track in track_models:
         disc = (
-            track.disc_number if hasattr(track, "disc_number") and track.disc_number else 1
+            track.disc_number
+            if hasattr(track, "disc_number") and track.disc_number
+            else 1
         )
         track_num = track.track_number or 0
         if track_num > 0:
@@ -890,7 +894,9 @@ async def library_album_detail(
             "spotify_uri": album_model.spotify_uri,
             "deezer_id": album_model.deezer_id,
             "is_streaming_only": downloaded_count == 0,  # All streaming, none local
-            "is_hybrid": 0 < downloaded_count < total_count,  # Some downloaded, some not
+            "is_hybrid": 0
+            < downloaded_count
+            < total_count,  # Some downloaded, some not
             "is_complete": downloaded_count == total_count,  # All downloaded
             "streaming_provider": provider_used,
             "downloaded_count": downloaded_count,
@@ -914,7 +920,9 @@ async def library_album_detail(
             "is_broken": track.is_broken,
             "source": track.source,  # 'local', 'spotify', 'deezer', 'tidal', 'hybrid'
             # Extract provider IDs for download support
-            "spotify_id": track.spotify_uri.split(":")[-1] if track.spotify_uri else None,
+            "spotify_id": track.spotify_uri.split(":")[-1]
+            if track.spotify_uri
+            else None,
             "deezer_id": track.deezer_id,
             "tidal_id": track.tidal_id,
             "is_downloaded": bool(track.file_path),

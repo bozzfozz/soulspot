@@ -77,7 +77,9 @@ async def get_stats_with_trends(
     # Hey future me - NOW fully uses StatsService! Clean Architecture.
     from soulspot.application.services.stats_service import StatsService
     from soulspot.infrastructure.persistence.models import DownloadModel, PlaylistModel
-    from soulspot.infrastructure.persistence.repositories import ProviderBrowseRepository
+    from soulspot.infrastructure.persistence.repositories import (
+        ProviderBrowseRepository,
+    )
 
     stats_service = StatsService(session)
 

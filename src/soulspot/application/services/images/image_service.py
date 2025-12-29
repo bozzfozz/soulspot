@@ -881,12 +881,8 @@ class ImageService:
         if self.has_local_image(existing_path):
             return False
 
-        # Rule 2: Have CDN URL → download
-        if cdn_url:
-            return True
-
-        # Rule 3: No URL → can't download
-        return False
+        # Rule 2: Have CDN URL → download, No URL → can't download
+        return bool(cdn_url)
 
     def needs_image_work(
         self,

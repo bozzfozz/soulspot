@@ -4,7 +4,7 @@ DEPRECATED: This module has been replaced by the ui/ package.
 
 All routes have been moved to the ui/ subdirectory:
 - ui/dashboard.py - Dashboard, playlists, auth, onboarding
-- ui/downloads.py - Downloads management  
+- ui/downloads.py - Downloads management
 - ui/search.py - Search functionality
 - ui/library_core.py - Library overview and import
 - ui/library_browse.py - Library browsing (artists, albums, tracks)
@@ -68,7 +68,9 @@ def _get_image_service_lazy() -> "ImageService":
             cache_base_path=str(settings.storage.image_path),
             local_serve_prefix="/api/images",
         )
-        logger.info(f"ImageService initialized with cache_base_path: {_image_service.cache_base_path}")
+        logger.info(
+            f"ImageService initialized with cache_base_path: {_image_service.cache_base_path}"
+        )
     return _image_service
 
 
@@ -86,7 +88,9 @@ def _get_display_url(
         {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
         {{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}
     """
-    return _get_image_service_lazy().get_display_url(source_url, local_path, entity_type)  # type: ignore[arg-type]
+    return _get_image_service_lazy().get_display_url(
+        source_url, local_path, entity_type
+    )  # type: ignore[arg-type]
 
 
 def _get_placeholder(entity_type: str = "album") -> str:
@@ -1872,7 +1876,7 @@ async def library_artist_detail(
                 include_tracks=True,  # CRITICAL: Fetch tracks for ALL albums!
             )
             await session.commit()  # Commit new albums + tracks
-            
+
             logger.info(
                 f"[ARTIST_DETAIL_SYNC] Synced discography for {artist_model.name}: "
                 f"albums={sync_stats.get('albums_added', 0)}, "
@@ -1906,7 +1910,7 @@ async def library_artist_detail(
     )
     tracks_result = await session.execute(tracks_stmt)
     track_models = tracks_result.unique().scalars().all()
-    
+
     # Log track count for debugging
     logger.debug(
         f"[ARTIST_DETAIL] Loaded {len(track_models)} tracks for {artist_model.name}"
@@ -1963,12 +1967,20 @@ async def library_artist_detail(
             "track_count": owned_tracks,  # Total tracks in DB for this album
             "local_tracks": local_tracks,  # Tracks with file_path (downloaded)
             "total_tracks": disc_entry.total_tracks or 0,
-            "year": int(disc_entry.release_date[:4]) if disc_entry.release_date and len(disc_entry.release_date) >= 4 else None,
+            "year": int(disc_entry.release_date[:4])
+            if disc_entry.release_date and len(disc_entry.release_date) >= 4
+            else None,
             "artwork_url": disc_entry.cover_url,
-            "artwork_path": local_album.cover_path if local_album and hasattr(local_album, "cover_path") else None,
-            "spotify_id": str(disc_entry.spotify_uri) if disc_entry.spotify_uri else None,
+            "artwork_path": local_album.cover_path
+            if local_album and hasattr(local_album, "cover_path")
+            else None,
+            "spotify_id": str(disc_entry.spotify_uri)
+            if disc_entry.spotify_uri
+            else None,
             "deezer_id": disc_entry.deezer_id,
-            "primary_type": disc_entry.album_type.title() if disc_entry.album_type else "Album",
+            "primary_type": disc_entry.album_type.title()
+            if disc_entry.album_type
+            else "Album",
             "secondary_types": [],  # Discography doesn't track secondary types
             "is_owned": disc_entry.is_owned,
             "source": disc_entry.source,
@@ -1981,22 +1993,38 @@ async def library_artist_detail(
             title_key = album.title.lower().strip()
             owned_tracks = tracks_per_album.get(title_key, 0)
             local_tracks = local_tracks_per_album.get(title_key, 0)
-            albums.append({
-                "id": f"{artist_name}::{album.title}",
-                "title": album.title,
-                "track_count": owned_tracks,  # Total tracks in DB
-                "local_tracks": local_tracks,  # Tracks with file_path
-                "total_tracks": album.total_tracks if hasattr(album, "total_tracks") else None,
-                "year": album.release_year,
-                "artwork_url": album.cover_url if hasattr(album, "cover_url") else None,
-                "artwork_path": album.cover_path if hasattr(album, "cover_path") else None,
-                "spotify_id": album.spotify_uri if hasattr(album, "spotify_uri") else None,
-                "deezer_id": album.deezer_id if hasattr(album, "deezer_id") else None,
-                "primary_type": album.primary_type if hasattr(album, "primary_type") else "album",
-                "secondary_types": album.secondary_types if hasattr(album, "secondary_types") else [],
-                "is_owned": True,  # If in local albums, user owns it
-                "source": album.source if hasattr(album, "source") else "local",
-            })
+            albums.append(
+                {
+                    "id": f"{artist_name}::{album.title}",
+                    "title": album.title,
+                    "track_count": owned_tracks,  # Total tracks in DB
+                    "local_tracks": local_tracks,  # Tracks with file_path
+                    "total_tracks": album.total_tracks
+                    if hasattr(album, "total_tracks")
+                    else None,
+                    "year": album.release_year,
+                    "artwork_url": album.cover_url
+                    if hasattr(album, "cover_url")
+                    else None,
+                    "artwork_path": album.cover_path
+                    if hasattr(album, "cover_path")
+                    else None,
+                    "spotify_id": album.spotify_uri
+                    if hasattr(album, "spotify_uri")
+                    else None,
+                    "deezer_id": album.deezer_id
+                    if hasattr(album, "deezer_id")
+                    else None,
+                    "primary_type": album.primary_type
+                    if hasattr(album, "primary_type")
+                    else "album",
+                    "secondary_types": album.secondary_types
+                    if hasattr(album, "secondary_types")
+                    else [],
+                    "is_owned": True,  # If in local albums, user owns it
+                    "source": album.source if hasattr(album, "source") else "local",
+                }
+            )
 
     # Convert tracks to template format
     tracks_data = [
@@ -2083,6 +2111,7 @@ async def library_album_detail(
     # Hey future me - use CASE-INSENSITIVE matching!
     # Album titles in URLs may have different casing than in DB.
     from sqlalchemy import func
+
     from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
     album_stmt = (
@@ -2102,6 +2131,7 @@ async def library_album_detail(
         # This happens when user clicks a link to an album that hasn't been synced yet.
         # Better UX: redirect to search page with the album query prefilled.
         from urllib.parse import quote
+
         search_query = f"{artist_name} {album_title}"
         return templates.TemplateResponse(
             request,
@@ -2109,7 +2139,7 @@ async def library_album_detail(
             context={
                 "error_code": 404,
                 "error_message": f"Album '{album_title}' by '{artist_name}' not found in library",
-                "suggestion": f"Try searching for it: ",
+                "suggestion": "Try searching for it: ",
                 "search_url": f"/search?q={quote(search_query)}",
                 "search_query": search_query,
             },
@@ -2143,14 +2173,14 @@ async def library_album_detail(
     # This enables track merging to show which tracks are downloaded vs available.
     # Even if we have local tracks, we want the FULL tracklist from the provider.
     # If no provider ID exists, we'll search by artist+album name.
-    
+
     # DEBUG: Log album info for tracking
     logger.info(
         f"[ALBUM_DETAIL] Album: '{album_title}' by '{artist_name}' | "
         f"deezer_id={album_model.deezer_id}, spotify_uri={album_model.spotify_uri}, "
         f"local_tracks={len(track_models)}"
     )
-    
+
     if True:  # Always try to fetch streaming tracks
         import asyncio
 
@@ -2159,14 +2189,18 @@ async def library_album_detail(
         # Define async fetchers for each source
         async def fetch_deezer_by_id() -> tuple[str, list[dict[str, Any]], str | None]:
             """Fetch tracks from Deezer using album ID."""
-            logger.info(f"[FETCH_DEEZER_ID] Attempting with deezer_id={album_model.deezer_id}")
+            logger.info(
+                f"[FETCH_DEEZER_ID] Attempting with deezer_id={album_model.deezer_id}"
+            )
             if not album_model.deezer_id:
                 logger.info("[FETCH_DEEZER_ID] Skipped - no deezer_id")
                 return ("deezer_id", [], None)
             try:
                 deezer_plugin = DeezerPlugin()
                 response = await deezer_plugin.get_album_tracks(album_model.deezer_id)
-                logger.info(f"[FETCH_DEEZER_ID] Got {len(response.items)} tracks from Deezer")
+                logger.info(
+                    f"[FETCH_DEEZER_ID] Got {len(response.items)} tracks from Deezer"
+                )
                 tracks = [
                     {
                         "id": f"deezer:{track.deezer_id}",
@@ -2192,7 +2226,9 @@ async def library_album_detail(
                 logger.warning(f"[FETCH_DEEZER_ID] Failed: {e}")
                 return ("deezer_id", [], None)
 
-        async def fetch_deezer_by_search() -> tuple[str, list[dict[str, Any]], str | None]:
+        async def fetch_deezer_by_search() -> tuple[
+            str, list[dict[str, Any]], str | None
+        ]:
             """Fetch tracks from Deezer by searching artist + album."""
             # Skip if we already have deezer_id (fetch_deezer_by_id will handle it)
             if album_model.deezer_id:
@@ -2207,24 +2243,38 @@ async def library_album_detail(
                     types=["album"],
                     limit=5,
                 )
-                logger.info(f"[FETCH_DEEZER_SEARCH] Got {len(search_results.albums)} albums from search")
+                logger.info(
+                    f"[FETCH_DEEZER_SEARCH] Got {len(search_results.albums)} albums from search"
+                )
 
                 # Find best matching album
                 matched_album = None
                 for album in search_results.albums:
-                    logger.info(f"[FETCH_DEEZER_SEARCH] Checking album: '{album.title}' (deezer_id={album.deezer_id})")
+                    logger.info(
+                        f"[FETCH_DEEZER_SEARCH] Checking album: '{album.title}' (deezer_id={album.deezer_id})"
+                    )
                     if album.title.lower().strip() == album_title.lower().strip():
                         matched_album = album
-                        logger.info(f"[FETCH_DEEZER_SEARCH] EXACT MATCH: '{album.title}'")
+                        logger.info(
+                            f"[FETCH_DEEZER_SEARCH] EXACT MATCH: '{album.title}'"
+                        )
                         break
                     if album_title.lower() in album.title.lower():
                         matched_album = album
-                        logger.info(f"[FETCH_DEEZER_SEARCH] PARTIAL MATCH: '{album.title}'")
+                        logger.info(
+                            f"[FETCH_DEEZER_SEARCH] PARTIAL MATCH: '{album.title}'"
+                        )
 
                 if matched_album and matched_album.deezer_id:
-                    logger.info(f"[FETCH_DEEZER_SEARCH] Fetching tracks for matched album: deezer_id={matched_album.deezer_id}")
-                    response = await deezer_plugin.get_album_tracks(matched_album.deezer_id)
-                    logger.info(f"[FETCH_DEEZER_SEARCH] Got {len(response.items)} tracks")
+                    logger.info(
+                        f"[FETCH_DEEZER_SEARCH] Fetching tracks for matched album: deezer_id={matched_album.deezer_id}"
+                    )
+                    response = await deezer_plugin.get_album_tracks(
+                        matched_album.deezer_id
+                    )
+                    logger.info(
+                        f"[FETCH_DEEZER_SEARCH] Got {len(response.items)} tracks"
+                    )
                     tracks = [
                         {
                             "id": f"deezer:{track.deezer_id}",
@@ -2255,7 +2305,9 @@ async def library_album_detail(
 
         async def fetch_spotify() -> tuple[str, list[dict[str, Any]], str | None]:
             """Fetch tracks from Spotify (requires auth)."""
-            logger.info(f"[FETCH_SPOTIFY] Attempting with spotify_uri={album_model.spotify_uri}")
+            logger.info(
+                f"[FETCH_SPOTIFY] Attempting with spotify_uri={album_model.spotify_uri}"
+            )
             if not album_model.spotify_uri:
                 logger.info("[FETCH_SPOTIFY] Skipped - no spotify_uri")
                 return ("spotify", [], None)
@@ -2270,14 +2322,18 @@ async def library_album_detail(
 
                 settings = get_settings()
                 credentials_service = await get_credentials_service(session, settings)
-                spotify_plugin = await get_spotify_plugin_optional(request, credentials_service)
+                spotify_plugin = await get_spotify_plugin_optional(
+                    request, credentials_service
+                )
 
                 if not spotify_plugin or not spotify_plugin.is_authenticated:
                     logger.info("[FETCH_SPOTIFY] Skipped - not authenticated")
                     return ("spotify", [], None)
 
                 spotify_album_id = album_model.spotify_uri.split(":")[-1]
-                logger.info(f"[FETCH_SPOTIFY] Fetching tracks for album_id={spotify_album_id}")
+                logger.info(
+                    f"[FETCH_SPOTIFY] Fetching tracks for album_id={spotify_album_id}"
+                )
                 response = await spotify_plugin.get_album_tracks(spotify_album_id)
                 logger.info(f"[FETCH_SPOTIFY] Got {len(response.items)} tracks")
                 tracks = [
@@ -2413,94 +2469,132 @@ async def library_album_detail(
     # Hey future me - MERGE streaming tracks with local tracks!
     # This shows which tracks are downloaded AND which are available for download.
     # Uses track_number + disc_number for matching (more reliable than title fuzzy match).
-    
+
     # Helper to normalize title for fuzzy matching
     def normalize_title(title: str) -> str:
         """Normalize title for comparison (lowercase, strip punctuation)."""
         import re
+
         return re.sub(r"[^\w\s]", "", title.lower()).strip()
-    
+
     # Build lookup from local tracks by (disc, track_number) AND normalized title
     local_by_position: dict[tuple[int, int], Any] = {}
     local_by_title: dict[str, Any] = {}
-    
+
     for track in track_models:
-        disc = track.disc_number if hasattr(track, "disc_number") and track.disc_number else 1
+        disc = (
+            track.disc_number
+            if hasattr(track, "disc_number") and track.disc_number
+            else 1
+        )
         track_num = track.track_number or 0
         if track_num > 0:
             local_by_position[(disc, track_num)] = track
         local_by_title[normalize_title(track.title)] = track
-    
+
     # If we have streaming tracks, merge with local info
     if streaming_tracks:
         merged_tracks = []
         matched_local_ids = set()
-        
+
         for streaming_track in streaming_tracks:
             disc = streaming_track.get("disc_number") or 1
             track_num = streaming_track.get("track_number") or 0
-            
+
             # Try to find matching local track
             local_track = None
-            
+
             # 1. Match by position (disc + track_number)
             if track_num > 0:
                 local_track = local_by_position.get((disc, track_num))
-            
+
             # 2. Fallback: Match by normalized title
             if not local_track:
                 norm_title = normalize_title(streaming_track["title"])
                 local_track = local_by_title.get(norm_title)
-            
+
             if local_track:
                 # Found matching local track - merge info
                 matched_local_ids.add(local_track.id)
-                merged_tracks.append({
-                    "id": local_track.id,
-                    "title": local_track.title,
-                    "artist": local_track.artist.name if local_track.artist else streaming_track.get("artist", "Unknown"),
-                    "album": album_title,
-                    "track_number": track_num or local_track.track_number,
-                    "disc_number": disc,
-                    "duration_ms": local_track.duration_ms or streaming_track.get("duration_ms"),
-                    "file_path": local_track.file_path,
-                    "is_broken": local_track.is_broken if hasattr(local_track, "is_broken") else False,
-                    "source": local_track.source if hasattr(local_track, "source") else "local",
-                    "spotify_id": streaming_track.get("spotify_id") or (local_track.spotify_uri.split(":")[-1] if local_track.spotify_uri else None),
-                    "deezer_id": streaming_track.get("deezer_id") or local_track.deezer_id,
-                    "tidal_id": local_track.tidal_id if hasattr(local_track, "tidal_id") else None,
-                    "is_downloaded": bool(local_track.file_path),
-                    "is_streaming": False,  # We have local file!
-                })
+                merged_tracks.append(
+                    {
+                        "id": local_track.id,
+                        "title": local_track.title,
+                        "artist": local_track.artist.name
+                        if local_track.artist
+                        else streaming_track.get("artist", "Unknown"),
+                        "album": album_title,
+                        "track_number": track_num or local_track.track_number,
+                        "disc_number": disc,
+                        "duration_ms": local_track.duration_ms
+                        or streaming_track.get("duration_ms"),
+                        "file_path": local_track.file_path,
+                        "is_broken": local_track.is_broken
+                        if hasattr(local_track, "is_broken")
+                        else False,
+                        "source": local_track.source
+                        if hasattr(local_track, "source")
+                        else "local",
+                        "spotify_id": streaming_track.get("spotify_id")
+                        or (
+                            local_track.spotify_uri.split(":")[-1]
+                            if local_track.spotify_uri
+                            else None
+                        ),
+                        "deezer_id": streaming_track.get("deezer_id")
+                        or local_track.deezer_id,
+                        "tidal_id": local_track.tidal_id
+                        if hasattr(local_track, "tidal_id")
+                        else None,
+                        "is_downloaded": bool(local_track.file_path),
+                        "is_streaming": False,  # We have local file!
+                    }
+                )
             else:
                 # No local match - show as streaming-only (available for download)
-                merged_tracks.append({
-                    **streaming_track,
-                    "is_downloaded": False,
-                    "is_streaming": True,
-                })
-        
+                merged_tracks.append(
+                    {
+                        **streaming_track,
+                        "is_downloaded": False,
+                        "is_streaming": True,
+                    }
+                )
+
         # Add any local tracks that weren't matched (orphan local files)
         for track in track_models:
             if track.id not in matched_local_ids:
-                merged_tracks.append({
-                    "id": track.id,
-                    "title": track.title,
-                    "artist": track.artist.name if track.artist else "Unknown Artist",
-                    "album": album_title,
-                    "track_number": track.track_number,
-                    "disc_number": track.disc_number if hasattr(track, "disc_number") else 1,
-                    "duration_ms": track.duration_ms,
-                    "file_path": track.file_path,
-                    "is_broken": track.is_broken if hasattr(track, "is_broken") else False,
-                    "source": "local",
-                    "spotify_id": track.spotify_uri.split(":")[-1] if track.spotify_uri else None,
-                    "deezer_id": track.deezer_id if hasattr(track, "deezer_id") else None,
-                    "tidal_id": track.tidal_id if hasattr(track, "tidal_id") else None,
-                    "is_downloaded": bool(track.file_path),
-                    "is_streaming": False,
-                })
-        
+                merged_tracks.append(
+                    {
+                        "id": track.id,
+                        "title": track.title,
+                        "artist": track.artist.name
+                        if track.artist
+                        else "Unknown Artist",
+                        "album": album_title,
+                        "track_number": track.track_number,
+                        "disc_number": track.disc_number
+                        if hasattr(track, "disc_number")
+                        else 1,
+                        "duration_ms": track.duration_ms,
+                        "file_path": track.file_path,
+                        "is_broken": track.is_broken
+                        if hasattr(track, "is_broken")
+                        else False,
+                        "source": "local",
+                        "spotify_id": track.spotify_uri.split(":")[-1]
+                        if track.spotify_uri
+                        else None,
+                        "deezer_id": track.deezer_id
+                        if hasattr(track, "deezer_id")
+                        else None,
+                        "tidal_id": track.tidal_id
+                        if hasattr(track, "tidal_id")
+                        else None,
+                        "is_downloaded": bool(track.file_path),
+                        "is_streaming": False,
+                    }
+                )
+
         # Sort merged tracks
         merged_tracks.sort(
             key=lambda x: (
@@ -2509,29 +2603,37 @@ async def library_album_detail(
                 (x.get("title") or "").lower(),
             )
         )
-        
+
         # Calculate stats
         total_duration_ms = sum(t.get("duration_ms") or 0 for t in merged_tracks)
         downloaded_count = sum(1 for t in merged_tracks if t.get("is_downloaded"))
         total_count = len(merged_tracks)
-        
+
         album_data = {
             "id": str(album_model.id),
             "title": album_title,
             "artist": artist_name,
             "artist_slug": artist_name,
             "tracks": merged_tracks,
-            "year": album_model.release_year if hasattr(album_model, "release_year") else None,
+            "year": album_model.release_year
+            if hasattr(album_model, "release_year")
+            else None,
             "total_duration_ms": total_duration_ms,
-            "artwork_url": album_model.cover_url if hasattr(album_model, "cover_url") else None,
-            "artwork_path": album_model.cover_path if hasattr(album_model, "cover_path") else None,
+            "artwork_url": album_model.cover_url
+            if hasattr(album_model, "cover_url")
+            else None,
+            "artwork_path": album_model.cover_path
+            if hasattr(album_model, "cover_path")
+            else None,
             "is_compilation": "compilation" in (album_model.secondary_types or []),
             "needs_sync": False,
             "source": album_model.source,
             "spotify_uri": album_model.spotify_uri,
             "deezer_id": album_model.deezer_id,
             "is_streaming_only": downloaded_count == 0,  # All streaming, none local
-            "is_hybrid": 0 < downloaded_count < total_count,  # Some downloaded, some not
+            "is_hybrid": 0
+            < downloaded_count
+            < total_count,  # Some downloaded, some not
             "is_complete": downloaded_count == total_count,  # All downloaded
             "streaming_provider": provider_used,
             "downloaded_count": downloaded_count,
@@ -2624,8 +2726,12 @@ async def library_album_detail(
         "artwork_path": artwork_path,  # Local cached image path or None
         "is_compilation": is_compilation,  # For compilation badge and override UI
         "source": album_model.source if hasattr(album_model, "source") else "local",
-        "spotify_uri": album_model.spotify_uri if hasattr(album_model, "spotify_uri") else None,
-        "deezer_id": album_model.deezer_id if hasattr(album_model, "deezer_id") else None,
+        "spotify_uri": album_model.spotify_uri
+        if hasattr(album_model, "spotify_uri")
+        else None,
+        "deezer_id": album_model.deezer_id
+        if hasattr(album_model, "deezer_id")
+        else None,
         "is_streaming_only": False,  # We have local tracks
         "is_hybrid": False,  # No streaming tracks fetched
         "is_complete": True,  # All local (no comparison to streaming possible)
@@ -3061,7 +3167,7 @@ async def spotify_discover_page(
     """Discover Similar Artists page - MULTI-PROVIDER!
 
     Hey future me - REFACTORED to work WITHOUT Spotify auth (Dec 2025)!
-    
+
     Removed dependency on SpotifySyncService - now uses direct DB access.
     This allows the page to work even if:
     - Spotify is not configured
@@ -3085,9 +3191,6 @@ async def spotify_discover_page(
 
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.discover_service import DiscoverService
-    from soulspot.infrastructure.persistence.repositories import (
-        SpotifyBrowseRepository,
-    )
 
     settings = AppSettingsService(session)
 
@@ -3115,13 +3218,17 @@ async def spotify_discover_page(
     # Hey future me - we want discovery based on user's LOCAL music collection!
     # This makes sense: "Find artists similar to the music I actually own"
     from soulspot.infrastructure.persistence.repositories import ArtistRepository
-    
+
     artist_repo = ArtistRepository(session)
     # Filter by source='local' or 'hybrid' (hybrid = local + streaming match)
     # These are used as SEEDS for discovery (find similar artists to these)
-    local_artists = await artist_repo.list_by_source(sources=["local", "hybrid"], limit=1000)
+    local_artists = await artist_repo.list_by_source(
+        sources=["local", "hybrid"], limit=1000
+    )
 
-    logger.info(f"Discover page: Found {len(local_artists) if local_artists else 0} LOCAL artists in DB")
+    logger.info(
+        f"Discover page: Found {len(local_artists) if local_artists else 0} LOCAL artists in DB"
+    )
 
     if not local_artists:
         return templates.TemplateResponse(
@@ -3152,7 +3259,7 @@ async def spotify_discover_page(
     # Use .resource_id to get the ID part from "spotify:artist:ID" -> "ID"
     local_artist_ids: set[str] = set()  # LOCAL/HYBRID only
     local_artist_names: set[str] = set()  # LOCAL/HYBRID only
-    
+
     # Use the same local_artists for exclusion - only exclude what user has locally!
     for a in local_artists:
         if a.spotify_uri:
@@ -3162,23 +3269,22 @@ async def spotify_discover_page(
             local_artist_ids.add(a.deezer_id)
         if a.name:
             local_artist_names.add(a.name.lower().strip())
-    
-    logger.debug(f"Discover filter: {len(local_artist_names)} LOCAL artist names to exclude")
+
+    logger.debug(
+        f"Discover filter: {len(local_artist_names)} LOCAL artist names to exclude"
+    )
 
     # Hey future me - Also get ALL artists in DB (any source) for "is_in_db" badge!
     # This lets UI show if an artist exists in DB (even if only spotify-synced).
     # We do a direct query to get only the IDs we need (more efficient than loading full entities).
     from sqlalchemy import select
+
     from soulspot.infrastructure.persistence.models import ArtistModel
-    
-    stmt = select(
-        ArtistModel.spotify_uri, 
-        ArtistModel.deezer_id, 
-        ArtistModel.name
-    )
+
+    stmt = select(ArtistModel.spotify_uri, ArtistModel.deezer_id, ArtistModel.name)
     db_result = await session.execute(stmt)
     all_db_rows = db_result.all()
-    
+
     all_db_artist_ids: set[str] = set()
     all_db_artist_names: set[str] = set()
     for row in all_db_rows:
@@ -3191,8 +3297,10 @@ async def spotify_discover_page(
             all_db_artist_ids.add(row.deezer_id)
         if row.name:
             all_db_artist_names.add(row.name.lower().strip())
-    
-    logger.debug(f"Discover: {len(all_db_artist_names)} total artists in DB (for is_in_db badge)")
+
+    logger.debug(
+        f"Discover: {len(all_db_artist_names)} total artists in DB (for is_in_db badge)"
+    )
 
     # Use DiscoverService for Multi-Provider discovery!
     service = DiscoverService(
@@ -3213,14 +3321,14 @@ async def spotify_discover_page(
             if artist.spotify_uri:
                 # SpotifyUri.value is "spotify:artist:ID" → extract ID
                 spotify_id = str(artist.spotify_uri).split(":")[-1]
-            
+
             # Get Deezer ID directly from entity (string or None)
             deezer_id: str | None = artist.deezer_id
-            
+
             logger.debug(
                 f"Discovery for {artist.name}: spotify_id={spotify_id}, deezer_id={deezer_id}"
             )
-            
+
             result = await service.discover_similar_artists(
                 seed_artist_name=artist.name,
                 seed_artist_spotify_id=spotify_id,
@@ -3235,25 +3343,29 @@ async def spotify_discover_page(
 
             for discovered in result.artists:
                 d_name_norm = discovered.name.lower().strip()
-                
+
                 # Skip if already in LOCAL library (source='local' or 'hybrid')
                 # These artists are already in user's local collection!
                 # Hey future me - Debug logging to understand filter misses!
                 should_skip = False
                 skip_reason = ""
-                
+
                 if d_name_norm in local_artist_names:
                     should_skip = True
                     skip_reason = f"name match: '{d_name_norm}'"
-                elif discovered.spotify_id and discovered.spotify_id in local_artist_ids:
+                elif (
+                    discovered.spotify_id and discovered.spotify_id in local_artist_ids
+                ):
                     should_skip = True
                     skip_reason = f"spotify_id match: '{discovered.spotify_id}'"
                 elif discovered.deezer_id and discovered.deezer_id in local_artist_ids:
                     should_skip = True
                     skip_reason = f"deezer_id match: '{discovered.deezer_id}'"
-                
+
                 if should_skip:
-                    logger.debug(f"Discover: Skipping '{discovered.name}' - {skip_reason}")
+                    logger.debug(
+                        f"Discover: Skipping '{discovered.name}' - {skip_reason}"
+                    )
                     continue
 
                 # Skip duplicates in this batch
@@ -3268,8 +3380,14 @@ async def spotify_discover_page(
                 # This flag helps UI show appropriate button/badge.
                 is_in_db = (
                     d_name_norm in all_db_artist_names
-                    or (discovered.spotify_id and discovered.spotify_id in all_db_artist_ids)
-                    or (discovered.deezer_id and discovered.deezer_id in all_db_artist_ids)
+                    or (
+                        discovered.spotify_id
+                        and discovered.spotify_id in all_db_artist_ids
+                    )
+                    or (
+                        discovered.deezer_id
+                        and discovered.deezer_id in all_db_artist_ids
+                    )
                 )
 
                 discoveries.append(

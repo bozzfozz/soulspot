@@ -33,11 +33,11 @@ class DownloadWorker:
     """Worker for processing download jobs in the background.
 
     REFACTORED (Dec 2025) - Session Factory Pattern for SQLite Lock Optimization!
-    
+
     Previously: Received pre-instantiated repositories with a shared session.
     Problem: Shared session caused "database is locked" errors when concurrent
     jobs tried to write to SQLite.
-    
+
     Now: Receives a session_factory and creates fresh session + repositories
     for each job. This ensures each job has its own transaction scope and
     releases locks quickly after completion.
@@ -80,7 +80,7 @@ class DownloadWorker:
         self._job_queue.register_handler(JobType.DOWNLOAD, self._handle_download_job)
 
     # Listen up future me, this is the actual job handler that processes each download job.
-    # 
+    #
     # REFACTORED (Dec 2025) - Session-per-Job Pattern!
     # Each job now gets its OWN database session, created fresh and committed/rolled back
     # immediately after the operation. This prevents SQLite lock contention when multiple

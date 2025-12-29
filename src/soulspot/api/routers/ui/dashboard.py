@@ -10,8 +10,8 @@ Hey future me - this module contains:
 import logging
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import (
@@ -303,7 +303,6 @@ async def playlist_missing_tracks(
     from sqlalchemy import select
     from sqlalchemy.orm import joinedload
 
-    from soulspot.api.dependencies import get_track_repository
     from soulspot.domain.value_objects import PlaylistId
     from soulspot.infrastructure.persistence.models import TrackModel
 

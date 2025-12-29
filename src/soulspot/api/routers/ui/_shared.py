@@ -81,7 +81,9 @@ def get_display_url(
         {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
         {{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}
     """
-    return _get_image_service_lazy().get_display_url(source_url, local_path, entity_type)  # type: ignore[arg-type]
+    return _get_image_service_lazy().get_display_url(
+        source_url, local_path, entity_type
+    )  # type: ignore[arg-type]
 
 
 def get_placeholder(entity_type: str = "album") -> str:

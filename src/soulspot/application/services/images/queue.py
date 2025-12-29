@@ -61,7 +61,9 @@ class ImageDownloadJob:
 
     # For priority queue ordering (lower = higher priority)
     priority: int = field(compare=True)
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC), compare=True)
+    created_at: datetime = field(
+        default_factory=lambda: datetime.now(UTC), compare=True
+    )
 
     # Job data (not used for ordering)
     entity_type: Literal["artist", "album", "playlist"] = field(
@@ -80,7 +82,7 @@ class ImageDownloadJob:
         url: str,
         provider: str = "spotify",
         priority: int = ImagePriority.NORMAL,
-    ) -> "ImageDownloadJob":
+    ) -> ImageDownloadJob:
         """Create job for artist image download.
 
         Args:
@@ -107,7 +109,7 @@ class ImageDownloadJob:
         url: str,
         provider: str = "spotify",
         priority: int = ImagePriority.NORMAL,
-    ) -> "ImageDownloadJob":
+    ) -> ImageDownloadJob:
         """Create job for album cover download."""
         return cls(
             priority=priority,
@@ -126,7 +128,7 @@ class ImageDownloadJob:
         url: str,
         provider: str = "spotify",
         priority: int = ImagePriority.NORMAL,
-    ) -> "ImageDownloadJob":
+    ) -> ImageDownloadJob:
         """Create job for playlist cover download."""
         return cls(
             priority=priority,
@@ -329,7 +331,7 @@ class ImageDownloadQueue:
         try:
             await asyncio.wait_for(self._queue.join(), timeout=timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "Queue drain timeout after %.1fs, %d jobs remaining",
                 timeout,

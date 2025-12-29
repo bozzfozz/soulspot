@@ -196,14 +196,14 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
         if orchestrator is not None:
             orchestrator_status = orchestrator.get_status()
             workers_healthy = orchestrator.is_healthy()
-            
+
             # Simplified worker status for health endpoint
             workers_summary = {
                 "total": orchestrator_status.get("total_workers", 0),
                 "by_state": orchestrator_status.get("by_state", {}),
                 "healthy": workers_healthy,
             }
-            
+
             # Add individual worker states for debugging
             workers_detail = {}
             for name, info in orchestrator_status.get("workers", {}).items():
@@ -211,7 +211,7 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
                     "state": info.get("state", "unknown"),
                     "category": info.get("category", "general"),
                 }
-            
+
             checks["workers"] = {
                 "summary": workers_summary,
                 "workers": workers_detail,
@@ -220,7 +220,7 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
             # Fallback: check workers manually if orchestrator not available
             workers_healthy = True
             workers_status = {}
-            
+
             # Download Worker
             download_worker = getattr(app.state, "download_worker", None)
             if download_worker:
@@ -230,7 +230,7 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
                 }
                 if not worker_status.get("running"):
                     workers_healthy = False
-    
+
             # Token Refresh Worker
             token_worker = getattr(app.state, "token_refresh_worker", None)
             if token_worker:
@@ -238,7 +238,7 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
                 workers_status["token_refresh"] = {
                     "running": worker_status.get("running", False),
                 }
-            
+
             checks["workers"] = workers_status
 
         if not workers_healthy and overall_status == HealthStatus.HEALTHY:
@@ -313,4 +313,3 @@ def register_health_endpoints(app: FastAPI, settings: Settings) -> None:
             stats["connection_pool"] = pool_stats
 
         return stats
-

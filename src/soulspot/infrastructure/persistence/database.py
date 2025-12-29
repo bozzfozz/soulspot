@@ -53,7 +53,7 @@ class Database:
         elif "sqlite" in settings.database.url:
             # SQLite-specific configuration
             # Hey future me - NullPool is CRITICAL for SQLite + async (Dec 2025)!
-            # 
+            #
             # Problem: SQLite only allows ONE writer at a time. With QueuePool, multiple
             # sessions might share the same connection, causing "database is locked" errors
             # when one session tries to write while another is already writing.

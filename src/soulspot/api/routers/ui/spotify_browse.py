@@ -11,6 +11,7 @@ import random
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -18,7 +19,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from starlette.responses import RedirectResponse
-from urllib.parse import quote
 
 from soulspot.api.dependencies import (
     get_db_session,
@@ -456,8 +456,7 @@ async def spotify_discover_page(
                     should_skip = True
                     skip_reason = f"name match: '{d_name_norm}'"
                 elif (
-                    discovered.spotify_id
-                    and discovered.spotify_id in local_artist_ids
+                    discovered.spotify_id and discovered.spotify_id in local_artist_ids
                 ):
                     should_skip = True
                     skip_reason = f"spotify_id match: '{discovered.spotify_id}'"
@@ -487,7 +486,10 @@ async def spotify_discover_page(
                         discovered.spotify_id
                         and discovered.spotify_id in all_db_artist_ids
                     )
-                    or (discovered.deezer_id and discovered.deezer_id in all_db_artist_ids)
+                    or (
+                        discovered.deezer_id
+                        and discovered.deezer_id in all_db_artist_ids
+                    )
                 )
 
                 discoveries.append(

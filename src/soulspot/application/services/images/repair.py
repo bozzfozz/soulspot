@@ -34,7 +34,6 @@ from soulspot.application.services.images.failed_markers import (
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
     ArtistModel,
-    TrackModel,
 )
 
 if TYPE_CHECKING:
@@ -54,19 +53,19 @@ API_RATE_LIMIT_SECONDS = 0.05
 
 
 async def get_artists_missing_images(
-    session: "AsyncSession",
+    session: AsyncSession,
     limit: int = 50,
 ) -> list[ArtistModel]:
     """Get artists with CDN URL but missing local file.
 
     Hey future me - this finds artists that NEED image downloads!
     We prioritize artists with image_url (CDN URL already known).
-    
+
     SQL Logic Fix (Dec 2025):
     The old query had a bug: `NOT LIKE 'FAILED%'` returns NULL when image_path is NULL,
     which caused NULL rows to be excluded! Now we use OR to handle NULL correctly:
     - image_path IS NULL → include (needs download)
-    - image_path = '' → include (needs download)  
+    - image_path = '' → include (needs download)
     - image_path LIKE 'FAILED%' → exclude (retry later)
     - image_path has valid path → exclude (already downloaded)
     """
@@ -95,14 +94,14 @@ async def get_artists_missing_images(
 
 
 async def get_artists_with_provider_id_but_no_image(
-    session: "AsyncSession",
+    session: AsyncSession,
     limit: int = 50,
 ) -> list[ArtistModel]:
     """Get artists with provider ID but no image_url.
 
     Hey future me - these artists were enriched but the provider
     didn't return an image URL. We try API lookup.
-    
+
     SQL Logic Fix (Dec 2025): Same NULL handling fix as get_artists_missing_images.
     """
     stmt = (
@@ -136,7 +135,7 @@ async def get_artists_with_provider_id_but_no_image(
 # partial enrichment, provider rate limits). This helper returns ONLY albums that have at least
 # one provider ID so we can do a safe lookup without guessing via fuzzy title search.
 async def get_albums_with_provider_id_but_no_cover_url(
-    session: "AsyncSession",
+    session: AsyncSession,
     limit: int = 50,
 ) -> list[AlbumModel]:
     """Get albums with provider ID but no cover_url.
@@ -184,10 +183,10 @@ async def get_albums_with_provider_id_but_no_cover_url(
 
 
 async def repair_artist_images(
-    session: "AsyncSession",
-    image_service: "ImageService",
-    image_provider_registry: "ImageProviderRegistry | None" = None,
-    spotify_plugin: "SpotifyPlugin | None" = None,
+    session: AsyncSession,
+    image_service: ImageService,
+    image_provider_registry: ImageProviderRegistry | None = None,
+    spotify_plugin: SpotifyPlugin | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Download images for artists that have CDN URL but missing local file.
@@ -218,12 +217,18 @@ async def repair_artist_images(
     logger.info("🎨 ARTIST IMAGE REPAIR - Starting")
     logger.info("=" * 60)
     logger.info(f"  📊 Limit: {limit}")
-    api_fallback_enabled = image_provider_registry is not None or spotify_plugin is not None
-    logger.info(f"  🔌 API fallback: {'enabled' if api_fallback_enabled else 'disabled'}")
+    api_fallback_enabled = (
+        image_provider_registry is not None or spotify_plugin is not None
+    )
+    logger.info(
+        f"  🔌 API fallback: {'enabled' if api_fallback_enabled else 'disabled'}"
+    )
     logger.info(f"  🎵 Spotify fallback: {'enabled' if spotify_plugin else 'disabled'}")
     if image_provider_registry is not None:
-        logger.info("  🧩 Providers: %s", image_provider_registry.get_registered_providers())
-    
+        logger.info(
+            "  🧩 Providers: %s", image_provider_registry.get_registered_providers()
+        )
+
     # Get total counts for progress tracking
     # SQL Logic Fix (Dec 2025): Handle NULL correctly with OR
     total_missing_query = (
@@ -259,7 +264,7 @@ async def repair_artist_images(
     total_artists_query = select(func.count()).select_from(ArtistModel)
     total_artists_result = await session.execute(total_artists_query)
     total_artists = total_artists_result.scalar() or 0
-    
+
     artists_with_url_query = (
         select(func.count())
         .select_from(ArtistModel)
@@ -323,7 +328,9 @@ async def repair_artist_images(
     logger.info(f"  💾 Artists with valid image_path: {artists_with_valid_path}")
     logger.info(f"  ❌ Artists with FAILED marker: {total_failed}")
     logger.info(f"  🎯 Artists needing download: {total_missing}")
-    logger.info(f"  🔎 Artists missing image_url (candidate for lookup): {artists_missing_url}")
+    logger.info(
+        f"  🔎 Artists missing image_url (candidate for lookup): {artists_missing_url}"
+    )
     logger.info("-" * 40)
 
     # Get breakdown by failure reason
@@ -336,7 +343,7 @@ async def repair_artist_images(
         is_failed, reason, _ = parse_failed_marker(row)
         if is_failed and reason:
             failed_breakdown[reason] = failed_breakdown.get(reason, 0) + 1
-    
+
     if failed_breakdown:
         logger.info("❌ FAILED breakdown:")
         for reason, count in sorted(failed_breakdown.items(), key=lambda x: -x[1]):
@@ -360,8 +367,10 @@ async def repair_artist_images(
 
     # Phase 1: Download from existing CDN URLs
     artists = await get_artists_missing_images(session, limit=limit)
-    logger.info(f"🔍 Query returned {len(artists)} artists (limit: {limit}, total needing: {total_missing})")
-    
+    logger.info(
+        f"🔍 Query returned {len(artists)} artists (limit: {limit}, total needing: {total_missing})"
+    )
+
     if not artists:
         logger.info("⚠️ No artists found needing image download!")
         logger.info("  Possible reasons:")
@@ -370,13 +379,17 @@ async def repair_artist_images(
             "    2. No artists have image_url set (missing_url=%d; Phase 2 may help)",
             artists_missing_url,
         )
-        logger.info("    3. All artists are marked as FAILED (reset with /reset-failed-images)")
+        logger.info(
+            "    3. All artists are marked as FAILED (reset with /reset-failed-images)"
+        )
     else:
         logger.info(f"📥 PHASE 1: Downloading from CDN URLs ({len(artists)} artists)")
 
     for idx, artist in enumerate(artists, 1):
         if not artist.image_url:
-            logger.debug(f"  [{idx}/{len(artists)}] ⏭️ {artist.name}: No image_url, skipping")
+            logger.debug(
+                f"  [{idx}/{len(artists)}] ⏭️ {artist.name}: No image_url, skipping"
+            )
             stats["no_image_url"] += 1
             continue
 
@@ -391,9 +404,11 @@ async def repair_artist_images(
 
             image_url = artist.image_url
             provider = guess_provider_from_url(image_url)
-            
+
             logger.debug(f"      URL: {image_url[:60]}...")
-            logger.debug(f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}")
+            logger.debug(
+                f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}"
+            )
 
             provider_id = deezer_id or spotify_id or str(artist.id)
             download_result = await image_service.download_artist_image_with_result(
@@ -407,7 +422,9 @@ async def repair_artist_images(
                 artist.image_path = download_result.path
                 artist.updated_at = datetime.now(UTC)
                 stats["repaired"] += 1
-                logger.info(f"  [{idx}/{len(artists)}] ✅ {artist.name} → {download_result.path}")
+                logger.info(
+                    f"  [{idx}/{len(artists)}] ✅ {artist.name} → {download_result.path}"
+                )
             else:
                 error_msg = download_result.error_message or "Download failed"
                 reason = classify_error(error_msg)
@@ -435,7 +452,7 @@ async def repair_artist_images(
         session, limit=limit
     )
     stats["artists_without_url_found"] = len(artists_without_url)
-    
+
     logger.info("-" * 40)
     if artists_without_url and api_fallback_enabled:
         logger.info(
@@ -486,7 +503,9 @@ async def repair_artist_images(
                 await asyncio.sleep(API_RATE_LIMIT_SECONDS)
 
                 if not image_url:
-                    stats["api_lookup_no_image"] = stats.get("api_lookup_no_image", 0) + 1
+                    stats["api_lookup_no_image"] = (
+                        stats.get("api_lookup_no_image", 0) + 1
+                    )
                     continue
 
                 provider_id = artist.deezer_id or artist.spotify_id or str(artist.id)
@@ -531,7 +550,9 @@ async def repair_artist_images(
                 stats["errors"].append(
                     {"name": artist.name, "error": error_msg, "reason": reason}
                 )
-                logger.error("  [%d/%d] 💥 %s: %s", idx, len(artists_without_url), artist.name, e)
+                logger.error(
+                    "  [%d/%d] 💥 %s: %s", idx, len(artists_without_url), artist.name, e
+                )
     else:
         logger.info(
             "📥 PHASE 2: No artists eligible for API fallback (missing_url_with_ids=%d)",
@@ -544,7 +565,7 @@ async def repair_artist_images(
 
     remaining_missing_url_result = await session.execute(artists_missing_url_query)
     stats["remaining_missing_image_url"] = remaining_missing_url_result.scalar() or 0
-    
+
     # Final summary
     logger.info("=" * 60)
     logger.info("🎨 ARTIST IMAGE REPAIR - Complete")
@@ -561,11 +582,11 @@ async def repair_artist_images(
         "  🔎 Still missing image_url (needs lookup/enrichment): %d",
         stats["remaining_missing_image_url"],
     )
-    if stats['errors']:
+    if stats["errors"]:
         logger.info("  Top errors:")
         error_summary: dict[str, int] = {}
-        for err in stats['errors']:
-            r = err.get('reason', 'unknown')
+        for err in stats["errors"]:
+            r = err.get("reason", "unknown")
             error_summary[r] = error_summary.get(r, 0) + 1
         for reason, count in sorted(error_summary.items(), key=lambda x: -x[1])[:5]:
             logger.info(f"    - {reason}: {count}")
@@ -575,11 +596,11 @@ async def repair_artist_images(
 
 
 async def get_albums_missing_covers(
-    session: "AsyncSession",
+    session: AsyncSession,
     limit: int = 50,
 ) -> list[AlbumModel]:
     """Get albums with CDN URL but missing local cover file.
-    
+
     SQL Logic Fix (Dec 2025): Same NULL handling fix as artist queries.
     """
     # Hey future me - eagerly load artist to avoid lazy-load surprises in async code.
@@ -608,9 +629,9 @@ async def get_albums_missing_covers(
 
 
 async def repair_album_images(
-    session: "AsyncSession",
-    image_service: "ImageService",
-    image_provider_registry: "ImageProviderRegistry | None" = None,
+    session: AsyncSession,
+    image_service: ImageService,
+    image_provider_registry: ImageProviderRegistry | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Download covers for albums that have CDN URL but missing local file.
@@ -628,10 +649,14 @@ async def repair_album_images(
     logger.info("💿 ALBUM COVER REPAIR - Starting")
     logger.info("=" * 60)
     logger.info(f"  📊 Limit: {limit}")
-    logger.info(f"  🔌 API fallback: {'enabled' if image_provider_registry else 'disabled'}")
+    logger.info(
+        f"  🔌 API fallback: {'enabled' if image_provider_registry else 'disabled'}"
+    )
     if image_provider_registry is not None:
-        logger.info("  🧩 Providers: %s", image_provider_registry.get_registered_providers())
-    
+        logger.info(
+            "  🧩 Providers: %s", image_provider_registry.get_registered_providers()
+        )
+
     # Get total counts
     # SQL Logic Fix (Dec 2025): Handle NULL correctly with OR
     total_missing_query = (
@@ -666,7 +691,7 @@ async def repair_album_images(
     total_albums_query = select(func.count()).select_from(AlbumModel)
     total_albums_result = await session.execute(total_albums_query)
     total_albums = total_albums_result.scalar() or 0
-    
+
     albums_with_url_query = (
         select(func.count())
         .select_from(AlbumModel)
@@ -713,7 +738,9 @@ async def repair_album_images(
             ),
         )
     )
-    albums_missing_url_total_result = await session.execute(albums_missing_url_total_query)
+    albums_missing_url_total_result = await session.execute(
+        albums_missing_url_total_query
+    )
     albums_missing_url_total = albums_missing_url_total_result.scalar() or 0
 
     albums_with_path_query = (
@@ -756,8 +783,10 @@ async def repair_album_images(
     }
 
     albums = await get_albums_missing_covers(session, limit=limit)
-    logger.info(f"🔍 Query returned {len(albums)} albums (limit: {limit}, total needing: {total_missing})")
-    
+    logger.info(
+        f"🔍 Query returned {len(albums)} albums (limit: {limit}, total needing: {total_missing})"
+    )
+
     if not albums:
         logger.info("⚠️ No albums found needing cover download!")
         logger.info("  Possible reasons:")
@@ -767,7 +796,9 @@ async def repair_album_images(
             albums_missing_url_total,
             albums_missing_url_with_ids,
         )
-        logger.info("    3. All albums are marked as FAILED (reset with /reset-failed-images)")
+        logger.info(
+            "    3. All albums are marked as FAILED (reset with /reset-failed-images)"
+        )
     else:
         logger.info(f"📥 Downloading from CDN URLs ({len(albums)} albums)")
 
@@ -780,9 +811,7 @@ async def repair_album_images(
         stats["albums_without_url_found"] = len(albums_without_url)
 
         if albums_without_url:
-            logger.info(
-                "-" * 40
-            )
+            logger.info("-" * 40)
             logger.info(
                 "📥 PHASE 2: API fallback for %d albums without cover_url",
                 len(albums_without_url),
@@ -802,13 +831,17 @@ async def repair_album_images(
 
                     image_result = await image_provider_registry.get_album_image(
                         album_title=album.title,
-                        artist_name=album.artist.name if getattr(album, "artist", None) else None,
+                        artist_name=album.artist.name
+                        if getattr(album, "artist", None)
+                        else None,
                         album_ids=album_ids,
                     )
                     await asyncio.sleep(API_RATE_LIMIT_SECONDS)
 
                     if image_result is None:
-                        stats["api_lookup_no_image"] = stats.get("api_lookup_no_image", 0) + 1
+                        stats["api_lookup_no_image"] = (
+                            stats.get("api_lookup_no_image", 0) + 1
+                        )
                         continue
 
                     provider_id = (
@@ -819,10 +852,12 @@ async def repair_album_images(
                         or str(album.id)
                     )
 
-                    download_result = await image_service.download_album_image_with_result(
-                        provider_id=provider_id,
-                        image_url=image_result.url,
-                        provider=image_result.provider,
+                    download_result = (
+                        await image_service.download_album_image_with_result(
+                            provider_id=provider_id,
+                            image_url=image_result.url,
+                            provider=image_result.provider,
+                        )
                     )
 
                     if download_result.success:
@@ -830,7 +865,9 @@ async def repair_album_images(
                         album.cover_path = download_result.path
                         album.updated_at = datetime.now(UTC)
                         stats["repaired"] += 1
-                        stats["api_lookup_success"] = stats.get("api_lookup_success", 0) + 1
+                        stats["api_lookup_success"] = (
+                            stats.get("api_lookup_success", 0) + 1
+                        )
                         logger.info(
                             "Repaired cover via API: %s (%s)",
                             album.title,
@@ -870,7 +907,9 @@ async def repair_album_images(
 
     for idx, album in enumerate(albums, 1):
         if not album.cover_url:
-            logger.debug(f"  [{idx}/{len(albums)}] ⏭️ {album.title}: No cover_url, skipping")
+            logger.debug(
+                f"  [{idx}/{len(albums)}] ⏭️ {album.title}: No cover_url, skipping"
+            )
             stats["no_cover_url"] += 1
             continue
 
@@ -883,9 +922,11 @@ async def repair_album_images(
 
             cover_url = album.cover_url
             provider = guess_provider_from_url(cover_url)
-            
+
             logger.debug(f"      URL: {cover_url[:60]}...")
-            logger.debug(f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}")
+            logger.debug(
+                f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}"
+            )
 
             provider_id = deezer_id or spotify_id or str(album.id)
             download_result = await image_service.download_album_image_with_result(
@@ -899,7 +940,9 @@ async def repair_album_images(
                 album.cover_path = download_result.path
                 album.updated_at = datetime.now(UTC)
                 stats["repaired"] += 1
-                logger.info(f"  [{idx}/{len(albums)}] ✅ {album.title} → {download_result.path}")
+                logger.info(
+                    f"  [{idx}/{len(albums)}] ✅ {album.title} → {download_result.path}"
+                )
             else:
                 error_msg = download_result.error_message or "Download failed"
                 reason = classify_error(error_msg)
@@ -926,8 +969,12 @@ async def repair_album_images(
     remaining_download_result = await session.execute(total_missing_query)
     stats["remaining_needing_download"] = remaining_download_result.scalar() or 0
 
-    remaining_missing_url_total_result = await session.execute(albums_missing_url_total_query)
-    stats["remaining_missing_cover_url"] = remaining_missing_url_total_result.scalar() or 0
+    remaining_missing_url_total_result = await session.execute(
+        albums_missing_url_total_query
+    )
+    stats["remaining_missing_cover_url"] = (
+        remaining_missing_url_total_result.scalar() or 0
+    )
 
     # Final summary
     logger.info("=" * 60)
@@ -945,11 +992,11 @@ async def repair_album_images(
         "  🔎 Still missing cover_url (needs lookup/enrichment): %d",
         stats["remaining_missing_cover_url"],
     )
-    if stats['errors']:
+    if stats["errors"]:
         logger.info("  Top errors:")
         error_summary: dict[str, int] = {}
-        for err in stats['errors']:
-            r = err.get('reason', 'unknown')
+        for err in stats["errors"]:
+            r = err.get("reason", "unknown")
             error_summary[r] = error_summary.get(r, 0) + 1
         for reason, count in sorted(error_summary.items(), key=lambda x: -x[1])[:5]:
             logger.info(f"    - {reason}: {count}")

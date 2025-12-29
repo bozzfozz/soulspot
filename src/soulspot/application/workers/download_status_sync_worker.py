@@ -570,7 +570,6 @@ class DownloadStatusSyncWorker:
 
         return False
 
-
     def get_health_status(self) -> dict[str, Any]:
         """Get circuit breaker health status for monitoring.
 
@@ -581,21 +580,20 @@ class DownloadStatusSyncWorker:
         the slskd connection status in the provider health widget. The
         circuit_state tells you if we're healthy (CLOSED), in trouble (OPEN),
         or testing recovery (HALF_OPEN).
-        
+
         IMPORTANT: is_healthy is only True if:
         1. Circuit is CLOSED (not OPEN or HALF_OPEN)
         2. AND we have had at least one successful sync (proves connection works)
         """
         now = datetime.now(UTC)
-        
+
         # Only consider healthy if circuit is closed AND we've proven connection works
         # Initial state: circuit=CLOSED but last_successful_sync=None → NOT healthy yet
         has_successful_connection = self._last_successful_sync is not None
         is_healthy = (
-            self._circuit_state == self.STATE_CLOSED 
-            and has_successful_connection
+            self._circuit_state == self.STATE_CLOSED and has_successful_connection
         )
-        
+
         status = {
             "circuit_state": self._circuit_state,
             "is_healthy": is_healthy,

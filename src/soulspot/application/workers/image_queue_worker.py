@@ -74,8 +74,8 @@ class ImageQueueWorker:
 
     def __init__(
         self,
-        queue: "ImageDownloadQueue",
-        image_service: "ImageService",
+        queue: ImageDownloadQueue,
+        image_service: ImageService,
         session_factory: Callable[[], Any] | None = None,
         max_concurrent: int = 3,
     ):
@@ -195,7 +195,7 @@ class ImageQueueWorker:
                 else:
                     self._stats["failed"] += 1
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No job available, loop continues
                 # This is normal - allows shutdown check
                 continue
@@ -209,7 +209,7 @@ class ImageQueueWorker:
 
         logger.debug("Worker %d stopped", worker_id)
 
-    async def _process_job(self, job: "ImageDownloadJob", worker_id: int) -> bool:
+    async def _process_job(self, job: ImageDownloadJob, worker_id: int) -> bool:
         """Process a single download job.
 
         Downloads the image and updates the database with the new path.
@@ -282,7 +282,7 @@ class ImageQueueWorker:
             return False
 
     async def _update_db(
-        self, job: "ImageDownloadJob", path: str, worker_id: int
+        self, job: ImageDownloadJob, path: str, worker_id: int
     ) -> None:
         """Update database with downloaded image path.
 
@@ -324,7 +324,7 @@ class ImageQueueWorker:
             )
 
     async def _update_artist_image(
-        self, session: "AsyncSession", job: "ImageDownloadJob", path: str
+        self, session: AsyncSession, job: ImageDownloadJob, path: str
     ) -> None:
         """Update artist image_path in database.
 
@@ -356,7 +356,7 @@ class ImageQueueWorker:
         await session.execute(stmt)
 
     async def _update_album_image(
-        self, session: "AsyncSession", job: "ImageDownloadJob", path: str
+        self, session: AsyncSession, job: ImageDownloadJob, path: str
     ) -> None:
         """Update album cover_path in database.
 
@@ -386,7 +386,7 @@ class ImageQueueWorker:
         await session.execute(stmt)
 
     async def _update_playlist_image(
-        self, session: "AsyncSession", job: "ImageDownloadJob", path: str
+        self, session: AsyncSession, job: ImageDownloadJob, path: str
     ) -> None:
         """Update playlist cover_path in database.
 

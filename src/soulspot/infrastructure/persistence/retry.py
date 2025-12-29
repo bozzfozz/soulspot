@@ -25,8 +25,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar
 
 from sqlalchemy.exc import OperationalError
 
@@ -127,9 +128,7 @@ class DatabaseLockMetrics:
                 4,
             ),
             "retry_rate": round(
-                self.lock_retries / self.lock_attempts
-                if self.lock_attempts > 0
-                else 0,
+                self.lock_retries / self.lock_attempts if self.lock_attempts > 0 else 0,
                 4,
             ),
             "last_lock_event_timestamp": self.last_lock_event,

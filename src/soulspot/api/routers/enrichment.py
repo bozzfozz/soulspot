@@ -243,10 +243,10 @@ async def repair_missing_artwork(
         from soulspot.application.services.images.image_provider_registry import (
             ImageProviderRegistry,
         )
+        from soulspot.infrastructure.plugins import DeezerPlugin
         from soulspot.infrastructure.providers.deezer_image_provider import (
             DeezerImageProvider,
         )
-        from soulspot.infrastructure.plugins import DeezerPlugin
 
         # Create Deezer provider (NO AUTH NEEDED!)
         deezer_plugin = DeezerPlugin()
@@ -280,14 +280,12 @@ async def repair_missing_artwork(
         result["albums"] = album_result
 
     # Summary stats
-    total_repaired = (
-        result.get("artists", {}).get("repaired", 0) +
-        result.get("albums", {}).get("repaired", 0)
-    )
-    total_processed = (
-        result.get("artists", {}).get("processed", 0) +
-        result.get("albums", {}).get("processed", 0)
-    )
+    total_repaired = result.get("artists", {}).get("repaired", 0) + result.get(
+        "albums", {}
+    ).get("repaired", 0)
+    total_processed = result.get("artists", {}).get("processed", 0) + result.get(
+        "albums", {}
+    ).get("processed", 0)
     result["summary"] = {
         "total_processed": total_processed,
         "total_repaired": total_repaired,
@@ -654,7 +652,9 @@ async def auto_fetch_images(
             total_repaired += album_result.get("repaired", 0)
 
         if total_repaired > 0:
-            logger.info(f"[AUTO_FETCH_IMAGES] Repaired {total_repaired} images in background")
+            logger.info(
+                f"[AUTO_FETCH_IMAGES] Repaired {total_repaired} images in background"
+            )
             # Return a subtle notification that can trigger a page refresh
             return HTMLResponse(
                 f"""<div id="auto-fetch-result" data-repaired="{total_repaired}"

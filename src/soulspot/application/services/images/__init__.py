@@ -82,17 +82,17 @@ from soulspot.application.services.images.image_service import (
     ImageService,
 )
 
-# Batch repair operations (extracted from deprecated ImageRepairService)
-from soulspot.application.services.images.repair import (
-    repair_album_images,
-    repair_artist_images,
-)
-
 # Image Download Queue (Eager Loading System)
 from soulspot.application.services.images.queue import (
     ImageDownloadJob,
     ImageDownloadQueue,
     ImagePriority,
+)
+
+# Batch repair operations (extracted from deprecated ImageRepairService)
+from soulspot.application.services.images.repair import (
+    repair_album_images,
+    repair_artist_images,
 )
 
 # Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
