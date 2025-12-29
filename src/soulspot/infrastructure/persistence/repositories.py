@@ -88,6 +88,39 @@ class ArtistRepository(IArtistRepository):
         """Initialize repository with session."""
         self.session = session
 
+    def _model_to_entity(self, model: ArtistModel) -> Artist:
+        """Convert ArtistModel to Artist entity with ALL fields.
+
+        Hey future me - this is THE SINGLE place that maps DB → Entity for Artist!
+        When you add fields to Artist entity, UPDATE THIS FUNCTION!
+        All get_*() methods MUST use this helper to avoid missing field bugs!
+
+        Model columns → Entity fields:
+        - image_url + image_path → image: ImageRef
+        - genres (JSON string) → genres: list[str]
+        - tags (JSON string) → tags: list[str]
+        - deezer_id, tidal_id → multi-service IDs
+        """
+        from soulspot.domain.entities import ArtistSource
+
+        return Artist(
+            id=ArtistId.from_string(model.id),
+            name=model.name,
+            source=ArtistSource(model.source),
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            image=ImageRef(url=model.image_url, path=model.image_path),
+            disambiguation=model.disambiguation,
+            genres=json.loads(model.genres) if model.genres else [],
+            tags=json.loads(model.tags) if model.tags else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     # Yo, add() converts domain entity (Artist) to ORM model (ArtistModel) and stages it. Note we
     # convert IDs and URIs to strings for DB storage (UUIDs/URIs as varchar). The session.add()
     # does NOT hit the database yet - it just marks model for INSERT. Actual DB write happens on
@@ -173,27 +206,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),  # Reconstruct from DB string
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            # Model image_url + image_path → Entity image: ImageRef
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     async def get_by_name(self, name: str) -> Artist | None:
         """Get an artist by name."""
@@ -201,27 +214,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            # Model image_url + image_path → Entity image: ImageRef
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Artist | None:
         """Get an artist by MusicBrainz ID."""
@@ -229,26 +222,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     # Hey future me, this gets artist by Spotify URI (spotify:artist:xxxxx). Used when syncing
     # followed artists from Spotify - we check if artist already exists before creating. The URI
@@ -267,26 +241,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     async def list_all(self, limit: int = 100, offset: int = 0) -> list[Artist]:
         """List all artists with pagination."""
@@ -296,26 +251,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        from soulspot.domain.entities import ArtistSource
-
-        return [
-            Artist(
-                id=ArtistId.from_string(model.id),
-                name=model.name,
-                source=ArtistSource(model.source),
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                image=ImageRef(url=model.image_url, path=model.image_path),
-                disambiguation=model.disambiguation,
-                genres=json.loads(model.genres) if model.genres else [],
-                tags=json.loads(model.tags) if model.tags else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def list_by_source(
         self, sources: list[str], limit: int = 100, offset: int = 0
@@ -344,27 +280,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        from soulspot.domain.entities import ArtistSource
-
-        return [
-            Artist(
-                id=ArtistId.from_string(model.id),
-                name=model.name,
-                source=ArtistSource(model.source),
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                deezer_id=model.deezer_id,
-                image=ImageRef(url=model.image_url, path=model.image_path),
-                disambiguation=model.disambiguation,
-                genres=json.loads(model.genres) if model.genres else [],
-                tags=json.loads(model.tags) if model.tags else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     # Hey future me - this counts ALL artists in the DB using SQL COUNT (efficient!).
     # Used for pagination total_count and stats. Returns 0 if no artists exist (not None).
@@ -431,8 +347,6 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        from soulspot.domain.entities import ArtistSource
-
         # Filter out Various Artists patterns in Python (more flexible than SQL LIKE)
         enrichable = []
         for model in models:
@@ -440,21 +354,7 @@ class ArtistRepository(IArtistRepository):
             # Skip if name matches Various Artists patterns
             if any(pattern in name_lower for pattern in VARIOUS_ARTISTS_PATTERNS):
                 continue
-            enrichable.append(
-                Artist(
-                    id=ArtistId.from_string(model.id),
-                    name=model.name,
-                    source=ArtistSource(model.source),  # Include source field
-                    spotify_uri=None,
-                    musicbrainz_id=model.musicbrainz_id,
-                    image=ImageRef(url=model.image_url, path=model.image_path),
-                    disambiguation=model.disambiguation,
-                    genres=json.loads(model.genres) if model.genres else [],
-                    tags=json.loads(model.tags) if model.tags else [],
-                    created_at=model.created_at,
-                    updated_at=model.updated_at,
-                )
-            )
+            enrichable.append(self._model_to_entity(model))
 
         return enrichable
 
@@ -615,26 +515,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        from soulspot.domain.entities import ArtistSource
-
-        return [
-            Artist(
-                id=ArtistId.from_string(model.id),
-                name=model.name,
-                source=ArtistSource(model.source),  # Include source field
-                spotify_uri=SpotifyUri(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                image=ImageRef(url=model.image_url, path=model.image_path),
-                disambiguation=model.disambiguation,
-                genres=json.loads(model.genres) if model.genres else [],
-                tags=json.loads(model.tags) if model.tags else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     # =========================================================================
     # MULTI-SERVICE LOOKUP METHODS
@@ -659,28 +540,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     async def get_by_tidal_id(self, tidal_id: str) -> Artist | None:
         """Get an artist by Tidal ID.
@@ -697,28 +557,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        from soulspot.domain.entities import ArtistSource
-
-        return Artist(
-            id=ArtistId.from_string(model.id),
-            name=model.name,
-            source=ArtistSource(model.source),
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            image=ImageRef(url=model.image_url, path=model.image_path),
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            disambiguation=model.disambiguation,
-            genres=json.loads(model.genres) if model.genres else [],
-            tags=json.loads(model.tags) if model.tags else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     # =======================================================================
     # LIBRARY DISCOVERY WORKER METHODS
@@ -863,8 +702,6 @@ class ArtistRepository(IArtistRepository):
         Returns:
             List of Artist entities needing discography sync
         """
-        from soulspot.domain.entities import ArtistSource
-
         threshold = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         stmt = (
@@ -880,26 +717,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Artist(
-                id=ArtistId.from_string(model.id),
-                name=model.name,
-                source=ArtistSource(model.source),
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                image=ImageRef(url=model.image_url, path=model.image_path),
-                deezer_id=model.deezer_id,
-                tidal_id=model.tidal_id,
-                disambiguation=model.disambiguation,
-                genres=json.loads(model.genres) if model.genres else [],
-                tags=json.loads(model.tags) if model.tags else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def get_with_discography(self, limit: int = 100) -> list[Artist]:
         """Get artists that have entries in artist_discography table.
@@ -913,8 +731,6 @@ class ArtistRepository(IArtistRepository):
         Returns:
             List of Artist entities with discography entries
         """
-        from soulspot.domain.entities import ArtistSource
-
         # Subquery to check if artist has discography entries
         has_discography = (
             select(ArtistDiscographyModel.id)
@@ -931,26 +747,7 @@ class ArtistRepository(IArtistRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Artist(
-                id=ArtistId.from_string(model.id),
-                name=model.name,
-                source=ArtistSource(model.source),
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                image=ImageRef(url=model.image_url, path=model.image_path),
-                deezer_id=model.deezer_id,
-                tidal_id=model.tidal_id,
-                disambiguation=model.disambiguation,
-                genres=json.loads(model.genres) if model.genres else [],
-                tags=json.loads(model.tags) if model.tags else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
 
 class AlbumRepository(IAlbumRepository):
@@ -1574,6 +1371,39 @@ class TrackRepository(ITrackRepository):
         """Initialize repository with session."""
         self.session = session
 
+    def _model_to_entity(self, model: TrackModel) -> Track:
+        """Convert TrackModel to Track entity with ALL fields.
+
+        Hey future me - this is the ONE place that maps DB → Entity!
+        When you add fields to Track entity, UPDATE THIS FUNCTION!
+        Model stores single genre in 'genre' column → Entity has genres: list[str]
+        
+        IMPORTANT: deezer_id and tidal_id are now properly mapped!
+        Before Dec 2025, these were missing and caused deduplication failures.
+        """
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms,
+            track_number=model.track_number,
+            disc_number=model.disc_number,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            musicbrainz_id=model.musicbrainz_id,
+            isrc=model.isrc,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            file_path=FilePath.from_string(model.file_path)
+            if model.file_path
+            else None,
+            genres=[model.genre] if model.genre else [],
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
     async def add(self, track: Track) -> None:
         """Add a new track."""
         # Hey - extract primary genre from genres list for DB storage!
@@ -1594,6 +1424,8 @@ class TrackRepository(ITrackRepository):
             spotify_uri=str(track.spotify_uri) if track.spotify_uri else None,
             musicbrainz_id=track.musicbrainz_id,
             isrc=track.isrc,
+            deezer_id=track.deezer_id,
+            tidal_id=track.tidal_id,
             file_path=str(track.file_path) if track.file_path else None,
             genre=primary_genre,
             created_at=track.created_at,
@@ -1625,6 +1457,8 @@ class TrackRepository(ITrackRepository):
         model.spotify_uri = str(track.spotify_uri) if track.spotify_uri else None
         model.musicbrainz_id = track.musicbrainz_id
         model.isrc = track.isrc
+        model.deezer_id = track.deezer_id
+        model.tidal_id = track.tidal_id
         model.file_path = str(track.file_path) if track.file_path else None
         model.genre = primary_genre
         model.updated_at = track.updated_at
@@ -1645,28 +1479,7 @@ class TrackRepository(ITrackRepository):
         if not model:
             return None
 
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre]
-            if model.genre
-            else [],  # Hey - convert single genre back to list!
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Track | None:
         """Get a track by Spotify URI."""
@@ -1677,26 +1490,7 @@ class TrackRepository(ITrackRepository):
         if not model:
             return None
 
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     async def get_by_album(self, album_id: AlbumId) -> list[Track]:
         """Get all tracks in an album."""
@@ -1708,30 +1502,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id)
-                if model.album_id
-                else None,
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def get_by_artist(self, artist_id: ArtistId) -> list[Track]:
         """Get all tracks by an artist."""
@@ -1743,30 +1514,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id)
-                if model.album_id
-                else None,
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     # Hey future me - this gets tracks that have NO album association (singles)!
     # Used for displaying "loose" tracks from an artist that aren't part of any album.
@@ -1792,29 +1540,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=None,  # Guaranteed to be None from query
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                genres=[model.genre] if model.genre else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     # Hey future me - count singles for an artist for pagination/stats.
     async def count_singles_by_artist(self, artist_id: ArtistId) -> int:
@@ -1848,30 +1574,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id)
-                if model.album_id
-                else None,
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def count_all(self) -> int:
         """Count total number of tracks."""
@@ -1899,6 +1602,8 @@ class TrackRepository(ITrackRepository):
         This is more efficient than calling add() multiple times as it reduces
         the number of round trips to the database.
 
+        Hey future me - FIXED: Now includes deezer_id/tidal_id like add() method!
+
         Args:
             tracks: List of Track entities to add
         """
@@ -1914,6 +1619,8 @@ class TrackRepository(ITrackRepository):
                 spotify_uri=str(track.spotify_uri) if track.spotify_uri else None,
                 musicbrainz_id=track.musicbrainz_id,
                 isrc=track.isrc,
+                deezer_id=track.deezer_id,
+                tidal_id=track.tidal_id,
                 file_path=str(track.file_path) if track.file_path else None,
                 created_at=track.created_at,
                 updated_at=track.updated_at,
@@ -1927,6 +1634,8 @@ class TrackRepository(ITrackRepository):
 
         This is more efficient than calling update() multiple times.
         Note: This loads all tracks into memory first, then updates them.
+
+        Hey future me - FIXED: Now includes deezer_id/tidal_id like update() method!
 
         Args:
             tracks: List of Track entities to update
@@ -1950,6 +1659,8 @@ class TrackRepository(ITrackRepository):
                 )
                 model.musicbrainz_id = track.musicbrainz_id
                 model.isrc = track.isrc
+                model.deezer_id = track.deezer_id
+                model.tidal_id = track.tidal_id
                 model.file_path = str(track.file_path) if track.file_path else None
                 model.updated_at = track.updated_at
 
@@ -1976,26 +1687,7 @@ class TrackRepository(ITrackRepository):
         if not model:
             return None
 
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     # Hey future me - CROSS-PROVIDER DEDUPLICATION for top tracks!
     # When we get tracks from Deezer but might already have them from Spotify,
@@ -2031,26 +1723,7 @@ class TrackRepository(ITrackRepository):
         if not model:
             return None
 
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     # Hey future me - ALBUM-BASED track lookup for discography sync!
     # When syncing complete discographies with tracks, we need to check if a track
@@ -2087,26 +1760,7 @@ class TrackRepository(ITrackRepository):
         if not model:
             return None
 
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model)
 
     # Hey future me - fuzzy title/artist search for fallback matching!
     # When ISRC is not available, we try to match by title and artist name.
@@ -2143,31 +1797,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id)
-                if model.album_id
-                else None,
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                genres=[model.genre] if model.genre else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     async def get_unenriched_with_isrc(self, limit: int = 50) -> list[Track]:
         """Get tracks that have ISRC but no Spotify URI (unenriched).
@@ -2194,31 +1824,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         models = result.scalars().all()
 
-        return [
-            Track(
-                id=TrackId.from_string(model.id),
-                title=model.title,
-                artist_id=ArtistId.from_string(model.artist_id),
-                album_id=AlbumId.from_string(model.album_id)
-                if model.album_id
-                else None,
-                duration_ms=model.duration_ms,
-                track_number=model.track_number,
-                disc_number=model.disc_number,
-                spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-                if model.spotify_uri
-                else None,
-                musicbrainz_id=model.musicbrainz_id,
-                isrc=model.isrc,
-                file_path=FilePath.from_string(model.file_path)
-                if model.file_path
-                else None,
-                genres=[model.genre] if model.genre else [],
-                created_at=model.created_at,
-                updated_at=model.updated_at,
-            )
-            for model in models
-        ]
+        return [self._model_to_entity(model) for model in models]
 
     # =========================================================================
     # MULTI-SERVICE LOOKUP METHODS
@@ -2240,31 +1846,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     async def get_by_tidal_id(self, tidal_id: str) -> Track | None:
         """Get a track by Tidal ID.
@@ -2279,31 +1861,7 @@ class TrackRepository(ITrackRepository):
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 
-        if not model:
-            return None
-
-        return Track(
-            id=TrackId.from_string(model.id),
-            title=model.title,
-            artist_id=ArtistId.from_string(model.artist_id),
-            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
-            duration_ms=model.duration_ms,
-            track_number=model.track_number,
-            disc_number=model.disc_number,
-            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
-            if model.spotify_uri
-            else None,
-            musicbrainz_id=model.musicbrainz_id,
-            isrc=model.isrc,
-            deezer_id=model.deezer_id,
-            tidal_id=model.tidal_id,
-            file_path=FilePath.from_string(model.file_path)
-            if model.file_path
-            else None,
-            genres=[model.genre] if model.genre else [],
-            created_at=model.created_at,
-            updated_at=model.updated_at,
-        )
+        return self._model_to_entity(model) if model else None
 
     # =========================================================================
     # DISCOVERY WORKER METHODS (LibraryDiscoveryWorker Phase 5)
