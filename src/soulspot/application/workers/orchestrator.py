@@ -124,7 +124,7 @@ class TaskWorkerWrapper:
             self._task.cancel()
             try:
                 await asyncio.wait_for(self._task, timeout=5.0)
-            except (TimeoutError, asyncio.CancelledError):
+            except (asyncio.CancelledError, TimeoutError):
                 pass
 
     def get_status(self) -> dict[str, Any]:
