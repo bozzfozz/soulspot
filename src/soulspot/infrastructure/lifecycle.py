@@ -221,6 +221,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.orchestrator = orchestrator
         logger.info("Worker orchestrator initialized (tracking mode)")
 
+        # =================================================================
+        # Image Download Queue (used by sync services for async downloads)
+        # =================================================================
+        # Hey future me - Queue wird FRÜH erstellt weil SyncWorker sie brauchen!
+        # ImageDownloadQueue ist stateless und hat keine Dependencies.
+        # Worker wird später gestartet nachdem alle anderen Workers registriert sind.
+        from soulspot.application.services.images import ImageDownloadQueue
+
+        image_download_queue = ImageDownloadQueue()
+        app.state.image_download_queue = image_download_queue
+        logger.info("Image download queue created (worker starts later)")
+
         spotify_client = SpotifyClient(settings.spotify)
 
         # Hey future me - same pattern as session_store: pass session_scope context manager factory!
@@ -263,6 +275,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Hey future me - this worker automatically syncs Spotify data based on settings!
         # It respects the app_settings table for enable/disable and intervals.
         # Depends on token_refresh_worker so tokens are always fresh.
+        # REFACTORED (Jan 2025): Bekommt image_download_queue für async Bilder-Downloads!
         from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 
         spotify_sync_worker = SpotifySyncWorker(
@@ -270,6 +283,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             token_manager=db_token_manager,
             settings=settings,
             check_interval_seconds=60,  # Check every minute if syncs are due
+            image_queue=image_download_queue,
         )
         orchestrator.register(
             name="spotify_sync",
@@ -286,12 +300,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Hey future me - this worker syncs Deezer data (charts, releases, user data)!
         # Unlike Spotify, Deezer has public APIs that don't need auth (charts, releases).
         # User data (favorites, playlists) needs auth from deezer_sessions table.
+        # REFACTORED (Jan 2025): Bekommt image_download_queue für async Bilder-Downloads!
         from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
 
         deezer_sync_worker = DeezerSyncWorker(
             db=db,
             settings=settings,
             check_interval_seconds=60,  # Check every minute if syncs are due
+            image_queue=image_download_queue,
         )
         orchestrator.register(
             name="deezer_sync",
@@ -771,6 +787,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 required=False,
             )
             app.state.image_backfill_worker = image_backfill_worker
+
+            # =================================================================
+            # Image Download Queue Worker (async image downloads)
+            # =================================================================
+            # Hey future me - Queue wurde bereits FRÜH erstellt (vor SyncWorkern)!
+            # Hier wird nur der WORKER gestartet der die Queue prozessiert.
+            # SpotifySyncService und DeezerSyncService queuen Bilder direkt in die Queue.
+            # Der Worker verarbeitet parallel (default 3 concurrent downloads).
+            from soulspot.application.services.images import ImageService
+            from soulspot.application.workers.image_queue_worker import (
+                ImageQueueWorker,
+            )
+
+            # Create ImageService for the queue worker
+            queue_image_service = ImageService(settings=settings)
+
+            # Create and start image queue worker (Queue bereits in app.state)
+            image_queue_worker = ImageQueueWorker(
+                queue=image_download_queue,
+                image_service=queue_image_service,
+                session_factory=db.session_scope,
+                max_concurrent=3,  # 3 parallel image downloads
+            )
+            # Start worker in background task
+            image_queue_task = asyncio.create_task(image_queue_worker.start())
+            orchestrator.register_running_task(
+                name="image_queue",
+                task=image_queue_task,
+                worker=image_queue_worker,
+                priority=52,
+                category="enrichment",
+                required=False,
+            )
+            app.state.image_queue_worker = image_queue_worker
+            app.state.image_queue_task = image_queue_task
+            logger.info("Image queue worker started (3 concurrent downloads)")
 
             # Auto-import service
             from soulspot.application.services import AutoImportService

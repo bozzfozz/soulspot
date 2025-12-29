@@ -88,6 +88,13 @@ from soulspot.application.services.images.repair import (
     repair_artist_images,
 )
 
+# Image Download Queue (Eager Loading System)
+from soulspot.application.services.images.queue import (
+    ImageDownloadJob,
+    ImageDownloadQueue,
+    ImagePriority,
+)
+
 # Clean Architecture: Import DTOs from Domain Port (Single Source of Truth)
 from soulspot.domain.ports.image_service import (
     EntityType,
@@ -125,4 +132,8 @@ __all__ = [
     # Batch repair operations
     "repair_artist_images",
     "repair_album_images",
+    # Image Download Queue (Eager Loading)
+    "ImageDownloadQueue",
+    "ImageDownloadJob",
+    "ImagePriority",
 ]

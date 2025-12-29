@@ -37,7 +37,7 @@ from soulspot.infrastructure.persistence.repositories import (
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.application.services.provider_mapping_service import (
         ProviderMappingService,
     )
@@ -79,6 +79,7 @@ class SpotifySyncService:
         spotify_plugin: "SpotifyPlugin",
         image_service: "ImageService | None" = None,
         settings_service: "AppSettingsService | None" = None,
+        image_queue: "ImageDownloadQueue | None" = None,
     ) -> None:
         """Initialize sync service.
 
@@ -90,12 +91,18 @@ class SpotifySyncService:
         
         NOTE: self.repo is KEPT for backwards compatibility during migration.
         Will be removed once all methods are migrated.
+        
+        IMAGE QUEUE (Jan 2025):
+        Added ImageDownloadQueue for async image downloads.
+        Instead of blocking on image downloads during sync, we queue jobs
+        that are processed in parallel by ImageQueueWorker.
 
         Args:
             session: Database session
             spotify_plugin: SpotifyPlugin for API calls (handles auth internally)
             image_service: Optional image service for downloading images
             settings_service: Optional settings service for sync config
+            image_queue: Optional queue for async image downloads
         """
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
@@ -105,6 +112,7 @@ class SpotifySyncService:
         self.spotify_plugin = spotify_plugin
         self._image_service = image_service
         self._settings_service = settings_service
+        self._image_queue = image_queue
         
         # NEW: Individual Repositories (Clean Architecture)
         self._artist_repo = ArtistRepository(session)
@@ -404,10 +412,15 @@ class SpotifySyncService:
     ) -> str | None:
         """Insert or update a Spotify artist in DB from ArtistDTO.
 
-        Hey future me - REFACTORED to use ProviderMappingService (Dec 2025)!
-        Nutzt jetzt den zentralen MappingService statt repo.upsert_artist().
-        Das ist konsistent mit DeezerSyncService und ermöglicht einheitliches
-        Dedup-Verhalten.
+        Hey future me - REFACTORED (Jan 2025) for Smart Image Logic + Queue!
+        
+        Changes:
+        1. Uses has_local_image() instead of should_redownload() 
+           → No more redundant URL comparisons
+        2. Queues image downloads instead of blocking
+           → Sync stays fast, images come async
+        3. Falls back to blocking download if no queue available
+           → Backward compatibility
 
         Args:
             artist_dto: ArtistDTO from SpotifyPlugin
@@ -416,6 +429,7 @@ class SpotifySyncService:
         Returns:
             Internal UUID of the artist, or None if failed
         """
+        from soulspot.application.services.images import ImageDownloadJob, ImagePriority
         from soulspot.domain.dtos import ArtistDTO
 
         if not isinstance(artist_dto, ArtistDTO):
@@ -427,29 +441,10 @@ class SpotifySyncService:
             logger.warning("ArtistDTO missing spotify_id, skipping")
             return None
 
-        # Download image if enabled BEFORE creating artist
-        image_path = None
+        # Get existing artist to check for local image
+        existing = await self.repo.get_artist_by_id(spotify_id)
+        existing_path = existing.image_path if existing else None
         image_url = artist_dto.image.url if artist_dto.image else None
-        if download_images and image_url and self._image_service:
-            # Check if image changed before downloading
-            existing = await self.repo.get_artist_by_id(spotify_id)
-            existing_url = (
-                existing.image_url if existing else None
-            )
-            existing_path = existing.image_path if existing else None
-
-            if await self._image_service.should_redownload(
-                existing_url, image_url, existing_path
-            ):
-                image_path = await self._image_service.download_artist_image(
-                    spotify_id, image_url
-                )
-            elif existing_path:
-                image_path = existing_path
-
-        # Update DTO with downloaded image path if available
-        if image_path and artist_dto.image:
-            artist_dto.image.path = image_path
 
         # Use ProviderMappingService for consistent upsert (Clean Architecture)
         internal_id, was_created = await self._mapping_service.get_or_create_artist(
@@ -458,10 +453,34 @@ class SpotifySyncService:
 
         if was_created:
             logger.debug(f"Created new artist '{artist_dto.name}' ({internal_id})")
-        else:
-            # Update existing artist with new data
-            # TODO: Consider adding update method to mapping service
-            pass
+
+        # IMAGE HANDLING: Smart Logic + Queue
+        if download_images and image_url and self._image_service:
+            # Smart check: Skip if local image already exists
+            if self._image_service.has_local_image(existing_path):
+                # Keep existing path
+                if artist_dto.image:
+                    artist_dto.image.path = existing_path
+            else:
+                # Need to download - use queue if available
+                if self._image_queue:
+                    # Queue for async download (non-blocking)
+                    await self._image_queue.enqueue(
+                        ImageDownloadJob.for_artist(
+                            entity_id=internal_id,
+                            provider_id=spotify_id,
+                            url=image_url,
+                            provider="spotify",
+                            priority=ImagePriority.NORMAL,
+                        )
+                    )
+                else:
+                    # Fallback: blocking download (backward compatibility)
+                    image_path = await self._image_service.download_artist_image(
+                        spotify_id, image_url
+                    )
+                    if image_path and artist_dto.image:
+                        artist_dto.image.path = image_path
 
         return internal_id
 
@@ -738,9 +757,13 @@ class SpotifySyncService:
     ) -> str | None:
         """Insert or update an album in DB from AlbumDTO (Spotify or Deezer).
 
-        Hey future me - REFACTORED to use ProviderMappingService (Dec 2025)!
+        Hey future me - REFACTORED (Jan 2025) for Smart Image Logic + Queue!
         NOW ALSO SYNCS TRACKS automatically if AlbumDTO contains them!
         This prevents the "no tracks" problem where albums load but tracks don't.
+
+        IMAGE QUEUE:
+        - Queues album cover for async download if not locally cached
+        - Uses Smart Logic (has_local_image) to skip existing covers
 
         DEDUPLICATION handled by ProviderMappingService:
         - Lookup by spotify_uri
@@ -754,6 +777,7 @@ class SpotifySyncService:
         Returns:
             Internal UUID of the album, or None if failed
         """
+        from soulspot.application.services.images import ImageDownloadJob, ImagePriority
         from soulspot.domain.dtos import AlbumDTO
 
         if not isinstance(album_dto, AlbumDTO):
@@ -780,6 +804,25 @@ class SpotifySyncService:
 
         if was_created:
             logger.debug(f"Created new album '{album_dto.title}' ({album_internal_id})")
+
+        # ALBUM COVER HANDLING: Smart Logic + Queue
+        cover_url = album_dto.cover.url if album_dto.cover else None
+        existing_cover_path = album_dto.cover.path if album_dto.cover else None
+        provider_id = album_dto.spotify_id or album_dto.deezer_id
+        provider = "spotify" if album_dto.spotify_id else "deezer"
+
+        if cover_url and self._image_service and self._image_queue:
+            # Smart check: Skip if local cover already exists
+            if not self._image_service.has_local_image(existing_cover_path):
+                await self._image_queue.enqueue(
+                    ImageDownloadJob.for_album(
+                        entity_id=album_internal_id,
+                        provider_id=provider_id,
+                        url=cover_url,
+                        provider=provider,
+                        priority=ImagePriority.NORMAL,
+                    )
+                )
 
         # Auto-sync tracks if AlbumDTO contains them
         # This prevents the "album loaded but no tracks" problem.

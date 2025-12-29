@@ -34,7 +34,7 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 if TYPE_CHECKING:
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ class DeezerSyncService:
         session: AsyncSession,
         deezer_plugin: "DeezerPlugin",
         image_service: "ImageService | None" = None,
+        image_queue: "ImageDownloadQueue | None" = None,
     ) -> None:
         """Initialize Deezer sync service.
 
@@ -79,10 +80,14 @@ class DeezerSyncService:
         REFACTORED (Dec 2025): Nutzt jetzt ProviderMappingService für Artist-Erstellung!
         Das ist konsistent mit SpotifySyncService.
 
+        REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
+        Images werden in Queue gestellt statt blockierend heruntergeladen.
+
         Args:
             session: Database session
             deezer_plugin: DeezerPlugin für API calls
             image_service: ImageService für Bilder-Downloads (optional)
+            image_queue: Queue für async Image-Downloads (optional)
         """
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
@@ -91,6 +96,7 @@ class DeezerSyncService:
         self._session = session
         self._plugin = deezer_plugin
         self._image_service = image_service
+        self._image_queue = image_queue
 
         # Repositories für DB-Zugriff
         self._artist_repo = ArtistRepository(session)
@@ -443,6 +449,7 @@ class DeezerSyncService:
     # =========================================================================
     # Hey future me - REFACTORED Dec 2025 to use ProviderMappingService!
     # Alle Artist-Erstellungen gehen jetzt über den MappingService für Konsistenz.
+    # REFACTORED Jan 2025: Smart-Logic + ImageDownloadQueue für non-blocking Downloads!
 
     async def _save_artist_from_dto(
         self,
@@ -454,6 +461,10 @@ class DeezerSyncService:
 
         Hey future me - REFACTORED to use ProviderMappingService!
         Das ist jetzt konsistent mit SpotifySyncService.
+
+        REFACTORED (Jan 2025): Nutzt jetzt Smart-Logic + ImageDownloadQueue!
+        - has_local_image() checkt ob Bild lokal existiert → skip download
+        - Queue statt blocking download → sync bleibt schnell
 
         Note: is_chart and is_related parameters are kept for API compatibility
         but not stored in database (fields don't exist in ArtistModel).
@@ -484,22 +495,38 @@ class DeezerSyncService:
             dto, source="deezer"
         )
 
-        # Download image if we have the service and URL
+        # Queue image download if needed (Smart-Logic!)
         dto_image_url = dto.image.url if dto.image else None
         deezer_id = dto.deezer_id
 
         if self._image_service and deezer_id and dto_image_url:
-            # Get the artist to update image_path
             from uuid import UUID
 
             from soulspot.domain.value_objects import ArtistId
 
             artist = await self._artist_repo.get_by_id(ArtistId(UUID(artist_id)))
             if artist:
-                should_download = is_new or await self._image_service.should_redownload(
-                    artist.image.url, dto_image_url, artist.image.path
-                )
-                if should_download:
+                # Smart-Logic: Skip wenn lokales Bild existiert
+                if self._image_service.has_local_image(artist.image.path):
+                    logger.debug(
+                        f"DeezerSync: Artist {artist.name} hat bereits lokales Bild, skip"
+                    )
+                elif self._image_queue:
+                    # Queue für async download (non-blocking!)
+                    from soulspot.application.services.images import ImageDownloadJob
+
+                    job = ImageDownloadJob.for_artist(
+                        deezer_id, dto_image_url, provider="deezer"
+                    )
+                    self._image_queue.enqueue(job)
+                    logger.debug(
+                        f"DeezerSync: Artist {artist.name} Bild in Queue gestellt"
+                    )
+                    # Update URL sofort, path kommt später vom Worker
+                    artist.image = ImageRef(url=dto_image_url, path=artist.image.path)
+                    await self._artist_repo.update(artist)
+                else:
+                    # Fallback: Blocking download wenn keine Queue
                     image_path = await self._image_service.download_artist_image(
                         deezer_id, dto_image_url, provider="deezer"
                     )
@@ -516,6 +543,10 @@ class DeezerSyncService:
 
         REFACTORED (Dec 2025): Now uses ProviderMappingService!
         This is consistent with SpotifySyncService and prevents duplicate artists.
+
+        REFACTORED (Jan 2025): Smart-Logic + ImageDownloadQueue!
+        - has_local_image() checkt ob Bild lokal existiert
+        - Queue statt blocking download
 
         Args:
             artist_dto: Artist DTO from plugin (must have: name, deezer_id, and optionally artwork_url, genres, tags)
@@ -562,7 +593,7 @@ class DeezerSyncService:
                 dto, source="deezer"
             )
 
-            # Download image if needed
+            # Queue image download if needed (Smart-Logic!)
             if self._image_service and deezer_id and artwork_url:
                 from uuid import UUID
 
@@ -570,13 +601,26 @@ class DeezerSyncService:
 
                 artist = await self._artist_repo.get_by_id(ArtistId(UUID(artist_id)))
                 if artist:
-                    should_download = (
-                        is_new
-                        or await self._image_service.should_redownload(
-                            artist.image.url, artwork_url, artist.image.path
+                    # Smart-Logic: Skip wenn lokales Bild existiert
+                    if self._image_service.has_local_image(artist.image.path):
+                        logger.debug(
+                            f"DeezerSync: Artist {artist.name} hat lokales Bild, skip"
                         )
-                    )
-                    if should_download:
+                    elif self._image_queue:
+                        # Queue für async download (non-blocking!)
+                        from soulspot.application.services.images import (
+                            ImageDownloadJob,
+                        )
+
+                        job = ImageDownloadJob.for_artist(
+                            deezer_id, artwork_url, provider="deezer"
+                        )
+                        self._image_queue.enqueue(job)
+                        # Update URL sofort
+                        artist.image = ImageRef(url=artwork_url, path=artist.image.path)
+                        await self._artist_repo.update(artist)
+                    else:
+                        # Fallback: Blocking download wenn keine Queue
                         image_path = await self._image_service.download_artist_image(
                             deezer_id, artwork_url, provider="deezer"
                         )
@@ -649,6 +693,7 @@ class DeezerSyncService:
         """Save album DTO with artist relationship.
 
         CRITICAL FIX (Dec 2025): This method properly links album to artist.
+        REFACTORED (Jan 2025): Smart-Logic + ImageDownloadQueue!
 
         Args:
             album_dto: Album DTO from plugin
@@ -670,35 +715,56 @@ class DeezerSyncService:
 
             if existing:
                 # Update existing - Model.cover_url ist DB-Spalte
-                # CRITICAL: Check if we need to download BEFORE updating cover_url!
-                old_cover_url = existing.cover_url
-                old_cover_path = existing.cover_path
-
                 existing.title = album_dto.title
                 existing.cover_url = dto_cover_url or existing.cover_url
 
-                # Download album cover if URL changed or no local copy (Deezer provider)
-                # Hey future me - we use OLD values here to detect changes!
+                # Smart-Logic: Queue cover download nur wenn kein lokales Bild
                 if (
                     self._image_service
                     and album_dto.deezer_id
                     and dto_cover_url
-                    and await self._image_service.should_redownload(
-                        old_cover_url, dto_cover_url, old_cover_path
-                    )
                 ):
-                    cover_path = await self._image_service.download_album_image(
-                        album_dto.deezer_id, dto_cover_url, provider="deezer"
-                    )
-                    if cover_path:
-                        existing.cover_path = cover_path
+                    if self._image_service.has_local_image(existing.cover_path):
+                        logger.debug(
+                            f"DeezerSync: Album {album_dto.title} hat lokales Cover, skip"
+                        )
+                    elif self._image_queue:
+                        # Queue für async download
+                        from soulspot.application.services.images import (
+                            ImageDownloadJob,
+                        )
+
+                        job = ImageDownloadJob.for_album(
+                            album_dto.deezer_id, dto_cover_url, provider="deezer"
+                        )
+                        self._image_queue.enqueue(job)
+                    else:
+                        # Fallback: Blocking download
+                        cover_path = await self._image_service.download_album_image(
+                            album_dto.deezer_id, dto_cover_url, provider="deezer"
+                        )
+                        if cover_path:
+                            existing.cover_path = cover_path
             else:
-                # Download album cover for new album (Deezer provider)
+                # New album - queue cover download
                 cover_path = None
                 if self._image_service and album_dto.deezer_id and dto_cover_url:
-                    cover_path = await self._image_service.download_album_image(
-                        album_dto.deezer_id, dto_cover_url, provider="deezer"
-                    )
+                    if self._image_queue:
+                        # Queue für async download
+                        from soulspot.application.services.images import (
+                            ImageDownloadJob,
+                        )
+
+                        job = ImageDownloadJob.for_album(
+                            album_dto.deezer_id, dto_cover_url, provider="deezer"
+                        )
+                        self._image_queue.enqueue(job)
+                        # cover_path bleibt None, wird vom Worker später gesetzt
+                    else:
+                        # Fallback: Blocking download
+                        cover_path = await self._image_service.download_album_image(
+                            album_dto.deezer_id, dto_cover_url, provider="deezer"
+                        )
 
                 # Create new with artist relationship
                 new_album = AlbumModel(

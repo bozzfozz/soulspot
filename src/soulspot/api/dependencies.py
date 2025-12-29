@@ -830,9 +830,11 @@ def get_queue_playlist_downloads_use_case(
 
 # Hey future me - this creates SpotifySyncService for auto-syncing Spotify data!
 # REFACTORED to use SpotifyPlugin (Dec 2025)!
+# REFACTORED to use ImageDownloadQueue (Jan 2025)!
 # Used by the /spotify/* UI routes to auto-sync on page load and fetch data from DB.
 # Requires both DB session and SpotifyPlugin for API calls + persistence.
 # ImageService wird mitgegeben für Bilder-Downloads!
+# ImageDownloadQueue wird mitgegeben für async non-blocking Downloads!
 async def get_spotify_sync_service(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -842,6 +844,9 @@ async def get_spotify_sync_service(
 
     Hey future me - refactored to use SpotifyPlugin (Dec 2025)!
     No more raw SpotifyClient - plugin handles auth and returns DTOs.
+
+    REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
+    Images werden in Queue gestellt statt blockierend heruntergeladen.
 
     ImageService wird IMMER mitgegeben für Bilder-Downloads!
     Die download_*_image() Methoden brauchen keine Session -
@@ -853,9 +858,9 @@ async def get_spotify_sync_service(
         settings: Application settings
 
     Yields:
-        SpotifySyncService instance with ImageService
+        SpotifySyncService instance with ImageService and ImageDownloadQueue
     """
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -885,10 +890,18 @@ async def get_spotify_sync_service(
         local_serve_prefix="/api/images",
     )
 
+    # Hey future me - ImageDownloadQueue aus app.state holen!
+    # Wird in lifecycle.py erstellt und auf app.state gespeichert.
+    # Falls nicht vorhanden (z.B. in Tests), None übergeben → Fallback zu blocking downloads.
+    image_queue: ImageDownloadQueue | None = getattr(
+        request.app.state, "image_download_queue", None
+    )
+
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,
         image_service=image_service,
+        image_queue=image_queue,
     )
 
 
@@ -903,10 +916,12 @@ async def get_spotify_sync_service_optional(
     Use this for multi-provider features like Discover where Deezer can
     provide data even if Spotify is not connected.
 
+    REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
+
     Unlike get_spotify_sync_service, this DOES NOT raise 401 if no token.
     Instead, it yields a service that may have limited functionality.
     """
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -929,10 +944,16 @@ async def get_spotify_sync_service_optional(
         local_serve_prefix="/api/images",
     )
 
+    # Hey future me - ImageDownloadQueue aus app.state holen!
+    image_queue: ImageDownloadQueue | None = getattr(
+        request.app.state, "image_download_queue", None
+    )
+
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,  # May be None if not authenticated!
         image_service=image_service,
+        image_queue=image_queue,
     )
 
 
@@ -968,6 +989,7 @@ async def get_library_scanner_service(
 # Optionaler SpotifySyncService für Sync-on-demand:
 # - Wenn spotify_sync vorhanden: Auto-sync tracks on page load
 # - Wenn nicht vorhanden: Zeigt nur cached Daten (graceful degradation)
+# REFACTORED (Jan 2025): SpotifySyncService bekommt ImageDownloadQueue!
 async def get_library_view_service(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -977,6 +999,8 @@ async def get_library_view_service(
 
     Hey future me - das ist Phase 1 des Service Separation Plans!
     ViewModels wurden aus SpotifySyncService extrahiert.
+
+    REFACTORED (Jan 2025): SpotifySyncService nutzt ImageDownloadQueue!
 
     Dieser Service:
     1. Holt Daten aus DB via Repositories
@@ -994,7 +1018,7 @@ async def get_library_view_service(
     Yields:
         LibraryViewService instance
     """
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.application.services.library_view_service import LibraryViewService
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -1022,10 +1046,16 @@ async def get_library_view_service(
                 local_serve_prefix="/api/images",
             )
 
+            # Hey future me - ImageDownloadQueue aus app.state holen!
+            image_queue: ImageDownloadQueue | None = getattr(
+                request.app.state, "image_download_queue", None
+            )
+
             spotify_sync = SpotifySyncService(
                 session=session,
                 spotify_plugin=spotify_plugin,
                 image_service=image_service,
+                image_queue=image_queue,
             )
     except Exception as e:
         # No auth or error - graceful degradation (show cached data)
@@ -1081,7 +1111,9 @@ def get_deezer_plugin() -> "DeezerPlugin":
 # Hey future me - DeezerSyncService synct Deezer-Daten zur DB!
 # Das ist Phase 2 des Service Separation Plans.
 # KEINE OAuth nötig für Charts, New Releases, Artist Albums!
+# REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Downloads!
 async def get_deezer_sync_service(
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> AsyncGenerator:
@@ -1089,6 +1121,9 @@ async def get_deezer_sync_service(
 
     Hey future me - das ist der DEEZER Sync Service nach Clean Architecture!
     Braucht KEINE OAuth für die meisten Operationen!
+
+    REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
+    Images werden in Queue gestellt statt blockierend heruntergeladen.
 
     Features:
     - sync_charts() - Top Tracks/Albums/Artists zu DB
@@ -1100,14 +1135,15 @@ async def get_deezer_sync_service(
     sie geben nur den Pfad zurück, der Caller aktualisiert die DB.
 
     Args:
+        request: FastAPI request for app state access
         session: Database session
         settings: App settings for ImageService
 
     Yields:
-        DeezerSyncService instance with ImageService
+        DeezerSyncService instance with ImageService and ImageDownloadQueue
     """
     from soulspot.application.services.deezer_sync_service import DeezerSyncService
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
     deezer_plugin = DeezerPlugin()
@@ -1121,10 +1157,16 @@ async def get_deezer_sync_service(
         local_serve_prefix="/api/images",
     )
 
+    # Hey future me - ImageDownloadQueue aus app.state holen!
+    image_queue: ImageDownloadQueue | None = getattr(
+        request.app.state, "image_download_queue", None
+    )
+
     yield DeezerSyncService(
         session=session,
         deezer_plugin=deezer_plugin,
         image_service=image_service,
+        image_queue=image_queue,
     )
 
 

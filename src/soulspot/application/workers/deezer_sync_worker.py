@@ -30,7 +30,8 @@ if TYPE_CHECKING:
     # NOTE: DeezerChartsCache and DeezerNewReleasesCache removed
     # - Charts: showed generic browse content, feature removed
     # - New Releases: now handled by NewReleasesSyncWorker
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.config import Settings
     from soulspot.infrastructure.persistence import Database
 
@@ -82,6 +83,7 @@ class DeezerSyncWorker:
         db: "Database",
         settings: "Settings",
         check_interval_seconds: int = 60,  # Check every minute
+        image_queue: "ImageDownloadQueue | None" = None,
     ) -> None:
         """Initialize Deezer sync worker.
 
@@ -89,13 +91,18 @@ class DeezerSyncWorker:
             db: Database instance for creating sessions
             settings: Application settings
             check_interval_seconds: How often to check if syncs are due
+            image_queue: Queue for async image downloads (optional)
 
         Note: No token_manager parameter unlike Spotify - Deezer tokens are
         managed via deezer_sessions table and checked per request.
+
+        REFACTORED (Jan 2025): Bekommt image_queue für async Bilder-Downloads!
+        Images werden in Queue gestellt statt blockierend heruntergeladen.
         """
         self.db = db
         self.settings = settings
         self.check_interval_seconds = check_interval_seconds
+        self._image_queue = image_queue
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
@@ -172,6 +179,45 @@ class DeezerSyncWorker:
                 await self._task
             self._task = None
         logger.info("Deezer sync worker stopped")
+
+    def _create_sync_service(
+        self, session: Any, access_token: str | None
+    ) -> "DeezerSyncService":
+        """Create a DeezerSyncService instance with all dependencies.
+
+        Hey future me - dieser Helper reduziert Code-Duplizierung!
+        Jede _run_*_sync Methode braucht denselben Setup-Code:
+        - DeezerClient erstellen
+        - DeezerPlugin erstellen
+        - ImageService erstellen
+        - DeezerSyncService erstellen (mit allen deps inkl. image_queue!)
+
+        REFACTORED (Jan 2025): image_queue wird jetzt durchgereicht für async Downloads!
+
+        Args:
+            session: Database session for the sync
+            access_token: Deezer OAuth token (None for public API calls)
+
+        Returns:
+            Configured DeezerSyncService instance
+        """
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.infrastructure.integrations.deezer_client import DeezerClient
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+
+        deezer_client = DeezerClient()
+        deezer_plugin = DeezerPlugin(
+            client=deezer_client,
+            access_token=access_token,
+        )
+        image_service = _get_image_service()
+
+        return DeezerSyncService(
+            session=session,
+            deezer_plugin=deezer_plugin,
+            image_service=image_service,
+            image_queue=self._image_queue,
+        )
 
     async def _run_loop(self) -> None:
         """Main worker loop - checks and runs syncs periodically.
@@ -395,27 +441,7 @@ class DeezerSyncWorker:
         logger.info("Starting automatic Deezer artists sync...")
 
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
-
+            sync_service = self._create_sync_service(session, access_token)
             result = await sync_service.sync_followed_artists(force=False)
 
             self._last_sync["artists"] = now
@@ -436,27 +462,7 @@ class DeezerSyncWorker:
         logger.info("Starting automatic Deezer playlists sync...")
 
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
-
+            sync_service = self._create_sync_service(session, access_token)
             result = await sync_service.sync_user_playlists(force=False)
 
             self._last_sync["playlists"] = now
@@ -477,27 +483,7 @@ class DeezerSyncWorker:
         logger.info("Starting automatic Deezer saved albums sync...")
 
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
-
+            sync_service = self._create_sync_service(session, access_token)
             result = await sync_service.sync_saved_albums(force=False)
 
             self._last_sync["saved_albums"] = now
@@ -518,27 +504,7 @@ class DeezerSyncWorker:
         logger.info("Starting automatic Deezer saved tracks sync...")
 
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
-
+            sync_service = self._create_sync_service(session, access_token)
             result = await sync_service.sync_saved_tracks(force=False)
 
             self._last_sync["saved_tracks"] = now
@@ -590,16 +556,9 @@ class DeezerSyncWorker:
             resync_enabled: Whether to resync existing artists (default True)
         """
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
             from soulspot.infrastructure.persistence.repositories import (
                 SpotifyBrowseRepository,
             )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
             repo = SpotifyBrowseRepository(session)
 
@@ -644,19 +603,8 @@ class DeezerSyncWorker:
                 f"this cycle. Pending: {pending_count} new, {resync_count} resync"
             )
 
-            # Set up services
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
+            # Set up sync service via helper (includes image_queue!)
+            sync_service = self._create_sync_service(session, access_token)
 
             synced_count = 0
             total_albums = 0
@@ -730,16 +678,9 @@ class DeezerSyncWorker:
             albums_per_cycle: How many albums to process (default 10)
         """
         try:
-            from soulspot.application.services.deezer_sync_service import (
-                DeezerSyncService,
-            )
-            from soulspot.infrastructure.integrations.deezer_client import (
-                DeezerClient,
-            )
             from soulspot.infrastructure.persistence.repositories import (
                 SpotifyBrowseRepository,
             )
-            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
             repo = SpotifyBrowseRepository(session)
 
@@ -759,21 +700,10 @@ class DeezerSyncWorker:
                 f"this cycle. Total pending: {pending_count}"
             )
 
-            # Set up services
+            # Set up sync service via helper (includes image_queue!)
             # Hey future me - access_token not really needed for get_album_tracks
             # but DeezerPlugin constructor accepts it
-            deezer_client = DeezerClient()
-            deezer_plugin = DeezerPlugin(
-                client=deezer_client,
-                access_token=access_token,
-            )
-            image_service = _get_image_service()
-
-            sync_service = DeezerSyncService(
-                session=session,
-                deezer_plugin=deezer_plugin,
-                image_service=image_service,
-            )
+            sync_service = self._create_sync_service(session, access_token)
 
             synced_count = 0
             total_tracks = 0

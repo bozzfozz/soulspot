@@ -807,6 +807,136 @@ class ImageService:
         return result
 
     # =========================================================================
+    # SMART IMAGE LOGIC (Phase 1 - Local-First Strategy)
+    # =========================================================================
+    #
+    # Hey future me - these methods implement the "Local-First" image strategy!
+    # Core principle: If we have a local file, we're DONE. Don't re-download.
+    #
+    # Decision tree:
+    # 1. has_local_image(path) → YES? → SKIP (no work needed)
+    # 2. has CDN URL? → YES? → DOWNLOAD from CDN
+    # 3. has provider_id? → YES? → API LOOKUP then download
+    # 4. Nothing? → SKIP (can't get image)
+
+    def has_local_image(self, entity_path: str | None) -> bool:
+        """Check if local image file exists (FAST - sync, no DB query).
+
+        Hey future me - this is THE primary check for "do we need to download?"
+        Call this BEFORE any download decision. It's intentionally SYNC
+        so it can be used in tight loops without async overhead.
+
+        Args:
+            entity_path: The image_path or cover_path from DB
+                        (e.g., "artists/spotify/abc123.webp")
+
+        Returns:
+            True if file exists on disk, False otherwise
+
+        Examples:
+            >>> service.has_local_image("artists/spotify/abc.webp")
+            True  # File exists
+            >>> service.has_local_image(None)
+            False  # No path
+            >>> service.has_local_image("FAILED:HTTP_404:2025-01-01")
+            False  # Failed marker, not a real file
+        """
+        if not entity_path:
+            return False
+
+        # Skip FAILED markers (they start with "FAILED")
+        if entity_path.startswith("FAILED"):
+            return False
+
+        full_path = Path(self.cache_base_path) / entity_path
+        return full_path.exists()
+
+    def should_download(
+        self,
+        existing_path: str | None,
+        cdn_url: str | None = None,
+    ) -> bool:
+        """Simplified download decision: Local exists? No. Has URL? Yes.
+
+        Hey future me - this REPLACES the old should_redownload() logic!
+        Key insight: We don't care about URL changes if we have a local file.
+        CDN URLs change (token refresh, CDN migration) but the IMAGE is the same.
+
+        Args:
+            existing_path: Current image_path/cover_path from DB
+            cdn_url: CDN URL available for download (optional)
+
+        Returns:
+            True if should download from CDN
+
+        Examples:
+            >>> service.should_download("artists/spotify/abc.webp", "https://...")
+            False  # Has local file, skip download
+            >>> service.should_download(None, "https://...")
+            True   # No local file, download needed
+            >>> service.should_download(None, None)
+            False  # No URL, can't download
+        """
+        # Rule 1: Local file exists → don't download
+        if self.has_local_image(existing_path):
+            return False
+
+        # Rule 2: Have CDN URL → download
+        if cdn_url:
+            return True
+
+        # Rule 3: No URL → can't download
+        return False
+
+    def needs_image_work(
+        self,
+        entity_path: str | None,
+        cdn_url: str | None,
+        provider_id: str | None = None,
+    ) -> tuple[bool, str]:
+        """Determine if entity needs image work and what kind.
+
+        Hey future me - use this for batch operations to categorize work!
+        Returns both a boolean AND the type of work needed.
+
+        Args:
+            entity_path: Current image_path/cover_path from DB
+            cdn_url: CDN URL (if available)
+            provider_id: Provider ID for API lookup (if no CDN URL)
+
+        Returns:
+            (needs_work, work_type) tuple where work_type is:
+            - "none": No work needed (has local image)
+            - "download": Has CDN URL, just download it
+            - "lookup": No CDN URL but has provider ID, need API lookup first
+            - "skip": No CDN URL and no provider ID, can't get image
+
+        Examples:
+            >>> service.needs_image_work("artists/x.webp", "https://...", "abc")
+            (False, "none")  # Already have local image
+            >>> service.needs_image_work(None, "https://...", "abc")
+            (True, "download")  # Have URL, just download
+            >>> service.needs_image_work(None, None, "abc")
+            (True, "lookup")  # Need API lookup first
+            >>> service.needs_image_work(None, None, None)
+            (False, "skip")  # Can't get image
+        """
+        # Priority 1: Already have local image
+        if self.has_local_image(entity_path):
+            return (False, "none")
+
+        # Priority 2: Have CDN URL → download directly
+        if cdn_url:
+            return (True, "download")
+
+        # Priority 3: Have provider ID → need API lookup
+        if provider_id:
+            return (True, "lookup")
+
+        # Priority 4: Nothing to work with
+        return (False, "skip")
+
+    # =========================================================================
     # COMPATIBILITY METHODS (for migration from ArtworkService)
     # =========================================================================
 
@@ -818,38 +948,26 @@ class ImageService:
     ) -> bool:
         """Check if image should be re-downloaded.
 
-        Future me note:
-        This is a COMPATIBILITY method for migration from ArtworkService.
-        Use this to check if an image URL has changed.
-        Made async to match ArtworkService signature.
+        ⚠️ DEPRECATED: Use should_download() instead!
+
+        Hey future me - this is kept for backward compatibility only.
+        The new should_download() is simpler and ignores URL changes
+        (which is correct - we don't need to re-download if local exists).
+
+        This wrapper delegates to should_download() but is async to
+        maintain the old signature for existing callers.
 
         Args:
-            existing_url: URL stored in DB
+            existing_url: URL stored in DB (IGNORED in new logic)
             new_url: New URL from provider
             existing_path: Local cache path stored in DB
 
         Returns:
             True if should re-download
         """
-        # No new URL - nothing to download
-        if not new_url:
-            return False
-
-        # No existing - definitely download
-        if not existing_url:
-            return True
-
-        # URL changed - re-download
-        if existing_url != new_url:
-            return True
-
-        # URL same but no local cache - download
-        if not existing_path:
-            return True
-
-        # Check if local file exists
-        full_path = Path(self.cache_base_path) / existing_path
-        return bool(not full_path.exists())
+        # Delegate to new simplified logic
+        # Note: existing_url is intentionally ignored now
+        return self.should_download(existing_path, new_url)
 
     async def delete_cached_image(self, relative_path: str | None) -> bool:
         """Delete a cached image file.

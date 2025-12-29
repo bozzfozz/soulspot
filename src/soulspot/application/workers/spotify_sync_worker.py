@@ -30,7 +30,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soulspot.application.services.images import ImageService
+    from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.application.services.token_manager import DatabaseTokenManager
     from soulspot.config import Settings
     from soulspot.infrastructure.persistence import Database
@@ -80,6 +80,7 @@ class SpotifySyncWorker:
         token_manager: "DatabaseTokenManager",
         settings: "Settings",
         check_interval_seconds: int = 60,  # Check every minute
+        image_queue: "ImageDownloadQueue | None" = None,
     ) -> None:
         """Initialize Spotify sync worker.
 
@@ -88,11 +89,13 @@ class SpotifySyncWorker:
             token_manager: DatabaseTokenManager for getting access tokens
             settings: Application settings (for SpotifyClient config)
             check_interval_seconds: How often to check if syncs are due
+            image_queue: Optional queue for async image downloads
         """
         self.db = db
         self.token_manager = token_manager
         self.settings = settings
         self.check_interval_seconds = check_interval_seconds
+        self._image_queue = image_queue
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
@@ -205,6 +208,41 @@ class SpotifySyncWorker:
         if self._rate_limit_backoff_minutes > 5:
             logger.info("Successful sync - resetting rate limit backoff to 5 minutes")
             self._rate_limit_backoff_minutes = 5
+
+    def _create_sync_service(
+        self, session: Any, access_token: str, settings_service: Any
+    ) -> Any:
+        """Create SpotifySyncService with all dependencies.
+
+        Hey future me - ZENTRALE Factory für SpotifySyncService!
+        Alle _run_*_sync Methoden nutzen diese Helper-Methode.
+        So wird image_queue korrekt an ALLE Service-Instanzen übergeben.
+
+        Args:
+            session: Database session
+            access_token: Spotify access token
+            settings_service: AppSettingsService instance
+
+        Returns:
+            SpotifySyncService instance
+        """
+        from soulspot.application.services.spotify_sync_service import (
+            SpotifySyncService,
+        )
+        from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+        spotify_client = SpotifyClient(self.settings.spotify)
+        spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=access_token)
+        image_service = _get_image_service()
+
+        return SpotifySyncService(
+            session=session,
+            spotify_plugin=spotify_plugin,
+            image_service=image_service,
+            settings_service=settings_service,
+            image_queue=self._image_queue,
+        )
 
     async def start(self) -> None:
         """Start the Spotify sync worker.
@@ -464,36 +502,19 @@ class SpotifySyncWorker:
     ) -> None:
         """Run artists sync and update tracking.
 
-        Hey future me - diese Methode instantiiert den SpotifySyncService
-        mit allen nötigen Dependencies und führt den Sync aus.
+        Hey future me - nutzt jetzt _create_sync_service() Helper!
+        Das stellt sicher dass image_queue korrekt übergeben wird.
         """
         logger.info("Starting automatic artists sync...")
 
         try:
-            # Import and instantiate services
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             result = await sync_service.sync_followed_artists(force=False)
@@ -523,26 +544,10 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             result = await sync_service.sync_user_playlists(force=False)
@@ -571,26 +576,10 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             result = await sync_service.sync_liked_songs(force=False)
@@ -618,26 +607,10 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             result = await sync_service.sync_saved_albums(force=False)
@@ -698,12 +671,6 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
             from soulspot.infrastructure.persistence.repositories import (
                 SpotifyBrowseRepository,
             )
@@ -756,20 +723,9 @@ class SpotifySyncWorker:
             )
 
             # Set up services
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             synced_count = 0
@@ -858,16 +814,9 @@ class SpotifySyncWorker:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
             )
-            from soulspot.application.services.spotify_sync_service import (
-                SpotifySyncService,
-            )
-            from soulspot.infrastructure.integrations.spotify_client import (
-                SpotifyClient,
-            )
             from soulspot.infrastructure.persistence.repositories import (
                 SpotifyBrowseRepository,
             )
-            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
             repo = SpotifyBrowseRepository(session)
 
@@ -890,18 +839,9 @@ class SpotifySyncWorker:
             )
 
             # Set up services
-            spotify_client = SpotifyClient(self.settings.spotify)
-            spotify_plugin = SpotifyPlugin(
-                client=spotify_client, access_token=access_token
-            )
-            image_service = _get_image_service()
             settings_service = AppSettingsService(session)
-
-            sync_service = SpotifySyncService(
-                session=session,
-                spotify_plugin=spotify_plugin,
-                image_service=image_service,
-                settings_service=settings_service,
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
             )
 
             synced_count = 0
