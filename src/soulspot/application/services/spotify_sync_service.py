@@ -27,11 +27,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.value_objects import ImageRef
 from soulspot.infrastructure.persistence.models import ensure_utc_aware
-from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
+from soulspot.infrastructure.persistence.repositories import (
+    AlbumRepository,
+    ArtistRepository,
+    PlaylistRepository,
+    SpotifyBrowseRepository,
+    TrackRepository,
+)
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.images import ImageService
+    from soulspot.application.services.provider_mapping_service import (
+        ProviderMappingService,
+    )
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -73,12 +82,14 @@ class SpotifySyncService:
     ) -> None:
         """Initialize sync service.
 
-        Hey future me - refactored to use SpotifyPlugin!
-        The plugin handles token management internally, no more access_token juggling.
-
-        NOTE (Dec 2025): Deezer fallback removed!
-        - Use DeezerSyncService for Deezer operations
-        - Use ProviderSyncOrchestrator for multi-provider aggregation (Phase 3)
+        Hey future me - REFACTORED to Clean Architecture (Dec 2025)!
+        Now uses individual Repositories + ProviderMappingService like DeezerSyncService.
+        
+        OLD: self.repo = SpotifyBrowseRepository (monolithic)
+        NEW: Individual repos + ProviderMappingService for unified patterns
+        
+        NOTE: self.repo is KEPT for backwards compatibility during migration.
+        Will be removed once all methods are migrated.
 
         Args:
             session: Database session
@@ -86,19 +97,58 @@ class SpotifySyncService:
             image_service: Optional image service for downloading images
             settings_service: Optional settings service for sync config
         """
-        # Hey future me - ProviderMappingService zentralisiert das ID-Mapping!
-        # Statt überall SpotifyUri.from_string() + ArtistId.generate() zu machen,
-        # nutzen wir jetzt den MappingService für einheitliche UUID-Vergabe.
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
         )
 
-        self.repo = SpotifyBrowseRepository(session)
-        self.spotify_plugin = spotify_plugin
         self._session = session
+        self.spotify_plugin = spotify_plugin
         self._image_service = image_service
         self._settings_service = settings_service
+        
+        # NEW: Individual Repositories (Clean Architecture)
+        self._artist_repo = ArtistRepository(session)
+        self._album_repo = AlbumRepository(session)
+        self._track_repo = TrackRepository(session)
+        self._playlist_repo = PlaylistRepository(session)
+        
+        # ProviderMappingService für zentrale Artist/Album/Track Erstellung
+        # Hey future me - das verhindert Duplikate und sorgt für konsistente UUIDs!
         self._mapping_service = ProviderMappingService(session)
+        
+        # LEGACY: Keep SpotifyBrowseRepository during migration
+        # TODO: Remove once all methods migrated to individual repos
+        self.repo = SpotifyBrowseRepository(session)
+        
+        # NEW: In-Memory Sync-Status Cache (wie DeezerSyncService)
+        self._last_sync_times: dict[str, datetime] = {}
+
+    # =========================================================================
+    # SYNC STATUS HELPERS (NEW - In-Memory like DeezerSyncService)
+    # =========================================================================
+
+    def _should_sync(self, sync_type: str, cooldown_minutes: int) -> bool:
+        """Check if sync should run based on cooldown.
+
+        Hey future me - das verhindert API-Spam!
+        Wir synken nicht jedes Mal, sondern respektieren Cooldowns.
+        
+        MIGRATION NOTE: This replaces repo.should_sync() with in-memory logic.
+        """
+        last_sync = self._last_sync_times.get(sync_type)
+        if not last_sync:
+            return True
+
+        now = datetime.now(UTC)
+        elapsed_minutes = (now - last_sync).total_seconds() / 60
+        return elapsed_minutes >= cooldown_minutes
+
+    def _mark_synced(self, sync_type: str) -> None:
+        """Mark sync as completed.
+        
+        MIGRATION NOTE: This replaces repo.update_sync_status() with in-memory logic.
+        """
+        self._last_sync_times[sync_type] = datetime.now(UTC)
 
     # =========================================================================
     # FOLLOWED ARTISTS SYNC
@@ -165,20 +215,17 @@ class SpotifySyncService:
                 logger.debug("Artists sync is disabled in settings")
                 return stats
 
-            # Check cooldown
-            if not force and not await self.repo.should_sync("followed_artists"):
+            # Check cooldown (NEW: In-Memory statt DB)
+            if not force and not self._should_sync(
+                "followed_artists", self.ARTISTS_SYNC_COOLDOWN
+            ):
                 stats["skipped_cooldown"] = True
                 existing_count = await self.repo.count_artists()
                 stats["total"] = existing_count
                 logger.debug("Skipping followed artists sync (cooldown)")
                 return stats
 
-            # Mark sync as running
-            await self.repo.update_sync_status(
-                sync_type="followed_artists",
-                status="running",
-            )
-            await self._session.commit()
+            # No more "running" status - we just proceed
 
             # Fetch all followed artists from Spotify
             spotify_artists = await self._fetch_all_followed_artists()
@@ -300,15 +347,8 @@ class SpotifySyncService:
                     f"Auto-discography sync complete: {stats.get('discography_synced', 0)}/{len(newly_created_ids)} artists"
                 )
 
-            # Update sync status
-            await self.repo.update_sync_status(
-                sync_type="followed_artists",
-                status="idle",
-                items_synced=len(spotify_artists),
-                items_added=len(to_add),
-                items_removed=stats["removed"],
-                cooldown_minutes=self.ARTISTS_SYNC_COOLDOWN,
-            )
+            # Mark sync complete (NEW: In-Memory statt DB)
+            self._mark_synced("followed_artists")
 
             await self._session.commit()
             stats["synced"] = True
@@ -321,12 +361,7 @@ class SpotifySyncService:
         except Exception as e:
             logger.error(f"Error syncing followed artists: {e}")
             stats["error"] = str(e)
-            await self.repo.update_sync_status(
-                sync_type="followed_artists",
-                status="error",
-                error_message=str(e),
-            )
-            await self._session.commit()
+            # No DB status update on error - we'll just retry next time
 
         return stats
 
@@ -366,44 +401,41 @@ class SpotifySyncService:
 
     async def _upsert_artist_from_dto(
         self, artist_dto: Any, download_images: bool = False
-    ) -> None:
+    ) -> str | None:
         """Insert or update a Spotify artist in DB from ArtistDTO.
 
-        Hey future me - this is the DTO version of _upsert_artist!
-        Accepts ArtistDTO from SpotifyPlugin instead of raw dict.
-        The image_url comes directly from DTO (plugin already selects best image).
+        Hey future me - REFACTORED to use ProviderMappingService (Dec 2025)!
+        Nutzt jetzt den zentralen MappingService statt repo.upsert_artist().
+        Das ist konsistent mit DeezerSyncService und ermöglicht einheitliches
+        Dedup-Verhalten.
 
         Args:
             artist_dto: ArtistDTO from SpotifyPlugin
             download_images: Whether to download profile image locally
+
+        Returns:
+            Internal UUID of the artist, or None if failed
         """
         from soulspot.domain.dtos import ArtistDTO
 
         if not isinstance(artist_dto, ArtistDTO):
             logger.warning(f"Expected ArtistDTO, got {type(artist_dto)}")
-            return
+            return None
 
         spotify_id = artist_dto.spotify_id
         if not spotify_id:
             logger.warning("ArtistDTO missing spotify_id, skipping")
-            return
+            return None
 
-        name = artist_dto.name or "Unknown"
-        genres = artist_dto.genres or []
-        # Hey future me - ArtistDTO.image ist jetzt ein ImageRef!
-        # Zugriff auf URL via .image.url statt .artwork_url
-        image_url = artist_dto.image.url  # Plugin already selects best image
-        popularity = artist_dto.popularity
-        follower_count = artist_dto.followers
-
-        # Download image if enabled
+        # Download image if enabled BEFORE creating artist
         image_path = None
+        image_url = artist_dto.image.url if artist_dto.image else None
         if download_images and image_url and self._image_service:
             # Check if image changed before downloading
             existing = await self.repo.get_artist_by_id(spotify_id)
             existing_url = (
                 existing.image_url if existing else None
-            )  # Model uses image_url
+            )
             existing_path = existing.image_path if existing else None
 
             if await self._image_service.should_redownload(
@@ -413,17 +445,25 @@ class SpotifySyncService:
                     spotify_id, image_url
                 )
             elif existing_path:
-                image_path = existing_path  # Keep existing path
+                image_path = existing_path
 
-        await self.repo.upsert_artist(
-            spotify_id=spotify_id,
-            name=name,
-            image_url=image_url,
-            image_path=image_path,
-            genres=genres,
-            popularity=popularity,
-            follower_count=follower_count,
+        # Update DTO with downloaded image path if available
+        if image_path and artist_dto.image:
+            artist_dto.image.path = image_path
+
+        # Use ProviderMappingService for consistent upsert (Clean Architecture)
+        internal_id, was_created = await self._mapping_service.get_or_create_artist(
+            artist_dto, source="spotify"
         )
+
+        if was_created:
+            logger.debug(f"Created new artist '{artist_dto.name}' ({internal_id})")
+        else:
+            # Update existing artist with new data
+            # TODO: Consider adding update method to mapping service
+            pass
+
+        return internal_id
 
     # Hey future me - UNIFIED LIBRARY SYNC mit ProviderMappingService!
     # Statt manuell SpotifyUri.from_string() + ArtistId.generate() zu machen,
@@ -693,76 +733,74 @@ class SpotifySyncService:
 
         return albums
 
-    async def _upsert_album_from_dto(self, album_dto: Any, artist_id: str) -> None:
+    async def _upsert_album_from_dto(
+        self, album_dto: Any, artist_id: str
+    ) -> str | None:
         """Insert or update an album in DB from AlbumDTO (Spotify or Deezer).
 
-        Hey future me - supports BOTH Spotify AND Deezer albums!
+        Hey future me - REFACTORED to use ProviderMappingService (Dec 2025)!
         NOW ALSO SYNCS TRACKS automatically if AlbumDTO contains them!
         This prevents the "no tracks" problem where albums load but tracks don't.
 
-        DEDUPLICATION STRATEGY:
-        - For Spotify albums: Use spotify_id as unique identifier
-        - For Deezer albums: Use deezer_id as unique identifier
-        - We prefix Deezer IDs with "deezer:" to avoid collisions
+        DEDUPLICATION handled by ProviderMappingService:
+        - Lookup by spotify_uri
+        - Lookup by deezer_id
+        - Then create if not found
 
-        WHY this works:
-        - Same album from Spotify = same spotify_id = upsert (no duplicate)
-        - Same album from Deezer = same deezer_id = upsert (no duplicate)
-        - Different source for same album = different IDs = could be duplicate!
+        Args:
+            album_dto: AlbumDTO from Spotify or Deezer plugin
+            artist_id: Spotify artist ID (will be resolved to internal UUID)
 
-        TODO: Consider ISRC matching for cross-service deduplication
+        Returns:
+            Internal UUID of the album, or None if failed
         """
         from soulspot.domain.dtos import AlbumDTO
 
         if not isinstance(album_dto, AlbumDTO):
             logger.warning(f"Expected AlbumDTO, got {type(album_dto)}")
-            return
+            return None
 
-        # Determine unique ID based on source
-        # Spotify albums have spotify_id, Deezer albums have deezer_id
-        unique_id = album_dto.spotify_id
-        if not unique_id and album_dto.deezer_id:
-            # Use Deezer ID with prefix to avoid collisions
-            unique_id = f"deezer:{album_dto.deezer_id}"
-
-        if not unique_id:
+        if not album_dto.spotify_id and not album_dto.deezer_id:
             logger.warning("AlbumDTO missing both spotify_id and deezer_id, skipping")
-            return
+            return None
 
-        name = album_dto.title or "Unknown"
-        # Hey future me - AlbumDTO.cover ist jetzt ImageRef!
-        image_url = album_dto.cover.url
-        release_date = album_dto.release_date
-        # AlbumDTO doesn't have release_date_precision, default to 'day'
-        release_date_precision = "day" if release_date else None
-        album_type = album_dto.album_type or "album"
-        total_tracks = album_dto.total_tracks or 0
+        # Get internal artist UUID from Spotify ID
+        artist_internal_id = await self._mapping_service.get_artist_uuid_by_spotify_id(
+            artist_id
+        )
+        if not artist_internal_id:
+            # Artist not in DB yet - this shouldn't happen if we synced artists first
+            logger.warning(f"Artist {artist_id} not found in DB, skipping album")
+            return None
 
-        await self.repo.upsert_album(
-            spotify_id=unique_id,  # Can be spotify ID or "deezer:ID"
-            artist_id=artist_id,
-            name=name,
-            image_url=image_url,
-            release_date=release_date,
-            release_date_precision=release_date_precision,
-            album_type=album_type,
-            total_tracks=total_tracks,
+        # Use ProviderMappingService for consistent upsert (Clean Architecture)
+        album_internal_id, was_created = await self._mapping_service.get_or_create_album(
+            album_dto, artist_internal_id=artist_internal_id, source="spotify"
         )
 
-        # NEW: Auto-sync tracks if AlbumDTO contains them!
+        if was_created:
+            logger.debug(f"Created new album '{album_dto.title}' ({album_internal_id})")
+
+        # Auto-sync tracks if AlbumDTO contains them
         # This prevents the "album loaded but no tracks" problem.
         if hasattr(album_dto, "tracks") and album_dto.tracks:
             logger.debug(
-                f"Auto-syncing {len(album_dto.tracks)} tracks for album {unique_id}"
+                f"Auto-syncing {len(album_dto.tracks)} tracks for album {album_internal_id}"
             )
             for track_dto in album_dto.tracks:
                 try:
-                    await self._upsert_track_from_dto(track_dto, unique_id)
+                    await self._upsert_track_from_dto(track_dto, album_internal_id)
                 except Exception as e:
-                    logger.warning(f"Failed to sync track from album {unique_id}: {e}")
+                    logger.warning(
+                        f"Failed to sync track from album {album_internal_id}: {e}"
+                    )
 
             # Mark tracks as synced (prevent re-sync cooldown)
-            await self.repo.set_tracks_synced(unique_id)
+            # Use the original spotify_id for repo call (legacy compatibility)
+            if album_dto.spotify_id:
+                await self.repo.set_tracks_synced(album_dto.spotify_id)
+
+        return album_internal_id
 
     # =========================================================================
     # ARTIST TOP TRACKS SYNC (für Konsistenz mit DeezerSyncService)
@@ -795,18 +833,21 @@ class SpotifySyncService:
             "skipped_cooldown": False,
         }
 
-        # Check cooldown (use TRACKS_SYNC_COOLDOWN for consistency)
-        sync_status = await self.repo.get_sync_status(cache_key)
-        if not force and sync_status:
-            last_sync = sync_status.last_sync_at
-            if last_sync:
-                last_sync = ensure_utc_aware(last_sync)
-                elapsed = (datetime.now(UTC) - last_sync).total_seconds() / 60
-                if elapsed < self.TRACKS_SYNC_COOLDOWN:
-                    stats["skipped_cooldown"] = True
-                    return stats
+        # Check cooldown (In-Memory)
+        if not force and not self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
+            stats["skipped_cooldown"] = True
+            return stats
 
         try:
+            # Get artist internal UUID
+            artist_internal_id = (
+                await self._mapping_service.get_artist_uuid_by_spotify_id(artist_id)
+            )
+            if not artist_internal_id:
+                logger.warning(f"Artist {artist_id} not found in DB")
+                stats["error"] = "Artist not found"
+                return stats
+
             # Get top tracks from Spotify
             tracks = await self.spotify_plugin.get_artist_top_tracks(
                 artist_id, market=market
@@ -814,24 +855,44 @@ class SpotifySyncService:
 
             for track_dto in tracks:
                 try:
-                    # Save track to DB
-                    await self.repo.upsert_track(
-                        spotify_id=track_dto.spotify_id or "",
-                        album_id=track_dto.album_id or "",
-                        name=track_dto.title,
+                    # We need an album for the track - get album UUID if available
+                    album_internal_id: str | None = None
+                    if track_dto.album_id:
+                        album_internal_id = (
+                            await self._mapping_service.get_album_uuid_by_spotify_id(
+                                track_dto.album_id
+                            )
+                        )
+                    
+                    if not album_internal_id:
+                        # Skip tracks without album context
+                        logger.debug(
+                            f"Skipping track {track_dto.title} - no album context"
+                        )
+                        continue
+
+                    # Save track via upsert_from_provider
+                    track = await self._track_repo.upsert_from_provider(
+                        artist_id=artist_internal_id,
+                        album_id=album_internal_id,
+                        title=track_dto.title or "Unknown",
+                        isrc=track_dto.isrc,
+                        spotify_uri=f"spotify:track:{track_dto.spotify_id}",
+                        deezer_id=track_dto.deezer_id,
                         duration_ms=track_dto.duration_ms,
-                        track_number=track_dto.track_number or 1,
-                        disc_number=track_dto.disc_number or 1,
+                        track_number=track_dto.track_number,
+                        disc_number=track_dto.disc_number,
                         explicit=track_dto.explicit,
                         preview_url=track_dto.preview_url,
-                        isrc=track_dto.isrc,
+                        source="spotify",
                     )
-                    stats["tracks_synced"] += 1
+                    if track:
+                        stats["tracks_synced"] += 1
                 except Exception as e:
                     logger.warning(f"Failed to save track {track_dto.title}: {e}")
 
-            # Update sync status
-            await self.repo.update_sync_status(cache_key)
+            # Mark sync complete (In-Memory)
+            self._mark_synced(cache_key)
             await self._session.commit()
 
             stats["synced"] = True
@@ -898,14 +959,13 @@ class SpotifySyncService:
 
             for artist_dto in related_artists:
                 try:
-                    # Save artist to DB
-                    # Hey future me - ArtistDTO.image ist jetzt ImageRef!
-                    await self.repo.upsert_artist(
-                        spotify_id=artist_dto.spotify_id or "",
-                        name=artist_dto.name,
-                        image_url=artist_dto.image.url,
+                    # Save artist via ProviderMappingService (Clean Architecture)
+                    _, was_created = await self._mapping_service.get_or_create_artist(
+                        artist_dto, source="spotify"
                     )
                     stats["artists_synced"] += 1
+                    if was_created:
+                        logger.debug(f"Created related artist: {artist_dto.name}")
                 except Exception as e:
                     logger.warning(
                         f"Failed to save related artist {artist_dto.name}: {e}"
@@ -915,8 +975,8 @@ class SpotifySyncService:
             # This requires a new table: artist_relations
             # For now, we just cache the related artists in DB
 
-            # Update sync status
-            await self.repo.update_sync_status(cache_key)
+            # Mark sync complete (In-Memory)
+            self._mark_synced(cache_key)
             await self._session.commit()
 
             stats["synced"] = True
@@ -1078,42 +1138,59 @@ class SpotifySyncService:
 
         return stats
 
-    async def _upsert_track_from_dto(self, track_dto: Any, album_id: str) -> None:
-        """Insert or update a Spotify track in DB from TrackDTO.
+    async def _upsert_track_from_dto(
+        self, track_dto: Any, album_internal_id: str
+    ) -> str | None:
+        """Insert or update a track in DB from TrackDTO.
 
-        Hey future me - DTO version of _upsert_track!
-        TrackDTO has spotify_id (not id) and isrc directly on object.
+        Hey future me - REFACTORED to use TrackRepository.upsert_from_provider (Dec 2025)!
+        Das ist der kanonische Weg für Track-Persistence aus allen Services.
+        Deduplication via ISRC → provider-ID → title+album matching.
+
+        Args:
+            track_dto: TrackDTO from Spotify plugin
+            album_internal_id: Internal UUID of the album
+
+        Returns:
+            Internal UUID of the track, or None if failed
         """
         from soulspot.domain.dtos import TrackDTO
 
         if not isinstance(track_dto, TrackDTO):
             logger.warning(f"Expected TrackDTO, got {type(track_dto)}")
-            return
+            return None
 
-        spotify_id = track_dto.spotify_id
-        if not spotify_id:
+        if not track_dto.spotify_id:
             logger.warning("TrackDTO missing spotify_id, skipping")
-            return
+            return None
 
-        name = track_dto.title or "Unknown"
-        track_number = track_dto.track_number or 1
-        disc_number = track_dto.disc_number or 1
-        duration_ms = track_dto.duration_ms or 0
-        explicit = track_dto.explicit or False
-        preview_url = track_dto.preview_url
-        isrc = track_dto.isrc
+        # Get artist UUID from album
+        from soulspot.domain.value_objects import AlbumId as AlbumIdVO
+        
+        album = await self._album_repo.get_by_id(AlbumIdVO(album_internal_id))
+        if not album:
+            logger.warning(f"Album {album_internal_id} not found, cannot create track")
+            return None
 
-        await self.repo.upsert_track(
-            spotify_id=spotify_id,
-            album_id=album_id,
-            name=name,
-            track_number=track_number,
-            disc_number=disc_number,
-            duration_ms=duration_ms,
-            explicit=explicit,
-            preview_url=preview_url,
-            isrc=isrc,
+        artist_internal_id = str(album.artist_id.value)
+
+        # Use TrackRepository.upsert_from_provider for consistent handling
+        track = await self._track_repo.upsert_from_provider(
+            artist_id=artist_internal_id,
+            album_id=album_internal_id,
+            title=track_dto.title or "Unknown",
+            isrc=track_dto.isrc,
+            spotify_uri=f"spotify:track:{track_dto.spotify_id}",
+            deezer_id=track_dto.deezer_id,
+            duration_ms=track_dto.duration_ms,
+            track_number=track_dto.track_number,
+            disc_number=track_dto.disc_number,
+            explicit=track_dto.explicit,
+            preview_url=track_dto.preview_url,
+            source="spotify",
         )
+
+        return str(track.id.value) if track else None
 
     # =========================================================================
     # UTILITY METHODS
@@ -1222,19 +1299,16 @@ class SpotifySyncService:
                 logger.debug("Playlist sync is disabled in settings")
                 return stats
 
-            # Check cooldown
-            if not force and not await self.repo.should_sync("user_playlists"):
+            # Check cooldown (NEW: In-Memory statt DB)
+            if not force and not self._should_sync(
+                "user_playlists", self.PLAYLISTS_SYNC_COOLDOWN
+            ):
                 stats["skipped_cooldown"] = True
                 stats["total"] = await self.repo.count_spotify_playlists()
                 logger.debug("Skipping user playlists sync (cooldown)")
                 return stats
 
-            # Mark sync as running
-            await self.repo.update_sync_status(
-                sync_type="user_playlists",
-                status="running",
-            )
-            await self._session.commit()
+            # No more "running" status - we just proceed
 
             # Fetch all playlists from Spotify
             spotify_playlists = await self._fetch_all_user_playlists()
@@ -1295,15 +1369,8 @@ class SpotifySyncService:
             else:
                 should_remove = False  # No playlists to remove
 
-            # Update sync status
-            await self.repo.update_sync_status(
-                sync_type="user_playlists",
-                status="idle",
-                items_synced=len(spotify_playlists),
-                items_added=len(to_add),
-                items_removed=len(to_remove) if should_remove else 0,
-                cooldown_minutes=self.PLAYLISTS_SYNC_COOLDOWN,
-            )
+            # Mark sync complete (NEW: In-Memory statt DB)
+            self._mark_synced("user_playlists")
 
             await self._session.commit()
             stats["synced"] = True
@@ -1316,12 +1383,7 @@ class SpotifySyncService:
         except Exception as e:
             logger.error(f"Error syncing user playlists: {e}")
             stats["error"] = str(e)
-            await self.repo.update_sync_status(
-                sync_type="user_playlists",
-                status="error",
-                error_message=str(e),
-            )
-            await self._session.commit()
+            # No DB status update on error - we'll just retry next time
 
         return stats
 

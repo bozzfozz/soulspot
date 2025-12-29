@@ -25,7 +25,6 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.infrastructure.persistence.repositories import (
