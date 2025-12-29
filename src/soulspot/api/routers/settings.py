@@ -1238,7 +1238,7 @@ async def get_spotify_db_stats(
     Counts how many artists, albums, tracks, and playlists were synced from Spotify.
     This counts from BOTH:
     1. Local entities with Spotify URIs (enriched with Spotify data)
-    2. Spotify browse tables (spotify_artists, spotify_albums, spotify_tracks from auto-sync)
+    2. Provider browse tables (unified tables with source filter) from auto-sync
     3. Liked Songs tracks (stored in soulspot_tracks with spotify_uri)
 
     Returns:
@@ -1248,7 +1248,7 @@ async def get_spotify_db_stats(
         AlbumRepository,
         ArtistRepository,
         PlaylistRepository,
-        SpotifyBrowseRepository,
+        ProviderBrowseRepository,
         TrackRepository,
     )
 
@@ -1263,17 +1263,18 @@ async def get_spotify_db_stats(
     local_tracks_count = await track_repo.count_with_spotify_uri()
     local_playlists_count = await playlist_repo.count_by_source("spotify")
 
-    # Count Spotify browse data (from auto-sync)
-    spotify_repo = SpotifyBrowseRepository(session)
-    spotify_artists_count = await spotify_repo.count_artists()
-    spotify_albums_count = await spotify_repo.count_albums()
-    spotify_tracks_count = await spotify_repo.count_tracks()
+    # Count provider browse data (from auto-sync)
+    # Hey future me - count methods filter by source='spotify' by default
+    provider_repo = ProviderBrowseRepository(session)
+    spotify_artists_count = await provider_repo.count_artists()
+    spotify_albums_count = await provider_repo.count_albums()
+    spotify_tracks_count = await provider_repo.count_tracks()
 
     # Count Liked Songs tracks (they're in soulspot_tracks but also need to be counted)
     # Hey future me - Liked Songs sync creates tracks in soulspot_tracks with spotify_uri.
     # The local_tracks_count above should already include them, but we also count
     # from the Liked Songs playlist to ensure accuracy.
-    liked_songs_count = await spotify_repo.count_liked_songs_tracks()
+    liked_songs_count = await provider_repo.count_liked_songs_tracks()
 
     # Combine: use the HIGHER count between local and spotify tables
     # local_tracks_count includes Liked Songs (after our fix) and manually added tracks

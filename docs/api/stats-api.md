@@ -167,7 +167,7 @@ The Stats API aggregates data from:
 | Playlists | `PlaylistModel` table |
 | Tracks | `PlaylistItemModel` (distinct tracks) |
 | Downloads | `DownloadModel` table |
-| Spotify data | `SpotifyBrowseRepository` |
+| Provider data | `ProviderBrowseRepository` (Spotify/Deezer/Tidal) |
 
 ---
 

@@ -77,7 +77,7 @@ async def get_stats_with_trends(
     # Hey future me - NOW fully uses StatsService! Clean Architecture.
     from soulspot.application.services.stats_service import StatsService
     from soulspot.infrastructure.persistence.models import DownloadModel, PlaylistModel
-    from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
+    from soulspot.infrastructure.persistence.repositories import ProviderBrowseRepository
 
     stats_service = StatsService(session)
 
@@ -95,11 +95,13 @@ async def get_stats_with_trends(
     queue_size = await stats_service.get_queue_size()
     active_downloads = await stats_service.get_active_downloads_count()
 
-    # Spotify stats
-    spotify_repo = SpotifyBrowseRepository(session)
-    spotify_artists = await spotify_repo.count_artists()
-    spotify_albums = await spotify_repo.count_albums()
-    spotify_tracks = await spotify_repo.count_tracks()
+    # Provider synced stats (Spotify, Deezer, Tidal, etc.)
+    # Hey future me - count methods filter by source='spotify' by default
+    # Can be extended to aggregate counts across all providers later
+    provider_repo = ProviderBrowseRepository(session)
+    spotify_artists = await provider_repo.count_artists()
+    spotify_albums = await provider_repo.count_albums()
+    spotify_tracks = await provider_repo.count_tracks()
 
     # === Trend Calculations ===
     # Hey future me - Trends sind basierend auf created_at/completed_at timestamps.

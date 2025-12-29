@@ -1,44 +1,31 @@
-"""UI routes for serving HTML templates."""
+"""UI routes for serving HTML templates.
 
-import logging
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+DEPRECATED: This module has been replaced by the ui/ package.
 
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
-from sqlalchemy.ext.asyncio import AsyncSession
+All routes have been moved to the ui/ subdirectory:
+- ui/dashboard.py - Dashboard, playlists, auth, onboarding
+- ui/downloads.py - Downloads management  
+- ui/search.py - Search functionality
+- ui/library_core.py - Library overview and import
+- ui/library_browse.py - Library browsing (artists, albums, tracks)
+- ui/library_detail.py - Detail pages (artist, album, metadata editor)
+- ui/library_maintenance.py - Maintenance pages (duplicates, broken files)
+- ui/spotify_browse.py - Spotify/Deezer browse (new releases, discover)
 
-from soulspot.api.dependencies import (
-    get_db_session,
-    get_deezer_plugin,
-    get_download_repository,
-    get_job_queue,
-    get_library_scanner_service,
-    get_playlist_repository,
-    get_spotify_browse_repository,
-    get_spotify_plugin_optional,
-    get_spotify_sync_service,
-    get_track_repository,
+Python will preferentially import the ui/ package over this ui.py module
+when using `from soulspot.api.routers import ui`.
+
+This file is kept to prevent import errors but should NOT be used.
+TODO: Delete this file after verifying the ui/ package works correctly.
+"""
+
+# This file should NOT be imported - Python should prefer the ui/ package.
+# If you see this error, something is wrong with the import resolution:
+raise ImportError(
+    "ui.py (legacy module) should not be imported. "
+    "Python should import ui/ package instead. "
+    "Please check your import paths."
 )
-from soulspot.application.services.library_scanner_service import LibraryScannerService
-from soulspot.application.services.spotify_sync_service import SpotifySyncService
-from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
-from soulspot.config import get_settings
-from soulspot.domain.entities import DownloadStatus
-from soulspot.infrastructure.persistence.repositories import (
-    DownloadRepository,
-    PlaylistRepository,
-    SpotifyBrowseRepository,
-    TrackRepository,
-)
-
-if TYPE_CHECKING:
-    from soulspot.application.services.images import ImageService
-    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-    from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-
-logger = logging.getLogger(__name__)
 
 # AI-Model: Copilot
 # Hey future me - compute templates directory relative to THIS file so it works both in

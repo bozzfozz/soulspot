@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.dtos import AlbumDetailView, ImageRef, TrackView
-from soulspot.infrastructure.persistence.repositories import SpotifyBrowseRepository
+from soulspot.infrastructure.persistence.repositories import ProviderBrowseRepository
 
 if TYPE_CHECKING:
     from soulspot.application.services.spotify_sync_service import SpotifySyncService
@@ -73,8 +73,8 @@ class LibraryViewService:
         self._session = session
         self._spotify_sync = spotify_sync
 
-        # Repository für DB-Zugriff
-        self._repo = SpotifyBrowseRepository(session)
+        # Repository für DB-Zugriff (multi-provider)
+        self._repo = ProviderBrowseRepository(session)
 
     # =========================================================================
     # ALBUM VIEWS

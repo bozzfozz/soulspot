@@ -432,18 +432,20 @@ class StatsService:
         )
     
     async def _get_spotify_entity_counts(self) -> dict[str, int]:
-        """Get counts from Spotify Browse tables.
+        """Get counts from provider browse tables (Spotify, Deezer, etc.).
         
-        Hey future me - verwendet SpotifyBrowseRepository wenn verfügbar.
-        Fallback zu 0 wenn Spotify nicht verbunden.
+        Hey future me - verwendet ProviderBrowseRepository für unified counts.
+        Fallback zu 0 wenn keine Provider verbunden sind.
         """
         try:
             from soulspot.infrastructure.persistence.repositories import (
-                SpotifyBrowseRepository,
+                ProviderBrowseRepository,
             )
-            repo = SpotifyBrowseRepository(self._session)
+            repo = ProviderBrowseRepository(self._session)
             
             # Run these in parallel too
+            # Hey future me - these methods filter by source='spotify' by default
+            # Can be extended to aggregate across all providers later
             artists, albums, tracks = await asyncio.gather(
                 repo.count_artists(),
                 repo.count_albums(),

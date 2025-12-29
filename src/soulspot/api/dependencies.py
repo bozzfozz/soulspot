@@ -49,7 +49,7 @@ from soulspot.infrastructure.persistence.repositories import (
     ArtistRepository,
     DownloadRepository,
     PlaylistRepository,
-    SpotifyBrowseRepository,
+    ProviderBrowseRepository,
     TrackRepository,
 )
 
@@ -689,13 +689,30 @@ def get_download_repository(
     return DownloadRepository(session)
 
 
-# Hey future me - SpotifyBrowseRepository handles synced Spotify data (followed artists, albums, tracks).
-# This is SEPARATE from the local library! Use this for dashboard stats that show Spotify data.
+# Hey future me - ProviderBrowseRepository handles synced provider data (Spotify, Deezer, Tidal).
+# Multi-provider architecture: Uses unified tables with source filter!
+# Use this for dashboard stats that show provider browse data (followed artists, albums, tracks).
+def get_provider_browse_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> ProviderBrowseRepository:
+    """Get provider browse repository instance for multi-provider synced data.
+    
+    Post-Nov 2025: Unified repository for all streaming providers.
+    Uses ArtistModel/AlbumModel/TrackModel with source filter.
+    """
+    return ProviderBrowseRepository(session)
+
+
+# Backwards compatibility alias (renamed Jan 2026)
+# TODO: Remove after all callers updated to use get_provider_browse_repository
 def get_spotify_browse_repository(
     session: AsyncSession = Depends(get_db_session),
-) -> SpotifyBrowseRepository:
-    """Get Spotify browse repository instance for Spotify synced data."""
-    return SpotifyBrowseRepository(session)
+) -> ProviderBrowseRepository:
+    """DEPRECATED: Use get_provider_browse_repository() instead.
+    
+    This function will be removed after migration is complete.
+    """
+    return get_provider_browse_repository(session)
 
 
 # Hey future me, this is a USE CASE - application layer orchestration! It coordinates SpotifyPlugin

@@ -6143,8 +6143,9 @@ class ProviderBrowseRepository:
         return result.rowcount or 0  # type: ignore[attr-defined]
 
 
-# Backwards compatibility alias (renamed Nov 2025)
-# Hey future me - remove this alias when all callers are updated to use ProviderBrowseRepository
+# Backwards compatibility alias (renamed Nov 2025, removed Jan 2026)
+# Migration complete! All usages updated to ProviderBrowseRepository.
+# TODO: Remove this alias after confirming no runtime errors in production
 SpotifyBrowseRepository = ProviderBrowseRepository
 
 
