@@ -2405,6 +2405,212 @@ class TrackRepository(ITrackRepository):
             for model in models
         ]
 
+    # =========================================================================
+    # UNIFIED UPSERT FROM PROVIDER (Clean Architecture Pattern!)
+    # =========================================================================
+    # Hey future me – diese Methode ist DIE EINZIGE Art, Tracks von externen
+    # Providern (Spotify, Deezer, Tidal) zu persistieren!
+    #
+    # DEDUPLICATION PRIORITY:
+    # 1. ISRC (global unique - best match)
+    # 2. Provider-specific ID (spotify_uri, deezer_id, tidal_id)
+    # 3. Title + Album (case-insensitive fallback)
+    #
+    # CRITICAL RULES:
+    # - artist_id MUSS eine interne UUID sein (nicht Spotify/Deezer ID!)
+    # - album_id MUSS eine interne UUID sein (nicht Spotify/Deezer ID!)
+    # - Provider-IDs (spotify_uri, deezer_id) werden gespeichert für Enrichment
+    # =========================================================================
+
+    async def upsert_from_provider(
+        self,
+        title: str,
+        artist_id: str,
+        album_id: str | None,
+        source: str,
+        *,
+        duration_ms: int = 0,
+        track_number: int = 1,
+        disc_number: int = 1,
+        explicit: bool = False,
+        isrc: str | None = None,
+        spotify_uri: str | None = None,
+        spotify_id: str | None = None,
+        deezer_id: str | None = None,
+        tidal_id: str | None = None,
+        preview_url: str | None = None,
+    ) -> Track:
+        """Upsert a track from an external provider with proper deduplication.
+
+        Hey future me – das ist DIE EINZIGE Methode für Provider-Track-Persistenz!
+
+        Deduplication Priority:
+        1. ISRC (global unique identifier - best match)
+        2. Provider-specific ID (spotify_uri, deezer_id, tidal_id)
+        3. Title + Album (case-insensitive fallback)
+
+        Args:
+            title: Track title
+            artist_id: Internal SoulSpot artist UUID (NOT provider ID!)
+            album_id: Internal SoulSpot album UUID (NOT provider ID!) or None
+            source: Provider source ("spotify", "deezer", "tidal")
+            duration_ms: Track duration in milliseconds
+            track_number: Track position on album
+            disc_number: Disc number for multi-disc albums
+            explicit: Whether track has explicit content
+            isrc: International Standard Recording Code (best for dedup!)
+            spotify_uri: Full Spotify URI (spotify:track:xxx)
+            spotify_id: Spotify track ID only (converted to URI if spotify_uri not set)
+            deezer_id: Deezer track ID
+            tidal_id: Tidal track ID
+            preview_url: URL to 30-second preview
+
+        Returns:
+            Track entity (created or updated)
+        """
+        import uuid as uuid_module
+
+        now = datetime.now(UTC)
+        model: TrackModel | None = None
+
+        # Build spotify_uri from spotify_id if not provided
+        if spotify_id and not spotify_uri:
+            spotify_uri = f"spotify:track:{spotify_id}"
+
+        # =========================================================================
+        # STEP 1: Try to find existing track by ISRC (BEST - globally unique)
+        # =========================================================================
+        if isrc and not model:
+            stmt = select(TrackModel).where(TrackModel.isrc == isrc)
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model:
+                logger.debug(f"Found existing track by ISRC: {isrc} → {model.title}")
+
+        # =========================================================================
+        # STEP 2: Try provider-specific ID (second best)
+        # =========================================================================
+        if spotify_uri and not model:
+            stmt = select(TrackModel).where(TrackModel.spotify_uri == spotify_uri)
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model:
+                logger.debug(f"Found existing track by spotify_uri: {spotify_uri}")
+
+        if deezer_id and not model:
+            stmt = select(TrackModel).where(TrackModel.deezer_id == deezer_id)
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model:
+                logger.debug(f"Found existing track by deezer_id: {deezer_id}")
+
+        if tidal_id and not model:
+            stmt = select(TrackModel).where(TrackModel.tidal_id == tidal_id)
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model:
+                logger.debug(f"Found existing track by tidal_id: {tidal_id}")
+
+        # =========================================================================
+        # STEP 3: Fallback - Title + Album (case-insensitive)
+        # =========================================================================
+        if album_id and not model:
+            stmt = (
+                select(TrackModel)
+                .where(
+                    func.lower(TrackModel.title) == func.lower(title),
+                    TrackModel.album_id == album_id,
+                )
+                .limit(1)
+            )
+            result = await self.session.execute(stmt)
+            model = result.scalar_one_or_none()
+            if model:
+                logger.debug(f"Found existing track by title+album: {title}")
+
+        # =========================================================================
+        # STEP 4: UPDATE existing or CREATE new
+        # =========================================================================
+        if model:
+            # UPDATE existing track - fill in missing provider IDs
+            model.title = title
+            model.artist_id = artist_id
+            if album_id:
+                model.album_id = album_id
+            model.duration_ms = duration_ms
+            model.track_number = track_number
+            model.disc_number = disc_number
+            model.explicit = explicit
+            model.preview_url = preview_url
+            model.updated_at = now
+
+            # Fill in missing provider IDs (don't overwrite existing!)
+            if isrc and not model.isrc:
+                model.isrc = isrc
+            if spotify_uri and not model.spotify_uri:
+                model.spotify_uri = spotify_uri
+            if deezer_id and not model.deezer_id:
+                model.deezer_id = deezer_id
+            if tidal_id and not model.tidal_id:
+                model.tidal_id = tidal_id
+
+            # Update source to "hybrid" if track now has multiple provider IDs
+            provider_count = sum([
+                bool(model.spotify_uri),
+                bool(model.deezer_id),
+                bool(model.tidal_id),
+            ])
+            if provider_count > 1 and model.source != "hybrid":
+                model.source = "hybrid"
+            elif model.source not in ("hybrid", "local"):
+                model.source = source
+
+            logger.debug(f"Updated existing track: {title} (ID: {model.id})")
+
+        else:
+            # CREATE new track
+            track_id = str(uuid_module.uuid4())
+            model = TrackModel(
+                id=track_id,
+                title=title,
+                artist_id=artist_id,
+                album_id=album_id,
+                duration_ms=duration_ms,
+                track_number=track_number,
+                disc_number=disc_number,
+                explicit=explicit,
+                isrc=isrc,
+                spotify_uri=spotify_uri,
+                deezer_id=deezer_id,
+                tidal_id=tidal_id,
+                preview_url=preview_url,
+                source=source,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(model)
+            logger.debug(f"Created new track: {title} (ID: {track_id})")
+
+        # Convert to Track entity and return
+        return Track(
+            id=TrackId.from_string(model.id),
+            title=model.title,
+            artist_id=ArtistId.from_string(model.artist_id),
+            album_id=AlbumId.from_string(model.album_id) if model.album_id else None,
+            duration_ms=model.duration_ms or 0,
+            track_number=model.track_number or 1,
+            disc_number=model.disc_number or 1,
+            explicit=model.explicit or False,
+            spotify_uri=SpotifyUri.from_string(model.spotify_uri)
+            if model.spotify_uri
+            else None,
+            isrc=model.isrc,
+            deezer_id=model.deezer_id,
+            tidal_id=model.tidal_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+
 
 class PlaylistRepository(IPlaylistRepository):
     """SQLAlchemy implementation of Playlist repository."""
@@ -5780,8 +5986,33 @@ class ProviderBrowseRepository:
     ) -> None:
         """Insert or update a Spotify track in unified library.
 
-        Hey future me - album_id here is SPOTIFY ID, not internal UUID!
+        ⚠️ DEPRECATED: Use TrackRepository.upsert_from_provider() instead!
+
+        Hey future me - diese Methode ist DEPRECATED!
+
+        WARUM DEPRECATED?
+        - Nimmt Spotify album_id und konvertiert intern zu UUID (schlechte Abstraction)
+        - Nicht einheitlich mit anderen Providern (Deezer, Tidal)
+        - Clean Architecture: Services sollten UUID-Lookup VOR dem Repo-Call machen
+
+        MIGRATION:
+        1. Album UUID via AlbumRepository oder ProviderMappingService nachschlagen
+        2. TrackRepository.upsert_from_provider() mit internen UUIDs aufrufen
+
+        Diese Methode bleibt für SpotifySyncService-Kompatibilität, aber neue Features
+        sollten TrackRepository.upsert_from_provider() nutzen!
+
+        Note: album_id here is SPOTIFY ID, not internal UUID! (legacy behavior)
         """
+        import warnings
+
+        warnings.warn(
+            "SpotifyBrowseRepository.upsert_track() is deprecated. "
+            "Use TrackRepository.upsert_from_provider() with internal UUIDs instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         from .models import AlbumModel, TrackModel
 
         spotify_uri = f"spotify:track:{spotify_id}"

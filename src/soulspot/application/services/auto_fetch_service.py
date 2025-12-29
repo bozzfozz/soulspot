@@ -298,60 +298,47 @@ class AutoFetchService:
         Tracks are saved WITHOUT file_path, marking them as "streaming-only".
         Next visit loads from DB instead of calling API.
 
+        REFACTORED (Jan 2025): Uses TrackRepository.upsert_from_provider() instead
+        of direct ORM! Clean Architecture compliant.
+
         Args:
-            album_id: Album ID to link tracks to
-            artist_id: Artist ID to link tracks to
+            album_id: Internal SoulSpot album UUID (NOT provider ID!)
+            artist_id: Internal SoulSpot artist UUID (NOT provider ID!)
             tracks: List of track dicts from streaming provider
             source: Provider name ("deezer" or "spotify")
 
         Returns:
             Dict with stats: {"saved": int, "skipped": int, "errors": int}
         """
-        from uuid import uuid4
-
-        from sqlalchemy import func, select
-
-        from soulspot.infrastructure.persistence.models import TrackModel
+        from soulspot.infrastructure.persistence.repositories import TrackRepository
 
         stats = {"saved": 0, "skipped": 0, "errors": 0}
 
         try:
+            # Use TrackRepository for Clean Architecture compliance!
+            track_repo = TrackRepository(self._session)
+
             for track in tracks:
-                # Check if track already exists (by title + album_id)
-                existing_stmt = select(TrackModel).where(
-                    TrackModel.album_id == album_id,
-                    func.lower(TrackModel.title) == track["title"].lower(),
-                )
-                existing_result = await self._session.execute(existing_stmt)
-                existing_track = existing_result.scalar_one_or_none()
+                try:
+                    # Use unified upsert_from_provider - handles deduplication!
+                    # Dedup priority: ISRC → provider ID → title+album
+                    await track_repo.upsert_from_provider(
+                        title=track["title"],
+                        artist_id=artist_id,
+                        album_id=album_id,
+                        source=source,
+                        duration_ms=track.get("duration_ms", 0),
+                        track_number=track.get("track_number", 1),
+                        disc_number=track.get("disc_number", 1),
+                        isrc=track.get("isrc"),
+                        deezer_id=track.get("deezer_id"),
+                        spotify_id=track.get("spotify_id"),  # Converts to URI internally
+                    )
+                    stats["saved"] += 1
 
-                if existing_track:
-                    # Update provider IDs if missing
-                    if track.get("deezer_id") and not existing_track.deezer_id:
-                        existing_track.deezer_id = track["deezer_id"]
-                    if track.get("spotify_id") and not existing_track.spotify_uri:
-                        existing_track.spotify_uri = f"spotify:track:{track['spotify_id']}"
-                    stats["skipped"] += 1
-                    continue
-
-                # Create new track (without file_path = streaming-only)
-                new_track = TrackModel(
-                    id=str(uuid4()),
-                    title=track["title"],
-                    artist_id=artist_id,
-                    album_id=album_id,
-                    track_number=track.get("track_number"),
-                    disc_number=track.get("disc_number"),
-                    duration_ms=track.get("duration_ms"),
-                    source=source,
-                    deezer_id=track.get("deezer_id"),
-                    spotify_uri=f"spotify:track:{track['spotify_id']}"
-                    if track.get("spotify_id")
-                    else None,
-                    # file_path=None means streaming-only track
-                )
-                self._session.add(new_track)
-                stats["saved"] += 1
+                except Exception as track_error:
+                    logger.debug(f"[AUTO_FETCH] Track upsert failed: {track_error}")
+                    stats["errors"] += 1
 
             if stats["saved"] > 0:
                 await self._session.commit()
@@ -360,7 +347,7 @@ class AutoFetchService:
                 )
 
         except Exception as e:
-            logger.warning(f"[AUTO_FETCH] Track save failed: {e}")
+            logger.warning(f"[AUTO_FETCH] Track save batch failed: {e}")
             stats["errors"] += 1
 
         return stats

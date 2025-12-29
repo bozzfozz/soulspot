@@ -376,6 +376,93 @@ async def get_artist(self, artist_id: str) -> ArtistDTO:
 
 ---
 
+## 5. Track-Persistenz von Providern (NEU!)
+
+### ⚠️ WICHTIG: Einheitliches Pattern für alle Provider!
+
+**IMMER `TrackRepository.upsert_from_provider()` nutzen!**
+
+Diese Methode ist die **einzige korrekte Art**, Tracks von externen Providern
+(Spotify, Deezer, Tidal) zu persistieren.
+
+### Warum?
+
+1. **Einheitliche Deduplication**: ISRC → Provider-ID → title+album
+2. **Konsistente album_id**: IMMER interne UUIDs, nie Provider-IDs
+3. **Clean Architecture**: Services → Repository → ORM (nicht Services → ORM direkt)
+4. **Multi-Provider-Ready**: Tracks bekommen `source="hybrid"` wenn mehrere Provider-IDs
+
+### Korrekte Verwendung
+
+```python
+# src/soulspot/application/services/deezer_sync_service.py
+
+async def _save_track_with_artist(
+    self,
+    track_dto: TrackDTO,
+    artist_id: str,  # ← Interne UUID!
+    album_id: str | None,  # ← Interne UUID!
+) -> None:
+    """
+    Hey future me - nutze TrackRepository.upsert_from_provider()!
+    Niemals ORM direkt (TrackModel) verwenden.
+    """
+    await self._track_repo.upsert_from_provider(
+        title=track_dto.title,
+        artist_id=artist_id,  # Internal UUID (from ProviderMappingService)
+        album_id=album_id,  # Internal UUID (from AlbumRepository lookup)
+        source="deezer",
+        duration_ms=track_dto.duration_ms or 0,
+        track_number=track_dto.track_number or 1,
+        disc_number=track_dto.disc_number or 1,
+        explicit=track_dto.explicit or False,
+        isrc=track_dto.isrc,  # KRITISCH für Deduplication!
+        deezer_id=track_dto.deezer_id,
+        preview_url=track_dto.preview_url,
+    )
+```
+
+### ❌ FALSCH: Direktes ORM
+
+```python
+# ❌ NIEMALS SO!
+from soulspot.infrastructure.persistence.models import TrackModel
+
+track = TrackModel(
+    title=dto.title,
+    artist_id=artist_id,
+    album_id=album_id,  # Was ist das - Spotify-ID oder UUID??
+    deezer_id=dto.deezer_id,
+)
+self._session.add(track)
+```
+
+### ❌ DEPRECATED: SpotifyBrowseRepository.upsert_track()
+
+```python
+# ❌ DEPRECATED - nicht für neue Features!
+await self.repo.upsert_track(
+    spotify_id=track.id,
+    album_id=album.id,  # Spotify-ID! Verwirrend!
+    name=track.title,
+)
+
+# ✅ STATTDESSEN:
+# 1. Album-UUID nachschlagen
+album = await album_repo.get_by_spotify_uri(f"spotify:album:{album.id}")
+# 2. TrackRepository nutzen
+await track_repo.upsert_from_provider(
+    title=track.title,
+    artist_id=str(album.artist_id.value),  # UUID!
+    album_id=str(album.id.value),  # UUID!
+    source="spotify",
+    spotify_uri=f"spotify:track:{track.id}",
+    ...
+)
+```
+
+---
+
 ## Quick Checklist für neue Features
 
 - [ ] Route ruft Service auf (nicht Client/Repo direkt)
@@ -385,3 +472,6 @@ async def get_artist(self, artist_id: str) -> ArtistDTO:
 - [ ] spotify_uri in DB, spotify_id nur als Property
 - [ ] Multi-Provider nutzt `can_use()` für Capability-Check
 - [ ] Error Handling mit `PluginError` für Plugin-Fehler
+- [ ] **Track-Persistenz via `TrackRepository.upsert_from_provider()` (NEU!)**
+- [ ] **artist_id/album_id sind IMMER interne UUIDs**
+

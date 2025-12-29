@@ -342,6 +342,36 @@ class ArtistModel(Base):
 
 **Grund:** Legacy-Code und Workers erwarten `.spotify_id`, aber wir speichern nur `spotify_uri` in der DB. Das Property bridged beide Welten.
 
+### 4.4 Interne UUIDs vs Provider-IDs (WICHTIG für Album↔Track!)
+
+Hey future me - das ist DER Klassiker, der Album-Detailseiten "leer" macht:
+Tracks werden gespeichert, aber `TrackModel.album_id` zeigt auf die falsche ID-Art.
+
+**Goldene Regel:**
+- **FKs in der DB sind interne UUIDs** (z.B. `AlbumModel.id` → `TrackModel.album_id`)
+- **Provider-IDs sind NIE FKs** (Spotify/Deezer IDs dienen nur zur Zuordnung / API Calls)
+
+**Konkret im Codebase:**
+- `AlbumModel.id`: interne UUID (Primary Key)
+- `TrackModel.album_id`: interne UUID (Foreign Key auf `AlbumModel.id`)
+- Spotify: `AlbumModel.spotify_uri` (Column) + `AlbumModel.spotify_id` (@property)
+- Deezer: `AlbumModel.deezer_id` (Column, **kein** `deezer_uri`)
+
+**Naming-Guardrail (damit du dich nicht selbst verarschst):**
+- Wenn ein Parameter eine Provider-ID ist: `spotify_album_id`, `deezer_album_id`, `spotify_track_id`, ...
+- Wenn ein Parameter eine interne UUID ist: `album_id`, `track_id`, `artist_id` (und im Zweifel `*_uuid`)
+
+**Typische Fallen (und wie du sie vermeidest):**
+- Background Sync Selektion:
+    - ❌ Nicht nach `AlbumModel.source == 'deezer'` filtern (hybrid/local Alben werden sonst übersprungen)
+    - ✅ Filtere nach Provider-Identifier Präsenz:
+        - Spotify: `AlbumModel.spotify_uri IS NOT NULL`
+        - Deezer: `AlbumModel.deezer_id IS NOT NULL`
+- Track Upserts:
+    - ✅ `upsert_track(spotify_id=..., album_id=<spotify_album_id>)` darf existieren,
+        **wenn** die Repo-Methode intern die Album-UUID auflöst und `TrackModel.album_id` korrekt setzt.
+    - ✅ Alles, was direkt `TrackModel.album_id = ...` setzt, MUSS eine Album-UUID verwenden.
+
 ---
 
 ## 5. RATE LIMITER SYSTEM (PFLICHT für externe APIs!)

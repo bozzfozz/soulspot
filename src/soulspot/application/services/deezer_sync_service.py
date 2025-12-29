@@ -724,68 +724,35 @@ class DeezerSyncService:
         track_dto: Any,
         artist_id: str,
         album_id: str | None = None,
-        is_chart: bool = False,
+        is_chart: bool = False,  # noqa: ARG002
     ) -> None:
-        """Save track DTO with artist relationship.
+        """Save track DTO with artist relationship using TrackRepository.
 
-        CRITICAL FIX (Dec 2025): This method properly links track to artist.
+        REFACTORED (Dec 2025): Now uses TrackRepository.upsert_from_provider()!
+        This is the Clean Architecture pattern - Services use Repositories, not ORM directly.
 
         Args:
             track_dto: Track DTO from plugin
-            artist_id: Internal artist ID to link to
+            artist_id: Internal artist UUID to link to
             album_id: Optional internal album UUID to link to (set by album track sync)
-            is_chart: Whether this is from charts
+            is_chart: Whether this is from charts (kept for API compatibility)
         """
-        import uuid
-
-        from soulspot.infrastructure.persistence.models import TrackModel
-
         try:
-            # Hey future me - use ORM lookup here (NOT TrackRepository), because we want
-            # a persistent TrackModel instance we can update in-place.
-            existing: TrackModel | None = None
-            if track_dto.deezer_id:
-                result = await self._session.execute(
-                    select(TrackModel).where(TrackModel.deezer_id == track_dto.deezer_id)
-                )
-                existing = result.scalar_one_or_none()
-
-            if existing is None and track_dto.isrc:
-                result = await self._session.execute(
-                    select(TrackModel).where(TrackModel.isrc == track_dto.isrc)
-                )
-                existing = result.scalar_one_or_none()
-
-            if existing is not None:
-                # Update existing
-                existing.title = track_dto.title
-                existing.deezer_id = track_dto.deezer_id or existing.deezer_id
-                existing.isrc = track_dto.isrc or existing.isrc
-                existing.duration_ms = track_dto.duration_ms or existing.duration_ms
-                existing.track_number = track_dto.track_number or existing.track_number
-                existing.disc_number = track_dto.disc_number or existing.disc_number
-                existing.explicit = track_dto.explicit if track_dto.explicit is not None else existing.explicit
-
-                # Link to album if this is an album-track sync and the track isn't linked yet.
-                if album_id and existing.album_id is None:
-                    existing.album_id = album_id
-            else:
-                # Create new with artist relationship
-                new_track = TrackModel(
-                    id=str(uuid.uuid4()),
-                    title=track_dto.title,
-                    artist_id=artist_id,  # CRITICAL: Link to artist
-                    album_id=album_id,
-                    deezer_id=track_dto.deezer_id,
-                    isrc=track_dto.isrc,
-                    duration_ms=track_dto.duration_ms or 0,
-                    track_number=track_dto.track_number,
-                    disc_number=track_dto.disc_number or 1,
-                    explicit=track_dto.explicit or False,
-                    source="deezer",
-                )
-                self._session.add(new_track)
-
+            # Hey future me - nutze TrackRepository.upsert_from_provider()!
+            # Das ist die einheitliche Methode für alle Provider-Track-Persistenz.
+            await self._track_repo.upsert_from_provider(
+                title=track_dto.title,
+                artist_id=artist_id,  # Internal UUID
+                album_id=album_id,  # Internal UUID (or None)
+                source="deezer",
+                duration_ms=track_dto.duration_ms or 0,
+                track_number=track_dto.track_number or 1,
+                disc_number=track_dto.disc_number or 1,
+                explicit=track_dto.explicit or False,
+                isrc=track_dto.isrc,
+                deezer_id=track_dto.deezer_id,
+                preview_url=getattr(track_dto, "preview_url", None),
+            )
         except Exception as e:
             logger.error(f"Failed to save track '{track_dto.title}': {e}")
 

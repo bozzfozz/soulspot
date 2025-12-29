@@ -618,6 +618,78 @@ class ITrackRepository(ABC):
         """
         pass
 
+    # =========================================================================
+    # UNIFIED UPSERT FROM PROVIDER (Clean Architecture Pattern!)
+    # =========================================================================
+    # Hey future me – diese Methode ist DIE EINZIGE Art, Tracks von externen
+    # Providern (Spotify, Deezer, Tidal) zu persistieren!
+    #
+    # WARUM?
+    # - Einheitliche Deduplication: ISRC → Provider-ID → title+album
+    # - Konsistente album_id Verwendung: IMMER interne UUIDs, nie Provider-IDs
+    # - Clean Architecture: Services rufen Repository, nicht direkt ORM
+    #
+    # ALLE Services müssen diese Methode nutzen statt direktem ORM:
+    # - DeezerSyncService.sync_album_tracks()
+    # - SpotifySyncService.sync_album_tracks()
+    # - AutoFetchService.save_streaming_tracks_to_db()
+    # - FollowedArtistsService.sync_artist_discography_complete()
+    # =========================================================================
+
+    @abstractmethod
+    async def upsert_from_provider(
+        self,
+        title: str,
+        artist_id: str,
+        album_id: str | None,
+        source: str,
+        *,
+        duration_ms: int = 0,
+        track_number: int = 1,
+        disc_number: int = 1,
+        explicit: bool = False,
+        isrc: str | None = None,
+        spotify_uri: str | None = None,
+        spotify_id: str | None = None,
+        deezer_id: str | None = None,
+        tidal_id: str | None = None,
+        preview_url: str | None = None,
+    ) -> Track:
+        """Upsert a track from an external provider with proper deduplication.
+
+        Hey future me – das ist DIE EINZIGE Methode für Provider-Track-Persistenz!
+
+        Deduplication Priority:
+        1. ISRC (global unique identifier - best match)
+        2. Provider-specific ID (spotify_uri, deezer_id, tidal_id)
+        3. Title + Album (case-insensitive fallback)
+
+        CRITICAL:
+        - artist_id MUSS eine interne UUID sein (nicht Spotify/Deezer ID!)
+        - album_id MUSS eine interne UUID sein (nicht Spotify/Deezer ID!)
+        - Nutze ProviderMappingService um Provider-IDs zu UUIDs zu konvertieren!
+
+        Args:
+            title: Track title
+            artist_id: Internal SoulSpot artist UUID (NOT provider ID!)
+            album_id: Internal SoulSpot album UUID (NOT provider ID!) or None for singles
+            source: Provider source ("spotify", "deezer", "tidal")
+            duration_ms: Track duration in milliseconds
+            track_number: Track position on album
+            disc_number: Disc number for multi-disc albums
+            explicit: Whether track has explicit content
+            isrc: International Standard Recording Code (best for dedup!)
+            spotify_uri: Full Spotify URI (spotify:track:xxx)
+            spotify_id: Spotify track ID only
+            deezer_id: Deezer track ID
+            tidal_id: Tidal track ID
+            preview_url: URL to 30-second preview
+
+        Returns:
+            Track entity (created or updated)
+        """
+        pass
+
 
 class IPlaylistRepository(ABC):
     """Repository interface for Playlist entities."""
