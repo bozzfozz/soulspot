@@ -949,9 +949,11 @@ class FollowedArtistsService:
             "albums_total": 0,
             "albums_added": 0,
             "albums_skipped": 0,
+            "albums_with_track_errors": 0,  # NEW: Track fetch failures
             "tracks_total": 0,
             "tracks_added": 0,
             "tracks_skipped": 0,
+            "track_fetch_errors": [],  # NEW: List of (album_title, error) tuples
             "source": "none",
         }
 
@@ -1080,10 +1082,39 @@ class FollowedArtistsService:
                 logger.debug(f"Added album: {album_dto.title}")
 
             # Now fetch tracks for this album (if enabled)
+            # Hey future me - IMPROVED ERROR RECOVERY (Jan 2025)!
+            # Track fetch failures are now logged and tracked in stats.
+            # One album's track failure doesn't stop other albums from being processed.
             if include_tracks:
-                track_dtos = await self._fetch_album_tracks(
-                    album_dto, source, spotify_artist_id, artist.deezer_id
-                )
+                try:
+                    track_dtos = await self._fetch_album_tracks(
+                        album_dto, source, spotify_artist_id, artist.deezer_id
+                    )
+                    
+                    if not track_dtos:
+                        # Track fetch returned empty - API issue or album has no tracks
+                        # Don't count as error for compilations (often have license issues)
+                        album_type_lower = (album_dto.album_type or "").lower()
+                        if album_type_lower not in ("compilation", "various"):
+                            logger.warning(
+                                f"No tracks returned for album '{album_dto.title}' "
+                                f"(type={album_dto.album_type})"
+                            )
+                            stats["albums_with_track_errors"] += 1
+                            stats["track_fetch_errors"].append(
+                                (album_dto.title, "No tracks returned from API")
+                            )
+                        continue  # Move to next album
+                except Exception as track_error:
+                    # CRITICAL: Log error but continue with other albums!
+                    logger.exception(
+                        f"Track fetch failed for album '{album_dto.title}': {track_error}"
+                    )
+                    stats["albums_with_track_errors"] += 1
+                    stats["track_fetch_errors"].append(
+                        (album_dto.title, str(track_error))
+                    )
+                    continue  # Move to next album
 
                 for track_dto in track_dtos:
                     stats["tracks_total"] += 1
@@ -1137,6 +1168,18 @@ class FollowedArtistsService:
             f"Complete discography sync for {artist.name}: "
             f"Albums {stats['albums_added']}/{stats['albums_total']}, "
             f"Tracks {stats['tracks_added']}/{stats['tracks_total']} (source={source})"
+        )
+        
+        # Log summary of track fetch errors (if any)
+        if stats["albums_with_track_errors"] > 0:
+            # Only show first 5 errors to avoid log spam
+            error_preview = stats["track_fetch_errors"][:5]
+            more_count = len(stats["track_fetch_errors"]) - 5
+            more_msg = f" (+{more_count} more)" if more_count > 0 else ""
+            logger.warning(
+                f"⚠️ Discography sync for {artist.name} had {stats['albums_with_track_errors']} "
+                f"albums with track errors: {error_preview}{more_msg}"
+            )
         )
         return stats
 

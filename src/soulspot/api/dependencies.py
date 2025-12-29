@@ -897,11 +897,18 @@ async def get_spotify_sync_service(
         request.app.state, "image_download_queue", None
     )
 
+    # Hey future me - AppSettingsService für persistente Sync-Status!
+    # SpotifySyncService speichert last_sync_time in DB → überlebt Restarts!
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings_service = AppSettingsService(session)
+
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,
         image_service=image_service,
         image_queue=image_queue,
+        settings_service=settings_service,
     )
 
 
@@ -949,11 +956,18 @@ async def get_spotify_sync_service_optional(
         request.app.state, "image_download_queue", None
     )
 
+    # Hey future me - AppSettingsService für persistente Sync-Status!
+    # SpotifySyncService speichert last_sync_time in DB → überlebt Restarts!
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings_service = AppSettingsService(session)
+
     yield SpotifySyncService(
         session=session,
         spotify_plugin=spotify_plugin,  # May be None if not authenticated!
         image_service=image_service,
         image_queue=image_queue,
+        settings_service=settings_service,
     )
 
 
@@ -1162,11 +1176,18 @@ async def get_deezer_sync_service(
         request.app.state, "image_download_queue", None
     )
 
+    # Hey future me - AppSettingsService für persistente Sync-Status!
+    # DeezerSyncService speichert last_sync_time in DB → überlebt Restarts!
+    from soulspot.application.services.app_settings_service import AppSettingsService
+
+    settings_service = AppSettingsService(session)
+
     yield DeezerSyncService(
         session=session,
         deezer_plugin=deezer_plugin,
         image_service=image_service,
         image_queue=image_queue,
+        settings_service=settings_service,
     )
 
 

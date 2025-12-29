@@ -135,15 +135,39 @@ class SpotifySyncService:
     # SYNC STATUS HELPERS (NEW - In-Memory like DeezerSyncService)
     # =========================================================================
 
-    def _should_sync(self, sync_type: str, cooldown_minutes: int) -> bool:
+    async def _should_sync(self, sync_type: str, cooldown_minutes: int) -> bool:
         """Check if sync should run based on cooldown.
 
         Hey future me - das verhindert API-Spam!
         Wir synken nicht jedes Mal, sondern respektieren Cooldowns.
         
-        MIGRATION NOTE: This replaces repo.should_sync() with in-memory logic.
+        REFACTORED (Jan 2025): Now supports PERSISTENT sync status!
+        - L1 Cache: In-memory (fast, no DB hit)
+        - L2 Cache: DB via AppSettingsService (survives restarts!)
+        
+        Flow:
+        1. Check in-memory cache first (fast path)
+        2. If not in memory, check DB (only on first call after restart)
+        3. If DB has value, load into memory
+        
+        Note: Changed from sync to async to support DB read.
         """
+        # L1: In-memory cache (fast path)
         last_sync = self._last_sync_times.get(sync_type)
+        
+        # L2: If not in memory, try loading from DB (persistent)
+        if last_sync is None and self._settings_service:
+            try:
+                # Load from DB into memory
+                db_last_sync = await self._settings_service.get_last_sync_time(
+                    f"spotify.{sync_type}"
+                )
+                if db_last_sync:
+                    self._last_sync_times[sync_type] = db_last_sync
+                    last_sync = db_last_sync
+            except Exception as e:
+                logger.debug(f"Could not load sync time from DB: {e}")
+        
         if not last_sync:
             return True
 
@@ -151,12 +175,29 @@ class SpotifySyncService:
         elapsed_minutes = (now - last_sync).total_seconds() / 60
         return elapsed_minutes >= cooldown_minutes
 
-    def _mark_synced(self, sync_type: str) -> None:
+    async def _mark_synced(self, sync_type: str) -> None:
         """Mark sync as completed.
         
-        MIGRATION NOTE: This replaces repo.update_sync_status() with in-memory logic.
+        REFACTORED (Jan 2025): Now persists to DB!
+        - Updates in-memory cache (fast)
+        - Also stores in DB (survives restarts!)
+        
+        Note: Changed from sync to async to support DB write.
         """
-        self._last_sync_times[sync_type] = datetime.now(UTC)
+        now = datetime.now(UTC)
+        
+        # L1: Update in-memory
+        self._last_sync_times[sync_type] = now
+        
+        # L2: Persist to DB (survives restarts!)
+        if self._settings_service:
+            try:
+                await self._settings_service.set_last_sync_time(
+                    f"spotify.{sync_type}",
+                    now,
+                )
+            except Exception as e:
+                logger.debug(f"Could not persist sync time to DB: {e}")
 
     # =========================================================================
     # FOLLOWED ARTISTS SYNC
@@ -224,7 +265,7 @@ class SpotifySyncService:
                 return stats
 
             # Check cooldown (NEW: In-Memory statt DB)
-            if not force and not self._should_sync(
+            if not force and not await self._should_sync(
                 "followed_artists", self.ARTISTS_SYNC_COOLDOWN
             ):
                 stats["skipped_cooldown"] = True
@@ -355,8 +396,8 @@ class SpotifySyncService:
                     f"Auto-discography sync complete: {stats.get('discography_synced', 0)}/{len(newly_created_ids)} artists"
                 )
 
-            # Mark sync complete (NEW: In-Memory statt DB)
-            self._mark_synced("followed_artists")
+            # Mark sync complete (REFACTORED: Now persists to DB!)
+            await self._mark_synced("followed_artists")
 
             await self._session.commit()
             stats["synced"] = True
@@ -876,8 +917,8 @@ class SpotifySyncService:
             "skipped_cooldown": False,
         }
 
-        # Check cooldown (In-Memory)
-        if not force and not self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
+        # Check cooldown (REFACTORED: Now persists to DB!)
+        if not force and not await self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
             stats["skipped_cooldown"] = True
             return stats
 
@@ -934,8 +975,8 @@ class SpotifySyncService:
                 except Exception as e:
                     logger.warning(f"Failed to save track {track_dto.title}: {e}")
 
-            # Mark sync complete (In-Memory)
-            self._mark_synced(cache_key)
+            # Mark sync complete (REFACTORED: Now persists to DB!)
+            await self._mark_synced(cache_key)
             await self._session.commit()
 
             stats["synced"] = True
@@ -1018,8 +1059,8 @@ class SpotifySyncService:
             # This requires a new table: artist_relations
             # For now, we just cache the related artists in DB
 
-            # Mark sync complete (In-Memory)
-            self._mark_synced(cache_key)
+            # Mark sync complete (REFACTORED: Now persists to DB!)
+            await self._mark_synced(cache_key)
             await self._session.commit()
 
             stats["synced"] = True
@@ -1342,8 +1383,8 @@ class SpotifySyncService:
                 logger.debug("Playlist sync is disabled in settings")
                 return stats
 
-            # Check cooldown (NEW: In-Memory statt DB)
-            if not force and not self._should_sync(
+            # Check cooldown (REFACTORED: Now persists to DB!)
+            if not force and not await self._should_sync(
                 "user_playlists", self.PLAYLISTS_SYNC_COOLDOWN
             ):
                 stats["skipped_cooldown"] = True
@@ -1412,8 +1453,8 @@ class SpotifySyncService:
             else:
                 should_remove = False  # No playlists to remove
 
-            # Mark sync complete (NEW: In-Memory statt DB)
-            self._mark_synced("user_playlists")
+            # Mark sync complete (REFACTORED: Now persists to DB!)
+            await self._mark_synced("user_playlists")
 
             await self._session.commit()
             stats["synced"] = True

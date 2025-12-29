@@ -223,6 +223,109 @@ class AppSettingsService:
         self._set_cache(key, value)
         return value
 
+    # =========================================================================
+    # DATETIME METHODS (Jan 2025) - For Persistent Sync Status
+    # =========================================================================
+
+    async def get_datetime(
+        self,
+        key: str,
+        default: datetime | None = None,
+    ) -> datetime | None:
+        """Get setting value as datetime.
+
+        Hey future me - verwendet für persistente Sync-Status!
+        Format: ISO 8601 (datetime.isoformat())
+        
+        Args:
+            key: Setting key (e.g., 'sync.spotify.artists.last_run')
+            default: Default value if not found or invalid
+
+        Returns:
+            datetime (UTC-aware) or default
+        """
+        # Check cache first
+        cached_value, cache_hit = self._get_from_cache(key)
+        if cache_hit:
+            return cached_value
+
+        setting = await self.get_raw(key)
+        if setting is None or setting.value is None:
+            value = default
+        else:
+            try:
+                # Parse ISO format datetime
+                value = datetime.fromisoformat(setting.value)
+                # Ensure UTC timezone
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=UTC)
+            except ValueError:
+                logger.warning(f"Invalid datetime value for {key}: {setting.value}")
+                value = default
+
+        self._set_cache(key, value)
+        return value
+
+    async def set_datetime(
+        self,
+        key: str,
+        value: datetime | None = None,
+        category: str = "sync",
+    ) -> AppSettingsModel:
+        """Set a datetime value (for sync timestamps, etc.).
+
+        Hey future me - convenience method for sync status tracking!
+        Stores as ISO 8601 string (datetime.isoformat()).
+        
+        Args:
+            key: Setting key (e.g., 'sync.spotify.artists.last_run')
+            value: datetime to store (defaults to now UTC)
+            category: Category for grouping (default: 'sync')
+
+        Returns:
+            Updated or created AppSettingsModel
+        """
+        if value is None:
+            value = datetime.now(UTC)
+        
+        return await self.set(
+            key=key,
+            value=value.isoformat(),
+            value_type="datetime",
+            category=category,
+            description=f"Last run timestamp for {key}",
+        )
+
+    async def get_last_sync_time(self, sync_type: str) -> datetime | None:
+        """Get last sync time for a sync operation.
+
+        Hey future me - convenience wrapper for sync status!
+        
+        Args:
+            sync_type: Sync type (e.g., 'spotify.artists', 'deezer.charts')
+            
+        Returns:
+            Last sync datetime (UTC) or None if never synced
+        """
+        key = f"sync.{sync_type}.last_run"
+        return await self.get_datetime(key)
+
+    async def set_last_sync_time(
+        self,
+        sync_type: str,
+        time: datetime | None = None,
+    ) -> None:
+        """Set last sync time for a sync operation.
+
+        Hey future me - convenience wrapper for sync status!
+        
+        Args:
+            sync_type: Sync type (e.g., 'spotify.artists')
+            time: Sync time (UTC). Defaults to now.
+        """
+        key = f"sync.{sync_type}.last_run"
+        await self.set_datetime(key, time)
+
     async def set(
         self,
         key: str,

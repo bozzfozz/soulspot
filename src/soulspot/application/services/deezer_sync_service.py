@@ -34,6 +34,7 @@ from soulspot.infrastructure.persistence.repositories import (
 )
 
 if TYPE_CHECKING:
+    from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.images import ImageDownloadQueue, ImageService
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
@@ -71,6 +72,7 @@ class DeezerSyncService:
         deezer_plugin: "DeezerPlugin",
         image_service: "ImageService | None" = None,
         image_queue: "ImageDownloadQueue | None" = None,
+        settings_service: "AppSettingsService | None" = None,
     ) -> None:
         """Initialize Deezer sync service.
 
@@ -82,12 +84,16 @@ class DeezerSyncService:
 
         REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
         Images werden in Queue gestellt statt blockierend heruntergeladen.
+        
+        REFACTORED (Jan 2025): Persistent Sync Status via AppSettingsService!
+        Sync times survive container restarts - L1 (memory) + L2 (DB) cache.
 
         Args:
             session: Database session
             deezer_plugin: DeezerPlugin für API calls
             image_service: ImageService für Bilder-Downloads (optional)
             image_queue: Queue für async Image-Downloads (optional)
+            settings_service: AppSettingsService für persistent sync status (optional)
         """
         from soulspot.application.services.provider_mapping_service import (
             ProviderMappingService,
@@ -97,6 +103,7 @@ class DeezerSyncService:
         self._plugin = deezer_plugin
         self._image_service = image_service
         self._image_queue = image_queue
+        self._settings_service = settings_service
 
         # Repositories für DB-Zugriff
         self._artist_repo = ArtistRepository(session)
@@ -107,20 +114,46 @@ class DeezerSyncService:
         # Hey future me - das verhindert Duplikate und sorgt für konsistente UUIDs!
         self._mapping_service = ProviderMappingService(session)
 
-        # Cache für Sync-Status
+        # Cache für Sync-Status (L1 = in-memory, L2 = DB)
         self._last_sync_times: dict[str, datetime] = {}
 
     # =========================================================================
-    # SYNC STATUS HELPERS
+    # SYNC STATUS HELPERS (REFACTORED Jan 2025 - Persistent!)
     # =========================================================================
 
-    def _should_sync(self, sync_type: str, cooldown_minutes: int) -> bool:
+    async def _should_sync(self, sync_type: str, cooldown_minutes: int) -> bool:
         """Check if sync should run based on cooldown.
 
         Hey future me - das verhindert API-Spam!
         Wir synken nicht jedes Mal, sondern respektieren Cooldowns.
+        
+        REFACTORED (Jan 2025): Now supports PERSISTENT sync status!
+        - L1 Cache: In-memory (fast, no DB hit)
+        - L2 Cache: DB via AppSettingsService (survives restarts!)
+        
+        Flow:
+        1. Check in-memory cache first (fast path)
+        2. If not in memory, check DB (only on first call after restart)
+        3. If DB has value, load into memory
+        
+        Note: Changed from sync to async to support DB read.
         """
+        # L1: In-memory cache (fast path)
         last_sync = self._last_sync_times.get(sync_type)
+        
+        # L2: If not in memory, try loading from DB (persistent)
+        if last_sync is None and self._settings_service:
+            try:
+                # Load from DB into memory
+                db_last_sync = await self._settings_service.get_last_sync_time(
+                    f"deezer.{sync_type}"
+                )
+                if db_last_sync:
+                    self._last_sync_times[sync_type] = db_last_sync
+                    last_sync = db_last_sync
+            except Exception as e:
+                logger.debug(f"Could not load sync time from DB: {e}")
+        
         if not last_sync:
             return True
 
@@ -128,9 +161,29 @@ class DeezerSyncService:
         elapsed_minutes = (now - last_sync).total_seconds() / 60
         return elapsed_minutes >= cooldown_minutes
 
-    def _mark_synced(self, sync_type: str) -> None:
-        """Mark sync as completed."""
-        self._last_sync_times[sync_type] = datetime.now(UTC)
+    async def _mark_synced(self, sync_type: str) -> None:
+        """Mark sync as completed.
+        
+        REFACTORED (Jan 2025): Now persists to DB!
+        - Updates in-memory cache (fast)
+        - Also stores in DB (survives restarts!)
+        
+        Note: Changed from sync to async to support DB write.
+        """
+        now = datetime.now(UTC)
+        
+        # L1: Update in-memory
+        self._last_sync_times[sync_type] = now
+        
+        # L2: Persist to DB (survives restarts!)
+        if self._settings_service:
+            try:
+                await self._settings_service.set_last_sync_time(
+                    f"deezer.{sync_type}",
+                    now,
+                )
+            except Exception as e:
+                logger.debug(f"Could not persist sync time to DB: {e}")
 
     # =========================================================================
     # CHARTS SYNC (DEPRECATED - Use in-memory cache!)
@@ -252,7 +305,7 @@ class DeezerSyncService:
             Sync result with counts
         """
         cache_key = f"artist_albums_{deezer_artist_id}"
-        if not force and not self._should_sync(
+        if not force and not await self._should_sync(
             cache_key, self.ARTIST_ALBUMS_SYNC_COOLDOWN
         ):
             return {
@@ -300,7 +353,7 @@ class DeezerSyncService:
             await self._update_artist_albums_synced_at(deezer_artist_id)
 
             await self._session.commit()
-            self._mark_synced(cache_key)
+            await self._mark_synced(cache_key)
 
             logger.info(
                 f"DeezerSyncService: Artist {deezer_artist_id} albums synced - "
@@ -402,7 +455,7 @@ class DeezerSyncService:
             Sync result with counts
         """
         cache_key = f"related_artists_{deezer_artist_id}"
-        if not force and not self._should_sync(cache_key, self.CHARTS_SYNC_COOLDOWN):
+        if not force and not await self._should_sync(cache_key, self.CHARTS_SYNC_COOLDOWN):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -430,7 +483,7 @@ class DeezerSyncService:
             # For now, we just cache the related artists in DB
 
             await self._session.commit()
-            self._mark_synced(cache_key)
+            await self._mark_synced(cache_key)
 
             result["synced"] = True
             logger.info(

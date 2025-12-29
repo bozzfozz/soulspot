@@ -181,7 +181,7 @@ class DeezerSyncWorker:
         logger.info("Deezer sync worker stopped")
 
     def _create_sync_service(
-        self, session: Any, access_token: str | None
+        self, session: Any, access_token: str | None, settings_service: Any
     ) -> "DeezerSyncService":
         """Create a DeezerSyncService instance with all dependencies.
 
@@ -193,10 +193,12 @@ class DeezerSyncWorker:
         - DeezerSyncService erstellen (mit allen deps inkl. image_queue!)
 
         REFACTORED (Jan 2025): image_queue wird jetzt durchgereicht für async Downloads!
+        REFACTORED (Jan 2025): settings_service für persistente Sync-Status!
 
         Args:
             session: Database session for the sync
             access_token: Deezer OAuth token (None for public API calls)
+            settings_service: AppSettingsService instance for persistent sync status
 
         Returns:
             Configured DeezerSyncService instance
@@ -217,6 +219,7 @@ class DeezerSyncWorker:
             deezer_plugin=deezer_plugin,
             image_service=image_service,
             image_queue=self._image_queue,
+            settings_service=settings_service,
         )
 
     async def _run_loop(self) -> None:
@@ -308,25 +311,33 @@ class DeezerSyncWorker:
                     if await settings_service.get_bool(
                         "deezer.auto_sync_artists", default=True
                     ) and self._is_sync_due("artists", user_sync_interval, now):
-                        await self._run_artists_sync(session, access_token, now)
+                        await self._run_artists_sync(
+                            session, access_token, now, settings_service
+                        )
 
                     # User Playlists sync
                     if await settings_service.get_bool(
                         "deezer.auto_sync_playlists", default=True
                     ) and self._is_sync_due("playlists", user_sync_interval, now):
-                        await self._run_playlists_sync(session, access_token, now)
+                        await self._run_playlists_sync(
+                            session, access_token, now, settings_service
+                        )
 
                     # Saved Albums sync
                     if await settings_service.get_bool(
                         "deezer.auto_sync_saved_albums", default=True
                     ) and self._is_sync_due("saved_albums", user_sync_interval, now):
-                        await self._run_saved_albums_sync(session, access_token, now)
+                        await self._run_saved_albums_sync(
+                            session, access_token, now, settings_service
+                        )
 
                     # Saved Tracks sync
                     if await settings_service.get_bool(
                         "deezer.auto_sync_saved_tracks", default=True
                     ) and self._is_sync_due("saved_tracks", user_sync_interval, now):
-                        await self._run_saved_tracks_sync(session, access_token, now)
+                        await self._run_saved_tracks_sync(
+                            session, access_token, now, settings_service
+                        )
 
                     # =========================================================
                     # GRADUAL BACKGROUND SYNCS
@@ -357,6 +368,7 @@ class DeezerSyncWorker:
                             session,
                             access_token,
                             now,
+                            settings_service,
                             artists_per_cycle,
                             resync_hours,
                             resync_enabled,
@@ -373,7 +385,7 @@ class DeezerSyncWorker:
                         "deezer.auto_sync_album_tracks", default=True
                     ) and self._is_sync_due("album_tracks", album_tracks_interval, now):
                         await self._run_album_tracks_sync(
-                            session, access_token, now, albums_per_cycle
+                            session, access_token, now, settings_service, albums_per_cycle
                         )
 
                 # Commit any changes
@@ -435,13 +447,15 @@ class DeezerSyncWorker:
     # =========================================================================
 
     async def _run_artists_sync(
-        self, session: Any, access_token: str, now: datetime
+        self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run followed artists sync."""
         logger.info("Starting automatic Deezer artists sync...")
 
         try:
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
             result = await sync_service.sync_followed_artists(force=False)
 
             self._last_sync["artists"] = now
@@ -456,13 +470,15 @@ class DeezerSyncWorker:
             logger.error(f"Deezer artists sync failed: {e}", exc_info=True)
 
     async def _run_playlists_sync(
-        self, session: Any, access_token: str, now: datetime
+        self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run user playlists sync."""
         logger.info("Starting automatic Deezer playlists sync...")
 
         try:
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
             result = await sync_service.sync_user_playlists(force=False)
 
             self._last_sync["playlists"] = now
@@ -477,13 +493,15 @@ class DeezerSyncWorker:
             logger.error(f"Deezer playlists sync failed: {e}", exc_info=True)
 
     async def _run_saved_albums_sync(
-        self, session: Any, access_token: str, now: datetime
+        self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run saved albums sync."""
         logger.info("Starting automatic Deezer saved albums sync...")
 
         try:
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
             result = await sync_service.sync_saved_albums(force=False)
 
             self._last_sync["saved_albums"] = now
@@ -498,13 +516,15 @@ class DeezerSyncWorker:
             logger.error(f"Deezer saved albums sync failed: {e}", exc_info=True)
 
     async def _run_saved_tracks_sync(
-        self, session: Any, access_token: str, now: datetime
+        self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run saved tracks sync."""
         logger.info("Starting automatic Deezer saved tracks sync...")
 
         try:
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
             result = await sync_service.sync_saved_tracks(force=False)
 
             self._last_sync["saved_tracks"] = now
@@ -528,6 +548,7 @@ class DeezerSyncWorker:
         session: Any,
         access_token: str,
         now: datetime,
+        settings_service: Any,
         artists_per_cycle: int = 5,
         resync_hours: int = 24,
         resync_enabled: bool = True,
@@ -551,6 +572,7 @@ class DeezerSyncWorker:
             session: Database session
             access_token: Deezer OAuth token (for getting artist IDs)
             now: Current timestamp
+            settings_service: AppSettingsService for persistent sync status
             artists_per_cycle: How many artists to process (default 5)
             resync_hours: How many hours before resync is needed (default 24)
             resync_enabled: Whether to resync existing artists (default True)
@@ -604,7 +626,9 @@ class DeezerSyncWorker:
             )
 
             # Set up sync service via helper (includes image_queue!)
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
 
             synced_count = 0
             total_albums = 0
@@ -660,6 +684,7 @@ class DeezerSyncWorker:
         session: Any,
         access_token: str,
         now: datetime,
+        settings_service: Any,
         albums_per_cycle: int = 10,
     ) -> None:
         """Run gradual album tracks sync (load tracks for albums that don't have them).
@@ -675,6 +700,7 @@ class DeezerSyncWorker:
             session: Database session
             access_token: Deezer OAuth token (not actually needed for this call)
             now: Current timestamp
+            settings_service: AppSettingsService for persistent sync status
             albums_per_cycle: How many albums to process (default 10)
         """
         try:
@@ -703,7 +729,9 @@ class DeezerSyncWorker:
             # Set up sync service via helper (includes image_queue!)
             # Hey future me - access_token not really needed for get_album_tracks
             # but DeezerPlugin constructor accepts it
-            sync_service = self._create_sync_service(session, access_token)
+            sync_service = self._create_sync_service(
+                session, access_token, settings_service
+            )
 
             synced_count = 0
             total_tracks = 0
