@@ -16,6 +16,7 @@ from soulspot.application.workers.download_worker import DownloadWorker
 from soulspot.application.workers.duplicate_detector_worker import (
     DuplicateDetectorWorker,
 )
+from soulspot.application.workers.ImageWorker import ImageWorker
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
 from soulspot.application.workers.library_discovery_worker import LibraryDiscoveryWorker
 from soulspot.application.workers.new_releases_sync_worker import (
@@ -43,7 +44,6 @@ from soulspot.application.workers.retry_scheduler_worker import (
 )
 from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
-from soulspot.application.workers.ImageWorker import ImageWorker
 
 # ⚠️ DEPRECATED Workers - Import triggers deprecation warning
 # These are kept for backwards compatibility only and will be removed

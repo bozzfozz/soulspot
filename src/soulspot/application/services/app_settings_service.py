@@ -236,7 +236,7 @@ class AppSettingsService:
 
         Hey future me - verwendet für persistente Sync-Status!
         Format: ISO 8601 (datetime.isoformat())
-        
+
         Args:
             key: Setting key (e.g., 'sync.spotify.artists.last_run')
             default: Default value if not found or invalid
@@ -276,7 +276,7 @@ class AppSettingsService:
 
         Hey future me - convenience method for sync status tracking!
         Stores as ISO 8601 string (datetime.isoformat()).
-        
+
         Args:
             key: Setting key (e.g., 'sync.spotify.artists.last_run')
             value: datetime to store (defaults to now UTC)
@@ -287,7 +287,7 @@ class AppSettingsService:
         """
         if value is None:
             value = datetime.now(UTC)
-        
+
         return await self.set(
             key=key,
             value=value.isoformat(),
@@ -300,10 +300,10 @@ class AppSettingsService:
         """Get last sync time for a sync operation.
 
         Hey future me - convenience wrapper for sync status!
-        
+
         Args:
             sync_type: Sync type (e.g., 'spotify.artists', 'deezer.charts')
-            
+
         Returns:
             Last sync datetime (UTC) or None if never synced
         """
@@ -318,7 +318,7 @@ class AppSettingsService:
         """Set last sync time for a sync operation.
 
         Hey future me - convenience wrapper for sync status!
-        
+
         Args:
             sync_type: Sync type (e.g., 'spotify.artists')
             time: Sync time (UTC). Defaults to now.

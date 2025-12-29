@@ -26,7 +26,9 @@ from soulspot.api.routers.ui.downloads import router as downloads_router
 from soulspot.api.routers.ui.library_browse import router as library_browse_router
 from soulspot.api.routers.ui.library_core import router as library_core_router
 from soulspot.api.routers.ui.library_detail import router as library_detail_router
-from soulspot.api.routers.ui.library_maintenance import router as library_maintenance_router
+from soulspot.api.routers.ui.library_maintenance import (
+    router as library_maintenance_router,
+)
 from soulspot.api.routers.ui.search import router as search_router
 from soulspot.api.routers.ui.spotify_browse import router as spotify_browse_router
 

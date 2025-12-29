@@ -49,7 +49,7 @@ class ImageBackfillWorker:
     def __init__(
         self,
         db: Any,  # Database instance
-        settings: "Settings",  # Settings instance
+        settings: Settings,  # Settings instance
         run_interval_minutes: int = 30,  # Default: 30 minutes
         batch_size: int = 50,  # Max items per entity type per cycle
     ) -> None:
@@ -115,13 +115,17 @@ class ImageBackfillWorker:
         contention during the busy startup phase.
         """
         # Initial delay to let app start up and other workers finish first
-        logger.info("🖼️ ImageBackfillWorker: Waiting 2 minutes for startup to complete...")
+        logger.info(
+            "🖼️ ImageBackfillWorker: Waiting 2 minutes for startup to complete..."
+        )
         await asyncio.sleep(120)
         logger.info("🖼️ ImageBackfillWorker: Starting main loop")
 
         while self._running:
             try:
-                logger.info(f"🖼️ ImageBackfillWorker: Starting backfill cycle (batch_size={self.batch_size})")
+                logger.info(
+                    f"🖼️ ImageBackfillWorker: Starting backfill cycle (batch_size={self.batch_size})"
+                )
                 stats = await self._run_backfill_cycle()
                 self._last_run_at = datetime.now(UTC)
                 self._last_run_stats = stats
@@ -133,20 +137,26 @@ class ImageBackfillWorker:
                     "albums_processed", 0
                 )
                 total_errors = len(stats.get("errors", []))
-                
+
                 logger.info("=" * 50)
                 logger.info("🖼️ IMAGE BACKFILL CYCLE COMPLETE")
                 logger.info("=" * 50)
-                logger.info(f"  ✅ Repaired: {total_repaired} (artists: {stats.get('artists_repaired', 0)}, albums: {stats.get('albums_repaired', 0)})")
+                logger.info(
+                    f"  ✅ Repaired: {total_repaired} (artists: {stats.get('artists_repaired', 0)}, albums: {stats.get('albums_repaired', 0)})"
+                )
                 logger.info(f"  📊 Processed: {total_processed}")
                 logger.info(f"  ❌ Errors: {total_errors}")
                 if stats.get("skipped_disabled"):
                     logger.info("  ⏭️ Skipped: Image downloads disabled in settings")
-                logger.info(f"  ⏱️ Next run in: {self.check_interval_seconds // 60} minutes")
+                logger.info(
+                    f"  ⏱️ Next run in: {self.check_interval_seconds // 60} minutes"
+                )
                 logger.info("=" * 50)
 
             except Exception as e:
-                logger.error(f"💥 Error in image backfill worker loop: {e}", exc_info=True)
+                logger.error(
+                    f"💥 Error in image backfill worker loop: {e}", exc_info=True
+                )
 
             # Wait for next cycle
             await asyncio.sleep(self.check_interval_seconds)

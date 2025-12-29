@@ -192,14 +192,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Hey future me - this is THE central token store for background workers!
         # It's separate from session_store (which is for user requests).
         # Workers like WatchlistWorker, DiscographyWorker use this to get tokens.
-        from soulspot.application.services.token_manager import DatabaseTokenManager
-        from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
-        from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
-
         # =================================================================
         # Track startup time for uptime monitoring
         # =================================================================
         from datetime import UTC, datetime
+
+        from soulspot.application.services.token_manager import DatabaseTokenManager
+        from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
+        from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
+
         app.state.startup_time = datetime.now(UTC)
 
         # =================================================================
@@ -212,11 +213,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # - Worker discovery (get_worker(name))
         # Full migration to orchestrator-managed start/stop is planned for v2.
         from soulspot.application.workers.orchestrator import (
-            WorkerOrchestrator,
-            WorkerState,
             get_orchestrator,
         )
-        
+
         orchestrator = get_orchestrator()
         app.state.orchestrator = orchestrator
         logger.info("Worker orchestrator initialized (tracking mode)")
@@ -901,7 +900,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # - auto_import: Wird separat gestoppt (task-basiert)
         # - database: Wird separat geschlossen
         # - http_pool: Wird separat geschlossen
-        
+
         logger.info("Shutting down application")
 
         # 1. Stop ALL workers via orchestrator (replaces 160+ lines of try/except!)
@@ -909,9 +908,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if orchestrator is not None:
             await orchestrator.stop_all()
         else:
-            logger.warning("Orchestrator not found - workers may not be stopped properly")
+            logger.warning(
+                "Orchestrator not found - workers may not be stopped properly"
+            )
             # Fallback: Stop critical workers manually if orchestrator missing
-            for worker_name in ["token_refresh_worker", "spotify_sync_worker", "deezer_sync_worker"]:
+            for worker_name in [
+                "token_refresh_worker",
+                "spotify_sync_worker",
+                "deezer_sync_worker",
+            ]:
                 worker = getattr(app.state, worker_name, None)
                 if worker is not None:
                     try:

@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
-    get_spotify_plugin_optional,
 )
 from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
@@ -48,15 +47,15 @@ router = APIRouter(prefix="/artists", tags=["Artists"])
 # =============================================================================
 async def _background_discography_sync(artist_id: str, artist_name: str) -> None:
     """Background task to sync discography for a newly added artist.
-    
+
     Hey future me - AUTOMATIC DISCOGRAPHY SYNC!
     When user clicks "Add to Library", this runs in the background to fetch
     all albums + tracks from providers (Spotify/Deezer) immediately.
-    
+
     GOTCHA: Must create own DB session! The request session is already closed
     when this runs in background. Create fresh Database instance with settings
     and use session_scope() for proper cleanup.
-    
+
     Args:
         artist_id: The artist UUID (string format)
         artist_name: Artist name for logging
@@ -65,9 +64,9 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
     from soulspot.infrastructure.persistence.database import Database
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-    
+
     logger.info(f"🎵 Background discography sync starting for: {artist_name}")
-    
+
     try:
         # Create fresh Database instance for background task
         # Hey future me - background tasks run AFTER the request is complete,
@@ -77,7 +76,7 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
             # Create plugins - DeezerPlugin doesn't need auth for album lookup
             # SpotifyPlugin will be None if user not authenticated
             deezer_plugin = DeezerPlugin()
-            
+
             # Try to create SpotifyPlugin from stored session tokens
             spotify_plugin = None
             try:
@@ -85,27 +84,27 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
             except Exception:
                 # No Spotify auth available, Deezer fallback will be used
                 pass
-            
+
             service = FollowedArtistsService(
                 session=session,
                 spotify_plugin=spotify_plugin,
                 deezer_plugin=deezer_plugin,
             )
-            
+
             stats = await service.sync_artist_discography_complete(
                 artist_id=artist_id,
                 include_tracks=True,
             )
-            
+
             await session.commit()
-            
+
             logger.info(
                 f"✅ Background discography sync complete for {artist_name}: "
                 f"albums={stats['albums_added']}/{stats['albums_total']}, "
                 f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
                 f"(source: {stats['source']})"
             )
-            
+
     except Exception as e:
         # Log but don't fail - this is a background task
         logger.error(
@@ -187,19 +186,20 @@ async def debug_search_artists(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """Debug endpoint: Search artists by name in DB.
-    
+
     Returns all matching artists with their source info.
     Case-insensitive partial match.
     """
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from soulspot.infrastructure.persistence.models import ArtistModel
-    
+
     stmt = select(ArtistModel).where(
         func.lower(ArtistModel.name).contains(name.lower())
     )
     result = await session.execute(stmt)
     artists = result.scalars().all()
-    
+
     return {
         "query": name,
         "count": len(artists),
@@ -212,7 +212,7 @@ async def debug_search_artists(
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             }
             for a in artists
-        ]
+        ],
     }
 
 
@@ -459,7 +459,9 @@ class AddArtistResponse(BaseModel):
     """Response model for add artist operation."""
 
     artist: ArtistResponse
-    created: bool = Field(..., description="True if new artist created, False if existing returned")
+    created: bool = Field(
+        ..., description="True if new artist created, False if existing returned"
+    )
     message: str
 
 
@@ -473,17 +475,17 @@ async def add_artist_to_library(
 
     Hey future me - this endpoint is called when user clicks "Add to Library" on
     Discovery page. It creates a LOCAL artist entry (not synced from streaming service).
-    
+
     AUTOMATIC DISCOGRAPHY SYNC (Jan 2025):
     After adding a new artist, we automatically start a background task to sync
     their complete discography (albums + tracks) from providers. This way the
     user doesn't have to wait 6 hours for LibraryDiscoveryWorker!
-    
+
     Deduplication logic:
     1. If spotify_id provided, check for existing artist with that spotify_uri
     2. If deezer_id provided, check for existing artist with that deezer_id
     3. Otherwise, check by normalized name (case-insensitive)
-    
+
     If duplicate found, returns existing artist with created=False.
     If new, creates artist with source='local' and returns with created=True.
 
@@ -503,7 +505,7 @@ async def add_artist_to_library(
         request.spotify_id,
         request.deezer_id,
     )
-    
+
     from soulspot.domain.entities import Artist, ArtistSource
     from soulspot.domain.value_objects import ImageRef, SpotifyUri
 
@@ -512,7 +514,7 @@ async def add_artist_to_library(
     # Hey future me - ONLY check if artist exists as LOCAL or HYBRID source!
     # Spotify-only synced artists (source='spotify') should NOT block adding!
     # User wants to add artist to their LOCAL library, not check streaming follows.
-    
+
     # Check for existing LOCAL/HYBRID artist by spotify_uri
     if request.spotify_id:
         spotify_uri = SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
@@ -530,7 +532,7 @@ async def add_artist_to_library(
             existing.source = ArtistSource.HYBRID
             await repo.update(existing)
             await session.commit()
-            
+
             # Hey future me - also trigger discography sync on upgrade!
             # The artist may have been synced without full discography.
             background_tasks.add_task(
@@ -538,7 +540,7 @@ async def add_artist_to_library(
                 artist_id=str(existing.id.value),
                 artist_name=existing.name,
             )
-            
+
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -561,14 +563,14 @@ async def add_artist_to_library(
             existing.source = ArtistSource.HYBRID
             await repo.update(existing)
             await session.commit()
-            
+
             # Hey future me - also trigger discography sync on upgrade!
             background_tasks.add_task(
                 _background_discography_sync,
                 artist_id=str(existing.id.value),
                 artist_name=existing.name,
             )
-            
+
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -590,19 +592,21 @@ async def add_artist_to_library(
         existing.source = ArtistSource.HYBRID
         # Also update spotify_id/deezer_id if provided
         if request.spotify_id and not existing.spotify_uri:
-            existing.spotify_uri = SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
+            existing.spotify_uri = SpotifyUri.from_string(
+                f"spotify:artist:{request.spotify_id}"
+            )
         if request.deezer_id and not existing.deezer_id:
             existing.deezer_id = request.deezer_id
         await repo.update(existing)
         await session.commit()
-        
+
         # Hey future me - also trigger discography sync on upgrade!
         background_tasks.add_task(
             _background_discography_sync,
             artist_id=str(existing.id.value),
             artist_name=existing.name,
         )
-        
+
         return AddArtistResponse(
             artist=_artist_to_response(existing),
             created=False,
@@ -614,7 +618,9 @@ async def add_artist_to_library(
         id=ArtistId.generate(),
         name=request.name,
         source=ArtistSource.LOCAL,  # User is adding to LOCAL library
-        spotify_uri=SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}") if request.spotify_id else None,
+        spotify_uri=SpotifyUri.from_string(f"spotify:artist:{request.spotify_id}")
+        if request.spotify_id
+        else None,
         deezer_id=request.deezer_id,
         image=ImageRef(url=request.image_url) if request.image_url else ImageRef(),
     )
@@ -1041,44 +1047,45 @@ async def _check_artists_in_library(
     deezer_ids: list[str] | None = None,
 ) -> dict[str, bool]:
     """Check which artists are in local library (LOCAL or HYBRID source).
-    
+
     Args:
         session: Database session
         spotify_ids: List of Spotify artist IDs to check
         deezer_ids: Optional list of Deezer artist IDs to check
-        
+
     Returns:
         Dict mapping spotify_id/deezer_id -> True if in library
     """
-    from sqlalchemy import select, or_
+    from sqlalchemy import or_, select
+
     from soulspot.infrastructure.persistence.models import ArtistModel
-    
+
     result: dict[str, bool] = {}
-    
+
     if not spotify_ids and not deezer_ids:
         return result
-    
+
     # Build query conditions
     conditions = []
-    
+
     # Check by spotify_uri (format: "spotify:artist:ID")
     if spotify_ids:
         spotify_uris = [f"spotify:artist:{sid}" for sid in spotify_ids]
         conditions.append(ArtistModel.spotify_uri.in_(spotify_uris))
-    
+
     # Check by deezer_id
     if deezer_ids:
         conditions.append(ArtistModel.deezer_id.in_(deezer_ids))
-    
+
     # Query artists with LOCAL or HYBRID source
     stmt = select(ArtistModel.spotify_uri, ArtistModel.deezer_id).where(
         or_(*conditions),
         ArtistModel.source.in_(["local", "hybrid"]),
     )
-    
+
     db_result = await session.execute(stmt)
     rows = db_result.all()
-    
+
     # Build result dict
     for row in rows:
         # Extract spotify_id from URI if present
@@ -1089,7 +1096,7 @@ async def _check_artists_in_library(
                 result[parts[2]] = True
         if row.deezer_id:
             result[row.deezer_id] = True
-    
+
     return result
 
 
@@ -1220,7 +1227,9 @@ class MultiProviderRelatedArtistResponse(BaseModel):
     genres: list[str] = Field(default_factory=list, description="Artist genres")
     popularity: int = Field(0, description="Popularity score (0-100)")
     source: str = Field(..., description="Source service: spotify, deezer, or merged")
-    based_on: str | None = Field(None, description="Which artist this was discovered from")
+    based_on: str | None = Field(
+        None, description="Which artist this was discovered from"
+    )
     is_in_library: bool = Field(
         False, description="Whether artist is in local library (LOCAL or HYBRID source)"
     )
@@ -1354,7 +1363,9 @@ async def get_multi_provider_related_artists(
 
         # Hey future me - Batch check which related artists are in LOCAL library!
         # Collect all spotify_ids and deezer_ids for library lookup
-        all_spotify_ids: list[str] = [a.spotify_id for a in result.artists if a.spotify_id]
+        all_spotify_ids: list[str] = [
+            a.spotify_id for a in result.artists if a.spotify_id
+        ]
         all_deezer_ids: list[str] = [a.deezer_id for a in result.artists if a.deezer_id]
         library_statuses = await _check_artists_in_library(
             session, all_spotify_ids, all_deezer_ids
@@ -1364,10 +1375,9 @@ async def get_multi_provider_related_artists(
         related_artists: list[MultiProviderRelatedArtistResponse] = []
         for artist in result.artists:
             # Check if in library by spotify_id OR deezer_id
-            is_in_lib = (
-                library_statuses.get(artist.spotify_id or "", False)
-                or library_statuses.get(artist.deezer_id or "", False)
-            )
+            is_in_lib = library_statuses.get(
+                artist.spotify_id or "", False
+            ) or library_statuses.get(artist.deezer_id or "", False)
             related_artists.append(
                 MultiProviderRelatedArtistResponse(
                     name=artist.name,
@@ -1403,7 +1413,7 @@ async def get_multi_provider_related_artists(
         ) from e
 
 
-async def get_spotify_plugin_optional(
+async def _get_spotify_plugin_for_discography_sync(
     session: AsyncSession = Depends(get_db_session),
 ) -> "SpotifyPlugin | None":
     """Get Spotify plugin if available, or None.
@@ -1461,7 +1471,9 @@ async def sync_artist_discography_complete(
     artist_id: str,
     include_tracks: bool = Query(True, description="Also sync tracks for each album"),
     session: AsyncSession = Depends(get_db_session),
-    spotify_plugin: "SpotifyPlugin | None" = Depends(get_spotify_plugin_optional),
+    spotify_plugin: "SpotifyPlugin | None" = Depends(
+        _get_spotify_plugin_for_discography_sync
+    ),
 ) -> DiscographySyncResponse:
     """Sync complete discography (albums AND tracks) for an artist.
 

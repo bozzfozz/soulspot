@@ -38,9 +38,6 @@ from soulspot.infrastructure.persistence.repositories import (
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.application.services.images import ImageDownloadQueue, ImageService
-    from soulspot.application.services.provider_mapping_service import (
-        ProviderMappingService,
-    )
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 logger = logging.getLogger(__name__)
@@ -85,13 +82,13 @@ class SpotifySyncService:
 
         Hey future me - REFACTORED to Clean Architecture (Dec 2025)!
         Now uses individual Repositories + ProviderMappingService like DeezerSyncService.
-        
+
         OLD: self.repo = SpotifyBrowseRepository (monolithic)
         NEW: Individual repos + ProviderMappingService for unified patterns
-        
+
         NOTE: self.repo is KEPT for backwards compatibility during migration.
         Will be removed once all methods are migrated.
-        
+
         IMAGE QUEUE (Jan 2025):
         Added ImageDownloadQueue for async image downloads.
         Instead of blocking on image downloads during sync, we queue jobs
@@ -113,21 +110,21 @@ class SpotifySyncService:
         self._image_service = image_service
         self._settings_service = settings_service
         self._image_queue = image_queue
-        
+
         # NEW: Individual Repositories (Clean Architecture)
         self._artist_repo = ArtistRepository(session)
         self._album_repo = AlbumRepository(session)
         self._track_repo = TrackRepository(session)
         self._playlist_repo = PlaylistRepository(session)
-        
+
         # ProviderMappingService für zentrale Artist/Album/Track Erstellung
         # Hey future me - das verhindert Duplikate und sorgt für konsistente UUIDs!
         self._mapping_service = ProviderMappingService(session)
-        
+
         # LEGACY: Keep SpotifyBrowseRepository during migration
         # TODO: Remove once all methods migrated to individual repos
         self.repo = SpotifyBrowseRepository(session)
-        
+
         # NEW: In-Memory Sync-Status Cache (wie DeezerSyncService)
         self._last_sync_times: dict[str, datetime] = {}
 
@@ -140,21 +137,21 @@ class SpotifySyncService:
 
         Hey future me - das verhindert API-Spam!
         Wir synken nicht jedes Mal, sondern respektieren Cooldowns.
-        
+
         REFACTORED (Jan 2025): Now supports PERSISTENT sync status!
         - L1 Cache: In-memory (fast, no DB hit)
         - L2 Cache: DB via AppSettingsService (survives restarts!)
-        
+
         Flow:
         1. Check in-memory cache first (fast path)
         2. If not in memory, check DB (only on first call after restart)
         3. If DB has value, load into memory
-        
+
         Note: Changed from sync to async to support DB read.
         """
         # L1: In-memory cache (fast path)
         last_sync = self._last_sync_times.get(sync_type)
-        
+
         # L2: If not in memory, try loading from DB (persistent)
         if last_sync is None and self._settings_service:
             try:
@@ -167,7 +164,7 @@ class SpotifySyncService:
                     last_sync = db_last_sync
             except Exception as e:
                 logger.debug(f"Could not load sync time from DB: {e}")
-        
+
         if not last_sync:
             return True
 
@@ -177,18 +174,18 @@ class SpotifySyncService:
 
     async def _mark_synced(self, sync_type: str) -> None:
         """Mark sync as completed.
-        
+
         REFACTORED (Jan 2025): Now persists to DB!
         - Updates in-memory cache (fast)
         - Also stores in DB (survives restarts!)
-        
+
         Note: Changed from sync to async to support DB write.
         """
         now = datetime.now(UTC)
-        
+
         # L1: Update in-memory
         self._last_sync_times[sync_type] = now
-        
+
         # L2: Persist to DB (survives restarts!)
         if self._settings_service:
             try:
@@ -375,12 +372,14 @@ class SpotifySyncService:
                         from soulspot.infrastructure.persistence.repositories import (
                             ArtistRepository,
                         )
-                        
+
                         artist_repo = ArtistRepository(self._session)
                         artist = await artist_repo.get_by_id(ArtistId(artist_id))
                         if artist and artist.spotify_uri:
                             spotify_id = artist.spotify_uri.artist_id
-                            result = await self.sync_artist_albums(spotify_id, force=True)
+                            result = await self.sync_artist_albums(
+                                spotify_id, force=True
+                            )
                             if result.get("synced"):
                                 stats["discography_synced"] += 1
                                 logger.info(
@@ -454,9 +453,9 @@ class SpotifySyncService:
         """Insert or update a Spotify artist in DB from ArtistDTO.
 
         Hey future me - REFACTORED (Jan 2025) for Smart Image Logic + Queue!
-        
+
         Changes:
-        1. Uses has_local_image() instead of should_redownload() 
+        1. Uses has_local_image() instead of should_redownload()
            → No more redundant URL comparisons
         2. Queues image downloads instead of blocking
            → Sync stays fast, images come async
@@ -839,7 +838,10 @@ class SpotifySyncService:
             return None
 
         # Use ProviderMappingService for consistent upsert (Clean Architecture)
-        album_internal_id, was_created = await self._mapping_service.get_or_create_album(
+        (
+            album_internal_id,
+            was_created,
+        ) = await self._mapping_service.get_or_create_album(
             album_dto, artist_internal_id=artist_internal_id, source="spotify"
         )
 
@@ -918,7 +920,9 @@ class SpotifySyncService:
         }
 
         # Check cooldown (REFACTORED: Now persists to DB!)
-        if not force and not await self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
+        if not force and not await self._should_sync(
+            cache_key, self.TRACKS_SYNC_COOLDOWN
+        ):
             stats["skipped_cooldown"] = True
             return stats
 
@@ -947,7 +951,7 @@ class SpotifySyncService:
                                 track_dto.album_id
                             )
                         )
-                    
+
                     if not album_internal_id:
                         # Skip tracks without album context
                         logger.debug(
@@ -1250,7 +1254,7 @@ class SpotifySyncService:
 
         # Get artist UUID from album
         from soulspot.domain.value_objects import AlbumId as AlbumIdVO
-        
+
         album = await self._album_repo.get_by_id(AlbumIdVO(album_internal_id))
         if not album:
             logger.warning(f"Album {album_internal_id} not found, cannot create track")

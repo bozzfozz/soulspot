@@ -89,6 +89,10 @@ soulspot = "soulspot.main:main"
 target-version = "py312"
 line-length = 88
 src = ["src"]
+# Exclude backup files and deprecated files scheduled for deletion
+exclude = [
+    "*_BACKUP_*.py",  # Backup files created before refactoring
+]
 
 [tool.ruff.lint]
 select = [
@@ -105,6 +109,9 @@ select = [
 ignore = [
     "E501",  # line too long, handled by formatter
     "B008",  # do not perform function calls in argument defaults
+    "SIM105",  # try-except-pass intentionally used for graceful error suppression
+    "SIM102",  # nested if statements - sometimes more readable than combined
+    "UP047",  # Generic function type params - stylistic preference
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -129,6 +136,14 @@ ignore = [
 # Image providers - interface implementations
 "src/soulspot/infrastructure/image_providers/*.py" = ["ARG002"]
 "src/soulspot/infrastructure/providers/*.py" = ["ARG002"]
+# UI browse routes - FastAPI handlers with unused request/settings arguments (used by middleware)
+"src/soulspot/api/routers/ui/spotify_browse.py" = ["ARG001"]
+# Enrichment routes - settings dependency for future use
+"src/soulspot/api/routers/enrichment.py" = ["ARG001"]
+# Image service - future extensibility args (existing_url for re-download logic)
+"src/soulspot/application/services/images/image_service.py" = ["ARG002"]
+# Followed artists service - provider IDs for future multi-provider track fetch
+"src/soulspot/application/services/followed_artists_service.py" = ["ARG002"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -297,12 +297,12 @@ async def unified_search(
     async def search_spotify() -> None:
         """Search Spotify for all types."""
         nonlocal artists, albums, tracks, sources_queried
-        
+
         # MULTI-SERVICE: spotify_plugin can be None if not authenticated
         if spotify_plugin is None:
             logger.debug("Spotify plugin not available (not authenticated)")
             return
-            
+
         spotify_enabled = await settings.is_provider_enabled("spotify")
         if not spotify_enabled:
             return
@@ -495,7 +495,11 @@ async def search_spotify_artists(
 
     # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS):
+    if (
+        spotify_plugin is not None
+        and spotify_enabled
+        and spotify_plugin.can_use(PluginCapability.SEARCH_ARTISTS)
+    ):
         try:
             spotify_result = await spotify_plugin.search_artist(query, limit=limit)
             sources_queried.append("spotify")
@@ -618,7 +622,11 @@ async def search_spotify_tracks(
 
     # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS):
+    if (
+        spotify_plugin is not None
+        and spotify_enabled
+        and spotify_plugin.can_use(PluginCapability.SEARCH_TRACKS)
+    ):
         try:
             spotify_result = await spotify_plugin.search_track(query, limit=limit)
             sources_queried.append("spotify")
@@ -742,7 +750,11 @@ async def search_spotify_albums(
 
     # 2. Spotify Search (requires auth) - MULTI-SERVICE: spotify_plugin can be None
     spotify_enabled = await settings.is_provider_enabled("spotify")
-    if spotify_plugin is not None and spotify_enabled and spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS):
+    if (
+        spotify_plugin is not None
+        and spotify_enabled
+        and spotify_plugin.can_use(PluginCapability.SEARCH_ALBUMS)
+    ):
         try:
             spotify_result = await spotify_plugin.search_album(query, limit=limit)
             sources_queried.append("spotify")

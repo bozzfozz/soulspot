@@ -188,7 +188,7 @@ class AutoImportService:
     # Before: Sequential processing - 100 files = 100 x 3s = 300 seconds
     # After: Parallel with semaphore - 100 files / 5 concurrent = ~60 seconds (5x speedup!)
     #
-    # WHY semaphore limit? 
+    # WHY semaphore limit?
     # - Too many concurrent file moves = disk I/O contention
     # - Too many concurrent DB writes = SQLite lock contention
     # - 5 is a good balance (configurable via settings.postprocessing.max_concurrent)
@@ -198,7 +198,7 @@ class AutoImportService:
     # - We collect all results and log summary at end
     async def _process_downloads(self) -> None:
         """Process all files in the downloads directory that have completed downloads.
-        
+
         OPTIMIZED: Uses parallel processing with concurrency limit for 5x+ speedup!
         """
         try:
@@ -247,10 +247,12 @@ class AutoImportService:
                 self._settings.postprocessing, "max_concurrent_imports", 5
             )
             sem = asyncio.Semaphore(max_concurrent)
-            
-            async def process_one_file(file_path: Path) -> tuple[Path, bool, str | None]:
+
+            async def process_one_file(
+                file_path: Path,
+            ) -> tuple[Path, bool, str | None]:
                 """Process a single file with concurrency control.
-                
+
                 Returns:
                     Tuple of (file_path, success, error_message)
                 """
@@ -264,26 +266,27 @@ class AutoImportService:
                             await self._import_file(file_path, track)
                             return (file_path, True, None)
                         elif track:
-                            return (file_path, False, f"track {track.id.value} has no completed download")
+                            return (
+                                file_path,
+                                False,
+                                f"track {track.id.value} has no completed download",
+                            )
                         else:
                             return (file_path, False, "no matching track in database")
                     except Exception as e:
-                        logger.exception(
-                            "Error importing file %s: %s", file_path, e
-                        )
+                        logger.exception("Error importing file %s: %s", file_path, e)
                         return (file_path, False, str(e))
 
             # Run all imports in parallel with concurrency limit
             results = await asyncio.gather(
-                *[process_one_file(f) for f in audio_files],
-                return_exceptions=True
+                *[process_one_file(f) for f in audio_files], return_exceptions=True
             )
-            
+
             # Count successes and failures
             success_count = 0
             skip_count = 0
             error_count = 0
-            
+
             for result in results:
                 if isinstance(result, Exception):
                     error_count += 1
@@ -293,11 +296,13 @@ class AutoImportService:
                 else:
                     skip_count += 1
                     logger.debug("Skipping file %s: %s", result[0].name, result[2])
-            
+
             if success_count > 0 or error_count > 0:
                 logger.info(
                     "Import batch complete: %d imported, %d skipped, %d errors",
-                    success_count, skip_count, error_count
+                    success_count,
+                    skip_count,
+                    error_count,
                 )
 
         except Exception as e:
@@ -336,7 +341,7 @@ class AutoImportService:
 
     # Hey future me - IMPROVED file completeness check (Jan 2025)!
     # The old 5-second heuristic was too naive - slow downloads could be moved too early.
-    # 
+    #
     # New multi-layer approach:
     # 1. Basic checks (exists, size > 0)
     # 2. Age check with configurable minimum (10s instead of 5s)
@@ -354,7 +359,7 @@ class AutoImportService:
         1. It exists and is readable
         2. Its size is greater than 0
         3. It hasn't been modified in the last 10 seconds (more conservative than before)
-        
+
         Hey future me - we use 10s instead of 5s because:
         - Large files (100MB+ FLAC) take longer to flush to disk
         - Network hiccups can cause brief pauses during download
@@ -367,7 +372,7 @@ class AutoImportService:
             True if file is complete, False otherwise
         """
         MIN_AGE_SECONDS = 10  # More conservative than old 5s value
-        
+
         try:
             if not file_path.exists() or not file_path.is_file():
                 return False
@@ -379,10 +384,7 @@ class AutoImportService:
 
             # Check if file was modified recently
             age = time.time() - stat.st_mtime
-            if age < MIN_AGE_SECONDS:
-                return False
-            
-            return True
+            return age >= MIN_AGE_SECONDS
 
         except Exception as e:
             logger.warning("Error checking file completeness for %s: %s", file_path, e)

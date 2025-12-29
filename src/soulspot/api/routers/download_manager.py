@@ -389,7 +389,9 @@ async def get_providers_health(
                     "seconds_until_recovery_attempt"
                 ),
                 error_message=None,
-                has_successful_connection=health.get("has_successful_connection", False),
+                has_successful_connection=health.get(
+                    "has_successful_connection", False
+                ),
             )
         )
     else:
@@ -397,7 +399,7 @@ async def get_providers_health(
         settings = get_settings()
         is_healthy = False
         error_message = "Status sync worker not running"
-        
+
         if settings.slskd.url:
             try:
                 # Try to create client and test connection
@@ -412,7 +414,7 @@ async def get_providers_health(
                 error_message = f"Connection error: {str(e)[:50]}"
         else:
             error_message = "slskd not configured"
-        
+
         providers.append(
             ProviderHealthDTO(
                 provider="soulseek",
@@ -533,7 +535,7 @@ async def htmx_provider_health_mini(
         status_class = "online" if provider.is_healthy else "offline"
         status_text = "Connected" if provider.is_healthy else "Disconnected"
         icon = "bi-check-circle-fill" if provider.is_healthy else "bi-x-circle-fill"
-        
+
         # Build tooltip with details
         tooltip_parts = [f"Provider: {provider.provider_name}"]
         if provider.circuit_state:
@@ -543,7 +545,7 @@ async def htmx_provider_health_mini(
         if provider.error_message:
             tooltip_parts.append(f"Error: {provider.error_message}")
         tooltip = " | ".join(tooltip_parts)
-        
+
         html_parts.append(f"""
         <div class="dc-provider-status" title="{tooltip}">
             <span class="dc-provider-indicator {status_class}"></span>
@@ -637,7 +639,9 @@ async def htmx_download_center_history(
         "partials/download_center_history.html",
         {
             "request": request,
-            "downloads": [UnifiedDownloadDTO.from_entity(d) for d in completed_downloads],
+            "downloads": [
+                UnifiedDownloadDTO.from_entity(d) for d in completed_downloads
+            ],
             "view": request.query_params.get("view", "cards"),
             "days": days,
         },
@@ -672,6 +676,7 @@ async def htmx_download_center_failed(
 
 class RetryAllResponse(BaseModel):
     """Response for retry all failed endpoint."""
+
     retried: int
     message: str
 
@@ -685,6 +690,7 @@ async def retry_all_failed_downloads(
     Moves all failed downloads back to WAITING status for re-processing.
     """
     from sqlalchemy import update
+
     from soulspot.domain.entities import DownloadStatus
     from soulspot.infrastructure.persistence.models import DownloadModel
 
@@ -700,8 +706,7 @@ async def retry_all_failed_downloads(
     logger.info(f"Retried {retried_count} failed downloads")
 
     return RetryAllResponse(
-        retried=retried_count,
-        message=f"Queued {retried_count} downloads for retry"
+        retried=retried_count, message=f"Queued {retried_count} downloads for retry"
     )
 
 
@@ -711,6 +716,7 @@ async def clear_all_failed_downloads(
 ) -> dict:
     """Delete all failed downloads permanently."""
     from sqlalchemy import delete
+
     from soulspot.domain.entities import DownloadStatus
     from soulspot.infrastructure.persistence.models import DownloadModel
 
@@ -722,7 +728,10 @@ async def clear_all_failed_downloads(
     deleted_count = result.rowcount or 0
     logger.info(f"Deleted {deleted_count} failed downloads")
 
-    return {"deleted": deleted_count, "message": f"Removed {deleted_count} failed downloads"}
+    return {
+        "deleted": deleted_count,
+        "message": f"Removed {deleted_count} failed downloads",
+    }
 
 
 @router.delete("/history/clear")
@@ -732,7 +741,9 @@ async def clear_old_history(
 ) -> dict:
     """Clear completed downloads older than N days."""
     from datetime import UTC, datetime, timedelta
+
     from sqlalchemy import delete
+
     from soulspot.domain.entities import DownloadStatus
     from soulspot.infrastructure.persistence.models import DownloadModel
 
@@ -746,9 +757,14 @@ async def clear_old_history(
     await session.commit()
 
     deleted_count = result.rowcount or 0
-    logger.info(f"Cleared {deleted_count} old completed downloads (older than {days} days)")
+    logger.info(
+        f"Cleared {deleted_count} old completed downloads (older than {days} days)"
+    )
 
-    return {"deleted": deleted_count, "message": f"Removed {deleted_count} old downloads"}
+    return {
+        "deleted": deleted_count,
+        "message": f"Removed {deleted_count} old downloads",
+    }
 
 
 # -------------------------------------------------------------------------
@@ -768,9 +784,10 @@ async def export_downloads(
         format: Export format ('json' or 'csv')
         status: Filter by status (optional)
     """
-    from fastapi.responses import StreamingResponse
     import csv
     import io
+
+    from fastapi.responses import StreamingResponse
 
     # Get all relevant downloads
     downloads = await service.get_active_downloads()
@@ -797,35 +814,47 @@ async def export_downloads(
         writer = csv.writer(output)
 
         # Header
-        writer.writerow([
-            "ID", "Title", "Artist", "Album", "Status", "Provider",
-            "Progress %", "Size", "Created At", "Error"
-        ])
+        writer.writerow(
+            [
+                "ID",
+                "Title",
+                "Artist",
+                "Album",
+                "Status",
+                "Provider",
+                "Progress %",
+                "Size",
+                "Created At",
+                "Error",
+            ]
+        )
 
         # Rows
         for dto in dtos:
-            writer.writerow([
-                dto.id,
-                dto.track_info.title,
-                dto.track_info.artist,
-                dto.track_info.album or "",
-                dto.status,
-                dto.provider_name,
-                f"{dto.progress.percent:.1f}",
-                dto.progress.size_formatted,
-                dto.created_at.isoformat() if dto.created_at else "",
-                dto.error_message or ""
-            ])
+            writer.writerow(
+                [
+                    dto.id,
+                    dto.track_info.title,
+                    dto.track_info.artist,
+                    dto.track_info.album or "",
+                    dto.status,
+                    dto.provider_name,
+                    f"{dto.progress.percent:.1f}",
+                    dto.progress.size_formatted,
+                    dto.created_at.isoformat() if dto.created_at else "",
+                    dto.error_message or "",
+                ]
+            )
 
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=downloads.csv"}
+            headers={"Content-Disposition": "attachment; filename=downloads.csv"},
         )
 
     # Default: JSON
     return {
         "count": len(dtos),
         "exported_at": datetime.now().isoformat(),
-        "downloads": [dto.model_dump(mode="json") for dto in dtos]
+        "downloads": [dto.model_dump(mode="json") for dto in dtos],
     }

@@ -1377,7 +1377,7 @@ class TrackRepository(ITrackRepository):
         Hey future me - this is the ONE place that maps DB → Entity!
         When you add fields to Track entity, UPDATE THIS FUNCTION!
         Model stores single genre in 'genre' column → Entity has genres: list[str]
-        
+
         IMPORTANT: deezer_id and tidal_id are now properly mapped!
         Before Dec 2025, these were missing and caused deduplication failures.
         """
@@ -1744,7 +1744,9 @@ class TrackRepository(ITrackRepository):
             Track entity or None if not found
         """
         # Convert AlbumId to string if needed
-        album_id_str = str(album_id.value) if isinstance(album_id, AlbumId) else str(album_id)
+        album_id_str = (
+            str(album_id.value) if isinstance(album_id, AlbumId) else str(album_id)
+        )
 
         stmt = (
             select(TrackModel)
@@ -2113,11 +2115,13 @@ class TrackRepository(ITrackRepository):
                 model.tidal_id = tidal_id
 
             # Update source to "hybrid" if track now has multiple provider IDs
-            provider_count = sum([
-                bool(model.spotify_uri),
-                bool(model.deezer_id),
-                bool(model.tidal_id),
-            ])
+            provider_count = sum(
+                [
+                    bool(model.spotify_uri),
+                    bool(model.deezer_id),
+                    bool(model.tidal_id),
+                ]
+            )
             if provider_count > 1 and model.source != "hybrid":
                 model.source = "hybrid"
             elif model.source not in ("hybrid", "local"):
@@ -5159,16 +5163,17 @@ class ProviderBrowseRepository:
             limit: Maximum number of albums to return (default 10)
             source: Provider source filter ('spotify' or 'deezer')
 
+        Returns:
+            List of AlbumModel objects without synced tracks
+        """
+        from .models import AlbumModel
+
+        # Filter by provider identifier presence rather than source column
         provider_filter = AlbumModel.source == source
         if source == "spotify":
             provider_filter = AlbumModel.spotify_uri.isnot(None)
         elif source == "deezer":
             provider_filter = AlbumModel.deezer_id.isnot(None)
-
-        Returns:
-            List of AlbumModel objects without synced tracks
-        """
-        from .models import AlbumModel
 
         stmt = (
             select(AlbumModel)

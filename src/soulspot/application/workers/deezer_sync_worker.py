@@ -385,7 +385,11 @@ class DeezerSyncWorker:
                         "deezer.auto_sync_album_tracks", default=True
                     ) and self._is_sync_due("album_tracks", album_tracks_interval, now):
                         await self._run_album_tracks_sync(
-                            session, access_token, now, settings_service, albums_per_cycle
+                            session,
+                            access_token,
+                            now,
+                            settings_service,
+                            albums_per_cycle,
                         )
 
                 # Commit any changes

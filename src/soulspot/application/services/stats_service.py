@@ -32,15 +32,16 @@ if TYPE_CHECKING:
 
 # Module-level cache for dashboard stats (shared across requests)
 # Hey future me - Singleton-Pattern für den Cache!
-_dashboard_stats_cache: "DashboardStatsCache | None" = None
+_dashboard_stats_cache: DashboardStatsCache | None = None
 
 
 @dataclass
 class DashboardStatsCache:
     """Cached dashboard statistics.
-    
+
     Hey future me - alle Dashboard-Stats in einem gecachten Objekt!
     """
+
     playlist_count: int
     tracks_downloaded: int
     total_playlist_tracks: int
@@ -53,18 +54,18 @@ class DashboardStatsCache:
     spotify_tracks: int
     cached_at: datetime
     ttl_seconds: int = 60
-    
+
     @property
     def is_stale(self) -> bool:
         """Check if cache has expired."""
         age = datetime.now(UTC) - self.cached_at
         return age > timedelta(seconds=self.ttl_seconds)
-    
+
     @property
     def age_seconds(self) -> float:
         """Get cache age in seconds."""
         return (datetime.now(UTC) - self.cached_at).total_seconds()
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for templates."""
         return {
@@ -360,45 +361,49 @@ class StatsService:
         ttl_seconds: int = 60,
     ) -> DashboardStatsCache:
         """Get dashboard statistics with caching.
-        
+
         Hey future me - das ist die OPTIMIERTE Methode für das Dashboard!
-        
+
         Optimierungen:
         1. Module-level Cache (shared across requests)
         2. Parallel Queries via asyncio.gather() (~5x schneller)
         3. Configurable TTL (default 60s)
-        
+
         Usage:
             stats = await stats_service.get_dashboard_stats_cached()
             # Use stats.playlist_count, stats.tracks_downloaded, etc.
-        
+
         Args:
             force_refresh: Bypass cache and fetch fresh data
             ttl_seconds: Cache TTL in seconds (default: 60)
-            
+
         Returns:
             DashboardStatsCache with all stats
         """
         global _dashboard_stats_cache
-        
+
         # Return cached if valid
-        if not force_refresh and _dashboard_stats_cache and not _dashboard_stats_cache.is_stale:
+        if (
+            not force_refresh
+            and _dashboard_stats_cache
+            and not _dashboard_stats_cache.is_stale
+        ):
             return _dashboard_stats_cache
-        
+
         # Fetch fresh stats with parallel queries
         stats = await self._fetch_dashboard_stats_parallel(ttl_seconds)
-        
+
         # Update cache
         _dashboard_stats_cache = stats
-        
+
         return stats
-    
+
     async def _fetch_dashboard_stats_parallel(
         self,
         ttl_seconds: int = 60,
     ) -> DashboardStatsCache:
         """Fetch dashboard stats using parallel queries.
-        
+
         Hey future me - asyncio.gather macht alle Queries parallel!
         8 sequentielle Queries → 8 parallele = ~5x speedup!
         """
@@ -413,9 +418,9 @@ class StatsService:
             self.get_failed_downloads_count(),
             self._get_spotify_entity_counts(),
         )
-        
+
         spotify_counts = results[7]
-        
+
         return DashboardStatsCache(
             playlist_count=results[0],
             tracks_downloaded=results[1],
@@ -430,10 +435,10 @@ class StatsService:
             cached_at=datetime.now(UTC),
             ttl_seconds=ttl_seconds,
         )
-    
+
     async def _get_spotify_entity_counts(self) -> dict[str, int]:
         """Get counts from provider browse tables (Spotify, Deezer, etc.).
-        
+
         Hey future me - verwendet ProviderBrowseRepository für unified counts.
         Fallback zu 0 wenn keine Provider verbunden sind.
         """
@@ -441,8 +446,9 @@ class StatsService:
             from soulspot.infrastructure.persistence.repositories import (
                 ProviderBrowseRepository,
             )
+
             repo = ProviderBrowseRepository(self._session)
-            
+
             # Run these in parallel too
             # Hey future me - these methods filter by source='spotify' by default
             # Can be extended to aggregate across all providers later
@@ -451,7 +457,7 @@ class StatsService:
                 repo.count_albums(),
                 repo.count_tracks(),
             )
-            
+
             return {
                 "artists": artists,
                 "albums": albums,
@@ -459,16 +465,16 @@ class StatsService:
             }
         except Exception:
             return {"artists": 0, "albums": 0, "tracks": 0}
-    
+
     @staticmethod
     def invalidate_dashboard_cache() -> None:
         """Invalidate the dashboard stats cache.
-        
+
         Call this after operations that change stats significantly:
         - Bulk import/delete
         - Playlist sync
         - Download completion
-        
+
         Usage:
             StatsService.invalidate_dashboard_cache()
         """

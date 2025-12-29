@@ -151,7 +151,7 @@ class FollowedArtistsService:
         IMPORTANT: This method REQUIRES spotify_plugin to be set!
         If you need album sync without Spotify, use sync_artist_albums()
         which falls back to Deezer.
-        
+
         AUTO-DISCOGRAPHY (Jan 2025):
         New artists automatically get their discography synced (albums + tracks)
         so they're immediately useful in the library. Set auto_sync_discography=False
@@ -327,7 +327,10 @@ class FollowedArtistsService:
             PluginCapability.USER_FOLLOWED_ARTISTS
         ):
             try:
-                spotify_artists, spotify_stats = await self._sync_spotify_followed_artists()
+                (
+                    spotify_artists,
+                    spotify_stats,
+                ) = await self._sync_spotify_followed_artists()
                 aggregate_stats["providers"]["spotify"] = spotify_stats
                 aggregate_stats["total_fetched"] += spotify_stats["total_fetched"]
                 aggregate_stats["total_created"] += spotify_stats["created"]
@@ -386,7 +389,9 @@ class FollowedArtistsService:
     # Deezer calls them "favorite artists" but it's the same concept.
     # This is separate from Spotify because Deezer has different pagination.
     async def _sync_deezer_followed_artists(
-        self, seen_names: set[str] | None = None, auto_sync_discography: bool = True,
+        self,
+        seen_names: set[str] | None = None,
+        auto_sync_discography: bool = True,
     ) -> tuple[list[Artist], dict[str, int]]:
         """Sync followed artists from Deezer to unified library.
 
@@ -939,7 +944,7 @@ class FollowedArtistsService:
 
         from soulspot.domain.entities import Album, Track
         from soulspot.domain.ports.plugin import PluginCapability
-        from soulspot.domain.value_objects import AlbumId, ArtistId, ImageRef, TrackId
+        from soulspot.domain.value_objects import AlbumId, ImageRef, TrackId
         from soulspot.infrastructure.persistence.repositories import (
             AlbumRepository,
             TrackRepository,
@@ -977,7 +982,9 @@ class FollowedArtistsService:
                     )
                     albums_dtos = response.items
                     source = "spotify"
-                    logger.info(f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}")
+                    logger.info(
+                        f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}"
+                    )
             except Exception as e:
                 logger.warning(f"Spotify album fetch failed for {artist.name}: {e}")
 
@@ -990,7 +997,9 @@ class FollowedArtistsService:
                 )
                 if albums_dtos:
                     source = "deezer"
-                    logger.info(f"Fetched {len(albums_dtos)} albums from Deezer for {artist.name}")
+                    logger.info(
+                        f"Fetched {len(albums_dtos)} albums from Deezer for {artist.name}"
+                    )
             except Exception as e:
                 logger.warning(f"Deezer album fetch failed for {artist.name}: {e}")
 
@@ -1039,7 +1048,9 @@ class FollowedArtistsService:
                     pass
             elif not existing_album and album_dto.spotify_id:
                 try:
-                    spotify_uri = SpotifyUri.from_string(f"spotify:album:{album_dto.spotify_id}")
+                    spotify_uri = SpotifyUri.from_string(
+                        f"spotify:album:{album_dto.spotify_id}"
+                    )
                     existing_album = await album_repo.get_by_spotify_uri(spotify_uri)
                 except ValueError:
                     pass
@@ -1061,7 +1072,9 @@ class FollowedArtistsService:
                 if album_dto.spotify_uri:
                     spotify_uri = SpotifyUri.from_string(album_dto.spotify_uri)
                 elif album_dto.spotify_id:
-                    spotify_uri = SpotifyUri.from_string(f"spotify:album:{album_dto.spotify_id}")
+                    spotify_uri = SpotifyUri.from_string(
+                        f"spotify:album:{album_dto.spotify_id}"
+                    )
 
                 album = Album(
                     id=AlbumId(str(uuid4())),
@@ -1073,7 +1086,9 @@ class FollowedArtistsService:
                     spotify_uri=spotify_uri,
                     deezer_id=album_dto.deezer_id,
                     total_tracks=album_dto.total_tracks,
-                    cover=ImageRef(url=album_dto.cover.url if album_dto.cover else None),
+                    cover=ImageRef(
+                        url=album_dto.cover.url if album_dto.cover else None
+                    ),
                     primary_type=(album_dto.album_type or "album").title(),
                 )
                 await album_repo.add(album)
@@ -1090,7 +1105,7 @@ class FollowedArtistsService:
                     track_dtos = await self._fetch_album_tracks(
                         album_dto, source, spotify_artist_id, artist.deezer_id
                     )
-                    
+
                     if not track_dtos:
                         # Track fetch returned empty - API issue or album has no tracks
                         # Don't count as error for compilations (often have license issues)
@@ -1145,9 +1160,13 @@ class FollowedArtistsService:
                     # Create new track
                     spotify_track_uri = None
                     if track_dto.spotify_uri:
-                        spotify_track_uri = SpotifyUri.from_string(track_dto.spotify_uri)
+                        spotify_track_uri = SpotifyUri.from_string(
+                            track_dto.spotify_uri
+                        )
                     elif track_dto.spotify_id:
-                        spotify_track_uri = SpotifyUri.from_string(f"spotify:track:{track_dto.spotify_id}")
+                        spotify_track_uri = SpotifyUri.from_string(
+                            f"spotify:track:{track_dto.spotify_id}"
+                        )
 
                     track = Track(
                         id=TrackId(str(uuid4())),
@@ -1169,7 +1188,7 @@ class FollowedArtistsService:
             f"Albums {stats['albums_added']}/{stats['albums_total']}, "
             f"Tracks {stats['tracks_added']}/{stats['tracks_total']} (source={source})"
         )
-        
+
         # Log summary of track fetch errors (if any)
         if stats["albums_with_track_errors"] > 0:
             # Only show first 5 errors to avoid log spam
@@ -1180,7 +1199,6 @@ class FollowedArtistsService:
                 f"⚠️ Discography sync for {artist.name} had {stats['albums_with_track_errors']} "
                 f"albums with track errors: {error_preview}{more_msg}"
             )
-        )
         return stats
 
     async def _fetch_album_tracks(
@@ -1206,13 +1224,13 @@ class FollowedArtistsService:
                         limit=50,
                     )
                     # PaginatedResponse has .items
-                    return response.items if hasattr(response, 'items') else []
+                    return response.items if hasattr(response, "items") else []
             elif source == "deezer" and self._deezer_plugin and album_dto.deezer_id:
                 # Deezer also returns PaginatedResponse!
                 response = await self._deezer_plugin.get_album_tracks(
                     album_id=album_dto.deezer_id,
                 )
-                return response.items if hasattr(response, 'items') else []
+                return response.items if hasattr(response, "items") else []
         except Exception as e:
             logger.warning(f"Failed to fetch tracks for album {album_dto.title}: {e}")
 

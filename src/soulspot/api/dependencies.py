@@ -696,7 +696,7 @@ def get_provider_browse_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> ProviderBrowseRepository:
     """Get provider browse repository instance for multi-provider synced data.
-    
+
     Post-Nov 2025: Unified repository for all streaming providers.
     Uses ArtistModel/AlbumModel/TrackModel with source filter.
     """
@@ -709,7 +709,7 @@ def get_spotify_browse_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> ProviderBrowseRepository:
     """DEPRECATED: Use get_provider_browse_repository() instead.
-    
+
     This function will be removed after migration is complete.
     """
     return get_provider_browse_repository(session)
@@ -955,7 +955,7 @@ async def get_spotify_sync_service_optional(
 
     # Get access token from token manager - DON'T FAIL if not authenticated!
     access_token = await db_token_manager.get_token_for_background()
-    
+
     spotify_plugin: SpotifyPlugin | None = None
     if access_token:
         spotify_plugin = SpotifyPlugin(

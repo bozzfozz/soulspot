@@ -82,7 +82,9 @@ def parse_failed_marker(marker: str | None) -> tuple[bool, str | None, datetime 
     return (True, FailedMarkerReason.UNKNOWN, None)
 
 
-def should_retry_failed(marker: str | None, retry_hours: int = FAILED_RETRY_HOURS) -> bool:
+def should_retry_failed(
+    marker: str | None, retry_hours: int = FAILED_RETRY_HOURS
+) -> bool:
     """Check if a FAILED marker is old enough to retry.
 
     Hey future me - we retry after retry_hours (default 24h).
@@ -127,7 +129,9 @@ def classify_error(error_message: str) -> str:
         return FailedMarkerReason.NOT_AVAILABLE
     elif "timeout" in error_lower or "timed out" in error_lower:
         return FailedMarkerReason.TIMEOUT
-    elif "invalid url" in error_lower or ("url" in error_lower and "invalid" in error_lower):
+    elif "invalid url" in error_lower or (
+        "url" in error_lower and "invalid" in error_lower
+    ):
         return FailedMarkerReason.INVALID_URL
     elif any(code in error_lower for code in ["500", "502", "503", "http"]):
         return FailedMarkerReason.HTTP_ERROR

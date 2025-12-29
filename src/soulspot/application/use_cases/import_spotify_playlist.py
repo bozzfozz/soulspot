@@ -177,7 +177,6 @@ class ImportSpotifyPlaylistUseCase(
             cover_url = spotify_playlist["images"][0].get("url")
 
         # Hey future me - Playlist.cover ist jetzt ImageRef!
-        from soulspot.domain.value_objects import ImageRef
 
         playlist = Playlist(
             id=playlist_id,
@@ -293,7 +292,9 @@ class ImportSpotifyPlaylistUseCase(
                                 artist_id=artist.id,
                                 release_year=release_year,
                                 spotify_uri=album_spotify_uri,
-                                cover=ImageRef(url=artwork_url),  # ImageRef not artwork_url!
+                                cover=ImageRef(
+                                    url=artwork_url
+                                ),  # ImageRef not artwork_url!
                                 created_at=datetime.now(UTC),
                                 updated_at=datetime.now(UTC),
                             )

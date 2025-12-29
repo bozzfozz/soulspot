@@ -109,7 +109,9 @@ async def readiness_probe(request: Request) -> JSONResponse:
         workers=workers_ok,
     )
 
-    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    status_code = (
+        status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    )
     return JSONResponse(content=response.model_dump(), status_code=status_code)
 
 
@@ -135,7 +137,11 @@ async def health_check(request: Request) -> JSONResponse:
                 await session.execute("SELECT 1")  # type: ignore
             checks["database"] = {"status": "ok", "connected": True}
         else:
-            checks["database"] = {"status": "error", "connected": False, "error": "Not initialized"}
+            checks["database"] = {
+                "status": "error",
+                "connected": False,
+                "error": "Not initialized",
+            }
     except Exception as e:
         checks["database"] = {"status": "error", "connected": False, "error": str(e)}
 

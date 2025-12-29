@@ -2,7 +2,7 @@
 
 Hey future me - this module contains the library browsing pages:
 - Artists list (/library/artists)
-- Albums list (/library/albums)  
+- Albums list (/library/albums)
 - Tracks list (/library/tracks)
 - Compilations list (/library/compilations)
 """

@@ -386,9 +386,7 @@ class LibraryDiscoveryWorker:
 
                     if search_result.items and search_result.items[0].deezer_id:
                         best_match = search_result.items[0]
-                        image_url = (
-                            best_match.image.url if best_match.image else None
-                        )
+                        image_url = best_match.image.url if best_match.image else None
                         await artist_repo.update_deezer_id(
                             artist_id=artist.id,
                             deezer_id=best_match.deezer_id,
@@ -1098,9 +1096,7 @@ class LibraryDiscoveryWorker:
                         "error": str(e),
                     }
                 )
-                logger.warning(
-                    f"Failed to backfill cover for '{album.title}': {e}"
-                )
+                logger.warning(f"Failed to backfill cover for '{album.title}': {e}")
 
         logger.info(
             f"Phase 6 complete: {stats['backfilled']} covers backfilled, "

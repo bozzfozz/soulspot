@@ -854,19 +854,19 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
 @router.get("/orchestrator")
 async def get_orchestrator_status(request: Request) -> dict[str, Any]:
     """Get comprehensive status from the Worker Orchestrator.
-    
+
     Returns detailed status of all workers tracked by the orchestrator,
     including:
     - Total worker count
     - Workers grouped by state (running, stopped, failed)
     - Per-worker details (name, category, priority, started_at, etc.)
     - Overall health status
-    
+
     This is the preferred endpoint for monitoring and debugging worker status.
     Use /api/workers/status for the UI-friendly format with icons and tooltips.
     """
     orchestrator = getattr(request.app.state, "orchestrator", None)
-    
+
     if orchestrator is None:
         return {
             "error": "Orchestrator not initialized",
@@ -874,10 +874,10 @@ async def get_orchestrator_status(request: Request) -> dict[str, Any]:
             "healthy": False,
             "workers": {},
         }
-    
+
     status = orchestrator.get_status()
     status["healthy"] = orchestrator.is_healthy()
-    
+
     return status
 
 
@@ -897,34 +897,35 @@ async def get_orchestrator_status(request: Request) -> dict[str, Any]:
 @router.post("/orchestrator/{worker_name}/stop")
 async def stop_worker(request: Request, worker_name: str) -> dict[str, Any]:
     """Stop a specific worker by name.
-    
+
     Args:
         worker_name: Name of the worker to stop (e.g., "token_refresh", "spotify_sync")
-    
+
     Returns:
         Status of the operation including success/error message.
-        
+
     Warning: Stopping critical workers may affect app functionality!
     """
     orchestrator = getattr(request.app.state, "orchestrator", None)
-    
+
     if orchestrator is None:
         return {"success": False, "error": "Orchestrator not initialized"}
-    
+
     worker_info = orchestrator._workers.get(worker_name)
     if worker_info is None:
         return {"success": False, "error": f"Worker '{worker_name}' not found"}
-    
+
     try:
         # Stop the worker
         stop_result = worker_info.worker.stop()
         if asyncio.iscoroutine(stop_result):
             await stop_result
-        
+
         # Update state
         from soulspot.application.workers.orchestrator import WorkerState
+
         worker_info.state = WorkerState.STOPPED
-        
+
         return {
             "success": True,
             "worker": worker_name,
@@ -942,25 +943,26 @@ async def stop_worker(request: Request, worker_name: str) -> dict[str, Any]:
 @router.post("/orchestrator/{worker_name}/start")
 async def start_worker(request: Request, worker_name: str) -> dict[str, Any]:
     """Start a specific worker by name.
-    
+
     Args:
         worker_name: Name of the worker to start (e.g., "token_refresh", "spotify_sync")
-    
+
     Returns:
         Status of the operation including success/error message.
     """
     orchestrator = getattr(request.app.state, "orchestrator", None)
-    
+
     if orchestrator is None:
         return {"success": False, "error": "Orchestrator not initialized"}
-    
+
     worker_info = orchestrator._workers.get(worker_name)
     if worker_info is None:
         return {"success": False, "error": f"Worker '{worker_name}' not found"}
-    
+
     try:
         # Check if already running
         from soulspot.application.workers.orchestrator import WorkerState
+
         if worker_info.state == WorkerState.RUNNING:
             return {
                 "success": True,
@@ -968,11 +970,11 @@ async def start_worker(request: Request, worker_name: str) -> dict[str, Any]:
                 "state": "running",
                 "message": f"Worker '{worker_name}' is already running",
             }
-        
+
         # Start the worker
         await worker_info.worker.start()
         worker_info.state = WorkerState.RUNNING
-        
+
         return {
             "success": True,
             "worker": worker_name,
@@ -992,36 +994,40 @@ async def start_worker(request: Request, worker_name: str) -> dict[str, Any]:
 @router.get("/orchestrator/{worker_name}")
 async def get_worker_status(request: Request, worker_name: str) -> dict[str, Any]:
     """Get detailed status of a specific worker.
-    
+
     Args:
         worker_name: Name of the worker to query
-    
+
     Returns:
         Detailed worker status including state, category, start time, errors, etc.
     """
     orchestrator = getattr(request.app.state, "orchestrator", None)
-    
+
     if orchestrator is None:
         return {"error": "Orchestrator not initialized"}
-    
+
     worker_info = orchestrator._workers.get(worker_name)
     if worker_info is None:
         return {"error": f"Worker '{worker_name}' not found"}
-    
+
     # Get worker's own status
     try:
         worker_status = worker_info.worker.get_status()
     except Exception:
         worker_status = {}
-    
+
     return {
         "name": worker_name,
         "state": worker_info.state.value,
         "category": worker_info.category,
         "priority": worker_info.priority,
         "required": worker_info.required,
-        "started_at": worker_info.started_at.isoformat() if worker_info.started_at else None,
-        "stopped_at": worker_info.stopped_at.isoformat() if worker_info.stopped_at else None,
+        "started_at": worker_info.started_at.isoformat()
+        if worker_info.started_at
+        else None,
+        "stopped_at": worker_info.stopped_at.isoformat()
+        if worker_info.stopped_at
+        else None,
         "error": worker_info.error,
         "depends_on": worker_info.depends_on,
         "worker_details": worker_status,

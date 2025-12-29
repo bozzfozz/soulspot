@@ -84,7 +84,7 @@ class DeezerSyncService:
 
         REFACTORED (Jan 2025): Nutzt ImageDownloadQueue für async Image-Downloads!
         Images werden in Queue gestellt statt blockierend heruntergeladen.
-        
+
         REFACTORED (Jan 2025): Persistent Sync Status via AppSettingsService!
         Sync times survive container restarts - L1 (memory) + L2 (DB) cache.
 
@@ -126,21 +126,21 @@ class DeezerSyncService:
 
         Hey future me - das verhindert API-Spam!
         Wir synken nicht jedes Mal, sondern respektieren Cooldowns.
-        
+
         REFACTORED (Jan 2025): Now supports PERSISTENT sync status!
         - L1 Cache: In-memory (fast, no DB hit)
         - L2 Cache: DB via AppSettingsService (survives restarts!)
-        
+
         Flow:
         1. Check in-memory cache first (fast path)
         2. If not in memory, check DB (only on first call after restart)
         3. If DB has value, load into memory
-        
+
         Note: Changed from sync to async to support DB read.
         """
         # L1: In-memory cache (fast path)
         last_sync = self._last_sync_times.get(sync_type)
-        
+
         # L2: If not in memory, try loading from DB (persistent)
         if last_sync is None and self._settings_service:
             try:
@@ -153,7 +153,7 @@ class DeezerSyncService:
                     last_sync = db_last_sync
             except Exception as e:
                 logger.debug(f"Could not load sync time from DB: {e}")
-        
+
         if not last_sync:
             return True
 
@@ -163,18 +163,18 @@ class DeezerSyncService:
 
     async def _mark_synced(self, sync_type: str) -> None:
         """Mark sync as completed.
-        
+
         REFACTORED (Jan 2025): Now persists to DB!
         - Updates in-memory cache (fast)
         - Also stores in DB (survives restarts!)
-        
+
         Note: Changed from sync to async to support DB write.
         """
         now = datetime.now(UTC)
-        
+
         # L1: Update in-memory
         self._last_sync_times[sync_type] = now
-        
+
         # L2: Persist to DB (survives restarts!)
         if self._settings_service:
             try:
@@ -455,7 +455,9 @@ class DeezerSyncService:
             Sync result with counts
         """
         cache_key = f"related_artists_{deezer_artist_id}"
-        if not force and not await self._should_sync(cache_key, self.CHARTS_SYNC_COOLDOWN):
+        if not force and not await self._should_sync(
+            cache_key, self.CHARTS_SYNC_COOLDOWN
+        ):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -772,11 +774,7 @@ class DeezerSyncService:
                 existing.cover_url = dto_cover_url or existing.cover_url
 
                 # Smart-Logic: Queue cover download nur wenn kein lokales Bild
-                if (
-                    self._image_service
-                    and album_dto.deezer_id
-                    and dto_cover_url
-                ):
+                if self._image_service and album_dto.deezer_id and dto_cover_url:
                     if self._image_service.has_local_image(existing.cover_path):
                         logger.debug(
                             f"DeezerSync: Album {album_dto.title} hat lokales Cover, skip"
