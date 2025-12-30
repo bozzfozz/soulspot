@@ -5159,13 +5159,18 @@ class ProviderBrowseRepository:
 
         Default 10 per cycle = ~10 API calls (one per album) - reasonable for rate limits.
 
+        IMPORTANT: Includes eager loading of artist relationship so workers can
+        display "Artist - Album" in logs without N+1 queries!
+
         Args:
             limit: Maximum number of albums to return (default 10)
             source: Provider source filter ('spotify' or 'deezer')
 
         Returns:
-            List of AlbumModel objects without synced tracks
+            List of AlbumModel objects without synced tracks (with artist loaded)
         """
+        from sqlalchemy.orm import selectinload
+
         from .models import AlbumModel
 
         # Filter by provider identifier presence rather than source column
@@ -5177,6 +5182,7 @@ class ProviderBrowseRepository:
 
         stmt = (
             select(AlbumModel)
+            .options(selectinload(AlbumModel.artist))  # Eager load artist for logging!
             .where(
                 provider_filter,
                 AlbumModel.tracks_synced_at.is_(None),

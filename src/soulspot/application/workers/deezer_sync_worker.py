@@ -854,8 +854,11 @@ class DeezerSyncWorker:
             synced_count = 0
             total_tracks = 0
 
-            for album in pending_albums:
+            for idx, album in enumerate(pending_albums, 1):
                 try:
+                    # Get artist name for logging (eager loaded by repository)
+                    artist_name = album.artist.name if album.artist else "Unknown Artist"
+                    
                     # Sync tracks for this album
                     # Hey future me - album.deezer_id is the Deezer ID from the model!
                     result = await sync_service.sync_album_tracks(
@@ -866,13 +869,13 @@ class DeezerSyncWorker:
                     if result.get("synced"):
                         synced_count += 1
                         total_tracks += result.get("tracks_synced", 0)
-                        logger.debug(
-                            f"Synced {result.get('tracks_synced', 0)} tracks for album "
-                            f"'{album.title}'"
+                        logger.info(
+                            f"🎵 [{idx}/{len(pending_albums)}] {artist_name} - {album.title} "
+                            f"({result.get('tracks_synced', 0)} tracks)"
                         )
                     elif result.get("error"):
                         logger.warning(
-                            f"Failed to sync tracks for Deezer album '{album.title}': "
+                            f"⚠️ [{idx}/{len(pending_albums)}] {artist_name} - {album.title}: "
                             f"{result.get('error')}"
                         )
 
@@ -881,7 +884,7 @@ class DeezerSyncWorker:
 
                 except Exception as e:
                     logger.warning(
-                        f"Failed to sync tracks for Deezer album {album.title}: {e}"
+                        f"❌ [{idx}/{len(pending_albums)}] {artist_name} - {album.title}: {e}"
                     )
 
             # Update tracking

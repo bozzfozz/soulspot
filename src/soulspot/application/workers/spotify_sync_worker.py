@@ -1005,8 +1005,11 @@ class SpotifySyncWorker:
             synced_count = 0
             total_tracks = 0
 
-            for album in pending_albums:
+            for idx, album in enumerate(pending_albums, 1):
                 try:
+                    # Get artist name for logging (eager loaded by repository)
+                    artist_name = album.artist.name if album.artist else "Unknown Artist"
+                    
                     # Sync tracks for this album
                     # Hey future me - album.spotify_id is the Spotify ID from the model!
                     result = await sync_service.sync_album_tracks(
@@ -1017,22 +1020,14 @@ class SpotifySyncWorker:
                     if result.get("synced"):
                         synced_count += 1
                         total_tracks += result.get("total", 0)
-                        logger.debug(
-                            "spotify_sync.album_tracks.album_synced",
-                            extra={
-                                "album_title": album.title,
-                                "album_id": album.spotify_id,
-                                "tracks_count": result.get("total", 0),
-                            },
+                        logger.info(
+                            f"🎵 [{idx}/{len(pending_albums)}] {artist_name} - {album.title} "
+                            f"({result.get('total', 0)} tracks)"
                         )
                     elif result.get("error"):
                         logger.warning(
-                            "spotify_sync.album_tracks.album_error",
-                            extra={
-                                "album_title": album.title,
-                                "album_id": album.spotify_id,
-                                "error_message": result.get("error"),
-                            },
+                            f"⚠️ [{idx}/{len(pending_albums)}] {artist_name} - {album.title}: "
+                            f"{result.get('error')}"
                         )
 
                     # Small delay between albums to be nice to the API
@@ -1040,13 +1035,8 @@ class SpotifySyncWorker:
 
                 except Exception as e:
                     logger.warning(
-                        "spotify_sync.album_tracks.album_failed",
-                        extra={
-                            "album_title": album.title,
-                            "album_id": album.spotify_id,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                        },
+                        f"❌ [{idx}/{len(pending_albums)}] {artist_name} - {album.title}: "
+                        f"{type(e).__name__}: {e}"
                     )
                     # Continue with next album, don't fail the whole batch
 

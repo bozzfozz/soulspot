@@ -191,7 +191,7 @@ async def repair_missing_artwork(
         description="Filter by 'artist' or 'album', or omit for both",
     ),
     use_api: bool = Query(
-        False,
+        True,
         description="If True, use Deezer API to find missing images (slower, but finds more)",
     ),
     limit: int = Query(100, ge=1, le=500),

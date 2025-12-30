@@ -698,11 +698,12 @@ async def repair_album_images(
     albums_with_valid_path = albums_with_path_result.scalar() or 0
 
     logger.info(
-        "Albums: %d total, %d need download, %d failed, %d missing URL",
+        "Albums: %d total, %d need download, %d failed, %d missing URL (%d have provider IDs)",
         total_albums,
         total_missing,
         total_failed,
         albums_missing_url_total,
+        albums_missing_url_with_ids,
     )
 
     stats: dict[str, Any] = {
@@ -792,8 +793,12 @@ async def repair_album_images(
                         stats["api_lookup_success"] = (
                             stats.get("api_lookup_success", 0) + 1
                         )
+                        artist_name = album.artist.name if getattr(album, "artist", None) else "Unknown"
                         logger.info(
-                            "Repaired cover via API: %s (%s)",
+                            "[%d/%d] ✅ %s - %s (via %s API)",
+                            idx,
+                            len(albums_without_url),
+                            artist_name,
                             album.title,
                             image_result.provider,
                         )
@@ -805,8 +810,12 @@ async def repair_album_images(
                         stats["errors"].append(
                             {"name": album.title, "error": error_msg, "reason": reason}
                         )
+                        artist_name = album.artist.name if getattr(album, "artist", None) else "Unknown"
                         logger.warning(
-                            "Failed: %s (%s)",
+                            "[%d/%d] ❌ %s - %s: %s",
+                            idx,
+                            len(albums_without_url),
+                            artist_name,
                             album.title,
                             reason,
                         )
@@ -856,7 +865,8 @@ async def repair_album_images(
                 album.cover_path = download_result.path
                 album.updated_at = datetime.now(UTC)
                 stats["repaired"] += 1
-                logger.info("Downloaded: %s", album.title)
+                artist_name = album.artist.name if getattr(album, "artist", None) else "Unknown"
+                logger.info("[%d/%d] ✅ %s - %s", idx, len(albums), artist_name, album.title)
             else:
                 error_msg = download_result.error_message or "Download failed"
                 reason = classify_error(error_msg)
@@ -865,14 +875,16 @@ async def repair_album_images(
                 stats["errors"].append(
                     {"name": album.title, "error": error_msg, "reason": reason}
                 )
-                logger.warning("Failed: %s (%s)", album.title, reason)
+                artist_name = album.artist.name if getattr(album, "artist", None) else "Unknown"
+                logger.warning("[%d/%d] ❌ %s - %s: %s", idx, len(albums), artist_name, album.title, reason)
 
         except Exception as e:
             error_msg = str(e)
             reason = classify_error(error_msg)
             album.cover_path = make_failed_marker(reason)
             album.updated_at = datetime.now(UTC)
-            logger.error("Exception: %s - %s", album.title, e)
+            artist_name = album.artist.name if getattr(album, "artist", None) else "Unknown"
+            logger.error("[%d/%d] 💥 %s - %s: %s", idx, len(albums), artist_name, album.title, e)
             stats["errors"].append(
                 {"name": album.title, "error": error_msg, "reason": reason}
             )
