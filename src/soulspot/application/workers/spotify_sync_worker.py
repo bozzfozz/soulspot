@@ -247,6 +247,11 @@ class SpotifySyncWorker:
         return SpotifySyncService(
             session=session,
             spotify_plugin=spotify_plugin,
+            image_service=image_service,
+            image_queue=self._image_queue,
+            settings_service=settings_service,
+        )
+
     async def start(self) -> None:
         """Start the Spotify sync worker.
 
@@ -266,7 +271,7 @@ class SpotifySyncWorker:
                 "check_interval_seconds": self.check_interval_seconds,
             },
         )
-        logger.info(
+
     async def stop(self) -> None:
         """Stop the Spotify sync worker.
 
@@ -288,21 +293,17 @@ class SpotifySyncWorker:
                 "uptime_seconds": int(time.time() - self._start_time),
             },
         )
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
-        logger.info("Spotify sync worker stopped")
 
     async def _run_loop(self) -> None:
         """Main worker loop - checks and runs syncs periodically.
 
-        Hey future me - diese Loop läuft EWIG bis stop() aufgerufen wird!
+        Hey future me - diese Loop laeuft EWIG bis stop() aufgerufen wird!
         Auf jedem Durchlauf:
         1. Hole Settings aus DB (welche Syncs enabled, Intervalle)
-        2. Prüfe ob ein Sync fällig ist (Cooldown abgelaufen)
-        3. Führe fällige Syncs aus
-        4. Schlafe für check_interval_seconds
+        2. Pruefe ob ein Sync faellig ist (Cooldown abgelaufen)
+        3. Fuehre faellige Syncs aus
+        4. Schlafe fuer check_interval_seconds
+        """
         logger.info("spotify_sync.main_loop.entered")
 
         while self._running:
@@ -321,7 +322,7 @@ class SpotifySyncWorker:
                     )
 
             except Exception as e:
-                # Don't crash the loop on errors - log and continue
+                # Do not crash the loop on errors - log and continue
                 self._errors_total += 1
                 logger.error(
                     "spotify_sync.cycle.failed",
@@ -334,31 +335,23 @@ class SpotifySyncWorker:
                 await asyncio.sleep(self.check_interval_seconds)
             except asyncio.CancelledError:
                 # Worker is being stopped
-                break't crash the loop on errors - log and continue
-                logger.error(f"Error in Spotify sync worker loop: {e}", exc_info=True)
-
-            # Wait for next check
-            try:
-                await asyncio.sleep(self.check_interval_seconds)
-            except asyncio.CancelledError:
-                # Worker is being stopped
                 break
 
     async def _check_and_run_syncs(self) -> None:
         """Check settings and run any due syncs.
 
         Hey future me - diese Methode wird alle check_interval_seconds aufgerufen.
-        Sie holt die aktuellen Settings aus der DB (damit Runtime-Änderungen wirken)
-        und führt alle fälligen Syncs aus.
+        Sie holt die aktuellen Settings aus der DB (damit Runtime-Aenderungen wirken)
+        und fuehrt alle faelligen Syncs aus.
 
         UPDATE (Nov 2025): Now uses session_scope context manager instead of
-        async generator to fix "GC cleaning up non-checked-in connection" errors.
+        async generator to fix GC cleaning up non-checked-in connection errors.
 
         UPDATE (Dez 2025): Added rate limit cooldown check!
-        If we're rate limited, we skip ALL syncs until cooldown expires.
+        If rate limited, we skip ALL syncs until cooldown expires.
         """
         # Hey future me - RATE LIMIT CHECK FIRST!
-        # If we're in cooldown, don't even try to sync.
+        # If in cooldown, do not try to sync.
         if self._is_rate_limited():
             logger.debug("spotify_sync.skipped", extra={"reason": "rate_limited"})
             return
