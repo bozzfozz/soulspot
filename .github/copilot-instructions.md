@@ -143,6 +143,201 @@ This rule prevents:
 - Unintentional breaking changes without deprecation
 - Making assumptions when facts are unclear
 
+## 0.2 🔍 CRITICAL: ANALYZE BEFORE IMPLEMENTING
+
+⚠️ **ABSOLUTE RULE: SEARCH EXISTING CODE BEFORE WRITING NEW CODE**
+
+**MANDATORY analysis checklist BEFORE implementing ANY feature:**
+
+### Step 1: Search for Existing Solutions
+```bash
+# ALWAYS do these searches FIRST:
+grep_search "function_name_or_keyword"     # Find similar functions
+grep_search "ClassName"                     # Find existing classes
+semantic_search "what you want to do"       # Find related code
+```
+
+### Step 2: Check Existing Services & Utilities
+| What you need | Where to look FIRST |
+|---------------|---------------------|
+| Database operations | `src/soulspot/infrastructure/persistence/repositories.py` |
+| Image handling | `src/soulspot/application/services/images/` |
+| Settings/Config | `src/soulspot/application/services/app_settings_service.py` |
+| Spotify operations | `src/soulspot/application/services/spotify_sync_service.py` |
+| Deezer operations | `src/soulspot/application/services/deezer_sync_service.py` |
+| File operations | `src/soulspot/application/services/library_cleanup_service.py` |
+| Background tasks | `src/soulspot/application/workers/` |
+| API dependencies | `src/soulspot/api/dependencies.py` |
+| Utility functions | `src/soulspot/domain/utils/` |
+
+### Step 3: Reuse Patterns - NEVER Reinvent
+```python
+# ❌ WRONG: Create new helper without checking
+def my_new_helper():
+    # 500 lines of code that already exists elsewhere
+
+# ✅ RIGHT: Search first, reuse existing
+from soulspot.application.services.existing_service import existing_helper
+result = existing_helper(params)
+```
+
+### Step 4: Decision Tree
+
+```
+Want to implement Feature X?
+           │
+           ▼
+   ┌───────────────────┐
+   │ grep_search for X │
+   └─────────┬─────────┘
+             │
+      Found existing code?
+           /    \
+         YES     NO
+          │       │
+          ▼       ▼
+   ┌──────────┐  ┌──────────────────┐
+   │ REUSE IT │  │ semantic_search  │
+   │ or       │  │ for similar      │
+   │ EXTEND   │  │ functionality    │
+   └──────────┘  └────────┬─────────┘
+                          │
+                   Found similar?
+                      /    \
+                    YES     NO
+                     │       │
+                     ▼       ▼
+              ┌──────────┐  ┌──────────────┐
+              │ ADAPT IT │  │ NOW you may  │
+              │ don't    │  │ create new   │
+              │ duplicate│  │ code         │
+              └──────────┘  └──────────────┘
+```
+
+### Common Mistakes This Rule Prevents
+
+| Mistake | What happens | Prevention |
+|---------|--------------|------------|
+| Duplicate service method | Two methods do same thing, one gets outdated | Search repos first |
+| New utility function | Existing one in utils/ does the same | grep for keywords |
+| Copy-paste from other file | Code diverges, bugs get fixed in one place only | Import and reuse |
+| New worker for existing task | Race conditions, duplicate processing | Check workers/ first |
+| New API endpoint | Existing endpoint already handles this | Check routers/ first |
+
+### Example: The spotify_sync_worker.py Corruption
+
+```python
+# ❌ WHAT HAPPENED (file corruption):
+# Someone copy-pasted code without checking structure
+# Result: Duplicate methods, broken syntax, 1197 lines of chaos
+
+# ✅ WHAT SHOULD HAVE HAPPENED:
+# 1. Read existing _create_sync_service() method
+# 2. Understand its return pattern
+# 3. Modify ONLY the specific part needed
+# 4. Test syntax before committing
+```
+
+### Required Searches Before ANY Implementation
+
+**MINIMUM 3 searches before writing new code:**
+
+1. **Exact name search:** `grep_search "exact_function_name"`
+2. **Keyword search:** `grep_search "related_keyword|alternative_term"`
+3. **Semantic search:** `semantic_search "description of what you need"`
+
+**If ALL 3 return nothing relevant → THEN create new code**
+
+### Verification Statement
+
+Before implementing, mentally answer:
+- [ ] "I searched for existing code that does this"
+- [ ] "I checked the relevant service files listed above"
+- [ ] "I found no existing solution OR I'm extending an existing one"
+- [ ] "I'm not duplicating functionality"
+
+**🚨 CREATING DUPLICATE CODE IS A BUG, NOT A FEATURE 🚨**
+
+## 0.3 📚 CRITICAL: DOCUMENTATION MUST STAY IN SYNC
+
+⚠️ **ABSOLUTE RULE: READ DOCS BEFORE CODING, UPDATE DOCS AFTER CODING**
+
+### Before ANY Code Change - READ These Docs:
+
+| What you're changing | Read FIRST |
+|---------------------|------------|
+| Entities/Models/DTOs | `docs/architecture/DATA_STANDARDS.md` |
+| Repository patterns | `docs/architecture/DATA_LAYER_PATTERNS.md` |
+| Settings/Config | `docs/architecture/CONFIGURATION.md` |
+| API endpoints | `docs/03-api-reference/` |
+| New features | `docs/06-features/` |
+| Worker/Background tasks | Check existing worker docs in `docs/` |
+
+### After ANY Code Change - UPDATE These Docs:
+
+| What you changed | Update |
+|-----------------|--------|
+| New API endpoint | `docs/03-api-reference/` |
+| New feature | `docs/06-features/` + `README.md` |
+| Config/Settings | `docs/architecture/CONFIGURATION.md` + `.env.example` |
+| DB schema | Migration + `docs/architecture/DATA_STANDARDS.md` |
+| Breaking change | `CHANGELOG.md` + Migration guide |
+| Fixed TODO | `docs/TODO.md` + `docs/TODOS_ANALYSIS.md` |
+| Completed task | `docs/ACTION_PLAN.md` status |
+
+### Documentation Locations
+
+```
+docs/
+├── 01-guides/           # User guides
+├── 03-api-reference/    # API documentation  
+├── 04-architecture/     # Architecture decisions
+├── 06-features/         # Feature documentation
+├── 07-library/          # Library management docs
+├── TODO.md              # Project TODOs
+├── ACTION_PLAN.md       # Current sprint tasks
+└── TODOS_ANALYSIS.md    # TODO tracking
+```
+
+### The Golden Rule: Code + Docs = ONE Unit
+
+```python
+# ❌ WRONG: Change code, forget docs
+def new_endpoint():
+    """Added new feature"""  # But docs/api/ not updated!
+    pass
+
+# ✅ RIGHT: Code AND docs together
+def new_endpoint():
+    """Added new feature"""
+    pass
+# THEN: Update docs/03-api-reference/endpoints.md
+# THEN: Update README.md if user-facing
+# THEN: Update CHANGELOG.md
+```
+
+### Mandatory Doc-Sync Checklist
+
+Before marking ANY task complete:
+- [ ] Read relevant docs BEFORE implementing
+- [ ] Code changes are done
+- [ ] Related docs are updated
+- [ ] Examples in docs still work
+- [ ] No stale/outdated information left behind
+
+### What Happens Without Doc-Sync
+
+| Symptom | Cause |
+|---------|-------|
+| "Where is feature X documented?" | Added feature, forgot docs |
+| "Docs say Y but code does Z" | Changed code, forgot docs |
+| "README is outdated" | New features not documented |
+| "TODO still listed but already done" | Fixed issue, forgot to update TODO.md |
+
+**🚨 UNDOCUMENTED CODE IS INCOMPLETE CODE 🚨**
+
+**🚨 OUTDATED DOCS ARE WORSE THAN NO DOCS 🚨**
+
 ## 1. Purpose & Big Picture
 
 **What:** SoulSpot syncs Spotify playlists and downloads tracks via the Soulseek `slskd` service, enriches metadata and stores organized music files.
@@ -533,6 +728,34 @@ from datetime import datetime, timezone
 now = datetime.now(timezone.utc)
 if dt.tzinfo is None:
     dt = dt.replace(tzinfo=timezone.utc)
+```
+
+### 9.5 Copy-Paste File Corruption (CRITICAL!)
+```python
+# ❌ WRONG: Copy-paste code without understanding file structure
+# Result: Duplicate methods, broken syntax, corrupted files like:
+#
+#   return SpotifySyncService(
+#       session=session,
+#       spotify_plugin=spotify_plugin,
+#   async def start(self) -> None:    # <-- BROKEN! return not closed!
+#
+#   break't crash the loop            # <-- BROKEN! merge conflict artifact
+
+# ✅ RIGHT: ALWAYS follow this process:
+# 1. READ the entire function/method you want to modify
+# 2. UNDERSTAND its structure (opening/closing braces, returns)
+# 3. MODIFY only the specific lines needed
+# 4. VERIFY syntax after editing (run pylance check)
+# 5. NEVER copy large blocks without reading context
+```
+
+**Signs of Copy-Paste Corruption:**
+- Duplicate method definitions in same class
+- `break` or `return` followed by random text
+- Unclosed docstrings (`"""` without closing `"""`)
+- Missing `return` statements in functions
+- Indentation suddenly changes mid-function
 diff = now - dt
 ```
 
@@ -580,6 +803,8 @@ Search before implementing:
 1. Use `grep_search` for similar functions
 2. Check if Service/Repo exists
 3. Reuse patterns, don't reinvent
+
+**See Section 0.2 for the FULL analysis checklist!**
 
 ### 12.5 Async consistency
 **ALL** database ops must use `async`/`await`:
