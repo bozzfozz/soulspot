@@ -22,11 +22,16 @@
 """Deezer Sync Service - Syncs Deezer data to database."""
 
 import logging
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
     ArtistRepository,
@@ -304,10 +309,22 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
+        operation_id = start_operation(
+            logger,
+            "deezer_sync.artist_albums",
+            extra={"deezer_artist_id": deezer_artist_id, "limit": limit, "force": force},
+        )
+        
         cache_key = f"artist_albums_{deezer_artist_id}"
         if not force and not await self._should_sync(
             cache_key, self.ARTIST_ALBUMS_SYNC_COOLDOWN
         ):
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={"skipped": "cooldown", "deezer_artist_id": deezer_artist_id},
+            )
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -335,6 +352,12 @@ class DeezerSyncService:
                 logger.warning(
                     f"DeezerSyncService: Cannot sync albums for artist {deezer_artist_id} - no artist_id"
                 )
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=False,
+                    extra={"error": "artist_not_found", "deezer_artist_id": deezer_artist_id},
+                )
                 return {"albums_synced": 0, "error": "artist_not_found"}
 
             # Step 2: Sync albums with artist relationship
@@ -359,10 +382,26 @@ class DeezerSyncService:
                 f"DeezerSyncService: Artist {deezer_artist_id} albums synced - "
                 f"{result['albums_synced']} albums"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "deezer_artist_id": deezer_artist_id,
+                    "albums_synced": result["albums_synced"],
+                    "errors_count": len(result["errors"]),
+                },
+            )
 
         except Exception as e:
-            logger.error(f"DeezerSyncService: Artist albums sync failed: {e}")
+            logger.error(
+                f"DeezerSyncService: Artist albums sync failed for {deezer_artist_id}",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
+            )
             result["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return result
 
@@ -380,6 +419,12 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
+        operation_id = start_operation(
+            logger,
+            "deezer_sync.artist_top_tracks",
+            extra={"deezer_artist_id": deezer_artist_id, "limit": limit},
+        )
+        
         result = {
             "tracks_synced": 0,
             "errors": [],
@@ -403,6 +448,12 @@ class DeezerSyncService:
                 logger.warning(
                     f"DeezerSyncService: Cannot sync tracks for artist {deezer_artist_id} - no artist_id"
                 )
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=False,
+                    extra={"error": "artist_not_found", "deezer_artist_id": deezer_artist_id},
+                )
                 return {"tracks_synced": 0, "error": "artist_not_found"}
 
             # Step 2: Sync tracks with artist relationship
@@ -421,10 +472,26 @@ class DeezerSyncService:
                 f"DeezerSyncService: Artist {deezer_artist_id} top tracks synced - "
                 f"{result['tracks_synced']} tracks"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "deezer_artist_id": deezer_artist_id,
+                    "tracks_synced": result["tracks_synced"],
+                    "errors_count": len(result["errors"]),
+                },
+            )
 
         except Exception as e:
-            logger.error(f"DeezerSyncService: Artist top tracks sync failed: {e}")
+            logger.error(
+                f"DeezerSyncService: Artist top tracks sync failed for {deezer_artist_id}",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
+            )
             result["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return result
 
@@ -454,10 +521,22 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
+        operation_id = start_operation(
+            logger,
+            "deezer_sync.related_artists",
+            extra={"deezer_artist_id": deezer_artist_id, "force": force},
+        )
+        
         cache_key = f"related_artists_{deezer_artist_id}"
         if not force and not await self._should_sync(
             cache_key, self.CHARTS_SYNC_COOLDOWN
         ):
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={"skipped": "cooldown", "deezer_artist_id": deezer_artist_id},
+            )
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -492,10 +571,26 @@ class DeezerSyncService:
                 f"DeezerSyncService: Related artists for {deezer_artist_id} synced - "
                 f"{result['artists_synced']} artists"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "deezer_artist_id": deezer_artist_id,
+                    "artists_synced": result["artists_synced"],
+                    "errors_count": len(result["errors"]),
+                },
+            )
 
         except Exception as e:
-            logger.error(f"DeezerSyncService: Related artists sync failed: {e}")
+            logger.error(
+                f"DeezerSyncService: Related artists sync failed for {deezer_artist_id}",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
+            )
             result["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return result
 

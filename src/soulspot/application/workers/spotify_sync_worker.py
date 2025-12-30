@@ -26,8 +26,11 @@
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
+
+from soulspot.infrastructure.observability import log_worker_health
 
 if TYPE_CHECKING:
     from soulspot.application.services.images import ImageDownloadQueue, ImageService
@@ -139,6 +142,11 @@ class SpotifySyncWorker:
             },
         }
 
+        # Worker lifecycle tracking for health logging
+        self._cycles_completed: int = 0
+        self._errors_total: int = 0
+        self._start_time: float = time.time()
+
     def _is_rate_limited(self) -> bool:
         """Check if we're currently in rate limit cooldown.
 
@@ -239,11 +247,6 @@ class SpotifySyncWorker:
         return SpotifySyncService(
             session=session,
             spotify_plugin=spotify_plugin,
-            image_service=image_service,
-            settings_service=settings_service,
-            image_queue=self._image_queue,
-        )
-
     async def start(self) -> None:
         """Start the Spotify sync worker.
 
@@ -251,19 +254,19 @@ class SpotifySyncWorker:
         Safe to call multiple times (idempotent).
         """
         if self._running:
-            logger.warning("Spotify sync worker is already running")
+            logger.warning("spotify_sync.already_running")
             return
 
         self._running = True
         self._task = asyncio.create_task(self._run_loop())
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-
         logger.info(
-            LogMessages.worker_started(
-                worker="Spotify Sync", interval=self.check_interval_seconds
-            )
+            "worker.started",
+            extra={
+                "worker": "spotify_sync",
+                "check_interval_seconds": self.check_interval_seconds,
+            },
         )
-
+        logger.info(
     async def stop(self) -> None:
         """Stop the Spotify sync worker.
 
@@ -272,6 +275,19 @@ class SpotifySyncWorker:
         """
         self._running = False
         if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+            self._task = None
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "spotify_sync",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": int(time.time() - self._start_time),
+            },
+        )
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
@@ -287,21 +303,38 @@ class SpotifySyncWorker:
         2. Prüfe ob ein Sync fällig ist (Cooldown abgelaufen)
         3. Führe fällige Syncs aus
         4. Schlafe für check_interval_seconds
-        5. Wiederhole
-
-        Fehler crashen die Loop NICHT - nur loggen und weitermachen.
-        """
-        # Wait a bit on startup to let other services initialize
-        # Especially the token refresh worker should have time to refresh if needed
-        await asyncio.sleep(30)
-
-        logger.info("Spotify sync worker entering main loop")
+        logger.info("spotify_sync.main_loop.entered")
 
         while self._running:
             try:
                 await self._check_and_run_syncs()
+                self._cycles_completed += 1
+
+                # Log health every 10 cycles
+                if self._cycles_completed % 10 == 0:
+                    log_worker_health(
+                        logger,
+                        "spotify_sync",
+                        self._cycles_completed,
+                        self._errors_total,
+                        time.time() - self._start_time,
+                    )
+
             except Exception as e:
                 # Don't crash the loop on errors - log and continue
+                self._errors_total += 1
+                logger.error(
+                    "spotify_sync.cycle.failed",
+                    extra={"error_type": type(e).__name__},
+                    exc_info=True,
+                )
+
+            # Wait for next check
+            try:
+                await asyncio.sleep(self.check_interval_seconds)
+            except asyncio.CancelledError:
+                # Worker is being stopped
+                break't crash the loop on errors - log and continue
                 logger.error(f"Error in Spotify sync worker loop: {e}", exc_info=True)
 
             # Wait for next check
@@ -327,7 +360,7 @@ class SpotifySyncWorker:
         # Hey future me - RATE LIMIT CHECK FIRST!
         # If we're in cooldown, don't even try to sync.
         if self._is_rate_limited():
-            logger.debug("Skipping sync cycle - rate limited")
+            logger.debug("spotify_sync.skipped", extra={"reason": "rate_limited"})
             return
 
         # Get a fresh DB session for this cycle using session_scope context manager
@@ -347,14 +380,20 @@ class SpotifySyncWorker:
                 )
 
                 if not auto_sync_enabled:
-                    logger.debug("Spotify auto-sync is disabled, skipping")
+                    logger.debug(
+                        "spotify_sync.skipped", extra={"reason": "auto_sync_disabled"}
+                    )
                     return
 
                 # Get access token - if not available, skip this cycle
                 access_token = await self.token_manager.get_token_for_background()
                 if not access_token:
                     logger.warning(
-                        "No valid Spotify token available, skipping sync cycle"
+                        "spotify_sync.skipped",
+                        extra={
+                            "reason": "no_token",
+                            "action": "user_needs_to_authenticate",
+                        },
                     )
                     return
 
@@ -505,7 +544,8 @@ class SpotifySyncWorker:
         Hey future me - nutzt jetzt _create_sync_service() Helper!
         Das stellt sicher dass image_queue korrekt übergeben wird.
         """
-        logger.info("Starting automatic artists sync...")
+        operation_start = time.time()
+        logger.info("spotify_sync.artists.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             from soulspot.application.services.app_settings_service import (
@@ -525,20 +565,39 @@ class SpotifySyncWorker:
             self._sync_stats["artists"]["last_result"] = result
             self._sync_stats["artists"]["last_error"] = None
 
+            duration = time.time() - operation_start
             synced = result.get("synced", 0) if result else 0
             removed = result.get("removed", 0) if result else 0
-            logger.info(f"Artists sync complete: {synced} synced, {removed} removed")
+            
+            logger.info(
+                "spotify_sync.artists.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "synced": synced,
+                    "removed": removed,
+                    "total_cycles": self._sync_stats["artists"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["artists"]["last_error"] = str(e)
-            logger.error(f"Artists sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.artists.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     async def _run_playlists_sync(
         self, session: Any, access_token: str, now: datetime
     ) -> None:
         """Run playlists sync and update tracking."""
-        logger.info("Starting automatic playlists sync...")
+        operation_start = time.time()
+        logger.info("spotify_sync.playlists.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             from soulspot.application.services.app_settings_service import (
@@ -557,20 +616,39 @@ class SpotifySyncWorker:
             self._sync_stats["playlists"]["last_result"] = result
             self._sync_stats["playlists"]["last_error"] = None
 
+            duration = time.time() - operation_start
             synced = result.get("synced", 0) if result else 0
             removed = result.get("removed", 0) if result else 0
-            logger.info(f"Playlists sync complete: {synced} synced, {removed} removed")
+            
+            logger.info(
+                "spotify_sync.playlists.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "synced": synced,
+                    "removed": removed,
+                    "total_cycles": self._sync_stats["playlists"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["playlists"]["last_error"] = str(e)
-            logger.error(f"Playlists sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.playlists.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     async def _run_liked_songs_sync(
         self, session: Any, access_token: str, now: datetime
     ) -> None:
         """Run liked songs sync and update tracking."""
-        logger.info("Starting automatic liked songs sync...")
+        operation_start = time.time()
+        logger.info("spotify_sync.liked_songs.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             from soulspot.application.services.app_settings_service import (
@@ -589,19 +667,37 @@ class SpotifySyncWorker:
             self._sync_stats["liked_songs"]["last_result"] = result
             self._sync_stats["liked_songs"]["last_error"] = None
 
+            duration = time.time() - operation_start
             track_count = result.get("track_count", 0) if result else 0
-            logger.info(f"Liked songs sync complete: {track_count} tracks")
+            
+            logger.info(
+                "spotify_sync.liked_songs.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "track_count": track_count,
+                    "total_cycles": self._sync_stats["liked_songs"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["liked_songs"]["last_error"] = str(e)
-            logger.error(f"Liked songs sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.liked_songs.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     async def _run_saved_albums_sync(
         self, session: Any, access_token: str, now: datetime
     ) -> None:
         """Run saved albums sync and update tracking."""
-        logger.info("Starting automatic saved albums sync...")
+        operation_start = time.time()
+        logger.info("spotify_sync.saved_albums.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             from soulspot.application.services.app_settings_service import (
@@ -620,12 +716,29 @@ class SpotifySyncWorker:
             self._sync_stats["saved_albums"]["last_result"] = result
             self._sync_stats["saved_albums"]["last_error"] = None
 
+            duration = time.time() - operation_start
             synced = result.get("synced", 0) if result else 0
-            logger.info(f"Saved albums sync complete: {synced} synced")
+            
+            logger.info(
+                "spotify_sync.saved_albums.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "synced": synced,
+                    "total_cycles": self._sync_stats["saved_albums"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["saved_albums"]["last_error"] = str(e)
-            logger.error(f"Saved albums sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.saved_albums.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     async def _run_artist_albums_sync(
@@ -667,6 +780,8 @@ class SpotifySyncWorker:
             resync_hours: How many hours before resync is needed (default 24)
             resync_enabled: Whether to resync existing artists (default True)
         """
+        operation_start = time.time()
+        
         try:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
@@ -708,7 +823,14 @@ class SpotifySyncWorker:
 
             if not artists_to_sync:
                 # All artists have been synced and none need resync
-                logger.debug("No artists pending album sync or needing resync")
+                logger.debug(
+                    "spotify_sync.artist_albums.skipped",
+                    extra={
+                        "reason": "no_artists_pending",
+                        "pending_count": 0,
+                        "resync_count": 0,
+                    },
+                )
                 self._sync_stats["artist_albums"]["pending"] = 0
                 self._sync_stats["artist_albums"]["resync_pending"] = 0
                 return
@@ -717,9 +839,15 @@ class SpotifySyncWorker:
             new_count = len(pending_artists)
             resync_this_cycle = len(artists_to_sync) - new_count
             logger.info(
-                f"Starting gradual artist albums sync: "
-                f"{new_count} new + {resync_this_cycle} resync = {len(artists_to_sync)} artists "
-                f"this cycle. Pending: {pending_count} new, {resync_count} resync"
+                "spotify_sync.artist_albums.started",
+                extra={
+                    "scheduled_time": now.isoformat(),
+                    "new_artists": new_count,
+                    "resync_artists": resync_this_cycle,
+                    "total_this_cycle": len(artists_to_sync),
+                    "pending_new": pending_count,
+                    "pending_resync": resync_count,
+                },
             )
 
             # Set up services
@@ -743,7 +871,12 @@ class SpotifySyncWorker:
                         synced_count += 1
                         total_albums += result.get("total", 0)
                         logger.debug(
-                            f"Synced {result.get('total', 0)} albums for {artist.name}"
+                            "spotify_sync.artist_albums.artist_synced",
+                            extra={
+                                "artist_name": artist.name,
+                                "artist_id": artist.spotify_id,
+                                "albums_count": result.get("total", 0),
+                            },
                         )
 
                     # Small delay between artists to be nice to the API
@@ -751,7 +884,13 @@ class SpotifySyncWorker:
 
                 except Exception as e:
                     logger.warning(
-                        f"Failed to sync albums for artist {artist.name}: {e}"
+                        "spotify_sync.artist_albums.artist_failed",
+                        extra={
+                            "artist_name": artist.name,
+                            "artist_id": artist.spotify_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
                     )
                     # Continue with next artist, don't fail the whole batch
 
@@ -768,14 +907,31 @@ class SpotifySyncWorker:
             self._sync_stats["artist_albums"]["pending"] = pending_count
             self._sync_stats["artist_albums"]["resync_pending"] = resync_count
 
+            duration = time.time() - operation_start
             logger.info(
-                f"Gradual artist albums sync complete: {synced_count} artists, "
-                f"{total_albums} albums. Still pending: {pending_count} new, {resync_count} resync"
+                "spotify_sync.artist_albums.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "artists_synced": synced_count,
+                    "total_albums": total_albums,
+                    "new_artists": new_count,
+                    "resync_artists": resync_this_cycle,
+                    "pending_new": pending_count,
+                    "pending_resync": resync_count,
+                },
             )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["artist_albums"]["last_error"] = str(e)
-            logger.error(f"Artist albums sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.artist_albums.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     async def _run_album_tracks_sync(
@@ -810,6 +966,8 @@ class SpotifySyncWorker:
             now: Current timestamp
             albums_per_cycle: How many albums to process (default 10)
         """
+        operation_start = time.time()
+        
         try:
             from soulspot.application.services.app_settings_service import (
                 AppSettingsService,
@@ -829,13 +987,20 @@ class SpotifySyncWorker:
 
             if not pending_albums:
                 # All albums have been synced
-                logger.debug("No albums pending track sync")
+                logger.debug(
+                    "spotify_sync.album_tracks.skipped",
+                    extra={"reason": "no_albums_pending", "pending_count": 0},
+                )
                 self._sync_stats["album_tracks"]["pending"] = 0
                 return
 
             logger.info(
-                f"Starting gradual album tracks sync: {len(pending_albums)} albums "
-                f"this cycle. Total pending: {pending_count}"
+                "spotify_sync.album_tracks.started",
+                extra={
+                    "scheduled_time": now.isoformat(),
+                    "albums_this_cycle": len(pending_albums),
+                    "total_pending": pending_count,
+                },
             )
 
             # Set up services
@@ -860,13 +1025,21 @@ class SpotifySyncWorker:
                         synced_count += 1
                         total_tracks += result.get("total", 0)
                         logger.debug(
-                            f"Synced {result.get('total', 0)} tracks for album "
-                            f"'{album.title}' (ID: {album.spotify_id})"
+                            "spotify_sync.album_tracks.album_synced",
+                            extra={
+                                "album_title": album.title,
+                                "album_id": album.spotify_id,
+                                "tracks_count": result.get("total", 0),
+                            },
                         )
                     elif result.get("error"):
                         logger.warning(
-                            f"Failed to sync tracks for album '{album.title}': "
-                            f"{result.get('error')}"
+                            "spotify_sync.album_tracks.album_error",
+                            extra={
+                                "album_title": album.title,
+                                "album_id": album.spotify_id,
+                                "error_message": result.get("error"),
+                            },
                         )
 
                     # Small delay between albums to be nice to the API
@@ -874,7 +1047,13 @@ class SpotifySyncWorker:
 
                 except Exception as e:
                     logger.warning(
-                        f"Failed to sync tracks for album {album.title}: {e}"
+                        "spotify_sync.album_tracks.album_failed",
+                        extra={
+                            "album_title": album.title,
+                            "album_id": album.spotify_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        },
                     )
                     # Continue with next album, don't fail the whole batch
 
@@ -888,14 +1067,28 @@ class SpotifySyncWorker:
             self._sync_stats["album_tracks"]["last_error"] = None
             self._sync_stats["album_tracks"]["pending"] = pending_count - synced_count
 
+            duration = time.time() - operation_start
             logger.info(
-                f"Gradual album tracks sync complete: {synced_count} albums, "
-                f"{total_tracks} tracks. Still pending: {pending_count - synced_count}"
+                "spotify_sync.album_tracks.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "albums_synced": synced_count,
+                    "total_tracks": total_tracks,
+                    "pending_remaining": pending_count - synced_count,
+                },
             )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["album_tracks"]["last_error"] = str(e)
-            logger.error(f"Album tracks sync failed: {e}", exc_info=True)
+            logger.error(
+                "spotify_sync.album_tracks.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
             raise
 
     @property

@@ -23,8 +23,11 @@
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
+
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 
 if TYPE_CHECKING:
     # NOTE: DeezerChartsCache and DeezerNewReleasesCache removed
@@ -106,6 +109,11 @@ class DeezerSyncWorker:
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._errors_total = 0
+        self._start_time = time.time()
+
         # NOTE: Charts and New Releases caches REMOVED!
         # - Charts were generic "trending" content, not user's personal music
         # - New Releases now handled by NewReleasesSyncWorker (shows only followed artists)
@@ -153,17 +161,19 @@ class DeezerSyncWorker:
         Safe to call multiple times (idempotent).
         """
         if self._running:
-            logger.warning("Deezer sync worker is already running")
+            logger.warning("deezer_sync.already_running")
             return
 
         self._running = True
+        self._start_time = time.time()  # Reset start time
         self._task = asyncio.create_task(self._run_loop())
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-
+        
         logger.info(
-            LogMessages.worker_started(
-                worker="Deezer Sync", interval=self.check_interval_seconds
-            )
+            "worker.started",
+            extra={
+                "worker": "deezer_sync",
+                "check_interval_seconds": self.check_interval_seconds,
+            },
         )
 
     async def stop(self) -> None:
@@ -178,7 +188,17 @@ class DeezerSyncWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
-        logger.info("Deezer sync worker stopped")
+        
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "deezer_sync",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": round(uptime, 2),
+            },
+        )
 
     def _create_sync_service(
         self, session: Any, access_token: str | None, settings_service: Any
@@ -230,14 +250,34 @@ class DeezerSyncWorker:
         # Wait a bit on startup to let other services initialize
         await asyncio.sleep(35)  # Slightly offset from Spotify worker
 
-        logger.info("Deezer sync worker entering main loop")
+        logger.info("deezer_sync.loop_started")
 
         while self._running:
             try:
                 await self._check_and_run_syncs()
+                self._cycles_completed += 1
+                
+                # Log health every 10 cycles
+                if self._cycles_completed % 10 == 0:
+                    log_worker_health(
+                        logger=logger,
+                        worker_name="deezer_sync",
+                        cycles_completed=self._cycles_completed,
+                        errors_total=self._errors_total,
+                        uptime_seconds=time.time() - self._start_time,
+                    )
+                
             except Exception as e:
+                self._errors_total += 1
                 # Don't crash the loop on errors - log and continue
-                logger.error(f"Error in Deezer sync worker loop: {e}", exc_info=True)
+                logger.error(
+                    "deezer_sync.loop_error",
+                    exc_info=True,
+                    extra={
+                        "error_type": type(e).__name__,
+                        "cycle": self._cycles_completed,
+                    },
+                )
 
             # Wait for next check
             try:
@@ -266,7 +306,7 @@ class DeezerSyncWorker:
                 )
 
                 if not auto_sync_enabled:
-                    logger.debug("Deezer auto-sync is disabled, skipping")
+                    logger.debug("deezer_sync.skipped", extra={"reason": "auto_sync_disabled"})
                     return
 
                 # Check if provider is enabled
@@ -274,7 +314,7 @@ class DeezerSyncWorker:
                     "deezer.provider_mode", default="basic"
                 )
                 if provider_mode == "off":
-                    logger.debug("Deezer provider is disabled, skipping sync")
+                    logger.debug("deezer_sync.skipped", extra={"reason": "provider_disabled"})
                     return
 
                 # Get interval settings
@@ -304,7 +344,11 @@ class DeezerSyncWorker:
                 access_token = await self._get_deezer_token(session)
                 if not access_token:
                     logger.debug(
-                        "No valid Deezer token for user syncs, skipping user data"
+                        "deezer_sync.skipped",
+                        extra={
+                            "reason": "no_token",
+                            "action": "user_needs_to_authenticate",
+                        },
                     )
                 else:
                     # Followed Artists sync
@@ -454,7 +498,8 @@ class DeezerSyncWorker:
         self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run followed artists sync."""
-        logger.info("Starting automatic Deezer artists sync...")
+        operation_start = time.time()
+        logger.info("deezer_sync.artists.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             sync_service = self._create_sync_service(
@@ -467,17 +512,34 @@ class DeezerSyncWorker:
             self._sync_stats["artists"]["last_result"] = result
             self._sync_stats["artists"]["last_error"] = None
 
-            logger.info(f"Deezer artists sync completed: {result}")
+            duration = time.time() - operation_start
+            logger.info(
+                "deezer_sync.artists.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "result": result,
+                    "total_cycles": self._sync_stats["artists"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["artists"]["last_error"] = str(e)
-            logger.error(f"Deezer artists sync failed: {e}", exc_info=True)
+            logger.error(
+                "deezer_sync.artists.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
 
     async def _run_playlists_sync(
         self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run user playlists sync."""
-        logger.info("Starting automatic Deezer playlists sync...")
+        operation_start = time.time()
+        logger.info("deezer_sync.playlists.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             sync_service = self._create_sync_service(
@@ -490,17 +552,34 @@ class DeezerSyncWorker:
             self._sync_stats["playlists"]["last_result"] = result
             self._sync_stats["playlists"]["last_error"] = None
 
-            logger.info(f"Deezer playlists sync completed: {result}")
+            duration = time.time() - operation_start
+            logger.info(
+                "deezer_sync.playlists.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "result": result,
+                    "total_cycles": self._sync_stats["playlists"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["playlists"]["last_error"] = str(e)
-            logger.error(f"Deezer playlists sync failed: {e}", exc_info=True)
+            logger.error(
+                "deezer_sync.playlists.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
 
     async def _run_saved_albums_sync(
         self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run saved albums sync."""
-        logger.info("Starting automatic Deezer saved albums sync...")
+        operation_start = time.time()
+        logger.info("deezer_sync.saved_albums.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             sync_service = self._create_sync_service(
@@ -513,17 +592,34 @@ class DeezerSyncWorker:
             self._sync_stats["saved_albums"]["last_result"] = result
             self._sync_stats["saved_albums"]["last_error"] = None
 
-            logger.info(f"Deezer saved albums sync completed: {result}")
+            duration = time.time() - operation_start
+            logger.info(
+                "deezer_sync.saved_albums.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "result": result,
+                    "total_cycles": self._sync_stats["saved_albums"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["saved_albums"]["last_error"] = str(e)
-            logger.error(f"Deezer saved albums sync failed: {e}", exc_info=True)
+            logger.error(
+                "deezer_sync.saved_albums.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
 
     async def _run_saved_tracks_sync(
         self, session: Any, access_token: str, now: datetime, settings_service: Any
     ) -> None:
         """Run saved tracks sync."""
-        logger.info("Starting automatic Deezer saved tracks sync...")
+        operation_start = time.time()
+        logger.info("deezer_sync.saved_tracks.started", extra={"scheduled_time": now.isoformat()})
 
         try:
             sync_service = self._create_sync_service(
@@ -536,11 +632,27 @@ class DeezerSyncWorker:
             self._sync_stats["saved_tracks"]["last_result"] = result
             self._sync_stats["saved_tracks"]["last_error"] = None
 
-            logger.info(f"Deezer saved tracks sync completed: {result}")
+            duration = time.time() - operation_start
+            logger.info(
+                "deezer_sync.saved_tracks.completed",
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "result": result,
+                    "total_cycles": self._sync_stats["saved_tracks"]["count"],
+                },
+            )
 
         except Exception as e:
+            duration = time.time() - operation_start
             self._sync_stats["saved_tracks"]["last_error"] = str(e)
-            logger.error(f"Deezer saved tracks sync failed: {e}", exc_info=True)
+            logger.error(
+                "deezer_sync.saved_tracks.failed",
+                exc_info=True,
+                extra={
+                    "duration_seconds": round(duration, 2),
+                    "error_type": type(e).__name__,
+                },
+            )
 
     # =========================================================================
     # GRADUAL BACKGROUND SYNCS (artist_albums, album_tracks)
@@ -581,6 +693,8 @@ class DeezerSyncWorker:
             resync_hours: How many hours before resync is needed (default 24)
             resync_enabled: Whether to resync existing artists (default True)
         """
+        operation_start = time.time()
+        
         try:
             from soulspot.infrastructure.persistence.repositories import (
                 SpotifyBrowseRepository,

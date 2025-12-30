@@ -20,6 +20,7 @@ Without this worker:
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.ports import ISlskdClient
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
 
 logger = logging.getLogger(__name__)
@@ -102,6 +104,10 @@ class DownloadStatusSyncWorker:
         self._running = False
         self._last_sync_stats: dict[str, int] = {}
 
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._start_time = time.time()
+
         # Error recovery state
         self._consecutive_failures = 0
         self._max_consecutive_failures = max_consecutive_failures
@@ -118,10 +124,15 @@ class DownloadStatusSyncWorker:
         Uses circuit breaker pattern for resilience when slskd goes offline.
         """
         self._running = True
+        self._start_time = time.time()  # Reset start time
+        
         logger.info(
-            "DownloadStatusSyncWorker started (sync_interval=%ds, max_failures=%d)",
-            self._sync_interval,
-            self._max_consecutive_failures,
+            "worker.started",
+            extra={
+                "worker": "download_status_sync",
+                "sync_interval_seconds": self._sync_interval,
+                "max_consecutive_failures": self._max_consecutive_failures,
+            },
         )
 
         while self._running:
@@ -163,6 +174,17 @@ class DownloadStatusSyncWorker:
     def stop(self) -> None:
         """Signal the worker to stop."""
         self._running = False
+        
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "download_status_sync",
+                "cycles_completed": self._cycles_completed,
+                "total_errors": self._total_errors,
+                "uptime_seconds": round(uptime, 2),
+            },
+        )
 
     async def _sync_cycle(self) -> bool:
         """Run one sync cycle.

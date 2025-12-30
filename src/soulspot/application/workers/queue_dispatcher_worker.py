@@ -27,6 +27,7 @@ by implementing the IDownloadManager interface.
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -35,6 +36,7 @@ from sqlalchemy import select
 from soulspot.application.workers.job_queue import JobQueue, JobType
 from soulspot.domain.entities import DownloadStatus
 from soulspot.domain.value_objects import TrackId
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 from soulspot.infrastructure.persistence.models import DownloadModel
 
 if TYPE_CHECKING:
@@ -88,6 +90,12 @@ class QueueDispatcherWorker:
         self._max_dispatch_per_cycle = max_dispatch_per_cycle
         self._running = False
         self._last_available: bool | None = None  # Track state changes for logging
+        
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._errors_total = 0
+        self._start_time = time.time()
+        self._dispatched_total = 0
 
     async def start(self) -> None:
         """Start the dispatcher worker.
@@ -95,22 +103,59 @@ class QueueDispatcherWorker:
         Runs continuously until stop() is called.
         """
         self._running = True
+        self._start_time = time.time()  # Reset start time
+        
         logger.info(
-            "QueueDispatcherWorker started (check_interval=%ds, dispatch_delay=%.1fs)",
-            self._check_interval,
-            self._dispatch_delay,
+            "worker.started",
+            extra={
+                "worker": "queue_dispatcher",
+                "check_interval_seconds": self._check_interval,
+                "dispatch_delay_seconds": self._dispatch_delay,
+                "max_dispatch_per_cycle": self._max_dispatch_per_cycle,
+            },
         )
 
         while self._running:
             try:
                 await self._dispatch_cycle()
+                self._cycles_completed += 1
+                
+                # Log health every 10 cycles
+                if self._cycles_completed % 10 == 0:
+                    log_worker_health(
+                        logger=logger,
+                        worker_name="queue_dispatcher",
+                        cycles_completed=self._cycles_completed,
+                        errors_total=self._errors_total,
+                        uptime_seconds=time.time() - self._start_time,
+                        extra_stats={"dispatched_total": self._dispatched_total},
+                    )
+                
             except Exception as e:
+                self._errors_total += 1
                 # Don't crash the worker on errors - log and continue
-                logger.exception("QueueDispatcherWorker error: %s", e)
+                logger.error(
+                    "queue_dispatcher.loop_error",
+                    exc_info=True,
+                    extra={
+                        "error_type": type(e).__name__,
+                        "cycle": self._cycles_completed,
+                    },
+                )
 
             await asyncio.sleep(self._check_interval)
 
-        logger.info("QueueDispatcherWorker stopped")
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "queue_dispatcher",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": round(uptime, 2),
+                "dispatched_total": self._dispatched_total,
+            },
+        )
 
     def stop(self) -> None:
         """Signal the worker to stop."""

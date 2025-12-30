@@ -11,6 +11,7 @@ This is the APPLICATION LAYER service that orchestrates:
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -34,6 +35,10 @@ from soulspot.domain.ports.download_provider import (
 )
 from soulspot.domain.value_objects import DownloadId, TrackId
 from soulspot.infrastructure.observability.log_messages import LogMessages
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
 
 if TYPE_CHECKING:
@@ -112,21 +117,41 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by created_at desc
         """
-        active_downloads: list[UnifiedDownload] = []
+        operation_id = start_operation(logger, "download_manager.get_active_downloads")
+        
+        try:
+            active_downloads: list[UnifiedDownload] = []
 
-        # 1. Get SoulSpot's internal queue (WAITING, PENDING downloads)
-        internal_downloads = await self._get_internal_queue_downloads()
-        active_downloads.extend(internal_downloads)
+            # 1. Get SoulSpot's internal queue (WAITING, PENDING downloads)
+            internal_downloads = await self._get_internal_queue_downloads()
+            active_downloads.extend(internal_downloads)
 
-        # 2. Get downloads from all available providers
-        provider_downloads = await self._get_provider_downloads()
-        active_downloads.extend(provider_downloads)
+            # 2. Get downloads from all available providers
+            provider_downloads = await self._get_provider_downloads()
+            active_downloads.extend(provider_downloads)
 
-        # 3. Sort by created_at (newest first)
-        active_downloads.sort(key=lambda d: d.timestamps.created_at, reverse=True)
+            # 3. Sort by created_at (newest first)
+            active_downloads.sort(key=lambda d: d.timestamps.created_at, reverse=True)
 
-        # 4. Limit results
-        return active_downloads[: self._config.max_active_downloads]
+            # 4. Limit results
+            result = active_downloads[: self._config.max_active_downloads]
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={"active_downloads_count": len(result)},
+            )
+            return result
+            
+        except Exception as e:
+            logger.error(
+                "Error getting active downloads",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
+            end_operation(logger, operation_id, success=False, error=e)
+            raise
 
     async def get_queue_statistics(self) -> QueueStatistics:
         """Get statistics about the download queue.
@@ -134,26 +159,50 @@ class DownloadManagerService:
         Returns counts of downloads in each state, plus recent
         completed/failed counts.
         """
-        # Count by status in SoulSpot's Download table
-        status_counts = await self._count_downloads_by_status()
+        operation_id = start_operation(logger, "download_manager.get_queue_statistics")
+        
+        try:
+            # Count by status in SoulSpot's Download table
+            status_counts = await self._count_downloads_by_status()
 
-        # Count completed/failed in last N hours
-        since = datetime.now(UTC) - timedelta(hours=self._config.stats_history_hours)
-        completed_today = await self._count_downloads_since(
-            DownloadStatus.COMPLETED, since
-        )
-        failed_today = await self._count_downloads_since(DownloadStatus.FAILED, since)
+            # Count completed/failed in last N hours
+            since = datetime.now(UTC) - timedelta(hours=self._config.stats_history_hours)
+            completed_today = await self._count_downloads_since(
+                DownloadStatus.COMPLETED, since
+            )
+            failed_today = await self._count_downloads_since(DownloadStatus.FAILED, since)
 
-        return QueueStatistics(
-            waiting=status_counts.get(DownloadStatus.WAITING, 0),
-            pending=status_counts.get(DownloadStatus.PENDING, 0),
-            queued=status_counts.get(DownloadStatus.QUEUED, 0),
-            downloading=status_counts.get(DownloadStatus.DOWNLOADING, 0),
-            paused=0,  # Not tracked in our DB yet
-            stalled=0,  # Not tracked in our DB yet
-            completed_today=completed_today,
-            failed_today=failed_today,
-        )
+            stats = QueueStatistics(
+                waiting=status_counts.get(DownloadStatus.WAITING, 0),
+                pending=status_counts.get(DownloadStatus.PENDING, 0),
+                queued=status_counts.get(DownloadStatus.QUEUED, 0),
+                downloading=status_counts.get(DownloadStatus.DOWNLOADING, 0),
+                paused=0,  # Not tracked in our DB yet
+                stalled=0,  # Not tracked in our DB yet
+                completed_today=completed_today,
+                failed_today=failed_today,
+            )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "waiting": stats.waiting,
+                    "downloading": stats.downloading,
+                    "completed_today": stats.completed_today,
+                },
+            )
+            return stats
+            
+        except Exception as e:
+            logger.error(
+                "Error getting queue statistics",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
+            end_operation(logger, operation_id, success=False, error=e)
+            raise
 
     # Hey future me - get_completed_downloads returns recently completed downloads for History tab!
     # Ordered by completed_at DESC (most recent first). Includes track metadata for display.
@@ -170,23 +219,45 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by completed_at desc
         """
-        since = datetime.now(UTC) - timedelta(days=days)
-
-        result = await self._session.execute(
-            select(DownloadModel)
-            .where(DownloadModel.status == DownloadStatus.COMPLETED.value)
-            .where(DownloadModel.completed_at >= since)
-            .order_by(DownloadModel.completed_at.desc())
-            .limit(limit)
+        operation_id = start_operation(
+            logger,
+            "download_manager.get_completed_downloads",
+            extra={"days": days, "limit": limit},
         )
-        download_models = result.scalars().all()
+        
+        try:
+            since = datetime.now(UTC) - timedelta(days=days)
 
-        unified: list[UnifiedDownload] = []
-        for dm in download_models:
-            track_info = await self._get_track_info(TrackId(dm.track_id))
-            unified.append(self._create_unified_download(dm, track_info, None))
+            result = await self._session.execute(
+                select(DownloadModel)
+                .where(DownloadModel.status == DownloadStatus.COMPLETED.value)
+                .where(DownloadModel.completed_at >= since)
+                .order_by(DownloadModel.completed_at.desc())
+                .limit(limit)
+            )
+            download_models = result.scalars().all()
 
-        return unified
+            unified: list[UnifiedDownload] = []
+            for dm in download_models:
+                track_info = await self._get_track_info(TrackId(dm.track_id))
+                unified.append(self._create_unified_download(dm, track_info, None))
+
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={"completed_downloads_count": len(unified), "days": days},
+            )
+            return unified
+            
+        except Exception as e:
+            logger.error(
+                "Error getting completed downloads",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "days": days},
+            )
+            end_operation(logger, operation_id, success=False, error=e)
+            raise
 
     # Hey future me - get_failed_downloads returns all failed downloads for the Failed tab!
     # These are downloads that failed and weren't successfully retried. Shows retry_count
@@ -200,27 +271,47 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by updated_at desc
         """
-        result = await self._session.execute(
-            select(DownloadModel)
-            .where(DownloadModel.status == DownloadStatus.FAILED.value)
-            .order_by(DownloadModel.updated_at.desc())
-            .limit(limit)
+        operation_id = start_operation(
+            logger, "download_manager.get_failed_downloads", extra={"limit": limit}
         )
-        download_models = result.scalars().all()
+        
+        try:
+            result = await self._session.execute(
+                select(DownloadModel)
+                .where(DownloadModel.status == DownloadStatus.FAILED.value)
+                .order_by(DownloadModel.updated_at.desc())
+                .limit(limit)
+            )
+            download_models = result.scalars().all()
 
-        unified: list[UnifiedDownload] = []
-        for dm in download_models:
-            track_info = await self._get_track_info(TrackId(dm.track_id))
-            download = self._create_unified_download(dm, track_info, None)
-            # Add retry info as metadata
-            download.provider_metadata = {
-                "retry_count": dm.retry_count,
-                "max_retries": dm.max_retries,
-                "last_error_code": dm.last_error_code,
-            }
-            unified.append(download)
+            unified: list[UnifiedDownload] = []
+            for dm in download_models:
+                track_info = await self._get_track_info(TrackId(dm.track_id))
+                download = self._create_unified_download(dm, track_info, None)
+                # Add retry info as metadata
+                download.provider_metadata = {
+                    "retry_count": dm.retry_count,
+                    "max_retries": dm.max_retries,
+                    "last_error_code": dm.last_error_code,
+                }
+                unified.append(download)
 
-        return unified
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={"failed_downloads_count": len(unified)},
+            )
+            return unified
+            
+        except Exception as e:
+            logger.error(
+                "Error getting failed downloads",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
+            end_operation(logger, operation_id, success=False, error=e)
+            raise
 
     async def get_download_by_id(
         self, download_id: DownloadId

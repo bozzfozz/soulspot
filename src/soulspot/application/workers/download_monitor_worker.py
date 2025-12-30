@@ -18,8 +18,11 @@
 import asyncio
 import contextlib
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
+
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.integrations.slskd_client import SlskdClient
@@ -92,6 +95,11 @@ class DownloadMonitorWorker:
         self._task: asyncio.Task[None] | None = None
         self._poll_count = 0  # Track polls for stale check interval
 
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._errors_total = 0
+        self._start_time = time.time()
+
         # Stats for monitoring - values can be int, str, or None
         self._stats: dict[str, int | str | None] = {
             "polls_completed": 0,
@@ -109,17 +117,19 @@ class DownloadMonitorWorker:
         Safe to call multiple times (idempotent).
         """
         if self._running:
-            logger.warning("Download monitor worker is already running")
+            logger.warning("download_monitor.already_running")
             return
 
         self._running = True
+        self._start_time = time.time()  # Reset start time
         self._task = asyncio.create_task(self._run_loop())
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-
+        
         logger.info(
-            LogMessages.worker_started(
-                worker="Download Monitor", interval=self._poll_interval
-            )
+            "worker.started",
+            extra={
+                "worker": "download_monitor",
+                "poll_interval_seconds": self._poll_interval,
+            },
         )
 
     async def stop(self) -> None:
@@ -134,7 +144,19 @@ class DownloadMonitorWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
-        logger.info("Download monitor worker stopped")
+        
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "download_monitor",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": round(uptime, 2),
+                "downloads_completed": self._stats.get("downloads_completed", 0),
+                "downloads_failed": self._stats.get("downloads_failed", 0),
+            },
+        )
 
     def get_status(self) -> dict[str, Any]:
         """Get current worker status for monitoring/UI.
@@ -164,24 +186,47 @@ class DownloadMonitorWorker:
         # Short delay on startup to let other services initialize
         await asyncio.sleep(5)
 
-        logger.info("Download monitor worker entering main loop")
+        logger.info("download_monitor.loop_started")
 
         while self._running:
             try:
                 await self._poll_downloads()
                 self._poll_count += 1
+                self._cycles_completed += 1
                 polls = self._stats.get("polls_completed")
                 self._stats["polls_completed"] = (int(polls) if polls else 0) + 1
                 self._stats["last_poll_at"] = datetime.now(UTC).isoformat()
                 self._stats["last_error"] = None
+
+                # Log health every 10 cycles
+                if self._cycles_completed % 10 == 0:
+                    log_worker_health(
+                        logger=logger,
+                        worker_name="download_monitor",
+                        cycles_completed=self._cycles_completed,
+                        errors_total=self._errors_total,
+                        uptime_seconds=time.time() - self._start_time,
+                        extra_stats={
+                            "downloads_completed": self._stats.get("downloads_completed", 0),
+                            "downloads_failed": self._stats.get("downloads_failed", 0),
+                        },
+                    )
 
                 # Check for stale downloads periodically (not every poll for efficiency)
                 if self._poll_count % STALE_CHECK_INTERVAL_POLLS == 0:
                     await self._check_stale_downloads()
 
             except Exception as e:
+                self._errors_total += 1
                 # Don't crash the loop on errors
-                logger.error(f"Error in download monitor loop: {e}", exc_info=True)
+                logger.error(
+                    "download_monitor.loop_error",
+                    exc_info=True,
+                    extra={
+                        "error_type": type(e).__name__,
+                        "cycle": self._cycles_completed,
+                    },
+                )
                 self._stats["last_error"] = str(e)
 
             # Wait for next poll

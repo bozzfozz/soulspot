@@ -1,5 +1,7 @@
 """Playlist management endpoints."""
 
+import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,10 +26,16 @@ from soulspot.application.use_cases.queue_playlist_downloads import (
 from soulspot.domain.entities import Playlist, PlaylistSource
 from soulspot.domain.exceptions import ValidationException
 from soulspot.domain.value_objects import PlaylistId, SpotifyUri
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.repositories import (
     PlaylistRepository,
 )
 from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -112,6 +120,16 @@ async def import_playlist(
     Returns:
         Import status and statistics
     """
+    operation_id = start_operation(
+        logger,
+        "api.playlists.import_playlist",
+        extra={
+            "playlist_input": playlist_id,
+            "fetch_all_tracks": fetch_all_tracks,
+            "auto_queue_downloads": auto_queue_downloads,
+        },
+    )
+
     try:
         # Extract ID from URL if needed
         extracted_id = _extract_playlist_id(playlist_id)
@@ -149,10 +167,25 @@ async def import_playlist(
                 errors_list: list[str] = result["errors"]
                 errors_list.extend(queue_response.errors)
 
+        end_operation(
+            logger,
+            operation_id,
+            success=True,
+            extra={
+                "playlist_name": response.playlist.name,
+                "tracks_imported": response.tracks_imported,
+                "tracks_failed": response.tracks_failed,
+                "auto_queued": auto_queue_downloads,
+            },
+        )
         return result
     except ValueError as e:
+        logger.error(f"Validation error importing playlist: {e}", exc_info=True, extra={"error_type": "ValueError"})
+        end_operation(logger, operation_id, success=False, error=e)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.error(f"Failed to import playlist: {e}", exc_info=True, extra={"error_type": type(e).__name__})
+        end_operation(logger, operation_id, success=False, error=e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

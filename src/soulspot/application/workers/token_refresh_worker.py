@@ -15,7 +15,10 @@
 import asyncio
 import contextlib
 import logging
+import time
 from typing import TYPE_CHECKING, Any
+
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 
 if TYPE_CHECKING:
     from soulspot.application.services.token_manager import DatabaseTokenManager
@@ -56,6 +59,11 @@ class TokenRefreshWorker:
         self.refresh_threshold_minutes = refresh_threshold_minutes
         self._running = False
         self._task: asyncio.Task[None] | None = None
+        
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._errors_total = 0
+        self._start_time = time.time()
 
     async def start(self) -> None:
         """Start the token refresh worker.
@@ -64,19 +72,20 @@ class TokenRefreshWorker:
         Safe to call multiple times (idempotent).
         """
         if self._running:
-            logger.warning("Token refresh worker is already running")
+            logger.warning("token_refresh.already_running")
             return
 
         self._running = True
+        self._start_time = time.time()  # Reset start time
         self._task = asyncio.create_task(self._run_loop())
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-
+        
         logger.info(
-            LogMessages.worker_started(
-                worker="Token Refresh",
-                interval=self.check_interval_seconds,
-                config={"refresh_threshold_min": self.refresh_threshold_minutes},
-            )
+            "worker.started",
+            extra={
+                "worker": "token_refresh",
+                "check_interval_seconds": self.check_interval_seconds,
+                "refresh_threshold_minutes": self.refresh_threshold_minutes,
+            },
         )
 
     async def stop(self) -> None:
@@ -91,7 +100,17 @@ class TokenRefreshWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
             self._task = None
-        logger.info("Token refresh worker stopped")
+        
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "token_refresh",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": round(uptime, 2),
+            },
+        )
 
     async def _run_loop(self) -> None:
         """Main worker loop - checks and refreshes tokens periodically.
@@ -108,21 +127,43 @@ class TokenRefreshWorker:
         # Yo - wait a bit on startup to let other services initialize
         await asyncio.sleep(10)
 
+        logger.info("token_refresh.loop_started")
+
         while self._running:
             try:
                 # Check and refresh expiring tokens
                 refreshed = await self.token_manager.refresh_expiring_tokens(
                     threshold_minutes=self.refresh_threshold_minutes
                 )
+                
+                self._cycles_completed += 1
 
                 if refreshed:
-                    logger.info("Token refreshed successfully by background worker")
+                    logger.info("token_refresh.refreshed", extra={"cycle": self._cycles_completed})
                 else:
-                    logger.debug("No tokens needed refresh")
+                    logger.debug("token_refresh.no_refresh_needed", extra={"cycle": self._cycles_completed})
+                
+                # Log health every 10 cycles
+                if self._cycles_completed % 10 == 0:
+                    log_worker_health(
+                        logger=logger,
+                        worker_name="token_refresh",
+                        cycles_completed=self._cycles_completed,
+                        errors_total=self._errors_total,
+                        uptime_seconds=time.time() - self._start_time,
+                    )
 
             except Exception as e:
+                self._errors_total += 1
                 # Don't crash the loop on errors - log and continue
-                logger.error(f"Error in token refresh worker: {e}", exc_info=True)
+                logger.error(
+                    "token_refresh.loop_error",
+                    exc_info=True,
+                    extra={
+                        "error_type": type(e).__name__,
+                        "cycle": self._cycles_completed,
+                    },
+                )
 
             # Wait for next check
             try:

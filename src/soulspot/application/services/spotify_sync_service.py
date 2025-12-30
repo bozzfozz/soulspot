@@ -20,12 +20,17 @@
 """Service for automatic Spotify data synchronization with diff logic."""
 
 import logging
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.value_objects import ImageRef
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.models import ensure_utc_aware
 from soulspot.infrastructure.persistence.repositories import (
     AlbumRepository,
@@ -219,6 +224,10 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats (added, removed, total, etc.)
         """
+        operation_id = start_operation(
+            logger, "spotify_sync.followed_artists", extra={"force": force}
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -241,6 +250,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping artists sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "provider_disabled"})
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
@@ -250,6 +260,7 @@ class SpotifySyncService:
             if not self.spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping artists sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "not_authenticated"})
                 return stats
 
             # Check if artists sync is enabled (feature-level)
@@ -259,6 +270,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_disabled"] = True
                 logger.debug("Artists sync is disabled in settings")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "sync_disabled"})
                 return stats
 
             # Check cooldown (NEW: In-Memory statt DB)
@@ -269,6 +281,7 @@ class SpotifySyncService:
                 existing_count = await self.repo.count_artists()
                 stats["total"] = existing_count
                 logger.debug("Skipping followed artists sync (cooldown)")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "cooldown", "total": existing_count})
                 return stats
 
             # No more "running" status - we just proceed
@@ -405,10 +418,27 @@ class SpotifySyncService:
                 f"Followed artists sync complete: {stats['total']} total, "
                 f"+{stats['added']} added, -{stats['removed']} removed"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "total": stats["total"],
+                    "added": stats["added"],
+                    "removed": stats["removed"],
+                    "unchanged": stats["unchanged"],
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Error syncing followed artists: {e}")
+            logger.error(
+                "Error syncing followed artists",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
             # No DB status update on error - we'll just retry next time
 
         return stats
@@ -669,6 +699,12 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats
         """
+        operation_id = start_operation(
+            logger,
+            "spotify_sync.artist_albums",
+            extra={"artist_id": artist_id, "force": force},
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -683,6 +719,12 @@ class SpotifySyncService:
             artist = await self.repo.get_artist_by_id(artist_id)
             if not artist:
                 stats["error"] = f"Artist {artist_id} not found"
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=False,
+                    extra={"error": "artist_not_found", "artist_id": artist_id},
+                )
                 return stats
 
             # Check cooldown based on albums_synced_at
@@ -697,6 +739,16 @@ class SpotifySyncService:
                 ):
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_albums_by_artist(artist_id)
+                    end_operation(
+                        logger,
+                        operation_id,
+                        success=True,
+                        extra={
+                            "skipped": "cooldown",
+                            "artist_id": artist_id,
+                            "total": stats["total"],
+                        },
+                    )
                     return stats
 
             # Fetch albums with multi-provider fallback
@@ -723,10 +775,27 @@ class SpotifySyncService:
                 f"Synced {len(album_dtos)} albums for artist {artist_id} "
                 f"(source: {stats['source']})"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "artist_id": artist_id,
+                    "total": stats["total"],
+                    "added": stats["added"],
+                    "source": stats["source"],
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Error syncing albums for artist {artist_id}: {e}")
+            logger.error(
+                f"Error syncing albums for artist {artist_id}",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "artist_id": artist_id},
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return stats
 
@@ -1164,6 +1233,12 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats
         """
+        operation_id = start_operation(
+            logger,
+            "spotify_sync.album_tracks",
+            extra={"album_id": album_id, "force": force},
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -1177,6 +1252,12 @@ class SpotifySyncService:
             album = await self.repo.get_album_by_id(album_id)
             if not album:
                 stats["error"] = f"Album {album_id} not found"
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=False,
+                    extra={"error": "album_not_found", "album_id": album_id},
+                )
                 return stats
 
             # Check cooldown
@@ -1191,6 +1272,16 @@ class SpotifySyncService:
                 ):
                     stats["skipped_cooldown"] = True
                     stats["total"] = await self.repo.count_tracks_by_album(album_id)
+                    end_operation(
+                        logger,
+                        operation_id,
+                        success=True,
+                        extra={
+                            "skipped": "cooldown",
+                            "album_id": album_id,
+                            "total": stats["total"],
+                        },
+                    )
                     return stats
 
             # Fetch album with tracks from Spotify using plugin
@@ -1198,6 +1289,12 @@ class SpotifySyncService:
 
             if not album_dto:
                 stats["error"] = f"Album {album_id} not found on Spotify"
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=False,
+                    extra={"error": "album_not_found_on_spotify", "album_id": album_id},
+                )
                 return stats
 
             # Album DTO contains tracks list
@@ -1219,10 +1316,26 @@ class SpotifySyncService:
 
             stats["synced"] = True
             logger.info(f"Synced {len(track_dtos)} tracks for album {album_id}")
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "album_id": album_id,
+                    "total": stats["total"],
+                    "added": stats["added"],
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Error syncing tracks for album {album_id}: {e}")
+            logger.error(
+                f"Error syncing tracks for album {album_id}",
+                exc_info=True,
+                extra={"error_type": type(e).__name__, "album_id": album_id},
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return stats
 
@@ -1347,6 +1460,10 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats (added, removed, total, etc.)
         """
+        operation_id = start_operation(
+            logger, "spotify_sync.user_playlists", extra={"force": force}
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -1368,6 +1485,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping playlists sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "provider_disabled"})
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
@@ -1376,6 +1494,7 @@ class SpotifySyncService:
             if not self.spotify_plugin.can_use(PluginCapability.USER_PLAYLISTS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping playlists sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "not_authenticated"})
                 return stats
 
             # Check if playlist sync is enabled (feature-level)
@@ -1385,6 +1504,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_disabled"] = True
                 logger.debug("Playlist sync is disabled in settings")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "sync_disabled"})
                 return stats
 
             # Check cooldown (REFACTORED: Now persists to DB!)
@@ -1394,6 +1514,12 @@ class SpotifySyncService:
                 stats["skipped_cooldown"] = True
                 stats["total"] = await self.repo.count_spotify_playlists()
                 logger.debug("Skipping user playlists sync (cooldown)")
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=True,
+                    extra={"skipped": "cooldown", "total": stats["total"]},
+                )
                 return stats
 
             # No more "running" status - we just proceed
@@ -1467,10 +1593,27 @@ class SpotifySyncService:
                 f"User playlists sync complete: {stats['total']} total, "
                 f"+{stats['added']} added, -{stats['removed']} removed"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "total": stats["total"],
+                    "added": stats["added"],
+                    "removed": stats["removed"],
+                    "unchanged": stats["unchanged"],
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Error syncing user playlists: {e}")
+            logger.error(
+                "Error syncing user playlists",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
             # No DB status update on error - we'll just retry next time
 
         return stats
@@ -1591,6 +1734,10 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats
         """
+        operation_id = start_operation(
+            logger, "spotify_sync.liked_songs", extra={"force": force}
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -1610,6 +1757,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Liked Songs sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "provider_disabled"})
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
@@ -1618,6 +1766,7 @@ class SpotifySyncService:
             if not self.spotify_plugin.can_use(PluginCapability.USER_SAVED_TRACKS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Liked Songs sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "not_authenticated"})
                 return stats
 
             # Check if Liked Songs sync is enabled (feature-level)
@@ -1627,6 +1776,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_disabled"] = True
                 logger.debug("Liked Songs sync is disabled in settings")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "sync_disabled"})
                 return stats
 
             # Check cooldown
@@ -1634,6 +1784,12 @@ class SpotifySyncService:
                 stats["skipped_cooldown"] = True
                 stats["total"] = await self.repo.count_liked_songs_tracks()
                 logger.debug("Skipping Liked Songs sync (cooldown)")
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=True,
+                    extra={"skipped": "cooldown", "total": stats["total"]},
+                )
                 return stats
 
             # Mark sync as running
@@ -1671,20 +1827,29 @@ class SpotifySyncService:
             stats["synced"] = True
 
             logger.info(f"Liked Songs sync complete: {stats['total']} tracks")
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "total": stats["total"],
+                    "added": stats["added"],
+                },
+            )
 
         except Exception as e:
-            from soulspot.infrastructure.observability.log_messages import LogMessages
-
             logger.error(
-                LogMessages.sync_failed(
-                    entity="Liked Songs",
-                    source="Spotify",
-                    error=str(e),
-                    hint="Check if liked tracks have valid album/artist data in Spotify",
-                ),
+                "Error syncing Liked Songs from Spotify",
                 exc_info=True,
+                extra={
+                    "error_type": type(e).__name__,
+                    "hint": "Check if liked tracks have valid album/artist data in Spotify",
+                },
             )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
+            
             await self.repo.update_sync_status(
                 sync_type="liked_songs",
                 status="error",
@@ -1780,6 +1945,10 @@ class SpotifySyncService:
         Returns:
             Dict with sync stats
         """
+        operation_id = start_operation(
+            logger, "spotify_sync.saved_albums", extra={"force": force}
+        )
+        
         stats: dict[str, Any] = {
             "synced": False,
             "total": 0,
@@ -1800,6 +1969,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_provider_disabled"] = True
                 logger.debug("Spotify provider is disabled, skipping Saved Albums sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "provider_disabled"})
                 return stats
 
             # Hey future me - AUTH CHECK USING can_use() - checks capability + auth!
@@ -1808,6 +1978,7 @@ class SpotifySyncService:
             if not self.spotify_plugin.can_use(PluginCapability.USER_SAVED_ALBUMS):
                 stats["skipped_not_authenticated"] = True
                 logger.debug("Spotify not authenticated, skipping Saved Albums sync")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "not_authenticated"})
                 return stats
 
             # Check if Saved Albums sync is enabled (feature-level)
@@ -1817,6 +1988,7 @@ class SpotifySyncService:
             ):
                 stats["skipped_disabled"] = True
                 logger.debug("Saved Albums sync is disabled in settings")
+                end_operation(logger, operation_id, success=True, extra={"skipped": "sync_disabled"})
                 return stats
 
             # Check cooldown
@@ -1824,6 +1996,12 @@ class SpotifySyncService:
                 stats["skipped_cooldown"] = True
                 stats["total"] = await self.repo.count_saved_albums()
                 logger.debug("Skipping Saved Albums sync (cooldown)")
+                end_operation(
+                    logger,
+                    operation_id,
+                    success=True,
+                    extra={"skipped": "cooldown", "total": stats["total"]},
+                )
                 return stats
 
             # Mark sync as running
@@ -1905,10 +2083,27 @@ class SpotifySyncService:
                 f"Saved Albums sync complete: {stats['total']} total, "
                 f"+{stats['added']} added, -{stats['removed']} unmarked"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "total": stats["total"],
+                    "added": stats["added"],
+                    "removed": stats["removed"],
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Error syncing Saved Albums: {e}")
+            logger.error(
+                "Error syncing Saved Albums",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
+            
             await self.repo.update_sync_status(
                 sync_type="saved_albums",
                 status="error",

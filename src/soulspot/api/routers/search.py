@@ -15,7 +15,9 @@ The Search Page UI uses these endpoints to show combined results from all provid
 Soulseek endpoints remain separate since they search the P2P network for actual files.
 """
 
+import asyncio
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -29,6 +31,10 @@ from soulspot.api.dependencies import (
     get_spotify_plugin_optional,
 )
 from soulspot.infrastructure.integrations.slskd_client import SlskdClient
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 
 if TYPE_CHECKING:
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
@@ -173,6 +179,12 @@ async def unified_search(
     Returns:
         Combined artists, albums, tracks from all providers
     """
+    operation_id = start_operation(
+        logger,
+        "api.search.unified_search",
+        extra={"query": query, "limit": limit},
+    )
+
     import asyncio
 
     from soulspot.application.services.app_settings_service import AppSettingsService
@@ -407,6 +419,7 @@ async def unified_search(
 
     # Error if no providers available
     if not sources_queried:
+        end_operation(logger, operation_id, success=False)
         raise HTTPException(
             status_code=503,
             detail="No search providers available. Enable Deezer or connect Spotify.",
@@ -417,7 +430,7 @@ async def unified_search(
     albums.sort(key=lambda x: x.total_tracks, reverse=True)
     tracks.sort(key=lambda x: x.popularity, reverse=True)
 
-    return UnifiedSearchResponse(
+    response = UnifiedSearchResponse(
         artists=artists,
         albums=albums,
         tracks=tracks,
@@ -425,6 +438,19 @@ async def unified_search(
         sources_queried=sources_queried,
         source_counts=source_counts,
     )
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={
+            "artists_count": len(artists),
+            "albums_count": len(albums),
+            "tracks_count": len(tracks),
+            "sources": sources_queried,
+            "source_counts": source_counts,
+        },
+    )
+    return response
 
 
 def _normalize_name(name: str) -> str:

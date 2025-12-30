@@ -19,6 +19,10 @@ from soulspot.domain.ports import (
     ITrackRepository,
 )
 from soulspot.domain.value_objects import FilePath
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 
 if TYPE_CHECKING:
     from soulspot.application.services.app_settings_service import AppSettingsService
@@ -201,6 +205,12 @@ class AutoImportService:
 
         OPTIMIZED: Uses parallel processing with concurrency limit for 5x+ speedup!
         """
+        operation_id = start_operation(
+            logger,
+            "auto_import.process_downloads",
+            extra={"poll_interval": self._poll_interval},
+        )
+        
         try:
             # Get all audio files in downloads directory
             audio_files = self._get_audio_files(self._download_path)
@@ -304,9 +314,27 @@ class AutoImportService:
                     skip_count,
                     error_count,
                 )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "total_files": len(audio_files),
+                    "completed_track_ids_count": len(completed_track_ids),
+                    "imported": success_count,
+                    "skipped": skip_count,
+                    "errors": error_count,
+                },
+            )
 
         except Exception as e:
-            logger.exception("Error processing downloads: %s", e, exc_info=True)
+            logger.error(
+                "Error processing downloads",
+                exc_info=True,
+                extra={"error_type": type(e).__name__},
+            )
+            end_operation(logger, operation_id, success=False, error=e)
 
     # Hey future me: Recursive file discovery with completeness check
     # WHY rglob("*")? Downloads might be organized in subdirs like "Artist/Album/track.mp3"

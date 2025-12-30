@@ -13,6 +13,7 @@ immediately, so user doesn't have to wait 6 hours for the LibraryDiscoveryWorker
 """
 
 import logging
+import time
 
 # Hey future me - we use TYPE_CHECKING for SpotifyPlugin to avoid circular imports!
 from typing import TYPE_CHECKING, Any
@@ -29,6 +30,10 @@ from soulspot.application.services.followed_artists_service import (
     FollowedArtistsService,
 )
 from soulspot.domain.value_objects import ArtistId
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
 if TYPE_CHECKING:
@@ -246,12 +251,15 @@ async def sync_followed_artists(
     Raises:
         HTTPException: If Spotify API fails or authentication issues
     """
+    operation_id = start_operation(logger, "api.artists.sync_followed_artists")
+
     # Check if Spotify provider is enabled + auth using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
+        end_operation(logger, operation_id, success=False)
         raise HTTPException(
             status_code=503,
             detail="Spotify provider is disabled in settings. Enable it to sync artists.",
@@ -259,6 +267,7 @@ async def sync_followed_artists(
 
     # can_use() checks capability + auth in one call
     if not spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
+        end_operation(logger, operation_id, success=False)
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -287,7 +296,7 @@ async def sync_followed_artists(
             f"{stats['created']} created, {stats['updated']} updated"
         )
 
-        return SyncArtistsResponse(
+        response = SyncArtistsResponse(
             artists=[_artist_to_response(a) for a in artists],
             stats=stats,
             message=(
@@ -296,6 +305,18 @@ async def sync_followed_artists(
                 f"Errors: {stats['errors']}"
             ),
         )
+        end_operation(
+            logger,
+            operation_id,
+            success=True,
+            extra={
+                "total_artists": len(artists),
+                "created": stats["created"],
+                "updated": stats["updated"],
+                "errors": stats["errors"],
+            },
+        )
+        return response
     except Exception as e:
         await session.rollback()
         from soulspot.infrastructure.observability.log_messages import LogMessages
@@ -308,7 +329,9 @@ async def sync_followed_artists(
                 hint="Check Spotify authentication in Settings → Providers → Spotify",
             ),
             exc_info=True,
+            extra={"error_type": type(e).__name__},
         )
+        end_operation(logger, operation_id, success=False, error=e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync followed artists: {str(e)}",
@@ -497,6 +520,16 @@ async def add_artist_to_library(
     Returns:
         Created or existing artist with status indicator
     """
+    operation_id = start_operation(
+        logger,
+        "api.artists.add_artist_to_library",
+        extra={
+            "artist_name": request.name,
+            "has_spotify_id": request.spotify_id is not None,
+            "has_deezer_id": request.deezer_id is not None,
+        },
+    )
+
     # Hey future me - DEBUG LOGGING to catch wrong artist issues!
     # If all Add clicks show same artist name (e.g. "Nosferatu"), check these values!
     logger.debug(
@@ -521,6 +554,7 @@ async def add_artist_to_library(
         existing = await repo.get_by_spotify_uri(spotify_uri)
         if existing and existing.source in (ArtistSource.LOCAL, ArtistSource.HYBRID):
             logger.info(f"Artist already exists locally (spotify_uri): {existing.name}")
+            end_operation(logger, operation_id, success=True, extra={"already_exists": True, "source": "spotify_uri"})
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -541,6 +575,7 @@ async def add_artist_to_library(
                 artist_name=existing.name,
             )
 
+            end_operation(logger, operation_id, success=True, extra={"upgraded_to_hybrid": True, "source": "spotify"})
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -641,6 +676,12 @@ async def add_artist_to_library(
     )
     logger.info(f"Queued background discography sync for: {artist.name}")
 
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={"created": True, "artist_name": artist.name, "artist_id": str(artist.id.value)},
+    )
     return AddArtistResponse(
         artist=_artist_to_response(artist),
         created=True,
@@ -1493,6 +1534,12 @@ async def sync_artist_discography_complete(
     Returns:
         Sync statistics (albums/tracks added/skipped)
     """
+    operation_id = start_operation(
+        logger,
+        "api.artists.sync_discography_complete",
+        extra={"artist_id": artist_id, "include_tracks": include_tracks},
+    )
+
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
     try:
@@ -1521,7 +1568,7 @@ async def sync_artist_discography_complete(
             "none": "No provider data available",
         }
 
-        return DiscographySyncResponse(
+        response = DiscographySyncResponse(
             albums_total=stats["albums_total"],
             albums_added=stats["albums_added"],
             albums_skipped=stats["albums_skipped"],
@@ -1535,13 +1582,28 @@ async def sync_artist_discography_complete(
                 f"Tracks: {stats['tracks_added']} added / {stats['tracks_skipped']} skipped."
             ),
         )
+        end_operation(
+            logger,
+            operation_id,
+            success=True,
+            extra={
+                "source": stats["source"],
+                "albums_added": stats["albums_added"],
+                "tracks_added": stats["tracks_added"],
+                "albums_total": stats["albums_total"],
+                "tracks_total": stats["tracks_total"],
+            },
+        )
+        return response
 
     except Exception as e:
         await session.rollback()
         logger.error(
             f"Failed to sync complete discography for artist {artist_id}: {e}",
             exc_info=True,
+            extra={"error_type": type(e).__name__},
         )
+        end_operation(logger, operation_id, success=False, error=e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync discography: {str(e)}",

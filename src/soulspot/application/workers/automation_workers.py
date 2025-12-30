@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from soulspot.application.services.automation_workflow_service import (
@@ -12,6 +13,7 @@ from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.domain.entities import AutomationTrigger
+from soulspot.infrastructure.observability.logger_template import log_worker_health
 from soulspot.infrastructure.plugins import SpotifyPlugin
 
 if TYPE_CHECKING:
@@ -50,6 +52,11 @@ class WatchlistWorker:
         # Hey - token_manager is set via set_token_manager() after construction
         # This avoids circular dependencies and allows workers to be created before app.state is ready
         self._token_manager: DatabaseTokenManager | None = None
+        
+        # Lifecycle tracking for health monitoring
+        self._cycles_completed = 0
+        self._errors_total = 0
+        self._start_time = time.time()
 
     def set_token_manager(self, token_manager: "DatabaseTokenManager") -> None:
         """Set the token manager for getting Spotify access tokens.
@@ -64,17 +71,19 @@ class WatchlistWorker:
     async def start(self) -> None:
         """Start the watchlist worker."""
         if self._running:
-            logger.warning("Watchlist worker is already running")
+            logger.warning("watchlist_worker.already_running")
             return
 
         self._running = True
+        self._start_time = time.time()  # Reset start time
         self._task = asyncio.create_task(self._run_loop())
-        from soulspot.infrastructure.observability.log_messages import LogMessages
-
+        
         logger.info(
-            LogMessages.worker_started(
-                worker="Watchlist", interval=self.check_interval_seconds
-            )
+            "worker.started",
+            extra={
+                "worker": "watchlist",
+                "check_interval_seconds": self.check_interval_seconds,
+            },
         )
 
     async def stop(self) -> None:
@@ -84,7 +93,17 @@ class WatchlistWorker:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-        logger.info("Watchlist worker stopped")
+        
+        uptime = time.time() - self._start_time
+        logger.info(
+            "worker.stopped",
+            extra={
+                "worker": "watchlist",
+                "cycles_completed": self._cycles_completed,
+                "errors_total": self._errors_total,
+                "uptime_seconds": round(uptime, 2),
+            },
+        )
 
     def get_status(self) -> dict[str, Any]:
         """Get worker status for monitoring/UI.

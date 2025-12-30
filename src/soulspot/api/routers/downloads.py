@@ -1,6 +1,7 @@
 """Download management endpoints."""
 
 import logging
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -22,6 +23,10 @@ from soulspot.application.workers.job_queue import JobQueue
 from soulspot.domain.entities import Download, DownloadStatus
 from soulspot.domain.value_objects import DownloadId, SpotifyUri, TrackId
 from soulspot.infrastructure.observability.log_messages import LogMessages
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
+)
 from soulspot.infrastructure.persistence.repositories import (
     DownloadRepository,
     TrackRepository,
@@ -146,10 +151,24 @@ async def create_download(
     Returns:
         Created download info including ID and status
     """
+    operation_id = start_operation(
+        logger,
+        "api.downloads.create_download",
+        extra={
+            "has_track_id": request.track_id is not None,
+            "has_spotify_id": request.spotify_id is not None,
+            "has_deezer_id": request.deezer_id is not None,
+            "has_tidal_id": request.tidal_id is not None,
+            "priority": request.priority,
+            "slskd_available": slskd_available,
+        },
+    )
+
     # Must provide at least one ID
     if not any(
         [request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]
     ):
+        end_operation(logger, operation_id, success=False)
         raise HTTPException(
             status_code=400,
             detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id",
@@ -244,6 +263,7 @@ async def create_download(
             DownloadStatus.CANCELLED,
             DownloadStatus.FAILED,
         ]:
+            end_operation(logger, operation_id, success=True, extra={"already_queued": True, "status": existing.status.value})
             return {
                 "message": "Download already in queue",
                 "id": str(existing.id.value),
@@ -260,6 +280,7 @@ async def create_download(
                     track_id=track_id,
                     priority=request.priority,
                 )
+                end_operation(logger, operation_id, success=True, extra={"status": "queued", "job_id": job_id})
                 return {
                     "message": "Download queued successfully",
                     "id": job_id,
@@ -286,6 +307,7 @@ async def create_download(
         )
         await download_repository.add(download)
 
+        end_operation(logger, operation_id, success=True, extra={"status": "waiting", "download_id": str(download.id.value)})
         return {
             "message": "Download added to waitlist (downloader offline)",
             "id": str(download.id.value),
@@ -293,6 +315,12 @@ async def create_download(
         }
 
     except Exception as e:
+        logger.error(
+            "Failed to create download",
+            exc_info=True,
+            extra={"error_type": type(e).__name__},
+        )
+        end_operation(logger, operation_id, success=False, error=e)
         raise HTTPException(
             status_code=500, detail=f"Failed to create download: {str(e)}"
         ) from e
@@ -496,6 +524,12 @@ async def list_downloads(
     Returns:
         Paginated list of downloads with total count and page info
     """
+    operation_id = start_operation(
+        logger,
+        "api.downloads.list_downloads",
+        extra={"status_filter": status, "page": page, "limit": limit},
+    )
+
     # Calculate offset from page number
     offset = (page - 1) * limit
 
@@ -514,7 +548,7 @@ async def list_downloads(
     has_next = page < total_pages
     has_previous = page > 1
 
-    return {
+    result = {
         "downloads": [
             {
                 "id": str(download.id.value),
@@ -547,6 +581,14 @@ async def list_downloads(
         "has_previous": has_previous,
         "status": status,
     }
+
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={"total_downloads": total, "returned_count": len(downloads), "total_pages": total_pages},
+    )
+    return result
 
 
 # Hey future me - download history shows recently COMPLETED downloads!
@@ -657,6 +699,8 @@ async def get_download_statistics(
     Returns:
         Download statistics dashboard data
     """
+    operation_id = start_operation(logger, "api.downloads.get_statistics")
+
     from datetime import timedelta
 
     from sqlalchemy import func, select
@@ -744,7 +788,7 @@ async def get_download_statistics(
         (total_completed / total_attempted * 100) if total_attempted > 0 else 0
     )
 
-    return {
+    result = {
         "queue": {
             "pending": queue_pending,
             "active": active_downloading,
@@ -766,6 +810,18 @@ async def get_download_statistics(
         },
         "timestamp": now.isoformat(),
     }
+
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={
+            "total_completed": total_completed,
+            "total_failed": total_failed,
+            "success_rate": round(success_rate, 1),
+        },
+    )
+    return result
 
 
 # Yo, this is a GLOBAL pause - stops ALL download processing across the entire system! The job queue stops
@@ -1059,6 +1115,8 @@ async def get_queue_status(
     Returns:
         Queue status information including waiting downloads count
     """
+    operation_id = start_operation(logger, "api.downloads.get_queue_status")
+
     stats = job_queue.get_stats()
 
     # Count downloads waiting for slskd to become available
@@ -1066,7 +1124,7 @@ async def get_queue_status(
         DownloadStatus.WAITING.value
     )
 
-    return {
+    result = {
         "paused": job_queue.is_paused(),
         "max_concurrent_downloads": job_queue.get_max_concurrent_jobs(),
         "active_downloads": stats.get("running", 0),
@@ -1077,6 +1135,18 @@ async def get_queue_status(
         "failed": stats.get("failed", 0),
         "cancelled": stats.get("cancelled", 0),
     }
+
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={
+            "active": stats.get("running", 0),
+            "queued": stats.get("pending", 0),
+            "waiting": waiting_count,
+        },
+    )
+    return result
 
 
 # Hey future me - Bulk download request for Spotify albums/tracks!
@@ -1292,13 +1362,17 @@ async def get_download_status(
     Returns:
         Download status and progress
     """
+    operation_id = start_operation(
+        logger, "api.downloads.get_download_status", extra={"download_id": download_id}
+    )
+
     download_id_obj = DownloadId.from_string(download_id)
     download = await download_repository.get_by_id(download_id_obj)
 
     if not download:
         raise HTTPException(status_code=404, detail="Download not found")
 
-    return {
+    result = {
         "id": str(download.id.value),
         "track_id": str(download.track_id.value),
         "status": download.status.value,
@@ -1314,6 +1388,14 @@ async def get_download_status(
         "created_at": download.created_at.isoformat(),
         "updated_at": download.updated_at.isoformat(),
     }
+
+    end_operation(
+        logger,
+        operation_id,
+        success=True,
+        extra={"status": download.status.value, "progress": download.progress_percent},
+    )
+    return result
 
 
 # Yo, this is INDIVIDUAL download pause (unlike global /pause endpoint!). Marks this download as paused so

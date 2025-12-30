@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,6 +37,10 @@ from soulspot.domain.value_objects.folder_parsing import (
     is_disc_folder,
     parse_album_folder,
     parse_track_filename,
+)
+from soulspot.infrastructure.observability.logger_template import (
+    end_operation,
+    start_operation,
 )
 from soulspot.infrastructure.persistence.models import (
     AlbumModel,
@@ -132,6 +137,16 @@ class LibraryScannerService:
         Returns:
             Dict with scan statistics including cleanup_needed flag
         """
+        operation_id = start_operation(
+            logger,
+            "library_scanner.scan_library",
+            extra={
+                "incremental": incremental,
+                "defer_cleanup": defer_cleanup,
+                "music_path": str(self.music_path),
+            },
+        )
+        
         # Auto-detect scan mode if not specified
         if incremental is None:
             track_count = await self._count_tracks()
@@ -344,10 +359,37 @@ class LibraryScannerService:
                 f"{stats['new_artists']} new artists, {stats['new_albums']} new albums, "
                 f"{stats['compilations_detected']} compilations"
             )
+            
+            end_operation(
+                logger,
+                operation_id,
+                success=True,
+                extra={
+                    "scan_mode": "incremental" if incremental else "full",
+                    "total_files": stats["total_files"],
+                    "imported": stats["imported"],
+                    "skipped": stats["skipped"],
+                    "errors": stats["errors"],
+                    "new_artists": stats["new_artists"],
+                    "new_albums": stats["new_albums"],
+                    "new_tracks": stats["new_tracks"],
+                    "compilations_detected": stats["compilations_detected"],
+                    "cleanup_needed": stats.get("cleanup_needed", False),
+                },
+            )
 
         except Exception as e:
-            logger.error(f"Library scan failed: {e}", exc_info=True)
+            logger.error(
+                "Library scan failed",
+                exc_info=True,
+                extra={
+                    "error_type": type(e).__name__,
+                    "music_path": str(self.music_path),
+                    "incremental": incremental,
+                },
+            )
             stats["error"] = str(e)
+            end_operation(logger, operation_id, success=False, error=e)
 
         return stats
 
