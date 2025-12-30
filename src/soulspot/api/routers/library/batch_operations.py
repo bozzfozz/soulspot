@@ -126,15 +126,24 @@ def _track_model_to_entity(track_model: Any) -> Any:
 async def clear_local_library(
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """Clear all LOCAL library data (tracks, albums, artists with file_path).
+    """Clear LOCAL library data (files with file_path) - MANUAL DEVELOPMENT RESET.
 
-    Hey future me - this is the NUCLEAR OPTION! Use when you want to:
-    1. Start fresh with a clean library scan
-    2. Fix corrupted/fragmented album assignments
-    3. Remove all imported local files without touching Spotify data
+    Hey future me - MANUAL USE ONLY (no automatic workers)!
 
-    This ONLY deletes entities that were imported from local files (have file_path).
-    Spotify-synced data (playlists, spotify_* tables) is NOT affected!
+    Use when:
+    1. Testing local file imports - want clean slate
+    2. Corrupted file_path assignments need cleanup
+    3. Development: reset local files without re-syncing streaming data
+
+    Deletes:
+    - Tracks with file_path (downloaded/imported files)
+    - Albums with NO tracks (true orphans)
+    - Artists with NO albums AND NO tracks (true orphans)
+
+    KEEPS:
+    - ✅ Streaming tracks (file_path=NULL from Spotify/Deezer)
+    - ✅ Albums with streaming tracks
+    - ✅ Artists with streaming data
 
     Returns:
         Statistics about deleted entities
@@ -148,7 +157,7 @@ async def clear_local_library(
 
     return {
         "success": True,
-        "message": "Local library cleared successfully",
+        "message": "Local files cleared (streaming data kept)",
         **stats,
     }
 
@@ -158,18 +167,29 @@ async def clear_entire_library(
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    """⚠️ DEV ONLY: Clear ENTIRE library (local + Spotify + Deezer + Tidal).
+    """⚠️ DEV ONLY: Complete reset - MANUAL DEVELOPMENT RESET.
 
-    Hey future me - this is the ULTRA NUCLEAR OPTION! Only for development/testing!
-    DELETES EVERYTHING:
-    - ALL artists (local + Spotify + Deezer + hybrid)
-    - ALL albums (local + Spotify + Deezer + hybrid)
-    - ALL tracks (local + Spotify + Deezer + hybrid)
+    Hey future me - ULTRA NUCLEAR OPTION! MANUAL USE ONLY!
+
+    DELETES:
+    ✅ Database: ALL tracks, albums, artists (local + streaming)
+    ✅ Image cache: ALL artist/album artwork (.webp/.jpg/.png)
+    ✅ Temp files: ALL temporary processing files
+
+    KEEPS:
+    ❌ /downloads - NOT touched (Soulseek downloads)
+    ❌ /music - NOT touched (organized library)
 
     ⚠️ PROTECTED: Only available when DEBUG mode is enabled!
+    ⚠️ MANUAL ONLY: NO automatic workers trigger this!
+
+    Use when:
+    - Complete fresh start during development
+    - Testing sync from scratch
+    - Database corrupted, need clean slate
 
     Returns:
-        Statistics about deleted entities
+        Statistics about deleted entities + files
     """
     if not settings.debug:
         raise HTTPException(
@@ -191,19 +211,75 @@ async def clear_entire_library(
     albums_count = await session.scalar(select(func.count(AlbumModel.id)))
     tracks_count = await session.scalar(select(func.count(TrackModel.id)))
 
-    # Nuclear option: DELETE EVERYTHING (CASCADE will handle relationships)
+    # Step 1: Nuclear option - DELETE ALL DATABASE ENTITIES (CASCADE will handle relationships)
     await session.execute(delete(TrackModel))
     await session.execute(delete(AlbumModel))
     await session.execute(delete(ArtistModel))
     await session.commit()
 
+    logger.info(
+        "Database cleared: %d tracks, %d albums, %d artists",
+        tracks_count or 0,
+        albums_count or 0,
+        artists_count or 0,
+    )
+
+    # Step 2: DELETE IMAGE CACHE (artist/album artwork)
+    # Hey future me - settings.storage.image_path points to cached images!
+    # Deletes ALL .webp/.jpg/.png files but keeps directory structure.
+    image_path = settings.storage.image_path
+    deleted_images = 0
+    if image_path.exists():
+        for image_file in image_path.rglob("*"):
+            if image_file.is_file() and image_file.suffix.lower() in [
+                ".webp",
+                ".jpg",
+                ".jpeg",
+                ".png",
+            ]:
+                try:
+                    image_file.unlink()
+                    deleted_images += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete image {image_file}: {e}")
+
+    logger.info("Image cache cleared: %d files", deleted_images)
+
+    # Step 3: DELETE TEMP FILES
+    # Hey future me - settings.storage.temp_path is for temporary processing files.
+    # SAFE to delete everything here (not user data).
+    temp_path = settings.storage.temp_path
+    deleted_temp_files = 0
+    if temp_path.exists():
+        for temp_file in temp_path.rglob("*"):
+            if temp_file.is_file():
+                try:
+                    temp_file.unlink()
+                    deleted_temp_files += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete temp file {temp_file}: {e}")
+        # Clean empty directories
+        for dir_path in sorted(
+            temp_path.rglob("*"), key=lambda p: len(p.parts), reverse=True
+        ):
+            if dir_path.is_dir() and not any(dir_path.iterdir()):
+                try:
+                    dir_path.rmdir()
+                except Exception:
+                    pass
+
+    logger.info("Temp files cleared: %d files", deleted_temp_files)
+
     return {
         "success": True,
-        "message": "⚠️ ENTIRE library cleared (local + Spotify + Deezer + Tidal)",
+        "message": "⚠️ COMPLETE reset: database + image cache + temp files cleared",
         "deleted_artists": artists_count or 0,
         "deleted_albums": albums_count or 0,
         "deleted_tracks": tracks_count or 0,
-        "warning": "This was a COMPLETE wipe. Sync from providers to restore data.",
+        "deleted_images": deleted_images,
+        "deleted_temp_files": deleted_temp_files,
+        "warning": "Complete wipe (DB + cache). Sync from providers to restore data.",
+        "kept": "Downloads and music files untouched",
     }
 
 

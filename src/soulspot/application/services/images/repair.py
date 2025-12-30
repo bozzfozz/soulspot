@@ -213,20 +213,13 @@ async def repair_artist_images(
     Returns:
         Stats dict with repaired count, processed count, and errors
     """
-    logger.info("=" * 60)
-    logger.info("🎨 ARTIST IMAGE REPAIR - Starting")
-    logger.info("=" * 60)
-    logger.info(f"  📊 Limit: {limit}")
+    logger.info("Artist Image Repair started (limit=%d)", limit)
     api_fallback_enabled = (
         image_provider_registry is not None or spotify_plugin is not None
     )
-    logger.info(
-        f"  🔌 API fallback: {'enabled' if api_fallback_enabled else 'disabled'}"
-    )
-    logger.info(f"  🎵 Spotify fallback: {'enabled' if spotify_plugin else 'disabled'}")
     if image_provider_registry is not None:
-        logger.info(
-            "  🧩 Providers: %s", image_provider_registry.get_registered_providers()
+        logger.debug(
+            "Providers available: %s", image_provider_registry.get_registered_providers()
         )
 
     # Get total counts for progress tracking
@@ -321,17 +314,13 @@ async def repair_artist_images(
     artists_with_path_result = await session.execute(artists_with_path_query)
     artists_with_valid_path = artists_with_path_result.scalar() or 0
 
-    logger.info("-" * 40)
-    logger.info("📈 DATABASE STATE:")
-    logger.info(f"  👤 Total artists in DB: {total_artists}")
-    logger.info(f"  🔗 Artists with image_url: {artists_with_url}")
-    logger.info(f"  💾 Artists with valid image_path: {artists_with_valid_path}")
-    logger.info(f"  ❌ Artists with FAILED marker: {total_failed}")
-    logger.info(f"  🎯 Artists needing download: {total_missing}")
     logger.info(
-        f"  🔎 Artists missing image_url (candidate for lookup): {artists_missing_url}"
+        "Artists: %d total, %d need download, %d failed, %d missing URL",
+        total_artists,
+        total_missing,
+        total_failed,
+        artists_missing_url,
     )
-    logger.info("-" * 40)
 
     # Get breakdown by failure reason
     failed_breakdown: dict[str, int] = {}
@@ -345,9 +334,7 @@ async def repair_artist_images(
             failed_breakdown[reason] = failed_breakdown.get(reason, 0) + 1
 
     if failed_breakdown:
-        logger.info("❌ FAILED breakdown:")
-        for reason, count in sorted(failed_breakdown.items(), key=lambda x: -x[1]):
-            logger.info(f"    {reason}: {count}")
+        logger.debug("FAILED breakdown: %s", failed_breakdown)
 
     stats: dict[str, Any] = {
         "processed": 0,
@@ -367,34 +354,18 @@ async def repair_artist_images(
 
     # Phase 1: Download from existing CDN URLs
     artists = await get_artists_missing_images(session, limit=limit)
-    logger.info(
-        f"🔍 Query returned {len(artists)} artists (limit: {limit}, total needing: {total_missing})"
-    )
 
     if not artists:
-        logger.info("⚠️ No artists found needing image download!")
-        logger.info("  Possible reasons:")
-        logger.info("    1. All artists already have valid image_path")
-        logger.info(
-            "    2. No artists have image_url set (missing_url=%d; Phase 2 may help)",
-            artists_missing_url,
-        )
-        logger.info(
-            "    3. All artists are marked as FAILED (reset with /reset-failed-images)"
-        )
+        logger.info("No artists need image download (missing_url=%d)", artists_missing_url)
     else:
-        logger.info(f"📥 PHASE 1: Downloading from CDN URLs ({len(artists)} artists)")
+        logger.info("Downloading images for %d artists", len(artists))
 
     for idx, artist in enumerate(artists, 1):
         if not artist.image_url:
-            logger.debug(
-                f"  [{idx}/{len(artists)}] ⏭️ {artist.name}: No image_url, skipping"
-            )
             stats["no_image_url"] += 1
             continue
 
         stats["processed"] += 1
-        logger.debug(f"  [{idx}/{len(artists)}] 🔄 {artist.name}: Downloading...")
 
         try:
             spotify_id = (
@@ -404,11 +375,6 @@ async def repair_artist_images(
 
             image_url = artist.image_url
             provider = guess_provider_from_url(image_url)
-
-            logger.debug(f"      URL: {image_url[:60]}...")
-            logger.debug(
-                f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}"
-            )
 
             provider_id = deezer_id or spotify_id or str(artist.id)
             download_result = await image_service.download_artist_image_with_result(
@@ -422,9 +388,7 @@ async def repair_artist_images(
                 artist.image_path = download_result.path
                 artist.updated_at = datetime.now(UTC)
                 stats["repaired"] += 1
-                logger.info(
-                    f"  [{idx}/{len(artists)}] ✅ {artist.name} → {download_result.path}"
-                )
+                logger.info("Downloaded: %s", artist.name)
             else:
                 error_msg = download_result.error_message or "Download failed"
                 reason = classify_error(error_msg)
@@ -433,16 +397,14 @@ async def repair_artist_images(
                 stats["errors"].append(
                     {"name": artist.name, "error": error_msg, "reason": reason}
                 )
-                logger.warning(
-                    f"  [{idx}/{len(artists)}] ❌ {artist.name}: {reason} - {error_msg[:50]}"
-                )
+                logger.warning("Failed: %s (%s)", artist.name, reason)
 
         except Exception as e:
             error_msg = str(e)
             reason = classify_error(error_msg)
             artist.image_path = make_failed_marker(reason)
             artist.updated_at = datetime.now(UTC)
-            logger.error(f"  [{idx}/{len(artists)}] 💥 {artist.name}: Exception - {e}")
+            logger.error("Exception: %s - %s", artist.name, e)
             stats["errors"].append(
                 {"name": artist.name, "error": error_msg, "reason": reason}
             )
@@ -535,9 +497,7 @@ async def repair_artist_images(
                         {"name": artist.name, "error": error_msg, "reason": reason}
                     )
                     logger.warning(
-                        "  [%d/%d] ❌ %s: %s",
-                        idx,
-                        len(artists_without_url),
+                        "Failed: %s (%s)",
                         artist.name,
                         reason,
                     )
@@ -551,11 +511,11 @@ async def repair_artist_images(
                     {"name": artist.name, "error": error_msg, "reason": reason}
                 )
                 logger.error(
-                    "  [%d/%d] 💥 %s: %s", idx, len(artists_without_url), artist.name, e
+                    "Exception: %s - %s", artist.name, e
                 )
     else:
         logger.info(
-            "📥 PHASE 2: No artists eligible for API fallback (missing_url_with_ids=%d)",
+            "Phase 2: No artists eligible for API fallback (missing_url_with_ids=%d)",
             artists_missing_url_with_ids,
         )
 
@@ -567,30 +527,18 @@ async def repair_artist_images(
     stats["remaining_missing_image_url"] = remaining_missing_url_result.scalar() or 0
 
     # Final summary
-    logger.info("=" * 60)
-    logger.info("🎨 ARTIST IMAGE REPAIR - Complete")
-    logger.info("=" * 60)
-    logger.info(f"  ✅ Repaired: {stats['repaired']}")
-    logger.info(f"  ❌ Errors: {len(stats['errors'])}")
-    logger.info(f"  ⏭️ Skipped (no URL): {stats['no_image_url']}")
-    logger.info(f"  📊 Total processed: {stats['processed']}")
     logger.info(
-        "  🔜 Still needing download (has URL): %d",
+        "Artist Image Repair complete: %d repaired, %d errors, %d remaining",
+        stats["repaired"],
+        len(stats["errors"]),
         stats["remaining_needing_download"],
     )
-    logger.info(
-        "  🔎 Still missing image_url (needs lookup/enrichment): %d",
-        stats["remaining_missing_image_url"],
-    )
     if stats["errors"]:
-        logger.info("  Top errors:")
         error_summary: dict[str, int] = {}
         for err in stats["errors"]:
             r = err.get("reason", "unknown")
             error_summary[r] = error_summary.get(r, 0) + 1
-        for reason, count in sorted(error_summary.items(), key=lambda x: -x[1])[:5]:
-            logger.info(f"    - {reason}: {count}")
-    logger.info("=" * 60)
+        logger.debug("Top errors: %s", dict(sorted(error_summary.items(), key=lambda x: -x[1])[:5]))
 
     return stats
 
@@ -645,16 +593,10 @@ async def repair_album_images(
     Returns:
         Stats dict with repaired count, processed count, and errors
     """
-    logger.info("=" * 60)
-    logger.info("💿 ALBUM COVER REPAIR - Starting")
-    logger.info("=" * 60)
-    logger.info(f"  📊 Limit: {limit}")
-    logger.info(
-        f"  🔌 API fallback: {'enabled' if image_provider_registry else 'disabled'}"
-    )
+    logger.info("Album Cover Repair started (limit=%d)", limit)
     if image_provider_registry is not None:
-        logger.info(
-            "  🧩 Providers: %s", image_provider_registry.get_registered_providers()
+        logger.debug(
+            "Providers available: %s", image_provider_registry.get_registered_providers()
         )
 
     # Get total counts
@@ -755,17 +697,13 @@ async def repair_album_images(
     albums_with_path_result = await session.execute(albums_with_path_query)
     albums_with_valid_path = albums_with_path_result.scalar() or 0
 
-    logger.info("-" * 40)
-    logger.info("📈 DATABASE STATE:")
-    logger.info(f"  💿 Total albums in DB: {total_albums}")
-    logger.info(f"  🔗 Albums with cover_url: {albums_with_url}")
-    logger.info(f"  💾 Albums with valid cover_path: {albums_with_valid_path}")
-    logger.info(f"  ❌ Albums with FAILED marker: {total_failed}")
-    logger.info(f"  🎯 Albums needing download: {total_missing}")
     logger.info(
-        f"  🔎 Albums missing cover_url (candidate for lookup): {albums_missing_url_total}"
+        "Albums: %d total, %d need download, %d failed, %d missing URL",
+        total_albums,
+        total_missing,
+        total_failed,
+        albums_missing_url_total,
     )
-    logger.info("-" * 40)
 
     stats: dict[str, Any] = {
         "processed": 0,
@@ -783,24 +721,11 @@ async def repair_album_images(
     }
 
     albums = await get_albums_missing_covers(session, limit=limit)
-    logger.info(
-        f"🔍 Query returned {len(albums)} albums (limit: {limit}, total needing: {total_missing})"
-    )
 
     if not albums:
-        logger.info("⚠️ No albums found needing cover download!")
-        logger.info("  Possible reasons:")
-        logger.info("    1. All albums already have valid cover_path")
-        logger.info(
-            "    2. No albums have cover_url set (missing_url=%d; Phase 2 may help for %d with IDs)",
-            albums_missing_url_total,
-            albums_missing_url_with_ids,
-        )
-        logger.info(
-            "    3. All albums are marked as FAILED (reset with /reset-failed-images)"
-        )
+        logger.info("No albums need cover download (missing_url=%d)", albums_missing_url_total)
     else:
-        logger.info(f"📥 Downloading from CDN URLs ({len(albums)} albums)")
+        logger.info("Downloading covers for %d albums", len(albums))
 
     # Phase 2: API fallback for albums without cover_url (only safe when IDs exist)
     albums_without_url: list[AlbumModel] = []
@@ -811,9 +736,8 @@ async def repair_album_images(
         stats["albums_without_url_found"] = len(albums_without_url)
 
         if albums_without_url:
-            logger.info("-" * 40)
             logger.info(
-                "📥 PHASE 2: API fallback for %d albums without cover_url",
+                "Phase 2: API fallback for %d albums without cover_url",
                 len(albums_without_url),
             )
 
@@ -882,9 +806,7 @@ async def repair_album_images(
                             {"name": album.title, "error": error_msg, "reason": reason}
                         )
                         logger.warning(
-                            "  [%d/%d] ❌ %s: %s",
-                            idx,
-                            len(albums_without_url),
+                            "Failed: %s (%s)",
                             album.title,
                             reason,
                         )
@@ -898,7 +820,7 @@ async def repair_album_images(
                         {"name": album.title, "error": error_msg, "reason": reason}
                     )
                     logger.error(
-                        "  [%d/%d] 💥 %s: %s",
+                        "Exception: %s - %s",
                         idx,
                         len(albums_without_url),
                         album.title,
@@ -914,7 +836,6 @@ async def repair_album_images(
             continue
 
         stats["processed"] += 1
-        logger.debug(f"  [{idx}/{len(albums)}] 🔄 {album.title}: Downloading...")
 
         try:
             spotify_id = album.spotify_id
@@ -922,11 +843,6 @@ async def repair_album_images(
 
             cover_url = album.cover_url
             provider = guess_provider_from_url(cover_url)
-
-            logger.debug(f"      URL: {cover_url[:60]}...")
-            logger.debug(
-                f"      Provider: {provider}, deezer_id={deezer_id}, spotify_id={spotify_id}"
-            )
 
             provider_id = deezer_id or spotify_id or str(album.id)
             download_result = await image_service.download_album_image_with_result(
@@ -940,9 +856,7 @@ async def repair_album_images(
                 album.cover_path = download_result.path
                 album.updated_at = datetime.now(UTC)
                 stats["repaired"] += 1
-                logger.info(
-                    f"  [{idx}/{len(albums)}] ✅ {album.title} → {download_result.path}"
-                )
+                logger.info("Downloaded: %s", album.title)
             else:
                 error_msg = download_result.error_message or "Download failed"
                 reason = classify_error(error_msg)
@@ -951,16 +865,14 @@ async def repair_album_images(
                 stats["errors"].append(
                     {"name": album.title, "error": error_msg, "reason": reason}
                 )
-                logger.warning(
-                    f"  [{idx}/{len(albums)}] ❌ {album.title}: {reason} - {error_msg[:50]}"
-                )
+                logger.warning("Failed: %s (%s)", album.title, reason)
 
         except Exception as e:
             error_msg = str(e)
             reason = classify_error(error_msg)
             album.cover_path = make_failed_marker(reason)
             album.updated_at = datetime.now(UTC)
-            logger.error(f"  [{idx}/{len(albums)}] 💥 {album.title}: Exception - {e}")
+            logger.error("Exception: %s - %s", album.title, e)
             stats["errors"].append(
                 {"name": album.title, "error": error_msg, "reason": reason}
             )
@@ -977,29 +889,17 @@ async def repair_album_images(
     )
 
     # Final summary
-    logger.info("=" * 60)
-    logger.info("💿 ALBUM COVER REPAIR - Complete")
-    logger.info("=" * 60)
-    logger.info(f"  ✅ Repaired: {stats['repaired']}")
-    logger.info(f"  ❌ Errors: {len(stats['errors'])}")
-    logger.info(f"  ⏭️ Skipped (no URL): {stats['no_cover_url']}")
-    logger.info(f"  📊 Total processed: {stats['processed']}")
     logger.info(
-        "  🔜 Still needing download (has URL): %d",
+        "Album Cover Repair complete: %d repaired, %d errors, %d remaining",
+        stats["repaired"],
+        len(stats["errors"]),
         stats["remaining_needing_download"],
     )
-    logger.info(
-        "  🔎 Still missing cover_url (needs lookup/enrichment): %d",
-        stats["remaining_missing_cover_url"],
-    )
     if stats["errors"]:
-        logger.info("  Top errors:")
         error_summary: dict[str, int] = {}
         for err in stats["errors"]:
             r = err.get("reason", "unknown")
             error_summary[r] = error_summary.get(r, 0) + 1
-        for reason, count in sorted(error_summary.items(), key=lambda x: -x[1])[:5]:
-            logger.info(f"    - {reason}: {count}")
-    logger.info("=" * 60)
+        logger.debug("Top errors: %s", dict(sorted(error_summary.items(), key=lambda x: -x[1])[:5]))
 
     return stats

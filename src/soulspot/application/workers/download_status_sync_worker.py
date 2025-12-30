@@ -572,6 +572,11 @@ class DownloadStatusSyncWorker:
         time to recover. After timeout, we go HALF_OPEN and test with one sync.
         Don't confuse this with the exponential backoff in start() - that's
         for CLOSED state failures. This is for OPEN state recovery.
+
+        Hey future me - CRITICAL BUG FIX: total_seconds() can crash with "int too large to
+        convert to float" if _last_failure_time is corrupted (far future/past datetime).
+        We now catch this exception and force circuit to HALF_OPEN for recovery attempt.
+        This prevents infinite crash loops where worker can't even check recovery state!
         """
         if self._circuit_state != self.STATE_OPEN:
             return False
@@ -580,7 +585,17 @@ class DownloadStatusSyncWorker:
             # Shouldn't happen, but handle gracefully
             return True
 
-        elapsed = (datetime.now(UTC) - self._last_failure_time).total_seconds()
+        try:
+            elapsed = (datetime.now(UTC) - self._last_failure_time).total_seconds()
+        except (ValueError, OverflowError) as e:
+            # Corrupted timestamp (datetime math overflow) - force recovery attempt
+            logger.warning(
+                "Circuit breaker: Invalid _last_failure_time (%s), forcing HALF_OPEN: %s",
+                self._last_failure_time,
+                e,
+            )
+            self._circuit_state = self.STATE_HALF_OPEN
+            return True
 
         if elapsed >= self._circuit_breaker_timeout:
             logger.info(

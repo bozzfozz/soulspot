@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 from soulspot.api.dependencies import get_db_session, get_download_repository
 from soulspot.api.routers.ui._shared import templates
 from soulspot.domain.entities import DownloadStatus
-from soulspot.infrastructure.persistence.models import DownloadModel
+from soulspot.infrastructure.persistence.models import DownloadModel, TrackModel
 from soulspot.infrastructure.persistence.repositories import DownloadRepository
 
 logger = logging.getLogger(__name__)
@@ -41,15 +41,15 @@ async def _get_downloads_data(
     offset = (page - 1) * limit
 
     # Query downloads with track info
+    # Hey future me - TrackModel.artist and TrackModel.album are relationship() attributes,
+    # NOT functions! Must use direct attribute access (not lambda) for selectinload().
+    # Lambda syntax like "lambda t: t.artist" causes SQLAlchemy ArgumentError because
+    # selectinload() expects ORM mapped attributes (relationship/mapped_column), not callables.
     stmt = (
         select(DownloadModel)
         .options(
-            selectinload(DownloadModel.track).selectinload(
-                lambda t: t.artist  # type: ignore[attr-defined]
-            ),
-            selectinload(DownloadModel.track).selectinload(
-                lambda t: t.album  # type: ignore[attr-defined]
-            ),
+            selectinload(DownloadModel.track).selectinload(TrackModel.artist),
+            selectinload(DownloadModel.track).selectinload(TrackModel.album),
         )
         .where(
             DownloadModel.status.in_(

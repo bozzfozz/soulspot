@@ -38,12 +38,22 @@ class LibraryCleanupService:
     async def clear_local_library(self, batch_size: int = 1000) -> dict[str, Any]:
         """Clear all local library data (tracks with file_path + orphaned entities).
 
-        Hey future me - NUCLEAR OPTION! Deletes:
-        1. All tracks with file_path (local imports)
-        2. Albums with no remaining tracks (orphaned) - BATCHED for memory safety!
-        3. Artists with no tracks AND no albums (orphaned) - BATCHED for memory safety!
+        Hey future me - MANUAL DEVELOPMENT RESET! Use when:
+        1. Testing local file imports - want clean slate
+        2. Corrupted file_path assignments need cleanup
+        3. Development: reset local files without re-syncing streaming data
 
-        Spotify-synced data (playlists, spotify_* tables) is NOT affected!
+        ⚠️ IMPORTANT: This is for MANUAL use only (no automatic workers)!
+
+        Deletes:
+        1. All tracks with file_path (downloaded/imported local files)
+        2. Albums with NO tracks (local OR streaming) - true orphans only
+        3. Artists with NO tracks AND NO albums - true orphans only
+
+        KEEPS:
+        ✅ Streaming tracks (file_path = NULL from Spotify/Deezer sync)
+        ✅ Albums with streaming tracks (even if no local files)
+        ✅ Artists with streaming albums
 
         CRITICAL: Includes transaction rollback on errors to prevent partial deletes!
         OPTIMIZED: Batch deletion prevents memory issues for massive (10k+) libraries.
@@ -61,10 +71,12 @@ class LibraryCleanupService:
         }
 
         logger.info(
-            "🗑️ Library Clear Started\n"
-            "├─ Operation: Clear local library\n"
+            "Library Clear Started (Manual Reset)\n"
+            "├─ Operation: Clear local files only\n"
             f"├─ Batch size: {batch_size}\n"
-            "└─ Target: All tracks with file_path + orphaned albums/artists"
+            "├─ Deletes: Tracks with file_path (local files)\n"
+            "├─ Keeps: Streaming tracks (file_path=NULL)\n"
+            "└─ Orphans: Only TRUE orphans (no local AND no streaming data)"
         )
 
         try:
@@ -81,8 +93,8 @@ class LibraryCleanupService:
                 )
                 await self._session.execute(delete_tracks_stmt)
                 logger.info(
-                    f"🗑️ Local Tracks Deleted\n"
-                    f"└─ Count: {stats['deleted_tracks']} tracks"
+                    "Local Tracks Deleted: %d (streaming tracks kept)",
+                    stats["deleted_tracks"],
                 )
 
             # Step 2: OPTIMIZED - Delete orphaned albums in batches (prevents memory overload)
@@ -110,7 +122,7 @@ class LibraryCleanupService:
                 await self._session.execute(delete_albums_stmt)
 
                 logger.debug(
-                    f"🗑️ Orphaned Albums Batch Deleted\n└─ Batch: {batch_count} albums"
+                    "Orphaned Albums Batch: %d (no tracks at all)", batch_count
                 )
 
                 if batch_count < batch_size:
@@ -118,8 +130,8 @@ class LibraryCleanupService:
 
             if stats["deleted_albums"] > 0:
                 logger.info(
-                    f"🗑️ Orphaned Albums Deleted\n"
-                    f"└─ Total: {stats['deleted_albums']} albums"
+                    "Orphaned Albums Deleted: %d (true orphans only)",
+                    stats["deleted_albums"],
                 )
 
             # Step 3: OPTIMIZED - Delete orphaned artists in batches (prevents memory overload)
@@ -150,7 +162,7 @@ class LibraryCleanupService:
                 await self._session.execute(delete_artists_stmt)
 
                 logger.debug(
-                    f"🗑️ Orphaned Artists Batch Deleted\n└─ Batch: {batch_count} artists"
+                    "Orphaned Artists Batch: %d (no albums/tracks)", batch_count
                 )
 
                 if batch_count < batch_size:
@@ -158,17 +170,17 @@ class LibraryCleanupService:
 
             if stats["deleted_artists"] > 0:
                 logger.info(
-                    f"🗑️ Orphaned Artists Deleted\n"
-                    f"└─ Total: {stats['deleted_artists']} artists"
+                    "Orphaned Artists Deleted: %d (true orphans only)",
+                    stats["deleted_artists"],
                 )
 
             await self._session.commit()
 
             logger.info(
-                "✅ Library Clear Complete\n"
-                f"├─ Tracks: {stats['deleted_tracks']}\n"
-                f"├─ Albums: {stats['deleted_albums']}\n"
-                f"└─ Artists: {stats['deleted_artists']}"
+                "Library Clear Complete: %d tracks, %d albums, %d artists (streaming data kept)",
+                stats["deleted_tracks"],
+                stats["deleted_albums"],
+                stats["deleted_artists"],
             )
 
             return stats
