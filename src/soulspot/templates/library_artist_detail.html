@@ -152,7 +152,7 @@
                             <i class="bi bi-music-note"></i> {{ local }}/{{ total }} local
                         </span>
                         {% else %}
-                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;" title="No local files yet">
+                        <span class="availability-badge-small availability-none" title="No local files yet">
                             <i class="bi bi-x-circle"></i> 0/{{ total }} local
                         </span>
                         {% endif %}
@@ -161,7 +161,7 @@
                         {% if local > 0 %}
                         <span title="{{ local }} tracks with local files"><i class="bi bi-music-note"></i> {{ local }} local</span>
                         {% else %}
-                        <span class="availability-badge-small availability-none" style="background: var(--danger); color: white;" title="No local files">
+                        <span class="availability-badge-small availability-none" title="No local files">
                             <i class="bi bi-x-circle"></i> 0 local
                         </span>
                         {% endif %}
@@ -346,9 +346,9 @@ function filterAlbumsByType(type) {
         border: 1px solid rgba(245, 158, 11, 0.3);
     }
     .availability-none {
-        background: rgba(239, 68, 68, 0.15);  /* Red tint */
-        color: var(--danger, #ef4444);
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: var(--color-error);
+        color: white;
+        border: 1px solid rgba(239, 68, 68, 0.5);
     }
     
     /* Album card wrapper for unified view */

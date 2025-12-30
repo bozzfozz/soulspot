@@ -51,6 +51,12 @@
   --color-info: #3b82f6;
   /* Info state */
 
+  /* Aliases for template compatibility */
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --danger: var(--color-error);
+  --info: var(--color-info);
+
   /* Semantic Backgrounds */
   --bg-success: rgba(16, 185, 129, 0.1);
   --bg-warning: rgba(245, 158, 11, 0.1);

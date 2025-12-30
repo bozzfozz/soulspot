@@ -239,20 +239,20 @@
     
     {% if album.tracks %}
     <div style="overflow-x: auto;">
-        <table class="data-table">
+        <table class="data-table" style="min-width: 100%;">
             <thead>
                 <tr>
-                    <th style="width: 40px;">
+                    <th style="width: 48px; text-align: center;">
                         <input type="checkbox" 
                                id="select-all-checkbox"
                                class="form-checkbox"
                                onclick="toggleSelectAll()">
                     </th>
-                    <th style="width: 50px;">#</th>
-                    <th>Title</th>
-                    <th>Duration</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th style="width: 60px; text-align: center;">#</th>
+                    <th style="text-align: left;">Title</th>
+                    <th style="width: 100px; text-align: center;">Duration</th>
+                    <th style="width: 120px; text-align: center;">Status</th>
+                    <th style="width: 150px; text-align: center;">Actions</th>
                 </tr>
             </thead>
             <tbody id="tracks-tbody">
@@ -283,7 +283,7 @@
                     data-title="{{ track.title|lower }}"
                     data-artist="{{ track.artist }}"
                     data-album="{{ album.title }}">
-                    <td>
+                    <td style="text-align: center;">
                         <input type="checkbox" 
                                class="track-checkbox form-checkbox"
                                data-track-id="{{ track.id }}"
@@ -296,9 +296,9 @@
                                data-status="{% if track.is_broken %}broken{% elif track.is_downloaded %}available{% else %}missing{% endif %}"
                                onchange="updateBulkActions()">
                     </td>
-                    <td style="color: var(--text-muted);">{{ track.track_number or loop.index }}</td>
-                    <td><span style="font-weight: var(--font-weight-medium);">{{ track.title }}</span></td>
-                    <td style="color: var(--text-muted);">
+                    <td style="text-align: center; color: var(--text-muted);">{{ track.track_number or loop.index }}</td>
+                    <td style="text-align: left;"><span style="font-weight: var(--font-weight-medium);">{{ track.title }}</span></td>
+                    <td style="text-align: center; color: var(--text-muted);">
                         {% if track.duration_ms %}
                             {% set minutes = (track.duration_ms / 60000) | int %}
                             {% set seconds = ((track.duration_ms % 60000) / 1000) | int %}
@@ -307,7 +307,7 @@
                             -
                         {% endif %}
                     </td>
-                    <td>
+                    <td style="text-align: center;">
                         {% if track.is_broken %}
                             <span class="badge badge-error">Broken</span>
                         {% elif track.file_path %}
@@ -316,8 +316,8 @@
                             <span class="badge badge-warning">Missing</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <div style="display: flex; gap: var(--space-2);">
+                    <td style="text-align: center;">
+                        <div style="display: flex; justify-content: center; gap: var(--space-2);">
                             {% if not track.is_downloaded %}
                             {# Multi-provider download support: Spotify, Deezer, Tidal #}
                             {% if track.spotify_id %}
