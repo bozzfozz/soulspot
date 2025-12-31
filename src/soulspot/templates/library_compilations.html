@@ -68,15 +68,12 @@
            data-year="{{ comp.year or 0 }}"
            data-track-count="{{ comp.track_count }}">
             <div class="compilation-cover">
-                {% if comp.artwork_path %}
-                <img src="/api/artwork/{{ comp.artwork_path }}" alt="{{ comp.title }}" loading="lazy">
-                {% elif comp.artwork_url %}
-                <img src="{{ comp.artwork_url }}" alt="{{ comp.title }}" loading="lazy">
-                {% else %}
-                <div class="cover-placeholder">
-                    <i class="bi bi-collection"></i>
-                </div>
-                {% endif %}
+                {# Hey future me - FIXED! Use get_display_url() like library_albums.html!
+                   This provides: local cache > CDN URL > placeholder SVG
+                   Without this, compilations show no cover even when cover_url is present! #}
+                <img src="{{ get_display_url(comp.artwork_url, comp.artwork_path, 'album') }}" 
+                     alt="{{ comp.title }}" 
+                     loading="lazy">
                 <div class="compilation-overlay">
                     <div class="play-button">
                         <i class="bi bi-play-fill"></i>

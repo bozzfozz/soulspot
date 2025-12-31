@@ -106,6 +106,80 @@ class LibraryScannerService:
         )
 
     # =========================================================================
+    # AUTO-DISCOGRAPHY SYNC (for LOCAL artists after scan)
+    # =========================================================================
+
+    async def _background_discography_sync(
+        self, artist_id: str, artist_name: str
+    ) -> None:
+        """Background task to sync discography for a newly scanned LOCAL artist.
+
+        Hey future me - SAME LOGIC as artists.py _background_discography_sync!
+        When local folder is scanned, new artists should get their FULL discography
+        from providers (Spotify/Deezer). This ensures LOCAL artists are treated
+        the same as "Add to Library" button artists.
+
+        GOTCHA: Must create own DB session! The scan session may be busy/committed.
+        Create fresh Database instance with settings and use session_scope().
+
+        Args:
+            artist_id: The artist UUID (string format)
+            artist_name: Artist name for logging
+        """
+        from soulspot.application.services.followed_artists_service import (
+            FollowedArtistsService,
+        )
+        from soulspot.config import get_settings
+        from soulspot.infrastructure.persistence.database import Database
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+        logger.info(f"🎵 Background discography sync starting for LOCAL artist: {artist_name}")
+
+        try:
+            # Create fresh Database instance for background task
+            db = Database(get_settings())
+            async with db.session_scope() as session:
+                # Create plugins - DeezerPlugin doesn't need auth for album lookup
+                # SpotifyPlugin will be None if user not authenticated
+                deezer_plugin = DeezerPlugin()
+
+                # Try to create SpotifyPlugin from stored session tokens
+                spotify_plugin = None
+                try:
+                    spotify_plugin = SpotifyPlugin()
+                except Exception:
+                    # No Spotify auth available, Deezer fallback will be used
+                    pass
+
+                service = FollowedArtistsService(
+                    session=session,
+                    spotify_plugin=spotify_plugin,
+                    deezer_plugin=deezer_plugin,
+                )
+
+                stats = await service.sync_artist_discography_complete(
+                    artist_id=artist_id,
+                    include_tracks=True,
+                )
+
+                await session.commit()
+
+                logger.info(
+                    f"✅ Background discography sync complete for {artist_name}: "
+                    f"albums={stats['albums_added']}/{stats['albums_total']}, "
+                    f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
+                    f"(source: {stats['source']})"
+                )
+
+        except Exception as e:
+            # Log but don't fail - this is a background task
+            logger.error(
+                f"❌ Background discography sync failed for {artist_name}: {e}",
+                exc_info=True,
+            )
+
+    # =========================================================================
     # MAIN SCAN METHODS
     # =========================================================================
 
@@ -177,7 +251,14 @@ class LibraryScannerService:
             # Deferred cleanup flag (caller should queue LIBRARY_SCAN_CLEANUP job)
             "cleanup_needed": False,
             "cleanup_file_paths": None,  # Serialized for cleanup job payload
+            # Auto-discography sync stats (Jan 2025)
+            "discography_sync_queued": 0,
         }
+
+        # Hey future me - track newly created artists for AUTO-DISCOGRAPHY SYNC!
+        # After scan completes, we queue discography sync for these artists.
+        # This ensures LOCAL artists get their FULL discography from providers.
+        newly_created_artist_ids: list[tuple[str, str]] = []  # [(artist_id, artist_name), ...]
 
         try:
             # Validate music path
@@ -265,6 +346,12 @@ class LibraryScannerService:
                 )
                 if is_new_artist:
                     stats["new_artists"] += 1
+                    # Hey future me - track for auto-discography sync!
+                    # Skip "Various Artists" - they're compilations, not real artists.
+                    if not is_various_artists(scanned_artist.name):
+                        newly_created_artist_ids.append(
+                            (str(artist_id.value), scanned_artist.name)
+                        )
                 else:
                     stats["existing_artists"] += 1
 
@@ -357,6 +444,39 @@ class LibraryScannerService:
                 f"{stats['new_artists']} new artists, {stats['new_albums']} new albums, "
                 f"{stats['compilations_detected']} compilations"
             )
+
+            # ================================================================
+            # AUTO-DISCOGRAPHY SYNC for newly created LOCAL artists!
+            # Hey future me - this is THE KEY to unified library behavior!
+            # When user scans local folder, new artists should get their FULL
+            # discography from providers (just like "Add to Library" button).
+            # This runs as background tasks so scan returns immediately.
+            # ================================================================
+            if newly_created_artist_ids:
+                logger.info(
+                    f"🎵 Queuing auto-discography sync for {len(newly_created_artist_ids)} "
+                    "new LOCAL artists..."
+                )
+                for artist_id_str, artist_name in newly_created_artist_ids:
+                    try:
+                        # Create background task for discography sync
+                        # Uses same method as "Add to Library" button!
+                        asyncio.create_task(
+                            self._background_discography_sync(
+                                artist_id=artist_id_str,
+                                artist_name=artist_name,
+                            )
+                        )
+                        stats["discography_sync_queued"] += 1
+                    except Exception as e:
+                        logger.warning(
+                            f"⚠️ Failed to queue discography sync for {artist_name}: {e}"
+                        )
+
+                logger.info(
+                    f"✅ Queued {stats['discography_sync_queued']} discography syncs "
+                    "(running in background)"
+                )
             
             end_operation(
                 logger,

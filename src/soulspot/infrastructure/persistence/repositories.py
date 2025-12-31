@@ -873,6 +873,24 @@ class AlbumRepository(IAlbumRepository):
 
         return [self._model_to_entity(model) for model in models]
 
+    async def count_for_artist(self, artist_id: ArtistId) -> int:
+        """Count albums for a specific artist.
+
+        Hey future me - this is used by sync to check if artist already has albums.
+        If count is 0, we need to trigger discography sync even for existing artists!
+
+        Args:
+            artist_id: Artist ID to count albums for
+
+        Returns:
+            Number of albums for this artist
+        """
+        stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.artist_id == str(artist_id.value)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
     async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Album | None:
         """Get an album by MusicBrainz ID."""
         stmt = select(AlbumModel).where(AlbumModel.musicbrainz_id == musicbrainz_id)

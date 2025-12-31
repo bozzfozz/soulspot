@@ -222,6 +222,23 @@ class FollowedArtistsService:
                             newly_created_artists.append(artist)
                         else:
                             stats["updated"] += 1
+                            # Hey future me - ALSO sync existing artists if they have NO albums!
+                            # This fixes the issue where artists added before auto-discography
+                            # was implemented still don't have their albums synced.
+                            # We check album count and treat them like new artists if count is 0.
+                            from soulspot.infrastructure.persistence.repositories import (
+                                AlbumRepository,
+                            )
+
+                            album_repo = AlbumRepository(self.session)
+                            album_count = await album_repo.count_for_artist(artist.id)
+                            if album_count == 0:
+                                logger.info(
+                                    f"🔄 Existing artist '{artist.name}' has 0 albums - "
+                                    "adding to discography sync queue"
+                                )
+                                newly_created_artists.append(artist)
+                                stats["albums_missing"] = stats.get("albums_missing", 0) + 1
                     except Exception as e:
                         logger.error(
                             LogMessages.sync_failed(

@@ -300,6 +300,21 @@ class IAlbumRepository(ABC):
         pass
 
     @abstractmethod
+    async def count_for_artist(self, artist_id: ArtistId) -> int:
+        """Count albums for a specific artist.
+
+        Hey future me - this is used by sync to check if artist already has albums.
+        If count is 0, we need to trigger discography sync even for existing artists!
+
+        Args:
+            artist_id: Artist ID to count albums for
+
+        Returns:
+            Number of albums for this artist
+        """
+        pass
+
+    @abstractmethod
     async def get_by_musicbrainz_id(self, musicbrainz_id: str) -> Album | None:
         """Get an album by MusicBrainz ID."""
         pass
