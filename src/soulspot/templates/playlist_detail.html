@@ -3,14 +3,16 @@
    Track list in a table with album art, status badges, actions.
    The download/sync actions use HTMX for async operations.
    Bulk selection logic is preserved - watch for checkbox state updates!
-   hide_topbar_breadcrumbs = true weil wir eigene Breadcrumbs haben! #}
+   hide_breadcrumbs = true weil wir eigene Breadcrumbs haben! #}
 
 {% extends "base.html" %}
 
 {% block title %}{{ playlist.name }} - SoulSpot{% endblock %}
 
+{# Hey future me - Diese Seite hat eigene Breadcrumbs, also Topbar-Breadcrumbs ausblenden! #}
+{% block hide_breadcrumbs %}true{% endblock %}
+
 {% block content %}
-{% set hide_topbar_breadcrumbs = true %}
 <!-- Breadcrumb -->
 <nav class="breadcrumb" style="margin-bottom: var(--space-6);">
     <a href="/playlists" style="color: var(--accent-primary);">Playlists</a>

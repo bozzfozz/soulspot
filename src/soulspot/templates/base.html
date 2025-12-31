@@ -76,6 +76,10 @@
             </div>
 
             <div class="app-content">
+                {# Detail-Seiten setzen hide_breadcrumbs auf "true" für manuelle Breadcrumbs #}
+                {% set hide_topbar_breadcrumbs = self.hide_breadcrumbs() | trim == 'true' %}
+                {% block hide_breadcrumbs %}{% endblock %}
+                
                 <!-- Desktop TopBar (hidden on mobile) -->
                 {% include "includes/_topbar.html" %}
                 
