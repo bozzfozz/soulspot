@@ -123,17 +123,12 @@
                         <span class="album-type-badge album-type-album">Album</span>
                         {% endif %}
                     </div>
-                    {# Download overlay for albums user doesn't have #}
-                    {% if not album.is_owned %}
-                    <div class="album-download-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: var(--space-2); display: flex; justify-content: center;">
-                        <a href="/search?q={{ (artist.name ~ ' ' ~ album.title)|urlencode }}" 
-                           class="btn btn-primary btn-sm"
-                           onclick="event.stopPropagation();"
-                           title="Search to download">
-                            <i class="bi bi-download"></i> Get
-                        </a>
-                    </div>
-                    {% endif %}
+                    {# Hey future me - Removed download overlay!
+                       Albums now link directly to album detail page where user can:
+                       - See all tracks with status
+                       - Download individual tracks or all missing
+                       The album-card <a> already links to /library/albums/{{ album.id }}
+                       No need for separate Get button - just click the album! #}
                 </div>
                 <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
                 <div class="album-meta">
@@ -360,13 +355,6 @@ function filterAlbumsByType(type) {
     }
     .album-cover {
         position: relative;
-    }
-    .album-download-overlay {
-        opacity: 0;
-        transition: opacity 0.2s ease;
-    }
-    .album-card-wrapper:hover .album-download-overlay {
-        opacity: 1;
     }
     
     .album-title {
