@@ -111,7 +111,7 @@
             <a href="/library/albums/{{ album.id }}" class="album-card">
                 <div class="album-cover">
                     <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
-                    {# Album type badge #}
+                    {# Album type badge (top-left) #}
                     <div class="album-type-badges">
                         {% if album.primary_type|lower == 'single' %}
                         <span class="album-type-badge album-type-single">Single</span>
@@ -123,47 +123,19 @@
                         <span class="album-type-badge album-type-album">Album</span>
                         {% endif %}
                     </div>
-                    {# Hey future me - Removed download overlay!
-                       Albums now link directly to album detail page where user can:
-                       - See all tracks with status
-                       - Download individual tracks or all missing
-                       The album-card <a> already links to /library/albums/{{ album.id }}
-                       No need for separate Get button - just click the album! #}
-                </div>
-                <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
-                <div class="album-meta">
-                    {# Hey future me - LOCAL availability badge showing X/Y tracks!
-                       X = local_tracks (tracks with file_path = downloaded files)
-                       Y = total_tracks (total tracks from provider)
-                       - Green (complete): local_tracks >= total_tracks
-                       - Orange (partial): local_tracks > 0 but < total_tracks
-                       - Red (none): local_tracks = 0 #}
+                    {# Track count badge (top-right): X/Y format #}
                     {% set local = album.local_tracks|default(0) %}
                     {% set total = album.total_tracks|default(0) %}
                     {% if total > 0 %}
-                        {% if local >= total %}
-                        <span class="availability-badge-small availability-complete" title="{{ local }} of {{ total }} tracks have local files">
-                            <i class="bi bi-check-circle-fill"></i> {{ local }}/{{ total }} local
-                        </span>
-                        {% elif local > 0 %}
-                        <span class="availability-badge-small availability-partial" title="{{ local }} of {{ total }} tracks have local files">
-                            <i class="bi bi-music-note"></i> {{ local }}/{{ total }} local
-                        </span>
-                        {% else %}
-                        <span class="availability-badge-small availability-none" title="No local files yet">
-                            <i class="bi bi-x-circle"></i> 0/{{ total }} local
-                        </span>
-                        {% endif %}
-                    {% else %}
-                        {# No total_tracks info - just show what we have locally #}
-                        {% if local > 0 %}
-                        <span title="{{ local }} tracks with local files"><i class="bi bi-music-note"></i> {{ local }} local</span>
-                        {% else %}
-                        <span class="availability-badge-small availability-none" title="No local files">
-                            <i class="bi bi-x-circle"></i> 0 local
-                        </span>
-                        {% endif %}
+                    <div class="album-track-badge {% if local >= total %}track-complete{% elif local > 0 %}track-partial{% else %}track-none{% endif %}" 
+                         title="{{ local }} of {{ total }} tracks verfügbar">
+                        {{ local }}/{{ total }}
+                    </div>
                     {% endif %}
+                </div>
+                <h3 class="album-title" title="{{ album.title }}">{{ album.title }}</h3>
+                <div class="album-meta">
+                    {# Jahr anzeigen wenn verfügbar #}
                     {% if album.year %}<span>{{ album.year }}</span>{% endif %}
                 </div>
             </a>
@@ -235,6 +207,8 @@ function filterAlbumsByType(type) {
         text-decoration: none;
         color: var(--text-primary);
         transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+        display: block;
+        overflow: hidden; /* Prevent child overflow */
     }
     .album-card:hover {
         transform: translateY(-2px);
@@ -270,6 +244,30 @@ function filterAlbumsByType(type) {
         max-width: calc(100% - 12px);
         z-index: 5;
     }
+    /* Track count badge (top-right) - shows X/Y format */
+    .album-track-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-bold);
+        backdrop-filter: blur(8px);
+        z-index: 5;
+    }
+    .album-track-badge.track-complete {
+        background: rgba(34, 197, 94, 0.9);  /* Green */
+        color: white;
+    }
+    .album-track-badge.track-partial {
+        background: rgba(245, 158, 11, 0.9);  /* Orange */
+        color: white;
+    }
+    .album-track-badge.track-none {
+        background: rgba(239, 68, 68, 0.9);  /* Red */
+        color: white;
+    }
     /* Individual badge styling */
     .album-type-badge {
         backdrop-filter: blur(8px);
@@ -278,6 +276,8 @@ function filterAlbumsByType(type) {
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold);
         white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     /* Primary types */
     .album-type-single {
@@ -332,6 +332,9 @@ function filterAlbumsByType(type) {
         display: inline-flex;
         align-items: center;
         gap: 2px;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+        white-space: nowrap;
     }
     .availability-complete {
         background: rgba(34, 197, 94, 0.15);  /* Green tint */
@@ -352,9 +355,7 @@ function filterAlbumsByType(type) {
     /* Album card wrapper for unified view */
     .album-card-wrapper {
         position: relative;
-    }
-    .album-cover {
-        position: relative;
+        overflow: hidden;
     }
     
     .album-title {
@@ -367,9 +368,11 @@ function filterAlbumsByType(type) {
     }
     .album-meta {
         display: flex;
-        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: var(--space-2);
         font-size: var(--font-size-xs);
         color: var(--text-muted);
+        overflow: hidden;
     }
     .data-table {
         width: 100%;

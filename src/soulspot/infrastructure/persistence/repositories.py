@@ -1381,6 +1381,55 @@ class AlbumRepository(IAlbumRepository):
         result = await self.session.execute(stmt)
         return result.rowcount > 0
 
+    async def get_albums_needing_track_backfill(self, limit: int = 30) -> list[Album]:
+        """Get albums that have deezer_id but NO tracks in DB (track backfill).
+
+        Hey future me - this is for LibraryDiscoveryWorker Phase 7!
+        These albums have deezer_id from discography sync, but no tracks were
+        fetched yet. We need to call Deezer API to get tracks for each album.
+
+        Strategy:
+        - Find albums WITH deezer_id
+        - Where NO tracks exist in DB with this album_id
+        - Prioritize albums from artists with local tracks (library artists)
+
+        Args:
+            limit: Maximum number of albums to return (default 30 - API friendly)
+
+        Returns:
+            List of Album entities needing track backfill
+        """
+        from sqlalchemy import func
+
+        # Subquery: count tracks per album
+        track_count_subquery = (
+            select(TrackModel.album_id, func.count(TrackModel.id).label("track_count"))
+            .group_by(TrackModel.album_id)
+            .subquery()
+        )
+
+        # Albums WITH deezer_id where track_count is NULL (no tracks) or 0
+        stmt = (
+            select(AlbumModel)
+            .outerjoin(
+                track_count_subquery,
+                AlbumModel.id == track_count_subquery.c.album_id,
+            )
+            .where(AlbumModel.deezer_id.isnot(None))  # Has Deezer ID
+            .where(
+                or_(
+                    track_count_subquery.c.track_count.is_(None),  # No tracks at all
+                    track_count_subquery.c.track_count == 0,
+                )
+            )
+            .order_by(AlbumModel.created_at)  # Oldest first (FIFO)
+            .limit(limit)
+        )
+
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        return [self._model_to_entity(model) for model in models]
+
 
 class TrackRepository(ITrackRepository):
     """SQLAlchemy implementation of Track repository."""
@@ -1502,6 +1551,27 @@ class TrackRepository(ITrackRepository):
     async def get_by_spotify_uri(self, spotify_uri: SpotifyUri) -> Track | None:
         """Get a track by Spotify URI."""
         stmt = select(TrackModel).where(TrackModel.spotify_uri == str(spotify_uri))
+        result = await self.session.execute(stmt)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            return None
+
+        return self._model_to_entity(model)
+
+    async def get_by_deezer_id(self, deezer_id: str) -> Track | None:
+        """Get a track by Deezer ID.
+
+        Hey future me - this is for Phase 7 track backfill deduplication!
+        Before adding a track from Deezer API, check if it already exists.
+
+        Args:
+            deezer_id: Deezer track ID (string)
+
+        Returns:
+            Track entity if found, None otherwise
+        """
+        stmt = select(TrackModel).where(TrackModel.deezer_id == deezer_id)
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
 

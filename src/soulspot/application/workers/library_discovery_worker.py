@@ -86,7 +86,7 @@ class LibraryDiscoveryWorker:
         self,
         db: Any,  # Database instance
         settings: Any,  # Settings instance
-        run_interval_hours: int = 6,  # Default: 6 hours
+        run_interval_hours: int = 2,  # Default: 2 hours (was 6, reduced for faster track backfill)
     ) -> None:
         """Initialize discovery worker.
 
@@ -97,7 +97,7 @@ class LibraryDiscoveryWorker:
         Args:
             db: Database instance for session creation
             settings: Application settings
-            run_interval_hours: How often to run discovery (default 6h)
+            run_interval_hours: How often to run discovery (default 2h, was 6h)
         """
         self.db = db
         self.settings = settings
@@ -189,11 +189,13 @@ class LibraryDiscoveryWorker:
             "phase4_album_enrichment": {},
             "phase5_track_enrichment": {},
             "phase6_cover_backfill": {},
+            "phase7_track_backfill": {},
             "artists_enriched": 0,
             "albums_discovered": 0,
             "albums_enriched": 0,
             "tracks_enriched": 0,
             "covers_backfilled": 0,
+            "tracks_backfilled": 0,
             "errors": [],
         }
 
@@ -238,6 +240,13 @@ class LibraryDiscoveryWorker:
                 phase6_stats = await self._phase6_backfill_cover_urls(session)
                 stats["phase6_cover_backfill"] = phase6_stats
                 stats["covers_backfilled"] = phase6_stats.get("backfilled", 0)
+
+                # Phase 7: Backfill tracks for albums without tracks
+                # Hey future me - This is the NEW phase that fills album tracks!
+                # Uses FollowedArtistsService.sync_artist_discography_complete() with include_tracks=True
+                phase7_stats = await self._phase7_backfill_album_tracks(session)
+                stats["phase7_track_backfill"] = phase7_stats
+                stats["tracks_backfilled"] = phase7_stats.get("tracks_added", 0)
 
                 # Commit all changes
                 await session.commit()
@@ -490,7 +499,7 @@ class LibraryDiscoveryWorker:
 
         # Get artists with deezer_id that haven't been synced recently
         artists = await artist_repo.get_with_deezer_id_needing_discography_sync(
-            limit=20
+            limit=50  # Increased from 20 to 50 for faster processing
         )
 
         if not artists:
@@ -1101,6 +1110,122 @@ class LibraryDiscoveryWorker:
         logger.info(
             f"Phase 6 complete: {stats['backfilled']} covers backfilled, "
             f"{stats['no_cover_in_api']} no cover in API, {stats['failed']} failed"
+        )
+
+        return stats
+
+    async def _phase7_backfill_album_tracks(
+        self, session: AsyncSession
+    ) -> dict[str, Any]:
+        """Phase 7: Backfill tracks for albums that have no tracks yet.
+
+        Hey future me - this is the CRITICAL phase that fills album tracks!
+
+        Strategy:
+        1. Find albums with deezer_id but zero tracks in DB
+        2. For each album, fetch tracks from Deezer API
+        3. Store tracks in DB linked to the album
+
+        This ensures ALL discography albums get populated with tracks,
+        not just the ones the user clicks on!
+
+        Rate limiting: 0.2s between API calls to be nice to Deezer.
+        Batch size: 30 albums per cycle to avoid long-running transactions.
+        """
+        from soulspot.infrastructure.persistence.repositories import (
+            AlbumRepository,
+            TrackRepository,
+        )
+
+        stats: dict[str, Any] = {
+            "albums_processed": 0,
+            "tracks_added": 0,
+            "albums_skipped_no_id": 0,
+            "albums_already_have_tracks": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+        album_repo = AlbumRepository(session)
+        track_repo = TrackRepository(session)
+
+        # Get albums WITH deezer_id but WITHOUT any tracks
+        # Hey future me - this is a custom query that checks track count!
+        albums = await album_repo.get_albums_needing_track_backfill(limit=30)
+
+        if not albums:
+            logger.debug("Phase 7: No albums need track backfill")
+            return stats
+
+        # Initialize Deezer plugin (no auth needed!)
+        deezer_plugin, _, _ = await self._initialize_plugins(session)
+
+        if not deezer_plugin:
+            logger.warning("Phase 7: Deezer not available for track backfill!")
+            return stats
+
+        logger.info(f"Phase 7: Backfilling tracks for {len(albums)} albums")
+
+        for album in albums:
+            stats["albums_processed"] += 1
+
+            if not album.deezer_id:
+                stats["albums_skipped_no_id"] += 1
+                continue
+
+            try:
+                # Fetch tracks from Deezer API
+                album_dto = await deezer_plugin.get_album(album.deezer_id)
+
+                if not album_dto or not album_dto.tracks:
+                    logger.debug(f"No tracks in Deezer API for '{album.title}'")
+                    continue
+
+                # Create track entities and save
+                from soulspot.domain.entities import Track
+                from soulspot.domain.value_objects import TrackId
+
+                for track_dto in album_dto.tracks:
+                    # Check if track already exists by deezer_id
+                    existing = await track_repo.get_by_deezer_id(track_dto.deezer_id)
+                    if existing:
+                        continue
+
+                    track = Track(
+                        id=TrackId.generate(),
+                        title=track_dto.title,
+                        album_id=album.id,
+                        artist_id=album.artist_id,
+                        deezer_id=track_dto.deezer_id,
+                        isrc=track_dto.isrc,
+                        track_number=track_dto.track_number,
+                        disc_number=track_dto.disc_number or 1,
+                        duration_ms=track_dto.duration_ms or 0,
+                    )
+                    await track_repo.add(track)
+                    stats["tracks_added"] += 1
+
+                logger.debug(
+                    f"Backfilled {len(album_dto.tracks)} tracks for '{album.title}'"
+                )
+
+                # Rate limiting - be nice to Deezer API
+                await asyncio.sleep(0.2)
+
+            except Exception as e:
+                stats["failed"] += 1
+                stats["errors"].append(
+                    {
+                        "album": album.title,
+                        "deezer_id": album.deezer_id,
+                        "error": str(e),
+                    }
+                )
+                logger.warning(f"Failed to backfill tracks for '{album.title}': {e}")
+
+        logger.info(
+            f"Phase 7 complete: {stats['tracks_added']} tracks added "
+            f"for {stats['albums_processed']} albums, {stats['failed']} failed"
         )
 
         return stats
