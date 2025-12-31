@@ -695,7 +695,7 @@ class LibraryDiscoveryWorker:
         artist_repo = ArtistRepository(session)
 
         # Get albums without deezer_id (local files without provider IDs)
-        albums = await album_repo.get_albums_without_deezer_id(limit=50)
+        albums = await album_repo.get_albums_without_deezer_id(limit=100)
 
         if not albums:
             logger.debug("No albums need ID discovery")
@@ -1043,7 +1043,7 @@ class LibraryDiscoveryWorker:
         album_repo = AlbumRepository(session)
 
         # Get albums WITH deezer_id but WITHOUT cover_url
-        albums = await album_repo.get_albums_without_cover_url(limit=50)
+        albums = await album_repo.get_albums_without_cover_url(limit=100)
 
         if not albums:
             logger.debug("No albums need cover URL backfill")

@@ -51,7 +51,7 @@ class ImageBackfillWorker:
         db: Any,  # Database instance
         settings: Settings,  # Settings instance
         run_interval_minutes: int = 30,  # Default: 30 minutes
-        batch_size: int = 100,  # Max items per entity type per cycle (increased from 50)
+        batch_size: int = 200,  # Max items per entity type per cycle (increased from 100)
     ) -> None:
         """Initialize image backfill worker.
 
@@ -59,7 +59,7 @@ class ImageBackfillWorker:
             db: Database instance for session creation
             settings: Application settings (for image paths)
             run_interval_minutes: How often to run backfill (default 30 min)
-            batch_size: Max artists/albums to process per cycle (default 100)
+            batch_size: Max artists/albums to process per cycle (default 200)
         """
         self.db = db
         self.settings = settings

@@ -469,31 +469,41 @@ class DeezerPlugin(IMusicServicePlugin):
         limit: int = 50,
         offset: int = 0,
     ) -> PaginatedResponse[AlbumDTO]:
-        """Get artist's albums from Deezer.
+        """Get artist's albums from Deezer WITH PAGINATION.
 
         Hey future me – Deezer Artist-Albums braucht KEINE Auth!
+        Deezer API supports pagination via 'index' parameter (offset).
+        Response includes 'total' and 'next' for pagination info.
 
         Args:
             artist_id: Deezer artist ID
             include_groups: Not used (Deezer returns all types)
-            limit: Maximum albums to return
-            offset: Pagination offset
+            limit: Maximum albums to return per page (max 100)
+            offset: Pagination offset (index for Deezer API)
 
         Returns:
-            PaginatedResponse with artist's albums
+            PaginatedResponse with artist's albums and pagination info
         """
         try:
-            deezer_albums = await self._client.get_artist_albums(
-                int(artist_id), limit=limit
+            # Client now returns dict with pagination info
+            response_data = await self._client.get_artist_albums(
+                int(artist_id), limit=limit, index=offset
             )
-            albums = [self._convert_album(a) for a in deezer_albums]
+
+            # response_data has: 'data' (albums), 'total', 'next' (URL or None)
+            albums = [self._convert_album(a) for a in response_data["data"]]
+            total = response_data.get("total", len(albums))
+            has_next = response_data.get("next") is not None
+
+            # Calculate next_offset if there are more pages
+            next_offset = offset + len(albums) if has_next else None
 
             return PaginatedResponse(
                 items=albums,
-                total=len(albums),
+                total=total,
                 limit=limit,
                 offset=offset,
-                next_offset=None,  # Deezer returns all at once
+                next_offset=next_offset,
             )
         except Exception as e:
             logger.error(f"DeezerPlugin get_artist_albums failed: {e}")

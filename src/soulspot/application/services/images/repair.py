@@ -187,7 +187,7 @@ async def repair_artist_images(
     image_service: ImageService,
     image_provider_registry: ImageProviderRegistry | None = None,
     spotify_plugin: SpotifyPlugin | None = None,
-    limit: int = 50,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Download images for artists that have CDN URL but missing local file.
 
@@ -580,7 +580,7 @@ async def repair_album_images(
     session: AsyncSession,
     image_service: ImageService,
     image_provider_registry: ImageProviderRegistry | None = None,
-    limit: int = 50,
+    limit: int = 100,
 ) -> dict[str, Any]:
     """Download covers for albums that have CDN URL but missing local file.
 
@@ -588,7 +588,7 @@ async def repair_album_images(
         session: SQLAlchemy async session
         image_service: ImageService for downloads
         image_provider_registry: Optional multi-provider registry for API fallback
-        limit: Maximum number of albums to process
+        limit: Maximum number of albums to process (default 100)
 
     Returns:
         Stats dict with repaired count, processed count, and errors

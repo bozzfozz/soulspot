@@ -860,13 +860,13 @@ class FollowedArtistsService:
         artist_name: str,
         deezer_artist_id: str | None = None,
     ) -> list:
-        """Fetch artist albums from Deezer as fallback.
+        """Fetch artist albums from Deezer as fallback WITH PAGINATION.
 
         Hey future me - Deezer uses different artist IDs!
         Strategy:
         1. If we HAVE deezer_id → use it directly (FASTER, MORE ACCURATE!)
         2. If NO deezer_id → Search Deezer for the artist by name (fallback)
-        3. Fetch albums using the resolved Deezer artist ID
+        3. Fetch ALL albums using pagination (Deezer limits to 100 per request)
 
         NO AUTH NEEDED for any of this!
 
@@ -875,7 +875,7 @@ class FollowedArtistsService:
             deezer_artist_id: Deezer artist ID if we have it (preferred!)
 
         Returns:
-            list[AlbumDTO] from Deezer
+            list[AlbumDTO] from Deezer (ALL albums, paginated)
         """
         if not self._deezer_plugin:
             return []
@@ -913,13 +913,36 @@ class FollowedArtistsService:
                     f"Using stored Deezer ID {resolved_deezer_id} for '{artist_name}'"
                 )
 
-            # Fetch albums from Deezer (NO AUTH NEEDED!)
-            albums_response = await self._deezer_plugin.get_artist_albums(
-                artist_id=resolved_deezer_id,
-                limit=50,
-            )
+            # Fetch ALL albums from Deezer WITH PAGINATION!
+            # Hey future me - Deezer API limits to 100 per request, some artists
+            # have 200+ albums so we MUST paginate (same as Spotify fix!).
+            all_albums: list = []
+            offset = 0
+            page_limit = 100  # Deezer max per request
+            max_pages = 10  # Safety limit: 10 * 100 = 1000 albums max
 
-            return albums_response.items if albums_response.items else []
+            for page in range(max_pages):
+                albums_response = await self._deezer_plugin.get_artist_albums(
+                    artist_id=resolved_deezer_id,
+                    limit=page_limit,
+                    offset=offset,
+                )
+                all_albums.extend(albums_response.items or [])
+
+                # Check if there are more pages
+                if albums_response.next_offset is None:
+                    break  # No more pages
+
+                offset = albums_response.next_offset
+                logger.debug(
+                    f"Deezer: Fetched page {page + 1} with {len(albums_response.items)} albums, "
+                    f"total so far: {len(all_albums)}, next_offset: {offset}"
+                )
+
+            logger.info(
+                f"Fetched {len(all_albums)} albums from Deezer for '{artist_name}' (paginated)"
+            )
+            return all_albums
 
         except Exception as e:
             logger.warning(f"Deezer artist albums lookup failed: {e}")
@@ -989,23 +1012,46 @@ class FollowedArtistsService:
         albums_dtos: list[Any] = []
         source = "none"
 
-        # 1. Try Spotify first
+        # 1. Try Spotify first - WITH PAGINATION!
+        # Hey future me - Spotify API limits to 50 albums per request.
+        # Artists like Beatles/Madonna have 100+ albums, so we MUST paginate!
         if spotify_artist_id and self.spotify_plugin:
             try:
                 if self.spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS):
-                    response = await self.spotify_plugin.get_artist_albums(
-                        artist_id=spotify_artist_id,
-                        limit=50,
-                    )
-                    albums_dtos = response.items
-                    source = "spotify"
-                    logger.info(
-                        f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name}"
-                    )
+                    offset = 0
+                    page_limit = 50  # Spotify max per request
+                    max_pages = 10  # Safety limit: 10 * 50 = 500 albums max
+
+                    for page in range(max_pages):
+                        response = await self.spotify_plugin.get_artist_albums(
+                            artist_id=spotify_artist_id,
+                            limit=page_limit,
+                            offset=offset,
+                        )
+                        albums_dtos.extend(response.items)
+
+                        # Check if there are more pages
+                        if response.next_offset is None:
+                            break  # No more pages
+
+                        offset = response.next_offset
+                        logger.debug(
+                            f"Fetched page {page + 1} with {len(response.items)} albums, "
+                            f"total so far: {len(albums_dtos)}, next_offset: {offset}"
+                        )
+
+                    if albums_dtos:
+                        source = "spotify"
+                        logger.info(
+                            f"Fetched {len(albums_dtos)} albums from Spotify for {artist.name} "
+                            f"(paginated)"
+                        )
             except Exception as e:
                 logger.warning(f"Spotify album fetch failed for {artist.name}: {e}")
 
         # 2. Fallback to Deezer
+        # Hey future me - Deezer API returns all albums at once (up to 100)
+        # No pagination needed, but limit is lower than Spotify.
         if not albums_dtos and self._deezer_plugin and artist.name:
             try:
                 albums_dtos = await self._fetch_albums_from_deezer(

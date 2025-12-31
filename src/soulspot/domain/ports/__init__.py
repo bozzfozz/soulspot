@@ -460,7 +460,7 @@ class IAlbumRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_albums_without_cover_url(self, limit: int = 50) -> list[Album]:
+    async def get_albums_without_cover_url(self, limit: int = 100) -> list[Album]:
         """Get albums that have deezer_id but missing cover_url (backfill).
 
         Hey future me - this is for LibraryDiscoveryWorker Phase 6!
@@ -468,7 +468,7 @@ class IAlbumRepository(ABC):
         was None (API returned no cover at the time). Now we retry to fetch covers.
 
         Args:
-            limit: Maximum number of albums to return
+            limit: Maximum number of albums to return (default 100)
 
         Returns:
             List of Album entities needing cover URL backfill

@@ -1,13 +1,15 @@
 {# Hey future me - Followed Artists page for automation!
    Syncs artists you follow on Spotify and creates watchlists for auto-downloads.
    HTMX POST to /api/automation/followed-artists/sync fetches the list.
-   selectedArtists Set tracks checkboxes, createWatchlistsForSelected() bulk-creates watchlists. #}
+   selectedArtists Set tracks checkboxes, createWatchlistsForSelected() bulk-creates watchlists.
+   hide_topbar_breadcrumbs = true weil wir eigene Breadcrumbs haben! #}
 
 {% extends "base.html" %}
 
 {% block title %}Followed Artists - SoulSpot{% endblock %}
 
 {% block content %}
+{% set hide_topbar_breadcrumbs = true %}
 <div style="max-width: 1400px; margin: 0 auto;">
     
     <!-- Page Header -->

@@ -2304,3 +2304,62 @@
         display: block;
     }
 }
+
+/* ===== DATA TABLE ===== */
+/* Hey future me - Global data-table styles for consistent tables across all pages!
+   Previously defined inline in each template, now centralized here so HTMX-loaded
+   partials get proper styling too. */
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.data-table th:hover {
+    background: var(--bg-hover);
+}
+
+.data-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-primary);
+    font-size: var(--font-size-sm);
+}
+
+.data-table tr:hover {
+    background: var(--bg-hover);
+}
+
+/* Disc separator for multi-disc albums */
+.data-table .disc-separator-row {
+    background: var(--bg-tertiary);
+}
+
+.data-table .disc-separator-row:hover {
+    background: var(--bg-tertiary);
+}
+
+.data-table .disc-separator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-muted);
+}
+
+.data-table .disc-separator i {
+    font-size: var(--font-size-base);
+}

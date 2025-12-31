@@ -694,31 +694,41 @@ class DeezerClient:
             raise
 
     async def get_artist_albums(
-        self, artist_id: int, limit: int = 50
-    ) -> list[DeezerAlbum]:
-        """Get albums for an artist.
+        self, artist_id: int, limit: int = 50, index: int = 0
+    ) -> dict[str, Any]:
+        """Get albums for an artist WITH PAGINATION.
+
+        Hey future me - Deezer API supports pagination via 'index' parameter!
+        Response includes 'total' and 'next' fields for pagination.
 
         Args:
             artist_id: Deezer artist ID
-            limit: Maximum results (default 50, max 100)
+            limit: Maximum results per page (default 50, max 100)
+            index: Offset for pagination (start from 0)
 
         Returns:
-            List of DeezerAlbum objects
+            Dict with 'data' (albums), 'total', and optionally 'next' URL
         """
         try:
             response = await self._api_request(
                 method="GET",
                 endpoint=f"/artist/{artist_id}/albums",
-                params={"limit": min(limit, 100)},
+                params={"limit": min(limit, 100), "index": index},
             )
             response.raise_for_status()
             data = response.json()
 
+            # Parse albums
             albums = []
             for item in data.get("data", []):
                 albums.append(self._parse_album(item))
 
-            return albums
+            # Return full response with pagination info
+            return {
+                "data": albums,
+                "total": data.get("total", len(albums)),
+                "next": data.get("next"),  # URL to next page, None if no more
+            }
 
         except httpx.HTTPError as e:
             logger.error(f"Deezer get_artist_albums failed: {e}")

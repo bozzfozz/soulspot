@@ -11,36 +11,41 @@
    - Pass `breadcrumbs` list: [{"label": "Library", "url": "/library"}, {"label": "Artists"}]
    - Last breadcrumb has no URL (current page)
    - OR: Uses request.url.path to auto-generate breadcrumbs
+   - Set `hide_topbar_breadcrumbs = true` in template if page has manual breadcrumbs
    
    This complements the sidebar - sidebar for nav sections, topbar for context.
    On mobile (<768px), this is hidden - mobile-header handles everything.
 #}
 
-{# Auto-generate breadcrumbs from URL path if not provided #}
-{% if not breadcrumbs %}
-    {% set path_parts = request.url.path.strip('/').split('/') %}
-    {% set auto_breadcrumbs = [] %}
-    {% set current_url = '' %}
-    {% for part in path_parts if part %}
-        {% set current_url = current_url ~ '/' ~ part %}
-        {% set label = part.replace('-', ' ').replace('_', ' ').title() %}
-        {% if loop.last %}
-            {% set _ = auto_breadcrumbs.append({'label': label}) %}
-        {% else %}
-            {% set _ = auto_breadcrumbs.append({'label': label, 'url': current_url}) %}
+{# Skip breadcrumb generation if page has its own breadcrumbs (Detail pages) #}
+{% if not hide_topbar_breadcrumbs %}
+    {# Auto-generate breadcrumbs from URL path if not provided #}
+    {% if not breadcrumbs %}
+        {% set path_parts = request.url.path.strip('/').split('/') %}
+        {% set auto_breadcrumbs = [] %}
+        {% set current_url = '' %}
+        {% for part in path_parts if part %}
+            {% set current_url = current_url ~ '/' ~ part %}
+            {% set label = part.replace('-', ' ').replace('_', ' ').title() %}
+            {% if loop.last %}
+                {% set _ = auto_breadcrumbs.append({'label': label}) %}
+            {% else %}
+                {% set _ = auto_breadcrumbs.append({'label': label, 'url': current_url}) %}
+            {% endif %}
+        {% endfor %}
+        {% if not auto_breadcrumbs %}
+            {% set auto_breadcrumbs = [{'label': 'Dashboard'}] %}
         {% endif %}
-    {% endfor %}
-    {% if not auto_breadcrumbs %}
-        {% set auto_breadcrumbs = [{'label': 'Dashboard'}] %}
+        {% set breadcrumbs = auto_breadcrumbs %}
     {% endif %}
-    {% set breadcrumbs = auto_breadcrumbs %}
 {% endif %}
 
 <!-- Desktop TopBar (hidden on mobile) -->
 <div class="topbar hidden-mobile">
     <div class="topbar-content">
         
-        <!-- Breadcrumbs (left) -->
+        <!-- Breadcrumbs (left) - only show if not hidden by page -->
+        {% if not hide_topbar_breadcrumbs %}
         <nav class="topbar-breadcrumbs" aria-label="Breadcrumb">
             {% if breadcrumbs %}
                 {% for crumb in breadcrumbs %}
@@ -55,6 +60,7 @@
                 <span class="breadcrumb-current" aria-current="page">Dashboard</span>
             {% endif %}
         </nav>
+        {% endif %}
         
         <!-- Spacer -->
         <div class="flex-1"></div>
