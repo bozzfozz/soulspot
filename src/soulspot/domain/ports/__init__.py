@@ -476,6 +476,25 @@ class IAlbumRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_albums_with_mbid_needing_cover(self, limit: int = 50) -> list[Album]:
+        """Get albums that have musicbrainz_id but missing cover_url.
+
+        Hey future me - this is for LibraryDiscoveryWorker Phase 8!
+        CoverArtArchive uses MusicBrainz Release IDs to serve covers.
+        This finds albums with MBID but no cover yet - perfect CAA candidates!
+
+        CoverArtArchive has NO RATE LIMITS, so this is a great free source
+        for high-quality album artwork (up to 1200px).
+
+        Args:
+            limit: Maximum number of albums to return (default 50)
+
+        Returns:
+            List of Album entities needing cover from CAA
+        """
+        pass
+
+    @abstractmethod
     async def update_cover_url(self, album_id: AlbumId, cover_url: str) -> bool:
         """Update album's cover_url only (backfill for albums missing cover).
 

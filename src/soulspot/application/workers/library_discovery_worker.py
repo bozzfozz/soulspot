@@ -190,11 +190,13 @@ class LibraryDiscoveryWorker:
             "phase5_track_enrichment": {},
             "phase6_cover_backfill": {},
             "phase7_track_backfill": {},
+            "phase8_caa_cover_backfill": {},
             "artists_enriched": 0,
             "albums_discovered": 0,
             "albums_enriched": 0,
             "tracks_enriched": 0,
             "covers_backfilled": 0,
+            "caa_covers_backfilled": 0,
             "tracks_backfilled": 0,
             "errors": [],
         }
@@ -247,6 +249,13 @@ class LibraryDiscoveryWorker:
                 phase7_stats = await self._phase7_backfill_album_tracks(session)
                 stats["phase7_track_backfill"] = phase7_stats
                 stats["tracks_backfilled"] = phase7_stats.get("tracks_added", 0)
+
+                # Phase 8: Backfill covers from CoverArtArchive for albums with MBID
+                # Hey future me - CAA has NO RATE LIMITS and is FREE!
+                # Perfect for albums that have MusicBrainz ID but no cover yet.
+                phase8_stats = await self._phase8_caa_cover_backfill(session)
+                stats["phase8_caa_cover_backfill"] = phase8_stats
+                stats["caa_covers_backfilled"] = phase8_stats.get("backfilled", 0)
 
                 # Commit all changes
                 await session.commit()
@@ -1129,7 +1138,7 @@ class LibraryDiscoveryWorker:
         This ensures ALL discography albums get populated with tracks,
         not just the ones the user clicks on!
 
-        Rate limiting: 0.2s between API calls to be nice to Deezer.
+        Rate limiting: 0.1s between API calls (Deezer allows ~10/sec).
         Batch size: 30 albums per cycle to avoid long-running transactions.
         """
         from soulspot.infrastructure.persistence.repositories import (
@@ -1209,8 +1218,8 @@ class LibraryDiscoveryWorker:
                     f"Backfilled {len(album_dto.tracks)} tracks for '{album.title}'"
                 )
 
-                # Rate limiting - be nice to Deezer API
-                await asyncio.sleep(0.2)
+                # Rate limiting - Deezer allows ~10 req/sec, we use 0.1s to be safe
+                await asyncio.sleep(0.1)
 
             except Exception as e:
                 stats["failed"] += 1
@@ -1226,6 +1235,99 @@ class LibraryDiscoveryWorker:
         logger.info(
             f"Phase 7 complete: {stats['tracks_added']} tracks added "
             f"for {stats['albums_processed']} albums, {stats['failed']} failed"
+        )
+
+        return stats
+
+    async def _phase8_caa_cover_backfill(
+        self, session: AsyncSession
+    ) -> dict[str, Any]:
+        """Phase 8: Backfill covers from CoverArtArchive for albums with MusicBrainz ID.
+
+        Hey future me - CoverArtArchive has NO RATE LIMITS! 🎉
+        This phase is perfect for albums that have a musicbrainz_id but no cover yet.
+        CAA is free, community-curated, and has high-quality artwork up to 1200px.
+
+        Strategy:
+        1. Find albums with musicbrainz_id but without cover_url
+        2. For each album, query CAA for front cover
+        3. Store the CAA URL as cover_url
+
+        Rate limiting: 0.1s between calls (CAA is lenient but let's be nice)
+        Batch size: 50 albums per cycle
+        """
+        from soulspot.infrastructure.integrations.coverartarchive_client import (
+            CoverArtArchiveClient,
+        )
+        from soulspot.infrastructure.persistence.repositories import AlbumRepository
+
+        stats: dict[str, Any] = {
+            "albums_processed": 0,
+            "backfilled": 0,
+            "no_cover_in_caa": 0,
+            "already_has_cover": 0,
+            "failed": 0,
+            "errors": [],
+        }
+
+        album_repo = AlbumRepository(session)
+
+        # Get albums WITH musicbrainz_id but WITHOUT cover_url
+        albums = await album_repo.get_albums_with_mbid_needing_cover(limit=50)
+
+        if not albums:
+            logger.debug("Phase 8: No albums need CAA cover backfill")
+            return stats
+
+        logger.info(f"Phase 8: Fetching covers from CoverArtArchive for {len(albums)} albums")
+
+        async with CoverArtArchiveClient() as caa_client:
+            for album in albums:
+                stats["albums_processed"] += 1
+
+                if album.cover.url:
+                    stats["already_has_cover"] += 1
+                    continue
+
+                if not album.musicbrainz_id:
+                    continue
+
+                try:
+                    # Query CAA for front cover
+                    # CAA uses Release ID - our musicbrainz_id should be Release ID
+                    front_url = await caa_client.get_front_cover_url(album.musicbrainz_id)
+
+                    if front_url:
+                        # Update album with CAA cover URL
+                        from soulspot.domain.value_objects import ImageRef
+
+                        album.cover = ImageRef(url=front_url, path=album.cover.path)
+                        await album_repo.update(album)
+
+                        stats["backfilled"] += 1
+                        logger.debug(
+                            f"CAA cover found for '{album.title}' (MBID: {album.musicbrainz_id})"
+                        )
+                    else:
+                        stats["no_cover_in_caa"] += 1
+
+                    # Rate limit - CAA is lenient but let's be responsible
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    stats["failed"] += 1
+                    stats["errors"].append(
+                        {
+                            "album": album.title,
+                            "musicbrainz_id": album.musicbrainz_id,
+                            "error": str(e),
+                        }
+                    )
+                    logger.warning(f"Failed to fetch CAA cover for '{album.title}': {e}")
+
+        logger.info(
+            f"Phase 8 complete: {stats['backfilled']} covers from CAA, "
+            f"{stats['no_cover_in_caa']} not in CAA, {stats['failed']} failed"
         )
 
         return stats
