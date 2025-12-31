@@ -309,10 +309,12 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
-        operation_id = start_operation(
+        start_time, operation_id = start_operation(
             logger,
             "deezer_sync.artist_albums",
-            extra={"deezer_artist_id": deezer_artist_id, "limit": limit, "force": force},
+            deezer_artist_id=deezer_artist_id,
+            limit=limit,
+            force=force,
         )
         
         cache_key = f"artist_albums_{deezer_artist_id}"
@@ -321,9 +323,12 @@ class DeezerSyncService:
         ):
             end_operation(
                 logger,
+                "deezer_sync.artist_albums",
+                start_time,
                 operation_id,
                 success=True,
-                extra={"skipped": "cooldown", "deezer_artist_id": deezer_artist_id},
+                skipped="cooldown",
+                deezer_artist_id=deezer_artist_id,
             )
             return {
                 "skipped": True,
@@ -354,9 +359,12 @@ class DeezerSyncService:
                 )
                 end_operation(
                     logger,
+                    "deezer_sync.artist_albums",
+                    start_time,
                     operation_id,
                     success=False,
-                    extra={"error": "artist_not_found", "deezer_artist_id": deezer_artist_id},
+                    error_type="artist_not_found",
+                    deezer_artist_id=deezer_artist_id,
                 )
                 return {"albums_synced": 0, "error": "artist_not_found"}
 
@@ -385,13 +393,13 @@ class DeezerSyncService:
             
             end_operation(
                 logger,
+                "deezer_sync.artist_albums",
+                start_time,
                 operation_id,
                 success=True,
-                extra={
-                    "deezer_artist_id": deezer_artist_id,
-                    "albums_synced": result["albums_synced"],
-                    "errors_count": len(result["errors"]),
-                },
+                deezer_artist_id=deezer_artist_id,
+                albums_synced=result["albums_synced"],
+                errors_count=len(result["errors"]),
             )
 
         except Exception as e:
@@ -401,7 +409,7 @@ class DeezerSyncService:
                 extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
             )
             result["error"] = str(e)
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "deezer_sync.artist_albums", start_time, operation_id, success=False, error=e)
 
         return result
 
@@ -419,10 +427,11 @@ class DeezerSyncService:
         Returns:
             Sync result with counts
         """
-        operation_id = start_operation(
+        start_time, operation_id = start_operation(
             logger,
             "deezer_sync.artist_top_tracks",
-            extra={"deezer_artist_id": deezer_artist_id, "limit": limit},
+            deezer_artist_id=deezer_artist_id,
+            limit=limit,
         )
         
         result = {
@@ -450,9 +459,12 @@ class DeezerSyncService:
                 )
                 end_operation(
                     logger,
+                    "deezer_sync.artist_top_tracks",
+                    start_time,
                     operation_id,
                     success=False,
-                    extra={"error": "artist_not_found", "deezer_artist_id": deezer_artist_id},
+                    error_type="artist_not_found",
+                    deezer_artist_id=deezer_artist_id,
                 )
                 return {"tracks_synced": 0, "error": "artist_not_found"}
 
@@ -475,13 +487,13 @@ class DeezerSyncService:
             
             end_operation(
                 logger,
+                "deezer_sync.artist_top_tracks",
+                start_time,
                 operation_id,
                 success=True,
-                extra={
-                    "deezer_artist_id": deezer_artist_id,
-                    "tracks_synced": result["tracks_synced"],
-                    "errors_count": len(result["errors"]),
-                },
+                deezer_artist_id=deezer_artist_id,
+                tracks_synced=result["tracks_synced"],
+                errors_count=len(result["errors"]),
             )
 
         except Exception as e:
@@ -491,7 +503,7 @@ class DeezerSyncService:
                 extra={"error_type": type(e).__name__, "deezer_artist_id": deezer_artist_id},
             )
             result["error"] = str(e)
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "deezer_sync.artist_top_tracks", start_time, operation_id, success=False, error=e)
 
         return result
 

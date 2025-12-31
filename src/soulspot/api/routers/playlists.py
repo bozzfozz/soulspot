@@ -120,14 +120,12 @@ async def import_playlist(
     Returns:
         Import status and statistics
     """
-    operation_id = start_operation(
+    start_time, operation_id = start_operation(
         logger,
         "api.playlists.import_playlist",
-        extra={
-            "playlist_input": playlist_id,
-            "fetch_all_tracks": fetch_all_tracks,
-            "auto_queue_downloads": auto_queue_downloads,
-        },
+        playlist_input=playlist_id,
+        fetch_all_tracks=fetch_all_tracks,
+        auto_queue_downloads=auto_queue_downloads,
     )
 
     try:
@@ -169,23 +167,23 @@ async def import_playlist(
 
         end_operation(
             logger,
+            "api.playlists.import_playlist",
+            start_time,
             operation_id,
             success=True,
-            extra={
-                "playlist_name": response.playlist.name,
-                "tracks_imported": response.tracks_imported,
-                "tracks_failed": response.tracks_failed,
-                "auto_queued": auto_queue_downloads,
-            },
+            playlist_name=response.playlist.name,
+            tracks_imported=response.tracks_imported,
+            tracks_failed=response.tracks_failed,
+            auto_queued=auto_queue_downloads,
         )
         return result
     except ValueError as e:
         logger.error(f"Validation error importing playlist: {e}", exc_info=True, extra={"error_type": "ValueError"})
-        end_operation(logger, operation_id, success=False, error=e)
+        end_operation(logger, "api.playlists.import_playlist", start_time, operation_id, success=False, error=e)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Failed to import playlist: {e}", exc_info=True, extra={"error_type": type(e).__name__})
-        end_operation(logger, operation_id, success=False, error=e)
+        end_operation(logger, "api.playlists.import_playlist", start_time, operation_id, success=False, error=e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

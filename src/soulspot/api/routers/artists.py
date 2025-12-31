@@ -251,7 +251,7 @@ async def sync_followed_artists(
     Raises:
         HTTPException: If Spotify API fails or authentication issues
     """
-    operation_id = start_operation(logger, "api.artists.sync_followed_artists")
+    start_time, operation_id = start_operation(logger, "api.artists.sync_followed_artists")
 
     # Check if Spotify provider is enabled + auth using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
@@ -259,7 +259,7 @@ async def sync_followed_artists(
 
     app_settings = AppSettingsService(session)
     if not await app_settings.is_provider_enabled("spotify"):
-        end_operation(logger, operation_id, success=False)
+        end_operation(logger, "api.artists.sync_followed_artists", start_time, operation_id, success=False)
         raise HTTPException(
             status_code=503,
             detail="Spotify provider is disabled in settings. Enable it to sync artists.",
@@ -267,7 +267,7 @@ async def sync_followed_artists(
 
     # can_use() checks capability + auth in one call
     if not spotify_plugin.can_use(PluginCapability.USER_FOLLOWED_ARTISTS):
-        end_operation(logger, operation_id, success=False)
+        end_operation(logger, "api.artists.sync_followed_artists", start_time, operation_id, success=False)
         raise HTTPException(
             status_code=401,
             detail="Not authenticated with Spotify. Please connect your account first.",
@@ -307,14 +307,14 @@ async def sync_followed_artists(
         )
         end_operation(
             logger,
+            "api.artists.sync_followed_artists",
+            start_time,
             operation_id,
             success=True,
-            extra={
-                "total_artists": len(artists),
-                "created": stats["created"],
-                "updated": stats["updated"],
-                "errors": stats["errors"],
-            },
+            total_artists=len(artists),
+            created=stats["created"],
+            updated=stats["updated"],
+            errors=stats["errors"],
         )
         return response
     except Exception as e:
@@ -331,7 +331,7 @@ async def sync_followed_artists(
             exc_info=True,
             extra={"error_type": type(e).__name__},
         )
-        end_operation(logger, operation_id, success=False, error=e)
+        end_operation(logger, "api.artists.sync_followed_artists", start_time, operation_id, success=False, error=e)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync followed artists: {str(e)}",

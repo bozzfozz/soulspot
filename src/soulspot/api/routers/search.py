@@ -179,10 +179,11 @@ async def unified_search(
     Returns:
         Combined artists, albums, tracks from all providers
     """
-    operation_id = start_operation(
+    start_time, operation_id = start_operation(
         logger,
         "api.search.unified_search",
-        extra={"query": query, "limit": limit},
+        query=query,
+        limit=limit,
     )
 
     import asyncio
@@ -419,7 +420,7 @@ async def unified_search(
 
     # Error if no providers available
     if not sources_queried:
-        end_operation(logger, operation_id, success=False)
+        end_operation(logger, "api.search.unified_search", start_time, operation_id, success=False)
         raise HTTPException(
             status_code=503,
             detail="No search providers available. Enable Deezer or connect Spotify.",
@@ -440,15 +441,15 @@ async def unified_search(
     )
     end_operation(
         logger,
+        "api.search.unified_search",
+        start_time,
         operation_id,
         success=True,
-        extra={
-            "artists_count": len(artists),
-            "albums_count": len(albums),
-            "tracks_count": len(tracks),
-            "sources": sources_queried,
-            "source_counts": source_counts,
-        },
+        artists_count=len(artists),
+        albums_count=len(albums),
+        tracks_count=len(tracks),
+        sources=sources_queried,
+        source_counts=source_counts,
     )
     return response
 

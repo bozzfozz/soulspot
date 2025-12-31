@@ -205,10 +205,10 @@ class AutoImportService:
 
         OPTIMIZED: Uses parallel processing with concurrency limit for 5x+ speedup!
         """
-        operation_id = start_operation(
+        start_time, operation_id = start_operation(
             logger,
             "auto_import.process_downloads",
-            extra={"poll_interval": self._poll_interval},
+            poll_interval=self._poll_interval,
         )
         
         try:
@@ -317,15 +317,15 @@ class AutoImportService:
             
             end_operation(
                 logger,
+                "auto_import.process_downloads",
+                start_time,
                 operation_id,
                 success=True,
-                extra={
-                    "total_files": len(audio_files),
-                    "completed_track_ids_count": len(completed_track_ids),
-                    "imported": success_count,
-                    "skipped": skip_count,
-                    "errors": error_count,
-                },
+                total_files=len(audio_files),
+                completed_track_ids_count=len(completed_track_ids),
+                imported=success_count,
+                skipped=skip_count,
+                errors=error_count,
             )
 
         except Exception as e:
@@ -334,7 +334,7 @@ class AutoImportService:
                 exc_info=True,
                 extra={"error_type": type(e).__name__},
             )
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "auto_import.process_downloads", start_time, operation_id, success=False, error=e)
 
     # Hey future me: Recursive file discovery with completeness check
     # WHY rglob("*")? Downloads might be organized in subdirs like "Artist/Album/track.mp3"
