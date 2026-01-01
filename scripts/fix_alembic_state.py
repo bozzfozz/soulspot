@@ -58,9 +58,19 @@ def fix_alembic_state() -> bool:
             db_url = "sqlite+aiosqlite:////config/soulspot.db"
 
     # Convert async URL to sync for direct SQLAlchemy access
-    sync_url = db_url.replace("+aiosqlite", "").replace("sqlite+", "sqlite:///")
-    if sync_url.startswith("sqlite://////"):
-        sync_url = sync_url.replace("sqlite://////", "sqlite:////")
+    # Use sqlalchemy.engine.make_url for robust URL parsing
+    try:
+        from sqlalchemy.engine import make_url
+        url = make_url(db_url)
+        # Remove async driver suffix
+        if url.drivername.endswith("+aiosqlite"):
+            url = url.set(drivername=url.drivername.replace("+aiosqlite", ""))
+        sync_url = str(url)
+    except Exception:
+        # Fallback to simple string replacement if URL parsing fails
+        sync_url = db_url.replace("+aiosqlite", "").replace("sqlite+", "sqlite:///")
+        if sync_url.startswith("sqlite://////"):
+            sync_url = sync_url.replace("sqlite://////", "sqlite:////")
 
     print(f"Checking database: {sync_url}")
 
@@ -104,27 +114,34 @@ def fix_alembic_state() -> bool:
         config = Config(str(alembic_ini))
         script = ScriptDirectory.from_config(config)
 
-        # Get ancestors for each version
+        # Get ancestors for each version using iterative approach
         def get_ancestors(rev_id: str) -> set:
-            """Get all ancestor revision IDs."""
+            """Get all ancestor revision IDs using iterative BFS to avoid stack overflow."""
             ancestors = set()
             try:
                 rev = script.get_revision(rev_id)
                 if not rev:
                     return ancestors
 
-                def collect(r, visited):
-                    if r.revision in visited:
-                        return
-                    visited.add(r.revision)
-                    if r.down_revision:
-                        downs = r.down_revision if isinstance(r.down_revision, tuple) else [r.down_revision]
+                # Use a queue for BFS traversal instead of recursion
+                from collections import deque
+                queue = deque([rev])
+                visited = set()
+
+                while queue:
+                    current = queue.popleft()
+                    if current.revision in visited:
+                        continue
+                    visited.add(current.revision)
+
+                    if current.down_revision:
+                        downs = current.down_revision if isinstance(current.down_revision, tuple) else [current.down_revision]
                         for d in downs:
                             dr = script.get_revision(d)
-                            if dr:
-                                collect(dr, visited)
+                            if dr and dr.revision not in visited:
+                                queue.append(dr)
 
-                collect(rev, ancestors)
+                ancestors = visited
                 ancestors.discard(rev_id)  # Don't include self
             except Exception as e:
                 print(f"  Warning: Could not get ancestors for {rev_id}: {e}")
@@ -144,15 +161,15 @@ def fix_alembic_state() -> bool:
             print("  No overlapping versions found")
             return False
 
-        # Remove ancestor versions
+        # Remove ancestor versions atomically in a single transaction
         print(f"  Removing overlapping versions: {versions_to_remove}")
-        with engine.connect() as conn:
+        with engine.begin() as conn:  # begin() provides automatic commit/rollback
             for v in versions_to_remove:
                 conn.execute(
                     sa.text("DELETE FROM alembic_version WHERE version_num = :v"),
                     {"v": v}
                 )
-            conn.commit()
+            # Transaction commits automatically on successful context exit
 
         # Verify the fix
         with engine.connect() as conn:

@@ -169,9 +169,17 @@ if [ -f "/app/alembic.ini" ]; then
     # an ancestor of another (e.g., both ddd38026ggH74 and BBB38024eeE72)
     if [ -f "/app/scripts/fix_alembic_state.py" ]; then
         echo "  Checking for migration state issues..."
-        gosu $PUID:$PGID python /app/scripts/fix_alembic_state.py 2>&1 | while read line; do
+        # Capture output to temp file to preserve exit code
+        FIX_OUTPUT=$(gosu $PUID:$PGID python /app/scripts/fix_alembic_state.py 2>&1)
+        FIX_EXIT_CODE=$?
+        # Display output with indentation
+        echo "$FIX_OUTPUT" | while IFS= read -r line; do
             echo "  $line"
         done
+        if [ $FIX_EXIT_CODE -ne 0 ]; then
+            echo -e "${YELLOW}!${NC} Warning: Migration state check failed (exit code: $FIX_EXIT_CODE)"
+            echo "  Continuing with migrations anyway..."
+        fi
     fi
     
     gosu $PUID:$PGID alembic upgrade head
