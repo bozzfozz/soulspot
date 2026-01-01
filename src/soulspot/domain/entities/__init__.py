@@ -101,6 +101,77 @@ class ProviderMode(str, Enum):
     PRO = "pro"  # Full features including OAuth/Premium/paid features
 
 
+# Hey future me – OwnershipState tracks whether an entity "belongs" to your library!
+# This is THE CORE CONCEPT for the UnifiedLibraryManager.
+#
+# OWNED = "This is in MY library, I want to manage/download it"
+#   - Followed Artist on Spotify → owned
+#   - Favorited Album on Deezer → owned
+#   - Track in local library → owned
+#
+# DISCOVERED = "I know about this, but it's not in my library"
+#   - Albums from artist discography browse
+#   - Tracks from playlist browse (not in your liked songs)
+#   - Search results you haven't added
+#
+# IGNORED = "I explicitly don't want this in my library"
+#   - User clicked "Ignore" button
+#   - Prevents auto-adding during discography expansion
+#
+# DEFAULT is DISCOVERED (safe) - entities become OWNED through explicit user action
+# (follow artist, like song, add to library).
+class OwnershipState(str, Enum):
+    """Ownership status of a Track/Album/Artist.
+
+    Tracks whether an entity belongs to the user's personal library.
+    """
+
+    OWNED = "owned"  # In my library, actively managed
+    DISCOVERED = "discovered"  # Known but not in library (browse results, etc.)
+    IGNORED = "ignored"  # Explicitly ignored by user
+
+
+# Hey future me – DownloadState tracks the download lifecycle of a Track!
+# IMPORTANT: Default is NOT_NEEDED, not PENDING!
+#
+# State machine:
+#   NOT_NEEDED → PENDING → DOWNLOADING → DOWNLOADED
+#                    ↓
+#                  FAILED (can retry → PENDING)
+#
+# NOT_NEEDED = "No download required or requested"
+#   - Default for all new tracks!
+#   - Tracks synced from cloud when auto_queue=false
+#   - User must explicitly request download
+#
+# PENDING = "In download queue, waiting to be processed"
+#   - Set when: auto_queue=true during sync, OR user clicks Download button
+#   - DownloadWorker picks these up
+#
+# DOWNLOADING = "Currently being downloaded"
+#   - DownloadWorker is actively working on this
+#
+# DOWNLOADED = "Successfully downloaded, file exists locally"
+#   - local_path should be set
+#   - File verified to exist
+#
+# FAILED = "Download attempted but failed"
+#   - Will be retried or marked NOT_NEEDED after timeout
+#   - Cleanup task resets FAILED>7days → NOT_NEEDED
+class DownloadState(str, Enum):
+    """Download status of a Track.
+
+    Tracks the download lifecycle. DEFAULT is NOT_NEEDED!
+    Auto-queue only happens when library.auto_queue_downloads=true.
+    """
+
+    NOT_NEEDED = "not_needed"  # No download needed/wanted (DEFAULT!)
+    PENDING = "pending"  # In download queue, waiting
+    DOWNLOADING = "downloading"  # Currently downloading
+    DOWNLOADED = "downloaded"  # Successfully downloaded
+    FAILED = "failed"  # Download failed (can retry)
+
+
 # Yo, Artist is the DOMAIN ENTITY (not DB model)! It represents the business concept of an artist.
 # Uses dataclass instead of Pydantic for simplicity (domain layer doesn't depend on Pydantic). The
 # metadata_sources dict tracks which fields came from which APIs (e.g., {"name": "spotify", "genres":
@@ -125,6 +196,11 @@ class Artist:
     id: ArtistId
     name: str
     source: ArtistSource = ArtistSource.LOCAL  # Default to LOCAL for backward compat
+    # Hey future me - UnifiedLibraryManager ownership tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: OwnershipState = OwnershipState.OWNED
+    primary_source: str | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     lastfm_url: str | None = None
@@ -197,6 +273,11 @@ class Album:
     # Hey future me - source tracks where album came from!
     # Values: 'local' (file scan), 'spotify', 'deezer', 'tidal', 'hybrid' (multiple)
     source: str = "local"
+    # Hey future me - UnifiedLibraryManager ownership tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: OwnershipState = OwnershipState.OWNED
+    primary_source: str | None = None
     release_year: int | None = None
     # Hey future me - full precision release date (YYYY-MM-DD or YYYY-MM or YYYY)
     # release_date_precision tells which parts are valid: 'day', 'month', 'year'
@@ -421,6 +502,13 @@ class Track:
     duration_ms: int = 0
     track_number: int | None = None
     disc_number: int = 1
+    # Hey future me - UnifiedLibraryManager ownership + download tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # download_state: 'not_needed' (DEFAULT!), 'pending', 'downloading', 'downloaded', 'failed'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: OwnershipState = OwnershipState.OWNED
+    download_state: DownloadState = DownloadState.NOT_NEEDED  # DEFAULT is NOT_NEEDED!
+    primary_source: str | None = None
     spotify_uri: SpotifyUri | None = None
     musicbrainz_id: str | None = None
     isrc: str | None = None
@@ -1531,4 +1619,7 @@ __all__ = [
     "AutomationAction",
     "ProviderMode",
     "ArtistSource",
+    # NEW: Ownership Model Enums (UnifiedLibraryManager)
+    "OwnershipState",
+    "DownloadState",
 ]

@@ -1356,3 +1356,83 @@ class AppSettingsService:
         """
         for provider, mode in modes.items():
             await self.set_provider_mode(provider, mode)
+
+    # =========================================================================
+    # UNIFIED LIBRARY MANAGER FEATURE FLAGS
+    # =========================================================================
+    # Hey future me - these control the new UnifiedLibraryManager system!
+    # See docs/architecture/UNIFIED_LIBRARY_WORKER.md for full documentation.
+    # =========================================================================
+
+    async def use_unified_library_manager(self) -> bool:
+        """Check if UnifiedLibraryManager is enabled.
+
+        Hey future me - this is the master switch for the new library system!
+        When FALSE (default), old workers are used.
+        When TRUE, UnifiedLibraryManager handles all sync/enrichment/download.
+
+        Returns:
+            True if UnifiedLibraryManager should be used.
+        """
+        return await self.get_bool("library.use_unified_manager", default=False)
+
+    async def auto_queue_downloads_enabled(self) -> bool:
+        """Check if tracks should auto-queue for download on sync.
+
+        Hey future me - this controls download_state behavior!
+        When FALSE (default): Synced tracks get download_state=NOT_NEEDED
+        When TRUE: Synced tracks get download_state=PENDING (auto-queue)
+
+        Requires use_unified_library_manager=True to have effect.
+
+        Returns:
+            True if auto-queueing is enabled.
+        """
+        return await self.get_bool("library.auto_queue_downloads", default=False)
+
+    async def get_download_cleanup_days(self) -> int:
+        """Get days before failed downloads reset to not_needed.
+
+        Hey future me - this is for the cleanup task!
+        Failed downloads older than this many days reset to NOT_NEEDED.
+        Set to 0 to disable cleanup (failed downloads stay forever).
+
+        Returns:
+            Number of days (default 7).
+        """
+        return await self.get_int("library.download_cleanup_days", default=7)
+
+    async def get_sync_cooldown_minutes(self) -> int:
+        """Get cooldown between sync operations.
+
+        Hey future me - this prevents API spam!
+        Same entity type won't sync more often than this interval.
+
+        Returns:
+            Minutes between syncs (default 5).
+        """
+        return await self.get_int("library.sync_cooldown_minutes", default=5)
+
+    async def get_enrichment_batch_size(self) -> int:
+        """Get batch size for enrichment operations.
+
+        Hey future me - rate limit friendly batch processing!
+        MusicBrainz allows 1 req/sec, Deezer allows ~50/5min.
+        This controls how many entities to process per batch.
+
+        Returns:
+            Number of entities per batch (default 20).
+        """
+        return await self.get_int("library.enrichment_batch_size", default=20)
+
+    async def image_download_enabled(self) -> bool:
+        """Check if local image downloading is enabled.
+
+        Hey future me - this controls whether images are cached locally!
+        When FALSE: Only store CDN URLs, serve from provider
+        When TRUE (default): Download and cache images locally
+
+        Returns:
+            True if local image caching is enabled.
+        """
+        return await self.get_bool("library.image_download_enabled", default=True)

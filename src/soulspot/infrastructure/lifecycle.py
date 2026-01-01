@@ -341,6 +341,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         app.state.new_releases_sync_worker = new_releases_sync_worker
 
+        # =================================================================
+        # UnifiedLibraryManager (FUTURE: replaces multiple workers)
+        # =================================================================
+        # Hey future me - this is THE NEW UNIFIED WORKER!
+        # Controlled by feature flag: library.use_unified_manager
+        # When enabled, it will eventually replace:
+        # - spotify_sync_worker, deezer_sync_worker
+        # - library_discovery_worker
+        # - image_backfill_worker
+        # - cleanup_worker
+        # For now, it runs IN PARALLEL with old workers during migration.
+        # Set library.use_unified_manager=true to test the new system.
+        from soulspot.application.workers.unified_library_worker import (
+            UnifiedLibraryManager,
+        )
+
+        # Check feature flag using a fresh session
+        async with db.session_scope() as feature_flag_session:
+            feature_flag_service = AppSettingsService(feature_flag_session)
+            use_unified_manager = await feature_flag_service.get_bool(
+                "library.use_unified_manager", default=False
+            )
+
+        if use_unified_manager:
+            logger.info("UnifiedLibraryManager ENABLED via feature flag")
+            # Plugins are None for now - will be initialized in Phase 2-4
+            # when we implement actual sync tasks that need provider access
+            unified_library_manager = UnifiedLibraryManager(
+                session_factory=db.get_session_factory(),
+                spotify_plugin=None,  # TODO: Pass from SpotifySyncWorker in Phase 2
+                deezer_plugin=None,  # TODO: Pass from DeezerSyncWorker in Phase 3
+            )
+            orchestrator.register(
+                name="unified_library",
+                worker=unified_library_manager,
+                category="sync",
+                priority=15,  # After individual sync workers
+                depends_on=["token_refresh"],
+                required=False,  # Non-fatal if fails
+            )
+            app.state.unified_library_manager = unified_library_manager
+        else:
+            logger.info(
+                "UnifiedLibraryManager DISABLED (set library.use_unified_manager=true to enable)"
+            )
+            app.state.unified_library_manager = None
+
         # Initialize PERSISTENT job queue (survives restarts!)
         # Hey future me - PersistentJobQueue wraps JobQueue with DB persistence.
         # Jobs are stored in background_jobs table and recovered on startup.

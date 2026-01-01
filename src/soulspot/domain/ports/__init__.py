@@ -116,6 +116,42 @@ class IArtistRepository(ABC):
         pass
 
     @abstractmethod
+    async def list_by_ownership_state(
+        self,
+        ownership_state: Any,  # OwnershipState enum - use Any to avoid circular import
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Artist]:
+        """List artists filtered by ownership state.
+
+        Hey future me - this is for UnifiedLibraryManager!
+        Get OWNED artists to sync their albums/tracks.
+        Get DISCOVERED artists to find recommendations.
+        Get IGNORED artists for blocklist management.
+
+        Args:
+            ownership_state: The ownership state to filter by (OWNED, DISCOVERED, IGNORED)
+            limit: Maximum number of artists to return
+            offset: Offset for pagination
+
+        Returns:
+            List of Artist entities matching the ownership state
+        """
+        pass
+
+    @abstractmethod
+    async def count_by_ownership_state(self, ownership_state: Any) -> int:
+        """Count artists by ownership state.
+
+        Args:
+            ownership_state: The ownership state to count
+
+        Returns:
+            Count of artists with the given ownership state
+        """
+        pass
+
+    @abstractmethod
     async def get_unenriched(self, limit: int = 50) -> list[Artist]:
         """Get artists that have local files but no Spotify enrichment yet.
 

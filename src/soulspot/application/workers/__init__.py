@@ -44,6 +44,12 @@ from soulspot.application.workers.retry_scheduler_worker import (
 )
 from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
+from soulspot.application.workers.unified_library_worker import (
+    TaskPriority,
+    TaskScheduler,
+    TaskType,
+    UnifiedLibraryManager,
+)
 
 # ⚠️ DEPRECATED Workers - Import triggers deprecation warning
 # These are kept for backwards compatibility only and will be removed
@@ -90,6 +96,11 @@ __all__ = [
     "DuplicateDetectorWorker",
     "LibraryDiscoveryWorker",  # NEW: Unified enrichment + discography discovery
     "ImageWorker",  # Image repair/backfill worker
+    # UnifiedLibraryManager (THE FUTURE - single library worker)
+    "UnifiedLibraryManager",
+    "TaskScheduler",
+    "TaskType",
+    "TaskPriority",
     # ⚠️ DEPRECATED - these exports are removed, use replacements:
     # "MetadataWorker" → Use LibraryDiscoveryWorker
     # "PlaylistSyncWorker" → Use SpotifySyncWorker or API endpoints

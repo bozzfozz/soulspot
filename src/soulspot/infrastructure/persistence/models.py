@@ -128,6 +128,15 @@ class ArtistModel(Base):
     albums_synced_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
+    # Hey future me - UnifiedLibraryManager ownership tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="owned", server_default="owned", index=True
+    )
+    primary_source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         default=utc_now, onupdate=utc_now, nullable=False
@@ -228,6 +237,15 @@ class AlbumModel(Base):
     # Hey future me - sync timestamps for cooldown logic!
     tracks_synced_at: Mapped[datetime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
+    )
+    # Hey future me - UnifiedLibraryManager ownership tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="owned", server_default="owned", index=True
+    )
+    primary_source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True
     )
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
@@ -439,6 +457,20 @@ class TrackModel(Base):
     audio_bitrate: Mapped[int | None] = mapped_column(Integer, nullable=True)
     audio_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
     audio_sample_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Hey future me - UnifiedLibraryManager ownership + download tracking!
+    # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
+    # download_state: 'not_needed' (default!), 'pending', 'downloading', 'downloaded', 'failed'
+    # primary_source: which provider owns this entity ('spotify', 'deezer', 'local', etc.)
+    ownership_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="owned", server_default="owned", index=True
+    )
+    download_state: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="not_needed", server_default="not_needed", index=True
+    )
+    primary_source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, index=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

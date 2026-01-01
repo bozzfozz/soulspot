@@ -19,7 +19,9 @@ from soulspot.domain.entities import (
     BlocklistEntry,
     BlocklistScope,
     Download,
+    DownloadState,
     DownloadStatus,
+    OwnershipState,
     Playlist,
     PlaylistSource,
     QualityProfile,
@@ -100,6 +102,8 @@ class ArtistRepository(IArtistRepository):
         - genres (JSON string) → genres: list[str]
         - tags (JSON string) → tags: list[str]
         - deezer_id, tidal_id → multi-service IDs
+        - ownership_state → OwnershipState enum
+        - primary_source → str | None
         """
         from soulspot.domain.entities import ArtistSource
 
@@ -107,6 +111,8 @@ class ArtistRepository(IArtistRepository):
             id=ArtistId.from_string(model.id),
             name=model.name,
             source=ArtistSource(model.source),
+            ownership_state=OwnershipState(model.ownership_state),
+            primary_source=model.primary_source,
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -138,6 +144,8 @@ class ArtistRepository(IArtistRepository):
             id=str(artist.id.value),
             name=artist.name,
             source=artist.source.value,  # Store as string: 'local', 'spotify', 'hybrid'
+            ownership_state=artist.ownership_state.value,  # OwnershipState enum → string
+            primary_source=artist.primary_source,
             spotify_uri=str(artist.spotify_uri) if artist.spotify_uri else None,
             musicbrainz_id=artist.musicbrainz_id,
             # Entity image → Model columns (ImageRef-consistent naming)
@@ -164,6 +172,8 @@ class ArtistRepository(IArtistRepository):
 
         model.name = artist.name
         model.source = artist.source.value  # Update source (local/spotify/hybrid)
+        model.ownership_state = artist.ownership_state.value  # OwnershipState enum → string
+        model.primary_source = artist.primary_source
         model.spotify_uri = str(artist.spotify_uri) if artist.spotify_uri else None
         model.musicbrainz_id = artist.musicbrainz_id
         # Entity image → Model columns (ImageRef-consistent naming)
@@ -281,6 +291,54 @@ class ArtistRepository(IArtistRepository):
         models = result.scalars().all()
 
         return [self._model_to_entity(model) for model in models]
+
+    async def list_by_ownership_state(
+        self,
+        ownership_state: OwnershipState,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Artist]:
+        """List artists filtered by ownership state.
+
+        Hey future me - this is for UnifiedLibraryManager!
+        Get OWNED artists to sync their albums/tracks.
+        Get DISCOVERED artists to find recommendations.
+        Get IGNORED artists for blocklist management.
+
+        Args:
+            ownership_state: The ownership state to filter by (OWNED, DISCOVERED, IGNORED)
+            limit: Maximum number of artists to return
+            offset: Offset for pagination
+
+        Returns:
+            List of Artist entities matching the ownership state
+        """
+        stmt = (
+            select(ArtistModel)
+            .where(ArtistModel.ownership_state == ownership_state.value)
+            .order_by(ArtistModel.name)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(model) for model in models]
+
+    async def count_by_ownership_state(self, ownership_state: OwnershipState) -> int:
+        """Count artists by ownership state.
+
+        Args:
+            ownership_state: The ownership state to count
+
+        Returns:
+            Count of artists with the given ownership state
+        """
+        stmt = select(func.count(ArtistModel.id)).where(
+            ArtistModel.ownership_state == ownership_state.value
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
 
     # Hey future me - this counts ALL artists in the DB using SQL COUNT (efficient!).
     # Used for pagination total_count and stats. Returns 0 if no artists exist (not None).
@@ -769,6 +827,8 @@ class AlbumRepository(IAlbumRepository):
             title=model.title,
             artist_id=ArtistId.from_string(model.artist_id),
             source=model.source,
+            ownership_state=OwnershipState(model.ownership_state),
+            primary_source=model.primary_source,
             release_year=model.release_year,
             release_date=model.release_date,
             release_date_precision=model.release_date_precision,
@@ -797,6 +857,8 @@ class AlbumRepository(IAlbumRepository):
             title=album.title,
             artist_id=str(album.artist_id.value),
             source=album.source,
+            ownership_state=album.ownership_state.value,  # OwnershipState enum → string
+            primary_source=album.primary_source,
             release_year=album.release_year,
             release_date=album.release_date,
             release_date_precision=album.release_date_precision,
@@ -825,6 +887,8 @@ class AlbumRepository(IAlbumRepository):
         model.title = album.title
         model.artist_id = str(album.artist_id.value)
         model.source = album.source
+        model.ownership_state = album.ownership_state.value  # OwnershipState enum → string
+        model.primary_source = album.primary_source
         model.release_year = album.release_year
         model.release_date = album.release_date
         model.release_date_precision = album.release_date_precision
@@ -1491,6 +1555,9 @@ class TrackRepository(ITrackRepository):
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
+            ownership_state=OwnershipState(model.ownership_state),
+            download_state=DownloadState(model.download_state),
+            primary_source=model.primary_source,
             spotify_uri=SpotifyUri.from_string(model.spotify_uri)
             if model.spotify_uri
             else None,
@@ -1523,6 +1590,9 @@ class TrackRepository(ITrackRepository):
             duration_ms=track.duration_ms,
             track_number=track.track_number,
             disc_number=track.disc_number,
+            ownership_state=track.ownership_state.value,  # OwnershipState enum → string
+            download_state=track.download_state.value,  # DownloadState enum → string
+            primary_source=track.primary_source,
             spotify_uri=str(track.spotify_uri) if track.spotify_uri else None,
             musicbrainz_id=track.musicbrainz_id,
             isrc=track.isrc,
@@ -1556,6 +1626,9 @@ class TrackRepository(ITrackRepository):
         model.duration_ms = track.duration_ms
         model.track_number = track.track_number
         model.disc_number = track.disc_number
+        model.ownership_state = track.ownership_state.value  # OwnershipState enum → string
+        model.download_state = track.download_state.value  # DownloadState enum → string
+        model.primary_source = track.primary_source
         model.spotify_uri = str(track.spotify_uri) if track.spotify_uri else None
         model.musicbrainz_id = track.musicbrainz_id
         model.isrc = track.isrc
