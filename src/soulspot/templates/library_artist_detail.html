@@ -124,8 +124,8 @@
                         {% endif %}
                     </div>
                     {# Track count badge (top-right): X/Y format #}
-                    {% set local = album.local_tracks|default(0) %}
-                    {% set total = album.total_tracks|default(0) %}
+                    {% set local = album.local_tracks|default(0)|int %}
+                    {% set total = album.total_tracks|default(0)|int %}
                     {% if total > 0 %}
                     <div class="album-track-badge {% if local >= total %}track-complete{% elif local > 0 %}track-partial{% else %}track-none{% endif %}" 
                          title="{{ local }} of {{ total }} tracks verfügbar">

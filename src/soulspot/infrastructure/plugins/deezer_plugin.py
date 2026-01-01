@@ -411,11 +411,12 @@ class DeezerPlugin(IMusicServicePlugin):
                 tracks = [self._convert_track(t) for t in deezer_tracks]
 
             return SearchResultDTO(
+                query=query,
+                source_service="deezer",
                 artists=artists,
                 albums=albums,
                 tracks=tracks,
                 playlists=[],  # Deezer playlist search not implemented
-                query=query,
             )
 
         except Exception as e:

@@ -279,7 +279,10 @@ class FileDiscoveryService:
                         break
 
         except Exception as e:
-            logger.warning(f"Error extracting metadata from {file_path}: {e}")
+            # FLAC metadata extraction can fail with ValueError for corrupted/unusual files
+            # Log with exception type for better debugging (e.g., "ValueError: <msg>")
+            error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else f"{type(e).__name__}"
+            logger.warning(f"Error extracting metadata from {file_path.name}: {error_msg}")
 
         return metadata
 

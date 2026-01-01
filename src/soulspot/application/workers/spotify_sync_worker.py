@@ -314,11 +314,11 @@ class SpotifySyncWorker:
                 # Log health every 10 cycles
                 if self._cycles_completed % 10 == 0:
                     log_worker_health(
-                        logger,
-                        "spotify_sync",
-                        self._cycles_completed,
-                        self._errors_total,
-                        time.time() - self._start_time,
+                        logger=logger,
+                        worker_name="spotify_sync",
+                        cycles_completed=self._cycles_completed,
+                        errors_total=self._errors_total,
+                        uptime_seconds=time.time() - self._start_time,
                     )
 
             except Exception as e:

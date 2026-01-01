@@ -57,6 +57,11 @@ logger = logging.getLogger(__name__)
 
 # AUDIO_EXTENSIONS is now imported from folder_parsing module (single source of truth)
 
+# Hey future me - Semaphore to limit concurrent background discography syncs!
+# SQLite can only handle ONE writer at a time - parallel writes cause "database is locked".
+# Limit to 2 concurrent syncs (one writing, one waiting for lock).
+_DISCOGRAPHY_SYNC_SEMAPHORE = asyncio.Semaphore(2)
+
 
 class LibraryScannerService:
     """Service for scanning Lidarr-organized music library and importing to database.
@@ -122,62 +127,68 @@ class LibraryScannerService:
         GOTCHA: Must create own DB session! The scan session may be busy/committed.
         Create fresh Database instance with settings and use session_scope().
 
+        CRITICAL: Uses semaphore to limit concurrent writes to SQLite!
+        SQLite can only handle ONE writer at a time - parallel writes cause
+        "database is locked" errors. Semaphore ensures max 2 tasks (1 writing, 1 waiting).
+
         Args:
             artist_id: The artist UUID (string format)
             artist_name: Artist name for logging
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
-        )
-        from soulspot.config import get_settings
-        from soulspot.infrastructure.persistence.database import Database
-        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
-        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
-
-        logger.info(f"🎵 Background discography sync starting for LOCAL artist: {artist_name}")
-
-        try:
-            # Create fresh Database instance for background task
-            db = Database(get_settings())
-            async with db.session_scope() as session:
-                # Create plugins - DeezerPlugin doesn't need auth for album lookup
-                # SpotifyPlugin will be None if user not authenticated
-                deezer_plugin = DeezerPlugin()
-
-                # Try to create SpotifyPlugin from stored session tokens
-                spotify_plugin = None
-                try:
-                    spotify_plugin = SpotifyPlugin()
-                except Exception:
-                    # No Spotify auth available, Deezer fallback will be used
-                    pass
-
-                service = FollowedArtistsService(
-                    session=session,
-                    spotify_plugin=spotify_plugin,
-                    deezer_plugin=deezer_plugin,
-                )
-
-                stats = await service.sync_artist_discography_complete(
-                    artist_id=artist_id,
-                    include_tracks=True,
-                )
-
-                await session.commit()
-
-                logger.info(
-                    f"✅ Background discography sync complete for {artist_name}: "
-                    f"albums={stats['albums_added']}/{stats['albums_total']}, "
-                    f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
-                    f"(source: {stats['source']})"
-                )
-
-        except Exception as e:
-            # Log but don't fail - this is a background task
-            logger.error(
-                f"❌ Background discography sync failed for {artist_name}: {e}",
-                exc_info=True,
+        # Acquire semaphore to limit concurrent database writes
+        async with _DISCOGRAPHY_SYNC_SEMAPHORE:
+            from soulspot.application.services.followed_artists_service import (
+                FollowedArtistsService,
             )
+            from soulspot.config import get_settings
+            from soulspot.infrastructure.persistence.database import Database
+            from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+            from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+
+            logger.info(f"🎵 Background discography sync starting for LOCAL artist: {artist_name}")
+
+            try:
+                # Create fresh Database instance for background task
+                db = Database(get_settings())
+                async with db.session_scope() as session:
+                    # Create plugins - DeezerPlugin doesn't need auth for album lookup
+                    # SpotifyPlugin will be None if user not authenticated
+                    deezer_plugin = DeezerPlugin()
+
+                    # Try to create SpotifyPlugin from stored session tokens
+                    spotify_plugin = None
+                    try:
+                        spotify_plugin = SpotifyPlugin()
+                    except Exception:
+                        # No Spotify auth available, Deezer fallback will be used
+                        pass
+
+                    service = FollowedArtistsService(
+                        session=session,
+                        spotify_plugin=spotify_plugin,
+                        deezer_plugin=deezer_plugin,
+                    )
+
+                    stats = await service.sync_artist_discography_complete(
+                        artist_id=artist_id,
+                        include_tracks=True,
+                    )
+
+                    await session.commit()
+
+                    logger.info(
+                        f"✅ Background discography sync complete for {artist_name}: "
+                        f"albums={stats['albums_added']}/{stats['albums_total']}, "
+                        f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
+                        f"(source: {stats['source']})"
+                    )
+
+            except Exception as e:
+                # Log but don't fail - this is a background task
+                logger.error(
+                    f"❌ Background discography sync failed for {artist_name}: {e}",
+                    exc_info=True,
+                )
 
     # =========================================================================
     # MAIN SCAN METHODS

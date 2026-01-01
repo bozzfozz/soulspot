@@ -110,8 +110,9 @@ def log_worker_health(
     logger: logging.Logger,
     worker_name: str,
     cycles_completed: int,
-    errors: int,
+    errors_total: int,
     uptime_seconds: float,
+    extra_stats: dict[str, Any] | None = None,
 ) -> None:
     """Log worker health status in consistent format.
     
@@ -121,16 +122,18 @@ def log_worker_health(
         logger: Logger instance
         worker_name: Worker identifier (e.g., "spotify_sync", "download_monitor")
         cycles_completed: Total cycles completed since start
-        errors: Total errors encountered since start
+        errors_total: Total errors encountered since start
         uptime_seconds: Seconds since worker started
+        extra_stats: Optional dict of additional stats to include in log
         
     Example:
         >>> log_worker_health(
         ...     logger,
         ...     "spotify_sync",
         ...     cycles_completed=100,
-        ...     errors=3,
-        ...     uptime_seconds=3600
+        ...     errors_total=3,
+        ...     uptime_seconds=3600,
+        ...     extra_stats={"synced_playlists": 5}
         ... )
         
         # Logs:
@@ -138,18 +141,20 @@ def log_worker_health(
         #     "worker": "spotify_sync",
         #     "cycles_completed": 100,
         #     "errors_total": 3,
-        #     "uptime_seconds": 3600
+        #     "uptime_seconds": 3600,
+        #     "synced_playlists": 5
         # }
     """
-    logger.info(
-        "worker.health",
-        extra={
-            "worker": worker_name,
-            "cycles_completed": cycles_completed,
-            "errors_total": errors,
-            "uptime_seconds": int(uptime_seconds),
-        },
-    )
+    log_data = {
+        "worker": worker_name,
+        "cycles_completed": cycles_completed,
+        "errors_total": errors_total,
+        "uptime_seconds": int(uptime_seconds),
+    }
+    if extra_stats:
+        log_data.update(extra_stats)
+    
+    logger.info("worker.health", extra=log_data)
 
 
 # Hey future me, this logs operation timing WITHOUT the context manager! Use this when you
