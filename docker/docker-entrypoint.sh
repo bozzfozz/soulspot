@@ -162,6 +162,26 @@ echo -e "${GREEN}✓${NC} Database directory prepared: $DB_DIR"
 # This ensures the database schema is up-to-date before starting the application
 if [ -f "/app/alembic.ini" ]; then
     echo "Running database migrations..."
+    
+    # Fix any corrupted alembic_version state before running migrations
+    # This handles the "overlaps with other requested revisions" error
+    # that occurs when alembic_version has multiple entries where one is
+    # an ancestor of another (e.g., both ddd38026ggH74 and BBB38024eeE72)
+    if [ -f "/app/scripts/fix_alembic_state.py" ]; then
+        echo "  Checking for migration state issues..."
+        # Capture output to temp file to preserve exit code
+        FIX_OUTPUT=$(gosu $PUID:$PGID python /app/scripts/fix_alembic_state.py 2>&1)
+        FIX_EXIT_CODE=$?
+        # Display output with indentation
+        echo "$FIX_OUTPUT" | while IFS= read -r line; do
+            echo "  $line"
+        done
+        if [ $FIX_EXIT_CODE -ne 0 ]; then
+            echo -e "${YELLOW}!${NC} Warning: Migration state check failed (exit code: $FIX_EXIT_CODE)"
+            echo "  Continuing with migrations anyway..."
+        fi
+    fi
+    
     gosu $PUID:$PGID alembic upgrade head
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓${NC} Database migrations completed"
@@ -170,6 +190,11 @@ if [ -f "/app/alembic.ini" ]; then
         echo "  Please check the database configuration and try again."
         echo "  Database URL: $DATABASE_URL"
         echo "  Database directory: $DB_DIR"
+        echo ""
+        echo "  If you see 'overlaps with other requested revisions' error,"
+        echo "  your database has a corrupted migration state."
+        echo "  Try running: python /app/scripts/fix_alembic_state.py"
+        echo "  Or delete the database file and restart."
         exit 1
     fi
 else

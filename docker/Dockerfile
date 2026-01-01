@@ -33,6 +33,7 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY docker/ ./docker/
+COPY scripts/ ./scripts/
 
 # Clone from repository if GIT_BRANCH is set, overwriting local files
 # When GIT_BRANCH is set, we overwrite the locally copied files with those
@@ -51,6 +52,7 @@ RUN if [ -n "${GIT_BRANCH}" ]; then \
         cp -r /tmp/repo/alembic ./alembic && \
         cp /tmp/repo/alembic.ini ./ && \
         cp -r /tmp/repo/docker ./docker && \
+        cp -r /tmp/repo/scripts ./scripts && \
         rm -rf /tmp/repo && \
         echo "=== Successfully cloned branch '${GIT_BRANCH}' ==="; \
     else \
@@ -92,6 +94,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy alembic migrations and configuration from builder (may be from git clone)
 COPY --from=builder /build/alembic/ ./alembic/
 COPY --from=builder /build/alembic.ini ./
+
+# Copy scripts from builder (includes fix_alembic_state.py for migration repair)
+COPY --from=builder /build/scripts/ ./scripts/
 
 # Copy entrypoint script from builder (may be from git clone)
 COPY --from=builder /build/docker/docker-entrypoint.sh /usr/local/bin/
