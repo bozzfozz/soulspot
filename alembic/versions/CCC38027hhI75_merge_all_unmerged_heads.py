@@ -1,19 +1,19 @@
-"""Merge all unmerged heads into single head.
+"""Continue after BBB38024eeE72 (Unified Library feature flags).
 
-Hey future me - THIS CONSOLIDATES THE MIGRATION MESS!
+Hey future me - THIS IS NOT A MERGE!
 
-We had 4 unmerged heads after zz37022bbC70:
-1. aa38023ccD73 (cleanup_deezer_pseudo_spotify_uri) - via BBB38024ddD72
-2. AAA38023DD71 (rename_spotify_download_images_setting) - ORPHAN
-3. ddd38026ggH74 (add_quality_profiles_table) - via aaa38023ddE71 → bbb → ccc → ddd
-4. BBB38024eeE72 (add_unified_library_feature_flags) - via AAA38024ccD71
+The previous attempt tried to merge 4 heads, but 3 of those heads
+(aa38023ccD73, AAA38023DD71, ddd38026ggH74) were never executed in this DB.
 
-After this merge, we have a SINGLE linear chain again!
+The DB's actual migration path was:
+  zz37022bbC70 → AAA38024ccD71 → BBB38024eeE72
 
-The migration itself does nothing - it's just a merge marker.
+This migration simply continues from BBB38024eeE72 (the real HEAD).
+
+No schema changes - just a placeholder for future migrations.
 
 Revision ID: CCC38027hhI75
-Revises: aa38023ccD73, AAA38023DD71, ddd38026ggH74, BBB38024eeE72
+Revises: BBB38024eeE72
 Create Date: 2025-01-25
 
 """
@@ -24,12 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "CCC38027hhI75"
-down_revision: Union[str, tuple[str, ...], None] = (
-    "aa38023ccD73",
-    "AAA38023DD71", 
-    "ddd38026ggH74",
-    "BBB38024eeE72",
-)
+down_revision: Union[str, None] = "BBB38024eeE72"  # SINGLE parent, not a merge!
 branch_labels: Union[str, tuple[str, ...], None] = None
 depends_on: Union[str, tuple[str, ...], None] = None
 
