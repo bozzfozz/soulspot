@@ -319,7 +319,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Jobs are stored in background_jobs table and recovered on startup.
         # This prevents losing queued downloads when container restarts!
         from soulspot.application.workers.download_worker import DownloadWorker
-        from soulspot.application.workers.library_scan_worker import LibraryScanWorker
         from soulspot.application.workers.persistent_job_queue import (
             PersistentJobQueue,
         )
@@ -442,15 +441,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 logger.warning("Download worker skipped - slskd client not available")
                 app.state.download_worker = None
 
-            # Initialize library scan worker (doesn't need slskd)
-            library_scan_worker = LibraryScanWorker(
-                job_queue=job_queue,
-                db=db,
-                settings=settings,
-            )
-            library_scan_worker.register()
-            app.state.library_scan_worker = library_scan_worker
-            logger.info("Library scan worker registered")
+            # =================================================================
+            # REMOVED: LibraryScanWorker - Replaced by UnifiedLibraryManager
+            # =================================================================
+            # Hey future me - LibraryScanWorker was DELETED!
+            # Its functionality is now in UnifiedLibraryManager:
+            # - Phase 1: DISCOVER (scan local library for files)
+            # See docs/architecture/UNIFIED_LIBRARY_WORKER.md for details.
+            # =================================================================
 
             # =================================================================
             # REMOVED: LibraryDiscoveryWorker - Replaced by UnifiedLibraryManager

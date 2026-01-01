@@ -1445,38 +1445,32 @@ class SyncWorkerStatus(BaseModel):
     stats: dict[str, dict[str, Any]] = Field(description="Sync statistics")
 
 
-# Hey future me – dieser Endpoint gibt den Status des SpotifySyncWorkers zurück.
-# Nützlich für Monitoring und Debugging. Zeigt an wann der letzte Sync war und
-# ob es Fehler gab.
-@router.get("/spotify-sync/worker-status")
+# =============================================================================
+# DEPRECATED: Spotify Sync Worker Status Endpoint
+# =============================================================================
+# Hey future me – dieser Endpoint ist DEPRECATED!
+# SpotifySyncWorker wurde durch UnifiedLibraryManager ersetzt.
+# Nutze stattdessen /api/workers/status für Worker-Status!
+# Dieser Endpoint wird für Backward-Kompatibilität behalten, gibt aber 410 Gone zurück.
+# =============================================================================
+@router.get("/spotify-sync/worker-status", deprecated=True)
 async def get_spotify_sync_worker_status(
     request: Request,
-) -> SyncWorkerStatus:
-    """Get the status of the Spotify sync background worker.
+) -> dict[str, str]:
+    """DEPRECATED: Get the status of the Spotify sync background worker.
 
-    Returns information about:
-    - Whether the worker is running
-    - Last sync times for each type
-    - Sync statistics and errors
+    This endpoint is deprecated. SpotifySyncWorker has been replaced by
+    UnifiedLibraryManager. Use /api/workers/status instead.
 
     Returns:
-        Worker status information
+        Error message indicating deprecation
     """
-    # Get worker from app state
-    if not hasattr(request.app.state, "spotify_sync_worker"):
-        raise HTTPException(
-            status_code=503,
-            detail="Spotify sync worker not initialized",
-        )
-
-    worker = request.app.state.spotify_sync_worker
-    status = worker.get_status()
-
-    return SyncWorkerStatus(
-        running=status["running"],
-        check_interval_seconds=status["check_interval_seconds"],
-        last_sync=status["last_sync"],
-        stats=status["stats"],
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "SpotifySyncWorker has been replaced by UnifiedLibraryManager. "
+            "Use /api/workers/status instead."
+        ),
     )
 
 
@@ -1508,77 +1502,59 @@ class NewReleasesSyncWorkerStatus(BaseModel):
     stats: dict[str, Any] = Field(description="Sync statistics")
 
 
-# Hey future me – dieser Endpoint gibt den Status des NewReleasesSyncWorkers zurück.
-# Zeigt Cache-Status und wann der letzte Sync war. Nützlich für Monitoring!
-@router.get("/new-releases/worker-status")
+# =============================================================================
+# DEPRECATED: New Releases Sync Worker Status Endpoint
+# =============================================================================
+# Hey future me – dieser Endpoint ist DEPRECATED!
+# NewReleasesSyncWorker wurde durch UnifiedLibraryManager ersetzt.
+# Nutze stattdessen /api/workers/status für Worker-Status!
+# =============================================================================
+@router.get("/new-releases/worker-status", deprecated=True)
 async def get_new_releases_worker_status(
     request: Request,
-) -> NewReleasesSyncWorkerStatus:
-    """Get the status of the New Releases sync background worker.
+) -> dict[str, str]:
+    """DEPRECATED: Get the status of the New Releases sync background worker.
 
-    Returns information about:
-    - Whether the worker is running
-    - Cache status (fresh, age, album count)
-    - Last sync time
-    - Sync statistics
+    This endpoint is deprecated. NewReleasesSyncWorker has been replaced by
+    UnifiedLibraryManager. Use /api/workers/status instead.
 
     Returns:
-        Worker status information
+        Error message indicating deprecation
     """
-    if not hasattr(request.app.state, "new_releases_sync_worker"):
-        raise HTTPException(
-            status_code=503,
-            detail="New Releases sync worker not initialized",
-        )
-
-    worker = request.app.state.new_releases_sync_worker
-    status = worker.get_status()
-
-    return NewReleasesSyncWorkerStatus(
-        running=status["running"],
-        check_interval_seconds=status["check_interval_seconds"],
-        last_sync=status["last_sync"],
-        cache=NewReleasesCacheStatus(**status["cache"]),
-        stats=status["stats"],
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "NewReleasesSyncWorker has been replaced by UnifiedLibraryManager. "
+            "Use /api/workers/status instead."
+        ),
     )
 
 
-# Hey future me – dieser Endpoint triggert einen sofortigen Sync!
-# Nützlich für "Refresh" Button in der UI.
-@router.post("/new-releases/force-sync")
+# =============================================================================
+# DEPRECATED: Force New Releases Sync Endpoint
+# =============================================================================
+# Hey future me – dieser Endpoint ist DEPRECATED!
+# NewReleasesSyncWorker wurde durch UnifiedLibraryManager ersetzt.
+# =============================================================================
+@router.post("/new-releases/force-sync", deprecated=True)
 async def force_new_releases_sync(
     request: Request,
-) -> dict[str, Any]:
-    """Force an immediate New Releases sync, bypassing cooldown.
+) -> dict[str, str]:
+    """DEPRECATED: Force an immediate New Releases sync.
 
-    Use this for "Refresh" button in the UI to get fresh data.
-    Returns the sync result with album count and source breakdown.
+    This endpoint is deprecated. NewReleasesSyncWorker has been replaced by
+    UnifiedLibraryManager. New releases sync is now automatic.
 
     Returns:
-        Sync result summary
+        Error message indicating deprecation
     """
-    if not hasattr(request.app.state, "new_releases_sync_worker"):
-        raise HTTPException(
-            status_code=503,
-            detail="New Releases sync worker not initialized",
-        )
-
-    worker = request.app.state.new_releases_sync_worker
-    result = await worker.force_sync()
-
-    if result is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Sync failed - check logs for details",
-        )
-
-    return {
-        "success": True,
-        "album_count": len(result.albums),
-        "source_counts": result.source_counts,
-        "total_before_dedup": result.total_before_dedup,
-        "errors": result.errors,
-    }
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "NewReleasesSyncWorker has been replaced by UnifiedLibraryManager. "
+            "New releases sync is now automatic."
+        ),
+    )
 
 
 # =====================================================

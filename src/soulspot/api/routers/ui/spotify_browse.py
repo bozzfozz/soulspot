@@ -110,64 +110,33 @@ async def browse_new_releases_page(
         enabled_providers.append("spotify")
 
     # -------------------------------------------------------------------------
-    # TRY TO USE CACHED DATA FROM BACKGROUND WORKER
+    # REMOVED: NewReleasesSyncWorker cache (worker deleted)
     # -------------------------------------------------------------------------
-    # Hey future me - der Worker cached im Hintergrund alle 30 min!
-    # Hier lesen wir aus dem Cache für schnelle Response.
-    # force_refresh=True oder cache stale → fetch live.
-    worker = getattr(request.app.state, "new_releases_sync_worker", None)
-
-    if worker and not force_refresh:
-        cache = worker.get_cached_releases()
-        if cache.is_fresh():
-            # Use cached data!
-            result = cache.result
-            cache_info = {
-                "source": "cache",
-                "age_seconds": cache.get_age_seconds(),
-                "cached_at": cache.cached_at.isoformat() if cache.cached_at else None,
-            }
-            logger.debug(
-                f"New Releases: Using cached data ({cache_info['age_seconds']}s old)"
-            )
-        else:
-            logger.debug("New Releases: Cache stale or invalid, fetching live")
-            cache_info = {"source": "live", "reason": "cache_stale"}
-    else:
-        if force_refresh:
-            logger.info("New Releases: Force refresh requested")
-            cache_info = {"source": "live", "reason": "force_refresh"}
-        else:
-            logger.debug("New Releases: No worker available, fetching live")
-            cache_info = {"source": "live", "reason": "no_worker"}
+    # Hey future me - NewReleasesSyncWorker was DELETED!
+    # Replaced by UnifiedLibraryManager which doesn't cache new releases.
+    # This endpoint now always fetches live from providers.
+    # -------------------------------------------------------------------------
+    cache_info = {"source": "live", "reason": "no_worker_available"}
 
     # -------------------------------------------------------------------------
-    # FETCH LIVE IF NO CACHE OR FORCE REFRESH
+    # FETCH LIVE FROM PROVIDERS
     # -------------------------------------------------------------------------
-    if result is None:
-        # Try force sync via worker first (updates cache)
-        if worker and force_refresh:
-            result = await worker.force_sync()
-            if result:
-                cache_info["source"] = "force_synced"
-
-        # Fallback: fetch directly via service
-        if result is None:
-            service = NewReleasesService(
-                spotify_plugin=spotify_plugin,
-                deezer_plugin=deezer_plugin,
-            )
-            try:
-                result = await service.get_all_new_releases(
-                    days=days,
-                    include_singles=include_singles,
-                    include_compilations=include_compilations,
-                    enabled_providers=enabled_providers,
-                )
-            except Exception as e:
-                logger.error(f"New Releases: Service failed: {e}")
-                error = f"Failed to fetch new releases: {e}"
-                result = None
+    # Fetch directly via NewReleasesService (no worker cache)
+    service = NewReleasesService(
+        spotify_plugin=spotify_plugin,
+        deezer_plugin=deezer_plugin,
+    )
+    try:
+        result = await service.get_all_new_releases(
+            days=days,
+            include_singles=include_singles,
+            include_compilations=include_compilations,
+            enabled_providers=enabled_providers,
+        )
+    except Exception as e:
+        logger.error(f"New Releases: Service failed: {e}")
+        error = f"Failed to fetch new releases: {e}"
+        result = None
 
     # -------------------------------------------------------------------------
     # CONVERT RESULT TO TEMPLATE FORMAT
