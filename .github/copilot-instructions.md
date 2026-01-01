@@ -258,6 +258,35 @@ Before implementing, mentally answer:
 
 **🚨 CREATING DUPLICATE CODE IS A BUG, NOT A FEATURE 🚨**
 
+## 0.4 🔨 CRITICAL: REFACTORING COMMITMENT (UNIFIED LIBRARY WORKER)
+
+⚠️ **ABSOLUTE RULE: NO SHORTCUTS, NO EXCUSES, NO HALF-MEASURES**
+
+**When working on the UnifiedLibraryManager refactoring, READ:**
+- `docs/architecture/REFACTORING_COMMITMENT_PROTOCOL.md` - BINDING rules
+- `docs/architecture/UNIFIED_LIBRARY_WORKER.md` - Architecture
+- `docs/architecture/UNIFIED_LIBRARY_WORKER_MIGRATION_INVENTORY.md` - What to migrate
+
+### Refactoring Rules (VERBOTEN = FORBIDDEN):
+
+| Faulheit-Symptom | Beispiel | Status |
+|------------------|----------|--------|
+| "Temporäre" Lösungen | "Wir können das später richtig machen" | ❌ VERBOTEN |
+| Copy-Paste statt Abstraktion | "Ich kopiere den Code erstmal schnell" | ❌ VERBOTEN |
+| Halb-fertige Migration | "Die anderen 3 Funktionen mache ich morgen" | ❌ VERBOTEN |
+| Shortcuts | "Ich rufe den alten Worker einfach vom neuen auf" | ❌ VERBOTEN |
+| "TODO: später" Kommentare | "# TODO: Add Deezer support" | ❌ VERBOTEN |
+| Alten Code behalten | "Falls wir zurückrollen müssen" | ❌ VERBOTEN |
+
+### Migration MUSS enthalten:
+
+1. ✅ **KOMPLETT** - Alle Funktionen migriert, keine ausgelassen
+2. ✅ **LÖSCHEN** - Alten Code nach erfolgreicher Migration entfernen
+3. ✅ **TESTEN** - Live in Docker testen bevor "fertig" sagen
+4. ✅ **DOKUMENTIEREN** - Inventar und Docs aktualisieren
+
+**🚨 WENN DU DENKST "DAS KANN ICH SPÄTER MACHEN" → FALSCH! JETZT MACHEN ODER NICHT ANFANGEN 🚨**
+
 ## 0.3 📚 CRITICAL: DOCUMENTATION MUST STAY IN SYNC
 
 ⚠️ **ABSOLUTE RULE: READ DOCS BEFORE CODING, UPDATE DOCS AFTER CODING**

@@ -2,6 +2,263 @@
 
 > Inspiriert von der *arr-Familie (Lidarr/Sonarr/Radarr) Task-Architektur
 
+## 🏠 Ownership Model (KERNKONZEPT)
+
+### Was bedeutet "Owned"?
+
+**Owned = "Das gehört zu meiner Bibliothek"**
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│                        OWNERSHIP LIFECYCLE                             │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  1. LOCAL FILES (Scan)                                                 │
+│  ─────────────────────                                                 │
+│  ┌───────────┐                                                         │
+│  │ MP3/FLAC  │ → owned=true, downloaded=true, source="local"           │
+│  │ auf Disk  │   (bereits vorhanden, kein Download nötig)              │
+│  └───────────┘                                                         │
+│                                                                        │
+│  2. CLOUD LIKED/FOLLOWED (Sync)                                        │
+│  ──────────────────────────────                                        │
+│  ┌───────────┐                                                         │
+│  │ Spotify   │ → owned=true, downloaded=false, source="spotify"        │
+│  │ Followed  │   → SOFORT in Library + Queue für Download              │
+│  └───────────┘                                                         │
+│                                                                        │
+│  ┌───────────┐                                                         │
+│  │ Deezer    │ → owned=true, downloaded=false, source="deezer"         │
+│  │ Favorites │   → SOFORT in Library + Queue für Download              │
+│  └───────────┘                                                         │
+│                                                                        │
+│  ┌───────────┐                                                         │
+│  │ Tidal     │ → owned=true, downloaded=false, source="tidal"          │
+│  │ Liked     │   → SOFORT in Library + Queue für Download              │
+│  └───────────┘                                                         │
+│                                                                        │
+│  3. DOWNLOAD PIPELINE (Automatisch)                                    │
+│  ───────────────────────────────────                                   │
+│  Track (owned=true, downloaded=false)                                  │
+│       │                                                                │
+│       ▼                                                                │
+│  DownloadQueue → DownloadSource (slskd/sabnzbd/...)                    │
+│       │                                                                │
+│       ▼                                                                │
+│  Track (downloaded=true, local_path="/music/Artist/Album/track.flac") │
+│                                                                        │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+### Entity States
+
+```python
+class OwnershipState(str, Enum):
+    """Ownership-Status eines Tracks/Albums/Artists."""
+    OWNED = "owned"           # In meiner Library, wird verwaltet
+    DISCOVERED = "discovered" # Bekannt (z.B. durch Browse), aber nicht owned
+    IGNORED = "ignored"       # Explizit ignoriert
+
+
+class DownloadState(str, Enum):
+    """Download-Status eines Tracks.
+    
+    WICHTIG: Default ist NOT_NEEDED, nicht PENDING!
+    Auto-Queue nur wenn library.auto_queue_downloads=true.
+    """
+    NOT_NEEDED = "not_needed"   # Kein Download nötig/gewollt (default!)
+    PENDING = "pending"         # In Download-Queue (nur bei auto_queue=true)
+    DOWNLOADING = "downloading" # Wird gerade heruntergeladen
+    DOWNLOADED = "downloaded"   # Erfolgreich heruntergeladen
+    FAILED = "failed"           # Download fehlgeschlagen
+```
+
+### Download-State Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      DOWNLOAD STATE MACHINE                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  LOCAL FILE SCAN                                                     │
+│  ───────────────                                                     │
+│  Datei gefunden → download_state = DOWNLOADED                        │
+│                   local_path = "/music/..."                          │
+│                                                                      │
+│  CLOUD SYNC (auto_queue=FALSE, default!)                             │
+│  ───────────────────────────────────────                             │
+│  Liked Track → download_state = NOT_NEEDED                           │
+│                (Benutzer kann manuell downloaden)                    │
+│                                                                      │
+│  CLOUD SYNC (auto_queue=TRUE)                                        │
+│  ─────────────────────────────                                       │
+│  Liked Track → download_state = PENDING                              │
+│                → automatisch in Download-Queue                       │
+│                                                                      │
+│  MANUELLER DOWNLOAD (Button in UI)                                   │
+│  ─────────────────────────────────                                   │
+│  User klickt "Download" → download_state = PENDING                   │
+│                                                                      │
+│  DOWNLOAD PROZESS                                                    │
+│  ────────────────                                                    │
+│  PENDING → DOWNLOADING → DOWNLOADED                                  │
+│              ↓                                                       │
+│            FAILED (bei Fehler, kann retry)                           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Track Entity (erweitert)
+
+```python
+@dataclass
+class Track:
+    """Track mit vollständigem Ownership-Model."""
+    id: int
+    title: str
+    artist_id: int
+    album_id: int | None
+    
+    # === IDs für Matching ===
+    isrc: str | None = None
+    spotify_uri: str | None = None
+    deezer_id: str | None = None
+    tidal_id: str | None = None
+    musicbrainz_id: str | None = None
+    
+    # === OWNERSHIP MODEL ===
+    ownership_state: OwnershipState = OwnershipState.DISCOVERED
+    primary_source: str | None = None  # "local", "spotify", "deezer", "tidal"
+    
+    # === DOWNLOAD STATE ===
+    # DEFAULT = NOT_NEEDED (User muss explizit downloaden, außer auto_queue=true)
+    download_state: DownloadState = DownloadState.NOT_NEEDED
+    local_path: str | None = None  # Pfad zur lokalen Datei (wenn downloaded)
+    
+    # === Metadata ===
+    duration_ms: int | None = None
+    track_number: int | None = None
+    genre: str | None = None
+    
+    @property
+    def is_owned(self) -> bool:
+        """Gehört zur Library (unabhängig ob downloaded)."""
+        return self.ownership_state == OwnershipState.OWNED
+    
+    @property
+    def is_downloaded(self) -> bool:
+        """Ist lokal verfügbar."""
+        return self.download_state == DownloadState.DOWNLOADED or self.local_path is not None
+    
+    @property
+    def needs_download(self) -> bool:
+        """Muss noch heruntergeladen werden."""
+        return (
+            self.is_owned and 
+            self.download_state == DownloadState.PENDING
+        )
+```
+
+### Sync-Logik: Cloud → Library (KEINE Downloads!)
+
+```python
+async def sync_cloud_liked(self, source: ImportSource) -> SyncResult:
+    """Synct Liked/Followed von Cloud-Provider zur Library.
+    
+    Ablauf:
+    1. Hole Liked Artists/Albums/Tracks von Provider
+    2. Markiere als owned=true
+    3. Setze download_state (aber führe KEINE Downloads aus!)
+    
+    Downloads werden vom separaten DownloadWorker verarbeitet!
+    """
+    result = SyncResult()
+    
+    # Setting prüfen: Auto-Queue aktiviert?
+    auto_queue = await self._settings.get_bool(
+        "library.auto_queue_downloads", 
+        default=False  # 🚨 DEFAULT: AUS (während Entwicklung)
+    )
+    
+    # 1. Liked Artists holen
+    liked_artists = await source.get_followed_artists()
+    for artist_dto in liked_artists:
+        # 2. In Library übernehmen
+        artist = await self._upsert_artist(artist_dto)
+        artist.ownership_state = OwnershipState.OWNED
+        artist.primary_source = source.name  # "spotify", "deezer", etc.
+        result.artists_synced += 1
+        
+        # 3. Discography holen und als owned markieren
+        albums = await source.get_artist_albums(artist_dto.provider_id)
+        for album_dto in albums:
+            album = await self._upsert_album(album_dto, artist.id)
+            album.ownership_state = OwnershipState.OWNED
+            result.albums_synced += 1
+            
+            # 4. Tracks als owned markieren + download_state setzen
+            tracks = await source.get_album_tracks(album_dto.provider_id)
+            for track_dto in tracks:
+                track = await self._upsert_track(track_dto, album.id)
+                track.ownership_state = OwnershipState.OWNED
+                
+                # 5. Download-State setzen (aber NICHT downloaden!)
+                if auto_queue:
+                    # DownloadWorker wird diesen Track finden und downloaden
+                    track.download_state = DownloadState.PENDING
+                else:
+                    # Kein automatischer Download - User muss manuell starten
+                    track.download_state = DownloadState.NOT_NEEDED
+                    
+                result.tracks_synced += 1
+                # ❌ KEIN: await self._queue_for_download(track)
+                # Downloads macht der DownloadWorker!
+    
+    return result
+```
+
+### Konfiguration: Auto-Download Queue
+
+**Settings-Key:** `library.auto_queue_downloads`
+
+| Wert | Verhalten | Wann nutzen? |
+|------|-----------|--------------|
+| `false` (default) | Liked Tracks werden als owned markiert, aber NICHT automatisch heruntergeladen | Entwicklung, Testing, manueller Betrieb |
+| `true` | Liked Tracks werden automatisch in Download-Queue eingereiht | Produktions-Betrieb, "Fire & Forget" |
+
+**UI-Integration:**
+```
+Settings → Library → Automation
+┌────────────────────────────────────────────────────────────┐
+│  ☐ Automatically download liked tracks                     │
+│    When enabled, tracks you like on Spotify/Deezer/Tidal   │
+│    will automatically be queued for download via slskd.    │
+│                                                            │
+│    ⚠️ This can use significant bandwidth and storage!      │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Manueller Download (wenn Auto-Queue aus):**
+```
+Library → Album → Track → "Download" Button
+       oder
+Library → Album → "Download All" Button
+       oder
+Library → Artist → "Download Discography" Button
+```
+
+### Download Sources (SEPARATER WORKER!)
+
+> **HINWEIS:** Die Download-Logik gehört NICHT zum UnifiedLibraryManager!
+> Sie bleibt beim existierenden `DownloadWorker`.
+
+Der UnifiedLibraryManager setzt nur `download_state=PENDING`.  
+Der DownloadWorker findet diese Tracks und verarbeitet sie.
+
+Siehe: `src/soulspot/application/workers/download_worker.py`
+
+---
+
 ## 📋 Problem Statement
 
 ### Aktuelle Situation
@@ -29,6 +286,484 @@
 | **Service-Kopplung** | Worker hart an Provider gebunden | Tidal/Apple Music = neuer Worker |
 | **8 Phasen in Discovery** | `_phase1..._phase8` wächst unkontrolliert | Wartbarkeit sinkt |
 | **Kein Deduplication** | Spotify + Deezer synct gleichen Artist doppelt | DB-Bloat |
+| **KEINE REIHENFOLGE** | Enrichment läuft bevor Entities existieren | Inkomplette Daten |
+
+---
+
+## 🔢 Task-Reihenfolge (KRITISCH!)
+
+### Das Problem: Chaotische Ausführung
+
+```
+AKTUELL (falsch!):
+┌──────────────────────────────────────────────────────────────────┐
+│  SpotifySyncWorker (30 min) ─┬─ LibraryDiscovery (2h) ─┬─ ???   │
+│  DeezerSyncWorker  (30 min) ─┘  ImageBackfill (30min) ─┘        │
+│                                                                  │
+│  PROBLEM: Alles läuft parallel ohne Abhängigkeiten!              │
+│  → Enrichment findet keine Artists (noch nicht gesynct)          │
+│  → Images werden geholt bevor MusicBrainz IDs da sind            │
+│  → Discography wird gesucht bevor Artist vollständig             │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Die Lösung: Abhängigkeitsbasierte Reihenfolge
+
+```
+PERFEKTE REIHENFOLGE (nach Abhängigkeiten):
+┌──────────────────────────────────────────────────────────────────┐
+│                                                                  │
+│  PHASE 1: DISCOVER (Was gehört zu meiner Library?)               │
+│  ════════════════════════════════════════════════                │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐             │
+│  │ Local Scan  │   │ Spotify     │   │ Deezer      │             │
+│  │ (Files)     │   │ Likes/Foll. │   │ Favorites   │             │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘             │
+│         │                 │                 │                    │
+│         └─────────────────┴─────────────────┘                    │
+│                           │                                      │
+│                           ▼                                      │
+│            ┌─────────────────────────────┐                       │
+│            │     DEDUPLICATION           │                       │
+│            │  (Merge by MBID/ISRC/Name)  │                       │
+│            └──────────────┬──────────────┘                       │
+│                           │                                      │
+│                           ▼                                      │
+│            Artists (owned=true, incomplete)                      │
+│            Albums  (owned=true, incomplete)                      │
+│            Tracks  (owned=true, incomplete)                      │
+│                                                                  │
+│  PHASE 2: IDENTIFY (Universal IDs für Matching)                  │
+│  ════════════════════════════════════════════                    │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Artists ohne MusicBrainz ID                 │                 │
+│  │ → MusicBrainz Lookup → Set MBID             │                 │
+│  └─────────────────────────────────────────────┘                 │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Tracks ohne ISRC                            │                 │
+│  │ → Spotify/Deezer Lookup → Set ISRC          │                 │
+│  └─────────────────────────────────────────────┘                 │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Albums ohne MusicBrainz ID                  │                 │
+│  │ → MusicBrainz Lookup → Set MBID             │                 │
+│  └─────────────────────────────────────────────┘                 │
+│                                                                  │
+│  PHASE 3: ENRICH (Metadata vervollständigen)                     │
+│  ════════════════════════════════════════════                    │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Artists mit MBID aber fehlenden Daten       │                 │
+│  │ → MusicBrainz Details → Genres, Tags, etc.  │                 │
+│  └─────────────────────────────────────────────┘                 │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Albums mit MBID aber fehlenden Daten        │                 │
+│  │ → MusicBrainz Details → Release Date, etc.  │                 │
+│  └─────────────────────────────────────────────┘                 │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Tracks mit ISRC aber fehlenden Daten        │                 │
+│  │ → Provider Details → Duration, etc.         │                 │
+│  └─────────────────────────────────────────────┘                 │
+│                                                                  │
+│  PHASE 4: EXPAND (Discography erweitern)                         │
+│  ════════════════════════════════════════                        │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Owned Artists mit bekannter Discography     │                 │
+│  │ → Check: Fehlen Albums in Library?          │                 │
+│  │ → Auto-Add wenn gewünscht                   │                 │
+│  └─────────────────────────────────────────────┘                 │
+│                                                                  │
+│  PHASE 5: IMAGERY (Cover & Artist Images)                        │
+│  ════════════════════════════════════════                        │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Entities mit MBID aber ohne image_url       │                 │
+│  │ → CoverArtArchive → Get URL                 │                 │
+│  │ → Queue Download Job für ImageDownloadWorker│                 │
+│  └─────────────────────────────────────────────┘                 │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Entities ohne MBID → Fallback               │                 │
+│  │ → Spotify API → images[0].url               │                 │
+│  │ → Deezer API → picture_xl                   │                 │
+│  │ → Queue Download Job für ImageDownloadWorker│                 │
+│  └─────────────────────────────────────────────┘                 │
+│                                                                  │
+│  PHASE 6: CLEANUP (Housekeeping)                                 │
+│  ════════════════════════════════                                │
+│            │                                                     │
+│            ▼                                                     │
+│  ┌─────────────────────────────────────────────┐                 │
+│  │ Orphaned Entities entfernen                 │                 │
+│  │ Stale Downloads bereinigen                  │                 │
+│  │ Duplicate Detection & Merge                 │                 │
+│  └─────────────────────────────────────────────┘                 │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Task-Definitionen mit Abhängigkeiten
+
+```python
+@dataclass
+class ScheduledTask:
+    """Scheduled Task mit Abhängigkeiten."""
+    name: str
+    interval: timedelta
+    handler: Callable[[], Awaitable[TaskResult]]
+    depends_on: list[str] = field(default_factory=list)  # NEU!
+    last_run: datetime | None = None
+    last_success: datetime | None = None  # NEU!
+    enabled: bool = True
+    
+    @property
+    def dependencies_satisfied(self, completed_tasks: set[str]) -> bool:
+        """Prüft ob alle Abhängigkeiten erfüllt sind."""
+        return all(dep in completed_tasks for dep in self.depends_on)
+
+
+# Task-Registrierung mit Reihenfolge
+tasks = [
+    # PHASE 1: DISCOVER (keine Abhängigkeiten)
+    ScheduledTask(
+        name="scan_local_library",
+        interval=timedelta(hours=1),
+        handler=self._task_scan_local,
+        depends_on=[],  # Läuft immer zuerst
+    ),
+    ScheduledTask(
+        name="sync_spotify_likes",
+        interval=timedelta(minutes=30),
+        handler=self._task_sync_spotify,
+        depends_on=[],  # Parallel zu local_scan
+    ),
+    ScheduledTask(
+        name="sync_deezer_favorites",
+        interval=timedelta(minutes=30),
+        handler=self._task_sync_deezer,
+        depends_on=[],  # Parallel zu local_scan
+    ),
+    
+    # PHASE 2: IDENTIFY (nach Discover)
+    ScheduledTask(
+        name="identify_artists",
+        interval=timedelta(hours=2),
+        handler=self._task_identify_artists,
+        depends_on=["scan_local_library", "sync_spotify_likes", "sync_deezer_favorites"],
+    ),
+    ScheduledTask(
+        name="identify_albums",
+        interval=timedelta(hours=2),
+        handler=self._task_identify_albums,
+        depends_on=["identify_artists"],  # Artists müssen IDs haben!
+    ),
+    ScheduledTask(
+        name="identify_tracks",
+        interval=timedelta(hours=2),
+        handler=self._task_identify_tracks,
+        depends_on=["identify_albums"],  # Albums müssen IDs haben!
+    ),
+    
+    # PHASE 3: ENRICH (nach Identify)
+    ScheduledTask(
+        name="enrich_metadata",
+        interval=timedelta(hours=3),
+        handler=self._task_enrich_metadata,
+        depends_on=["identify_artists", "identify_albums", "identify_tracks"],
+    ),
+    
+    # PHASE 4: EXPAND (nach Enrich)
+    ScheduledTask(
+        name="expand_discography",
+        interval=timedelta(hours=6),
+        handler=self._task_expand_discography,
+        depends_on=["enrich_metadata"],  # Braucht vollständige Artist-Daten
+    ),
+    
+    # PHASE 5: IMAGERY (nach Identify, braucht MBIDs!)
+    ScheduledTask(
+        name="enrich_images",
+        interval=timedelta(hours=2),
+        handler=self._task_enrich_images,
+        depends_on=["identify_artists", "identify_albums"],  # Braucht MBIDs!
+    ),
+    
+    # PHASE 6: CLEANUP (ganz am Ende)
+    ScheduledTask(
+        name="cleanup_library",
+        interval=timedelta(hours=24),
+        handler=self._task_cleanup,
+        depends_on=["enrich_metadata", "enrich_images"],  # Nach allem anderen
+    ),
+]
+```
+
+### Scheduler mit Abhängigkeitsauflösung
+
+```python
+class TaskScheduler:
+    """Task-Scheduler mit Abhängigkeitsauflösung."""
+    
+    async def run_cycle(self) -> None:
+        """Führt einen kompletten Task-Cycle mit Reihenfolge aus."""
+        completed_this_cycle: set[str] = set()
+        
+        # Tasks nach Abhängigkeitstiefe sortieren
+        sorted_tasks = self._topological_sort(self._tasks.values())
+        
+        for task in sorted_tasks:
+            if not task.is_due:
+                continue
+            if not task.dependencies_satisfied(completed_this_cycle):
+                logger.debug(f"Skipping {task.name}: dependencies not met")
+                continue
+            
+            result = await self._execute_task(task)
+            if result.success:
+                completed_this_cycle.add(task.name)
+                task.last_success = datetime.now(UTC)
+    
+    def _topological_sort(self, tasks: Iterable[ScheduledTask]) -> list[ScheduledTask]:
+        """Sortiert Tasks nach Abhängigkeiten (Kahn's Algorithm)."""
+        # ... Topologische Sortierung ...
+        pass
+```
+
+### 6-Phasen Zusammenfassung
+
+| Phase | Name | Was passiert | Abhängig von | Intervall |
+|-------|------|--------------|--------------|-----------|
+| 1 | **DISCOVER** | Local scan, Cloud sync (Likes/Follows) | – | 30-60 min |
+| 2 | **IDENTIFY** | MBID für Artists, MBID für Albums, ISRC für Tracks | Phase 1 | 2h |
+| 3 | **ENRICH** | Genres, Tags, Release Dates, Duration | Phase 2 | 3h |
+| 4 | **EXPAND** | Missing albums from discography | Phase 3 | 6h |
+| 5 | **IMAGERY** | Cover URLs + Queue Download Jobs | Phase 2 | 2h |
+| 6 | **CLEANUP** | Orphans, Duplicates, Stale data | Phase 3+5 | 24h |
+
+### Warum diese Reihenfolge?
+
+```
+1. DISCOVER zuerst:
+   - Ohne Entities gibt es nichts zu enrichen
+   - Basis für alles andere
+   
+2. IDENTIFY vor ENRICH:
+   - MusicBrainz braucht MBID für detaillierte Daten
+   - ISRC ist Matching-Key für Tracks
+   - Ohne IDs nur Name-basiertes Matching (fehleranfällig)
+   
+3. ENRICH vor EXPAND:
+   - Discography-Lookup braucht MBID
+   - Ohne vollständige Artist-Daten → falsche Albums
+   
+4. IMAGERY nach IDENTIFY:
+   - CoverArtArchive braucht MBID!
+   - Ohne MBID nur Provider-Fallback (schlechtere Qualität)
+   
+5. CLEANUP ganz am Ende:
+   - Kann nur Orphans finden wenn alles gesynct ist
+   - Duplicate Detection braucht alle IDs
+```
+
+---
+
+## 🧹 Cleanup-Logik (Präzise Aufräumung)
+
+### Was Cleanup NICHT tut
+
+```
+❌ FALSCH: Wildes Löschen von allem was "unvollständig" aussieht
+❌ FALSCH: Tracks löschen die keine Provider-IDs haben
+❌ FALSCH: Artists löschen die keine MBID haben
+❌ FALSCH: Albums löschen die keine Covers haben
+```
+
+### Was Cleanup TUT (nur kaskadierende Orphans)
+
+```
+✓ RICHTIG: Lösche nur was WIRKLICH verwaist ist
+✓ RICHTIG: Kaskadierende Löschung bei expliziten User-Aktionen
+✓ RICHTIG: Bereinige nur Referenzen zu nicht mehr existierenden Entities
+```
+
+### Cleanup-Szenarien
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                      CLEANUP SCENARIOS                            │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  SZENARIO 1: User löscht Artist                                   │
+│  ─────────────────────────────────                                │
+│                                                                   │
+│    User: "Delete Artist 'Pink Floyd'"                             │
+│         │                                                         │
+│         ▼                                                         │
+│    ┌─────────────────────────────────────────┐                    │
+│    │ Artist löschen                          │                    │
+│    │ → owned=false setzen (nicht hart löschen!)                   │
+│    │                                         │                    │
+│    │ Kaskadierende Prüfung:                  │                    │
+│    │ - Hat dieser Artist noch owned Albums?  │                    │
+│    │ - Falls NEIN → Albums auch owned=false  │                    │
+│    │ - Hat Album noch owned Tracks?          │                    │
+│    │ - Falls NEIN → Tracks auch owned=false  │                    │
+│    └─────────────────────────────────────────┘                    │
+│                                                                   │
+│    WICHTIG: Entities bleiben in DB (für zukünftiges Re-Add)!      │
+│    Nur ownership_state ändert sich.                               │
+│                                                                   │
+│  SZENARIO 2: User löscht Album                                    │
+│  ──────────────────────────────                                   │
+│                                                                   │
+│    User: "Delete Album 'The Wall'"                                │
+│         │                                                         │
+│         ▼                                                         │
+│    ┌─────────────────────────────────────────┐                    │
+│    │ Album owned=false setzen                │                    │
+│    │ → Tracks des Albums: owned=false        │                    │
+│    │                                         │                    │
+│    │ Prüfung: Hat Artist noch owned Albums?  │                    │
+│    │ - Falls JA → Artist bleibt owned        │                    │
+│    │ - Falls NEIN → Artist owned=false       │                    │
+│    └─────────────────────────────────────────┘                    │
+│                                                                   │
+│  SZENARIO 3: User entfernt Track aus Cloud-Likes                  │
+│  ───────────────────────────────────────────────                  │
+│                                                                   │
+│    Spotify: User unliked Track                                    │
+│         │                                                         │
+│         ▼                                                         │
+│    ┌─────────────────────────────────────────┐                    │
+│    │ Sync erkennt: Track nicht mehr in Likes │                    │
+│    │ → Track.ownership_state = DISCOVERED    │                    │
+│    │   (nicht mehr owned, aber bekannt)      │                    │
+│    │                                         │                    │
+│    │ Prüfung: Hat Album noch owned Tracks?   │                    │
+│    │ - Falls JA → Album bleibt owned         │                    │
+│    │ - Falls NEIN → Album ownership prüfen   │                    │
+│    └─────────────────────────────────────────┘                    │
+│                                                                   │
+│  SZENARIO 4: Echter Orphan (DB-Inkonsistenz)                      │
+│  ───────────────────────────────────────────                      │
+│                                                                   │
+│    Track existiert aber artist_id zeigt auf gelöschten Artist     │
+│         │                                                         │
+│         ▼                                                         │
+│    ┌─────────────────────────────────────────┐                    │
+│    │ CLEANUP findet referenzielle Orphans:   │                    │
+│    │ - Track.artist_id → Artist existiert    │                    │
+│    │   nicht mehr                            │                    │
+│    │ → Track.artist_id = NULL setzen         │                    │
+│    │ → Track als "orphaned" markieren        │                    │
+│    │ → Optional: Versuche Artist neu zuzuordnen│                  │
+│    └─────────────────────────────────────────┘                    │
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Cleanup-Tasks im Detail
+
+```python
+async def _task_cleanup(self) -> TaskResult:
+    """Phase 6: Präzise Cleanup-Logik.
+    
+    NUR aufräumen was WIRKLICH verwaist ist!
+    """
+    stats = {"orphaned_tracks": 0, "orphaned_albums": 0, "stale_downloads": 0}
+    
+    async with self._db.session_scope() as session:
+        # 1. Referenzielle Orphans (DB-Inkonsistenzen)
+        stats["orphaned_tracks"] = await self._cleanup_orphaned_tracks(session)
+        stats["orphaned_albums"] = await self._cleanup_orphaned_albums(session)
+        
+        # 2. Stale Downloads (FAILED seit > 7 Tagen)
+        stats["stale_downloads"] = await self._cleanup_stale_downloads(session)
+        
+        # 3. NICHT: Artists ohne Albums löschen (könnten gewollt sein!)
+        # 3. NICHT: Tracks ohne ISRC löschen (ist Enrichment-Job!)
+        # 3. NICHT: Albums ohne Cover löschen (ist Imagery-Job!)
+        
+        await session.commit()
+    
+    return TaskResult(success=True, stats=stats)
+
+
+async def _cleanup_orphaned_tracks(self, session: AsyncSession) -> int:
+    """Findet Tracks deren Artist nicht mehr existiert."""
+    # SELECT t.* FROM tracks t
+    # LEFT JOIN artists a ON t.artist_id = a.id
+    # WHERE t.artist_id IS NOT NULL AND a.id IS NULL
+    query = (
+        select(TrackModel)
+        .outerjoin(ArtistModel, TrackModel.artist_id == ArtistModel.id)
+        .where(TrackModel.artist_id.isnot(None))
+        .where(ArtistModel.id.is_(None))
+    )
+    orphans = (await session.execute(query)).scalars().all()
+    
+    for track in orphans:
+        # Option A: artist_id auf NULL setzen
+        track.artist_id = None
+        # Option B: Versuche neu zuzuordnen über Name/ISRC
+    
+    return len(orphans)
+
+
+async def _cleanup_stale_downloads(self, session: AsyncSession) -> int:
+    """Bereinigt Downloads die seit > 7 Tagen FAILED sind."""
+    seven_days_ago = datetime.now(UTC) - timedelta(days=7)
+    
+    query = (
+        update(TrackModel)
+        .where(TrackModel.download_state == DownloadState.FAILED)
+        .where(TrackModel.download_updated_at < seven_days_ago)
+        .values(download_state=DownloadState.NOT_NEEDED)
+    )
+    result = await session.execute(query)
+    return result.rowcount
+```
+
+### Was Cleanup NICHT tut (mit Begründung)
+
+| Was NICHT löschen | Warum |
+|-------------------|-------|
+| Artists ohne MBID | Enrichment-Job, nicht Cleanup |
+| Albums ohne Cover | Imagery-Job, nicht Cleanup |
+| Tracks ohne ISRC | Enrichment-Job, nicht Cleanup |
+| Artists ohne Albums | Könnte gewollt sein (Watchlist) |
+| Nicht-owned Entities | Bleiben für zukünftiges Re-Add |
+| Incomplete Downloads | Retry-Logic, nicht Cleanup |
+
+### Ownership vs. Deletion
+
+```
+WICHTIG: "Löschen" bedeutet ownership_state ändern, NICHT aus DB entfernen!
+
+owned=true   → In meiner Library
+owned=false  → Nicht mehr in Library, aber Entity bleibt (für Re-Add)
+
+Warum?
+- User liked Artist erneut → Alle Daten noch da, kein erneutes Enrichment
+- Prevents data loss bei versehentlichem Unlike
+- History bleibt erhalten
+```
+
+---
 
 ### Lidarr-Vergleich: Wie machen es die Profis?
 
@@ -294,7 +1029,11 @@ class UnifiedLibraryManager:
         self._register_default_tasks()
     
     def _register_default_tasks(self) -> None:
-        """Registriert die Standard Scheduled Tasks."""
+        """Registriert die Standard Scheduled Tasks.
+        
+        WICHTIG: Download-Verwaltung ist NICHT hier!
+        Downloads werden von einem separaten DownloadWorker verwaltet.
+        """
         tasks = [
             ScheduledTask(
                 name="refresh_library",
@@ -344,7 +1083,11 @@ class UnifiedLibraryManager:
         return TaskResult(success=True, stats=stats)
     
     async def _task_sync_cloud(self) -> TaskResult:
-        """Synct von allen Cloud-Quellen (Spotify, Deezer, etc.)."""
+        """Synct von allen Cloud-Quellen (Spotify, Deezer, etc.).
+        
+        Markiert Liked/Followed als owned=true.
+        Download-State wird gesetzt, aber Downloads sind Sache des DownloadWorkers!
+        """
         async with self._db.session_scope() as session:
             result = await self._sources.import_from_all()
             
@@ -353,6 +1096,9 @@ class UnifiedLibraryManager:
                 key = self._deduplicator.find_match_key(artist_dto)
                 existing = await self._find_artist_by_key(session, key)
                 merged = await self._deduplicator.merge_artist(existing, artist_dto)
+                
+                # Als OWNED markieren (aus Cloud-Liked)
+                merged.ownership_state = OwnershipState.OWNED
                 await self._save_artist(session, merged)
             
             await session.commit()
@@ -361,6 +1107,11 @@ class UnifiedLibraryManager:
             success=len(result.errors) == 0,
             stats={"imported": len(result.artists), "errors": len(result.errors)},
         )
+    
+    # HINWEIS: Kein _task_process_downloads hier!
+    # Downloads werden vom separaten DownloadWorker verwaltet.
+    # UnifiedLibraryManager setzt nur download_state=PENDING,
+    # der DownloadWorker verarbeitet die Queue.
 ```
 
 ## 🔄 Migration Plan
@@ -464,24 +1215,316 @@ priorities = {
 
 ```
 src/soulspot/application/
-├── library/                          # NEUES Modul
+├── library/                          # NEUES Modul (nur Library-Management!)
 │   ├── __init__.py
 │   ├── task_scheduler.py             # ScheduledTask, TaskScheduler
 │   ├── task_result.py                # TaskResult, TaskStats
 │   ├── import_source.py              # ImportSource Protocol
 │   ├── entity_deduplicator.py        # Merge-Logik
-│   └── unified_library_manager.py    # DER zentrale Worker
+│   ├── ownership.py                  # OwnershipState, DownloadState Enums
+│   └── unified_library_manager.py    # DER zentrale Library-Worker
 │
-├── library/sources/                  # Import Sources
+├── library/sources/                  # Import Sources (Cloud → Library)
 │   ├── __init__.py
-│   ├── local_import_source.py        # Lokale Files
+│   ├── local_import_source.py        # Lokale Files (owned + downloaded)
 │   ├── spotify_import_source.py      # Spotify API (wraps Plugin)
 │   ├── deezer_import_source.py       # Deezer API (wraps Plugin)
+│   ├── tidal_import_source.py        # Tidal API (zukünftig)
 │   └── registry.py                   # ImportSourceRegistry
 │
-└── workers/                          # Existierend, wird vereinfacht
-    ├── orchestrator.py               # Bleibt, registriert nur UnifiedLibraryManager
-    └── unified_library_worker.py     # Thin wrapper für Orchestrator-Kompatibilität
+└── workers/                          # Existierend - wird stark vereinfacht!
+    ├── orchestrator.py               # Registriert alle Worker
+    ├── unified_library_worker.py     # DER Library Worker (inkl. Images!)
+    ├── download_worker.py            # BLEIBT! Audio-Downloads
+    └── token_refresh_worker.py       # BLEIBT! Auth-spezifisch
+
+# ZU LÖSCHEN nach Migration (7 Worker → 3 Worker):
+# ├── SpotifySyncWorker.py           # → UnifiedLibraryManager
+# ├── DeezerSyncWorker.py            # → UnifiedLibraryManager  
+# ├── LibraryScanWorker.py           # → UnifiedLibraryManager
+# ├── library_discovery_worker.py    # → UnifiedLibraryManager
+# ├── new_releases_sync_worker.py    # → UnifiedLibraryManager
+# ├── ImageWorker.py (Backfill)      # → UnifiedLibraryManager.enrich_images
+# └── image_queue_worker.py          # → UnifiedLibraryManager.enrich_images
+```
+
+### Worker-Verantwortlichkeiten (Separation of Concerns)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WORKER RESPONSIBILITIES                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  UnifiedLibraryManager (NEU)                                         │
+│  ──────────────────────────                                          │
+│  ✓ Artist/Album/Track Management                                     │
+│  ✓ Cloud Sync (Spotify, Deezer, Tidal Likes/Follows)                │
+│  ✓ Local Library Scan                                                │
+│  ✓ Metadata Enrichment (MusicBrainz)                                 │
+│  ✓ Entity Deduplication                                              │
+│  ✓ Image URL Enrichment (holt URLs, nicht die Bilder selbst!)        │
+│  ✓ Setzt download_state=PENDING wenn nötig                           │
+│  ✓ Queued Image-Jobs für ImageDownloadWorker                         │
+│  ✗ KEINE Audio-Download-Logik!                                       │
+│  ✗ KEINE Image-Download-Logik (nur URLs sammeln!)                    │
+│                                                                      │
+│  DownloadWorker (EXISTIEREND, bleibt!)                               │
+│  ──────────────────────────────────────                              │
+│  ✓ Sucht Tracks mit download_state=PENDING                           │
+│  ✓ Sucht Download-Kandidaten (slskd, sabnzbd, ...)                   │
+│  ✓ Startet Audio-Downloads                                           │
+│  ✓ Setzt download_state=DOWNLOADED nach Erfolg                       │
+│  ✗ KEINE Library-Logik!                                              │
+│  ✗ KEINE Image-Logik!                                                │
+│                                                                      │
+│  ImageDownloadWorker (ehemals ImageQueueWorker)                      │
+│  ───────────────────────────────────────────────                     │
+│  ✓ Prozessiert Image-Download-Queue                                  │
+│  ✓ Lädt Bilder von URLs herunter                                     │
+│  ✓ Speichert Bilder lokal (/images/artists/, /images/albums/)        │
+│  ✓ Aktualisiert image_path in DB nach Download                       │
+│  ✗ KEINE URL-Ermittlung (macht UnifiedLibraryManager!)               │
+│                                                                      │
+│  ImageBackfillWorker → WIRD GELÖSCHT!                                │
+│  ─────────────────────────────────────                               │
+│  ✗ Logik wird Teil von UnifiedLibraryManager.enrich_images           │
+│                                                                      │
+│  ImageQueueWorker → WIRD AUCH GELÖSCHT!                              │
+│  ──────────────────────────────────────                              │
+│  ✗ Logik wird Teil von UnifiedLibraryManager.enrich_images           │
+│  (Image Download jetzt integriert für bessere Prozess-Steuerung)     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Image-Verarbeitung: Integriert in IMAGERY Phase
+
+> **Entscheidung (Task #10):** Image-Downloads werden in Phase 5 (IMAGERY) integriert.
+> Kein separater ImageDownloadWorker mehr für bessere Prozess-Steuerung.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│         PHASE 5: IMAGERY (URL Enrichment + Download)             │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  SCHRITT 1: URL Enrichment                                        │
+│  ─────────────────────────                                        │
+│                                                                   │
+│    Entities ohne image_url                                        │
+│         │                                                         │
+│         ▼                                                         │
+│    Für jeden Entity:                                              │
+│    1. CoverArtArchive (wenn MBID vorhanden) → Beste Qualität      │
+│    2. Fallback: Spotify API → images[0].url                       │
+│    3. Fallback: Deezer API → picture_xl                           │
+│         │                                                         │
+│         ▼                                                         │
+│    Entity.image_url = "https://..."                               │
+│                                                                   │
+│  SCHRITT 2: Image Download (INTEGRIERT!)                          │
+│  ───────────────────────────────────────                          │
+│                                                                   │
+│    Entities mit image_url aber ohne image_path                    │
+│         │                                                         │
+│         ▼                                                         │
+│    ┌─────────────────────────────────────────┐                    │
+│    │ Batch Download mit Concurrency Limit    │                    │
+│    │ - Max 5 parallel Downloads              │                    │
+│    │ - 100ms zwischen Batches                │                    │
+│    │ - Error Handling pro Image              │                    │
+│    │                                         │                    │
+│    │ Für jedes Image:                        │                    │
+│    │ 1. Download von image_url               │                    │
+│    │ 2. Speichern: /images/{type}/{id}.jpg   │                    │
+│    │ 3. DB Update: image_path setzen         │                    │
+│    └─────────────────────────────────────────┘                    │
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Warum Integration statt separater Worker?
+
+| Aspekt | Separater Worker | Integriert (gewählt) |
+|--------|------------------|---------------------|
+| **Prozess-Steuerung** | ❌ Asynchron, schwer koordinierbar | ✅ Direkte Kontrolle |
+| **Reihenfolge** | ❌ Kann parallel laufen | ✅ Garantiert nach IDENTIFY |
+| **MBIDs verfügbar?** | ⚠️ Nicht garantiert | ✅ Ja, Phase 2 ist fertig |
+| **Fehler-Handling** | ❌ Separate Logik | ✅ Teil des Task-Flows |
+| **Debugging** | ❌ Zwei Logs checken | ✅ Ein Log, ein Flow |
+
+### Image Download Sub-Task Code
+
+```python
+async def _task_enrich_images(self) -> TaskResult:
+    """Phase 5: Image Enrichment + Download (integriert).
+    
+    Zwei Schritte in einem Task:
+    1. URL Enrichment (von APIs holen)
+    2. Image Download (lokal speichern)
+    """
+    stats = {
+        "urls_found": 0, 
+        "downloaded": 0, 
+        "failed": 0,
+        "skipped_existing": 0
+    }
+    
+    # Konfigurierbare Concurrency (default: 5)
+    max_concurrent = await self._settings.get_int(
+        "library.image_download_concurrency",
+        default=5  # Max 5 parallel Downloads
+    )
+    
+    async with self._db.session_scope() as session:
+        # SCHRITT 1: URL Enrichment
+        entities_needing_url = await self._get_entities_without_image_url(session)
+        for entity in entities_needing_url:
+            url = await self._find_image_url(entity)  # CAA → Spotify → Deezer
+            if url:
+                entity.image_url = url
+                stats["urls_found"] += 1
+        
+        # SCHRITT 2: Image Download (NACH URL Enrichment!)
+        entities_needing_download = await self._get_entities_needing_download(session)
+        
+        # Semaphore = "Ampel" die max N gleichzeitig durchlässt
+        # Verhindert: Server-Überlastung, Memory-Explosion, Rate Limits
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def download_with_limit(entity):
+            async with semaphore:  # Warte bis Platz frei
+                return await self._download_image(entity)
+        
+        tasks = [download_with_limit(e) for e in entities_needing_download]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for entity, result in zip(entities_needing_download, results):
+            if isinstance(result, Exception):
+                stats["failed"] += 1
+                entity.image_state = ImageState.FAILED
+            elif result:
+                stats["downloaded"] += 1
+                entity.image_path = result
+                entity.image_state = ImageState.DOWNLOADED
+        
+        await session.commit()
+    
+    return TaskResult(success=True, stats=stats)
+```
+
+### Concurrency-Erklärung
+
+```
+Was bedeutet "Max 5 parallel Downloads"?
+════════════════════════════════════════
+
+OHNE LIMIT (❌ schlecht):
+  100 Images → 100 gleichzeitige HTTP-Requests
+  → Server überlastet (Rate Limit 429)
+  → Netzwerk blockiert
+  → 100 Bilder im RAM = Memory-Explosion
+  → Timeouts, Fehlschläge
+
+MIT SEMAPHORE(5) (✅ kontrolliert):
+  100 Images → Max 5 gleichzeitige Requests
+  
+  Zeit 0: Start Download 1, 2, 3, 4, 5
+  Zeit 1: Download 1 fertig → Start Download 6
+  Zeit 2: Download 3 fertig → Start Download 7
+  ...bis alle 100 fertig
+
+SETTING:
+  library.image_download_concurrency = 5  (default)
+  
+  Wert 1:  Sequenziell, langsam aber sicher
+  Wert 3:  Konservativ, für schwache Server
+  Wert 5:  Guter Kompromiss (Standard)
+  Wert 10: Schneller, mehr Last
+```
+
+### Worker-Konsolidierung (aktualisiert)
+
+| Alter Worker | Aktion | Neuer Zuständiger |
+|--------------|--------|-------------------|
+| `SpotifySyncWorker` | → DELETE | `UnifiedLibraryManager.sync_cloud_sources` |
+| `DeezerSyncWorker` | → DELETE | `UnifiedLibraryManager.sync_cloud_sources` |
+| `LibraryScanWorker` | → DELETE | `UnifiedLibraryManager.refresh_library` |
+| `LibraryDiscoveryWorker` | → DELETE | `UnifiedLibraryManager.enrich_metadata` |
+| `NewReleasesSyncWorker` | → DELETE | `UnifiedLibraryManager` (optional Task) |
+| `ImageBackfillWorker` | → DELETE | `UnifiedLibraryManager.enrich_images` |
+| `ImageQueueWorker` | → DELETE | `UnifiedLibraryManager.enrich_images` |
+| `DownloadWorker` | → KEEP | Bleibt für Audio-Downloads |
+| `TokenRefreshWorker` | → KEEP | Bleibt separat (Auth-spezifisch) |
+
+**Nach Migration: Nur noch 3 Worker!**
+```
+workers/
+├── orchestrator.py               # Registriert Worker
+├── unified_library_worker.py     # ALLES Library (inkl. Images!)
+├── download_worker.py            # Audio-Downloads
+└── token_refresh_worker.py       # OAuth Token Refresh
+```
+
+### Datenfluss-Übersicht (korrigiert)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    UNIFIED LIBRARY MANAGER (Library only!)               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  IMPORT SOURCES (Cloud/Local → Database)                                 │
+│  ───────────────────────────────────────                                 │
+│                                                                          │
+│    ┌───────────┐   ┌───────────┐   ┌───────────┐   ┌───────────┐        │
+│    │  Local    │   │  Spotify  │   │  Deezer   │   │  Tidal    │        │
+│    │  Scanner  │   │  Plugin   │   │  Plugin   │   │  Plugin   │        │
+│    └─────┬─────┘   └─────┬─────┘   └─────┬─────┘   └─────┬─────┘        │
+│          │               │               │               │               │
+│          └───────────────┴───────────────┴───────────────┘               │
+│                                  │                                       │
+│                                  ▼                                       │
+│                     ┌─────────────────────────┐                          │
+│                     │   Entity Deduplicator   │                          │
+│                     │   (MBID/ISRC/ID/Name)   │                          │
+│                     └───────────┬─────────────┘                          │
+│                                 │                                        │
+│                                 ▼                                        │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                      DATABASE (Single Source of Truth)            │   │
+│  │  ┌──────────────────────────────────────────────────────────────┐│   │
+│  │  │ Track: id, title, isrc, spotify_uri, deezer_id,             ││   │
+│  │  │        ownership_state, download_state, local_path           ││   │
+│  │  └──────────────────────────────────────────────────────────────┘│   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  UnifiedLibraryManager ENDET HIER!                                       │
+│  (Setzt download_state=PENDING, aber führt keine Downloads aus)          │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   │ download_state=PENDING
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         DOWNLOAD WORKER (Separater Worker!)              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  1. Liest Tracks mit download_state=PENDING aus Database                 │
+│  2. Sucht Kandidaten bei Download-Quellen                                │
+│  3. Startet Downloads                                                    │
+│  4. Setzt download_state=DOWNLOADED nach Erfolg                          │
+│                                                                          │
+│    ┌───────────┐   ┌───────────┐   ┌───────────┐                        │
+│    │   slskd   │   │  SABnzbd  │   │  ...      │                        │
+│    │ (Soulseek)│   │  (Usenet) │   │  (future) │                        │
+│    └─────┬─────┘   └─────┬─────┘   └─────┬─────┘                        │
+│          │               │               │                               │
+│          └───────────────┴───────────────┘                               │
+│                          │                                               │
+│                          ▼                                               │
+│            /music/Artist/Album/track.flac                                │
+│            (download_state=DOWNLOADED, local_path set)                   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## ❓ Entscheidungsmatrix
@@ -524,6 +1567,406 @@ Frage: Braucht mein Feature einen eigenen Worker?
 | Neuer Cleanup-Task | Zu `cleanup_library` Task hinzufügen |
 | Neuer Background-Job | Als `ScheduledTask` registrieren |
 | Neuer API-Sync | Bestehenden `sync_cloud_sources` erweitern |
+
+---
+
+## ⚠️ Error Handling & Retry-Logik
+
+### Fehler-Szenarien
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     ERROR HANDLING STRATEGY                          │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  SZENARIO 1: Einzelner API-Call fehlschlägt                          │
+│  ─────────────────────────────────────────────                       │
+│                                                                      │
+│    Spotify API: 429 Too Many Requests                                │
+│         │                                                            │
+│         ▼                                                            │
+│    ┌─────────────────────────────────────────┐                       │
+│    │ Aktion:                                 │                       │
+│    │ - Exponential Backoff (1s, 2s, 4s, 8s)  │                       │
+│    │ - Max 3 Retries                         │                       │
+│    │ - Bei dauerhaftem Fehler: Skip Entity   │                       │
+│    │ - Entity.last_error = "429: Rate Limit" │                       │
+│    │ - Weiter mit nächster Entity            │                       │
+│    └─────────────────────────────────────────┘                       │
+│                                                                      │
+│  SZENARIO 2: Provider komplett down                                  │
+│  ─────────────────────────────────                                   │
+│                                                                      │
+│    Spotify API: Connection Refused                                   │
+│         │                                                            │
+│         ▼                                                            │
+│    ┌─────────────────────────────────────────┐                       │
+│    │ Aktion:                                 │                       │
+│    │ - Circuit Breaker öffnet nach 5 Fehlern │                       │
+│    │ - Provider als "unavailable" markieren  │                       │
+│    │ - Andere Provider weiter nutzen         │                       │
+│    │ - Nach 5 Min: Circuit Breaker reset     │                       │
+│    └─────────────────────────────────────────┘                       │
+│                                                                      │
+│  SZENARIO 3: Phase fehlschlägt komplett                              │
+│  ─────────────────────────────────────                               │
+│                                                                      │
+│    Phase 2 (IDENTIFY): MusicBrainz down                              │
+│         │                                                            │
+│         ▼                                                            │
+│    ┌─────────────────────────────────────────┐                       │
+│    │ Frage: Läuft Phase 3 trotzdem?          │                       │
+│    │                                         │                       │
+│    │ ANTWORT: NEIN, Abhängigkeiten gelten!   │                       │
+│    │ - Phase 3 (ENRICH) braucht MBIDs        │                       │
+│    │ - Ohne Phase 2 → Phase 3 überspringen   │                       │
+│    │ - Nächster Cycle versucht erneut        │                       │
+│    └─────────────────────────────────────────┘                       │
+│                                                                      │
+│  SZENARIO 4: DB-Fehler                                               │
+│  ─────────────────────                                               │
+│                                                                      │
+│    SQLite: Database locked                                           │
+│         │                                                            │
+│         ▼                                                            │
+│    ┌─────────────────────────────────────────┐                       │
+│    │ Aktion:                                 │                       │
+│    │ - Rollback aktuelle Transaktion         │                       │
+│    │ - Retry nach 1s                         │                       │
+│    │ - Max 3 Retries                         │                       │
+│    │ - Bei dauerhaftem Fehler: Task abbrechen│                       │
+│    │ - Health Status: DEGRADED               │                       │
+│    └─────────────────────────────────────────┘                       │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Retry-Strategie Code
+
+```python
+@dataclass
+class RetryConfig:
+    """Retry-Konfiguration."""
+    max_retries: int = 3
+    initial_delay: float = 1.0  # Sekunden
+    max_delay: float = 30.0
+    exponential_base: float = 2.0
+
+
+async def with_retry(
+    func: Callable,
+    config: RetryConfig = RetryConfig(),
+) -> Any:
+    """Führt Funktion mit Retry-Logik aus."""
+    last_exception = None
+    
+    for attempt in range(config.max_retries + 1):
+        try:
+            return await func()
+        except Exception as e:
+            last_exception = e
+            
+            if attempt == config.max_retries:
+                raise  # Letzte Chance vorbei
+            
+            # Exponential Backoff
+            delay = min(
+                config.initial_delay * (config.exponential_base ** attempt),
+                config.max_delay
+            )
+            
+            logger.warning(f"Retry {attempt + 1}/{config.max_retries} after {delay}s: {e}")
+            await asyncio.sleep(delay)
+    
+    raise last_exception
+```
+
+### Phase-Fehler-Handling
+
+```python
+async def run_cycle(self) -> CycleResult:
+    """Führt einen Task-Cycle mit Fehler-Handling aus."""
+    result = CycleResult()
+    completed_this_cycle: set[str] = set()
+    
+    for task in self._topological_sort(self._tasks.values()):
+        if not task.is_due:
+            result.skipped.append((task.name, "not_due"))
+            continue
+        
+        if not task.dependencies_satisfied(completed_this_cycle):
+            result.skipped.append((task.name, "dependencies_not_met"))
+            logger.info(f"Skipping {task.name}: dependencies {task.depends_on} not satisfied")
+            continue
+        
+        try:
+            task_result = await self._execute_task(task)
+            
+            if task_result.success:
+                completed_this_cycle.add(task.name)
+                result.completed.append(task.name)
+            else:
+                result.failed.append((task.name, task_result.error))
+                # Phase fehlgeschlagen → abhängige Phasen werden übersprungen
+                
+        except Exception as e:
+            result.failed.append((task.name, str(e)))
+            logger.exception(f"Task {task.name} failed with exception")
+    
+    return result
+```
+
+---
+
+## 📊 Status API
+
+### Endpoints
+
+```
+GET /api/library/status
+→ Gesamtstatus des UnifiedLibraryManager
+
+GET /api/library/tasks
+→ Liste aller Tasks mit Status
+
+GET /api/library/tasks/{task_name}
+→ Details zu einem Task
+
+POST /api/library/tasks/{task_name}/run
+→ Task manuell ausführen (wie Lidarr's "Run Now")
+```
+
+### Response-Modelle
+
+```python
+@dataclass
+class TaskStatus:
+    """Status eines einzelnen Tasks."""
+    name: str
+    enabled: bool
+    interval_minutes: int
+    last_run: datetime | None
+    last_success: datetime | None
+    last_error: str | None
+    next_run: datetime | None
+    is_running: bool
+    stats: dict[str, Any]  # Letzte Ausführungs-Stats
+
+
+@dataclass
+class LibraryStatus:
+    """Gesamtstatus der Library."""
+    state: Literal["healthy", "degraded", "error"]
+    uptime_seconds: int
+    tasks: list[TaskStatus]
+    providers: dict[str, ProviderStatus]
+    last_cycle: CycleResult | None
+    
+    # Aggregierte Stats
+    total_artists: int
+    total_albums: int
+    total_tracks: int
+    owned_artists: int
+    owned_albums: int
+    owned_tracks: int
+    pending_downloads: int
+
+
+@dataclass
+class ProviderStatus:
+    """Status eines Providers (Spotify, Deezer, etc.)."""
+    name: str
+    enabled: bool
+    authenticated: bool
+    circuit_breaker_open: bool
+    last_successful_call: datetime | None
+    error_count_24h: int
+```
+
+### Status API Implementierung
+
+```python
+@router.get("/library/status")
+async def get_library_status(
+    library_manager: UnifiedLibraryManager = Depends(get_library_manager),
+) -> LibraryStatus:
+    """Gibt den aktuellen Status der Library zurück."""
+    return await library_manager.get_status()
+
+
+@router.post("/library/tasks/{task_name}/run")
+async def run_task_now(
+    task_name: str,
+    library_manager: UnifiedLibraryManager = Depends(get_library_manager),
+) -> TaskResult:
+    """Führt einen Task sofort aus (wie Lidarr's Run Now Button)."""
+    return await library_manager.run_task_now(task_name)
+```
+
+### UI Integration
+
+```
+Settings → Library → Tasks
+┌────────────────────────────────────────────────────────────────┐
+│  Task                  │ Last Run    │ Next Run   │ Status     │
+│  ────────────────────────────────────────────────────────────  │
+│  scan_local_library    │ 5 min ago   │ in 55 min  │ ✓ Success  │
+│  sync_spotify_likes    │ 2 min ago   │ in 28 min  │ ✓ Success  │
+│  sync_deezer_favorites │ 2 min ago   │ in 28 min  │ ⚠ Degraded │
+│  identify_artists      │ 1h ago      │ in 1h      │ ✓ Success  │
+│  enrich_metadata       │ 2h ago      │ in 1h      │ ✓ Success  │
+│  enrich_images         │ 2h ago      │ in 0 min   │ ⏳ Running  │
+│  cleanup_library       │ 23h ago     │ in 1h      │ ✓ Success  │
+│                                                   │ [Run Now]  │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎵 Playlist-Handling
+
+### Playlists vs. Library
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      PLAYLIST KONZEPT                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  WICHTIG: Playlists sind NICHT Teil der "Owned" Library!             │
+│  ─────────────────────────────────────────────────────               │
+│                                                                      │
+│  Warum?                                                              │
+│  - Playlist = Referenz-Liste, nicht Besitz                           │
+│  - Tracks in Playlist können auch "nicht-owned" sein                 │
+│  - Playlist-Sync ≠ Library-Sync                                      │
+│                                                                      │
+│  BEISPIEL:                                                           │
+│  ┌─────────────────────────────────────────────┐                     │
+│  │ Spotify Playlist "Summer Hits 2024"         │                     │
+│  │                                             │                     │
+│  │ Track 1: "Espresso" - Sabrina Carpenter     │ ← Owned (geliked)   │
+│  │ Track 2: "Birds of a Feather" - B. Eilish   │ ← Owned (geliked)   │
+│  │ Track 3: "Random Song" - Unknown            │ ← NOT owned         │
+│  │ Track 4: "Another Hit" - Some Artist        │ ← NOT owned         │
+│  └─────────────────────────────────────────────┘                     │
+│                                                                      │
+│  Die Playlist selbst ist "followed", aber nur Track 1 & 2            │
+│  sind "owned" (weil separat geliked).                                │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Playlist-Sync Optionen
+
+```python
+class PlaylistSyncMode(str, Enum):
+    """Wie werden Playlists behandelt?"""
+    
+    REFERENCE_ONLY = "reference_only"
+    # Playlist wird gespeichert, aber Tracks nicht automatisch owned
+    # Default! Playlist ist nur eine "Leseliste"
+    
+    AUTO_OWN_TRACKS = "auto_own_tracks"
+    # Alle Tracks in Playlist werden automatisch owned
+    # Vorsicht: Kann viele Tracks markieren!
+    
+    DISABLED = "disabled"
+    # Playlists werden nicht gesynct
+```
+
+### Playlist Entity
+
+```python
+@dataclass
+class Playlist:
+    """Playlist (pro Provider)."""
+    id: int
+    name: str
+    provider: str  # "spotify", "deezer", "tidal"
+    provider_id: str  # z.B. "spotify:playlist:37i9..."
+    
+    # Ownership
+    is_followed: bool  # User folgt dieser Playlist
+    is_owner: bool     # User hat diese Playlist erstellt
+    
+    # Sync Settings
+    sync_mode: PlaylistSyncMode = PlaylistSyncMode.REFERENCE_ONLY
+    
+    # Metadata
+    cover_url: str | None = None
+    cover_path: str | None = None
+    track_count: int = 0
+    last_synced: datetime | None = None
+```
+
+### Playlist-Sync Task
+
+```python
+ScheduledTask(
+    name="sync_playlists",
+    interval=timedelta(hours=1),
+    handler=self._task_sync_playlists,
+    depends_on=["sync_spotify_likes", "sync_deezer_favorites"],  # Nach Library-Sync!
+)
+
+async def _task_sync_playlists(self) -> TaskResult:
+    """Synct Playlists von allen Providern.
+    
+    WICHTIG: Tracks in Playlists werden NICHT automatisch owned!
+    Es sei denn sync_mode == AUTO_OWN_TRACKS.
+    """
+    stats = {"playlists_synced": 0, "tracks_referenced": 0}
+    
+    for source in self._sources.get_available_sources():
+        playlists = await source.import_playlists()
+        
+        for playlist_dto in playlists:
+            playlist = await self._upsert_playlist(playlist_dto)
+            stats["playlists_synced"] += 1
+            
+            # Tracks holen (als Referenzen, nicht owned!)
+            tracks = await source.get_playlist_tracks(playlist_dto.provider_id)
+            
+            for track_dto in tracks:
+                # Track in DB speichern (falls nicht existiert)
+                track = await self._upsert_track(track_dto)
+                
+                # Playlist-Track Zuordnung
+                await self._link_track_to_playlist(playlist.id, track.id)
+                stats["tracks_referenced"] += 1
+                
+                # NICHT automatisch owned! Es sei denn...
+                if playlist.sync_mode == PlaylistSyncMode.AUTO_OWN_TRACKS:
+                    track.ownership_state = OwnershipState.OWNED
+    
+    return TaskResult(success=True, stats=stats)
+```
+
+### Playlist UI-Optionen
+
+```
+Library → Playlists → "Summer Hits 2024"
+┌────────────────────────────────────────────────────────────────┐
+│  Summer Hits 2024                               [Sync Settings]│
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Sync Mode: ○ Reference Only (default)                         │
+│             ○ Auto-Own Tracks                                   │
+│             ○ Don't Sync                                        │
+│                                                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│  Track                    │ Artist              │ Owned?        │
+│  ─────────────────────────────────────────────────────────────  │
+│  Espresso                 │ Sabrina Carpenter   │ ✓ Yes         │
+│  Birds of a Feather       │ Billie Eilish       │ ✓ Yes         │
+│  Random Song              │ Unknown Artist      │ ✗ No [Add]    │
+│  Another Hit              │ Some Artist         │ ✗ No [Add]    │
+│                                                                 │
+│                          [Own All Tracks] [Download Owned Only] │
+└────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 🎯 Success Criteria
 
