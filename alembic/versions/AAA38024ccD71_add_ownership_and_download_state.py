@@ -53,68 +53,81 @@ depends_on = None
 def upgrade() -> None:
     """Add ownership_state, download_state, and primary_source columns."""
     
+    # Import for column check
+    from sqlalchemy import inspect
+    
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
     # === ARTISTS ===
-    with op.batch_alter_table("soulspot_artists", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "ownership_state",
-                sa.String(20),
-                nullable=False,
-                server_default="discovered",
+    # Check if column already exists (idempotency for retry after partial failure)
+    artist_columns = [col["name"] for col in inspector.get_columns("soulspot_artists")]
+    if "ownership_state" not in artist_columns:
+        with op.batch_alter_table("soulspot_artists", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "ownership_state",
+                    sa.String(20),
+                    nullable=False,
+                    server_default="discovered",
+                )
             )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "primary_source",
-                sa.String(20),
-                nullable=True,
+            batch_op.add_column(
+                sa.Column(
+                    "primary_source",
+                    sa.String(20),
+                    nullable=True,
+                )
             )
-        )
     
     # === ALBUMS ===
-    with op.batch_alter_table("soulspot_albums", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "ownership_state",
-                sa.String(20),
-                nullable=False,
-                server_default="discovered",
+    album_columns = [col["name"] for col in inspector.get_columns("soulspot_albums")]
+    if "ownership_state" not in album_columns:
+        with op.batch_alter_table("soulspot_albums", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "ownership_state",
+                    sa.String(20),
+                    nullable=False,
+                    server_default="discovered",
+                )
             )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "primary_source",
-                sa.String(20),
-                nullable=True,
+            batch_op.add_column(
+                sa.Column(
+                    "primary_source",
+                    sa.String(20),
+                    nullable=True,
+                )
             )
-        )
     
     # === TRACKS ===
-    with op.batch_alter_table("soulspot_tracks", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "ownership_state",
-                sa.String(20),
-                nullable=False,
-                server_default="discovered",
+    track_columns = [col["name"] for col in inspector.get_columns("soulspot_tracks")]
+    if "ownership_state" not in track_columns:
+        with op.batch_alter_table("soulspot_tracks", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "ownership_state",
+                    sa.String(20),
+                    nullable=False,
+                    server_default="discovered",
+                )
             )
-        )
-        # download_state only for tracks!
-        batch_op.add_column(
-            sa.Column(
-                "download_state",
-                sa.String(20),
-                nullable=False,
-                server_default="not_needed",  # IMPORTANT: not 'pending'!
+            # download_state only for tracks!
+            batch_op.add_column(
+                sa.Column(
+                    "download_state",
+                    sa.String(20),
+                    nullable=False,
+                    server_default="not_needed",  # IMPORTANT: not 'pending'!
+                )
             )
-        )
-        batch_op.add_column(
-            sa.Column(
-                "primary_source",
-                sa.String(20),
-                nullable=True,
+            batch_op.add_column(
+                sa.Column(
+                    "primary_source",
+                    sa.String(20),
+                    nullable=True,
+                )
             )
-        )
     
     # === DATA MIGRATION ===
     # Mark existing entities based on their source
@@ -155,14 +168,16 @@ def upgrade() -> None:
         WHERE deezer_id IS NOT NULL AND ownership_state != 'owned'
     """)
     
-    # Tracks with local_path have been downloaded → owned + downloaded
-    op.execute("""
-        UPDATE soulspot_tracks 
-        SET ownership_state = 'owned', 
-            download_state = 'downloaded',
-            primary_source = 'local'
-        WHERE local_path IS NOT NULL
-    """)
+    # Tracks with local_path (if column exists) → owned + downloaded
+    # Check if local_path column exists before using it
+    if "local_path" in track_columns:
+        op.execute("""
+            UPDATE soulspot_tracks 
+            SET ownership_state = 'owned', 
+                download_state = 'downloaded',
+                primary_source = 'local'
+            WHERE local_path IS NOT NULL
+        """)
     
     # Tracks with spotify_uri are from Spotify → owned + not_needed
     op.execute("""
@@ -182,31 +197,40 @@ def upgrade() -> None:
         WHERE deezer_id IS NOT NULL AND ownership_state != 'owned'
     """)
     
-    # Create indexes for efficient filtering
-    op.create_index(
-        "ix_soulspot_artists_ownership",
-        "soulspot_artists",
-        ["ownership_state"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_soulspot_albums_ownership",
-        "soulspot_albums",
-        ["ownership_state"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_soulspot_tracks_ownership",
-        "soulspot_tracks",
-        ["ownership_state"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_soulspot_tracks_download_state",
-        "soulspot_tracks",
-        ["download_state"],
-        unique=False,
-    )
+    # Create indexes for efficient filtering (idempotent - check before create)
+    existing_indexes = [idx["name"] for idx in inspector.get_indexes("soulspot_artists")]
+    if "ix_soulspot_artists_ownership" not in existing_indexes:
+        op.create_index(
+            "ix_soulspot_artists_ownership",
+            "soulspot_artists",
+            ["ownership_state"],
+            unique=False,
+        )
+    
+    existing_indexes = [idx["name"] for idx in inspector.get_indexes("soulspot_albums")]
+    if "ix_soulspot_albums_ownership" not in existing_indexes:
+        op.create_index(
+            "ix_soulspot_albums_ownership",
+            "soulspot_albums",
+            ["ownership_state"],
+            unique=False,
+        )
+    
+    existing_indexes = [idx["name"] for idx in inspector.get_indexes("soulspot_tracks")]
+    if "ix_soulspot_tracks_ownership" not in existing_indexes:
+        op.create_index(
+            "ix_soulspot_tracks_ownership",
+            "soulspot_tracks",
+            ["ownership_state"],
+            unique=False,
+        )
+    if "ix_soulspot_tracks_download_state" not in existing_indexes:
+        op.create_index(
+            "ix_soulspot_tracks_download_state",
+            "soulspot_tracks",
+            ["download_state"],
+            unique=False,
+        )
 
 
 def downgrade() -> None:
