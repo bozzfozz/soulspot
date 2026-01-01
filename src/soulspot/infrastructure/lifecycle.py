@@ -269,124 +269,50 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.token_refresh_worker = token_refresh_worker
 
         # =================================================================
-        # Spotify Sync Worker (automatic background syncing)
+        # UnifiedLibraryManager (THE central library worker)
         # =================================================================
-        # Hey future me - this worker automatically syncs Spotify data based on settings!
-        # It respects the app_settings table for enable/disable and intervals.
-        # Depends on token_refresh_worker so tokens are always fresh.
-        # REFACTORED (Jan 2025): Bekommt image_download_queue für async Bilder-Downloads!
-        from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
-
-        spotify_sync_worker = SpotifySyncWorker(
-            db=db,
-            token_manager=db_token_manager,
-            settings=settings,
-            check_interval_seconds=60,  # Check every minute if syncs are due
-            image_queue=image_download_queue,
-        )
-        orchestrator.register(
-            name="spotify_sync",
-            worker=spotify_sync_worker,
-            category="sync",
-            priority=10,
-            depends_on=["token_refresh"],
-        )
-        app.state.spotify_sync_worker = spotify_sync_worker
-
-        # =================================================================
-        # Deezer Sync Worker (automatic background syncing for Deezer)
-        # =================================================================
-        # Hey future me - this worker syncs Deezer data (charts, releases, user data)!
-        # Unlike Spotify, Deezer has public APIs that don't need auth (charts, releases).
-        # User data (favorites, playlists) needs auth from deezer_sessions table.
-        # REFACTORED (Jan 2025): Bekommt image_download_queue für async Bilder-Downloads!
-        from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
-
-        deezer_sync_worker = DeezerSyncWorker(
-            db=db,
-            settings=settings,
-            check_interval_seconds=60,  # Check every minute if syncs are due
-            image_queue=image_download_queue,
-        )
-        orchestrator.register(
-            name="deezer_sync",
-            worker=deezer_sync_worker,
-            category="sync",
-            priority=11,
-        )
-        app.state.deezer_sync_worker = deezer_sync_worker
-
-        # =================================================================
-        # New Releases Sync Worker (caches new releases from all providers)
-        # =================================================================
-        # Hey future me - dieser Worker cached New Releases im Hintergrund!
-        # Das vermeidet langsame API-Calls bei jedem Page Load.
-        # Depends on token_refresh for Spotify token access.
-        from soulspot.application.workers.new_releases_sync_worker import (
-            NewReleasesSyncWorker,
-        )
-
-        new_releases_sync_worker = NewReleasesSyncWorker(
-            db=db,
-            token_manager=db_token_manager,
-            settings=settings,
-            check_interval_seconds=60,  # Check every minute if sync is due
-        )
-        orchestrator.register(
-            name="new_releases_sync",
-            worker=new_releases_sync_worker,
-            category="sync",
-            priority=12,
-            depends_on=["token_refresh"],
-        )
-        app.state.new_releases_sync_worker = new_releases_sync_worker
-
-        # =================================================================
-        # UnifiedLibraryManager (FUTURE: replaces multiple workers)
-        # =================================================================
-        # Hey future me - this is THE NEW UNIFIED WORKER!
-        # Controlled by feature flag: library.use_unified_manager
-        # When enabled, it will eventually replace:
-        # - spotify_sync_worker, deezer_sync_worker
-        # - library_discovery_worker
-        # - image_backfill_worker
-        # - cleanup_worker
-        # For now, it runs IN PARALLEL with old workers during migration.
-        # Set library.use_unified_manager=true to test the new system.
+        # Hey future me - THIS IS IT! The ONE worker that replaces:
+        # - SpotifySyncWorker (DELETED)
+        # - DeezerSyncWorker (DELETED)
+        # - NewReleasesSyncWorker (DELETED)
+        # - LibraryDiscoveryWorker (DELETED)
+        # - ImageBackfillWorker (DELETED)
+        # - ImageQueueWorker (DELETED)
+        #
+        # Architecture: See docs/architecture/UNIFIED_LIBRARY_WORKER.md
+        # - 6 phases: DISCOVER → IDENTIFY → ENRICH → EXPAND → IMAGERY → CLEANUP
+        # - Dependency-based task scheduling (topological order)
+        # - Single DB session per phase (no SQLite locking issues!)
+        # - Deduplication via MBID > ISRC > Provider-ID > Name
         from soulspot.application.workers.unified_library_worker import (
             UnifiedLibraryManager,
         )
+        from soulspot.infrastructure.plugins import DeezerPlugin, SpotifyPlugin
 
-        # Check feature flag using a fresh session
-        async with db.session_scope() as feature_flag_session:
-            feature_flag_service = AppSettingsService(feature_flag_session)
-            use_unified_manager = await feature_flag_service.get_bool(
-                "library.use_unified_manager", default=False
-            )
+        # Create plugins for the UnifiedLibraryManager
+        # Hey future me - SpotifyPlugin needs token from db_token_manager!
+        # DeezerPlugin doesn't need auth for most operations (charts, search, etc.)
+        spotify_plugin = SpotifyPlugin(
+            client=spotify_client,
+            access_token=None,  # Token set dynamically from db_token_manager
+        )
+        deezer_plugin = DeezerPlugin()
 
-        if use_unified_manager:
-            logger.info("UnifiedLibraryManager ENABLED via feature flag")
-            # Plugins are None for now - will be initialized in Phase 2-4
-            # when we implement actual sync tasks that need provider access
-            unified_library_manager = UnifiedLibraryManager(
-                session_factory=db.get_session_factory(),
-                spotify_plugin=None,  # TODO: Pass from SpotifySyncWorker in Phase 2
-                deezer_plugin=None,  # TODO: Pass from DeezerSyncWorker in Phase 3
-            )
-            orchestrator.register(
-                name="unified_library",
-                worker=unified_library_manager,
-                category="sync",
-                priority=15,  # After individual sync workers
-                depends_on=["token_refresh"],
-                required=False,  # Non-fatal if fails
-            )
-            app.state.unified_library_manager = unified_library_manager
-        else:
-            logger.info(
-                "UnifiedLibraryManager DISABLED (set library.use_unified_manager=true to enable)"
-            )
-            app.state.unified_library_manager = None
+        unified_library_manager = UnifiedLibraryManager(
+            session_factory=db.get_session_factory(),
+            spotify_plugin=spotify_plugin,
+            deezer_plugin=deezer_plugin,
+        )
+        orchestrator.register(
+            name="unified_library",
+            worker=unified_library_manager,
+            category="sync",
+            priority=10,  # High priority - main sync worker
+            depends_on=["token_refresh"],
+            required=True,  # This is now THE sync worker
+        )
+        app.state.unified_library_manager = unified_library_manager
+        logger.info("UnifiedLibraryManager registered (replaces 6 deprecated workers)")
 
         # Initialize PERSISTENT job queue (survives restarts!)
         # Hey future me - PersistentJobQueue wraps JobQueue with DB persistence.
@@ -527,45 +453,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("Library scan worker registered")
 
             # =================================================================
-            # DEPRECATED: LibraryEnrichmentWorker - REMOVED (Dec 2025)
+            # REMOVED: LibraryDiscoveryWorker - Replaced by UnifiedLibraryManager
             # =================================================================
-            # The old job-based enrichment worker has been replaced by LibraryDiscoveryWorker.
-            # LibraryDiscoveryWorker runs automatically every 6 hours and handles all ID discovery.
-            # Users can trigger it manually via POST /api/library/discovery/trigger
-            # The following services replace LocalLibraryEnrichmentService:
-            # - LibraryMergeService: Duplicate detection & merging
-            # - MusicBrainzEnrichmentService: Disambiguation enrichment
-            # - repair_artist_images() / repair_album_images(): Artwork repair (images/repair.py)
-            # - LibraryDiscoveryWorker: Automatic ID discovery (5 phases)
+            # Hey future me - LibraryDiscoveryWorker was DELETED!
+            # Its functionality is now in UnifiedLibraryManager:
+            # - Phase 2: IDENTIFY (MusicBrainz IDs for artists/albums)
+            # - Phase 3: ENRICH (metadata from providers)
+            # - Phase 4: EXPAND (discography sync)
+            # See docs/architecture/UNIFIED_LIBRARY_WORKER.md for details.
             # =================================================================
-
-            # =================================================================
-            # Start Library Discovery Worker (ID enrichment for artists/albums/tracks)
-            # =================================================================
-            # Hey future me - dieser SUPERWORKER ersetzt LocalLibraryEnrichmentService!
-            # Er läuft alle 6 Stunden und:
-            #   Phase 1: Findet Deezer/Spotify IDs für Artists ohne IDs
-            #   Phase 2: Holt komplette Discographien von Deezer/Spotify
-            #   Phase 3: Markiert lokale Alben die auf Streaming Services existieren
-            #   Phase 4: Findet Deezer/Spotify IDs für Alben ohne IDs + primary_type
-            #   Phase 5: Findet Deezer/Spotify IDs für Tracks via ISRC
-            # Läuft unabhängig von JobQueue (eigener asyncio.create_task).
-            from soulspot.application.workers.library_discovery_worker import (
-                LibraryDiscoveryWorker,
-            )
-
-            library_discovery_worker = LibraryDiscoveryWorker(
-                db=db,
-                settings=settings,
-                run_interval_hours=6,  # Run every 6 hours
-            )
-            orchestrator.register(
-                name="library_discovery",
-                worker=library_discovery_worker,
-                category="enrichment",
-                priority=50,
-            )
-            app.state.library_discovery_worker = library_discovery_worker
 
             # Start job queue workers
             # Hey future me - SQLite needs fewer workers to avoid "database is locked" errors!
@@ -813,65 +709,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             app.state.duplicate_detector_worker = duplicate_detector_worker
 
             # =================================================================
-            # Image Backfill Worker (automatic artwork downloading)
+            # REMOVED: ImageBackfillWorker + ImageQueueWorker
             # =================================================================
-            from soulspot.application.workers.ImageWorker import (
-                ImageBackfillWorker,
-            )
-
-            image_backfill_worker = ImageBackfillWorker(
-                db=db,
-                settings=settings,
-                run_interval_minutes=30,  # Run every 30 minutes
-                batch_size=50,  # Max 50 artists + 50 albums per cycle
-            )
-            orchestrator.register(
-                name="image_backfill",
-                worker=image_backfill_worker,
-                category="enrichment",
-                priority=51,
-                required=False,
-            )
-            app.state.image_backfill_worker = image_backfill_worker
-
+            # Hey future me - These workers were DELETED!
+            # Image handling is now in UnifiedLibraryManager:
+            # - Phase 5: IMAGERY (Cover URLs + Queue Download Jobs)
+            # The ImageDownloadQueue is still used but processed differently.
+            # See docs/architecture/UNIFIED_LIBRARY_WORKER.md for details.
             # =================================================================
-            # Image Download Queue Worker (async image downloads)
-            # =================================================================
-            # Hey future me - Queue wurde bereits FRÜH erstellt (vor SyncWorkern)!
-            # Hier wird nur der WORKER gestartet der die Queue prozessiert.
-            # SpotifySyncService und DeezerSyncService queuen Bilder direkt in die Queue.
-            # Der Worker verarbeitet parallel (default 3 concurrent downloads).
-            from soulspot.application.services.images import ImageService
-            from soulspot.application.workers.image_queue_worker import (
-                ImageQueueWorker,
-            )
-
-            # Create ImageService for the queue worker
-            queue_image_service = ImageService(
-                cache_base_path=str(settings.storage.image_path),
-                local_serve_prefix="/api/images",
-            )
-
-            # Create and start image queue worker (Queue bereits in app.state)
-            image_queue_worker = ImageQueueWorker(
-                queue=image_download_queue,
-                image_service=queue_image_service,
-                session_factory=db.session_scope,
-                max_concurrent=3,  # 3 parallel image downloads
-            )
-            # Start worker in background task
-            image_queue_task = asyncio.create_task(image_queue_worker.start())
-            orchestrator.register_running_task(
-                name="image_queue",
-                task=image_queue_task,
-                worker=image_queue_worker,
-                priority=52,
-                category="enrichment",
-                required=False,
-            )
-            app.state.image_queue_worker = image_queue_worker
-            app.state.image_queue_task = image_queue_task
-            logger.info("Image queue worker started (3 concurrent downloads)")
 
             # Auto-import service
             from soulspot.application.services import AutoImportService
@@ -964,8 +809,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Fallback: Stop critical workers manually if orchestrator missing
             for worker_name in [
                 "token_refresh_worker",
-                "spotify_sync_worker",
-                "deezer_sync_worker",
+                "unified_library_manager",  # THE central worker now
             ]:
                 worker = getattr(app.state, worker_name, None)
                 if worker is not None:
