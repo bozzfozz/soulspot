@@ -1,7 +1,7 @@
 """rename spotify.download_images to library.download_images
 
 Revision ID: AAA38023DD71
-Revises: zz37022bbC70
+Revises: aa38023ccD73
 Create Date: 2025-12-18 14:00:00.000000
 
 Hey future me - MULTI-PROVIDER SETTING KEY MIGRATION!

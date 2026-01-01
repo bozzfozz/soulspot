@@ -1,7 +1,7 @@
 """Cleanup invalid spotify_uri values that were stored as Deezer pseudo-URIs
 
 Revision ID: aa38023ccD73
-Revises: BBB38024ddD72
+Revises: CCC38027hhI75
 Create Date: 2025-12-21 00:00:00.000000
 
 Hey future me - we accidentally persisted Deezer pseudo-URIs ("deezer:123") into
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "aa38023ccD73"
-down_revision = "BBB38024ddD72"
+down_revision = "CCC38027hhI75"
 branch_labels = None
 depends_on = None
 

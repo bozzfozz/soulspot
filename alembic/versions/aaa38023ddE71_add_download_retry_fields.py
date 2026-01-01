@@ -1,8 +1,8 @@
 """add download retry fields
 
 Revision ID: aaa38023ddE71
-Revises: zz37022bbC70
-Create Date: 2025-12-22 10:00:00.000000
+Revises: AAA38023DD71
+Create Date: 2025-12-20 02:00:00.000000
 
 Hey future me - AUTO-RETRY FEATURE!
 
