@@ -130,19 +130,26 @@ def _get_token_worker_status(request: Request) -> WorkerStatusInfo:
     )
 
 
-def _get_spotify_sync_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Spotify Sync Worker.
+def _get_unified_library_manager_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Unified Library Manager.
 
-    Hey future me - holt den Status vom SpotifySyncWorker.
-    Der Worker ist auf app.state.spotify_sync_worker gespeichert.
+    Hey future me - THE central library worker that replaced:
+    - SpotifySyncWorker
+    - DeezerSyncWorker
+    - NewReleasesSyncWorker
+    - LibraryDiscoveryWorker
+    - ImageBackfillWorker
+    - ImageQueueWorker
+
+    Single worker, multi-provider (Spotify + Deezer + Tidal + ...)
     """
-    worker = getattr(request.app.state, "spotify_sync_worker", None)
+    worker = getattr(request.app.state, "unified_library_manager", None)
 
     if worker is None:
         return WorkerStatusInfo(
-            name="Spotify Sync",
-            icon="bi bi-spotify",
-            settings_url="/settings?tab=spotify",
+            name="Library Manager",
+            icon="bi bi-database",
+            settings_url="/settings?tab=library",
             running=False,
             status="stopped",
             details={"error": "Worker not initialized"},
@@ -150,41 +157,25 @@ def _get_spotify_sync_worker_status(request: Request) -> WorkerStatusInfo:
 
     raw_status = worker.get_status()
 
-    # Format last sync times
-    last_syncs = raw_status.get("last_sync", {})
-    formatted_last_syncs = {}
-    for sync_type, iso_time in last_syncs.items():
-        if iso_time:
-            dt = datetime.fromisoformat(iso_time)
-            formatted_last_syncs[sync_type] = _format_time_ago(dt)
-        else:
-            formatted_last_syncs[sync_type] = "noch nie"
-
-    # Check for errors in stats
-    stats = raw_status.get("stats", {})
-    has_errors = any(
-        s.get("last_error") is not None for s in stats.values() if isinstance(s, dict)
-    )
-
     # Determine status
     if not raw_status.get("running"):
         status = "stopped"
-    elif has_errors:
+    elif raw_status.get("errors", 0) > 0:
         status = "error"
     else:
         status = "idle"
 
     return WorkerStatusInfo(
-        name="Spotify Sync",
-        icon="bi bi-spotify",
-        settings_url="/settings?tab=spotify",
+        name="Library Manager",
+        icon="bi bi-database",
+        settings_url="/settings?tab=library",
         running=raw_status.get("running", False),
         status=status,
         details={
-            "last_syncs": formatted_last_syncs,
-            "check_interval_seconds": raw_status.get("check_interval_seconds", 60),
-            "stats": stats,
-            "has_errors": has_errors,
+            "enabled_providers": raw_status.get("enabled_providers", []),
+            "tasks_completed": raw_status.get("tasks_completed", 0),
+            "tasks_pending": raw_status.get("tasks_pending", 0),
+            "errors": raw_status.get("errors", 0),
         },
     )
 
@@ -291,112 +282,10 @@ def _get_automation_workers_status(request: Request) -> WorkerStatusInfo:
     )
 
 
-def _get_cleanup_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Cleanup Worker.
-
-    Hey future me - holt den Status vom CleanupWorker.
-    Dieser Worker löscht alte Temp-Dateien und verwaiste Downloads.
-    ACHTUNG: Ist per Default DISABLED weil destruktiv!
-    """
-    worker = getattr(request.app.state, "cleanup_worker", None)
-
-    if worker is None:
-        return WorkerStatusInfo(
-            name="Cleanup",
-            icon="bi bi-trash3",
-            settings_url="/settings?tab=automation",
-            running=False,
-            status="stopped",
-            details={"error": "Worker not initialized"},
-        )
-
-    raw_status = worker.get_status()
-    stats = raw_status.get("stats", {})
-
-    # Format last run time
-    last_run_at = stats.get("last_run_at")
-    if last_run_at:
-        dt = datetime.fromisoformat(last_run_at)
-        last_run_formatted = _format_time_ago(dt)
-    else:
-        last_run_formatted = "noch nie"
-
-    # Determine status
-    if not raw_status.get("running"):
-        status = "stopped"
-    elif stats.get("last_error"):
-        status = "error"
-    else:
-        status = "idle"
-
-    return WorkerStatusInfo(
-        name="Cleanup",
-        icon="bi bi-trash3",
-        settings_url="/settings?tab=automation",
-        running=raw_status.get("running", False),
-        status=status,
-        details={
-            "dry_run": raw_status.get("dry_run", False),
-            "last_run": last_run_formatted,
-            "files_deleted": stats.get("files_deleted", 0),
-            "bytes_freed": stats.get("bytes_freed", 0),
-            "last_error": stats.get("last_error"),
-        },
-    )
 
 
-def _get_duplicate_detector_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Duplicate Detector Worker.
 
-    Hey future me - holt den Status vom DuplicateDetectorWorker.
-    Dieser Worker findet Duplikate via Metadata-Hash.
-    Per Default DISABLED, läuft nur 1x pro Woche wenn enabled.
-    """
-    worker = getattr(request.app.state, "duplicate_detector_worker", None)
 
-    if worker is None:
-        return WorkerStatusInfo(
-            name="Duplicate Detector",
-            icon="bi bi-copy",
-            settings_url="/settings?tab=automation",
-            running=False,
-            status="stopped",
-            details={"error": "Worker not initialized"},
-        )
-
-    raw_status = worker.get_status()
-    stats = raw_status.get("stats", {})
-
-    # Format last scan time
-    last_scan_at = stats.get("last_scan_at")
-    if last_scan_at:
-        dt = datetime.fromisoformat(last_scan_at)
-        last_scan_formatted = _format_time_ago(dt)
-    else:
-        last_scan_formatted = "noch nie"
-
-    # Determine status
-    if not raw_status.get("running"):
-        status = "stopped"
-    elif stats.get("last_error"):
-        status = "error"
-    else:
-        status = "idle"
-
-    return WorkerStatusInfo(
-        name="Duplicate Detector",
-        icon="bi bi-copy",
-        settings_url="/settings?tab=automation",
-        running=raw_status.get("running", False),
-        status=status,
-        details={
-            "detection_method": raw_status.get("detection_method", "metadata-hash"),
-            "last_scan": last_scan_formatted,
-            "duplicates_found": stats.get("duplicates_found", 0),
-            "tracks_scanned": stats.get("tracks_scanned", 0),
-            "last_error": stats.get("last_error"),
-        },
-    )
 
 
 def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
@@ -603,14 +492,12 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
 
     Returns status information for:
     - Token Refresh Worker: Keeps Spotify OAuth tokens fresh
-    - Spotify Sync Worker: Automatically syncs Spotify data
+    - Unified Library Manager: THE central library worker (Spotify + Deezer + Tidal)
     - Download Monitor Worker: Tracks slskd download progress
     - Retry Scheduler Worker: Schedules automatic retries for failed downloads
     - Post-Processing Worker: Tags and organizes completed downloads
     - Queue Dispatcher Worker: Dispatches jobs from queue to slskd
     - Automation Workers: Watchlist, Discography, Quality Upgrade
-    - Cleanup Worker: Removes orphaned files (disabled by default)
-    - Duplicate Detector Worker: Finds duplicate tracks (disabled by default)
 
     Each worker includes:
     - name: Display name
@@ -622,14 +509,12 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     """
     workers = {
         "token_refresh": _get_token_worker_status(request),
-        "spotify_sync": _get_spotify_sync_worker_status(request),
+        "library_manager": _get_unified_library_manager_status(request),
         "download_monitor": _get_download_monitor_worker_status(request),
         "retry_scheduler": _get_retry_scheduler_worker_status(request),
         "post_processing": _get_post_processing_worker_status(request),
         "queue_dispatcher": _get_queue_dispatcher_worker_status(request),
         "automation": _get_automation_workers_status(request),
-        "cleanup": _get_cleanup_worker_status(request),
-        "duplicate_detector": _get_duplicate_detector_worker_status(request),
     }
 
     return AllWorkersStatus(workers=workers)
@@ -657,14 +542,12 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
     worker_rows = ""
     worker_order = [
         "token_refresh",
-        "spotify_sync",
+        "library_manager",
         "download_monitor",
         "retry_scheduler",
         "post_processing",
         "queue_dispatcher",
         "automation",
-        "cleanup",
-        "duplicate_detector",
     ]
 
     for worker_key in worker_order:
@@ -695,22 +578,12 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
                 next_check = worker.details.get("next_check_in", "unknown")
                 details_html = f'<div class="tooltip-detail">Check alle {interval} min • Nächste: {next_check}</div>'
 
-            elif worker_key == "spotify_sync":
-                last_syncs = worker.details.get("last_syncs", {})
-                if last_syncs:
-                    sync_rows = ""
-                    sync_icons = {
-                        "artists": "🎤",
-                        "playlists": "📋",
-                        "liked_songs": "❤️",
-                        "saved_albums": "💿",
-                    }
-                    for sync_type, icon in sync_icons.items():
-                        if sync_type in last_syncs:
-                            last_time = last_syncs[sync_type]
-                            sync_rows += f'<span class="tooltip-sync-tag">{icon} {last_time}</span>'
-                    if sync_rows:
-                        details_html = f'<div class="tooltip-detail tooltip-syncs">{sync_rows}</div>'
+            elif worker_key == "library_manager":
+                providers = worker.details.get("enabled_providers", [])
+                pending = worker.details.get("tasks_pending", 0)
+                completed = worker.details.get("tasks_completed", 0)
+                providers_str = ", ".join(providers) if providers else "none"
+                details_html = f'<div class="tooltip-detail">Providers: {providers_str} • Pending: {pending} • Done: {completed}</div>'
 
             elif worker_key == "download_monitor":
                 poll_interval = worker.details.get("poll_interval_seconds", 10)
@@ -742,16 +615,6 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
                 details_html = (
                     f'<div class="tooltip-detail">{running} von 3 Workern aktiv</div>'
                 )
-
-            elif worker_key == "cleanup":
-                dry_run = worker.details.get("dry_run", False)
-                last_run = worker.details.get("last_run", "noch nie")
-                details_html = f'<div class="tooltip-detail">{"(Dry Run) " if dry_run else ""}Zuletzt: {last_run}</div>'
-
-            elif worker_key == "duplicate_detector":
-                method = worker.details.get("detection_method", "metadata-hash")
-                found = worker.details.get("duplicates_found", 0)
-                details_html = f'<div class="tooltip-detail">Methode: {method} • Gefunden: {found}</div>'
 
         worker_rows += f"""
         <div class="tooltip-worker-row">

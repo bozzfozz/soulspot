@@ -6,23 +6,12 @@ from soulspot.application.workers.automation_workers import (
     QualityUpgradeWorker,
     WatchlistWorker,
 )
-from soulspot.application.workers.cleanup_worker import CleanupWorker
-from soulspot.application.workers.deezer_sync_worker import DeezerSyncWorker
 from soulspot.application.workers.download_monitor_worker import DownloadMonitorWorker
 from soulspot.application.workers.download_status_sync_worker import (
     DownloadStatusSyncWorker,
 )
 from soulspot.application.workers.download_worker import DownloadWorker
-from soulspot.application.workers.duplicate_detector_worker import (
-    DuplicateDetectorWorker,
-)
-from soulspot.application.workers.ImageWorker import ImageWorker
 from soulspot.application.workers.job_queue import JobQueue, JobStatus, JobType
-from soulspot.application.workers.library_discovery_worker import LibraryDiscoveryWorker
-from soulspot.application.workers.new_releases_sync_worker import (
-    NewReleasesCache,
-    NewReleasesSyncWorker,
-)
 from soulspot.application.workers.orchestrator import (
     WorkerOrchestrator,
     WorkerState,
@@ -42,7 +31,6 @@ from soulspot.application.workers.retry_scheduler_worker import (
     RetrySchedulerWorker,
     create_retry_scheduler_worker,
 )
-from soulspot.application.workers.spotify_sync_worker import SpotifySyncWorker
 from soulspot.application.workers.token_refresh_worker import TokenRefreshWorker
 from soulspot.application.workers.unified_library_worker import (
     TaskPriority,
@@ -51,31 +39,23 @@ from soulspot.application.workers.unified_library_worker import (
     UnifiedLibraryManager,
 )
 
-# ⚠️ DEPRECATED Workers - Import triggers deprecation warning
-# These are kept for backwards compatibility only and will be removed
-# from soulspot.application.workers.metadata_worker import MetadataWorker
-# from soulspot.application.workers.playlist_sync_worker import PlaylistSyncWorker
-# from soulspot.application.workers.post_processing_worker import PostProcessingWorker
-
 __all__ = [
     # Job Queue
     "JobQueue",
     "JobStatus",
     "JobType",
-    # Worker Orchestrator (NEW!)
+    # Worker Orchestrator
     "WorkerOrchestrator",
     "WorkerState",
     "get_orchestrator",
     "reset_orchestrator",
-    # Persistent Job Queue (survives restarts!)
+    # Persistent Job Queue
     "PersistentJobQueue",
     "PersistentJobQueueStats",
     "create_persistent_job_queue",
     # Core Workers
-    "DeezerSyncWorker",
     "DownloadWorker",
     "DownloadMonitorWorker",
-    "SpotifySyncWorker",
     "TokenRefreshWorker",
     "QueueDispatcherWorker",
     "create_queue_dispatcher_worker",
@@ -83,26 +63,14 @@ __all__ = [
     # Retry System
     "RetrySchedulerWorker",
     "create_retry_scheduler_worker",
-    # New Releases
-    "NewReleasesSyncWorker",
-    "NewReleasesCache",
     # Automation Workers
     "AutomationWorkerManager",
     "WatchlistWorker",
     "DiscographyWorker",
     "QualityUpgradeWorker",
-    # Maintenance Workers
-    "CleanupWorker",
-    "DuplicateDetectorWorker",
-    "LibraryDiscoveryWorker",  # NEW: Unified enrichment + discography discovery
-    "ImageWorker",  # Image repair/backfill worker
-    # UnifiedLibraryManager (THE FUTURE - single library worker)
+    # UnifiedLibraryManager - THE central library worker
     "UnifiedLibraryManager",
     "TaskScheduler",
     "TaskType",
     "TaskPriority",
-    # ⚠️ DEPRECATED - these exports are removed, use replacements:
-    # "MetadataWorker" → Use LibraryDiscoveryWorker
-    # "PlaylistSyncWorker" → Use SpotifySyncWorker or API endpoints
-    # "PostProcessingWorker" → Use AutoImportService
 ]
