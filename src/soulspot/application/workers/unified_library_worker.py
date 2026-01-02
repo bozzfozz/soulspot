@@ -218,8 +218,16 @@ class TaskScheduler:
         self._completed_this_cycle.add(task_type)
 
     def mark_failed(self, task_type: TaskType) -> None:
-        """Mark task as failed (still counts as run for cooldown)."""
+        """Mark task as failed (allows immediate retry without cooldown).
+        
+        Hey future me - when a task FAILS, we clear the last_run timestamp!
+        This allows the task to retry immediately on the next loop iteration.
+        No point waiting 5 minutes if there was a bug/connection error.
+        """
         self._running[task_type] = False
+        # Clear last_run so task can retry immediately (no cooldown on failure!)
+        if task_type in self._last_run:
+            del self._last_run[task_type]
 
     def get_next_task(self) -> TaskType | None:
         """Get next task that can run, by dependency order then priority.
@@ -328,7 +336,10 @@ class UnifiedLibraryManager:
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
 
-        self._scheduler = TaskScheduler()
+        # Hey future me - 1 minute cooldown for responsive initial sync!
+        # Prevents API spam but allows tasks to complete in reasonable time.
+        # Old default was 5 minutes which made users think nothing was happening.
+        self._scheduler = TaskScheduler(cooldown_minutes=1)
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
@@ -1092,8 +1103,11 @@ class UnifiedLibraryManager:
 
         Hey future me - use this with `async with self._get_session() as session:`
         The session is automatically committed and closed when exiting the context.
+        
+        session_factory() is an async generator that yields sessions, so we use
+        `async with` to consume it as a context manager, not `async for`.
         """
-        async for session in self._session_factory():
+        async with self._session_factory() as session:
             try:
                 yield session
             finally:
