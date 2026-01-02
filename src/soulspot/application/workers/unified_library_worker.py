@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -1085,14 +1086,18 @@ class UnifiedLibraryManager:
 
         return AppSettingsService(session)
 
+    @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Get a new database session.
 
-        Hey future me - use this with `async for session in self._get_session():`
-        The session is automatically closed when you exit the loop.
+        Hey future me - use this with `async with self._get_session() as session:`
+        The session is automatically committed and closed when exiting the context.
         """
         async for session in self._session_factory():
-            yield session
+            try:
+                yield session
+            finally:
+                await session.close()
 
     async def trigger_task(self, task_type: TaskType) -> bool:
         """Manually trigger a task (bypasses cooldown for user requests).
