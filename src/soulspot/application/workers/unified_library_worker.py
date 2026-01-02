@@ -177,34 +177,60 @@ class TaskScheduler:
             True if cooldown has passed, task is not running, 
             AND all dependencies have completed in this cycle.
         """
+        # DEBUG: Log checks for IMAGE_SYNC
+        is_image_sync = task_type == TaskType.IMAGE_SYNC
+        
         # Check if already running
         if self._running.get(task_type, False):
+            if is_image_sync:
+                logger.debug(f"[IMAGE_SYNC] Already running - skipping")
             return False
 
         # Check cooldown
         last_run = self._last_run.get(task_type)
         if last_run is not None:
             cooldown = timedelta(minutes=self._cooldown_minutes)
-            if datetime.now(UTC) - last_run < cooldown:
+            time_since = datetime.now(UTC) - last_run
+            if time_since < cooldown:
+                if is_image_sync:
+                    logger.debug(f"[IMAGE_SYNC] On cooldown - {time_since.total_seconds():.0f}s elapsed, need {cooldown.total_seconds():.0f}s")
                 return False
 
         # Check dependencies
         dependencies = TASK_DEPENDENCIES.get(task_type, [])
+        if is_image_sync:
+            logger.info(f"[IMAGE_SYNC] Checking dependencies: {[d.value for d in dependencies]}")
+            logger.info(f"[IMAGE_SYNC] Completed this cycle: {[d.value for d in self._completed_this_cycle]}")
+        
         for dep in dependencies:
             if dep not in self._completed_this_cycle:
                 # Dependency hasn't completed yet this cycle
                 # But if the dependency ran recently (within cooldown), allow
                 dep_last_run = self._last_run.get(dep)
+                if is_image_sync:
+                    logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} not in completed_this_cycle")
+                    logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} last_run: {dep_last_run}")
+                
                 if dep_last_run is None:
                     # Dependency never ran - block this task
+                    if is_image_sync:
+                        logger.warning(f"[IMAGE_SYNC] BLOCKED: Dependency {dep.value} never ran!")
                     return False
                 # If dependency ran recently, consider it "done enough"
                 # This handles the case where deps are on different cooldowns
                 cooldown = timedelta(minutes=self._cooldown_minutes * 2)
-                if datetime.now(UTC) - dep_last_run > cooldown:
+                time_since_dep = datetime.now(UTC) - dep_last_run
+                if time_since_dep > cooldown:
                     # Dependency is stale - wait for it to run first
+                    if is_image_sync:
+                        logger.warning(f"[IMAGE_SYNC] BLOCKED: Dependency {dep.value} is stale ({time_since_dep.total_seconds():.0f}s > {cooldown.total_seconds():.0f}s)")
                     return False
+                else:
+                    if is_image_sync:
+                        logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} ran recently enough ({time_since_dep.total_seconds():.0f}s ago)")
 
+        if is_image_sync:
+            logger.info(f"[IMAGE_SYNC] ✅ CAN RUN - all checks passed!")
         return True
 
     def mark_started(self, task_type: TaskType) -> None:
@@ -256,9 +282,20 @@ class TaskScheduler:
             TaskType.CLEANUP,  # Deps: ENRICHMENT, IMAGE_SYNC - runs last
         ]
 
+        # DEBUG: Log when IMAGE_SYNC is checked
+        checking_image = False
         for task_type in topological_order:
+            if task_type == TaskType.IMAGE_SYNC:
+                checking_image = True
+                logger.debug(f"[IMAGE_SYNC] Checking if can run...")
+            
             if self.can_run(task_type):
+                if task_type == TaskType.IMAGE_SYNC:
+                    logger.info(f"[IMAGE_SYNC] ✅ SELECTED as next task!")
                 return task_type
+            elif checking_image:
+                logger.debug(f"[IMAGE_SYNC] ❌ Cannot run (see can_run logs above)")
+                checking_image = False
 
         return None
 
@@ -906,20 +943,25 @@ class UnifiedLibraryManager:
             ArtistRepository,
         )
 
+        logger.info("[IMAGE_SYNC] ========== _sync_images() CALLED ==========")
+        
         async with self._get_session() as session:
             settings_service = self._app_settings_service_factory(session)
             batch_size = await settings_service.get_enrichment_batch_size()
+            logger.info(f"[IMAGE_SYNC] Batch size: {batch_size}")
 
             # Check if image download is enabled
             image_enabled = await settings_service.image_download_enabled()
+            logger.info(f"[IMAGE_SYNC] Image download enabled setting: {image_enabled}")
+            
             if not image_enabled:
-                logger.debug("Image sync disabled in settings")
+                logger.warning("[IMAGE_SYNC] ⚠️ Image sync DISABLED in settings - early return")
                 return
 
             artist_repo = ArtistRepository(session)
             album_repo = AlbumRepository(session)
 
-            logger.info("Starting image URL sync...")
+            logger.info("[IMAGE_SYNC] Starting image URL sync...")
 
             # Get artists missing artwork
             artists_updated = 0
