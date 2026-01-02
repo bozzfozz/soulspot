@@ -177,13 +177,8 @@ class TaskScheduler:
             True if cooldown has passed, task is not running, 
             AND all dependencies have completed in this cycle.
         """
-        # DEBUG: Log checks for IMAGE_SYNC
-        is_image_sync = task_type == TaskType.IMAGE_SYNC
-        
         # Check if already running
         if self._running.get(task_type, False):
-            if is_image_sync:
-                logger.debug(f"[IMAGE_SYNC] Already running - skipping")
             return False
 
         # Check cooldown
@@ -192,29 +187,17 @@ class TaskScheduler:
             cooldown = timedelta(minutes=self._cooldown_minutes)
             time_since = datetime.now(UTC) - last_run
             if time_since < cooldown:
-                if is_image_sync:
-                    logger.debug(f"[IMAGE_SYNC] On cooldown - {time_since.total_seconds():.0f}s elapsed, need {cooldown.total_seconds():.0f}s")
                 return False
 
         # Check dependencies
         dependencies = TASK_DEPENDENCIES.get(task_type, [])
-        if is_image_sync:
-            logger.info(f"[IMAGE_SYNC] Checking dependencies: {[d.value for d in dependencies]}")
-            logger.info(f"[IMAGE_SYNC] Completed this cycle: {[d.value for d in self._completed_this_cycle]}")
-        
         for dep in dependencies:
             if dep not in self._completed_this_cycle:
                 # Dependency hasn't completed yet this cycle
                 # But if the dependency ran recently (within cooldown), allow
                 dep_last_run = self._last_run.get(dep)
-                if is_image_sync:
-                    logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} not in completed_this_cycle")
-                    logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} last_run: {dep_last_run}")
-                
                 if dep_last_run is None:
                     # Dependency never ran - block this task
-                    if is_image_sync:
-                        logger.warning(f"[IMAGE_SYNC] BLOCKED: Dependency {dep.value} never ran!")
                     return False
                 # If dependency ran recently, consider it "done enough"
                 # This handles the case where deps are on different cooldowns
@@ -222,15 +205,8 @@ class TaskScheduler:
                 time_since_dep = datetime.now(UTC) - dep_last_run
                 if time_since_dep > cooldown:
                     # Dependency is stale - wait for it to run first
-                    if is_image_sync:
-                        logger.warning(f"[IMAGE_SYNC] BLOCKED: Dependency {dep.value} is stale ({time_since_dep.total_seconds():.0f}s > {cooldown.total_seconds():.0f}s)")
                     return False
-                else:
-                    if is_image_sync:
-                        logger.debug(f"[IMAGE_SYNC] Dependency {dep.value} ran recently enough ({time_since_dep.total_seconds():.0f}s ago)")
 
-        if is_image_sync:
-            logger.info(f"[IMAGE_SYNC] ✅ CAN RUN - all checks passed!")
         return True
 
     def mark_started(self, task_type: TaskType) -> None:
@@ -282,20 +258,9 @@ class TaskScheduler:
             TaskType.CLEANUP,  # Deps: ENRICHMENT, IMAGE_SYNC - runs last
         ]
 
-        # DEBUG: Log when IMAGE_SYNC is checked
-        checking_image = False
         for task_type in topological_order:
-            if task_type == TaskType.IMAGE_SYNC:
-                checking_image = True
-                logger.debug(f"[IMAGE_SYNC] Checking if can run...")
-            
             if self.can_run(task_type):
-                if task_type == TaskType.IMAGE_SYNC:
-                    logger.info(f"[IMAGE_SYNC] ✅ SELECTED as next task!")
                 return task_type
-            elif checking_image:
-                logger.debug(f"[IMAGE_SYNC] ❌ Cannot run (see can_run logs above)")
-                checking_image = False
 
         return None
 
@@ -473,16 +438,19 @@ class UnifiedLibraryManager:
         """Main processing loop - schedules and runs tasks.
 
         Hey future me - this is the HEART of the manager!
-        Pattern: Start cycle → Run tasks in dependency order → Sleep → Repeat
+        Pattern: Start cycle → Run ALL tasks in dependency order → Sleep → Repeat
 
         The loop runs every 10 seconds to check for work.
-        Each task type has its own cooldown (default 5 minutes).
+        Each task type has its own cooldown (default 1 minute).
         Tasks respect TASK_DEPENDENCIES - e.g., ALBUM_SYNC waits for ARTIST_SYNC.
         
-        NEW: Cycle-based dependency tracking!
-        - start_new_cycle() clears completed tasks set
-        - Tasks only run when dependencies completed THIS cycle
-        - When no tasks are runnable, we start a fresh cycle
+        CRITICAL FIX: Run ALL runnable tasks in one cycle!
+        Old bug: Only ran ONE task per iteration, so fast tasks (ARTIST_SYNC)
+        would always run again before slower tasks (IMAGE_SYNC) got a chance.
+        
+        New behavior: Run ALL tasks that can run in dependency order,
+        then start fresh cycle. This ensures IMAGE_SYNC runs after ALBUM_SYNC
+        in the SAME cycle.
         """
         logger.info("UnifiedLibraryManager main loop started")
 
@@ -500,17 +468,32 @@ class UnifiedLibraryManager:
                         # Timeout - continue to check for work
                         pass
 
-                    # Get next runnable task (respects dependencies)
-                    next_task = self._scheduler.get_next_task()
+                    # CRITICAL FIX: Run ALL runnable tasks in this cycle!
+                    # Keep getting next task until none are runnable.
+                    # This ensures IMAGE_SYNC runs after ALBUM_SYNC completes
+                    # in the same cycle, instead of ARTIST_SYNC running again.
+                    tasks_run_this_iteration = 0
+                    while True:
+                        next_task = self._scheduler.get_next_task()
+                        if next_task:
+                            await self._run_task(next_task)
+                            tasks_run_this_iteration += 1
+                            # Check stop signal between tasks
+                            if self._stop_event.is_set():
+                                break
+                        else:
+                            # No more tasks runnable
+                            break
                     
-                    if next_task:
-                        await self._run_task(next_task)
-                    else:
-                        # No tasks runnable - all on cooldown or waiting for deps
+                    if tasks_run_this_iteration == 0:
+                        # No tasks ran - all on cooldown or waiting for deps
                         # Start a fresh cycle so dependencies can be re-evaluated
-                        # when cooldowns expire
                         self._scheduler.start_new_cycle()
                         logger.debug("All tasks on cooldown, starting new cycle")
+                    else:
+                        logger.info(f"Cycle complete: {tasks_run_this_iteration} tasks executed")
+                        # Start fresh cycle for next iteration
+                        self._scheduler.start_new_cycle()
 
                 except asyncio.CancelledError:
                     logger.info("Main loop cancelled")
@@ -943,25 +926,20 @@ class UnifiedLibraryManager:
             ArtistRepository,
         )
 
-        logger.info("[IMAGE_SYNC] ========== _sync_images() CALLED ==========")
-        
         async with self._get_session() as session:
             settings_service = self._app_settings_service_factory(session)
             batch_size = await settings_service.get_enrichment_batch_size()
-            logger.info(f"[IMAGE_SYNC] Batch size: {batch_size}")
 
             # Check if image download is enabled
             image_enabled = await settings_service.image_download_enabled()
-            logger.info(f"[IMAGE_SYNC] Image download enabled setting: {image_enabled}")
-            
             if not image_enabled:
-                logger.warning("[IMAGE_SYNC] ⚠️ Image sync DISABLED in settings - early return")
+                logger.debug("Image sync disabled in settings")
                 return
 
             artist_repo = ArtistRepository(session)
             album_repo = AlbumRepository(session)
 
-            logger.info("[IMAGE_SYNC] Starting image URL sync...")
+            logger.info("Starting image URL sync...")
 
             # Get artists missing artwork
             artists_updated = 0
