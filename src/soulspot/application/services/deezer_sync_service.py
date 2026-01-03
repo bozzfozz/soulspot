@@ -343,15 +343,17 @@ class DeezerSyncService:
 
         try:
             # Get albums from Deezer
-            albums = await self._plugin.get_artist_albums(deezer_artist_id, limit=limit)
+            # Hey future me - get_artist_albums returns PaginatedResponse[AlbumDTO]!
+            # Access the list via .items attribute, NOT subscript like albums[0]!
+            albums_response = await self._plugin.get_artist_albums(deezer_artist_id, limit=limit)
 
             # Step 1: Ensure artist exists and get artist_id
             # We need artist_id to link albums properly
             artist_id: str | None = None
 
-            if albums and albums[0]:
+            if albums_response.items:
                 # Get artist_id from first album DTO
-                artist_id = await self._ensure_artist_exists(albums[0], is_chart=False)
+                artist_id = await self._ensure_artist_exists(albums_response.items[0], is_chart=False)
 
             if not artist_id:
                 logger.warning(
@@ -369,7 +371,7 @@ class DeezerSyncService:
                 return {"albums_synced": 0, "error": "artist_not_found"}
 
             # Step 2: Sync albums with artist relationship
-            for album_dto in albums:
+            for album_dto in albums_response.items:
                 try:
                     await self._save_album_with_artist(
                         album_dto, artist_id, is_chart=False
@@ -1410,7 +1412,7 @@ class DeezerSyncService:
             Sync result with counts
         """
         cache_key = f"album_tracks_{deezer_album_id}"
-        if not force and not self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
+        if not force and not await self._should_sync(cache_key, self.TRACKS_SYNC_COOLDOWN):
             return {
                 "skipped": True,
                 "reason": "cooldown",
@@ -1435,13 +1437,15 @@ class DeezerSyncService:
             album_internal_id = str(album.id.value)
 
             # Get album tracks from Deezer (NO OAuth needed!)
-            tracks = await self._plugin.get_album_tracks(deezer_album_id, limit=100)
+            # Hey future me - get_album_tracks returns PaginatedResponse[TrackDTO]!
+            # Access the list via .items attribute, NOT subscript like tracks[0]!
+            tracks_response = await self._plugin.get_album_tracks(deezer_album_id, limit=100)
 
             # Step 1: Get artist_id (all tracks in same album should have same artist)
             artist_id: str | None = None
 
-            if tracks and tracks[0]:
-                artist_id = await self._ensure_artist_exists(tracks[0], is_chart=False)
+            if tracks_response.items:
+                artist_id = await self._ensure_artist_exists(tracks_response.items[0], is_chart=False)
 
             if not artist_id:
                 logger.warning(
@@ -1454,7 +1458,7 @@ class DeezerSyncService:
                 }
 
             # Step 2: Sync tracks with artist relationship
-            for track_dto in tracks:
+            for track_dto in tracks_response.items:
                 try:
                     await self._save_track_with_artist(
                         track_dto,
@@ -1471,7 +1475,7 @@ class DeezerSyncService:
             await self._update_album_tracks_synced_at(deezer_album_id)
 
             await self._session.commit()
-            self._mark_synced(cache_key)
+            await self._mark_synced(cache_key)
 
             result["synced"] = True
             logger.info(
