@@ -1,4 +1,26 @@
-"""Multi-Provider Artist Discovery Service.
+"""DEPRECATED: Merged into browse_service.py (Jan 2025)
+
+===============================================================================
+⚠️ DEPRECATED - DO NOT USE - TO BE DELETED ⚠️
+===============================================================================
+
+This service has been merged into BrowseService:
+    from soulspot.application.services.browse_service import BrowseService
+
+Migrated methods:
+    DiscoverService.get_related_artists() → BrowseService.get_related_artists()
+    DiscoverService.get_discovery_suggestions() → BrowseService.get_discovery_suggestions()
+
+Backward compatibility aliases in browse_service.py:
+    DiscoverService = BrowseService
+    DiscoverResult = BrowseResult
+
+DELETE THIS FILE after confirming all callers are updated!
+File marked for deletion: discover_service.py (565 LOC → browse_service.py)
+===============================================================================
+
+ORIGINAL DOCSTRING:
+Multi-Provider Artist Discovery Service.
 
 Hey future me - dieser Service aggregiert Artist Discovery von ALLEN Providern!
 

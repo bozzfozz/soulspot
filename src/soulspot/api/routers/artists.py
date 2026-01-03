@@ -26,9 +26,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
 )
-from soulspot.application.services.followed_artists_service import (
-    FollowedArtistsService,
-)
+from soulspot.application.services.artist_service import ArtistService
 from soulspot.domain.value_objects import ArtistId
 from soulspot.infrastructure.observability.logger_template import (
     end_operation,
@@ -90,7 +88,7 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
                 # No Spotify auth available, Deezer fallback will be used
                 pass
 
-            service = FollowedArtistsService(
+            service = ArtistService(
                 session=session,
                 spotify_plugin=spotify_plugin,
                 deezer_plugin=deezer_plugin,
@@ -279,14 +277,14 @@ async def sync_followed_artists(
 
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        service = ArtistService(
             session=session,
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
         )
 
         # Hey future me - using the renamed Spotify-specific method!
-        artists, stats = await service._sync_spotify_followed_artists()
+        artists, stats = await service.sync_followed_artists_spotify()
 
         # Commit the transaction to persist changes
         await session.commit()
@@ -361,7 +359,7 @@ async def sync_followed_artists_all_providers(
         # Create DeezerPlugin with potential OAuth token
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        service = ArtistService(
             session=session,
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
@@ -1548,7 +1546,7 @@ async def sync_artist_discography_complete(
         # DeezerPlugin doesn't need auth for album/track lookup.
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        service = ArtistService(
             session=session,
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,

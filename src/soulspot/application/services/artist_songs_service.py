@@ -1,5 +1,26 @@
 # AI-Model: Copilot
-"""Service for syncing and managing individual songs (singles) from followed artists.
+"""DEPRECATED: Merged into artist_service.py (Jan 2025)
+
+===============================================================================
+⚠️ DEPRECATED - DO NOT USE - TO BE DELETED ⚠️
+===============================================================================
+
+This service has been merged into ArtistService:
+    from soulspot.application.services.artist_service import ArtistService
+
+Migrated methods:
+    ArtistSongsService.sync_artist_songs() → ArtistService.sync_artist_top_tracks()
+    ArtistSongsService.sync_all_artists_songs() → ArtistService.sync_all_artists_top_tracks()
+    ArtistSongsService.get_artist_singles() → ArtistService.get_artist_singles()
+    ArtistSongsService.remove_song() → ArtistService.remove_track()
+    ArtistSongsService.remove_all_artist_songs() → ArtistService.remove_all_artist_tracks()
+
+DELETE THIS FILE after confirming all callers are updated!
+File marked for deletion: artist_songs_service.py (566 LOC → artist_service.py)
+===============================================================================
+
+ORIGINAL DOCSTRING:
+Service for syncing and managing individual songs (singles) from followed artists.
 
 Hey future me - REFACTORED to use SpotifyPlugin with DEEZER FALLBACK!
 The plugin handles token management internally, no more access_token parameter juggling.

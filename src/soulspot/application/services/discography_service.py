@@ -1,4 +1,23 @@
-"""Discography service for detecting missing albums.
+"""DEPRECATED: Merged into artist_service.py (Jan 2025)
+
+===============================================================================
+⚠️ DEPRECATED - DO NOT USE - TO BE DELETED ⚠️
+===============================================================================
+
+This service has been merged into ArtistService:
+    from soulspot.application.services.artist_service import ArtistService, DiscographyInfo
+
+Migrated:
+    DiscographyService.DiscographyInfo → ArtistService.DiscographyInfo (as dataclass)
+    DiscographyService.check_discography() → ArtistService.check_discography()
+    DiscographyService.get_missing_albums_for_all_artists() → ArtistService.get_missing_albums_for_all_artists()
+
+DELETE THIS FILE after confirming all callers are updated!
+File marked for deletion: discography_service.py (266 LOC → artist_service.py)
+===============================================================================
+
+ORIGINAL DOCSTRING:
+Discography service for detecting missing albums.
 
 Hey future me - Nach Table Consolidation (Nov 2025):
 - KEINE spotify_albums Tabelle mehr! Alles in soulspot_albums

@@ -1,4 +1,26 @@
-"""New Releases Service - Multi-Provider Orchestration.
+"""DEPRECATED: Merged into browse_service.py (Jan 2025)
+
+===============================================================================
+⚠️ DEPRECATED - DO NOT USE - TO BE DELETED ⚠️
+===============================================================================
+
+This service has been merged into BrowseService:
+    from soulspot.application.services.browse_service import BrowseService
+
+Migrated methods:
+    NewReleasesService.get_new_releases() → BrowseService.get_new_releases()
+    NewReleasesService.get_followed_artist_ids() → BrowseService.get_followed_artist_ids()
+
+Backward compatibility aliases in browse_service.py:
+    NewReleasesService = BrowseService
+    NewReleasesResult = BrowseResult
+
+DELETE THIS FILE after confirming all callers are updated!
+File marked for deletion: new_releases_service.py (275 LOC → browse_service.py)
+===============================================================================
+
+ORIGINAL DOCSTRING:
+New Releases Service - Multi-Provider Orchestration.
 
 Hey future me - DAS ist der zentrale Service für Multi-Provider New Releases!
 Er orchestriert ALLE verfügbaren Plugins (Spotify, Deezer, Tidal, etc.) und

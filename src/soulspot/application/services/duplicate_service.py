@@ -1,5 +1,17 @@
 """Duplicate Service - Manages duplicate track detection and resolution.
 
+⚠️ PARTIALLY DEPRECATED: Most functionality migrated to deduplication_housekeeping.py!
+The list_candidates() and resolve_candidate() methods are still used until we migrate
+the duplicate_candidates table concept to DeduplicationHousekeepingService.
+
+Migrated to: soulspot.application.services.deduplication_housekeeping.DeduplicationHousekeepingService
+
+TODO: Migrate duplicate_candidates table handling to DeduplicationHousekeepingService
+
+The new consolidated deduplication architecture splits functionality:
+- DeduplicationChecker: Fast import-time matching (<50ms)
+- DeduplicationHousekeepingService: Async scheduled cleanup
+
 Hey future me - this service handles the ENTIRE duplicate workflow!
 Instead of library.py doing complex JOINs and resolution logic, we centralize it here.
 Clean Architecture: Router → DuplicateService → Repositories.

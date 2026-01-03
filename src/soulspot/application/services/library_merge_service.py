@@ -1,5 +1,14 @@
 """Library Merge Service - Duplicate detection and entity merging.
 
+⚠️ DEPRECATED: Use deduplication_housekeeping.py instead!
+This file is kept for reference only and will be removed in a future version.
+
+Migrated to: soulspot.application.services.deduplication_housekeeping.DeduplicationHousekeepingService
+
+The new consolidated deduplication architecture splits functionality:
+- DeduplicationChecker: Fast import-time matching (<50ms)
+- DeduplicationHousekeepingService: Async scheduled cleanup - this file's replacement
+
 Hey future me - this service handles duplicate detection and merging for library entities!
 
 Common duplicate causes:
@@ -12,15 +21,17 @@ The service uses normalize_artist_name() for matching, which strips common
 prefixes (DJ, The, MC) and normalizes case for comparison.
 
 Usage:
-    service = LibraryMergeService(session)
+    # DEPRECATED - use DeduplicationHousekeepingService instead:
+    from soulspot.application.services.deduplication_housekeeping import DeduplicationHousekeepingService
+    service = DeduplicationHousekeepingService(session, artist_repo, album_repo, track_repo)
+    groups = await service.find_duplicate_artists()
+    result = await service.merge_artist_group(groups[0])
 
-    # Find duplicates
+    # Old usage (deprecated):
+    service = LibraryMergeService(session)
     artist_duplicates = await service.find_duplicate_artists()
     album_duplicates = await service.find_duplicate_albums()
-
-    # Merge (user picks which to keep)
     result = await service.merge_artists(keep_id="uuid1", merge_ids=["uuid2", "uuid3"])
-    result = await service.merge_albums(keep_id="uuid1", merge_ids=["uuid2"])
 
 Design decisions:
 - User ALWAYS chooses which entity to keep (we suggest, but don't auto-merge)

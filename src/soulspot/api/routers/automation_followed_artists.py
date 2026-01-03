@@ -78,9 +78,7 @@ async def sync_followed_artists(
 
         from fastapi.templating import Jinja2Templates
 
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
-        )
+        from soulspot.application.services.artist_service import ArtistService
         from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
 
         _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates"
@@ -88,11 +86,11 @@ async def sync_followed_artists(
 
         # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
         deezer_plugin = DeezerPlugin()
-        service = FollowedArtistsService(
+        service = ArtistService(
             session, spotify_plugin, deezer_plugin=deezer_plugin
         )
-        # Hey future me - using the renamed Spotify-specific method!
-        artists, stats = await service._sync_spotify_followed_artists()
+        # Hey future me - using the unified ArtistService sync method!
+        artists, stats = await service.sync_followed_artists_spotify()
         await session.commit()
 
         is_htmx = request.headers.get("HX-Request") == "true"

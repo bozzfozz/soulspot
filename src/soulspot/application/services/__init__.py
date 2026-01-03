@@ -2,6 +2,11 @@
 
 from soulspot.application.services.app_settings_service import AppSettingsService
 
+# Hey future me - ArtistService is THE unified service for ALL artist operations!
+# Merged from: followed_artists_service, artist_songs_service, discography_service
+# See: artist_service.py docstring for full list of merged methods.
+from soulspot.application.services.artist_service import ArtistService, DiscographyInfo
+
 # Hey future me - AutoFetchService centralizes all background auto-fetching!
 # Replaces inline auto-fetch logic that was scattered across UI routes.
 # Architecture: Routes → AutoFetchService → repair_artist_images() / repair_album_images()
@@ -23,10 +28,19 @@ from soulspot.application.services.deezer_auth_service import (
     DeezerTokenResult,
 )
 from soulspot.application.services.deezer_sync_service import DeezerSyncService
-from soulspot.application.services.discover_service import (
+
+# Hey future me - BrowseService is THE unified service for all browse/discovery operations!
+# Merged from: discover_service.py + new_releases_service.py
+# Backward compatible aliases: DiscoverService, NewReleasesService
+from soulspot.application.services.browse_service import (
+    BrowseResult,
+    BrowseService,
     DiscoveredArtist,
+    # Backward compatibility aliases
     DiscoverResult,
     DiscoverService,
+    NewReleasesResult,
+    NewReleasesService,
 )
 
 # Hey future me – ImageService ist der NEUE zentrale Ort für Bildoperationen!
@@ -42,34 +56,61 @@ from soulspot.application.services.images import (
     SaveImageResult,
 )
 
-# Hey future me - LibraryMergeService handles duplicate detection and merging!
-# Replaces the duplicate/merge methods from LocalLibraryEnrichmentService (deprecated).
-from soulspot.application.services.library_merge_service import LibraryMergeService
-from soulspot.application.services.library_view_service import LibraryViewService
+# Hey future me - Deduplication is split into two services for performance reasons:
+# - DeduplicationChecker: Fast import-time matching (<50ms required)
+# - DeduplicationHousekeepingService: Async scheduled cleanup (can take minutes)
+# Old services (entity_deduplicator.py, library_merge_service.py, duplicate_service.py)
+# are deprecated - use these new consolidated services instead.
+from soulspot.application.services.deduplication_checker import DeduplicationChecker
+from soulspot.application.services.deduplication_housekeeping import (
+    DeduplicationHousekeepingService,
+    DuplicateCounts,
+    DuplicateGroup,
+    MergeResult,
+)
+
+# Hey future me - Library Services are now in services/library/ subpackage!
+# Phase 6 of SERVICE_CONSOLIDATION_PLAN reorganized library services for better organization.
+# Import from library/ for new code, old imports still work for backward compatibility.
+from soulspot.application.services.library import (
+    LibraryScannerService,
+    LibraryCleanupService,
+    LibraryViewService,
+    # AutoImportService already imported above
+    # CompilationAnalyzerService already imported above
+)
+
+# Hey future me - Provider Services are now in services/providers/ subpackage!
+# Phase 7 of SERVICE_CONSOLIDATION_PLAN reorganized provider services for better organization.
+# Import from providers/ for new code, old imports still work for backward compatibility.
+from soulspot.application.services.providers import (
+    ProviderMappingService,
+    ProviderSyncOrchestrator,
+    AggregatedSyncResult,
+    # SpotifySyncService, DeezerSyncService imported separately below for compatibility
+)
+
+# Hey future me - Session Services are now in services/sessions/ subpackage!
+# Phase 8 of SERVICE_CONSOLIDATION_PLAN reorganized session services for better organization.
+# Import from sessions/ for new code, old imports still work for backward compatibility.
+from soulspot.application.services.sessions import (
+    Session,
+    SessionStore,
+    TokenManager,
+    TokenInfo,
+    TokenStatus,
+)
 
 # Hey future me - MusicBrainzEnrichmentService handles disambiguation enrichment!
 # Replaces enrich_disambiguation_batch from LocalLibraryEnrichmentService (deprecated).
 from soulspot.application.services.musicbrainz_enrichment_service import (
     MusicBrainzEnrichmentService,
 )
-from soulspot.application.services.new_releases_service import (
-    NewReleasesResult,
-    NewReleasesService,
-)
-from soulspot.application.services.provider_mapping_service import (
-    ProviderMappingService,
-)
-from soulspot.application.services.provider_sync_orchestrator import (
-    AggregatedSyncResult,
-    ProviderSyncOrchestrator,
-)
-from soulspot.application.services.session_store import Session, SessionStore
 from soulspot.application.services.spotify_auth_service import (
     AuthUrlResult,
     SpotifyAuthService,
     TokenResult,
 )
-from soulspot.application.services.token_manager import TokenManager
 
 # ArtworkService is DEPRECATED and can be deleted
 # All functionality has been migrated to ImageService
@@ -78,9 +119,12 @@ __all__ = [
     "AggregatedSyncResult",
     "AlbumAnalysisResult",
     "AppSettingsService",
+    "ArtistService",
     "AuthUrlResult",
     "AutoFetchService",
     "AutoImportService",
+    "BrowseResult",
+    "BrowseService",
     "CompilationAnalyzerService",
     "CredentialsService",
     "DeezerAuthService",
@@ -88,26 +132,37 @@ __all__ = [
     "DeezerCredentials",
     "DeezerSyncService",
     "DeezerTokenResult",
+    "DiscographyInfo",
     "DiscoveredArtist",
     "DiscoverResult",
     "DiscoverService",
+    "DeduplicationChecker",
+    "DeduplicationHousekeepingService",
+    "DuplicateCounts",
+    "DuplicateGroup",
     "ImageDownloadErrorCode",
     "ImageDownloadResult",
     "ImageInfo",
     "ImageService",
-    "LibraryMergeService",
+    # Library Services (Phase 6)
+    "LibraryScannerService",
+    "LibraryCleanupService",
     "LibraryViewService",
+    "MergeResult",
     "MusicBrainzEnrichmentService",
     "NewReleasesResult",
     "NewReleasesService",
     "ProviderMappingService",
     "ProviderSyncOrchestrator",
     "SaveImageResult",
+    # Session Services (Phase 8)
     "Session",
     "SessionStore",
+    "TokenManager",
+    "TokenInfo",
+    "TokenStatus",
     "SlskdCredentials",
     "SpotifyAuthService",
     "SpotifyCredentials",
-    "TokenManager",
     "TokenResult",
 ]

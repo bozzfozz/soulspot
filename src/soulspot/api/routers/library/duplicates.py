@@ -153,6 +153,11 @@ async def list_duplicate_candidates(
     Returns:
         List of duplicate candidates with statistics
     """
+    # Hey future me - DuplicateService is DEPRECATED! But the list_candidates method
+    # requires the duplicate_candidates table which DeduplicationHousekeepingService
+    # doesn't know about. This is a special case - we need to keep DuplicateService
+    # for now until we migrate the duplicate_candidates table concept.
+    # TODO: Migrate duplicate_candidates to DeduplicationHousekeepingService
     from soulspot.application.services.duplicate_service import DuplicateService
 
     service = DuplicateService(session)
@@ -210,6 +215,9 @@ async def resolve_duplicate(
     Returns:
         Resolution result with deleted track ID (if any)
     """
+    # Hey future me - resolve_candidate requires the duplicate_candidates table
+    # which is handled by DuplicateService. We keep using it until table migration.
+    # TODO: Migrate duplicate_candidates table to DeduplicationHousekeepingService
     from soulspot.application.services.duplicate_service import DuplicateService
     from soulspot.domain.exceptions import EntityNotFoundError, InvalidOperationError
 

@@ -1,5 +1,26 @@
 # AI-Model: Copilot
-"""Service for syncing and managing followed artists from MULTIPLE PROVIDERS.
+"""DEPRECATED: Merged into artist_service.py (Jan 2025)
+
+===============================================================================
+⚠️ DEPRECATED - DO NOT USE - TO BE DELETED ⚠️
+===============================================================================
+
+This service has been merged into ArtistService:
+    from soulspot.application.services.artist_service import ArtistService
+
+Migrated methods:
+    FollowedArtistsService.sync_followed_artists() → ArtistService.sync_followed_artists_spotify()
+    FollowedArtistsService.sync_followed_artists_all_providers() → ArtistService.sync_followed_artists_all_providers()
+    FollowedArtistsService.sync_artist_albums() → ArtistService.sync_artist_albums()
+    FollowedArtistsService.sync_artist_discography_complete() → ArtistService.sync_artist_discography_complete()
+    FollowedArtistsService.preview_followed_artists() → ArtistService.preview_followed_artists()
+
+DELETE THIS FILE after confirming all callers are updated!
+File marked for deletion: followed_artists_service.py (1408 LOC → artist_service.py)
+===============================================================================
+
+ORIGINAL DOCSTRING:
+Service for syncing and managing followed artists from MULTIPLE PROVIDERS.
 
 MULTI-PROVIDER SUPPORT (Nov 2025):
 - sync_followed_artists() - NOW MULTI-PROVIDER! Spotify + Deezer (both require OAuth)

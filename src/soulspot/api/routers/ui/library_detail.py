@@ -104,9 +104,7 @@ async def library_artist_detail(
     if not album_models:
         try:
             # MULTI-SERVICE PATTERN: Try available services
-            from soulspot.application.services.followed_artists_service import (
-                FollowedArtistsService,
-            )
+            from soulspot.application.services.artist_service import ArtistService
             from soulspot.application.services.token_manager import (
                 DatabaseTokenManager,
             )
@@ -143,7 +141,7 @@ async def library_artist_detail(
             deezer_plugin = DeezerPlugin()
 
             # 3. Create service with available plugins (spotify_plugin can be None!)
-            followed_service = FollowedArtistsService(
+            artist_service = ArtistService(
                 session,
                 spotify_plugin=spotify_plugin,  # May be None - service handles this
                 deezer_plugin=deezer_plugin,  # Always available
@@ -153,7 +151,7 @@ async def library_artist_detail(
             # Hey future me - This is the KEY CHANGE! We now use sync_artist_discography_complete
             # with include_tracks=True so ALL album tracks are fetched and stored in DB.
             # When user clicks an album, tracks load from DB (no API call needed)!
-            sync_stats = await followed_service.sync_artist_discography_complete(
+            sync_stats = await artist_service.sync_artist_discography_complete(
                 artist_id=str(artist_model.id),
                 include_tracks=True,  # CRITICAL: Fetch tracks for ALL albums!
             )

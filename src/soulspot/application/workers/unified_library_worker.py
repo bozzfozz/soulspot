@@ -803,16 +803,14 @@ class UnifiedLibraryManager:
         After sync, we update ownership_state to OWNED for all synced artists.
         This marks them as "user wants these" vs "discovered via recommendations".
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
-        )
+        from soulspot.application.services.artist_service import ArtistService
         from soulspot.domain.entities import OwnershipState
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
         async with self._get_session() as session:
             # Create service with available plugins
             # Hey future me - plugins might be None if not authenticated!
-            followed_service = FollowedArtistsService(
+            artist_service = ArtistService(
                 session=session,
                 spotify_plugin=self._spotify_plugin,
                 deezer_plugin=self._deezer_plugin,
@@ -822,7 +820,7 @@ class UnifiedLibraryManager:
 
             # Sync from all providers - this returns deduplicated artists
             # and auto-syncs discography for new artists
-            artists, stats = await followed_service.sync_followed_artists_all_providers()
+            artists, stats = await artist_service.sync_followed_artists_all_providers()
 
             # Update ownership_state to OWNED for all synced artists
             # This marks them as "user-selected" vs "discovered"
@@ -877,9 +875,7 @@ class UnifiedLibraryManager:
         - Process in chunks of batch_size artists
         - Brief pause between batches
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
-        )
+        from soulspot.application.services.artist_service import ArtistService
         from soulspot.domain.entities import OwnershipState
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
@@ -902,7 +898,7 @@ class UnifiedLibraryManager:
             errors = 0
 
             # Create service once per session
-            followed_service = FollowedArtistsService(
+            artist_service = ArtistService(
                 session=session,
                 spotify_plugin=self._spotify_plugin,
                 deezer_plugin=self._deezer_plugin,
@@ -921,7 +917,7 @@ class UnifiedLibraryManager:
                 for artist in artists:
                     try:
                         # Sync discography (albums + tracks)
-                        stats = await followed_service.sync_artist_discography_complete(
+                        stats = await artist_service.sync_artist_discography_complete(
                             artist_id=str(artist.id.value),
                             include_tracks=True,  # Sync tracks too!
                         )
@@ -967,9 +963,7 @@ class UnifiedLibraryManager:
 
         Uses Deezer API to fetch tracks (NO AUTH NEEDED!) with rate limiting.
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
-        )
+        from soulspot.application.services.artist_service import ArtistService
         from soulspot.domain.entities import DownloadState
         from soulspot.infrastructure.persistence.repositories import (
             AlbumRepository,
@@ -1001,7 +995,7 @@ class UnifiedLibraryManager:
             logger.info(f"Found {len(albums)} albums needing track backfill")
 
             # Create service for track fetching
-            followed_service = FollowedArtistsService(
+            artist_service = ArtistService(
                 session=session,
                 spotify_plugin=self._spotify_plugin,
                 deezer_plugin=self._deezer_plugin,
@@ -1017,7 +1011,7 @@ class UnifiedLibraryManager:
                     # But we already have the album, just need tracks
                     # Use _fetch_album_tracks_from_deezer if available
                     # For now, re-sync entire artist discography which handles it
-                    stats = await followed_service.sync_artist_discography_complete(
+                    stats = await artist_service.sync_artist_discography_complete(
                         artist_id=str(album.artist_id.value),
                         include_tracks=True,
                     )
@@ -1446,7 +1440,12 @@ class UnifiedLibraryManager:
                     self._spotify_plugin.set_token(access_token)
                 
                 # Create services
-                watchlist_service = WatchlistService(session, self._spotify_plugin)
+                # MULTI-PROVIDER: Inject both Spotify AND Deezer for combined results!
+                watchlist_service = WatchlistService(
+                    session,
+                    spotify_plugin=self._spotify_plugin,
+                    deezer_plugin=self._deezer_plugin,
+                )
                 workflow_service = AutomationWorkflowService(session)
                 artist_repo = ArtistRepository(session)
                 spotify_repo = SpotifyBrowseRepository(session)

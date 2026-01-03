@@ -1,5 +1,19 @@
 """File discovery service for scanning and analyzing music files.
 
+⚠️ DEPRECATED - DELETE THIS FILE! ⚠️
+
+This file is UNUSED and should be deleted as part of Phase 6 cleanup.
+See: docs/architecture/SERVICE_CONSOLIDATION_PLAN_COMPLETE.md
+
+REASON FOR DEPRECATION:
+- Zero imports across the codebase (verified via grep_search)
+- Functionality duplicated in LibraryScannerService which uses LibraryFolderParser
+- LibraryScannerService is the preferred approach (folder-structure-first)
+
+DO NOT USE THIS FILE. Import from:
+- soulspot.application.services.library.LibraryScannerService (for library scanning)
+- soulspot.domain.value_objects.folder_parsing (for AUDIO_EXTENSIONS)
+
 RENAMED FROM: library_scanner.py (Dec 2025)
 REASON: Clarity - this is LOW-LEVEL file discovery, not full library import
 
@@ -17,15 +31,20 @@ NOT IN SCOPE:
 
 USAGE:
 ```python
-from soulspot.application.services.file_discovery_service import FileDiscoveryService
-
-service = FileDiscoveryService()
-files = service.discover_audio_files(Path("/music"))
-for file in files:
-    info = service.scan_file(file)
-    print(f"{info.title} - {info.artist}")
+# ⚠️ DEPRECATED - Don't use this!
+# Use LibraryScannerService instead:
+from soulspot.application.services.library import LibraryScannerService
 ```
 """
+
+import warnings
+
+warnings.warn(
+    "file_discovery_service.py is DEPRECATED and will be deleted. "
+    "Use LibraryScannerService from soulspot.application.services.library instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import hashlib
 import logging

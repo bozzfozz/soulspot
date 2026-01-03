@@ -1,47 +1,49 @@
-"""Entity Deduplicator Service.
+# AI-Model: Copilot
+"""Deduplication Checker - Import-Zeit Entity Matching.
 
-⚠️ DEPRECATED: Use deduplication_checker.py instead!
-This file is kept for reference only and will be removed in a future version.
+Hey future me - dies ist der SCHNELLE Teil der Deduplizierung!
 
-Migrated to: soulspot.application.services.deduplication_checker.DeduplicationChecker
+TIMING: Synchron, <50ms Latenz. Wird bei jedem Import aufgerufen.
+Darf NICHT langsam sein - kein Batch-Processing, kein Full-Table-Scan!
 
-The new consolidated deduplication architecture splits functionality:
-- DeduplicationChecker: Fast import-time matching (<50ms) - this file's replacement
-- DeduplicationHousekeepingService: Async scheduled cleanup
+VERANTWORTUNG:
+- Entity-Matching beim Import (Artist, Album, Track)
+- DTO-in-Entity Merging (Provider-IDs kombinieren)
+- Match-Key Generation für schnelle Lookups
 
-Hey future me - THIS IS THE DEDUPLICATION CORE!
+NICHT HIER (→ deduplication_housekeeping.py):
+- Scheduled Cleanup Jobs
+- Full-Library Duplicate Scan
+- User-getriggerte Merge-Operationen
+- Track-Datei Löschung
 
-Problem: Spotify and Deezer can return the SAME artist/album/track
-         but with different metadata and IDs.
-         
-Solution: Match and merge entities using a priority hierarchy:
-          1. MusicBrainz ID (MBID) - Universal standard
-          2. ISRC (for tracks) - ISO standard
-          3. Provider IDs - Same ID on same provider
-          4. Normalized Name - Fallback (case-insensitive, stripped)
+MATCHING PRIORITY:
+1. MusicBrainz ID (MBID) - Universal Standard ✅
+2. ISRC (für Tracks) - ISO Standard
+3. Provider IDs (Spotify URI, Deezer ID)
+4. Normalized Name (Fallback - Case-Insensitive)
 
-IMPORTANT: This does NOT delete duplicates!
-           It MERGES incoming data into existing entities.
-           
+MERGED AUS (Jan 2025):
+- entity_deduplicator.py (494 LOC) - Komplette Migration
+
 Architecture:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      EntityDeduplicator                          │
+│                     DeduplicationChecker                         │
 │  ┌─────────────┐                                                 │
-│  │ Incoming    │  find_match_key()    ┌──────────────────────┐  │
-│  │ ArtistDTO   │ ──────────────────── │ Match Key            │  │
-│  │ from Deezer │                      │ "mbid:xxx" or        │  │
-│  └─────────────┘                      │ "spotify:yyy" or     │  │
-│                                       │ "name:pink floyd"    │  │
+│  │ Incoming    │  find_existing()     ┌──────────────────────┐  │
+│  │ ArtistDTO   │ ──────────────────── │ Match Strategy       │  │
+│  │ from Deezer │                      │ MBID → Spotify →     │  │
+│  └─────────────┘                      │ Deezer → Name        │  │
 │                                       └──────────┬───────────┘  │
 │                                                  │              │
-│  ┌─────────────┐   lookup_by_key()               ▼              │
-│  │ Existing    │ ◄────────────────── Find in DB via           │
-│  │ Artist      │                     Repository                 │
+│  ┌─────────────┐   Repository Lookup             ▼              │
+│  │ Existing    │ ◄────────────────── Fast lookup via           │
+│  │ Artist      │                     indexed columns            │
 │  │ (or None)   │                                                │
 │  └──────┬──────┘                                                │
 │         │                                                       │
-│         │ merge_artist()                                        │
+│         │ merge_into_existing()                                 │
 │         ▼                                                       │
 │  ┌─────────────┐                                                │
 │  │ Merged      │  IDs combined:                                 │
@@ -52,16 +54,17 @@ Architecture:
 ```
 
 Usage:
-    # DEPRECATED - use DeduplicationChecker instead:
-    from soulspot.application.services.deduplication_checker import DeduplicationChecker
-    checker = DeduplicationChecker(artist_repo, album_repo, track_repo)
-    artist = await checker.find_existing_artist(dto)
-    # If artist is None, create new. If found, merge dto into it.
-    
-    # Old usage (deprecated):
-    dedup = EntityDeduplicator(artist_repo, album_repo, track_repo)
-    for dto in incoming_artists:
-        artist, was_created = await dedup.deduplicate_artist(dto, source="spotify")
+```python
+checker = DeduplicationChecker(artist_repo, album_repo, track_repo)
+
+# Bei Artist-Import
+existing, was_found = await checker.find_existing_artist(dto)
+if was_found:
+    checker.merge_artist_dto(existing, dto, source="deezer")
+else:
+    # Create new artist
+    artist = Artist.from_dto(dto)
+```
 """
 
 from __future__ import annotations
@@ -78,10 +81,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class EntityDeduplicator:
-    """Service for deduplicating entities across multiple sources.
+class DeduplicationChecker:
+    """Fast entity deduplication for import-time matching.
     
     Hey future me - this is CRITICAL for multi-source sync!
+    Timing requirement: <50ms per lookup.
     
     Without deduplication:
     - "Pink Floyd" from Spotify creates Artist A
@@ -100,7 +104,14 @@ class EntityDeduplicator:
         album_repo: "IAlbumRepository",
         track_repo: "ITrackRepository",
     ) -> None:
-        """Initialize with repositories for lookup.
+        """Initialize with repositories for fast lookups.
+        
+        Hey future me - repositories should have indexes on:
+        - musicbrainz_id
+        - spotify_uri
+        - deezer_id
+        - LOWER(name) for artists
+        - isrc for tracks
         
         Args:
             artist_repo: Repository for artist lookups
@@ -112,90 +123,99 @@ class EntityDeduplicator:
         self._track_repo = track_repo
     
     # =========================================================================
-    # ARTIST DEDUPLICATION
+    # === ARTIST DEDUPLICATION ===
     # =========================================================================
     
-    async def deduplicate_artist(
+    async def find_existing_artist(
         self,
         dto: "ArtistDTO",
-        source: str,
     ) -> tuple["Artist | None", bool]:
-        """Deduplicate an artist DTO against existing artists.
+        """Find existing artist matching the incoming DTO.
         
-        Priority for matching:
-        1. MusicBrainz ID (most reliable)
-        2. Spotify URI/ID
-        3. Deezer ID
-        4. Normalized name (fallback)
+        Hey future me - Matching priority:
+        1. MusicBrainz ID (most reliable, universal standard)
+        2. Spotify URI (provider-specific but stable)
+        3. Deezer ID (provider-specific but stable)
+        4. Normalized name (fallback - risky for common names!)
         
         Args:
-            dto: Incoming artist data
-            source: Source name ("spotify", "deezer", etc.)
+            dto: Incoming artist data from provider
         
         Returns:
             Tuple of (existing_artist_or_none, was_match_found)
             If match found: Returns existing artist (caller should merge)
             If no match: Returns None (caller should create new)
         """
-        # Try MBID first (most reliable)
+        # 1. Try MusicBrainz ID (gold standard)
         if dto.musicbrainz_id:
             existing = await self._artist_repo.get_by_musicbrainz_id(dto.musicbrainz_id)
             if existing:
                 logger.debug(f"Artist match by MBID: {dto.name}")
                 return existing, True
         
-        # Try Spotify URI
+        # 2. Try Spotify URI (stable provider ID)
         if dto.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing = await self._artist_repo.get_by_spotify_uri(
-                SpotifyUri.from_string(dto.spotify_uri)
-            )
-            if existing:
-                logger.debug(f"Artist match by Spotify URI: {dto.name}")
-                return existing, True
+            try:
+                existing = await self._artist_repo.get_by_spotify_uri(
+                    SpotifyUri.from_string(dto.spotify_uri)
+                )
+                if existing:
+                    logger.debug(f"Artist match by Spotify URI: {dto.name}")
+                    return existing, True
+            except ValueError:
+                # Invalid Spotify URI format
+                pass
         
-        # Try Deezer ID
+        # 3. Try Deezer ID (stable provider ID)
         if dto.deezer_id:
             existing = await self._artist_repo.get_by_deezer_id(dto.deezer_id)
             if existing:
                 logger.debug(f"Artist match by Deezer ID: {dto.name}")
                 return existing, True
         
-        # Fallback: Name match (normalized, case-insensitive)
-        # Be careful here - many artists share names!
+        # 4. Fallback: Name match (normalized, case-insensitive)
+        # CAUTION: Many artists share names - be careful!
         if dto.name:
             existing = await self._artist_repo.get_by_name(dto.name)
             if existing:
-                # Only match by name if confident (e.g., same source or unique name)
                 logger.debug(f"Artist potential match by name: {dto.name}")
                 return existing, True
         
         # No match found
         return None, False
     
-    def merge_artist(
+    def merge_artist_dto(
         self,
         existing: "Artist",
         incoming: "ArtistDTO",
         source: str,
     ) -> "Artist":
-        """Merge incoming DTO data into existing artist.
+        """Merge incoming DTO data into existing artist entity.
         
         Hey future me - this PRESERVES existing data, only ADDS missing!
-        We don't overwrite existing IDs or metadata.
+        We never overwrite existing IDs or metadata - only fill gaps.
+        
+        Merge rules:
+        - Provider IDs: Add if missing, never overwrite
+        - Image: Add if missing OR from "better" source
+        - Metadata: Add if missing
         
         Args:
-            existing: Existing artist entity
-            incoming: New data to merge
-            source: Source of incoming data
+            existing: Existing artist entity to update
+            incoming: New data from provider
+            source: Source name ("spotify", "deezer", "musicbrainz")
         
         Returns:
-            Modified existing artist (same object)
+            Modified existing artist (same object, mutated)
         """
-        # Merge provider IDs (never overwrite existing)
+        # Merge provider IDs (never overwrite existing!)
         if incoming.spotify_uri and not existing.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            try:
+                existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            except ValueError:
+                pass  # Invalid URI, skip
         
         if incoming.deezer_id and not existing.deezer_id:
             existing.deezer_id = incoming.deezer_id
@@ -214,64 +234,69 @@ class EntityDeduplicator:
                 path=existing.image.path,
             )
         
-        # Update primary source if this is a "better" source
-        # (Spotify/Deezer are "better" than local for metadata)
-        if not existing.primary_source and source in ("spotify", "deezer"):
+        # Update primary_source if this is a "better" source
+        # (Provider data is "better" than local for metadata)
+        if not existing.primary_source and source in ("spotify", "deezer", "musicbrainz"):
             existing.primary_source = source
+        
+        # Merge genres if we have them and existing is empty
+        if incoming.genres and not existing.genres:
+            existing.genres = incoming.genres
         
         return existing
     
     # =========================================================================
-    # ALBUM DEDUPLICATION
+    # === ALBUM DEDUPLICATION ===
     # =========================================================================
     
-    async def deduplicate_album(
+    async def find_existing_album(
         self,
         dto: "AlbumDTO",
         artist_id: str,
-        source: str,
     ) -> tuple["Album | None", bool]:
-        """Deduplicate an album DTO against existing albums.
+        """Find existing album matching the incoming DTO.
         
-        Priority for matching:
-        1. MusicBrainz ID
+        Hey future me - Matching priority:
+        1. MusicBrainz Release Group ID
         2. Spotify URI
         3. Deezer ID
-        4. Title + Artist combination
+        4. Title + Artist combination (fuzzy fallback)
         
         Args:
-            dto: Incoming album data
+            dto: Incoming album data from provider
             artist_id: Artist ID this album belongs to
-            source: Source name
         
         Returns:
             Tuple of (existing_album_or_none, was_match_found)
         """
-        # Try MBID
+        # 1. Try MusicBrainz ID
         if dto.musicbrainz_id:
             existing = await self._album_repo.get_by_musicbrainz_id(dto.musicbrainz_id)
             if existing:
                 logger.debug(f"Album match by MBID: {dto.title}")
                 return existing, True
         
-        # Try Spotify URI
+        # 2. Try Spotify URI
         if dto.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing = await self._album_repo.get_by_spotify_uri(
-                SpotifyUri.from_string(dto.spotify_uri)
-            )
-            if existing:
-                logger.debug(f"Album match by Spotify URI: {dto.title}")
-                return existing, True
+            try:
+                existing = await self._album_repo.get_by_spotify_uri(
+                    SpotifyUri.from_string(dto.spotify_uri)
+                )
+                if existing:
+                    logger.debug(f"Album match by Spotify URI: {dto.title}")
+                    return existing, True
+            except ValueError:
+                pass
         
-        # Try Deezer ID
+        # 3. Try Deezer ID
         if dto.deezer_id:
             existing = await self._album_repo.get_by_deezer_id(dto.deezer_id)
             if existing:
                 logger.debug(f"Album match by Deezer ID: {dto.title}")
                 return existing, True
         
-        # Fallback: Title + Artist
+        # 4. Fallback: Title + Artist
         if dto.title and artist_id:
             from soulspot.domain.value_objects import ArtistId
             existing = await self._album_repo.get_by_title_and_artist(
@@ -284,26 +309,29 @@ class EntityDeduplicator:
         
         return None, False
     
-    def merge_album(
+    def merge_album_dto(
         self,
         existing: "Album",
         incoming: "AlbumDTO",
         source: str,
     ) -> "Album":
-        """Merge incoming DTO data into existing album.
+        """Merge incoming DTO data into existing album entity.
         
         Args:
-            existing: Existing album entity
-            incoming: New data to merge
-            source: Source of incoming data
+            existing: Existing album entity to update
+            incoming: New data from provider
+            source: Source name
         
         Returns:
-            Modified existing album
+            Modified existing album (same object, mutated)
         """
         # Merge provider IDs
         if incoming.spotify_uri and not existing.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            try:
+                existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            except ValueError:
+                pass
         
         if incoming.deezer_id and not existing.deezer_id:
             existing.deezer_id = incoming.deezer_id
@@ -311,7 +339,7 @@ class EntityDeduplicator:
         if incoming.musicbrainz_id and not existing.musicbrainz_id:
             existing.musicbrainz_id = incoming.musicbrainz_id
         
-        # Merge cover
+        # Merge cover image
         if incoming.cover_url and not existing.cover.url:
             from soulspot.domain.value_objects import ImageRef
             existing.cover = ImageRef(
@@ -326,68 +354,71 @@ class EntityDeduplicator:
         if incoming.total_tracks and not existing.total_tracks:
             existing.total_tracks = incoming.total_tracks
         
+        if incoming.label and not existing.label:
+            existing.label = incoming.label
+        
         return existing
     
     # =========================================================================
-    # TRACK DEDUPLICATION
+    # === TRACK DEDUPLICATION ===
     # =========================================================================
     
-    async def deduplicate_track(
+    async def find_existing_track(
         self,
         dto: "TrackDTO",
         album_id: str | None,
-        source: str,
     ) -> tuple["Track | None", bool]:
-        """Deduplicate a track DTO against existing tracks.
+        """Find existing track matching the incoming DTO.
         
-        Priority for matching:
-        1. ISRC (ISO standard for recordings)
-        2. MusicBrainz ID
+        Hey future me - Matching priority:
+        1. ISRC (ISO standard for recordings - BEST!)
+        2. MusicBrainz Recording ID
         3. Spotify URI
         4. Deezer ID
-        5. Title + Album combination
+        5. Title + Album combination (risky fallback)
         
         Args:
-            dto: Incoming track data
-            album_id: Album ID this track belongs to
-            source: Source name
+            dto: Incoming track data from provider
+            album_id: Album ID this track belongs to (can be None for singles)
         
         Returns:
             Tuple of (existing_track_or_none, was_match_found)
         """
-        # ISRC is the gold standard for track matching
+        # 1. ISRC is the gold standard for track matching
         if dto.isrc:
             existing = await self._track_repo.get_by_isrc(dto.isrc)
             if existing:
                 logger.debug(f"Track match by ISRC: {dto.title}")
                 return existing, True
         
-        # Try MBID
+        # 2. Try MusicBrainz Recording ID
         if dto.musicbrainz_id:
             existing = await self._track_repo.get_by_musicbrainz_id(dto.musicbrainz_id)
             if existing:
                 logger.debug(f"Track match by MBID: {dto.title}")
                 return existing, True
         
-        # Try Spotify URI
+        # 3. Try Spotify URI
         if dto.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing = await self._track_repo.get_by_spotify_uri(
-                SpotifyUri.from_string(dto.spotify_uri)
-            )
-            if existing:
-                logger.debug(f"Track match by Spotify URI: {dto.title}")
-                return existing, True
+            try:
+                existing = await self._track_repo.get_by_spotify_uri(
+                    SpotifyUri.from_string(dto.spotify_uri)
+                )
+                if existing:
+                    logger.debug(f"Track match by Spotify URI: {dto.title}")
+                    return existing, True
+            except ValueError:
+                pass
         
-        # Try Deezer ID
+        # 4. Try Deezer ID
         if dto.deezer_id:
             existing = await self._track_repo.get_by_deezer_id(dto.deezer_id)
             if existing:
                 logger.debug(f"Track match by Deezer ID: {dto.title}")
                 return existing, True
         
-        # Fallback: Title + Album (fuzzy)
-        # Note: This is risky - many albums have tracks with same name
+        # 5. Fallback: Title + Album (RISKY - many albums have same track names!)
         # Only do this if we have album_id to narrow down
         if dto.title and album_id:
             from soulspot.domain.value_objects import AlbumId
@@ -401,26 +432,29 @@ class EntityDeduplicator:
         
         return None, False
     
-    def merge_track(
+    def merge_track_dto(
         self,
         existing: "Track",
         incoming: "TrackDTO",
         source: str,
     ) -> "Track":
-        """Merge incoming DTO data into existing track.
+        """Merge incoming DTO data into existing track entity.
         
         Args:
-            existing: Existing track entity
-            incoming: New data to merge
-            source: Source of incoming data
+            existing: Existing track entity to update
+            incoming: New data from provider
+            source: Source name
         
         Returns:
-            Modified existing track
+            Modified existing track (same object, mutated)
         """
         # Merge provider IDs
         if incoming.spotify_uri and not existing.spotify_uri:
             from soulspot.domain.value_objects import SpotifyUri
-            existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            try:
+                existing.spotify_uri = SpotifyUri.from_string(incoming.spotify_uri)
+            except ValueError:
+                pass
         
         if incoming.deezer_id and not existing.deezer_id:
             existing.deezer_id = incoming.deezer_id
@@ -438,10 +472,13 @@ class EntityDeduplicator:
         if incoming.track_number and not existing.track_number:
             existing.track_number = incoming.track_number
         
+        if incoming.disc_number and not existing.disc_number:
+            existing.disc_number = incoming.disc_number
+        
         return existing
     
     # =========================================================================
-    # UTILITY METHODS
+    # === UTILITY METHODS ===
     # =========================================================================
     
     @staticmethod
@@ -450,14 +487,18 @@ class EntityDeduplicator:
         
         Hey future me - use this for name-based matching!
         - Lowercase
-        - Remove special characters
+        - Remove special characters (keep letters, numbers, spaces)
         - Collapse whitespace
+        - Strip leading/trailing
+        
+        This is a SIMPLE normalizer. For artist names with prefixes
+        (DJ, The, MC), use normalize_artist_name() from value_objects.
         
         Args:
             name: Name to normalize
         
         Returns:
-            Normalized name
+            Normalized name (lowercase, cleaned)
         """
         # Lowercase
         normalized = name.lower()
@@ -477,22 +518,24 @@ class EntityDeduplicator:
     ) -> str:
         """Generate a match key for deduplication.
         
-        Priority:
-        1. mbid:xxx
-        2. isrc:xxx
+        Hey future me - use this for building dedup caches!
+        
+        Priority order:
+        1. mbid:xxx (most reliable)
+        2. isrc:xxx (for tracks)
         3. spotify:xxx
         4. deezer:xxx
-        5. name:xxx (normalized)
+        5. name:xxx (normalized, fallback)
         
         Args:
             mbid: MusicBrainz ID
-            spotify_id: Spotify ID
+            spotify_id: Spotify ID (not full URI!)
             deezer_id: Deezer ID
-            isrc: ISRC code
+            isrc: ISRC code (for tracks)
             name: Entity name (fallback)
         
         Returns:
-            Match key string
+            Match key string like "mbid:abc123" or "name:pink floyd"
         """
         if mbid:
             return f"mbid:{mbid}"
@@ -503,5 +546,20 @@ class EntityDeduplicator:
         if deezer_id:
             return f"deezer:{deezer_id}"
         if name:
-            return f"name:{EntityDeduplicator.normalize_name(name)}"
+            return f"name:{DeduplicationChecker.normalize_name(name)}"
         return "unknown"
+    
+    @staticmethod
+    def extract_spotify_id(spotify_uri: str | None) -> str | None:
+        """Extract Spotify ID from URI.
+        
+        Args:
+            spotify_uri: Full Spotify URI like "spotify:artist:abc123"
+        
+        Returns:
+            Just the ID part "abc123" or None
+        """
+        if not spotify_uri:
+            return None
+        parts = spotify_uri.split(":")
+        return parts[-1] if len(parts) >= 3 else None

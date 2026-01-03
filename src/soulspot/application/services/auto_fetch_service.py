@@ -15,7 +15,7 @@ not the deprecated ImageRepairService wrapper!
 
 Architecture:
   API (ui.py) → AutoFetchService → repair_artist_images() / repair_album_images()
-                                 → FollowedArtistsService
+                                 → ArtistService
                                  → Infrastructure (DB, API Clients)
 
 Usage from routes:
@@ -246,15 +246,13 @@ class AutoFetchService:
             Dict with stats: {"albums_added": int, "tracks_added": int, "source": str}
         """
         try:
-            from soulspot.application.services.followed_artists_service import (
-                FollowedArtistsService,
-            )
+            from soulspot.application.services.artist_service import ArtistService
             from soulspot.infrastructure.plugins import DeezerPlugin
 
             # Deezer is ALWAYS available (no auth needed!)
             deezer_plugin = DeezerPlugin()
 
-            service = FollowedArtistsService(
+            service = ArtistService(
                 self._session,
                 spotify_plugin=None,  # Deezer is sufficient
                 deezer_plugin=deezer_plugin,

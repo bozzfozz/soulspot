@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.domain.entities import QualityUpgradeCandidate
 from soulspot.domain.exceptions import ValidationError
-from soulspot.domain.value_objects import DownloadId, TrackId
+from soulspot.domain.value_objects import (
+    DownloadId,
+    QualityProfile,
+    QUALITY_PROFILES_DICT,
+    TrackId,
+)
 from soulspot.infrastructure.persistence.models import (
     QualityUpgradeCandidateModel,
     TrackModel,
@@ -20,13 +25,10 @@ logger = logging.getLogger(__name__)
 class QualityUpgradeService:
     """Service for identifying and managing quality upgrade opportunities."""
 
-    # Quality profiles with target bitrates (in kbps)
-    QUALITY_PROFILES = {
-        "low": {"min_bitrate": 128, "formats": ["mp3", "m4a", "ogg"]},
-        "medium": {"min_bitrate": 192, "formats": ["mp3", "m4a", "ogg"]},
-        "high": {"min_bitrate": 320, "formats": ["mp3", "m4a", "flac", "alac"]},
-        "lossless": {"min_bitrate": 1411, "formats": ["flac", "alac", "wav"]},
-    }
+    # Hey future me - QUALITY_PROFILES is now imported from domain/value_objects!
+    # Use QualityProfile enum for type safety, QUALITY_PROFILES_DICT for legacy dict access.
+    # Single source of truth: soulspot.domain.value_objects.quality_profile
+    QUALITY_PROFILES = QUALITY_PROFILES_DICT
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize quality upgrade service.

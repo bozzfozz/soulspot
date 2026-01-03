@@ -59,6 +59,14 @@ from soulspot.domain.value_objects.naming import (
     sort_name,
 )
 
+# Quality profile exports (single source of truth for audio quality standards)
+# Hey future me - use QualityProfile enum instead of string "high"/"low"/etc!
+from soulspot.domain.value_objects.quality_profile import (
+    QualityConfig,
+    QualityProfile,
+    QUALITY_PROFILES_DICT,  # Legacy compatibility only
+)
+
 
 # Hey future me, ArtistId is a VALUE OBJECT (Domain-Driven Design)! It's NOT just a UUID - it's a
 # type-safe wrapper that ensures IDs are always valid UUIDs. The @dataclass(frozen=True) makes it

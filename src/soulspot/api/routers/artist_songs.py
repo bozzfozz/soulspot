@@ -27,7 +27,7 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
 )
-from soulspot.application.services.artist_songs_service import ArtistSongsService
+from soulspot.application.services.artist_service import ArtistService
 from soulspot.domain.value_objects import ArtistId, TrackId
 
 if TYPE_CHECKING:
@@ -156,13 +156,13 @@ async def sync_artist_songs(
             status_code=400, detail=f"Invalid artist ID format: {e}"
         ) from e
 
-    service = ArtistSongsService(
+    service = ArtistService(
         session=session,
         spotify_plugin=spotify_plugin,
     )
 
     try:
-        tracks, stats = await service.sync_artist_songs(
+        tracks, stats = await service.sync_artist_top_tracks(
             artist_id=artist_id_obj,
             market=market,
         )
@@ -243,13 +243,13 @@ async def sync_all_artists_songs(
             detail="Not authenticated with Spotify. Please connect your account first.",
         )
 
-    service = ArtistSongsService(
+    service = ArtistService(
         session=session,
         spotify_plugin=spotify_plugin,
     )
 
     try:
-        tracks, stats = await service.sync_all_artists_songs(
+        tracks, stats = await service.sync_all_artists_top_tracks(
             market=market,
             limit=limit,
         )
@@ -307,7 +307,7 @@ async def list_artist_songs(
         ) from e
 
     # spotify_client is optional for read operations
-    service = ArtistSongsService(session=session)
+    service = ArtistService(session=session)
 
     tracks = await service.get_artist_singles(artist_id_obj)
 
@@ -349,10 +349,10 @@ async def delete_artist_song(
         raise HTTPException(status_code=400, detail=f"Invalid ID format: {e}") from e
 
     # spotify_client is optional for delete operations
-    service = ArtistSongsService(session=session)
+    service = ArtistService(session=session)
 
     try:
-        await service.remove_song(track_id_obj, artist_id_obj)
+        await service.remove_track(track_id_obj, artist_id_obj)
         await session.commit()
 
         logger.info(f"Deleted song {track_id} from artist {artist_id}")
@@ -403,10 +403,10 @@ async def delete_all_artist_songs(
         ) from e
 
     # spotify_client is optional for delete operations
-    service = ArtistSongsService(session=session)
+    service = ArtistService(session=session)
 
     try:
-        count = await service.remove_all_artist_songs(artist_id_obj)
+        count = await service.remove_all_artist_tracks(artist_id_obj)
         await session.commit()
 
         logger.info(f"Deleted {count} songs for artist {artist_id}")

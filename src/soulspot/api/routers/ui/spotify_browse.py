@@ -91,9 +91,9 @@ async def browse_new_releases_page(
         HTML page with combined new releases from all sources
     """
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.new_releases_service import (
-        NewReleasesResult,
-        NewReleasesService,
+    from soulspot.application.services.browse_service import (
+        BrowseResult as NewReleasesResult,
+        BrowseService as NewReleasesService,
     )
 
     error: str | None = None
@@ -266,7 +266,7 @@ async def spotify_discover_page(
     Falls back to Deezer if Spotify unavailable.
     """
     from soulspot.application.services.app_settings_service import AppSettingsService
-    from soulspot.application.services.discover_service import DiscoverService
+    from soulspot.application.services.browse_service import BrowseService as DiscoverService
     from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
     settings = AppSettingsService(session)

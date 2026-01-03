@@ -13,7 +13,8 @@ so fuzzy matching can find the correct artist even with naming differences.
 
 Used by:
 - LibraryDiscoveryWorker (matching local → Deezer/Spotify)
-- LibraryMergeService (duplicate artist detection)
+- DeduplicationChecker (import-time deduplication)
+- DeduplicationHousekeepingService (duplicate artist detection)
 - MetadataMerger (external tag comparison)
 - EnrichmentService (candidate scoring)
 

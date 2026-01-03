@@ -19,6 +19,7 @@ from soulspot.domain.ports import (
     ITrackRepository,
 )
 from soulspot.domain.value_objects import FilePath
+from soulspot.domain.value_objects.folder_parsing import AUDIO_EXTENSIONS
 from soulspot.infrastructure.observability.logger_template import (
     end_operation,
     start_operation,
@@ -99,19 +100,9 @@ class AutoImportService:
                 app_settings_service=app_settings_service,  # Pass for dynamic templates
             )
 
-        # Supported audio file extensions
-        self._audio_extensions = {
-            ".mp3",
-            ".flac",
-            ".m4a",
-            ".aac",
-            ".ogg",
-            ".opus",
-            ".wav",
-            ".wma",
-            ".ape",
-            ".alac",
-        }
+        # Hey future me - use unified AUDIO_EXTENSIONS from folder_parsing!
+        # Single source of truth for all audio file extensions.
+        self._audio_extensions = AUDIO_EXTENSIONS
 
     # Hey future me: Auto-import service - the background daemon that moves completed downloads to music library
     # WHY poll every 60 seconds? Balance between responsiveness and CPU usage

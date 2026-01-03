@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from soulspot.api.dependencies import get_db_session
-from soulspot.application.services.discography_service import DiscographyService
+from soulspot.application.services.artist_service import ArtistService
 from soulspot.domain.value_objects import ArtistId
 
 router = APIRouter()
@@ -33,7 +33,7 @@ async def check_discography(
     """Check discography completeness for an artist."""
     try:
         artist_id = ArtistId.from_string(request.artist_id)
-        service = DiscographyService(session)
+        service = ArtistService(session)
         info = await service.check_discography(artist_id, "")
         return info.to_dict()
     except ValueError as e:
@@ -52,7 +52,7 @@ async def get_missing_albums(
 ) -> dict[str, Any]:
     """Get missing albums for all artists."""
     try:
-        service = DiscographyService(session)
+        service = ArtistService(session)
         infos = await service.get_missing_albums_for_all_artists("", limit)
         return {
             "artists_with_missing_albums": [info.to_dict() for info in infos],

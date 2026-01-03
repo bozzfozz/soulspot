@@ -10,11 +10,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulspot.api.dependencies import get_db_session, get_spotify_plugin
+from soulspot.api.dependencies import get_db_session, get_deezer_plugin, get_spotify_plugin
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.domain.value_objects import ArtistId, WatchlistId
 
 if TYPE_CHECKING:
+    from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
 router = APIRouter()
@@ -175,32 +176,46 @@ async def get_watchlist(
 
 # Hey, this check endpoint is the MANUAL trigger for "check this artist for new releases RIGHT NOW".
 # SpotifyPlugin handles token internally.
+# MULTI-PROVIDER: Now also accepts DeezerPlugin for combined results!
 @router.post("/watchlist/{watchlist_id}/check")
 async def check_watchlist_releases(
     watchlist_id: str,
     spotify_plugin: "SpotifyPlugin" = Depends(get_spotify_plugin),
+    deezer_plugin: "DeezerPlugin" = Depends(get_deezer_plugin),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
-    """Check for new releases for a watchlist."""
+    """Check for new releases for a watchlist using ALL available providers."""
     # Provider + Auth checks using can_use()
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 
     app_settings = AppSettingsService(session)
-    if not await app_settings.is_provider_enabled("spotify"):
+    
+    # Hey future me - both providers are OPTIONAL!
+    # Spotify may be disabled or user not authenticated
+    # Deezer is always available (no auth for browse)
+    spotify_available = (
+        await app_settings.is_provider_enabled("spotify")
+        and spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS)
+    )
+    deezer_available = (
+        await app_settings.is_provider_enabled("deezer")
+        and deezer_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS)
+    )
+    
+    if not spotify_available and not deezer_available:
         raise HTTPException(
             status_code=503,
-            detail="Spotify provider is disabled in settings.",
-        )
-    if not spotify_plugin.can_use(PluginCapability.GET_ARTIST_ALBUMS):
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated with Spotify. Please connect your account first.",
+            detail="No music providers available. Enable Spotify or Deezer in settings.",
         )
 
     try:
         wid = WatchlistId.from_string(watchlist_id)
-        service = WatchlistService(session, spotify_plugin)
+        service = WatchlistService(
+            session,
+            spotify_plugin=spotify_plugin if spotify_available else None,
+            deezer_plugin=deezer_plugin if deezer_available else None,
+        )
         watchlist = await service.get_watchlist(wid)
 
         if not watchlist:
