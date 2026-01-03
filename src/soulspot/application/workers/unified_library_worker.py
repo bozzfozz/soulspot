@@ -1562,12 +1562,12 @@ class UnifiedLibraryManager:
         3. If missing albums found, trigger MISSING_ALBUM automation
         
         TOKEN HANDLING: Gets token from _token_manager for API access.
-        Uses DiscographyService which queries LOCAL spotify_albums data.
+        Uses ArtistService.check_discography() which queries LOCAL soulspot_albums data.
         """
+        from soulspot.application.services.artist_service import ArtistService
         from soulspot.application.services.automation_workflow_service import (
             AutomationWorkflowService,
         )
-        from soulspot.application.services.discography_service import DiscographyService
         from soulspot.domain.entities import AutomationTrigger
         from soulspot.infrastructure.persistence.repositories import (
             ArtistWatchlistRepository,
@@ -1590,7 +1590,7 @@ class UnifiedLibraryManager:
                     return
                 
                 # Create services
-                discography_service = DiscographyService(session)
+                artist_service = ArtistService(session)
                 workflow_service = AutomationWorkflowService(session)
                 watchlist_repo = ArtistWatchlistRepository(session)
                 
@@ -1612,7 +1612,7 @@ class UnifiedLibraryManager:
                             continue
                         
                         # Check discography completeness
-                        discography_info = await discography_service.check_discography(
+                        discography_info = await artist_service.check_discography(
                             artist_id=watchlist.artist_id,
                             access_token=access_token,
                         )
