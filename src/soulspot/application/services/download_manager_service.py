@@ -117,7 +117,7 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by created_at desc
         """
-        operation_id = start_operation(logger, "download_manager.get_active_downloads")
+        start_time, operation_id = start_operation(logger, "download_manager.get_active_downloads")
         
         try:
             active_downloads: list[UnifiedDownload] = []
@@ -138,9 +138,11 @@ class DownloadManagerService:
             
             end_operation(
                 logger,
+                "download_manager.get_active_downloads",
+                start_time,
                 operation_id,
                 success=True,
-                extra={"active_downloads_count": len(result)},
+                active_downloads_count=len(result),
             )
             return result
             
@@ -150,7 +152,7 @@ class DownloadManagerService:
                 exc_info=True,
                 extra={"error_type": type(e).__name__},
             )
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "download_manager.get_active_downloads", start_time, operation_id, success=False, error=e)
             raise
 
     async def get_queue_statistics(self) -> QueueStatistics:
@@ -159,7 +161,7 @@ class DownloadManagerService:
         Returns counts of downloads in each state, plus recent
         completed/failed counts.
         """
-        operation_id = start_operation(logger, "download_manager.get_queue_statistics")
+        start_time, operation_id = start_operation(logger, "download_manager.get_queue_statistics")
         
         try:
             # Count by status in SoulSpot's Download table
@@ -185,13 +187,13 @@ class DownloadManagerService:
             
             end_operation(
                 logger,
+                "download_manager.get_queue_statistics",
+                start_time,
                 operation_id,
                 success=True,
-                extra={
-                    "waiting": stats.waiting,
-                    "downloading": stats.downloading,
-                    "completed_today": stats.completed_today,
-                },
+                waiting=stats.waiting,
+                downloading=stats.downloading,
+                completed_today=stats.completed_today,
             )
             return stats
             
@@ -201,7 +203,7 @@ class DownloadManagerService:
                 exc_info=True,
                 extra={"error_type": type(e).__name__},
             )
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "download_manager.get_queue_statistics", start_time, operation_id, success=False, error=e)
             raise
 
     # Hey future me - get_completed_downloads returns recently completed downloads for History tab!
@@ -219,10 +221,11 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by completed_at desc
         """
-        operation_id = start_operation(
+        start_time, operation_id = start_operation(
             logger,
             "download_manager.get_completed_downloads",
-            extra={"days": days, "limit": limit},
+            days=days,
+            limit=limit,
         )
         
         try:
@@ -244,9 +247,12 @@ class DownloadManagerService:
 
             end_operation(
                 logger,
+                "download_manager.get_completed_downloads",
+                start_time,
                 operation_id,
                 success=True,
-                extra={"completed_downloads_count": len(unified), "days": days},
+                completed_downloads_count=len(unified),
+                days=days,
             )
             return unified
             
@@ -256,7 +262,7 @@ class DownloadManagerService:
                 exc_info=True,
                 extra={"error_type": type(e).__name__, "days": days},
             )
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "download_manager.get_completed_downloads", start_time, operation_id, success=False, error=e)
             raise
 
     # Hey future me - get_failed_downloads returns all failed downloads for the Failed tab!
@@ -271,8 +277,8 @@ class DownloadManagerService:
         Returns:
             List of UnifiedDownload objects sorted by updated_at desc
         """
-        operation_id = start_operation(
-            logger, "download_manager.get_failed_downloads", extra={"limit": limit}
+        start_time, operation_id = start_operation(
+            logger, "download_manager.get_failed_downloads", limit=limit
         )
         
         try:
@@ -298,9 +304,11 @@ class DownloadManagerService:
 
             end_operation(
                 logger,
+                "download_manager.get_failed_downloads",
+                start_time,
                 operation_id,
                 success=True,
-                extra={"failed_downloads_count": len(unified)},
+                failed_downloads_count=len(unified),
             )
             return unified
             
@@ -310,7 +318,7 @@ class DownloadManagerService:
                 exc_info=True,
                 extra={"error_type": type(e).__name__},
             )
-            end_operation(logger, operation_id, success=False, error=e)
+            end_operation(logger, "download_manager.get_failed_downloads", start_time, operation_id, success=False, error=e)
             raise
 
     async def get_download_by_id(

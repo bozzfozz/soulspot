@@ -136,8 +136,14 @@ class ProviderSyncOrchestrator:
         spotify_result: dict[str, Any] | None = None
         deezer_result: dict[str, Any] | None = None
 
-        # 1. Try Spotify (if available and enabled)
-        if self._spotify_sync and await self._is_provider_enabled("spotify"):
+        # 1. Try Spotify (if available, enabled, AND we have a Spotify artist ID)
+        # Hey future me - artist_id kann None sein für Deezer-only Artists!
+        # In dem Fall überspringen wir Spotify komplett statt mit None aufzurufen.
+        if (
+            artist_id  # MUST have Spotify ID
+            and self._spotify_sync 
+            and await self._is_provider_enabled("spotify")
+        ):
             try:
                 spotify_result = await self._spotify_sync.sync_artist_albums(
                     artist_id=artist_id,
@@ -152,34 +158,39 @@ class ProviderSyncOrchestrator:
                 logger.warning(f"Spotify artist albums sync failed: {e}")
                 result.errors["spotify"] = str(e)
         else:
+            # No Spotify ID or Spotify disabled - skip silently
+            if not artist_id:
+                logger.debug("Spotify skipped: No Spotify artist ID provided")
             result.skipped_providers.append("spotify")
 
         # 2. Try Deezer as fallback (if Spotify failed or got nothing)
+        # Hey future me - Deezer braucht eine deezer_artist_id!
+        # DeezerSyncService.sync_artist_albums() akzeptiert NUR deezer_artist_id.
+        # Wenn wir keine haben, überspringen wir Deezer (kein Name-Search implementiert).
         if (
             self._deezer_sync
             and await self._is_provider_enabled("deezer")
             and (not spotify_result or not spotify_result.get("synced"))
         ):
             try:
-                # Use Deezer artist ID if we have it, otherwise search by name
-                deezer_id = deezer_artist_id
-                if not deezer_id and artist_name:
-                    # DeezerSyncService handles the name→ID mapping internally
-                    pass  # Will use artist_name parameter
-
-                deezer_result = await self._deezer_sync.sync_artist_albums(
-                    artist_id=deezer_id
-                    or artist_id,  # Fallback to Spotify ID for lookup
-                    artist_name=artist_name,
-                    force=force,
-                )
-                if deezer_result.get("synced"):
-                    result.source_counts["deezer"] = deezer_result.get(
-                        "albums_synced", 0
+                if not deezer_artist_id:
+                    logger.debug(
+                        f"Deezer skipped for {artist_name or 'unknown'}: "
+                        "No deezer_artist_id available (name-search not implemented)"
                     )
-                    result.added += deezer_result.get("albums_synced", 0)
-                elif deezer_result.get("skipped_cooldown"):
                     result.skipped_providers.append("deezer")
+                else:
+                    deezer_result = await self._deezer_sync.sync_artist_albums(
+                        deezer_artist_id=deezer_artist_id,
+                        force=force,
+                    )
+                    if deezer_result.get("synced") or deezer_result.get("albums_synced", 0) > 0:
+                        result.source_counts["deezer"] = deezer_result.get(
+                            "albums_synced", 0
+                        )
+                        result.added += deezer_result.get("albums_synced", 0)
+                    elif deezer_result.get("skipped") and deezer_result.get("reason") == "cooldown":
+                        result.skipped_providers.append("deezer")
             except Exception as e:
                 logger.warning(f"Deezer artist albums sync failed: {e}")
                 result.errors["deezer"] = str(e)

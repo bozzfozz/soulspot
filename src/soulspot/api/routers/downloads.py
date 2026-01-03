@@ -151,24 +151,22 @@ async def create_download(
     Returns:
         Created download info including ID and status
     """
-    operation_id = start_operation(
+    start_time, operation_id = start_operation(
         logger,
         "api.downloads.create_download",
-        extra={
-            "has_track_id": request.track_id is not None,
-            "has_spotify_id": request.spotify_id is not None,
-            "has_deezer_id": request.deezer_id is not None,
-            "has_tidal_id": request.tidal_id is not None,
-            "priority": request.priority,
-            "slskd_available": slskd_available,
-        },
+        has_track_id=request.track_id is not None,
+        has_spotify_id=request.spotify_id is not None,
+        has_deezer_id=request.deezer_id is not None,
+        has_tidal_id=request.tidal_id is not None,
+        priority=request.priority,
+        slskd_available=slskd_available,
     )
 
     # Must provide at least one ID
     if not any(
         [request.track_id, request.spotify_id, request.deezer_id, request.tidal_id]
     ):
-        end_operation(logger, operation_id, success=False)
+        end_operation(logger, "api.downloads.create_download", start_time, operation_id, success=False)
         raise HTTPException(
             status_code=400,
             detail="Must provide one of: track_id, spotify_id, deezer_id, tidal_id",
@@ -263,7 +261,7 @@ async def create_download(
             DownloadStatus.CANCELLED,
             DownloadStatus.FAILED,
         ]:
-            end_operation(logger, operation_id, success=True, extra={"already_queued": True, "status": existing.status.value})
+            end_operation(logger, "api.downloads.create_download", start_time, operation_id, success=True, already_queued=True, status=existing.status.value)
             return {
                 "message": "Download already in queue",
                 "id": str(existing.id.value),
@@ -280,7 +278,7 @@ async def create_download(
                     track_id=track_id,
                     priority=request.priority,
                 )
-                end_operation(logger, operation_id, success=True, extra={"status": "queued", "job_id": job_id})
+                end_operation(logger, "api.downloads.create_download", start_time, operation_id, success=True, status="queued", job_id=job_id)
                 return {
                     "message": "Download queued successfully",
                     "id": job_id,
@@ -307,7 +305,7 @@ async def create_download(
         )
         await download_repository.add(download)
 
-        end_operation(logger, operation_id, success=True, extra={"status": "waiting", "download_id": str(download.id.value)})
+        end_operation(logger, "api.downloads.create_download", start_time, operation_id, success=True, status="waiting", download_id=str(download.id.value))
         return {
             "message": "Download added to waitlist (downloader offline)",
             "id": str(download.id.value),
@@ -320,7 +318,7 @@ async def create_download(
             exc_info=True,
             extra={"error_type": type(e).__name__},
         )
-        end_operation(logger, operation_id, success=False, error=e)
+        end_operation(logger, "api.downloads.create_download", start_time, operation_id, success=False, error=e)
         raise HTTPException(
             status_code=500, detail=f"Failed to create download: {str(e)}"
         ) from e
@@ -524,10 +522,12 @@ async def list_downloads(
     Returns:
         Paginated list of downloads with total count and page info
     """
-    operation_id = start_operation(
+    start_time, operation_id = start_operation(
         logger,
         "api.downloads.list_downloads",
-        extra={"status_filter": status, "page": page, "limit": limit},
+        status_filter=status,
+        page=page,
+        limit=limit,
     )
 
     # Calculate offset from page number
@@ -584,9 +584,13 @@ async def list_downloads(
 
     end_operation(
         logger,
+        "api.downloads.list_downloads",
+        start_time,
         operation_id,
         success=True,
-        extra={"total_downloads": total, "returned_count": len(downloads), "total_pages": total_pages},
+        total_downloads=total,
+        returned_count=len(downloads),
+        total_pages=total_pages,
     )
     return result
 
@@ -699,7 +703,7 @@ async def get_download_statistics(
     Returns:
         Download statistics dashboard data
     """
-    operation_id = start_operation(logger, "api.downloads.get_statistics")
+    start_time, operation_id = start_operation(logger, "api.downloads.get_statistics")
 
     from datetime import timedelta
 
@@ -813,13 +817,13 @@ async def get_download_statistics(
 
     end_operation(
         logger,
+        "api.downloads.get_statistics",
+        start_time,
         operation_id,
         success=True,
-        extra={
-            "total_completed": total_completed,
-            "total_failed": total_failed,
-            "success_rate": round(success_rate, 1),
-        },
+        total_completed=total_completed,
+        total_failed=total_failed,
+        success_rate=round(success_rate, 1),
     )
     return result
 
@@ -1115,7 +1119,7 @@ async def get_queue_status(
     Returns:
         Queue status information including waiting downloads count
     """
-    operation_id = start_operation(logger, "api.downloads.get_queue_status")
+    start_time, operation_id = start_operation(logger, "api.downloads.get_queue_status")
 
     stats = job_queue.get_stats()
 
@@ -1138,13 +1142,13 @@ async def get_queue_status(
 
     end_operation(
         logger,
+        "api.downloads.get_queue_status",
+        start_time,
         operation_id,
         success=True,
-        extra={
-            "active": stats.get("running", 0),
-            "queued": stats.get("pending", 0),
-            "waiting": waiting_count,
-        },
+        active=stats.get("running", 0),
+        queued=stats.get("pending", 0),
+        waiting=waiting_count,
     )
     return result
 
@@ -1362,8 +1366,8 @@ async def get_download_status(
     Returns:
         Download status and progress
     """
-    operation_id = start_operation(
-        logger, "api.downloads.get_download_status", extra={"download_id": download_id}
+    start_time, operation_id = start_operation(
+        logger, "api.downloads.get_download_status", download_id=download_id
     )
 
     download_id_obj = DownloadId.from_string(download_id)
@@ -1391,9 +1395,12 @@ async def get_download_status(
 
     end_operation(
         logger,
+        "api.downloads.get_download_status",
+        start_time,
         operation_id,
         success=True,
-        extra={"status": download.status.value, "progress": download.progress_percent},
+        status=download.status.value,
+        progress=download.progress_percent,
     )
     return result
 

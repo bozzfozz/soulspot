@@ -67,6 +67,7 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
     from soulspot.infrastructure.persistence.database import Database
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+    from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
 
     logger.info(f"🎵 Background discography sync starting for: {artist_name}")
 
@@ -74,19 +75,24 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
         # Create fresh Database instance for background task
         # Hey future me - background tasks run AFTER the request is complete,
         # so we can't use the request's session. Create our own!
-        db = Database(get_settings())
+        settings = get_settings()
+        db = Database(settings)
         async with db.session_scope() as session:
             # Create plugins - DeezerPlugin doesn't need auth for album lookup
             # SpotifyPlugin will be None if user not authenticated
             deezer_plugin = DeezerPlugin()
 
             # Try to create SpotifyPlugin from stored session tokens
+            # Hey future me - SpotifyPlugin REQUIRES a SpotifyClient instance!
+            # We create one without auth (access_token=None) - the plugin will
+            # check auth status and fail gracefully if token is missing.
             spotify_plugin = None
             try:
-                spotify_plugin = SpotifyPlugin()
-            except Exception:
+                spotify_client = SpotifyClient(settings.spotify)
+                spotify_plugin = SpotifyPlugin(client=spotify_client, access_token=None)
+            except Exception as e:
                 # No Spotify auth available, Deezer fallback will be used
-                pass
+                logger.debug(f"Spotify plugin unavailable: {e}")
 
             service = ArtistService(
                 session=session,
@@ -518,14 +524,12 @@ async def add_artist_to_library(
     Returns:
         Created or existing artist with status indicator
     """
-    operation_id = start_operation(
+    start_time, operation_id = start_operation(
         logger,
         "api.artists.add_artist_to_library",
-        extra={
-            "artist_name": request.name,
-            "has_spotify_id": request.spotify_id is not None,
-            "has_deezer_id": request.deezer_id is not None,
-        },
+        artist_name=request.name,
+        has_spotify_id=request.spotify_id is not None,
+        has_deezer_id=request.deezer_id is not None,
     )
 
     # Hey future me - DEBUG LOGGING to catch wrong artist issues!
@@ -552,7 +556,7 @@ async def add_artist_to_library(
         existing = await repo.get_by_spotify_uri(spotify_uri)
         if existing and existing.source in (ArtistSource.LOCAL, ArtistSource.HYBRID):
             logger.info(f"Artist already exists locally (spotify_uri): {existing.name}")
-            end_operation(logger, operation_id, success=True, extra={"already_exists": True, "source": "spotify_uri"})
+            end_operation(logger, "api.artists.add_artist_to_library", start_time, operation_id, success=True, already_exists=True, source="spotify_uri")
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -573,7 +577,7 @@ async def add_artist_to_library(
                 artist_name=existing.name,
             )
 
-            end_operation(logger, operation_id, success=True, extra={"upgraded_to_hybrid": True, "source": "spotify"})
+            end_operation(logger, "api.artists.add_artist_to_library", start_time, operation_id, success=True, upgraded_to_hybrid=True, source="spotify")
             return AddArtistResponse(
                 artist=_artist_to_response(existing),
                 created=False,
@@ -676,9 +680,13 @@ async def add_artist_to_library(
 
     end_operation(
         logger,
+        "api.artists.add_artist_to_library",
+        start_time,
         operation_id,
         success=True,
-        extra={"created": True, "artist_name": artist.name, "artist_id": str(artist.id.value)},
+        created=True,
+        artist_name=artist.name,
+        artist_id=str(artist.id.value),
     )
     return AddArtistResponse(
         artist=_artist_to_response(artist),

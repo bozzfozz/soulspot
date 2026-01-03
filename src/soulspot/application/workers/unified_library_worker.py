@@ -908,14 +908,24 @@ class UnifiedLibraryManager:
                 DeezerSyncService,
             )
 
-            spotify_sync = SpotifySyncService(
-                session=session,
-                spotify_plugin=self._spotify_plugin,
-            )
-            deezer_sync = DeezerSyncService(
-                session=session,
-                deezer_plugin=self._deezer_plugin,
-            )
+            # Hey future me - Services only created if plugins are available!
+            # SpotifySyncService requires spotify_plugin (NOT optional!)
+            # DeezerSyncService requires deezer_plugin (NOT optional!)
+            # ProviderSyncOrchestrator accepts None for both (handles fallback)
+            spotify_sync = None
+            if self._spotify_plugin:
+                spotify_sync = SpotifySyncService(
+                    session=session,
+                    spotify_plugin=self._spotify_plugin,
+                )
+            
+            deezer_sync = None
+            if self._deezer_plugin:
+                deezer_sync = DeezerSyncService(
+                    session=session,
+                    deezer_plugin=self._deezer_plugin,
+                )
+            
             orchestrator = ProviderSyncOrchestrator(
                 session=session,
                 spotify_sync=spotify_sync,
@@ -937,15 +947,32 @@ class UnifiedLibraryManager:
                     try:
                         # Sync albums ONLY (not tracks!) with cooldown check
                         # Tracks will be synced separately in _sync_tracks() phase
+                        # 
+                        # Hey future me - WICHTIG für Artist-ID Logik:
+                        # - spotify_id: Spotify artist ID (z.B. "3TV0qLgjEYM0STMlmI05U3")
+                        # - deezer_id: Deezer artist ID (z.B. "27")
+                        # - artist.id.value: Internes UUID (NICHT für Provider API geeignet!)
+                        #
+                        # Wenn Artist nur deezer_id hat (kein spotify_id), 
+                        # wird Spotify übersprungen und nur Deezer verwendet.
+                        # Wenn Artist keinen Provider hat, wird der Artist übersprungen.
+                        
+                        # Skip artists without any provider ID
+                        if not artist.spotify_id and not artist.deezer_id:
+                            logger.debug(
+                                f"Skipping {artist.name}: No provider ID (neither Spotify nor Deezer)"
+                            )
+                            continue
+                        
                         result = await orchestrator.sync_artist_albums(
-                            artist_id=artist.spotify_id,
+                            artist_id=artist.spotify_id,  # Can be None - Spotify will be skipped
                             artist_name=artist.name,
                             deezer_artist_id=artist.deezer_id,
                             force=False,  # Respect cooldown!
                         )
                         
                         # Only count if actually synced (not skipped due to cooldown)
-                        if result.synced and not result.skipped_providers:
+                        if result.synced and result.added > 0:
                             total_albums_added += result.added
                             artists_processed += 1
                             logger.debug(
@@ -954,9 +981,8 @@ class UnifiedLibraryManager:
                                 f"Deezer: {result.source_counts.get('deezer', 0)})"
                             )
                         elif result.skipped_providers:
-                            logger.debug(
-                                f"Skipped {artist.name} (cooldown - providers: {result.skipped_providers})"
-                            )
+                            # All providers on cooldown - this is expected, not an error
+                            pass  # Don't log every cooldown skip
 
                     except Exception as e:
                         errors += 1
@@ -1029,9 +1055,22 @@ class UnifiedLibraryManager:
 
             logger.info(f"Found {len(albums)} albums needing track backfill")
 
-            # Create sync services
-            spotify_sync = SpotifySyncService(session=session, plugin=self._spotify_plugin)
-            deezer_sync = DeezerSyncService(session=session, plugin=self._deezer_plugin)
+            # Create sync services with correct parameter names!
+            # Hey future me - Services only created if plugins are available!
+            # SpotifySyncService requires spotify_plugin (NOT optional!)
+            # DeezerSyncService requires deezer_plugin (NOT optional!)
+            spotify_sync = None
+            if self._spotify_plugin:
+                spotify_sync = SpotifySyncService(
+                    session=session, spotify_plugin=self._spotify_plugin
+                )
+            
+            deezer_sync = None
+            if self._deezer_plugin:
+                deezer_sync = DeezerSyncService(
+                    session=session, deezer_plugin=self._deezer_plugin
+                )
+            
             orchestrator = ProviderSyncOrchestrator(
                 session=session,
                 spotify_sync=spotify_sync,
@@ -1728,66 +1767,83 @@ class UnifiedLibraryManager:
                 workflow_service = AutomationWorkflowService(session)
                 track_repo = TrackRepository(session)
                 
-                # Get all tracks (future: filter by bitrate < 320 or format = mp3)
-                all_tracks = await track_repo.list_all()
+                # Hey future me - DON'T use list_all() without limit!
+                # Default limit is 100, which would miss 99% of large libraries.
+                # Use count_all() + paginated fetch instead!
+                total_tracks = await track_repo.count_all()
                 
-                if not all_tracks:
+                if total_tracks == 0:
                     logger.debug("No tracks in library to check for upgrades")
                     return
                 
-                logger.info(f"Scanning {len(all_tracks)} tracks for quality upgrades")
+                logger.info(f"Scanning {total_tracks} tracks for quality upgrades (paginated)...")
                 
                 upgrade_candidates_found = 0
                 improvement_threshold = 20.0  # Significant upgrade threshold
+                batch_size = 500  # Process in batches to avoid memory issues
+                offset = 0
+                tracks_scanned = 0
                 
-                for track in all_tracks:
-                    try:
-                        # Skip tracks without audio files
-                        if not track.file_path or not track.is_downloaded():
-                            continue
-                        
-                        # Check if quality service has upgrade identification
-                        if not hasattr(quality_service, "identify_upgrade_opportunities"):
-                            logger.debug(
-                                "Quality upgrade identification not yet implemented - skipping"
+                while offset < total_tracks:
+                    # Fetch batch of tracks
+                    all_tracks = await track_repo.list_all(limit=batch_size, offset=offset)
+                    
+                    if not all_tracks:
+                        break
+                
+                    for track in all_tracks:
+                        try:
+                            tracks_scanned += 1
+                            
+                            # Skip tracks without audio files
+                            if not track.file_path or not track.is_downloaded():
+                                continue
+                            
+                            # Check if quality service has upgrade identification
+                            if not hasattr(quality_service, "identify_upgrade_opportunities"):
+                                logger.debug(
+                                    "Quality upgrade identification not yet implemented - skipping"
+                                )
+                                break
+                            
+                            # Identify upgrade opportunities
+                            candidates = await quality_service.identify_upgrade_opportunities(
+                                track_id=track.id
                             )
-                            break
-                        
-                        # Identify upgrade opportunities
-                        candidates = await quality_service.identify_upgrade_opportunities(
-                            track_id=track.id
-                        )
-                        
-                        for candidate in candidates:
-                            if candidate.improvement_score >= improvement_threshold:
-                                logger.info(
-                                    f"Found upgrade: {track.title} - "
-                                    f"{candidate.current_format}@{candidate.current_bitrate}kbps → "
-                                    f"{candidate.target_format}@{candidate.target_bitrate}kbps "
-                                    f"(score: {candidate.improvement_score})"
-                                )
-                                
-                                await workflow_service.trigger_workflow(
-                                    trigger=AutomationTrigger.QUALITY_UPGRADE,
-                                    context={
-                                        "track_id": str(track.id.value),
-                                        "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
-                                        "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
-                                        "improvement_score": candidate.improvement_score,
-                                    },
-                                )
-                                upgrade_candidates_found += 1
-                        
-                    except Exception as e:
-                        logger.error(f"Error checking upgrade for track {track.id}: {e}")
-                        continue
+                            
+                            for candidate in candidates:
+                                if candidate.improvement_score >= improvement_threshold:
+                                    logger.info(
+                                        f"Found upgrade: {track.title} - "
+                                        f"{candidate.current_format}@{candidate.current_bitrate}kbps → "
+                                        f"{candidate.target_format}@{candidate.target_bitrate}kbps "
+                                        f"(score: {candidate.improvement_score})"
+                                    )
+                                    
+                                    await workflow_service.trigger_workflow(
+                                        trigger=AutomationTrigger.QUALITY_UPGRADE,
+                                        context={
+                                            "track_id": str(track.id.value),
+                                            "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
+                                            "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
+                                            "improvement_score": candidate.improvement_score,
+                                        },
+                                    )
+                                    upgrade_candidates_found += 1
+                            
+                        except Exception as e:
+                            logger.error(f"Error checking upgrade for track {track.id}: {e}")
+                            continue
+                    
+                    # Move to next batch
+                    offset += batch_size
                 
                 # Update stats
                 self._stats["quality_upgrades_found"] += upgrade_candidates_found
                 
                 logger.info(
                     f"✅ Quality upgrade scan complete: "
-                    f"{len(all_tracks)} tracks scanned, {upgrade_candidates_found} upgrades found"
+                    f"{tracks_scanned} tracks scanned, {upgrade_candidates_found} upgrades found"
                 )
                 
             except Exception as e:

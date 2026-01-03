@@ -139,6 +139,7 @@ class LibraryScannerService:
         async with _DISCOGRAPHY_SYNC_SEMAPHORE:
             from soulspot.application.services.artist_service import ArtistService
             from soulspot.config import get_settings
+            from soulspot.infrastructure.integrations.spotify_client import SpotifyClient
             from soulspot.infrastructure.persistence.database import Database
             from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
             from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
@@ -147,16 +148,22 @@ class LibraryScannerService:
 
             try:
                 # Create fresh Database instance for background task
-                db = Database(get_settings())
+                settings = get_settings()
+                db = Database(settings)
                 async with db.session_scope() as session:
                     # Create plugins - DeezerPlugin doesn't need auth for album lookup
                     # SpotifyPlugin will be None if user not authenticated
                     deezer_plugin = DeezerPlugin()
 
                     # Try to create SpotifyPlugin from stored session tokens
+                    # Hey future me - SpotifyPlugin REQUIRES client parameter!
+                    # It won't work without a proper SpotifyClient instance.
                     spotify_plugin = None
                     try:
-                        spotify_plugin = SpotifyPlugin()
+                        spotify_client = SpotifyClient(settings.spotify)
+                        spotify_plugin = SpotifyPlugin(
+                            client=spotify_client, access_token=None
+                        )
                     except Exception:
                         # No Spotify auth available, Deezer fallback will be used
                         pass
