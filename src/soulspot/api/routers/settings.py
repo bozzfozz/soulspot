@@ -1639,9 +1639,12 @@ async def get_automation_settings(
     summary = await settings_service.get_automation_settings_summary()
 
     # Get worker status if available
+    # Hey future me - hasattr returns True even if value is None!
+    # Must check BOTH hasattr AND value is not None
     worker_status = None
-    if hasattr(request.app.state, "automation_manager"):
-        worker_status = request.app.state.automation_manager.get_status()
+    automation_manager = getattr(request.app.state, "automation_manager", None)
+    if automation_manager is not None:
+        worker_status = automation_manager.get_status()
 
     return AutomationSettingsResponse(
         settings=AutomationSettings(**summary),
