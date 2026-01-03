@@ -1623,6 +1623,7 @@ class TrackRepository(ITrackRepository):
             duration_ms=model.duration_ms,
             track_number=model.track_number,
             disc_number=model.disc_number,
+            explicit=model.explicit or False,
             ownership_state=OwnershipState(model.ownership_state),
             download_state=DownloadState(model.download_state),
             primary_source=model.primary_source,
@@ -1658,6 +1659,7 @@ class TrackRepository(ITrackRepository):
             duration_ms=track.duration_ms,
             track_number=track.track_number,
             disc_number=track.disc_number,
+            explicit=track.explicit,
             ownership_state=track.ownership_state.value,  # OwnershipState enum → string
             download_state=track.download_state.value,  # DownloadState enum → string
             primary_source=track.primary_source,
@@ -1694,6 +1696,7 @@ class TrackRepository(ITrackRepository):
         model.duration_ms = track.duration_ms
         model.track_number = track.track_number
         model.disc_number = track.disc_number
+        model.explicit = track.explicit
         model.ownership_state = track.ownership_state.value  # OwnershipState enum → string
         model.download_state = track.download_state.value  # DownloadState enum → string
         model.primary_source = track.primary_source

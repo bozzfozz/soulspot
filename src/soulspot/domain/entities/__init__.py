@@ -502,6 +502,9 @@ class Track:
     duration_ms: int = 0
     track_number: int | None = None
     disc_number: int = 1
+    # Hey future me - explicit flag from Spotify/Deezer for parental advisory content!
+    # Used in naming templates and UI display. Default is False (assume clean).
+    explicit: bool = False
     # Hey future me - UnifiedLibraryManager ownership + download tracking!
     # ownership_state: 'owned' (in user library), 'discovered' (known, not owned), 'ignored'
     # download_state: 'not_needed' (DEFAULT!), 'pending', 'downloading', 'downloaded', 'failed'
