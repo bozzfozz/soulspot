@@ -1074,6 +1074,36 @@ class FollowedArtistsService:
         album_repo = AlbumRepository(self._session)
         track_repo = TrackRepository(self._session)
 
+        # =====================================================================
+        # PRE-SYNC LOGGING: Show what's already in DB
+        # Hey future me - this helps debug "0 added" situations!
+        # If existing_albums_count == albums_total, everything is already synced.
+        # =====================================================================
+        existing_albums = await album_repo.get_by_artist(artist.id)
+        existing_album_count = len(existing_albums)
+        existing_track_count = 0
+        albums_needing_tracks: list[str] = []
+
+        for existing_album in existing_albums:
+            tracks = await track_repo.get_by_album(existing_album.id)
+            track_count = len(tracks)
+            existing_track_count += track_count
+            if track_count == 0:
+                albums_needing_tracks.append(existing_album.title)
+
+        logger.info(
+            f"📊 Pre-sync status for {artist.name}: "
+            f"{existing_album_count} albums in DB, {existing_track_count} tracks in DB, "
+            f"{len(albums_needing_tracks)} albums need tracks"
+        )
+        if albums_needing_tracks and len(albums_needing_tracks) <= 10:
+            logger.info(f"   Albums needing tracks: {albums_needing_tracks}")
+        elif albums_needing_tracks:
+            logger.info(
+                f"   Albums needing tracks: {albums_needing_tracks[:5]} "
+                f"(+{len(albums_needing_tracks) - 5} more)"
+            )
+
         # Track seen albums and tracks to avoid duplicates
         seen_album_keys: set[str] = set()
         seen_track_keys: set[str] = set()
@@ -1129,6 +1159,16 @@ class FollowedArtistsService:
                 # Album exists - use its ID for track linking
                 album_id = existing_album.id
                 stats["albums_skipped"] += 1
+                # Check if this existing album has tracks
+                existing_tracks = await track_repo.get_by_album(existing_album.id)
+                if len(existing_tracks) == 0:
+                    logger.debug(
+                        f"   ⚠️ Album '{album_dto.title}' exists but has 0 tracks - will try to fetch"
+                    )
+                else:
+                    logger.debug(
+                        f"   ✓ Album '{album_dto.title}' exists with {len(existing_tracks)} tracks"
+                    )
             else:
                 # Create new album
                 spotify_uri = None
@@ -1246,11 +1286,46 @@ class FollowedArtistsService:
                     await track_repo.add(track)
                     stats["tracks_added"] += 1
 
+        # =====================================================================
+        # POST-SYNC LOGGING: Show detailed summary
+        # Hey future me - this is the MONEY LOG for debugging sync issues!
+        # Shows exactly what happened: added vs skipped vs errors.
+        # =====================================================================
         logger.info(
-            f"Complete discography sync for {artist.name}: "
-            f"Albums {stats['albums_added']}/{stats['albums_total']}, "
-            f"Tracks {stats['tracks_added']}/{stats['tracks_total']} (source={source})"
+            f"✅ Discography sync for {artist.name} complete (source={source}):"
         )
+        logger.info(
+            f"   Albums: {stats['albums_added']} added, "
+            f"{stats['albums_skipped']} skipped, "
+            f"{stats['albums_total']} total from API"
+        )
+        logger.info(
+            f"   Tracks: {stats['tracks_added']} added, "
+            f"{stats['tracks_skipped']} skipped, "
+            f"{stats['tracks_total']} total from API"
+        )
+
+        # Post-sync: Check how many albums still need tracks
+        post_sync_albums = await album_repo.get_by_artist(artist.id)
+        albums_still_needing_tracks: list[str] = []
+        for post_album in post_sync_albums:
+            post_tracks = await track_repo.get_by_album(post_album.id)
+            if len(post_tracks) == 0:
+                albums_still_needing_tracks.append(post_album.title)
+
+        if albums_still_needing_tracks:
+            logger.warning(
+                f"   ⚠️ {len(albums_still_needing_tracks)} albums STILL have 0 tracks after sync!"
+            )
+            if len(albums_still_needing_tracks) <= 5:
+                logger.warning(f"   Missing tracks for: {albums_still_needing_tracks}")
+            else:
+                logger.warning(
+                    f"   Missing tracks for: {albums_still_needing_tracks[:5]} "
+                    f"(+{len(albums_still_needing_tracks) - 5} more)"
+                )
+        else:
+            logger.info(f"   ✓ All albums have tracks")
 
         # Log summary of track fetch errors (if any)
         if stats["albums_with_track_errors"] > 0:
