@@ -180,17 +180,22 @@ def _get_unified_library_manager_status(request: Request) -> WorkerStatusInfo:
     )
 
 
-def _get_download_monitor_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Download Monitor Worker.
+def _get_download_status_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Download Status Worker (consolidated).
 
-    Hey future me - holt den Status vom DownloadMonitorWorker.
-    Der Worker überwacht slskd Downloads und updated Job Progress.
+    Hey future me - holt den Status vom DownloadStatusWorker.
+    Dieser KONSOLIDIERTE Worker ersetzt:
+    - DownloadMonitorWorker (überwacht slskd Downloads)
+    - DownloadStatusSyncWorker (synct Status zur DB)
+
+    Single slskd poll, dual update (JobQueue + DB).
+    See: docs/architecture/DOWNLOAD_WORKER_CONSOLIDATION_PLAN.md
     """
-    worker = getattr(request.app.state, "download_monitor_worker", None)
+    worker = getattr(request.app.state, "download_status_worker", None)
 
     if worker is None:
         return WorkerStatusInfo(
-            name="Download Monitor",
+            name="Download Status",
             icon="bi bi-download",
             settings_url="/settings?tab=downloads",
             running=False,
@@ -209,25 +214,30 @@ def _get_download_monitor_worker_status(request: Request) -> WorkerStatusInfo:
     else:
         last_poll_formatted = "noch nie"
 
-    # Determine status
+    # Determine status based on circuit breaker state
+    circuit_state = stats.get("circuit_breaker_state", "CLOSED")
     if not raw_status.get("running"):
         status = "stopped"
+    elif circuit_state == "OPEN":
+        status = "error"
     elif stats.get("last_error"):
         status = "error"
     else:
         status = "idle"
 
     return WorkerStatusInfo(
-        name="Download Monitor",
+        name="Download Status",
         icon="bi bi-download",
         settings_url="/settings?tab=downloads",
         running=raw_status.get("running", False),
         status=status,
         details={
-            "poll_interval_seconds": raw_status.get("poll_interval_seconds", 10),
+            "poll_interval_seconds": raw_status.get("poll_interval_seconds", 5),
             "last_poll": last_poll_formatted,
             "downloads_completed": stats.get("downloads_completed", 0),
             "downloads_failed": stats.get("downloads_failed", 0),
+            "stale_detected": stats.get("stale_detected", 0),
+            "circuit_breaker_state": circuit_state,
             "last_error": stats.get("last_error"),
         },
     )
@@ -288,18 +298,22 @@ def _get_automation_workers_status(request: Request) -> WorkerStatusInfo:
 
 
 
-def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Retry Scheduler Worker.
+def _get_download_queue_worker_status(request: Request) -> WorkerStatusInfo:
+    """Get status for the Download Queue Worker (consolidated).
 
-    Hey future me - holt den Status vom RetrySchedulerWorker.
-    Dieser Worker plant automatische Retries für fehlgeschlagene Downloads.
-    Uses exponential backoff (1, 5, 15 minutes).
+    Hey future me - holt den Status vom DownloadQueueWorker.
+    Dieser KONSOLIDIERTE Worker ersetzt:
+    - QueueDispatcherWorker (WAITING → PENDING dispatch)
+    - RetrySchedulerWorker (FAILED → WAITING retry)
+
+    Single poll cycle handles BOTH dispatch AND retry.
+    See: docs/architecture/DOWNLOAD_WORKER_CONSOLIDATION_PLAN.md
     """
-    worker = getattr(request.app.state, "retry_scheduler_worker", None)
+    worker = getattr(request.app.state, "download_queue_worker", None)
 
     if worker is None:
         return WorkerStatusInfo(
-            name="Retry Scheduler",
+            name="Download Queue",
             icon="bi bi-arrow-repeat",
             settings_url="/settings?tab=downloads",
             running=False,
@@ -307,7 +321,7 @@ def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
             details={"error": "Worker not initialized"},
         )
 
-    raw_status = worker.get_stats()
+    raw_status = worker.get_status()
     stats = raw_status.get("stats", {})
 
     # Format last check time
@@ -318,26 +332,31 @@ def _get_retry_scheduler_worker_status(request: Request) -> WorkerStatusInfo:
     else:
         last_check_formatted = "noch nie"
 
-    # Determine status
+    # Determine status based on slskd availability
+    slskd_available = stats.get("slskd_available", True)
     if not raw_status.get("running"):
         status = "stopped"
+    elif not slskd_available:
+        status = "error"
     elif stats.get("last_error"):
         status = "error"
     else:
         status = "idle"
 
     return WorkerStatusInfo(
-        name="Retry Scheduler",
+        name="Download Queue",
         icon="bi bi-arrow-repeat",
         settings_url="/settings?tab=downloads",
         running=raw_status.get("running", False),
         status=status,
         details={
-            "check_interval_seconds": raw_status.get("check_interval_seconds", 60),
+            "poll_interval_seconds": raw_status.get("poll_interval_seconds", 30),
             "last_check": last_check_formatted,
+            "slskd_available": slskd_available,
+            "jobs_dispatched": stats.get("jobs_dispatched", 0),
             "retries_scheduled": stats.get("retries_scheduled", 0),
-            "retries_successful": stats.get("retries_successful", 0),
-            "max_retries": raw_status.get("max_retries", 3),
+            "max_dispatch_per_cycle": raw_status.get("max_dispatch_per_cycle", 5),
+            "max_retries_per_cycle": raw_status.get("max_retries_per_cycle", 10),
             "last_error": stats.get("last_error"),
         },
     )
@@ -396,57 +415,13 @@ def _get_post_processing_worker_status(request: Request) -> WorkerStatusInfo:
     )
 
 
-def _get_queue_dispatcher_worker_status(request: Request) -> WorkerStatusInfo:
-    """Get status for the Queue Dispatcher Worker.
-
-    Hey future me - holt den Status vom QueueDispatcherWorker.
-    Dieser Worker dispatched Jobs aus der PersistentJobQueue an slskd.
-    """
-    worker = getattr(request.app.state, "queue_dispatcher_worker", None)
-
-    if worker is None:
-        return WorkerStatusInfo(
-            name="Queue Dispatcher",
-            icon="bi bi-send",
-            settings_url="/settings?tab=downloads",
-            running=False,
-            status="stopped",
-            details={"error": "Worker not initialized"},
-        )
-
-    raw_status = worker.get_status()
-    stats = raw_status.get("stats", {})
-
-    # Format last dispatch time
-    last_dispatch_at = stats.get("last_dispatch_at")
-    if last_dispatch_at:
-        dt = datetime.fromisoformat(last_dispatch_at)
-        last_dispatch_formatted = _format_time_ago(dt)
-    else:
-        last_dispatch_formatted = "noch nie"
-
-    # Determine status
-    if not raw_status.get("running"):
-        status = "stopped"
-    elif stats.get("last_error"):
-        status = "error"
-    else:
-        status = "idle"
-
-    return WorkerStatusInfo(
-        name="Queue Dispatcher",
-        icon="bi bi-send",
-        settings_url="/settings?tab=downloads",
-        running=raw_status.get("running", False),
-        status=status,
-        details={
-            "dispatch_interval_seconds": raw_status.get("dispatch_interval_seconds", 5),
-            "last_dispatch": last_dispatch_formatted,
-            "jobs_dispatched": stats.get("jobs_dispatched", 0),
-            "concurrent_limit": raw_status.get("concurrent_limit", 3),
-            "last_error": stats.get("last_error"),
-        },
-    )
+# =============================================================================
+# REMOVED: _get_queue_dispatcher_worker_status() - CONSOLIDATED
+# =============================================================================
+# Hey future me - this function was CONSOLIDATED into _get_download_queue_worker_status()!
+# The DownloadQueueWorker now handles BOTH dispatch AND retry in one worker.
+# See: docs/architecture/DOWNLOAD_WORKER_CONSOLIDATION_PLAN.md
+# =============================================================================
 
 
 def _get_service_status(request: Request) -> dict[str, Any]:
@@ -468,12 +443,11 @@ def _get_service_status(request: Request) -> dict[str, Any]:
         spotify_worker is not None and spotify_worker.get_status().get("running", False)
     )
 
-    # Check if slskd connection is available
-    # This is checked by the DownloadMonitorWorker
-    download_worker = getattr(request.app.state, "download_monitor_worker", None)
+    # Check if slskd connection is available via DownloadStatusWorker (consolidated)
+    download_status_worker = getattr(request.app.state, "download_status_worker", None)
     service_status["slskd"] = (
-        download_worker is not None
-        and download_worker.get_status().get("running", False)
+        download_status_worker is not None
+        and download_status_worker.get_status().get("running", False)
     )
 
     # External APIs (MusicBrainz, CoverArtArchive) are generally available
@@ -493,10 +467,9 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     Returns status information for:
     - Token Refresh Worker: Keeps Spotify OAuth tokens fresh
     - Unified Library Manager: THE central library worker (Spotify + Deezer + Tidal)
-    - Download Monitor Worker: Tracks slskd download progress
-    - Retry Scheduler Worker: Schedules automatic retries for failed downloads
+    - Download Status Worker: Monitors slskd + syncs status to DB (consolidated)
+    - Download Queue Worker: Dispatch + Retry scheduling (consolidated)
     - Post-Processing Worker: Tags and organizes completed downloads
-    - Queue Dispatcher Worker: Dispatches jobs from queue to slskd
     - Automation Workers: Watchlist, Discography, Quality Upgrade
 
     Each worker includes:
@@ -510,10 +483,9 @@ async def get_all_workers_status(request: Request) -> AllWorkersStatus:
     workers = {
         "token_refresh": _get_token_worker_status(request),
         "library_manager": _get_unified_library_manager_status(request),
-        "download_monitor": _get_download_monitor_worker_status(request),
-        "retry_scheduler": _get_retry_scheduler_worker_status(request),
+        "download_status": _get_download_status_worker_status(request),
+        "download_queue": _get_download_queue_worker_status(request),
         "post_processing": _get_post_processing_worker_status(request),
-        "queue_dispatcher": _get_queue_dispatcher_worker_status(request),
         "automation": _get_automation_workers_status(request),
     }
 
@@ -543,10 +515,9 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
     worker_order = [
         "token_refresh",
         "library_manager",
-        "download_monitor",
-        "retry_scheduler",
+        "download_status",
+        "download_queue",
         "post_processing",
-        "queue_dispatcher",
         "automation",
     ]
 
