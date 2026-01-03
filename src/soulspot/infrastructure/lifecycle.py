@@ -561,7 +561,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     session_factory=db.get_session_factory(),
                     slskd_client=slskd_client,
                     job_queue=job_queue,
-                    poll_interval=30,  # Check queue every 30 seconds
+                    check_interval=30,  # Check queue every 30 seconds
                     dispatch_delay=2.0,  # 2s between dispatches (rate limiting)
                     max_dispatch_per_cycle=5,  # Max 5 new downloads per cycle
                     max_retries_per_cycle=10,  # Max 10 retries per cycle
@@ -639,6 +639,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 settings_service=app_settings_service,
                 downloads_path=settings.storage.download_path,
                 music_path=settings.storage.music_path,
+                temp_path=settings.storage.temp_path,  # Add missing temp_path parameter
                 dry_run=False,  # Set to True for testing
             )
             orchestrator.register(
