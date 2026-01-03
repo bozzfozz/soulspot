@@ -1,7 +1,8 @@
 # Download Worker Konsolidierungs-Plan
 
 > Erstellt: Januar 2026  
-> Status: **GEPLANT**  
+> Status: **✅ IMPLEMENTIERT**  
+> Implementiert: Januar 2026  
 > Ziel: 4 Download-Worker → 2 konsolidierte Worker  
 > Inspiriert von: Lidarr Download Client Architecture
 
@@ -343,25 +344,25 @@ make docker-up
 
 ## 🧹 Phase 3: Cleanup
 
-### Nach erfolgreicher Validierung löschen:
+### Alte Worker (DEPRECATED, nicht mehr in lifecycle.py):
 
 | Datei | Zeilen | Status |
 |-------|--------|--------|
-| `download_monitor_worker.py` | 506 | ❌ LÖSCHEN |
-| `download_status_sync_worker.py` | 665 | ❌ LÖSCHEN |
-| `queue_dispatcher_worker.py` | 352 | ❌ LÖSCHEN |
-| `retry_scheduler_worker.py` | 214 | ❌ LÖSCHEN |
-| **Total gelöscht:** | **1737** | |
+| `download_monitor_worker.py` | 506 | ⚠️ DEPRECATED |
+| `download_status_sync_worker.py` | 665 | ⚠️ DEPRECATED |
+| `queue_dispatcher_worker.py` | 352 | ⚠️ DEPRECATED |
+| `retry_scheduler_worker.py` | 214 | ⚠️ DEPRECATED |
+| **Total deprecated:** | **1737** | |
 
-### Neue Dateien:
+### Neue Dateien (aktiv in lifecycle.py):
 
 | Datei | Zeilen | Status |
 |-------|--------|--------|
-| `download_status_worker.py` | ~600 | ✅ NEU |
-| `download_queue_worker.py` | ~350 | ✅ NEU |
-| **Total neu:** | **~950** | |
+| `download_status_worker.py` | ~550 | ✅ AKTIV |
+| `download_queue_worker.py` | ~330 | ✅ AKTIV |
+| **Total neu:** | **~880** | |
 
-**Netto-Reduktion:** ~787 Zeilen (-45%)
+**Netto-Reduktion:** ~857 Zeilen (-49%)
 
 ---
 
@@ -369,47 +370,47 @@ make docker-up
 
 ### Von `DownloadMonitorWorker` (506 Zeilen):
 
-- [ ] Poll slskd API für aktive Downloads
-- [ ] Update JobQueue mit Progress (bytes_downloaded, percent)
-- [ ] Mark Jobs as COMPLETED when download finishes
-- [ ] Mark Jobs as FAILED when download errors
-- [ ] Stale Download Detection (> 12h ohne Progress)
-- [ ] Restart Stale Downloads
-- [ ] Log worker health via log_worker_health()
+- [x] Poll slskd API für aktive Downloads
+- [x] Update JobQueue mit Progress (bytes_downloaded, percent)
+- [x] Mark Jobs as COMPLETED when download finishes
+- [x] Mark Jobs as FAILED when download errors
+- [x] Stale Download Detection (> 1h ohne Progress)
+- [x] Restart Stale Downloads
+- [x] Log worker health via log_worker_health()
 
 ### Von `DownloadStatusSyncWorker` (665 Zeilen):
 
-- [ ] Poll slskd API für alle Downloads
-- [ ] Match slskd downloads zu DownloadModel via source_url/external_id
-- [ ] Update DownloadModel.status
-- [ ] Update DownloadModel.progress
-- [ ] Update DownloadModel.bytes_downloaded
-- [ ] Update TrackModel.file_path on Completion
-- [ ] Circuit Breaker (STATE_CLOSED/OPEN/HALF_OPEN)
-- [ ] Exponential Backoff bei Failures
-- [ ] Completed History Tracking (24h)
-- [ ] Log worker health via log_worker_health()
+- [x] Poll slskd API für alle Downloads
+- [x] Match slskd downloads zu DownloadModel via source_url/external_id
+- [x] Update DownloadModel.status
+- [x] Update DownloadModel.progress
+- [x] Update DownloadModel.bytes_downloaded
+- [x] Update TrackModel.file_path on Completion
+- [x] Circuit Breaker (STATE_CLOSED/OPEN/HALF_OPEN)
+- [x] Exponential Backoff bei Failures
+- [x] Completed History Tracking (24h)
+- [x] Log worker health via log_worker_health()
 
 ### Von `QueueDispatcherWorker` (352 Zeilen):
 
-- [ ] Check slskd health via test_connection
-- [ ] Query WAITING downloads (oldest first, priority order)
-- [ ] Transition WAITING → PENDING
-- [ ] Enqueue DOWNLOAD job in JobQueue
-- [ ] Max dispatch per cycle (default: 5)
-- [ ] Dispatch delay between downloads (default: 2s)
-- [ ] Track availability state changes
-- [ ] Graceful shutdown handling
-- [ ] Log worker health via log_worker_health()
+- [x] Check slskd health via test_connection
+- [x] Query WAITING downloads (oldest first, priority order)
+- [x] Transition WAITING → PENDING
+- [x] Enqueue DOWNLOAD job in JobQueue
+- [x] Max dispatch per cycle (default: 5)
+- [x] Dispatch delay between downloads (default: 2s)
+- [x] Track availability state changes
+- [x] Graceful shutdown handling
+- [x] Log worker health via log_worker_health()
 
 ### Von `RetrySchedulerWorker` (214 Zeilen):
 
-- [ ] Query retry-eligible downloads (FAILED + retry_count < max + next_retry_at <= now)
-- [ ] Check non-retryable errors (file_not_found, user_blocked, invalid_file)
-- [ ] Activate for retry (FAILED → WAITING)
-- [ ] Max retries per cycle (default: 10)
-- [ ] Graceful shutdown handling
-- [ ] Log worker health via log_worker_health()
+- [x] Query retry-eligible downloads (FAILED + retry_count < max + next_retry_at <= now)
+- [x] Check non-retryable errors (file_not_found, user_blocked, invalid_file)
+- [x] Activate for retry (FAILED → WAITING)
+- [x] Max retries per cycle (default: 10)
+- [x] Graceful shutdown handling
+- [x] Log worker health via log_worker_health()
 
 ---
 
@@ -454,8 +455,24 @@ slskd Polls: 2x → 1x (-50% API-Calls)
 | Phase | Dauer | Status |
 |-------|-------|--------|
 | Phase 1: Design | ✅ Fertig | Dieses Dokument |
-| Phase 2: Implementierung | ~2-3h | ⏳ Geplant |
-| Phase 3: Cleanup | ~30min | ⏳ Nach Validierung |
+| Phase 2: Implementierung | ✅ ~2h | Fertig - Januar 2026 |
+| Phase 3: Cleanup | ✅ Fertig | Alte Worker deprecated, nicht gelöscht |
+
+### Implementierungs-Details (Januar 2026):
+
+**Neue Worker erstellt:**
+- `src/soulspot/application/workers/download_status_worker.py` (~550 Zeilen)
+- `src/soulspot/application/workers/download_queue_worker.py` (~330 Zeilen)
+
+**lifecycle.py aktualisiert:**
+- Alte Worker-Imports entfernt
+- Neue Worker-Registrierung hinzugefügt
+- Orchestrator.register_running_task() für task-basierte Worker
+
+**Alte Worker mit Deprecation-Header versehen:**
+- Jede Datei hat prominent `⚠️ DEPRECATED` Kommentar
+- Verweis auf neue Worker und Migration
+- Docstring mit `.. deprecated::` Sphinx directive
 
 ---
 

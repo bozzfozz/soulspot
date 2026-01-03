@@ -477,149 +477,123 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
             # =================================================================
-            # Download Monitor Worker (tracks slskd download progress)
+            # DownloadStatusWorker (CONSOLIDATED - replaces MonitorWorker + StatusSyncWorker)
             # =================================================================
-            # Hey future me - dieser Worker ÜBERWACHT laufende Downloads!
-            # Requires slskd_client to be configured.
+            # Hey future me - THIS IS THE LIDARR-INSPIRED CONSOLIDATED WORKER!
+            # Single slskd poll fetches ALL download state at once:
+            # - Active downloads (progress, speed, ETA)
+            # - Completed downloads (ready for import)
+            # - Failed downloads (error detection)
+            # - Stale downloads (stuck > 1 hour)
+            #
+            # Replaces 2 separate workers with overlapping functionality:
+            # - download_monitor_worker.py (506 lines) - DEPRECATED
+            # - download_status_sync_worker.py (665 lines) - DEPRECATED
+            #
+            # See: docs/architecture/DOWNLOAD_WORKER_CONSOLIDATION_PLAN.md
             if slskd_client is not None:
-                from soulspot.application.workers.download_monitor_worker import (
-                    DownloadMonitorWorker,
+                from soulspot.application.workers.download_status_worker import (
+                    DownloadStatusWorker,
                 )
 
-                download_monitor_worker = DownloadMonitorWorker(
-                    job_queue=job_queue,
-                    slskd_client=slskd_client,
-                    poll_interval_seconds=10,  # Poll every 10 seconds
-                )
-                orchestrator.register(
-                    name="download_monitor",
-                    worker=download_monitor_worker,
-                    category="download",
-                    priority=31,
-                    required=False,  # Optional if slskd not configured
-                )
-                app.state.download_monitor_worker = download_monitor_worker
-            else:
-                logger.warning(
-                    "Download monitor worker skipped - slskd client not available"
-                )
-                app.state.download_monitor_worker = None
-
-            # =================================================================
-            # Queue Dispatcher Worker (dispatches WAITING downloads)
-            # =================================================================
-            # Hey future me - dieser Worker ist TASK-BASIERT!
-            # Er läuft als blocking coroutine in eigenem Task.
-            # Wird NICHT über orchestrator.start_all() gestartet, sondern manuell.
-            # Der Task wird aber beim Orchestrator registriert für Tracking.
-            if slskd_client is not None:
-                from soulspot.application.workers.queue_dispatcher_worker import (
-                    QueueDispatcherWorker,
-                )
-
-                queue_dispatcher_worker = QueueDispatcherWorker(
+                download_status_worker = DownloadStatusWorker(
                     session_factory=db.get_session_factory(),
                     slskd_client=slskd_client,
                     job_queue=job_queue,
-                    check_interval=30,  # Check slskd every 30 seconds
-                    dispatch_delay=2.0,  # 2s between dispatches
-                    max_dispatch_per_cycle=5,  # Max 5 downloads per cycle
-                )
-                # Start in background task (blocking coroutine)
-                queue_dispatcher_task = asyncio.create_task(
-                    queue_dispatcher_worker.start()
-                )
-                # Register with orchestrator for tracking (already started!)
-                orchestrator.register_running_task(
-                    name="queue_dispatcher",
-                    task=queue_dispatcher_task,
-                    worker=queue_dispatcher_worker,
-                    priority=32,
-                    category="download",
-                    required=False,
-                )
-                app.state.queue_dispatcher_worker = queue_dispatcher_worker
-                app.state.queue_dispatcher_task = queue_dispatcher_task
-                logger.info("Queue dispatcher worker started (checks slskd every 30s)")
-            else:
-                logger.warning(
-                    "Queue dispatcher worker skipped - slskd client not available"
-                )
-                app.state.queue_dispatcher_worker = None
-                app.state.queue_dispatcher_task = None
-
-            # =================================================================
-            # Download Status Sync Worker (syncs slskd status to DB)
-            # =================================================================
-            # Hey future me - TASK-BASIERT wie queue_dispatcher.
-            if slskd_client is not None:
-                from soulspot.application.workers.download_status_sync_worker import (
-                    DownloadStatusSyncWorker,
-                )
-
-                download_status_sync_worker = DownloadStatusSyncWorker(
-                    session_factory=db.get_session_factory(),
-                    slskd_client=slskd_client,
-                    sync_interval=5,  # Sync every 5 seconds for responsive UI
+                    poll_interval=5,  # Poll slskd every 5 seconds for responsive UI
                     completed_history_hours=24,  # Track completed downloads for 24h
                     max_consecutive_failures=3,  # Open circuit after 3 failures
                     circuit_breaker_timeout=60,  # Wait 60s before retry when circuit open
                 )
-                download_status_sync_task = asyncio.create_task(
-                    download_status_sync_worker.start()
+                download_status_task = asyncio.create_task(
+                    download_status_worker.start()
                 )
-                # Register for tracking (already started!)
                 orchestrator.register_running_task(
-                    name="download_status_sync",
-                    task=download_status_sync_task,
-                    worker=download_status_sync_worker,
-                    priority=33,
+                    name="download_status",
+                    task=download_status_task,
+                    worker=download_status_worker,
+                    priority=31,
                     category="download",
                     required=False,
                 )
-                app.state.download_status_sync_worker = download_status_sync_worker
-                app.state.download_status_sync_task = download_status_sync_task
-                logger.info("Download status sync worker started (syncs every 5s)")
+                app.state.download_status_worker = download_status_worker
+                app.state.download_status_task = download_status_task
+                logger.info("DownloadStatusWorker started (consolidated slskd monitor)")
             else:
                 logger.warning(
-                    "Download status sync worker skipped - slskd client not available"
+                    "DownloadStatusWorker skipped - slskd client not available"
                 )
-                app.state.download_status_sync_worker = None
-                app.state.download_status_sync_task = None
+                app.state.download_status_worker = None
+                app.state.download_status_task = None
 
             # =================================================================
-            # Retry Scheduler Worker (auto-retries failed downloads)
+            # DownloadQueueWorker (CONSOLIDATED - replaces DispatcherWorker + RetryWorker)
             # =================================================================
-            # Hey future me - TASK-BASIERT.
-            # next_retry_at timestamp und retry_count < max_retries).
-            # Exponential backoff: 1min, 5min, 15min zwischen Retries.
-            # NON-RETRYABLE errors (file_not_found, user_blocked) werden NICHT retried!
-            # Dieser Worker braucht KEINEN slskd_client - er ändert nur DB Status
-            # von FAILED → WAITING. QueueDispatcherWorker macht den Rest.
-            # TASK-BASIERT.
-            from soulspot.application.workers.retry_scheduler_worker import (
-                RetrySchedulerWorker,
-            )
+            # Hey future me - THIS IS THE LIDARR-INSPIRED QUEUE MANAGER!
+            # Single poll cycle handles BOTH dispatch AND retry:
+            # - Phase 1: Check slskd health (skip if circuit breaker open)
+            # - Phase 2: Dispatch WAITING → PENDING downloads to slskd
+            # - Phase 3: Schedule FAILED → WAITING retries (with exponential backoff)
+            #
+            # Replaces 2 separate workers:
+            # - queue_dispatcher_worker.py (352 lines) - DEPRECATED
+            # - retry_scheduler_worker.py (214 lines) - DEPRECATED
+            #
+            # BLOCKLIST_ERRORS: Permanent failures that are NOT retried:
+            # - file_not_found, user_blocked, corrupted_file, invalid_format
+            #
+            # See: docs/architecture/DOWNLOAD_WORKER_CONSOLIDATION_PLAN.md
+            if slskd_client is not None:
+                from soulspot.application.workers.download_queue_worker import (
+                    DownloadQueueWorker,
+                )
 
-            retry_scheduler_worker = RetrySchedulerWorker(
-                session_factory=db.get_session_factory(),
-                check_interval=30,  # Check every 30 seconds
-                max_retries_per_cycle=10,  # Max 10 retries per cycle to prevent flooding
-            )
-            retry_scheduler_task = asyncio.create_task(retry_scheduler_worker.start())
-            orchestrator.register_running_task(
-                name="retry_scheduler",
-                task=retry_scheduler_task,
-                worker=retry_scheduler_worker,
-                priority=34,
-                category="download",
-                required=False,
-            )
-            app.state.retry_scheduler_worker = retry_scheduler_worker
-            app.state.retry_scheduler_task = retry_scheduler_task
-            logger.info(
-                "Retry scheduler worker started (checks every 30s, max 3 retries)"
-            )
+                download_queue_worker = DownloadQueueWorker(
+                    session_factory=db.get_session_factory(),
+                    slskd_client=slskd_client,
+                    job_queue=job_queue,
+                    poll_interval=30,  # Check queue every 30 seconds
+                    dispatch_delay=2.0,  # 2s between dispatches (rate limiting)
+                    max_dispatch_per_cycle=5,  # Max 5 new downloads per cycle
+                    max_retries_per_cycle=10,  # Max 10 retries per cycle
+                )
+                download_queue_task = asyncio.create_task(
+                    download_queue_worker.start()
+                )
+                orchestrator.register_running_task(
+                    name="download_queue",
+                    task=download_queue_task,
+                    worker=download_queue_worker,
+                    priority=32,
+                    category="download",
+                    required=False,
+                )
+                app.state.download_queue_worker = download_queue_worker
+                app.state.download_queue_task = download_queue_task
+                logger.info("DownloadQueueWorker started (consolidated dispatch+retry)")
+            else:
+                logger.warning(
+                    "DownloadQueueWorker skipped - slskd client not available"
+                )
+                app.state.download_queue_worker = None
+                app.state.download_queue_task = None
+
+            # =================================================================
+            # REMOVED: Download Status Sync Worker - CONSOLIDATED
+            # =================================================================
+            # Hey future me - this worker was CONSOLIDATED into DownloadStatusWorker!
+            # The new worker handles both progress monitoring AND status sync in one
+            # poll cycle (Lidarr-inspired pattern). See lines above for the new worker.
+            # Old file: download_status_sync_worker.py (665 lines) - DEPRECATED
+            # =================================================================
+
+            # =================================================================
+            # REMOVED: Retry Scheduler Worker - CONSOLIDATED
+            # =================================================================
+            # Hey future me - this worker was CONSOLIDATED into DownloadQueueWorker!
+            # The new worker handles both dispatch AND retry in one poll cycle.
+            # Old file: retry_scheduler_worker.py (214 lines) - DEPRECATED
+            # =================================================================
 
             # =================================================================
             # Automation Workers (optional, controlled by settings)
