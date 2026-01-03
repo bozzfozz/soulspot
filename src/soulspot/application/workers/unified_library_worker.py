@@ -897,11 +897,30 @@ class UnifiedLibraryManager:
             artists_processed = 0
             errors = 0
 
-            # Create service once per session
-            artist_service = ArtistService(
+            # Create orchestrator for multi-provider album sync with cooldown
+            from soulspot.application.services.provider_sync_orchestrator import (
+                ProviderSyncOrchestrator,
+            )
+            from soulspot.application.services.spotify_sync_service import (
+                SpotifySyncService,
+            )
+            from soulspot.application.services.deezer_sync_service import (
+                DeezerSyncService,
+            )
+
+            spotify_sync = SpotifySyncService(
                 session=session,
                 spotify_plugin=self._spotify_plugin,
+            )
+            deezer_sync = DeezerSyncService(
+                session=session,
                 deezer_plugin=self._deezer_plugin,
+            )
+            orchestrator = ProviderSyncOrchestrator(
+                session=session,
+                spotify_sync=spotify_sync,
+                deezer_sync=deezer_sync,
+                settings_service=settings_service,
             )
 
             while offset < owned_count:
@@ -916,19 +935,28 @@ class UnifiedLibraryManager:
 
                 for artist in artists:
                     try:
-                        # Sync discography (albums + tracks)
-                        stats = await artist_service.sync_artist_discography_complete(
-                            artist_id=str(artist.id.value),
-                            include_tracks=True,  # Sync tracks too!
+                        # Sync albums ONLY (not tracks!) with cooldown check
+                        # Tracks will be synced separately in _sync_tracks() phase
+                        result = await orchestrator.sync_artist_albums(
+                            artist_id=artist.spotify_id,
+                            artist_name=artist.name,
+                            deezer_artist_id=artist.deezer_id,
+                            force=False,  # Respect cooldown!
                         )
-                        total_albums_added += stats.get("albums_added", 0)
-                        total_tracks_added += stats.get("tracks_added", 0)
-                        artists_processed += 1
-
-                        logger.debug(
-                            f"Synced {artist.name}: {stats.get('albums_added', 0)} albums, "
-                            f"{stats.get('tracks_added', 0)} tracks"
-                        )
+                        
+                        # Only count if actually synced (not skipped due to cooldown)
+                        if result.synced and not result.skipped_providers:
+                            total_albums_added += result.added
+                            artists_processed += 1
+                            logger.debug(
+                                f"Synced {artist.name}: {result.added} albums "
+                                f"(Spotify: {result.source_counts.get('spotify', 0)}, "
+                                f"Deezer: {result.source_counts.get('deezer', 0)})"
+                            )
+                        elif result.skipped_providers:
+                            logger.debug(
+                                f"Skipped {artist.name} (cooldown - providers: {result.skipped_providers})"
+                            )
 
                     except Exception as e:
                         errors += 1
@@ -962,8 +990,15 @@ class UnifiedLibraryManager:
         2. Set download_state=PENDING for new tracks if auto_queue_downloads=True
 
         Uses Deezer API to fetch tracks (NO AUTH NEEDED!) with rate limiting.
+        
+        CRITICAL FIX (Jan 2026): Use sync_album_tracks() instead of sync_artist_discography_complete()!
+        Was syncing entire artist discography for EACH album → Dr. Peacock endless loop!
         """
-        from soulspot.application.services.artist_service import ArtistService
+        from soulspot.application.services.provider_sync_orchestrator import (
+            ProviderSyncOrchestrator,
+        )
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.application.services.spotify_sync_service import SpotifySyncService
         from soulspot.domain.entities import DownloadState
         from soulspot.infrastructure.persistence.repositories import (
             AlbumRepository,
@@ -994,11 +1029,14 @@ class UnifiedLibraryManager:
 
             logger.info(f"Found {len(albums)} albums needing track backfill")
 
-            # Create service for track fetching
-            artist_service = ArtistService(
+            # Create sync services
+            spotify_sync = SpotifySyncService(session=session, plugin=self._spotify_plugin)
+            deezer_sync = DeezerSyncService(session=session, plugin=self._deezer_plugin)
+            orchestrator = ProviderSyncOrchestrator(
                 session=session,
-                spotify_plugin=self._spotify_plugin,
-                deezer_plugin=self._deezer_plugin,
+                spotify_sync=spotify_sync,
+                deezer_sync=deezer_sync,
+                settings_service=settings_service,
             )
 
             tracks_added = 0
@@ -1007,16 +1045,20 @@ class UnifiedLibraryManager:
 
             for album in albums:
                 try:
-                    # sync_artist_discography_complete fetches tracks too
-                    # But we already have the album, just need tracks
-                    # Use _fetch_album_tracks_from_deezer if available
-                    # For now, re-sync entire artist discography which handles it
-                    stats = await artist_service.sync_artist_discography_complete(
-                        artist_id=str(album.artist_id.value),
-                        include_tracks=True,
+                    # FIXED: Sync ONLY this album's tracks, not entire artist!
+                    # Use album IDs from the album entity
+                    result = await orchestrator.sync_album_tracks(
+                        album_id=album.spotify_id,  # Spotify album ID
+                        deezer_album_id=album.deezer_id,  # Deezer album ID (if available)
+                        force=False,
                     )
-                    tracks_added += stats.get("tracks_added", 0)
+                    tracks_added += result.added
                     albums_processed += 1
+                    
+                    if not result.synced:
+                        logger.debug(
+                            f"No tracks synced for album {album.title}: {result.errors}"
+                        )
 
                 except Exception as e:
                     errors += 1
