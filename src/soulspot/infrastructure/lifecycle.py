@@ -509,8 +509,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     session_factory=db.get_session_factory(),
                     slskd_client=slskd_client,
                     job_queue=job_queue,
-                    poll_interval=5,  # Poll slskd every 5 seconds for responsive UI
-                    completed_history_hours=24,  # Track completed downloads for 24h
+                    poll_interval_seconds=5,  # Poll slskd every 5 seconds for responsive UI
+                    stale_timeout_hours=12,  # Restart downloads stale after 12h
                     max_consecutive_failures=3,  # Open circuit after 3 failures
                     circuit_breaker_timeout=60,  # Wait 60s before retry when circuit open
                 )
