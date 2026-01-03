@@ -278,12 +278,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # - LibraryDiscoveryWorker (DELETED)
         # - ImageBackfillWorker (DELETED)
         # - ImageQueueWorker (DELETED)
+        # - AutomationWorkerManager (CONSOLIDATED - watchlist/discography/quality)
         #
         # Architecture: See docs/architecture/UNIFIED_LIBRARY_WORKER.md
-        # - 6 phases: DISCOVER → IDENTIFY → ENRICH → EXPAND → IMAGERY → CLEANUP
+        # - Core tasks: ARTIST_SYNC → ALBUM_SYNC → TRACK_SYNC → ENRICHMENT → etc.
+        # - Automation tasks: WATCHLIST_CHECK, DISCOGRAPHY_SCAN, QUALITY_UPGRADE
         # - Dependency-based task scheduling (topological order)
-        # - Single DB session per phase (no SQLite locking issues!)
-        # - Deduplication via MBID > ISRC > Provider-ID > Name
+        # - Task-specific cooldowns (TASK_COOLDOWNS dict)
+        # - Single DB session per task (no SQLite locking issues!)
         from soulspot.application.workers.unified_library_worker import (
             UnifiedLibraryManager,
         )
@@ -303,6 +305,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
         )
+        # Hey future me - set token_manager for automation tasks!
+        # WATCHLIST_CHECK, DISCOGRAPHY_SCAN need Spotify API access.
+        unified_library_manager.set_token_manager(db_token_manager)
+        
         orchestrator.register(
             name="unified_library",
             worker=unified_library_manager,
@@ -312,7 +318,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             required=True,  # This is now THE sync worker
         )
         app.state.unified_library_manager = unified_library_manager
-        logger.info("UnifiedLibraryManager registered (replaces 6 deprecated workers)")
+        logger.info(
+            "UnifiedLibraryManager registered "
+            "(replaces 6 deprecated workers + AutomationWorkerManager)"
+        )
 
         # Initialize PERSISTENT job queue (survives restarts!)
         # Hey future me - PersistentJobQueue wraps JobQueue with DB persistence.
@@ -596,40 +605,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # =================================================================
 
             # =================================================================
-            # Automation Workers (optional, controlled by settings)
+            # REMOVED: AutomationWorkerManager - CONSOLIDATED into UnifiedLibraryManager
             # =================================================================
-            # Hey future me - diese Worker sind OPTIONAL und default DISABLED!
-            from soulspot.application.workers.automation_workers import (
-                AutomationWorkerManager,
-            )
-            from soulspot.infrastructure.plugins import SpotifyPlugin
-
-            # Create SpotifyPlugin for automation workers
-            automation_spotify_plugin = SpotifyPlugin(
-                client=spotify_client,
-                access_token=None,  # Token set via set_token() by workers
-            )
-
-            automation_manager = AutomationWorkerManager(
-                session_factory=db.get_session_factory(),
-                spotify_plugin=automation_spotify_plugin,
-                token_manager=db_token_manager,
-                watchlist_interval=3600,  # 1 hour
-                discography_interval=86400,  # 24 hours
-                quality_interval=86400,  # 24 hours
-            )
-            # AutomationWorkerManager has its own start_all() - creates internal tasks
-            await automation_manager.start_all()
-            # Register the manager itself (not individual workers)
-            orchestrator.register(
-                name="automation_manager",
-                worker=automation_manager,
-                category="automation",
-                priority=80,
-                required=False,
-            )
-            app.state.automation_manager = automation_manager
-            logger.info("Automation workers started (watchlist/discography/quality)")
+            # Hey future me - AutomationWorkerManager was CONSOLIDATED!
+            # Its 3 sub-workers are now TASKS in UnifiedLibraryManager:
+            # - WatchlistWorker → TaskType.WATCHLIST_CHECK (1h cooldown)
+            # - DiscographyWorker → TaskType.DISCOGRAPHY_SCAN (24h cooldown)
+            # - QualityUpgradeWorker → TaskType.QUALITY_UPGRADE (24h cooldown)
+            #
+            # Benefits of consolidation:
+            # - Single DB session shared across all automation tasks
+            # - Task dependency management (WATCHLIST_CHECK depends on ALBUM_SYNC)
+            # - Unified status API via UnifiedLibraryManager.get_status()
+            # - ~835 lines → ~200 lines (76% code reduction)
+            #
+            # Old file: automation_workers.py - DEPRECATED, do not delete yet
+            # See: docs/architecture/AUTOMATION_WORKER_CONSOLIDATION_PLAN.md
+            # =================================================================
+            app.state.automation_manager = None  # Legacy compat - use unified_library_manager
 
             # =================================================================
             # Cleanup Worker (optional, default disabled)

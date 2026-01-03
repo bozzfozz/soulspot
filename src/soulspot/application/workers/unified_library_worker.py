@@ -81,8 +81,16 @@ class TaskType(str, Enum):
 
     Hey future me - these are the ONLY operations the manager performs!
     Each task type has its own cooldown tracked in task_last_run.
+    
+    AUTOMATION TASKS (migrated from AutomationWorkerManager):
+    - WATCHLIST_CHECK: Check for new releases on watched artists (hourly)
+    - DISCOGRAPHY_SCAN: Check for missing albums in discographies (daily)
+    - QUALITY_UPGRADE: Find tracks that can be upgraded to better quality (daily)
+    
+    These automation tasks use longer cooldowns and run with MAINTENANCE priority.
     """
 
+    # === CORE SYNC TASKS ===
     ARTIST_SYNC = "artist_sync"  # Sync followed artists from providers
     ALBUM_SYNC = "album_sync"  # Sync albums for artists
     TRACK_SYNC = "track_sync"  # Sync tracks for albums
@@ -90,6 +98,11 @@ class TaskType(str, Enum):
     IMAGE_SYNC = "image_sync"  # Download/cache images
     DOWNLOAD = "download"  # Coordinate downloads with slskd
     CLEANUP = "cleanup"  # Reset failed downloads, remove orphans
+    
+    # === AUTOMATION TASKS (from AutomationWorkerManager) ===
+    WATCHLIST_CHECK = "watchlist_check"  # Check for new releases (hourly)
+    DISCOGRAPHY_SCAN = "discography_scan"  # Check for missing albums (daily)
+    QUALITY_UPGRADE = "quality_upgrade"  # Find quality upgrade opportunities (daily)
 
 
 class TaskPriority(int, Enum):
@@ -111,6 +124,27 @@ class TaskPriority(int, Enum):
 # =============================================================================
 
 
+# Task-specific cooldowns in minutes
+# Hey future me - Lidarr-inspired variable intervals!
+# Core sync tasks: Short cooldowns (1-5 min) for responsive sync
+# Automation tasks: Longer cooldowns (1h-24h) to avoid API spam
+TASK_COOLDOWNS: dict[TaskType, int] = {
+    # === CORE SYNC (short cooldowns) ===
+    TaskType.ARTIST_SYNC: 5,       # 5 min - frequent sync for new follows
+    TaskType.ALBUM_SYNC: 5,        # 5 min - follows artist sync
+    TaskType.TRACK_SYNC: 5,        # 5 min - follows album sync
+    TaskType.ENRICHMENT: 10,       # 10 min - MusicBrainz rate limiting
+    TaskType.IMAGE_SYNC: 10,       # 10 min - image downloads
+    TaskType.DOWNLOAD: 1,          # 1 min - responsive download queue
+    TaskType.CLEANUP: 30,          # 30 min - maintenance task
+    
+    # === AUTOMATION (long cooldowns, Lidarr-style) ===
+    TaskType.WATCHLIST_CHECK: 60,       # 1 hour - check for new releases
+    TaskType.DISCOGRAPHY_SCAN: 1440,    # 24 hours - daily discography scan
+    TaskType.QUALITY_UPGRADE: 1440,     # 24 hours - daily quality check
+}
+
+
 # Task Dependencies: Which tasks must complete before others can run
 # Key = task that depends, Value = list of tasks that must complete first
 TASK_DEPENDENCIES: dict[TaskType, list[TaskType]] = {
@@ -128,6 +162,14 @@ TASK_DEPENDENCIES: dict[TaskType, list[TaskType]] = {
     TaskType.DOWNLOAD: [TaskType.TRACK_SYNC],
     # CLEANUP runs last (after everything)
     TaskType.CLEANUP: [TaskType.ENRICHMENT, TaskType.IMAGE_SYNC],
+    
+    # === AUTOMATION TASK DEPENDENCIES ===
+    # WATCHLIST_CHECK needs albums synced to find new releases locally
+    TaskType.WATCHLIST_CHECK: [TaskType.ALBUM_SYNC],
+    # DISCOGRAPHY_SCAN needs artists to be synced
+    TaskType.DISCOGRAPHY_SCAN: [TaskType.ARTIST_SYNC],
+    # QUALITY_UPGRADE needs tracks to be synced
+    TaskType.QUALITY_UPGRADE: [TaskType.TRACK_SYNC],
 }
 
 
@@ -136,28 +178,39 @@ class TaskScheduler:
 
     Hey future me - this is the BRAIN of the manager!
     - Tracks last run time for each task type
-    - Enforces cooldowns to prevent API spam
+    - Enforces TASK-SPECIFIC cooldowns (from TASK_COOLDOWNS dict)
     - Prioritizes tasks when multiple are due
     - Respects TASK_DEPENDENCIES (topological order)
 
     Pattern: Simple priority queue with cooldown enforcement.
     No persistent state - all state derived from DB timestamps.
     
-    NEW: Dependency-aware scheduling!
+    NEW (Lidarr-inspired):
+    - Variable cooldowns per task type (1min for downloads, 24h for discography)
+    - Dependency-aware scheduling (tasks wait for dependencies)
+    
     Tasks only run if their dependencies have completed in this cycle.
     """
 
-    def __init__(self, cooldown_minutes: int = 5) -> None:
+    def __init__(self, default_cooldown_minutes: int = 5) -> None:
         """Initialize scheduler.
 
         Args:
-            cooldown_minutes: Default cooldown between same task types.
+            default_cooldown_minutes: Fallback cooldown if task not in TASK_COOLDOWNS.
         """
-        self._cooldown_minutes = cooldown_minutes
+        self._default_cooldown_minutes = default_cooldown_minutes
         self._last_run: dict[TaskType, datetime] = {}
         self._running: dict[TaskType, bool] = {}
         # Track completed tasks in current cycle for dependency resolution
         self._completed_this_cycle: set[TaskType] = set()
+
+    def _get_cooldown_minutes(self, task_type: TaskType) -> int:
+        """Get cooldown for a specific task type.
+        
+        Hey future me - uses TASK_COOLDOWNS dict with fallback to default!
+        Automation tasks have MUCH longer cooldowns than sync tasks.
+        """
+        return TASK_COOLDOWNS.get(task_type, self._default_cooldown_minutes)
 
     def start_new_cycle(self) -> None:
         """Start a new scheduling cycle.
@@ -181,10 +234,11 @@ class TaskScheduler:
         if self._running.get(task_type, False):
             return False
 
-        # Check cooldown
+        # Check task-specific cooldown (Lidarr-style variable intervals)
         last_run = self._last_run.get(task_type)
         if last_run is not None:
-            cooldown = timedelta(minutes=self._cooldown_minutes)
+            cooldown_minutes = self._get_cooldown_minutes(task_type)
+            cooldown = timedelta(minutes=cooldown_minutes)
             time_since = datetime.now(UTC) - last_run
             if time_since < cooldown:
                 return False
@@ -194,16 +248,17 @@ class TaskScheduler:
         for dep in dependencies:
             if dep not in self._completed_this_cycle:
                 # Dependency hasn't completed yet this cycle
-                # But if the dependency ran recently (within cooldown), allow
+                # But if the dependency ran recently (within its cooldown), allow
                 dep_last_run = self._last_run.get(dep)
                 if dep_last_run is None:
                     # Dependency never ran - block this task
                     return False
                 # If dependency ran recently, consider it "done enough"
-                # This handles the case where deps are on different cooldowns
-                cooldown = timedelta(minutes=self._cooldown_minutes * 2)
+                # Use 2x the dependency's cooldown as staleness threshold
+                dep_cooldown = self._get_cooldown_minutes(dep)
+                staleness_threshold = timedelta(minutes=dep_cooldown * 2)
                 time_since_dep = datetime.now(UTC) - dep_last_run
-                if time_since_dep > cooldown:
+                if time_since_dep > staleness_threshold:
                     # Dependency is stale - wait for it to run first
                     return False
 
@@ -235,27 +290,39 @@ class TaskScheduler:
         """Get next task that can run, by dependency order then priority.
 
         Hey future me - this uses TOPOLOGICAL ORDER for dependencies!
-        Tasks run in correct dependency order:
+        
+        CORE SYNC tasks run first (in order):
         1. ARTIST_SYNC (no deps)
         2. ALBUM_SYNC (depends on ARTIST_SYNC)
         3. TRACK_SYNC (depends on ALBUM_SYNC)
         4. ENRICHMENT, IMAGE_SYNC (depend on ARTIST/ALBUM)
         5. DOWNLOAD (depends on TRACK_SYNC)
         6. CLEANUP (depends on ENRICHMENT, IMAGE_SYNC)
+        
+        AUTOMATION tasks run last (lower priority, longer cooldowns):
+        7. WATCHLIST_CHECK (depends on ALBUM_SYNC, 1h cooldown)
+        8. DISCOGRAPHY_SCAN (depends on ARTIST_SYNC, 24h cooldown)
+        9. QUALITY_UPGRADE (depends on TRACK_SYNC, 24h cooldown)
 
         Returns:
             Next runnable TaskType or None if all on cooldown.
         """
         # Topologically sorted order based on TASK_DEPENDENCIES
-        # Tasks with fewer dependencies come first
+        # Core sync tasks first, automation tasks last (lower priority)
         topological_order = [
+            # === CORE SYNC (high priority, short cooldowns) ===
             TaskType.ARTIST_SYNC,  # No deps - runs first
             TaskType.ALBUM_SYNC,  # Deps: ARTIST_SYNC
             TaskType.TRACK_SYNC,  # Deps: ALBUM_SYNC
             TaskType.ENRICHMENT,  # Deps: ARTIST_SYNC, ALBUM_SYNC
             TaskType.IMAGE_SYNC,  # Deps: ARTIST_SYNC, ALBUM_SYNC
             TaskType.DOWNLOAD,  # Deps: TRACK_SYNC
-            TaskType.CLEANUP,  # Deps: ENRICHMENT, IMAGE_SYNC - runs last
+            TaskType.CLEANUP,  # Deps: ENRICHMENT, IMAGE_SYNC
+            
+            # === AUTOMATION (low priority, long cooldowns) ===
+            TaskType.WATCHLIST_CHECK,    # Deps: ALBUM_SYNC (1h cooldown)
+            TaskType.DISCOGRAPHY_SCAN,   # Deps: ARTIST_SYNC (24h cooldown)
+            TaskType.QUALITY_UPGRADE,    # Deps: TRACK_SYNC (24h cooldown)
         ]
 
         for task_type in topological_order:
@@ -268,7 +335,7 @@ class TaskScheduler:
         """Get scheduler status for monitoring.
 
         Returns:
-            Dict with task states and cooldowns.
+            Dict with task states and cooldowns (task-specific).
         """
         now = datetime.now(UTC)
         status = {}
@@ -276,10 +343,11 @@ class TaskScheduler:
         for task_type in TaskType:
             last_run = self._last_run.get(task_type)
             running = self._running.get(task_type, False)
+            cooldown_minutes = self._get_cooldown_minutes(task_type)
 
             if last_run:
                 elapsed = (now - last_run).total_seconds()
-                next_run_in = max(0, self._cooldown_minutes * 60 - elapsed)
+                next_run_in = max(0, cooldown_minutes * 60 - elapsed)
             else:
                 next_run_in = 0
 
@@ -287,9 +355,140 @@ class TaskScheduler:
                 "running": running,
                 "last_run": last_run.isoformat() if last_run else None,
                 "next_run_in_seconds": next_run_in,
+                "cooldown_minutes": cooldown_minutes,  # Task-specific cooldown
                 "can_run": self.can_run(task_type),
             }
 
+        return status
+
+
+# =============================================================================
+# TASK DEBOUNCER (Lidarr-inspired)
+# =============================================================================
+
+
+class TaskDebouncer:
+    """Debounces rapid task requests to prevent duplicate work.
+    
+    Hey future me - this is Lidarr's "debouncer" pattern!
+    When multiple events trigger the same task rapidly (e.g., 10 new albums found),
+    we DON'T want to run WATCHLIST_CHECK 10 times in 2 seconds.
+    
+    Instead: Wait for events to "settle" (no new events for X seconds),
+    then run the task ONCE.
+    
+    Example:
+        debouncer = TaskDebouncer(window_seconds=5)
+        
+        # Event 1 at t=0: schedule WATCHLIST_CHECK
+        debouncer.request(TaskType.WATCHLIST_CHECK)  # pending, waits 5s
+        
+        # Event 2 at t=2: another request
+        debouncer.request(TaskType.WATCHLIST_CHECK)  # extends wait to t=7
+        
+        # Event 3 at t=3: another request  
+        debouncer.request(TaskType.WATCHLIST_CHECK)  # extends wait to t=8
+        
+        # No more events... at t=8 the task finally runs ONCE
+    """
+    
+    def __init__(self, window_seconds: float = 5.0) -> None:
+        """Initialize debouncer.
+        
+        Args:
+            window_seconds: Time to wait after last request before executing.
+                           Lidarr uses 5 seconds, we use the same default.
+        """
+        self._window_seconds = window_seconds
+        # Track last request time for each task type
+        self._last_request: dict[TaskType, datetime] = {}
+        # Track pending executions (task requested but not yet stable)
+        self._pending: set[TaskType] = set()
+    
+    def request(self, task_type: TaskType) -> None:
+        """Request a task execution (debounced).
+        
+        The task won't actually run until the debounce window passes
+        with no new requests for the same task type.
+        
+        Args:
+            task_type: The task to request.
+        """
+        self._last_request[task_type] = datetime.now(UTC)
+        self._pending.add(task_type)
+        logger.debug(f"TaskDebouncer: Request for {task_type.value}, window resets")
+    
+    def get_ready_tasks(self) -> list[TaskType]:
+        """Get tasks that are ready to execute (debounce window passed).
+        
+        Hey future me - call this periodically to check for settled tasks!
+        Returns tasks where no new requests came in during the window.
+        
+        Returns:
+            List of TaskTypes ready to run.
+        """
+        now = datetime.now(UTC)
+        ready: list[TaskType] = []
+        
+        for task_type in list(self._pending):
+            last_request = self._last_request.get(task_type)
+            if last_request is None:
+                continue
+            
+            elapsed = (now - last_request).total_seconds()
+            if elapsed >= self._window_seconds:
+                # Window passed - task is stable, ready to run
+                ready.append(task_type)
+                self._pending.discard(task_type)
+                logger.debug(
+                    f"TaskDebouncer: {task_type.value} ready after {elapsed:.1f}s"
+                )
+        
+        return ready
+    
+    def cancel(self, task_type: TaskType) -> None:
+        """Cancel a pending task request.
+        
+        Args:
+            task_type: The task to cancel.
+        """
+        self._pending.discard(task_type)
+        if task_type in self._last_request:
+            del self._last_request[task_type]
+    
+    def is_pending(self, task_type: TaskType) -> bool:
+        """Check if a task is pending (requested but not yet stable).
+        
+        Args:
+            task_type: The task to check.
+            
+        Returns:
+            True if task is in debounce window.
+        """
+        return task_type in self._pending
+    
+    def get_status(self) -> dict[str, Any]:
+        """Get debouncer status for monitoring.
+        
+        Returns:
+            Dict with pending tasks and their time until ready.
+        """
+        now = datetime.now(UTC)
+        status: dict[str, Any] = {
+            "window_seconds": self._window_seconds,
+            "pending_tasks": {},
+        }
+        
+        for task_type in self._pending:
+            last_request = self._last_request.get(task_type)
+            if last_request:
+                elapsed = (now - last_request).total_seconds()
+                remaining = max(0, self._window_seconds - elapsed)
+                status["pending_tasks"][task_type.value] = {
+                    "elapsed_seconds": round(elapsed, 1),
+                    "remaining_seconds": round(remaining, 1),
+                }
+        
         return status
 
 
@@ -338,13 +537,21 @@ class UnifiedLibraryManager:
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
 
-        # Hey future me - 1 minute cooldown for responsive initial sync!
-        # Prevents API spam but allows tasks to complete in reasonable time.
-        # Old default was 5 minutes which made users think nothing was happening.
-        self._scheduler = TaskScheduler(cooldown_minutes=1)
+        # Hey future me - default cooldown only used if task not in TASK_COOLDOWNS!
+        # Most tasks use TASK_COOLDOWNS dict for task-specific intervals.
+        self._scheduler = TaskScheduler(default_cooldown_minutes=5)
+        
+        # TaskDebouncer for rapid event handling (Lidarr-style)
+        self._debouncer = TaskDebouncer(window_seconds=5.0)
+        
         self._running = False
         self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
+        
+        # Token manager for Spotify/Deezer access (set via set_token_manager)
+        # Hey future me - this is injected after construction because
+        # DatabaseTokenManager might not exist yet during app startup!
+        self._token_manager: Any = None
 
         # Statistics for monitoring
         self._stats: dict[str, Any] = {
@@ -366,7 +573,26 @@ class UnifiedLibraryManager:
             "downloads_queued": 0,
             "downloads_completed": 0,
             "downloads_failed": 0,
+            # === AUTOMATION STATS (from AutomationWorkerManager) ===
+            "watchlist_checks": 0,
+            "new_releases_found": 0,
+            "discography_scans": 0,
+            "missing_albums_found": 0,
+            "quality_upgrades_found": 0,
         }
+    
+    def set_token_manager(self, token_manager: Any) -> None:
+        """Set the token manager for background Spotify/Deezer access.
+        
+        Hey future me - this is called from lifecycle.py after
+        DatabaseTokenManager is created. Workers need this to get
+        access tokens for API calls without user interaction.
+        
+        Args:
+            token_manager: DatabaseTokenManager instance.
+        """
+        self._token_manager = token_manager
+        logger.debug("UnifiedLibraryManager: TokenManager set")
 
     # =========================================================================
     # LIFECYCLE
@@ -511,6 +737,11 @@ class UnifiedLibraryManager:
 
         Hey future me - this dispatches to the correct task handler!
         Each task type has its own implementation method.
+        
+        AUTOMATION TASKS (migrated from AutomationWorkerManager):
+        - WATCHLIST_CHECK: Checks for new releases (from WatchlistWorker)
+        - DISCOGRAPHY_SCAN: Checks for missing albums (from DiscographyWorker)
+        - QUALITY_UPGRADE: Finds upgrade opportunities (from QualityUpgradeWorker)
 
         Args:
             task_type: The type of task to run.
@@ -521,6 +752,7 @@ class UnifiedLibraryManager:
         try:
             # Dispatch to correct handler
             match task_type:
+                # === CORE SYNC TASKS ===
                 case TaskType.ARTIST_SYNC:
                     await self._sync_artists()
                 case TaskType.ALBUM_SYNC:
@@ -535,6 +767,14 @@ class UnifiedLibraryManager:
                     await self._process_downloads()
                 case TaskType.CLEANUP:
                     await self._run_cleanup()
+                
+                # === AUTOMATION TASKS (from AutomationWorkerManager) ===
+                case TaskType.WATCHLIST_CHECK:
+                    await self._check_watchlists()
+                case TaskType.DISCOGRAPHY_SCAN:
+                    await self._scan_discographies()
+                case TaskType.QUALITY_UPGRADE:
+                    await self._identify_quality_upgrades()
 
             self._scheduler.mark_completed(task_type)
             self._stats["tasks_completed"] += 1
@@ -1151,3 +1391,363 @@ class UnifiedLibraryManager:
         # Run immediately in background
         asyncio.create_task(self._run_task(task_type))
         return True
+
+    # =========================================================================
+    # AUTOMATION TASKS (migrated from AutomationWorkerManager)
+    # =========================================================================
+
+    async def _check_watchlists(self) -> None:
+        """Check artist watchlists for new releases.
+        
+        Hey future me - this is the WATCHLIST_CHECK task!
+        Migrated from WatchlistWorker._check_watchlists()
+        
+        Flow:
+        1. Get all watchlists due for checking
+        2. For each watchlist, check for new albums since last check
+        3. If new releases found and auto_download enabled, trigger automation
+        4. Update last_checked_at timestamp
+        
+        OPTIMIZATION: Uses pre-synced spotify_albums data (no API calls!)
+        The ALBUM_SYNC task keeps albums fresh, we just query locally.
+        
+        TOKEN HANDLING: Gets token from _token_manager for Spotify API access.
+        Graceful degradation: skips work if no valid token available.
+        """
+        from soulspot.application.services.automation_workflow_service import (
+            AutomationWorkflowService,
+        )
+        from soulspot.application.services.watchlist_service import WatchlistService
+        from soulspot.domain.entities import AutomationTrigger
+        from soulspot.infrastructure.persistence.repositories import (
+            ArtistRepository,
+            SpotifyBrowseRepository,
+        )
+
+        logger.info("🔔 Starting watchlist check for new releases...")
+        
+        async with self._get_session() as session:
+            try:
+                # Get access token from token manager
+                access_token = None
+                if self._token_manager:
+                    access_token = await self._token_manager.get_token_for_background()
+                
+                if not access_token and self._spotify_plugin:
+                    # Token invalid or missing - skip this cycle gracefully
+                    logger.warning(
+                        "No valid Spotify token - skipping watchlist check. "
+                        "User needs to re-authenticate via UI."
+                    )
+                    return
+                
+                # Set token on plugin if available
+                if access_token and self._spotify_plugin:
+                    self._spotify_plugin.set_token(access_token)
+                
+                # Create services
+                watchlist_service = WatchlistService(session, self._spotify_plugin)
+                workflow_service = AutomationWorkflowService(session)
+                artist_repo = ArtistRepository(session)
+                spotify_repo = SpotifyBrowseRepository(session)
+                
+                # Get watchlists due for checking
+                watchlists = await watchlist_service.list_due_for_check(limit=100)
+                
+                if not watchlists:
+                    logger.debug("No watchlists due for checking")
+                    return
+                
+                logger.info(f"Checking {len(watchlists)} watchlists for new releases")
+                
+                total_releases_found = 0
+                total_downloads_triggered = 0
+                
+                for watchlist in watchlists:
+                    try:
+                        # Get local artist
+                        local_artist = await artist_repo.get_by_id(watchlist.artist_id)
+                        if not local_artist or not local_artist.spotify_uri:
+                            continue
+                        
+                        spotify_artist_id = local_artist.spotify_id
+                        
+                        # Check if albums are synced
+                        sync_status = await spotify_repo.get_artist_albums_sync_status(
+                            spotify_artist_id
+                        )
+                        
+                        if not sync_status["albums_synced"]:
+                            # Albums not synced - will be caught by next ALBUM_SYNC
+                            watchlist.update_check(releases_found=0, downloads_triggered=0)
+                            await watchlist_service.repository.update(watchlist)
+                            await session.commit()
+                            continue
+                        
+                        # Get new albums since last check (LOCAL query, no API!)
+                        new_album_models = await spotify_repo.get_new_albums_since(
+                            artist_id=spotify_artist_id,
+                            since_date=watchlist.last_checked_at,
+                        )
+                        
+                        # Convert to dict format for automation
+                        new_releases = [
+                            {
+                                "album_id": album.spotify_uri,
+                                "album_name": album.title,
+                                "album_type": album.primary_type,
+                                "release_date": album.release_date,
+                                "total_tracks": album.total_tracks,
+                                "images": [{"url": album.cover_url}] if album.cover_url else [],
+                            }
+                            for album in new_album_models
+                        ]
+                        
+                        if new_releases:
+                            logger.info(
+                                f"Found {len(new_releases)} new releases for {local_artist.name}"
+                            )
+                            total_releases_found += len(new_releases)
+                        
+                        # Trigger automation if enabled
+                        downloads_triggered = 0
+                        if new_releases and watchlist.auto_download:
+                            for release in new_releases:
+                                context = {
+                                    "artist_id": str(watchlist.artist_id.value),
+                                    "watchlist_id": str(watchlist.id.value),
+                                    "release_info": release,
+                                    "quality_profile": watchlist.quality_profile,
+                                }
+                                await workflow_service.trigger_workflow(
+                                    trigger=AutomationTrigger.NEW_RELEASE,
+                                    context=context,
+                                )
+                                downloads_triggered += 1
+                                total_downloads_triggered += 1
+                        
+                        # Update watchlist
+                        watchlist.update_check(
+                            releases_found=len(new_releases),
+                            downloads_triggered=downloads_triggered,
+                        )
+                        await watchlist_service.repository.update(watchlist)
+                        await session.commit()
+                        
+                    except Exception as e:
+                        logger.error(f"Error checking watchlist {watchlist.id}: {e}")
+                        await session.rollback()
+                
+                # Update stats
+                self._stats["watchlist_checks"] += 1
+                self._stats["new_releases_found"] += total_releases_found
+                
+                logger.info(
+                    f"✅ Watchlist check complete: "
+                    f"{len(watchlists)} checked, {total_releases_found} new releases, "
+                    f"{total_downloads_triggered} downloads triggered"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in watchlist check: {e}", exc_info=True)
+
+    async def _scan_discographies(self) -> None:
+        """Scan artist discographies for missing albums.
+        
+        Hey future me - this is the DISCOGRAPHY_SCAN task!
+        Migrated from DiscographyWorker._check_discographies()
+        
+        Flow:
+        1. Get all active watchlists with auto_download enabled
+        2. For each artist, check discography completeness
+        3. If missing albums found, trigger MISSING_ALBUM automation
+        
+        TOKEN HANDLING: Gets token from _token_manager for API access.
+        Uses DiscographyService which queries LOCAL spotify_albums data.
+        """
+        from soulspot.application.services.automation_workflow_service import (
+            AutomationWorkflowService,
+        )
+        from soulspot.application.services.discography_service import DiscographyService
+        from soulspot.domain.entities import AutomationTrigger
+        from soulspot.infrastructure.persistence.repositories import (
+            ArtistWatchlistRepository,
+        )
+
+        logger.info("📚 Starting discography scan for missing albums...")
+        
+        async with self._get_session() as session:
+            try:
+                # Get access token
+                access_token = None
+                if self._token_manager:
+                    access_token = await self._token_manager.get_token_for_background()
+                
+                if not access_token:
+                    logger.warning(
+                        "No valid Spotify token - skipping discography scan. "
+                        "User needs to re-authenticate via UI."
+                    )
+                    return
+                
+                # Create services
+                discography_service = DiscographyService(session)
+                workflow_service = AutomationWorkflowService(session)
+                watchlist_repo = ArtistWatchlistRepository(session)
+                
+                # Get active watchlists
+                active_watchlists = await watchlist_repo.list_active(limit=100)
+                
+                if not active_watchlists:
+                    logger.debug("No active watchlists to check")
+                    return
+                
+                logger.info(f"Scanning discographies for {len(active_watchlists)} artists")
+                
+                total_missing_found = 0
+                
+                for watchlist in active_watchlists:
+                    try:
+                        # Skip if auto_download disabled
+                        if not watchlist.auto_download:
+                            continue
+                        
+                        # Check discography completeness
+                        discography_info = await discography_service.check_discography(
+                            artist_id=watchlist.artist_id,
+                            access_token=access_token,
+                        )
+                        
+                        # Trigger automation for missing albums
+                        if discography_info.missing_albums:
+                            missing_count = len(discography_info.missing_albums)
+                            total_missing_found += missing_count
+                            
+                            logger.info(
+                                f"Found {missing_count} missing albums "
+                                f"for artist {watchlist.artist_id}"
+                            )
+                            
+                            await workflow_service.trigger_workflow(
+                                trigger=AutomationTrigger.MISSING_ALBUM,
+                                context={
+                                    "artist_id": str(watchlist.artist_id.value),
+                                    "missing_albums": discography_info.missing_albums,
+                                    "quality_profile": watchlist.quality_profile,
+                                },
+                            )
+                        
+                    except Exception as e:
+                        logger.error(
+                            f"Error scanning discography for artist {watchlist.artist_id}: {e}"
+                        )
+                        continue
+                
+                # Update stats
+                self._stats["discography_scans"] += 1
+                self._stats["missing_albums_found"] += total_missing_found
+                
+                logger.info(
+                    f"✅ Discography scan complete: "
+                    f"{len(active_watchlists)} artists, {total_missing_found} missing albums"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in discography scan: {e}", exc_info=True)
+
+    async def _identify_quality_upgrades(self) -> None:
+        """Identify tracks that can be upgraded to better quality.
+        
+        Hey future me - this is the QUALITY_UPGRADE task!
+        Migrated from QualityUpgradeWorker._identify_upgrades()
+        
+        Flow:
+        1. Scan library for tracks with lower quality files
+        2. Calculate improvement score (bitrate/format upgrade potential)
+        3. If score >= threshold (20.0), trigger QUALITY_UPGRADE automation
+        
+        This scans LOCAL library only - no external API calls needed.
+        Improvement threshold: 20.0 = significant upgrade (MP3 → FLAC, 128 → 320)
+        """
+        from soulspot.application.services.automation_workflow_service import (
+            AutomationWorkflowService,
+        )
+        from soulspot.application.services.quality_upgrade_service import (
+            QualityUpgradeService,
+        )
+        from soulspot.domain.entities import AutomationTrigger
+        from soulspot.infrastructure.persistence.repositories import TrackRepository
+
+        logger.info("🎵 Starting quality upgrade scan...")
+        
+        async with self._get_session() as session:
+            try:
+                # Create services
+                quality_service = QualityUpgradeService(session)
+                workflow_service = AutomationWorkflowService(session)
+                track_repo = TrackRepository(session)
+                
+                # Get all tracks (future: filter by bitrate < 320 or format = mp3)
+                all_tracks = await track_repo.list_all()
+                
+                if not all_tracks:
+                    logger.debug("No tracks in library to check for upgrades")
+                    return
+                
+                logger.info(f"Scanning {len(all_tracks)} tracks for quality upgrades")
+                
+                upgrade_candidates_found = 0
+                improvement_threshold = 20.0  # Significant upgrade threshold
+                
+                for track in all_tracks:
+                    try:
+                        # Skip tracks without audio files
+                        if not track.file_path or not track.is_downloaded():
+                            continue
+                        
+                        # Check if quality service has upgrade identification
+                        if not hasattr(quality_service, "identify_upgrade_opportunities"):
+                            logger.debug(
+                                "Quality upgrade identification not yet implemented - skipping"
+                            )
+                            break
+                        
+                        # Identify upgrade opportunities
+                        candidates = await quality_service.identify_upgrade_opportunities(
+                            track_id=track.id
+                        )
+                        
+                        for candidate in candidates:
+                            if candidate.improvement_score >= improvement_threshold:
+                                logger.info(
+                                    f"Found upgrade: {track.title} - "
+                                    f"{candidate.current_format}@{candidate.current_bitrate}kbps → "
+                                    f"{candidate.target_format}@{candidate.target_bitrate}kbps "
+                                    f"(score: {candidate.improvement_score})"
+                                )
+                                
+                                await workflow_service.trigger_workflow(
+                                    trigger=AutomationTrigger.QUALITY_UPGRADE,
+                                    context={
+                                        "track_id": str(track.id.value),
+                                        "current_quality": f"{candidate.current_format}@{candidate.current_bitrate}kbps",
+                                        "target_quality": f"{candidate.target_format}@{candidate.target_bitrate}kbps",
+                                        "improvement_score": candidate.improvement_score,
+                                    },
+                                )
+                                upgrade_candidates_found += 1
+                        
+                    except Exception as e:
+                        logger.error(f"Error checking upgrade for track {track.id}: {e}")
+                        continue
+                
+                # Update stats
+                self._stats["quality_upgrades_found"] += upgrade_candidates_found
+                
+                logger.info(
+                    f"✅ Quality upgrade scan complete: "
+                    f"{len(all_tracks)} tracks scanned, {upgrade_candidates_found} upgrades found"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error in quality upgrade scan: {e}", exc_info=True)
