@@ -29,10 +29,10 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from soulspot.application.services.artist_service import ArtistService
 from soulspot.application.services.automation_workflow_service import (
     AutomationWorkflowService,
 )
-from soulspot.application.services.discography_service import DiscographyService
 from soulspot.application.services.quality_upgrade_service import QualityUpgradeService
 from soulspot.application.services.watchlist_service import WatchlistService
 from soulspot.domain.entities import AutomationTrigger
@@ -475,7 +475,7 @@ class DiscographyWorker:
                 )
 
                 # Create services with this session
-                discography_service = DiscographyService(session)
+                artist_service = ArtistService(session)
                 workflow_service = AutomationWorkflowService(session)
 
                 # Get watchlist repository instance
@@ -506,7 +506,7 @@ class DiscographyWorker:
                         # Token is refreshed automatically by TokenRefreshWorker.
 
                         # Check discography using service
-                        discography_info = await discography_service.check_discography(
+                        discography_info = await artist_service.check_discography(
                             artist_id=watchlist.artist_id, access_token=access_token
                         )
 

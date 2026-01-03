@@ -2029,22 +2029,8 @@ class TrackRepository(ITrackRepository):
     # =========================================================================
     # Hey future me - these are for multi-service deduplication!
     # Pattern: Check ISRC first (universal), then service ID, then name match.
+    # Note: get_by_deezer_id is defined above in the main lookup methods section.
     # =========================================================================
-
-    async def get_by_deezer_id(self, deezer_id: str) -> Track | None:
-        """Get a track by Deezer ID.
-
-        Args:
-            deezer_id: Deezer track ID
-
-        Returns:
-            Track entity if found, None otherwise
-        """
-        stmt = select(TrackModel).where(TrackModel.deezer_id == deezer_id)
-        result = await self.session.execute(stmt)
-        model = result.scalar_one_or_none()
-
-        return self._model_to_entity(model) if model else None
 
     async def get_by_tidal_id(self, tidal_id: str) -> Track | None:
         """Get a track by Tidal ID.

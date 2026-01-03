@@ -888,7 +888,7 @@ class DeduplicationHousekeepingService:
             canonical.spotify_uri = source.spotify_uri
         if not canonical.deezer_id and source.deezer_id:
             canonical.deezer_id = source.deezer_id
-        if not canonical.duration_ms is None and source.duration_ms:
+        if canonical.duration_ms is None and source.duration_ms:
             canonical.duration_ms = source.duration_ms
         if not canonical.track_number and source.track_number:
             canonical.track_number = source.track_number

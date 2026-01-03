@@ -186,8 +186,6 @@ async def unified_search(
         limit=limit,
     )
 
-    import asyncio
-
     from soulspot.application.services.app_settings_service import AppSettingsService
     from soulspot.domain.ports.plugin import PluginCapability
 

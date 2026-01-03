@@ -693,9 +693,7 @@ async def auto_fetch_discography(
     Returns:
         HTMX partial with status
     """
-    from soulspot.application.services.followed_artists_service import (
-        FollowedArtistsService,
-    )
+    from soulspot.application.services.artist_service import ArtistService
     from soulspot.infrastructure.plugins import DeezerPlugin
 
     try:
@@ -703,7 +701,7 @@ async def auto_fetch_discography(
         deezer_plugin = DeezerPlugin()
 
         # Create service (without Spotify - Deezer is sufficient)
-        service = FollowedArtistsService(
+        service = ArtistService(
             session,
             spotify_plugin=None,
             deezer_plugin=deezer_plugin,
