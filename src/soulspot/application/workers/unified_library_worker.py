@@ -803,26 +803,33 @@ class UnifiedLibraryManager:
         After sync, we update ownership_state to OWNED for all synced artists.
         This marks them as "user wants these" vs "discovered via recommendations".
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
+        from soulspot.application.services.provider_sync_orchestrator import (
+            ProviderSyncOrchestrator,
         )
+        from soulspot.application.services.app_settings_service import AppSettingsService
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.application.services.spotify_sync_service import SpotifySyncService
         from soulspot.domain.entities import OwnershipState
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
 
         async with self._get_session() as session:
-            # Create service with available plugins
-            # Hey future me - plugins might be None if not authenticated!
-            followed_service = FollowedArtistsService(
+            # Create sync services with available plugins
+            settings_service = AppSettingsService(session)
+            deezer_sync = DeezerSyncService(session, self._deezer_plugin) if self._deezer_plugin else None
+            spotify_sync = SpotifySyncService(session, self._spotify_plugin) if self._spotify_plugin else None
+
+            # Create orchestrator
+            orchestrator = ProviderSyncOrchestrator(
                 session=session,
-                spotify_plugin=self._spotify_plugin,
-                deezer_plugin=self._deezer_plugin,
+                settings_service=settings_service,
+                spotify_sync=spotify_sync,
+                deezer_sync=deezer_sync,
             )
 
             logger.info("Starting multi-provider artist sync...")
 
             # Sync from all providers - this returns deduplicated artists
-            # and auto-syncs discography for new artists
-            artists, stats = await followed_service.sync_followed_artists_all_providers()
+            artists, stats = await orchestrator.sync_followed_artists_all_providers()
 
             # Update ownership_state to OWNED for all synced artists
             # This marks them as "user-selected" vs "discovered"
@@ -876,86 +883,14 @@ class UnifiedLibraryManager:
         We batch this to avoid overwhelming the API:
         - Process in chunks of batch_size artists
         - Brief pause between batches
+        
+        TODO (Jan 2026): Needs migration to ProviderSyncOrchestrator.
+        TEMPORARILY DISABLED until migration complete.
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
+        logger.warning(
+            "⚠️ Album sync temporarily disabled - needs migration to ProviderSyncOrchestrator"
         )
-        from soulspot.domain.entities import OwnershipState
-        from soulspot.infrastructure.persistence.repositories import ArtistRepository
-
-        async with self._get_session() as session:
-            artist_repo = ArtistRepository(session)
-
-            # Get settings for batch size
-            settings_service = self._app_settings_service_factory(session)
-            batch_size = await settings_service.get_enrichment_batch_size()
-
-            # Get all OWNED artists
-            owned_count = await artist_repo.count_by_ownership_state(OwnershipState.OWNED)
-            logger.info(f"Starting album sync for {owned_count} OWNED artists...")
-
-            # Process in batches
-            offset = 0
-            total_albums_added = 0
-            total_tracks_added = 0
-            artists_processed = 0
-            errors = 0
-
-            # Create service once per session
-            followed_service = FollowedArtistsService(
-                session=session,
-                spotify_plugin=self._spotify_plugin,
-                deezer_plugin=self._deezer_plugin,
-            )
-
-            while offset < owned_count:
-                artists = await artist_repo.list_by_ownership_state(
-                    ownership_state=OwnershipState.OWNED,
-                    limit=batch_size,
-                    offset=offset,
-                )
-
-                if not artists:
-                    break
-
-                for artist in artists:
-                    try:
-                        # Sync discography (albums + tracks)
-                        stats = await followed_service.sync_artist_discography_complete(
-                            artist_id=str(artist.id.value),
-                            include_tracks=True,  # Sync tracks too!
-                        )
-                        total_albums_added += stats.get("albums_added", 0)
-                        total_tracks_added += stats.get("tracks_added", 0)
-                        artists_processed += 1
-
-                        logger.debug(
-                            f"Synced {artist.name}: {stats.get('albums_added', 0)} albums, "
-                            f"{stats.get('tracks_added', 0)} tracks"
-                        )
-
-                    except Exception as e:
-                        errors += 1
-                        logger.warning(
-                            f"Failed to sync albums for {artist.name}: {e}"
-                        )
-
-                await session.commit()
-                offset += batch_size
-
-                # Brief pause between batches to avoid rate limits
-                if offset < owned_count:
-                    await asyncio.sleep(1.0)
-
-            # Update stats
-            self._stats["albums_synced"] = total_albums_added
-            self._stats["tracks_synced"] = total_tracks_added
-
-            logger.info(
-                f"✅ Album sync complete: {artists_processed} artists processed, "
-                f"{total_albums_added} albums added, {total_tracks_added} tracks added, "
-                f"{errors} errors"
-            )
+        return
 
     async def _sync_tracks(self) -> None:
         """Sync tracks for albums missing tracks and handle download state.
@@ -966,88 +901,15 @@ class UnifiedLibraryManager:
         2. Set download_state=PENDING for new tracks if auto_queue_downloads=True
 
         Uses Deezer API to fetch tracks (NO AUTH NEEDED!) with rate limiting.
+        
+        TODO (Jan 2026): Needs migration to ProviderSyncOrchestrator.
+        TEMPORARILY DISABLED until migration complete.
         """
-        from soulspot.application.services.followed_artists_service import (
-            FollowedArtistsService,
+        logger.warning(
+            "⚠️ Track sync temporarily disabled - needs migration to ProviderSyncOrchestrator"
         )
-        from soulspot.domain.entities import DownloadState
-        from soulspot.infrastructure.persistence.repositories import (
-            AlbumRepository,
-            TrackRepository,
-        )
-
-        async with self._get_session() as session:
-            album_repo = AlbumRepository(session)
-            track_repo = TrackRepository(session)
-
-            # Get settings
-            settings_service = self._app_settings_service_factory(session)
-            auto_queue = await settings_service.auto_queue_downloads_enabled()
-            batch_size = await settings_service.get_enrichment_batch_size()
-
-            logger.info(
-                f"Starting track sync (auto_queue_downloads={auto_queue})..."
-            )
-
-            # Get albums needing track backfill
-            albums = await album_repo.get_albums_needing_track_backfill(
-                limit=batch_size
-            )
-
-            if not albums:
-                logger.debug("No albums need track backfill")
-                return
-
-            logger.info(f"Found {len(albums)} albums needing track backfill")
-
-            # Create service for track fetching
-            followed_service = FollowedArtistsService(
-                session=session,
-                spotify_plugin=self._spotify_plugin,
-                deezer_plugin=self._deezer_plugin,
-            )
-
-            tracks_added = 0
-            albums_processed = 0
-            errors = 0
-
-            for album in albums:
-                try:
-                    # sync_artist_discography_complete fetches tracks too
-                    # But we already have the album, just need tracks
-                    # Use _fetch_album_tracks_from_deezer if available
-                    # For now, re-sync entire artist discography which handles it
-                    stats = await followed_service.sync_artist_discography_complete(
-                        artist_id=str(album.artist_id.value),
-                        include_tracks=True,
-                    )
-                    tracks_added += stats.get("tracks_added", 0)
-                    albums_processed += 1
-
-                except Exception as e:
-                    errors += 1
-                    logger.warning(
-                        f"Failed to sync tracks for album {album.title}: {e}"
-                    )
-
-                # Brief pause between albums to avoid rate limits
-                await asyncio.sleep(0.5)
-
-            await session.commit()
-
-            # If auto_queue_downloads is enabled, set PENDING for new tracks
-            if auto_queue:
-                await self._queue_pending_downloads(session, track_repo)
-
-            # Update stats
-            self._stats["tracks_synced"] = tracks_added
-            self._stats["tracks_created"] = tracks_added
-
-            logger.info(
-                f"✅ Track sync complete: {albums_processed} albums processed, "
-                f"{tracks_added} tracks added, {errors} errors"
-            )
-
+        return
+        
     async def _queue_pending_downloads(
         self, session: "AsyncSession", track_repo: Any
     ) -> None:
@@ -1568,13 +1430,18 @@ class UnifiedLibraryManager:
         from soulspot.application.services.automation_workflow_service import (
             AutomationWorkflowService,
         )
-        from soulspot.application.services.discography_service import DiscographyService
+        # DEPRECATED (Jan 2026): DiscographyService removed - needs migration
+        # from soulspot.application.services.discography_service import DiscographyService
         from soulspot.domain.entities import AutomationTrigger
         from soulspot.infrastructure.persistence.repositories import (
             ArtistWatchlistRepository,
         )
 
-        logger.info("📚 Starting discography scan for missing albums...")
+        logger.warning(
+            "⚠️ Discography scanning temporarily disabled - "
+            "DiscographyService was deprecated. Needs migration to ProviderSyncOrchestrator."
+        )
+        return  # Disabled until migration complete
         
         async with self._get_session() as session:
             try:

@@ -26,9 +26,6 @@ from soulspot.api.dependencies import (
     get_db_session,
     get_spotify_plugin,
 )
-from soulspot.application.services.followed_artists_service import (
-    FollowedArtistsService,
-)
 from soulspot.domain.value_objects import ArtistId
 from soulspot.infrastructure.observability.logger_template import (
     end_operation,
@@ -76,6 +73,17 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
         # Create fresh Database instance for background task
         # Hey future me - background tasks run AFTER the request is complete,
         # so we can't use the request's session. Create our own!
+        from soulspot.config import get_settings
+        from soulspot.infrastructure.persistence.database import Database
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+        from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
+        from soulspot.application.services.provider_sync_orchestrator import (
+            ProviderSyncOrchestrator,
+        )
+        from soulspot.application.services.app_settings_service import AppSettingsService
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.application.services.spotify_sync_service import SpotifySyncService
+        
         db = Database(get_settings())
         async with db.session_scope() as session:
             # Create plugins - DeezerPlugin doesn't need auth for album lookup
@@ -90,13 +98,20 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
                 # No Spotify auth available, Deezer fallback will be used
                 pass
 
-            service = FollowedArtistsService(
+            # Create sync services
+            settings_service = AppSettingsService(session)
+            deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+            spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+            # Create orchestrator
+            orchestrator = ProviderSyncOrchestrator(
                 session=session,
-                spotify_plugin=spotify_plugin,
-                deezer_plugin=deezer_plugin,
+                settings_service=settings_service,
+                spotify_sync=spotify_sync,
+                deezer_sync=deezer_sync,
             )
 
-            stats = await service.sync_artist_discography_complete(
+            stats = await orchestrator.sync_artist_discography_complete(
                 artist_id=artist_id,
                 include_tracks=True,
             )
@@ -105,9 +120,9 @@ async def _background_discography_sync(artist_id: str, artist_name: str) -> None
 
             logger.info(
                 f"✅ Background discography sync complete for {artist_name}: "
-                f"albums={stats['albums_added']}/{stats['albums_total']}, "
-                f"tracks={stats['tracks_added']}/{stats['tracks_total']} "
-                f"(source: {stats['source']})"
+                f"albums={stats['albums_added']}, "
+                f"tracks={stats['tracks_added']} "
+                f"(source: {stats.get('source', 'none')})"
             )
 
     except Exception as e:
@@ -274,19 +289,33 @@ async def sync_followed_artists(
         )
 
     try:
-        # Create DeezerPlugin for fallback (NO AUTH NEEDED!)
+        # Create orchestrator with Spotify sync service
         from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+        from soulspot.application.services.provider_sync_orchestrator import (
+            ProviderSyncOrchestrator,
+        )
+        from soulspot.application.services.app_settings_service import AppSettingsService
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.application.services.spotify_sync_service import SpotifySyncService
 
+        # Create plugins
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        # Create sync services
+        settings_service = AppSettingsService(session)
+        deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+        spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+        # Create orchestrator
+        orchestrator = ProviderSyncOrchestrator(
             session=session,
-            spotify_plugin=spotify_plugin,
-            deezer_plugin=deezer_plugin,
+            settings_service=settings_service,
+            spotify_sync=spotify_sync,
+            deezer_sync=deezer_sync,
         )
 
-        # Hey future me - using the renamed Spotify-specific method!
-        artists, stats = await service._sync_spotify_followed_artists()
+        # Sync Spotify followed artists only
+        artists, stats = await orchestrator.sync_spotify_followed_artists()
 
         # Commit the transaction to persist changes
         await session.commit()
@@ -356,18 +385,31 @@ async def sync_followed_artists_all_providers(
         Dict with aggregated stats per provider and total counts
     """
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+    from soulspot.application.services.provider_sync_orchestrator import (
+        ProviderSyncOrchestrator,
+    )
+    from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.application.services.deezer_sync_service import DeezerSyncService
+    from soulspot.application.services.spotify_sync_service import SpotifySyncService
 
     try:
-        # Create DeezerPlugin with potential OAuth token
+        # Create plugins
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        # Create sync services
+        settings_service = AppSettingsService(session)
+        deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+        spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+        # Create orchestrator
+        orchestrator = ProviderSyncOrchestrator(
             session=session,
-            spotify_plugin=spotify_plugin,
-            deezer_plugin=deezer_plugin,
+            settings_service=settings_service,
+            spotify_sync=spotify_sync,
+            deezer_sync=deezer_sync,
         )
 
-        artists, stats = await service.sync_followed_artists_all_providers()
+        artists, stats = await orchestrator.sync_followed_artists_all_providers()
 
         await session.commit()
 
@@ -1546,15 +1588,31 @@ async def sync_artist_discography_complete(
         # Hey future me - spotify_plugin is now properly injected via Depends!
         # It's None if user is not authenticated with Spotify.
         # DeezerPlugin doesn't need auth for album/track lookup.
+        from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
+        from soulspot.application.services.provider_sync_orchestrator import (
+            ProviderSyncOrchestrator,
+        )
+        from soulspot.application.services.app_settings_service import AppSettingsService
+        from soulspot.application.services.deezer_sync_service import DeezerSyncService
+        from soulspot.application.services.spotify_sync_service import SpotifySyncService
+
+        # Create plugins
         deezer_plugin = DeezerPlugin()
 
-        service = FollowedArtistsService(
+        # Create sync services
+        settings_service = AppSettingsService(session)
+        deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+        spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+        # Create orchestrator
+        orchestrator = ProviderSyncOrchestrator(
             session=session,
-            spotify_plugin=spotify_plugin,
-            deezer_plugin=deezer_plugin,
+            settings_service=settings_service,
+            spotify_sync=spotify_sync,
+            deezer_sync=deezer_sync,
         )
 
-        stats = await service.sync_artist_discography_complete(
+        stats = await orchestrator.sync_artist_discography_complete(
             artist_id=artist_id,
             include_tracks=include_tracks,
         )

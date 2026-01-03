@@ -578,3 +578,99 @@ class ProviderSyncOrchestrator:
             "source": source,
             "synced": albums_result.synced,
         }
+
+    # =========================================================================
+    # FOLLOWED ARTISTS SYNC
+    # =========================================================================
+
+    async def sync_followed_artists_all_providers(
+        self,
+        force: bool = False,
+    ) -> tuple[list[Any], dict[str, Any]]:
+        """Sync followed/favorite artists from all available providers.
+
+        This replaces the deprecated FollowedArtistsService.sync_followed_artists_all_providers().
+
+        Args:
+            force: Skip cooldown checks
+
+        Returns:
+            Tuple of (artists_list, stats_dict)
+        """
+        all_artists = []
+        stats = {
+            "total_fetched": 0,
+            "created": 0,
+            "updated": 0,
+            "providers": {},
+        }
+
+        # Sync from Spotify
+        if self._spotify_sync and await self._is_provider_enabled("spotify"):
+            try:
+                spotify_result = await self._spotify_sync.sync_followed_artists(force=force)
+                if spotify_result.get("synced"):
+                    spotify_artists = spotify_result.get("artists", [])
+                    all_artists.extend(spotify_artists)
+                    stats["providers"]["spotify"] = {
+                        "total_fetched": len(spotify_artists),
+                        "created": spotify_result.get("created", 0),
+                        "updated": spotify_result.get("updated", 0),
+                    }
+                    stats["total_fetched"] += len(spotify_artists)
+                    stats["created"] += spotify_result.get("created", 0)
+                    stats["updated"] += spotify_result.get("updated", 0)
+            except Exception as e:
+                logger.warning(f"Spotify followed artists sync failed: {e}")
+                stats["providers"]["spotify"] = {"error": str(e)}
+
+        # Sync from Deezer
+        if self._deezer_sync and await self._is_provider_enabled("deezer"):
+            try:
+                deezer_result = await self._deezer_sync.sync_followed_artists(force=force)
+                if deezer_result.get("synced"):
+                    deezer_artists = deezer_result.get("artists", [])
+                    all_artists.extend(deezer_artists)
+                    stats["providers"]["deezer"] = {
+                        "total_fetched": len(deezer_artists),
+                        "created": deezer_result.get("created", 0),
+                        "updated": deezer_result.get("updated", 0),
+                    }
+                    stats["total_fetched"] += len(deezer_artists)
+                    stats["created"] += deezer_result.get("created", 0)
+                    stats["updated"] += deezer_result.get("updated", 0)
+            except Exception as e:
+                logger.warning(f"Deezer followed artists sync failed: {e}")
+                stats["providers"]["deezer"] = {"error": str(e)}
+
+        return all_artists, stats
+
+    async def sync_spotify_followed_artists(
+        self,
+        force: bool = False,
+    ) -> tuple[list[Any], dict[str, Any]]:
+        """Sync followed artists from Spotify only.
+
+        This replaces the deprecated FollowedArtistsService._sync_spotify_followed_artists().
+
+        Args:
+            force: Skip cooldown checks
+
+        Returns:
+            Tuple of (artists_list, stats_dict)
+        """
+        if not self._spotify_sync or not await self._is_provider_enabled("spotify"):
+            return [], {"created": 0, "updated": 0, "total": 0}
+
+        try:
+            result = await self._spotify_sync.sync_followed_artists(force=force)
+            artists = result.get("artists", [])
+            stats = {
+                "created": result.get("created", 0),
+                "updated": result.get("updated", 0),
+                "total": len(artists),
+            }
+            return artists, stats
+        except Exception as e:
+            logger.error(f"Spotify followed artists sync failed: {e}")
+            return [], {"created": 0, "updated": 0, "total": 0, "error": str(e)}
