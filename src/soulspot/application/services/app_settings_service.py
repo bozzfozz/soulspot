@@ -1413,17 +1413,7 @@ class AppSettingsService:
         """
         return await self.get_int("library.sync_cooldown_minutes", default=5)
 
-    async def get_enrichment_batch_size(self) -> int:
-        """Get batch size for enrichment operations.
-
-        Hey future me - rate limit friendly batch processing!
-        MusicBrainz allows 1 req/sec, Deezer allows ~50/5min.
-        This controls how many entities to process per batch.
-
-        Returns:
-            Number of entities per batch (default 20).
-        """
-        return await self.get_int("library.enrichment_batch_size", default=20)
+    # NOTE: get_enrichment_batch_size is defined above in the ENRICHMENT SETTINGS section
 
     async def image_download_enabled(self) -> bool:
         """Check if local image downloading is enabled.
