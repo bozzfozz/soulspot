@@ -217,9 +217,16 @@ class MusicBrainzEnrichmentService:
         """Get albums that don't have disambiguation but have titles.
 
         Hey future me - same priority logic as artists: enriched albums first!
+        
+        CRITICAL: Must use selectinload for artist relationship!
+        Otherwise accessing album.artist.name after asyncio.sleep() will fail
+        with "greenlet_spawn has not been called" error.
         """
+        from sqlalchemy.orm import selectinload
+        
         stmt = (
             select(AlbumModel)
+            .options(selectinload(AlbumModel.artist))  # Eager load artist!
             .where(
                 (
                     AlbumModel.disambiguation.is_(None)

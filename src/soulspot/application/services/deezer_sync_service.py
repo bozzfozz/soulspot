@@ -646,12 +646,14 @@ class DeezerSyncService:
                 artwork_url = getattr(artist_dto, "artwork_url", None)
                 image = ImageRef(url=artwork_url) if artwork_url else ImageRef()
 
+            # Hey future me - source_service is REQUIRED for ArtistDTO!
             dto = ArtistDTO(
                 name=artist_dto.name,
+                source_service="deezer",  # CRITICAL: Required field!
                 deezer_id=artist_dto.deezer_id,
                 image=image,
-                genres=getattr(artist_dto, "genres", None),
-                tags=getattr(artist_dto, "tags", None),
+                genres=getattr(artist_dto, "genres", None) or [],
+                tags=getattr(artist_dto, "tags", None) or [],
             )
 
         # Use ProviderMappingService for consistent artist creation/update
@@ -743,12 +745,14 @@ class DeezerSyncService:
                 return None
 
             # Build ArtistDTO for ProviderMappingService
+            # Hey future me - source_service is REQUIRED! It identifies where the data came from.
             dto = ArtistDTO(
                 name=artist_name,
+                source_service="deezer",  # CRITICAL: Required field!
                 deezer_id=deezer_id,
                 image=ImageRef(url=artwork_url) if artwork_url else ImageRef(),
-                genres=genres,
-                tags=tags,
+                genres=genres if genres else [],
+                tags=tags if tags else [],
             )
 
             # Use ProviderMappingService for consistent artist creation/update
