@@ -104,9 +104,12 @@ async def library_artist_detail(
     if not album_models:
         try:
             # MULTI-SERVICE PATTERN: Try available services
-            from soulspot.application.services.followed_artists_service import (
-                FollowedArtistsService,
+            from soulspot.application.services.provider_sync_orchestrator import (
+                ProviderSyncOrchestrator,
             )
+            from soulspot.application.services.app_settings_service import AppSettingsService
+            from soulspot.application.services.deezer_sync_service import DeezerSyncService
+            from soulspot.application.services.spotify_sync_service import SpotifySyncService
             from soulspot.application.services.token_manager import (
                 DatabaseTokenManager,
             )
@@ -142,18 +145,24 @@ async def library_artist_detail(
             # 2. Deezer is ALWAYS available (no auth needed!)
             deezer_plugin = DeezerPlugin()
 
-            # 3. Create service with available plugins (spotify_plugin can be None!)
-            followed_service = FollowedArtistsService(
-                session,
-                spotify_plugin=spotify_plugin,  # May be None - service handles this
-                deezer_plugin=deezer_plugin,  # Always available
+            # 3. Create sync services
+            settings_service = AppSettingsService(session)
+            deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+            spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+            # 4. Create orchestrator with available plugins
+            orchestrator = ProviderSyncOrchestrator(
+                session=session,
+                settings_service=settings_service,
+                spotify_sync=spotify_sync,
+                deezer_sync=deezer_sync,
             )
 
             # Sync albums AND tracks using available services
             # Hey future me - This is the KEY CHANGE! We now use sync_artist_discography_complete
             # with include_tracks=True so ALL album tracks are fetched and stored in DB.
             # When user clicks an album, tracks load from DB (no API call needed)!
-            sync_stats = await followed_service.sync_artist_discography_complete(
+            sync_stats = await orchestrator.sync_artist_discography_complete(
                 artist_id=str(artist_model.id),
                 include_tracks=True,  # CRITICAL: Fetch tracks for ALL albums!
             )

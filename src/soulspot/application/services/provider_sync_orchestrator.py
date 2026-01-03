@@ -502,3 +502,79 @@ class ProviderSyncOrchestrator:
         result.synced = result.total > 0 or not result.errors
 
         return result
+
+    # =========================================================================
+    # DISCOGRAPHY SYNC (Complete: Albums + Tracks)
+    # =========================================================================
+
+    async def sync_artist_discography_complete(
+        self,
+        artist_id: str,
+        artist_name: str | None = None,
+        deezer_artist_id: str | None = None,
+        include_tracks: bool = True,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Sync complete artist discography (albums + optionally tracks).
+
+        This is a convenience method that replaces the deprecated
+        FollowedArtistsService.sync_artist_discography_complete().
+
+        Args:
+            artist_id: Internal artist UUID or provider ID
+            artist_name: Artist name for Deezer search
+            deezer_artist_id: Deezer artist ID if known
+            include_tracks: Whether to also sync tracks for each album
+            force: Skip cooldown checks
+
+        Returns:
+            Dict with stats: {"albums_added": int, "tracks_added": int, "source": str}
+        """
+        from soulspot.infrastructure.persistence.repositories import AlbumRepository
+
+        # Step 1: Sync albums
+        albums_result = await self.sync_artist_albums(
+            artist_id=artist_id,
+            artist_name=artist_name,
+            deezer_artist_id=deezer_artist_id,
+            force=force,
+        )
+
+        tracks_added = 0
+        source = "none"
+
+        if albums_result.source_counts.get("spotify"):
+            source = "spotify"
+        elif albums_result.source_counts.get("deezer"):
+            source = "deezer"
+
+        # Step 2: Sync tracks for each album if requested
+        if include_tracks and albums_result.synced:
+            album_repo = AlbumRepository(self._session)
+            
+            # Get all albums for this artist
+            from soulspot.domain.value_objects import ArtistId
+            try:
+                artist_id_obj = ArtistId.from_string(artist_id)
+                albums = await album_repo.get_by_artist_id(artist_id_obj)
+                
+                for album in albums:
+                    # Sync tracks for each album
+                    album_id_str = str(album.id.value) if hasattr(album, 'id') else None
+                    if album_id_str:
+                        tracks_result = await self.sync_album_tracks(
+                            album_id=album_id_str,
+                            deezer_album_id=getattr(album, 'deezer_id', None),
+                            force=force,
+                        )
+                        tracks_added += tracks_result.added
+
+            except Exception as e:
+                logger.warning(f"Failed to sync tracks for artist {artist_id}: {e}")
+
+        return {
+            "albums_added": albums_result.added,
+            "tracks_added": tracks_added,
+            "source": source,
+            "synced": albums_result.synced,
+        }

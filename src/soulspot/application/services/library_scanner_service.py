@@ -137,9 +137,12 @@ class LibraryScannerService:
         """
         # Acquire semaphore to limit concurrent database writes
         async with _DISCOGRAPHY_SYNC_SEMAPHORE:
-            from soulspot.application.services.followed_artists_service import (
-                FollowedArtistsService,
+            from soulspot.application.services.provider_sync_orchestrator import (
+                ProviderSyncOrchestrator,
             )
+            from soulspot.application.services.app_settings_service import AppSettingsService
+            from soulspot.application.services.deezer_sync_service import DeezerSyncService
+            from soulspot.application.services.spotify_sync_service import SpotifySyncService
             from soulspot.config import get_settings
             from soulspot.infrastructure.persistence.database import Database
             from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
@@ -163,13 +166,20 @@ class LibraryScannerService:
                         # No Spotify auth available, Deezer fallback will be used
                         pass
 
-                    service = FollowedArtistsService(
+                    # Create sync services
+                    settings_service = AppSettingsService(session)
+                    deezer_sync = DeezerSyncService(session, deezer_plugin) if deezer_plugin else None
+                    spotify_sync = SpotifySyncService(session, spotify_plugin) if spotify_plugin else None
+
+                    # Create orchestrator
+                    orchestrator = ProviderSyncOrchestrator(
                         session=session,
-                        spotify_plugin=spotify_plugin,
-                        deezer_plugin=deezer_plugin,
+                        settings_service=settings_service,
+                        spotify_sync=spotify_sync,
+                        deezer_sync=deezer_sync,
                     )
 
-                    stats = await service.sync_artist_discography_complete(
+                    stats = await orchestrator.sync_artist_discography_complete(
                         artist_id=artist_id,
                         include_tracks=True,
                     )
