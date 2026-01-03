@@ -1227,15 +1227,22 @@ class UnifiedLibraryManager:
     async def _sync_images(self) -> None:
         """Download/cache images for artists and albums.
 
-        Hey future me - THIS SYNCS IMAGE URLS FROM PROVIDERS!
-        Finds entities with missing image URLs and fetches from Deezer/Spotify.
-        Actual file download is handled separately by ImageService.
+        Hey future me - THIS DOES THE FULL IMAGE PIPELINE!
+        1. Find entities with missing image_url → fetch from Deezer
+        2. Find entities with URL but no local file → download and cache
 
         Process:
-        1. Find artists/albums with missing image_url
-        2. Query Deezer (no auth!) for images
-        3. Update image_url in DB
+        Phase 1: URL Enrichment
+        - Find artists/albums with missing image_url
+        - Query Deezer (no auth!) for images
+        - Update image_url in DB
+
+        Phase 2: Local Download
+        - Find artists/albums with URL but no local image_path
+        - Download from CDN via ImageService
+        - Convert to WebP and cache locally
         """
+        from soulspot.application.services.images import ImageService
         from soulspot.infrastructure.persistence.repositories import (
             AlbumRepository,
             ArtistRepository,
@@ -1253,17 +1260,21 @@ class UnifiedLibraryManager:
 
             artist_repo = ArtistRepository(session)
             album_repo = AlbumRepository(session)
+            image_service = ImageService(session=session)
 
-            logger.info("Starting image URL sync...")
+            logger.info("🖼️ Starting image sync (URL enrichment + local download)...")
 
-            # Get artists missing artwork
-            artists_updated = 0
+            # ================================================================
+            # PHASE 1: URL ENRICHMENT (fetch URLs from Deezer)
+            # ================================================================
+            urls_fetched = {"artists": 0, "albums": 0}
+
+            # Get artists missing image URL
             try:
                 artists = await artist_repo.get_missing_artwork(limit=batch_size)
                 if artists and self._deezer_plugin:
                     for artist in artists:
                         try:
-                            # Try to find artist on Deezer and get image
                             if artist.deezer_id:
                                 artist_data = await self._deezer_plugin.get_artist(
                                     artist.deezer_id
@@ -1276,15 +1287,14 @@ class UnifiedLibraryManager:
                                         path=artist.image.path,
                                     )
                                     await artist_repo.update(artist)
-                                    artists_updated += 1
-                            await asyncio.sleep(0.2)  # Brief pause
+                                    urls_fetched["artists"] += 1
+                            await asyncio.sleep(0.2)  # Rate limit
                         except Exception as e:
-                            logger.debug(f"Failed to get image for {artist.name}: {e}")
+                            logger.debug(f"Failed to get URL for artist {artist.name}: {e}")
             except Exception as e:
-                logger.warning(f"Artist image sync failed: {e}")
+                logger.warning(f"Artist URL enrichment failed: {e}")
 
-            # Get albums missing cover
-            albums_updated = 0
+            # Get albums missing cover URL
             try:
                 albums = await album_repo.get_albums_without_cover_url(limit=batch_size)
                 if albums and self._deezer_plugin:
@@ -1298,17 +1308,86 @@ class UnifiedLibraryManager:
                                     await album_repo.update_cover_url(
                                         album.id, album_data.cover_url
                                     )
-                                    albums_updated += 1
-                            await asyncio.sleep(0.2)  # Brief pause
+                                    urls_fetched["albums"] += 1
+                            await asyncio.sleep(0.2)  # Rate limit
                         except Exception as e:
-                            logger.debug(f"Failed to get cover for {album.title}: {e}")
+                            logger.debug(f"Failed to get URL for album {album.title}: {e}")
             except Exception as e:
-                logger.warning(f"Album cover sync failed: {e}")
+                logger.warning(f"Album URL enrichment failed: {e}")
 
             await session.commit()
 
             logger.info(
-                f"✅ Image sync complete: {artists_updated} artists, {albums_updated} albums"
+                f"📥 Phase 1 URL enrichment: {urls_fetched['artists']} artists, "
+                f"{urls_fetched['albums']} albums"
+            )
+
+            # ================================================================
+            # PHASE 2: LOCAL DOWNLOAD (download and cache images locally)
+            # ================================================================
+            downloads = {"artists": 0, "albums": 0, "errors": 0}
+
+            # Download artist images (have URL but no local file)
+            try:
+                artists_needing_download = await artist_repo.get_artists_needing_image_download(
+                    limit=batch_size
+                )
+                for artist in artists_needing_download:
+                    try:
+                        if artist.image and artist.image.url:
+                            result = await image_service.download_and_cache(
+                                source_url=artist.image.url,
+                                entity_type="artist",
+                                entity_id=str(artist.id),
+                            )
+                            if result.success:
+                                downloads["artists"] += 1
+                                logger.debug(f"✅ Downloaded image for artist: {artist.name}")
+                            else:
+                                downloads["errors"] += 1
+                                logger.debug(f"❌ Failed to download image for {artist.name}: {result.error}")
+                        await asyncio.sleep(0.3)  # Rate limit downloads
+                    except Exception as e:
+                        downloads["errors"] += 1
+                        logger.debug(f"Error downloading artist image {artist.name}: {e}")
+            except Exception as e:
+                logger.warning(f"Artist image download phase failed: {e}")
+
+            # Download album covers (have URL but no local file)
+            try:
+                albums_needing_download = await album_repo.get_albums_needing_cover_download(
+                    limit=batch_size
+                )
+                for album in albums_needing_download:
+                    try:
+                        # Album uses cover: ImageRef, not cover_url directly
+                        cover_url = album.cover.url if album.cover else None
+                        if cover_url:
+                            result = await image_service.download_and_cache(
+                                source_url=cover_url,
+                                entity_type="album",
+                                entity_id=str(album.id),
+                            )
+                            if result.success:
+                                downloads["albums"] += 1
+                                logger.debug(f"✅ Downloaded cover for album: {album.title}")
+                            else:
+                                downloads["errors"] += 1
+                                logger.debug(f"❌ Failed to download cover for {album.title}: {result.error}")
+                        await asyncio.sleep(0.3)  # Rate limit downloads
+                    except Exception as e:
+                        downloads["errors"] += 1
+                        logger.debug(f"Error downloading album cover {album.title}: {e}")
+            except Exception as e:
+                logger.warning(f"Album cover download phase failed: {e}")
+
+            await session.commit()
+
+            logger.info(
+                f"✅ Image sync complete! "
+                f"URLs: {urls_fetched['artists']}+{urls_fetched['albums']} | "
+                f"Downloads: {downloads['artists']} artists, {downloads['albums']} albums "
+                f"({downloads['errors']} errors)"
             )
 
     async def _process_downloads(self) -> None:

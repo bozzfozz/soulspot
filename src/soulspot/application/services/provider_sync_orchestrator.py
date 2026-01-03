@@ -458,14 +458,18 @@ class ProviderSyncOrchestrator:
 
     async def sync_album_tracks(
         self,
-        album_id: str,
+        album_id: str | None = None,
         deezer_album_id: str | None = None,
         force: bool = False,
     ) -> AggregatedSyncResult:
         """Sync album tracks from available providers.
 
+        Hey future me - album_id and deezer_album_id are BOTH optional now!
+        get_albums_needing_track_backfill() returns albums with deezer_id,
+        but they may NOT have spotify_uri (and thus spotify_id is None).
+
         Args:
-            album_id: Spotify album ID (or internal ID)
+            album_id: Spotify album ID (optional - can be None for Deezer-only albums)
             deezer_album_id: Deezer album ID if known
             force: Skip cooldown check
 
@@ -474,8 +478,13 @@ class ProviderSyncOrchestrator:
         """
         result = AggregatedSyncResult()
 
-        # 1. Try Spotify first
-        if self._spotify_sync and await self._is_provider_enabled("spotify"):
+        # 1. Try Spotify first - ONLY if we have a Spotify album ID!
+        # Hey future me - album_id can be None for Deezer-only albums!
+        if (
+            self._spotify_sync
+            and await self._is_provider_enabled("spotify")
+            and album_id  # CRITICAL: Skip if no Spotify ID!
+        ):
             try:
                 spotify_result = await self._spotify_sync.sync_album_tracks(
                     album_id=album_id,
@@ -497,7 +506,7 @@ class ProviderSyncOrchestrator:
         ):
             try:
                 deezer_result = await self._deezer_sync.sync_album_tracks(
-                    album_id=deezer_album_id,
+                    deezer_album_id=deezer_album_id,
                     force=force,
                 )
                 if deezer_result.get("synced"):

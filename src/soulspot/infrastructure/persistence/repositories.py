@@ -575,6 +575,41 @@ class ArtistRepository(IArtistRepository):
 
         return [self._model_to_entity(model) for model in models]
 
+    async def get_artists_needing_image_download(self, limit: int = 50) -> list[Artist]:
+        """Get artists that have image_url but missing local image_path.
+
+        Hey future me - this is for LOCAL IMAGE CACHING!
+        Phase 2 of image sync: We have CDN URL, now download and cache locally.
+
+        Returns artists where:
+        - image_url is NOT NULL (have CDN URL)
+        - image_path is NULL (not yet downloaded locally)
+        - image_path does NOT start with 'FAILED:' (skip permanently failed)
+
+        Args:
+            limit: Maximum number of artists to return
+
+        Returns:
+            List of Artist entities needing local image download
+        """
+        stmt = (
+            select(ArtistModel)
+            .where(ArtistModel.image_url.isnot(None))  # Has CDN URL
+            .where(ArtistModel.image_url != "")  # Not empty string
+            .where(
+                or_(
+                    ArtistModel.image_path.is_(None),  # No local path
+                    ArtistModel.image_path == "",  # Empty string
+                )
+            )
+            .order_by(ArtistModel.name)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+
+        return [self._model_to_entity(model) for model in models]
+
     # =========================================================================
     # MULTI-SERVICE LOOKUP METHODS
     # =========================================================================
@@ -1479,6 +1514,39 @@ class AlbumRepository(IAlbumRepository):
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0
+
+    async def get_albums_needing_cover_download(self, limit: int = 50) -> list[Album]:
+        """Get albums that have cover_url but missing local cover_path.
+
+        Hey future me - this is for LOCAL IMAGE CACHING Phase 2!
+        We have CDN URL, now download and cache locally.
+
+        Returns albums where:
+        - cover_url is NOT NULL (have CDN URL)
+        - cover_path is NULL (not yet downloaded locally)
+
+        Args:
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of Album entities needing local cover download
+        """
+        stmt = (
+            select(AlbumModel)
+            .where(AlbumModel.cover_url.isnot(None))  # Has CDN URL
+            .where(AlbumModel.cover_url != "")  # Not empty string
+            .where(
+                or_(
+                    AlbumModel.cover_path.is_(None),  # No local path
+                    AlbumModel.cover_path == "",  # Empty string
+                )
+            )
+            .order_by(AlbumModel.title)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        models = result.scalars().all()
+        return [self._model_to_entity(model) for model in models]
 
     async def get_albums_needing_track_backfill(self, limit: int = 30) -> list[Album]:
         """Get albums that have deezer_id but NO tracks in DB (track backfill).

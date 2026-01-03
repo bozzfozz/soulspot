@@ -200,6 +200,25 @@ class IArtistRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def get_artists_needing_image_download(self, limit: int = 50) -> list[Artist]:
+        """Get artists that have image_url but missing local image_path.
+
+        Hey future me - this is for LOCAL IMAGE CACHING Phase 2!
+        We have CDN URL, now download and cache locally.
+
+        Returns artists where:
+        - image_url is NOT NULL (have CDN URL)
+        - image_path is NULL (not yet downloaded locally)
+
+        Args:
+            limit: Maximum number of artists to return
+
+        Returns:
+            List of Artist entities needing local image download
+        """
+        pass
+
     # =========================================================================
     # MULTI-SERVICE LOOKUP METHODS
     # =========================================================================
@@ -543,6 +562,25 @@ class IAlbumRepository(ABC):
 
         Returns:
             True if updated, False if album not found
+        """
+        pass
+
+    @abstractmethod
+    async def get_albums_needing_cover_download(self, limit: int = 50) -> list[Album]:
+        """Get albums that have cover_url but missing local cover_path.
+
+        Hey future me - this is for LOCAL IMAGE CACHING Phase 2!
+        We have CDN URL, now download and cache locally.
+
+        Returns albums where:
+        - cover_url is NOT NULL (have CDN URL)
+        - cover_path is NULL (not yet downloaded locally)
+
+        Args:
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of Album entities needing local cover download
         """
         pass
 
