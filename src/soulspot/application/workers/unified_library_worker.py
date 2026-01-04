@@ -287,6 +287,27 @@ class TaskScheduler:
         if task_type in self._last_run:
             del self._last_run[task_type]
 
+    def mark_urgent(self, task_type: TaskType) -> None:
+        """Mark a task as urgent, bypassing its cooldown.
+
+        Hey future me - THIS IS FOR OPTION D+ (Hybrid Image Sync)!
+        After ARTIST_SYNC completes with new artists, we want IMAGE_SYNC
+        to run IMMEDIATELY instead of waiting for the 10-minute cooldown.
+
+        Use cases:
+        - New artists added → trigger IMAGE_SYNC right away
+        - User triggered action → bypass automation cooldowns
+        - Error recovery → force re-run of failed task
+
+        How it works: Clears last_run timestamp so can_run() returns True.
+
+        Args:
+            task_type: The task to mark as urgent.
+        """
+        if task_type in self._last_run:
+            del self._last_run[task_type]
+            logger.info(f"TaskScheduler: Marked {task_type.value} as URGENT (cooldown bypassed)")
+
     def get_next_task(self) -> TaskType | None:
         """Get next task that can run, by dependency order then priority.
 
@@ -899,6 +920,27 @@ class UnifiedLibraryManager:
                             f"  {provider}: {pstats.get('total_fetched', 0)} fetched"
                         )
 
+            # ================================================================
+            # OPTION D+: Trigger IMAGE_SYNC immediately if new artists created
+            # ================================================================
+            # Hey future me - THIS IS THE HYBRID IMAGE SYNC!
+            # When new artists are created, we want their images ASAP.
+            # CDN URLs are already in DB (artist.image_url), but local files aren't.
+            # By marking IMAGE_SYNC as urgent, it runs on the NEXT cycle without
+            # waiting for its 10-minute cooldown.
+            #
+            # Why not download here? Because:
+            # 1. This method should finish fast (responsive UI)
+            # 2. IMAGE_SYNC has proper error handling and batching
+            # 3. IMAGE_SYNC also handles albums (which sync in ALBUM_SYNC task)
+            # 4. No code duplication!
+            total_created = stats.get("total_created", 0)
+            if total_created > 0:
+                self._scheduler.mark_urgent(TaskType.IMAGE_SYNC)
+                logger.info(
+                    f"🖼️ {total_created} new artists created - IMAGE_SYNC marked urgent"
+                )
+
     async def _sync_albums(self) -> None:
         """Sync albums for owned artists.
 
@@ -1060,6 +1102,18 @@ class UnifiedLibraryManager:
                 f"{total_albums_added} albums added, {total_tracks_added} tracks added, "
                 f"{errors} errors"
             )
+
+            # ================================================================
+            # OPTION D+: Trigger IMAGE_SYNC immediately if new albums created
+            # ================================================================
+            # Hey future me - same logic as _sync_artists()!
+            # New albums have cover_url (CDN) but no cover_path (local).
+            # IMAGE_SYNC will download them in batches with proper rate limiting.
+            if total_albums_added > 0:
+                self._scheduler.mark_urgent(TaskType.IMAGE_SYNC)
+                logger.info(
+                    f"🖼️ {total_albums_added} new albums added - IMAGE_SYNC marked urgent"
+                )
 
     async def _sync_tracks(self) -> None:
         """Sync tracks for albums missing tracks and handle download state.
