@@ -26,6 +26,7 @@ from soulspot.api.dependencies import (
     get_spotify_plugin_optional,
 )
 from soulspot.api.routers.ui._shared import templates
+from soulspot.domain.value_objects.album_types import is_various_artists
 from soulspot.infrastructure.persistence.models import AlbumModel, ArtistModel
 
 if TYPE_CHECKING:
@@ -315,6 +316,24 @@ async def spotify_discover_page(
                 "total_discoveries": 0,
                 "source_counts": {},
                 "error": "No local artists found. Scan your music library first! (Settings → Library Scanner)",
+            },
+        )
+
+    # Hey future me - FILTER OUT "Various Artists"!
+    # "Various Artists" is a compilation folder marker, NOT a real artist.
+    # We should never search for similar artists to "Various Artists".
+    local_artists = [a for a in local_artists if not is_various_artists(a.name)]
+
+    if not local_artists:
+        return templates.TemplateResponse(
+            request,
+            "discover.html",
+            context={
+                "discoveries": [],
+                "based_on_count": 0,
+                "total_discoveries": 0,
+                "source_counts": {},
+                "error": "No real artists found (only compilations). Scan more of your music library!",
             },
         )
 

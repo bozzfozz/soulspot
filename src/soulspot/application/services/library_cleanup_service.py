@@ -188,3 +188,102 @@ class LibraryCleanupService:
             await self._session.rollback()
             logger.error(f"Failed to clear local library: {e}")
             raise
+
+    async def cleanup_orphaned_entities(self, batch_size: int = 500) -> dict[str, int]:
+        """Clean up orphaned albums and artists (no tracks/albums linked).
+
+        Hey future me - this is the ORPHAN CLEANUP for after artist/album deletions!
+        Call this after deleting an artist to clean up any "discovered" or featured artists
+        that now have no content linked to them.
+
+        Deletes:
+        1. Albums with NO tracks (true orphans)
+        2. Artists with NO tracks AND NO albums (true orphans)
+
+        This does NOT affect artists/albums that still have content - only true orphans.
+
+        Args:
+            batch_size: Number of entities to delete per batch (default 500)
+
+        Returns:
+            Statistics about deleted entities: {"albums": N, "artists": N}
+        """
+        stats = {
+            "albums": 0,
+            "artists": 0,
+        }
+
+        logger.info("Starting orphan cleanup...")
+
+        try:
+            # Step 1: Delete orphaned albums (albums with no tracks)
+            while True:
+                orphan_albums_stmt = (
+                    select(AlbumModel.id)
+                    .outerjoin(TrackModel, AlbumModel.id == TrackModel.album_id)
+                    .group_by(AlbumModel.id)
+                    .having(func.count(TrackModel.id) == 0)
+                    .limit(batch_size)
+                )
+                result = await self._session.execute(orphan_albums_stmt)
+                orphan_ids = [row[0] for row in result.all()]
+
+                if not orphan_ids:
+                    break
+
+                batch_count = len(orphan_ids)
+                stats["albums"] += batch_count
+
+                delete_stmt = delete(AlbumModel).where(AlbumModel.id.in_(orphan_ids))
+                await self._session.execute(delete_stmt)
+
+                logger.debug(f"Deleted {batch_count} orphaned albums (no tracks)")
+
+                if batch_count < batch_size:
+                    break
+
+            # Step 2: Delete orphaned artists (no albums AND no tracks)
+            while True:
+                orphan_artists_stmt = (
+                    select(ArtistModel.id)
+                    .outerjoin(TrackModel, ArtistModel.id == TrackModel.artist_id)
+                    .outerjoin(AlbumModel, ArtistModel.id == AlbumModel.artist_id)
+                    .group_by(ArtistModel.id)
+                    .having(
+                        (func.count(TrackModel.id) == 0)
+                        & (func.count(AlbumModel.id) == 0)
+                    )
+                    .limit(batch_size)
+                )
+                result = await self._session.execute(orphan_artists_stmt)
+                orphan_ids = [row[0] for row in result.all()]
+
+                if not orphan_ids:
+                    break
+
+                batch_count = len(orphan_ids)
+                stats["artists"] += batch_count
+
+                delete_stmt = delete(ArtistModel).where(ArtistModel.id.in_(orphan_ids))
+                await self._session.execute(delete_stmt)
+
+                logger.debug(f"Deleted {batch_count} orphaned artists (no albums/tracks)")
+
+                if batch_count < batch_size:
+                    break
+
+            await self._session.commit()
+
+            if stats["albums"] > 0 or stats["artists"] > 0:
+                logger.info(
+                    f"Orphan cleanup complete: {stats['albums']} albums, {stats['artists']} artists deleted"
+                )
+            else:
+                logger.debug("No orphans found to clean up")
+
+            return stats
+
+        except Exception as e:
+            await self._session.rollback()
+            logger.error(f"Orphan cleanup failed: {e}")
+            raise

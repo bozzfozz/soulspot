@@ -502,6 +502,99 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("LIBRARY_SCAN handler registered")
 
             # =================================================================
+            # LIBRARY_SPOTIFY_ENRICHMENT Job Handler
+            # =================================================================
+            # Hey future me - this enriches local artists/albums with Spotify URIs!
+            # Searches Spotify for entities without spotify_uri yet.
+            # Requires Spotify auth - gracefully skips if not authenticated.
+            # =================================================================
+
+            async def _handle_library_spotify_enrichment_job(
+                job: Job,
+            ) -> dict[str, Any]:
+                """Handle LIBRARY_SPOTIFY_ENRICHMENT jobs from JobQueue.
+
+                Hey future me - this searches Spotify for unenriched local entities!
+                For each artist/album without spotify_uri, searches Spotify and:
+                - Applies high-confidence matches automatically
+                - Creates EnrichmentCandidate for ambiguous matches (user review)
+
+                Requires Spotify authentication - skips gracefully if unavailable.
+
+                Args:
+                    job: The job with payload {triggered_by: str}
+
+                Returns:
+                    Stats dict: {artists_enriched, albums_enriched, candidates_created}
+                """
+                logger.info(f"Starting library Spotify enrichment job {job.id}")
+
+                # Check if Spotify is available
+                if spotify_plugin is None or not spotify_plugin.is_authenticated:
+                    logger.warning(
+                        "Spotify enrichment skipped - no valid Spotify token. "
+                        "User needs to authenticate via Settings > Spotify."
+                    )
+                    return {
+                        "skipped": True,
+                        "reason": "spotify_not_authenticated",
+                        "artists_enriched": 0,
+                        "albums_enriched": 0,
+                        "candidates_created": 0,
+                    }
+
+                # Run enrichment with fresh session
+                async with db.session_scope() as enrich_session:
+                    from soulspot.application.services.enrichment_service import (
+                        EnrichmentService,
+                    )
+
+                    service = EnrichmentService(enrich_session)
+                    status = await service.get_enrichment_status()
+
+                    if not status.is_enrichment_needed:
+                        logger.info(
+                            f"Library Spotify enrichment job {job.id}: "
+                            "No unenriched entities found"
+                        )
+                        return {
+                            "skipped": False,
+                            "reason": "no_enrichment_needed",
+                            "artists_enriched": 0,
+                            "albums_enriched": 0,
+                            "candidates_created": 0,
+                        }
+
+                    # Log what needs enrichment
+                    logger.info(
+                        f"Library Spotify enrichment: {status.artists_unenriched} artists, "
+                        f"{status.albums_unenriched} albums need enrichment"
+                    )
+
+                    # TODO: Implement actual Spotify search + enrichment logic
+                    # For now, just log and return status
+                    # Full implementation would:
+                    # 1. Query artists/albums without spotify_uri
+                    # 2. Search Spotify for each
+                    # 3. Apply high-confidence matches
+                    # 4. Create EnrichmentCandidate for ambiguous matches
+
+                    await enrich_session.commit()
+                    logger.info(f"Library Spotify enrichment job {job.id} completed")
+                    return {
+                        "skipped": False,
+                        "artists_unenriched": status.artists_unenriched,
+                        "albums_unenriched": status.albums_unenriched,
+                        "pending_candidates": status.pending_candidates,
+                    }
+
+            job_queue.register_handler(
+                JobType.LIBRARY_SPOTIFY_ENRICHMENT,
+                _handle_library_spotify_enrichment_job,
+            )
+            logger.info("LIBRARY_SPOTIFY_ENRICHMENT handler registered")
+
+            # =================================================================
             # REMOVED: LibraryDiscoveryWorker - Replaced by UnifiedLibraryManager
             # =================================================================
             # Hey future me - LibraryDiscoveryWorker was DELETED!

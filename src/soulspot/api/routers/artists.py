@@ -737,7 +737,12 @@ async def delete_artist(
     """Delete an artist from the database.
 
     Removes the artist and cascades to delete their albums and tracks.
-    This is a destructive operation - use with caution!
+    Also cleans up any orphaned albums and artists created during discography sync
+    (e.g., featured artists, compilation contributors).
+
+    Hey future me - this is a destructive operation! But we ALSO clean up orphans
+    because discography sync creates "discovered" artists that may have no content
+    after the main artist is deleted.
 
     Args:
         artist_id: Artist UUID to delete
@@ -746,6 +751,10 @@ async def delete_artist(
     Raises:
         HTTPException: 404 if artist not found, 400 if invalid ID format
     """
+    from soulspot.application.services.library_cleanup_service import (
+        LibraryCleanupService,
+    )
+
     repo = ArtistRepository(session)
 
     try:
@@ -764,6 +773,18 @@ async def delete_artist(
     await session.commit()
 
     logger.info(f"Deleted artist: {artist.name} (id: {artist_id})")
+
+    # Hey future me - IMPORTANT! Clean up orphaned albums and artists!
+    # Discography sync creates "discovered" artists (featured artists, collaborators)
+    # that may now be orphaned after deleting the main artist.
+    cleanup_service = LibraryCleanupService(session)
+    orphan_stats = await cleanup_service.cleanup_orphaned_entities()
+
+    if orphan_stats["albums"] > 0 or orphan_stats["artists"] > 0:
+        logger.info(
+            f"Post-delete cleanup: {orphan_stats['albums']} orphan albums, "
+            f"{orphan_stats['artists']} orphan artists removed"
+        )
 
 
 # =========================================================================

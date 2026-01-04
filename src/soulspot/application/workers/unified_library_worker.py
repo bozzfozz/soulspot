@@ -1453,8 +1453,8 @@ class UnifiedLibraryManager:
         Hey future me - THIS IS THE MAINTENANCE TASK!
         Runs periodically to:
         1. Reset old FAILED downloads to PENDING for retry
-        2. Validate file paths still exist
-        3. Remove orphaned entities
+        2. Remove orphaned albums (no tracks)
+        3. Remove orphaned artists (no albums AND no tracks)
 
         Uses cleanup_days from settings to determine "stale" threshold.
         """
@@ -1462,6 +1462,9 @@ class UnifiedLibraryManager:
 
         from sqlalchemy import update
 
+        from soulspot.application.services.library_cleanup_service import (
+            LibraryCleanupService,
+        )
         from soulspot.domain.entities import DownloadState
         from soulspot.infrastructure.persistence.models import TrackModel
 
@@ -1491,7 +1494,19 @@ class UnifiedLibraryManager:
             else:
                 logger.debug("No stale failed downloads to reset")
 
-            # Future: Add orphan detection and file validation here
+            # Clean up orphaned entities (albums without tracks, artists without albums/tracks)
+            # Hey future me - this catches orphans from:
+            # - Manual artist deletions
+            # - Discography sync creating "discovered" entities
+            # - Track deletions leaving empty albums
+            cleanup_service = LibraryCleanupService(session)
+            orphan_stats = await cleanup_service.cleanup_orphaned_entities()
+
+            if orphan_stats["albums"] > 0 or orphan_stats["artists"] > 0:
+                logger.info(
+                    f"🧹 Orphan cleanup: {orphan_stats['albums']} albums, "
+                    f"{orphan_stats['artists']} artists removed"
+                )
 
     # =========================================================================
     # HELPER METHODS

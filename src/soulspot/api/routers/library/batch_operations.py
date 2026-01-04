@@ -162,6 +162,42 @@ async def clear_local_library(
     }
 
 
+@router.post("/cleanup-orphans")
+async def cleanup_orphaned_entities(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Clean up orphaned albums and artists.
+
+    Hey future me - use this to manually clean up orphans after bulk operations!
+    The UnifiedLibraryWorker runs this automatically, but you can trigger it manually.
+
+    Orphans are:
+    - Albums with NO tracks linked
+    - Artists with NO albums AND NO tracks linked
+
+    These can occur from:
+    - Deleting artists with featured artists/collaborators
+    - Track deletions leaving empty albums
+    - Discography sync creating "discovered" entities
+
+    Returns:
+        Statistics about deleted orphans
+    """
+    from soulspot.application.services.library_cleanup_service import (
+        LibraryCleanupService,
+    )
+
+    service = LibraryCleanupService(session)
+    stats = await service.cleanup_orphaned_entities()
+
+    return {
+        "success": True,
+        "message": f"Cleaned up {stats['albums']} orphan albums, {stats['artists']} orphan artists",
+        "deleted_albums": stats["albums"],
+        "deleted_artists": stats["artists"],
+    }
+
+
 @router.delete("/clear-all")
 async def clear_entire_library(
     session: AsyncSession = Depends(get_db_session),
@@ -178,6 +214,7 @@ async def clear_entire_library(
 
     KEEPS:
     ❌ /downloads - NOT touched (Soulseek downloads)
+
     ❌ /music - NOT touched (organized library)
 
     ⚠️ PROTECTED: Only available when DEBUG mode is enabled!
