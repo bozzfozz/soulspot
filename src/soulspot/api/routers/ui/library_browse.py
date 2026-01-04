@@ -184,7 +184,13 @@ async def library_artists(
 
     # Check for missing artwork (artists + albums)
     # Hey future me - the enrichment button fetches BOTH artist images and album covers.
-    artists_without_image = sum(1 for a in artists if not a["image_url"])
+    # FIXED (Dec 2025): Count artists without LOCAL image (image_path), not CDN URL!
+    # Artists may have image_url (CDN) but no image_path (local cache).
+    # Auto-fetch should download from CDN to create local cache.
+    artists_without_local_image = sum(
+        1 for a in artists if not a["image_path"] or a["image_path"].startswith("FAILED")
+    )
+    artists_without_url = sum(1 for a in artists if not a["image_url"])
 
     has_local_album_tracks = (
         select(TrackModel.id)
@@ -200,23 +206,25 @@ async def library_artists(
     albums_without_cover_result = await session.execute(albums_without_cover_stmt)
     albums_without_cover = albums_without_cover_result.scalar() or 0
 
-    enrichment_needed = (artists_without_image + albums_without_cover) > 0
+    enrichment_needed = (artists_without_local_image + albums_without_cover) > 0
 
     # ==========================================================================
     # AUTO-FETCH: Background image fetch via AutoFetchService (Application Layer)
     # Hey future me - business logic lives in Service, not in Route!
+    # Trigger when: missing image_url (needs API lookup) OR missing image_path (needs download)
     # ==========================================================================
-    if artists_without_image > 0:
+    if artists_without_local_image > 0:
         try:
             from soulspot.application.services import AutoFetchService
             from soulspot.config import get_settings
 
             app_settings = get_settings()
             auto_fetch = AutoFetchService(session, app_settings)
-            result = await auto_fetch.fetch_missing_artist_images(limit=10)
+            # use_api=True: Searches Deezer for missing URLs AND downloads existing URLs
+            result = await auto_fetch.fetch_missing_artist_images(limit=10, use_api=True)
             repaired = result.get("repaired", 0)
             if repaired > 0:
-                artists_without_image = max(0, artists_without_image - repaired)
+                artists_without_local_image = max(0, artists_without_local_image - repaired)
         except Exception as e:
             # Fail silently - this is a background optimization
             logger.debug(f"[AUTO_FETCH_ARTISTS] Background fetch failed: {e}")
@@ -250,7 +258,7 @@ async def library_artists(
         context={
             "artists": artists,
             "enrichment_needed": enrichment_needed,
-            "artists_without_image": artists_without_image,
+            "artists_without_image": artists_without_local_image,  # For template compatibility
             "albums_without_cover": albums_without_cover,
             "current_source": source or "all",  # Active filter
             "source_counts": source_counts,  # For filter badge counts
