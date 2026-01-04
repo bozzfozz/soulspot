@@ -142,6 +142,7 @@ class SpotifyPlugin(IMusicServicePlugin):
             CapabilityInfo(PluginCapability.GET_ARTIST_ALBUMS, requires_auth=True),
             CapabilityInfo(PluginCapability.GET_ARTIST_TOP_TRACKS, requires_auth=True),
             CapabilityInfo(PluginCapability.GET_RELATED_ARTISTS, requires_auth=True),
+            CapabilityInfo(PluginCapability.GET_ALBUM_TRACKS, requires_auth=True),
             # User library - requires auth!
             CapabilityInfo(PluginCapability.USER_PROFILE, requires_auth=True),
             CapabilityInfo(PluginCapability.USER_FOLLOWED_ARTISTS, requires_auth=True),

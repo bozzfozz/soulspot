@@ -95,6 +95,7 @@ class PluginCapability(str, Enum):
     GET_ARTIST_ALBUMS = "get_artist_albums"
     GET_ARTIST_TOP_TRACKS = "get_artist_top_tracks"
     GET_RELATED_ARTISTS = "get_related_artists"
+    GET_ALBUM_TRACKS = "get_album_tracks"  # Fetch tracks for a specific album
 
     # User library (always requires auth)
     USER_PROFILE = "user_profile"
