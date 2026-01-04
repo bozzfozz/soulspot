@@ -1445,20 +1445,28 @@ class DeezerSyncService:
             # Access the list via .items attribute, NOT subscript like tracks[0]!
             tracks_response = await self._plugin.get_album_tracks(deezer_album_id, limit=100)
 
-            # Step 1: Get artist_id (all tracks in same album should have same artist)
-            artist_id: str | None = None
-
-            if tracks_response.items:
-                artist_id = await self._ensure_artist_exists(tracks_response.items[0], is_chart=False)
+            # Hey future me - CRITICAL FIX (Jan 2026):
+            # Use the ALBUM's artist_id, NOT the track's artist metadata!
+            #
+            # REASON: Tracks in /music/ArtistFolder/AlbumFolder/ should belong to
+            # that Artist, even if Deezer metadata says the track has a different
+            # artist (e.g., featured artists, collaborations, DJ remixes).
+            #
+            # OLD (WRONG): artist_id = await self._ensure_artist_exists(tracks_response.items[0])
+            # This created new artists like "JKLL", "The Prophet" from track metadata!
+            #
+            # NEW (CORRECT): Use album.artist_id - the album already has the right artist!
+            artist_id = str(album.artist_id.value) if album.artist_id else None
 
             if not artist_id:
                 logger.warning(
-                    f"DeezerSyncService: Cannot sync tracks for album {deezer_album_id} - no artist_id"
+                    f"DeezerSyncService: Cannot sync tracks for album {deezer_album_id} - "
+                    f"album has no artist_id"
                 )
                 return {
                     "synced": False,
                     "tracks_synced": 0,
-                    "error": "artist_not_found",
+                    "error": "album_has_no_artist",
                 }
 
             # Step 2: Sync tracks with artist relationship

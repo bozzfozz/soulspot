@@ -225,6 +225,91 @@ async def debug_search_artists(
     }
 
 
+# Hey future me - DEBUG endpoint to find orphaned artists (no local tracks/albums)!
+# This helps understand why library scan shows X artists but UI shows Y.
+# Usage: GET /api/artists/debug/orphans
+@router.get("/debug/orphans")
+async def debug_find_orphan_artists(
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Debug endpoint: Find artists without any local content.
+
+    Returns artists that have:
+    - No tracks (or only tracks without file_path)
+    - No albums with tracks
+
+    These are typically created from:
+    - Spotify/Deezer sync (followed artists without downloads)
+    - Discography sync (featured artists, collaborators)
+    - Manual additions that weren't downloaded
+
+    Use POST /api/library/cleanup-orphans to remove true orphans.
+    """
+    from sqlalchemy import func, select
+
+    from soulspot.infrastructure.persistence.models import (
+        AlbumModel,
+        ArtistModel,
+        TrackModel,
+    )
+
+    # Find artists with NO local tracks (no tracks at all OR no tracks with file_path)
+    # Subquery: Artists with local files
+    artists_with_local_tracks = (
+        select(TrackModel.artist_id)
+        .where(TrackModel.file_path.isnot(None))
+        .distinct()
+    )
+
+    # Get all artists not in above subquery
+    stmt = (
+        select(ArtistModel)
+        .where(ArtistModel.id.notin_(artists_with_local_tracks))
+        .order_by(ArtistModel.name)
+    )
+    result = await session.execute(stmt)
+    orphan_artists = result.scalars().all()
+
+    # Also count how many tracks (streaming only) they have
+    orphan_details = []
+    for artist in orphan_artists:
+        track_count_stmt = select(func.count(TrackModel.id)).where(
+            TrackModel.artist_id == artist.id
+        )
+        track_count = await session.scalar(track_count_stmt) or 0
+
+        album_count_stmt = select(func.count(AlbumModel.id)).where(
+            AlbumModel.artist_id == artist.id
+        )
+        album_count = await session.scalar(album_count_stmt) or 0
+
+        orphan_details.append({
+            "id": str(artist.id),
+            "name": artist.name,
+            "source": artist.source,
+            "ownership_state": artist.ownership_state,
+            "streaming_tracks": track_count,
+            "streaming_albums": album_count,
+            "spotify_uri": artist.spotify_uri,
+            "deezer_id": artist.deezer_id,
+            "created_at": artist.created_at.isoformat() if artist.created_at else None,
+        })
+
+    # Also get total counts for context
+    total_artists = await session.scalar(select(func.count(ArtistModel.id))) or 0
+    artists_with_local = len(
+        (await session.execute(artists_with_local_tracks)).all()
+    )
+
+    return {
+        "total_artists_in_db": total_artists,
+        "artists_with_local_files": artists_with_local,
+        "artists_without_local_files": len(orphan_details),
+        "orphan_artists": orphan_details,
+        "hint": "Use POST /api/library/cleanup-orphans to remove true orphans (no albums/tracks at all)",
+    }
+
+
 # Yo, this is the MAIN sync endpoint! It fetches ALL followed artists from Spotify (paginated
 # internally) and creates/updates them in our DB. Uses shared server-side token so any device
 # can trigger sync. Returns the full list of synced artists plus stats (created/updated counts).
