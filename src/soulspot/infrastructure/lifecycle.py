@@ -235,10 +235,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         spotify_client = SpotifyClient(settings.spotify)
 
-        # Hey future me - same pattern as session_store: pass session_scope context manager factory!
+        # Hey future me - use session_scope_with_retry for SQLite lock resilience!
+        # TokenRefreshWorker runs every 5 min and writes to DB. If another worker is
+        # writing (e.g., UnifiedLibraryManager), we'd get "database is locked".
+        # The retry mechanism handles this transparently. Dec 2025 fix.
         db_token_manager = DatabaseTokenManager(
             spotify_client=spotify_client,
-            session_scope=db.session_scope,
+            session_scope=db.session_scope_with_retry,  # With retry for SQLite
         )
         app.state.db_token_manager = db_token_manager
         logger.info("Database token manager initialized for background workers")
@@ -301,10 +304,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         deezer_plugin = DeezerPlugin()
 
+        # Hey future me - database= is CRITICAL for SQLite!
+        # Passing `database=db` enables session_scope_with_retry() for all DB ops.
+        # Without this, we get massive "database is locked" errors when multiple
+        # tasks (Scanner, Sync, Images, Token Refresh) write concurrently.
+        # Dec 2025 fix for SQLite lock contention.
         unified_library_manager = UnifiedLibraryManager(
             session_factory=db.get_session_factory(),
             spotify_plugin=spotify_plugin,
             deezer_plugin=deezer_plugin,
+            database=db,  # For retry-enabled sessions (SQLite lock fix)
         )
         # Hey future me - set token_manager for automation tasks!
         # WATCHLIST_CHECK, DISCOGRAPHY_SCAN need Spotify API access.

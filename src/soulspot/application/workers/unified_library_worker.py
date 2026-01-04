@@ -65,6 +65,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from soulspot.application.services.app_settings_service import AppSettingsService
+    from soulspot.infrastructure.persistence.database import Database
     from soulspot.infrastructure.plugins.deezer_plugin import DeezerPlugin
     from soulspot.infrastructure.plugins.spotify_plugin import SpotifyPlugin
 
@@ -525,6 +526,8 @@ class UnifiedLibraryManager:
         session_factory: Callable[[], AsyncGenerator[AsyncSession, None]],
         spotify_plugin: SpotifyPlugin | None = None,
         deezer_plugin: DeezerPlugin | None = None,
+        *,
+        database: "Database | None" = None,
     ) -> None:
         """Initialize the UnifiedLibraryManager.
 
@@ -532,8 +535,17 @@ class UnifiedLibraryManager:
             session_factory: Factory function to create DB sessions.
             spotify_plugin: Spotify plugin instance (optional).
             deezer_plugin: Deezer plugin instance (optional).
+            database: Database instance for retry-enabled sessions (optional).
+                     If provided, uses session_scope_with_retry() for all DB ops
+                     to avoid SQLite "database is locked" errors.
+
+        Hey future me - ALWAYS pass database= when using SQLite!
+        Without it, we use raw session_factory which has NO retry logic.
+        The retry mechanism (session_scope_with_retry) is CRITICAL for SQLite
+        because multiple workers write concurrently. Dec 2025 update.
         """
         self._session_factory = session_factory
+        self._database = database
         self._spotify_plugin = spotify_plugin
         self._deezer_plugin = deezer_plugin
 
@@ -1582,19 +1594,32 @@ class UnifiedLibraryManager:
 
     @asynccontextmanager
     async def _get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Get a new database session.
+        """Get a new database session with automatic retry on SQLite locks.
 
-        Hey future me - use this with `async with self._get_session() as session:`
-        The session is automatically committed and closed when exiting the context.
-        
-        session_factory() is an async generator that yields sessions, so we use
-        `async with` to consume it as a context manager, not `async for`.
+        Hey future me - this now uses session_scope_with_retry() when database is available!
+        This prevents "database is locked" errors during heavy concurrent writes.
+
+        The retry mechanism:
+        1. If database is available → use session_scope_with_retry (3 retries, exponential backoff)
+        2. If database not available → fallback to raw session_factory (no retries)
+
+        Dec 2025: This change fixed massive SQLite lock errors when Library Scanner,
+        Artist Sync, Image Repair, and Token Refresh all wrote simultaneously.
         """
-        async with self._session_factory() as session:
-            try:
+        if self._database is not None:
+            # Use retry-enabled session for SQLite lock resilience
+            async with self._database.session_scope_with_retry(
+                max_attempts=3,
+                initial_delay=0.5,
+            ) as session:
                 yield session
-            finally:
-                await session.close()
+        else:
+            # Fallback: raw session factory (no retries)
+            async with self._session_factory() as session:
+                try:
+                    yield session
+                finally:
+                    await session.close()
 
     async def trigger_task(self, task_type: TaskType) -> bool:
         """Manually trigger a task (bypasses cooldown for user requests).
