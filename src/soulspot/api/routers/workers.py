@@ -142,6 +142,7 @@ def _get_unified_library_manager_status(request: Request) -> WorkerStatusInfo:
     - ImageQueueWorker
 
     Single worker, multi-provider (Spotify + Deezer + Tidal + ...)
+    Now includes detailed task progress info!
     """
     worker = getattr(request.app.state, "unified_library_manager", None)
 
@@ -156,14 +157,40 @@ def _get_unified_library_manager_status(request: Request) -> WorkerStatusInfo:
         )
 
     raw_status = worker.get_status()
+    stats = raw_status.get("stats", {})
+    scheduler_status = raw_status.get("scheduler", {})
 
-    # Determine status
+    # Find currently running task
+    current_task = None
+    for task_name, task_info in scheduler_status.items():
+        if isinstance(task_info, dict) and task_info.get("running"):
+            current_task = task_name
+            break
+
+    # Determine status based on running task
     if not raw_status.get("running"):
         status = "stopped"
-    elif raw_status.get("errors", 0) > 0:
+    elif current_task:
+        status = "active"  # A task is actively running
+    elif stats.get("last_error"):
         status = "error"
     else:
         status = "idle"
+
+    # Build detailed info
+    details = {
+        # Current activity
+        "current_task": current_task or "Idle",
+        # Stats
+        "artists_synced": stats.get("artists_synced", 0),
+        "albums_synced": stats.get("albums_synced", 0),
+        "tracks_synced": stats.get("tracks_synced", 0),
+        "downloads_queued": stats.get("downloads_queued", 0),
+        # Task completion info
+        "tasks_completed": stats.get("tasks_completed", 0),
+        "tasks_failed": stats.get("tasks_failed", 0),
+        "last_error": stats.get("last_error"),
+    }
 
     return WorkerStatusInfo(
         name="Library Manager",
@@ -171,12 +198,7 @@ def _get_unified_library_manager_status(request: Request) -> WorkerStatusInfo:
         settings_url="/settings?tab=library",
         running=raw_status.get("running", False),
         status=status,
-        details={
-            "enabled_providers": raw_status.get("enabled_providers", []),
-            "tasks_completed": raw_status.get("tasks_completed", 0),
-            "tasks_pending": raw_status.get("tasks_pending", 0),
-            "errors": raw_status.get("errors", 0),
-        },
+        details=details,
     )
 
 
@@ -550,11 +572,13 @@ async def get_workers_status_html(request: Request) -> HTMLResponse:
                 details_html = f'<div class="tooltip-detail">Check alle {interval} min • Nächste: {next_check}</div>'
 
             elif worker_key == "library_manager":
-                providers = worker.details.get("enabled_providers", [])
-                pending = worker.details.get("tasks_pending", 0)
-                completed = worker.details.get("tasks_completed", 0)
-                providers_str = ", ".join(providers) if providers else "none"
-                details_html = f'<div class="tooltip-detail">Providers: {providers_str} • Pending: {pending} • Done: {completed}</div>'
+                current_task = worker.details.get("current_task", "Idle")
+                artists = worker.details.get("artists_synced", 0)
+                albums = worker.details.get("albums_synced", 0)
+                tracks = worker.details.get("tracks_synced", 0)
+                # Show current task prominently
+                task_display = f"<strong>{current_task}</strong>" if current_task != "Idle" else "Idle"
+                details_html = f'<div class="tooltip-detail">{task_display} • 👤{artists} 💿{albums} 🎵{tracks}</div>'
 
             elif worker_key == "download_monitor":
                 poll_interval = worker.details.get("poll_interval_seconds", 10)

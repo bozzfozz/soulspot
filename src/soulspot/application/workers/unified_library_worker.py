@@ -847,7 +847,7 @@ class UnifiedLibraryManager:
             artist_repo = ArtistRepository(session)
             owned_count = 0
 
-            for artist in artists:
+            for idx, artist in enumerate(artists):
                 if artist.ownership_state != OwnershipState.OWNED:
                     artist.ownership_state = OwnershipState.OWNED
                     # Set primary_source based on which service we got them from
@@ -856,6 +856,11 @@ class UnifiedLibraryManager:
                         artist.primary_source = artist.source.value
                     await artist_repo.update(artist)
                     owned_count += 1
+                
+                # Hey future me - YIELD every 10 artists to keep UI responsive!
+                # Without this, bulk artist updates block the event loop.
+                if idx > 0 and idx % 10 == 0:
+                    await asyncio.sleep(0)  # Yield without delay
 
             await session.commit()
 
@@ -1015,6 +1020,11 @@ class UnifiedLibraryManager:
                         elif result.skipped_providers:
                             # All providers on cooldown - this is expected, not an error
                             pass  # Don't log every cooldown skip
+                        
+                        # Hey future me - YIELD to event loop between artists!
+                        # This allows UI requests to be processed during sync.
+                        # Without this, the UI becomes unresponsive during bulk syncs.
+                        await asyncio.sleep(0)  # Yield without delay
 
                     except Exception as e:
                         errors += 1
@@ -1824,7 +1834,7 @@ class UnifiedLibraryManager:
                 
                 total_missing_found = 0
                 
-                for watchlist in active_watchlists:
+                for idx, watchlist in enumerate(active_watchlists):
                     try:
                         # Skip if auto_download disabled
                         if not watchlist.auto_download:
@@ -1854,6 +1864,10 @@ class UnifiedLibraryManager:
                                     "quality_profile": watchlist.quality_profile,
                                 },
                             )
+                        
+                        # Hey future me - YIELD every 5 artists to keep UI responsive!
+                        if idx > 0 and idx % 5 == 0:
+                            await asyncio.sleep(0)
                         
                     except Exception as e:
                         logger.error(
