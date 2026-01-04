@@ -71,6 +71,7 @@ def get_display_url(
     source_url: str | None,
     local_path: str | None,
     entity_type: str = "album",
+    require_local: bool = False,
 ) -> str:
     """Template helper for image URL resolution.
 
@@ -80,9 +81,15 @@ def get_display_url(
         {{ get_display_url(album.cover_url, album.cover_path, 'album') }}
         {{ get_display_url(artist.image_url, artist.image_path, 'artist') }}
         {{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}
+        
+    For Library entities (require local images, no CDN fallback):
+        {{ get_display_url(artist.image_url, artist.image_path, 'artist', True) }}
+        
+    For Browse/Search (CDN fallback OK):
+        {{ get_display_url(artist.image_url, None, 'artist', False) }}
     """
     return _get_image_service_lazy().get_display_url(
-        source_url, local_path, entity_type
+        source_url, local_path, entity_type, require_local
     )  # type: ignore[arg-type]
 
 

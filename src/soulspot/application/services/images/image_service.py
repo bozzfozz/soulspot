@@ -179,6 +179,7 @@ class ImageService:
         source_url: str | None,
         local_path: str | None,
         entity_type: EntityType = "album",
+        require_local: bool = False,
     ) -> str:
         """Get the best display URL for an image.
 
@@ -188,7 +189,7 @@ class ImageService:
 
         Priority:
         1. Local cache path (if exists and file is there)
-        2. CDN URL (Spotify, Deezer, etc.)
+        2. CDN URL (Spotify, Deezer, etc.) - ONLY if require_local=False
         3. Entity-specific placeholder
         4. Generic placeholder
 
@@ -196,6 +197,10 @@ class ImageService:
             source_url: CDN URL (e.g., "https://i.scdn.co/image/...")
             local_path: Local path (e.g., "artists/abc123.jpg")
             entity_type: For choosing the right placeholder
+            require_local: If True, never return CDN URL - only local or placeholder.
+                          Use require_local=True for Library entities (Artists, Albums)
+                          to ensure images are always served from local cache.
+                          Use require_local=False (default) for Browse/Search results.
 
         Returns:
             URL string to display the image
@@ -212,8 +217,11 @@ class ImageService:
                     entity_type,
                 )
 
-        # Priority 2: CDN URL (Spotify, Deezer, etc.)
-        if source_url:
+        # Priority 2: CDN URL - ONLY if require_local=False
+        # Hey future me - require_local=True means "Library entity, needs local image!"
+        # We return placeholder instead of CDN so UI shows clear "no image yet" state.
+        # The IMAGE_SYNC worker will download the image later.
+        if source_url and not require_local:
             return source_url
 
         # Priority 3: Entity-specific placeholder

@@ -23,8 +23,9 @@
 <!-- Playlist Header -->
 <div class="card" style="background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%); padding: var(--space-8); margin-bottom: var(--space-8);">
     <div class="flex gap-6" style="align-items: flex-start;">
-        {# ImageService: local cache > CDN > placeholder #}
-        <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}"
+        {# ImageService: local cache > placeholder (no CDN!)
+           Playlists are synced to DB so images should be local #}
+        <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist', true) }}"
             alt="{{ playlist.name }}"
             style="width: 200px; height: 200px; border-radius: var(--radius-lg); object-fit: cover; box-shadow: var(--shadow-xl); flex-shrink: 0;">
         <div style="flex: 1; min-width: 0;">

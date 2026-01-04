@@ -23,9 +23,10 @@
 
 <!-- Artist Header -->
 <div style="display: flex; align-items: center; gap: var(--space-6); margin-bottom: var(--space-8);">
-    {# ImageService provides SVG placeholder if no image #}
+    {# ImageService provides SVG placeholder if no local image
+       require_local=True ensures we NEVER show CDN URLs for Library Artists #}
     <div class="artist-avatar-large">
-        <img src="{{ get_display_url(artist.image_url, artist.image_path, 'artist') }}" alt="{{ artist.name }}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+        <img src="{{ get_display_url(artist.image_url, artist.image_path, 'artist', true) }}" alt="{{ artist.name }}" loading="lazy" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
     </div>
     <div>
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ artist.name }}</h1>
@@ -110,7 +111,8 @@
         <div class="album-card-wrapper" data-album-type="{{ album.primary_type|lower }}" style="{% if not album.is_owned %}opacity: 0.7;{% endif %}">
             <a href="/library/albums/{{ album.id }}" class="album-card">
                 <div class="album-cover">
-                    <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
+                    {# require_local=True for Library Albums - no CDN fallback #}
+                    <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album', true) }}" alt="{{ album.title }}" loading="lazy">
                     {# Album type badge (top-left) #}
                     <div class="album-type-badges">
                         {% if album.primary_type|lower == 'single' %}

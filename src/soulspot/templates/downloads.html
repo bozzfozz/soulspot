@@ -114,8 +114,9 @@
             
             <!-- Album Art with Status Overlay -->
             <div class="download-artwork">
-                {# ImageService: local cache > CDN > placeholder #}
-                <img src="{{ get_display_url(item.album_art, item.album_art_path, 'album') }}" 
+                {# ImageService: local cache > placeholder (no CDN for Library!)
+                   Downloads are from Library albums that should have local images #}
+                <img src="{{ get_display_url(item.album_art, item.album_art_path, 'album', true) }}" 
                      alt="{{ item.title|default('Track') }}"
                      loading="lazy">
                 <div class="artwork-overlay">

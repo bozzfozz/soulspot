@@ -32,8 +32,9 @@
 <!-- Album Header -->
 <div style="display: flex; flex-wrap: wrap; gap: var(--space-6); margin-bottom: var(--space-8);">
     <div class="album-cover-large">
-        {# ImageService provides: local cache > CDN > placeholder #}
-        <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album') }}" alt="{{ album.title }}" loading="lazy">
+        {# ImageService provides: local cache > placeholder (no CDN for Library!)
+           require_local=True ensures Library Albums always use local images #}
+        <img src="{{ get_display_url(album.artwork_url, album.artwork_path, 'album', true) }}" alt="{{ album.title }}" loading="lazy">
     </div>
     <div style="flex: 1; min-width: 200px;">
         <h1 style="font-size: var(--font-size-3xl); margin-bottom: var(--space-2);">{{ album.title }}</h1>

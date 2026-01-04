@@ -134,15 +134,19 @@ class IImageService(Protocol):
         source_url: str | None,
         local_path: str | None,
         entity_type: EntityType = "album",
+        require_local: bool = False,
     ) -> str:
         """Get best display URL for an image (sync method for templates).
 
-        Priority: local > CDN > placeholder
+        Priority: local > CDN (if require_local=False) > placeholder
 
         Args:
             source_url: CDN URL from provider
             local_path: Local cache path
             entity_type: For choosing placeholder
+            require_local: If True, never return CDN URL - only local or placeholder.
+                          Use require_local=True for Library entities.
+                          Use require_local=False (default) for Browse/Search.
 
         Returns:
             URL string to display

@@ -114,9 +114,9 @@
            style="--delay: {{ loop.index0 }};">
             <div class="release-image shimmer-loading">
                 {# Hey future me - get_display_url is the central ImageService helper!
-                   It prioritizes: local cache > CDN URL > placeholder
+                   require_local=true: Albums are pre-synced so images should be local
                    See: src/soulspot/application/services/images/image_service.py #}
-                <img src="{{ get_display_url(release.image_url, release.image_path, 'album') }}"
+                <img src="{{ get_display_url(release.image_url, release.image_path, 'album', true) }}"
                     alt="{{ release.name }}"
                     loading="lazy">
                 <div class="release-overlay">
@@ -168,8 +168,9 @@
         {% for playlist in playlists[:6] %}
         <a href="/playlists/{{ playlist.id }}" class="playlist-card playlist-card-animated blur-fade-in hover-scale-interactive" style="--delay: {{ loop.index0 }};">
             <div class="playlist-image shimmer-loading">
-                {# Hey future me - get_display_url provides: local cache > CDN > placeholder #}
-                <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist') }}"
+                {# Hey future me - get_display_url provides: local cache > placeholder
+                   require_local=true: Playlists are synced so images should be local #}
+                <img src="{{ get_display_url(playlist.cover_url, playlist.cover_path, 'playlist', true) }}"
                     alt="{{ playlist.name }}"
                     loading="lazy">
                 <div class="playlist-overlay">
