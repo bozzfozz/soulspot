@@ -209,42 +209,23 @@
 <div class="card danger-zone-card">
     <div class="card-header danger-zone-header"><h3><i class="bi bi-exclamation-triangle-fill"></i> Danger Zone</h3></div>
     <div class="card-body">
-        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">These actions are destructive and cannot be undone.</p>
+        <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.875rem;">This action is destructive and cannot be undone.</p>
         
-        <!-- Clear Local Library -->
+        {# Hey future me - SIMPLIFIED (Jan 2026): One button to clear everything!
+           Merged the "local only" and "entire library" buttons - users don't need to distinguish.
+           Uses /api/library/clear-all which deletes everything (local + streaming data). #}
         <div class="danger-action">
             <div class="danger-action-info">
-                <h4><i class="bi bi-trash3"></i> Clear Local Library</h4>
-                <p>Delete all locally imported tracks, albums, and artists. Spotify data will NOT be affected.</p>
+                <h4><i class="bi bi-trash3"></i> Clear Library</h4>
+                <p>Delete all library data including artists, albums, and tracks from all sources (local files, Spotify, Deezer).</p>
             </div>
             <button class="btn btn-danger" id="clear-library-btn"
-                    hx-delete="/api/library/clear" hx-target="#clear-library-status" hx-swap="innerHTML"
-                    hx-confirm="Delete ALL local library data? Spotify data will NOT be affected.">
+                    hx-delete="/api/library/clear-all" hx-target="#clear-library-status" hx-swap="innerHTML"
+                    hx-confirm="Delete ALL library data?\n\nThis will remove:\n• All artists\n• All albums\n• All tracks\n\nThis cannot be undone!">
                 <i class="bi bi-trash3-fill"></i>Clear Library
             </button>
         </div>
         <div id="clear-library-status" style="margin-top: 1rem;"></div>
-        
-        <!-- Clear ENTIRE Library (DEV ONLY) -->
-        <div class="danger-action" style="margin-top: 1.5rem; border-top: 2px solid var(--danger-primary); padding-top: 1.5rem;">
-            <div class="danger-action-info">
-                <h4><i class="bi bi-radioactive"></i> ⚠️ DEV ONLY: Clear ENTIRE Library</h4>
-                <p style="color: var(--danger-primary); font-weight: bold;">
-                    Delete EVERYTHING: Local files + Spotify + Deezer + Tidal data. 
-                    Complete wipe! Only for development/testing.
-                </p>
-                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-                    ⚠️ TODO: Remove this button before production release!
-                </p>
-            </div>
-            <button class="btn btn-danger" id="clear-all-btn"
-                    hx-delete="/api/library/clear-all" hx-target="#clear-all-status" hx-swap="innerHTML"
-                    hx-confirm="⚠️ DELETE EVERYTHING? This will remove:\n\n• ALL local files\n• ALL Spotify data\n• ALL Deezer data\n• ALL Tidal data\n\nThis cannot be undone!\n\nType 'DELETE EVERYTHING' to confirm."
-                    style="background: linear-gradient(135deg, #dc2626, #991b1b);">
-                <i class="bi bi-radioactive"></i>Clear ENTIRE Library
-            </button>
-        </div>
-        <div id="clear-all-status" style="margin-top: 1rem;"></div>
         
     </div>
 </div>

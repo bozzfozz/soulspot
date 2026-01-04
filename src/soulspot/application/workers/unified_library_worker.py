@@ -802,10 +802,30 @@ class UnifiedLibraryManager:
 
         After sync, we update ownership_state to OWNED for all synced artists.
         This marks them as "user wants these" vs "discovered via recommendations".
+        
+        TOKEN HANDLING (CRITICAL FIX Jan 2026):
+        Gets token from _token_manager and sets it on spotify_plugin!
+        Without this, spotify_plugin.can_use() returns False and sync is skipped.
         """
         from soulspot.application.services.artist_service import ArtistService
         from soulspot.domain.entities import OwnershipState
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+        # CRITICAL: Get and set Spotify token BEFORE creating service!
+        # Hey future me - without this, spotify_plugin.can_use() returns False
+        # and sync_followed_artists_all_providers() skips Spotify entirely!
+        access_token = None
+        if self._token_manager:
+            access_token = await self._token_manager.get_token_for_background()
+        
+        if access_token and self._spotify_plugin:
+            self._spotify_plugin.set_token(access_token)
+            logger.debug("ARTIST_SYNC: Spotify token set from token manager")
+        elif self._spotify_plugin:
+            logger.warning(
+                "ARTIST_SYNC: No valid Spotify token available. "
+                "Spotify sync will be skipped. User needs to re-authenticate via UI."
+            )
 
         async with self._get_session() as session:
             # Create service with available plugins
@@ -816,7 +836,7 @@ class UnifiedLibraryManager:
                 deezer_plugin=self._deezer_plugin,
             )
 
-            logger.info("Starting multi-provider artist sync...")
+            logger.info("🎵 Starting multi-provider artist sync...")
 
             # Sync from all providers - this returns deduplicated artists
             # and auto-syncs discography for new artists
@@ -874,10 +894,22 @@ class UnifiedLibraryManager:
         We batch this to avoid overwhelming the API:
         - Process in chunks of batch_size artists
         - Brief pause between batches
+        
+        TOKEN HANDLING (CRITICAL FIX Jan 2026):
+        Gets token from _token_manager and sets it on spotify_plugin!
         """
         from soulspot.application.services.artist_service import ArtistService
         from soulspot.domain.entities import OwnershipState
         from soulspot.infrastructure.persistence.repositories import ArtistRepository
+
+        # CRITICAL: Get and set Spotify token BEFORE creating services!
+        access_token = None
+        if self._token_manager:
+            access_token = await self._token_manager.get_token_for_background()
+        
+        if access_token and self._spotify_plugin:
+            self._spotify_plugin.set_token(access_token)
+            logger.debug("ALBUM_SYNC: Spotify token set from token manager")
 
         async with self._get_session() as session:
             artist_repo = ArtistRepository(session)
@@ -1019,6 +1051,9 @@ class UnifiedLibraryManager:
         
         CRITICAL FIX (Jan 2026): Use sync_album_tracks() instead of sync_artist_discography_complete()!
         Was syncing entire artist discography for EACH album → Dr. Peacock endless loop!
+        
+        TOKEN HANDLING (CRITICAL FIX Jan 2026):
+        Gets token from _token_manager and sets it on spotify_plugin!
         """
         from soulspot.application.services.provider_sync_orchestrator import (
             ProviderSyncOrchestrator,
@@ -1030,6 +1065,15 @@ class UnifiedLibraryManager:
             AlbumRepository,
             TrackRepository,
         )
+
+        # CRITICAL: Get and set Spotify token BEFORE creating services!
+        access_token = None
+        if self._token_manager:
+            access_token = await self._token_manager.get_token_for_background()
+        
+        if access_token and self._spotify_plugin:
+            self._spotify_plugin.set_token(access_token)
+            logger.debug("TRACK_SYNC: Spotify token set from token manager")
 
         async with self._get_session() as session:
             album_repo = AlbumRepository(session)
