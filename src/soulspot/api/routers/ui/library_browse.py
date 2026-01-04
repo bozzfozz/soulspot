@@ -393,16 +393,24 @@ async def library_albums(
     # ==========================================================================
     # AUTO-FETCH: Background cover fetch via AutoFetchService (Application Layer)
     # Hey future me - business logic lives in Service, not in Route!
+    # FIXED (Dec 2025): Count albums without LOCAL cover (artwork_path), not CDN URL!
+    # Albums may have artwork_url (CDN) but no artwork_path (local cache).
+    # Auto-fetch should download from CDN to create local cache.
     # ==========================================================================
-    albums_without_cover = sum(1 for a in albums if not a["artwork_url"])
-    if albums_without_cover > 0:
+    albums_without_local_cover = sum(
+        1 for a in albums if not a["artwork_path"] or (
+            a["artwork_path"] and a["artwork_path"].startswith("FAILED")
+        )
+    )
+    if albums_without_local_cover > 0:
         try:
             from soulspot.application.services import AutoFetchService
             from soulspot.config import get_settings
 
             app_settings = get_settings()
             auto_fetch = AutoFetchService(session, app_settings)
-            await auto_fetch.fetch_missing_album_covers(limit=10)
+            # use_api=True: Searches Deezer for missing URLs AND downloads existing URLs
+            await auto_fetch.fetch_missing_album_covers(limit=10, use_api=True)
         except Exception as e:
             # Fail silently - this is a background optimization
             logger.debug(f"[AUTO_FETCH_ALBUMS] Background fetch failed: {e}")
