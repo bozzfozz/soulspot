@@ -123,13 +123,26 @@
                         <span class="album-type-badge album-type-album">Album</span>
                         {% endif %}
                     </div>
-                    {# Track count badge (top-right): X/Y format #}
+                    {# Track count badge (top-right): X/Y format or X/? if total unknown #}
                     {% set local = album.local_tracks|default(0)|int %}
                     {% set total = album.total_tracks|default(0)|int %}
                     {% if total > 0 %}
+                    {# Total known: show X/Y with color-coded status #}
                     <div class="album-track-badge {% if local >= total %}track-complete{% elif local > 0 %}track-partial{% else %}track-none{% endif %}" 
                          title="{{ local }} of {{ total }} tracks verfügbar">
                         {{ local }}/{{ total }}
+                    </div>
+                    {% elif local > 0 %}
+                    {# Total unknown but have local: show X/? #}
+                    <div class="album-track-badge track-partial" 
+                         title="{{ local }} tracks lokal (Total unbekannt)">
+                        {{ local }}/?
+                    </div>
+                    {% else %}
+                    {# No local tracks, total unknown: show placeholder to indicate no tracks yet #}
+                    <div class="album-track-badge track-none" 
+                         title="Keine Tracks - klicken für Details">
+                        0/?
                     </div>
                     {% endif %}
                 </div>

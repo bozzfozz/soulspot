@@ -6772,8 +6772,9 @@ class ArtistDiscographyRepository:
                 existing.musicbrainz_id = entry.musicbrainz_id
             if entry.tidal_id and not existing.tidal_id:
                 existing.tidal_id = entry.tidal_id
-            # Update metadata if better
-            if entry.total_tracks and not existing.total_tracks:
+            # Update metadata - ALWAYS update total_tracks if we have a new value
+            # Hey future me - this ensures backfill works for older entries that had NULL!
+            if entry.total_tracks:
                 existing.total_tracks = entry.total_tracks
             if entry.cover_url and not existing.cover_url:
                 existing.cover_url = entry.cover_url
