@@ -328,6 +328,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Jobs are stored in background_jobs table and recovered on startup.
         # This prevents losing queued downloads when container restarts!
         from soulspot.application.workers.download_worker import DownloadWorker
+        from soulspot.application.workers.job_queue import Job, JobType
         from soulspot.application.workers.persistent_job_queue import (
             PersistentJobQueue,
         )
@@ -451,13 +452,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.download_worker = None
 
             # =================================================================
-            # REMOVED: LibraryScanWorker - Replaced by UnifiedLibraryManager
+            # LIBRARY_SCAN Job Handler (session-per-job for SQLite safety)
             # =================================================================
-            # Hey future me - LibraryScanWorker was DELETED!
-            # Its functionality is now in UnifiedLibraryManager:
-            # - Phase 1: DISCOVER (scan local library for files)
-            # See docs/architecture/UNIFIED_LIBRARY_WORKER.md for details.
+            # Hey future me - LIBRARY_SCAN jobs need a handler!
+            # The scan.py endpoint enqueues these jobs, but we need code to run them.
+            # Pattern: Create fresh session + scanner for each job, prevents SQLite locks.
             # =================================================================
+            from soulspot.application.services.library_scanner_service import (
+                LibraryScannerService,
+            )
+
+            async def _handle_library_scan_job(job: Job) -> dict[str, Any]:
+                """Handle LIBRARY_SCAN jobs from JobQueue.
+
+                Hey future me - this creates a FRESH session for each scan!
+                Long-running scans with shared sessions cause SQLite locks.
+                The session is committed/rolled back automatically by context manager.
+
+                Args:
+                    job: The job with payload {incremental: bool|None, defer_cleanup: bool}
+
+                Returns:
+                    Scan stats dict from LibraryScannerService.scan_library()
+                """
+                logger.info(f"Starting library scan job {job.id}")
+                payload = job.payload or {}
+                incremental = payload.get("incremental")  # None = auto-detect
+                defer_cleanup = payload.get("defer_cleanup", True)
+
+                async with db.session_scope() as scan_session:
+                    scanner = LibraryScannerService(
+                        session=scan_session,
+                        settings=settings,
+                    )
+                    result = await scanner.scan_library(
+                        incremental=incremental,
+                        defer_cleanup=defer_cleanup,
+                    )
+                    await scan_session.commit()
+                    logger.info(
+                        f"Library scan job {job.id} completed: "
+                        f"processed={result.get('processed_files', 0)}, "
+                        f"added={result.get('tracks_added', 0)}"
+                    )
+                    return result
+
+            job_queue.register_handler(JobType.LIBRARY_SCAN, _handle_library_scan_job)
+            logger.info("LIBRARY_SCAN handler registered")
 
             # =================================================================
             # REMOVED: LibraryDiscoveryWorker - Replaced by UnifiedLibraryManager
