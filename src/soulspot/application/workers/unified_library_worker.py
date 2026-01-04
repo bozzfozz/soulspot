@@ -126,18 +126,21 @@ class TaskPriority(int, Enum):
 
 
 # Task-specific cooldowns in minutes
-# Hey future me - Lidarr-inspired variable intervals!
-# Core sync tasks: Short cooldowns (1-5 min) for responsive sync
+# Hey future me - WORKER-FIRST PATTERN (Jan 2026)!
+# Routes don't fetch from API anymore - Worker is sole source of sync!
+# Cooldowns are now AGGRESSIVE to keep DB always up-to-date.
+#
+# Core sync tasks: Very short cooldowns (1-2 min) for responsive sync
 # Automation tasks: Longer cooldowns (1h-24h) to avoid API spam
 TASK_COOLDOWNS: dict[TaskType, int] = {
-    # === CORE SYNC (short cooldowns) ===
-    TaskType.ARTIST_SYNC: 5,       # 5 min - frequent sync for new follows
-    TaskType.ALBUM_SYNC: 5,        # 5 min - follows artist sync
-    TaskType.TRACK_SYNC: 5,        # 5 min - follows album sync
-    TaskType.ENRICHMENT: 10,       # 10 min - MusicBrainz rate limiting
-    TaskType.IMAGE_SYNC: 10,       # 10 min - image downloads
+    # === CORE SYNC (aggressive cooldowns - WORKER-FIRST!) ===
+    TaskType.ARTIST_SYNC: 2,       # 2 min - quick sync for new follows
+    TaskType.ALBUM_SYNC: 2,        # 2 min - follows artist sync quickly
+    TaskType.TRACK_SYNC: 2,        # 2 min - follows album sync quickly
+    TaskType.ENRICHMENT: 5,        # 5 min - MusicBrainz rate limiting
+    TaskType.IMAGE_SYNC: 5,        # 5 min - image downloads
     TaskType.DOWNLOAD: 1,          # 1 min - responsive download queue
-    TaskType.CLEANUP: 30,          # 30 min - maintenance task
+    TaskType.CLEANUP: 15,          # 15 min - maintenance task
     
     # === AUTOMATION (long cooldowns, Lidarr-style) ===
     TaskType.WATCHLIST_CHECK: 60,       # 1 hour - check for new releases
@@ -636,17 +639,74 @@ class UnifiedLibraryManager:
 
         Hey future me - this is the ONLY public method to start the manager!
         Creates a background task that runs until stop() is called.
+        
+        WORKER-FIRST PATTERN (Jan 2026):
+        On startup, immediately runs INITIAL SYNC to populate DB!
+        This ensures routes have data to show even on first visit.
         """
         if self._running:
             logger.warning("UnifiedLibraryManager already running")
             return
 
-        logger.info("Starting UnifiedLibraryManager")
+        logger.info("Starting UnifiedLibraryManager (WORKER-FIRST mode)")
         self._running = True
         self._stop_event.clear()
         self._stats["started_at"] = datetime.now(UTC).isoformat()
 
+        # WORKER-FIRST: Run initial sync immediately on startup!
+        # This ensures DB has data before any routes are accessed.
+        # Without this, users would see empty pages until first worker cycle.
+        logger.info("🚀 Running INITIAL SYNC on startup...")
+        try:
+            await self._run_initial_sync()
+        except Exception as e:
+            logger.exception(f"Initial sync failed: {e}")
+            # Continue anyway - main loop will retry
+
         self._task = asyncio.create_task(self._main_loop())
+
+    async def _run_initial_sync(self) -> None:
+        """Run initial sync on startup to populate DB immediately.
+        
+        Hey future me - WORKER-FIRST PATTERN (Jan 2026)!
+        This runs BEFORE the main loop starts, ensuring:
+        1. Artists are synced from Spotify/Deezer
+        2. Albums are synced for all artists
+        3. Tracks are synced for all albums
+        
+        After this, routes can immediately show data from DB.
+        Without this, users would see empty pages on first visit.
+        
+        Note: This ignores cooldowns - it's an INITIAL sync!
+        """
+        logger.info("=" * 60)
+        logger.info("INITIAL SYNC STARTING (WORKER-FIRST mode)")
+        logger.info("=" * 60)
+        
+        # Phase 1: Sync Artists
+        logger.info("[1/3] Syncing Artists...")
+        try:
+            await self._sync_artists()
+        except Exception as e:
+            logger.warning(f"[1/3] Artist sync failed: {e}")
+        
+        # Phase 2: Sync Albums for all artists
+        logger.info("[2/3] Syncing Albums...")
+        try:
+            await self._sync_albums()
+        except Exception as e:
+            logger.warning(f"[2/3] Album sync failed: {e}")
+        
+        # Phase 3: Sync Tracks for all albums
+        logger.info("[3/3] Syncing Tracks...")
+        try:
+            await self._sync_tracks()
+        except Exception as e:
+            logger.warning(f"[3/3] Track sync failed: {e}")
+        
+        logger.info("=" * 60)
+        logger.info("INITIAL SYNC COMPLETE")
+        logger.info("=" * 60)
 
     async def stop(self) -> None:
         """Stop the background processing gracefully.
@@ -699,8 +759,11 @@ class UnifiedLibraryManager:
         Hey future me - this is the HEART of the manager!
         Pattern: Start cycle → Run ALL tasks in dependency order → Sleep → Repeat
 
-        The loop runs every 10 seconds to check for work.
-        Each task type has its own cooldown (default 1 minute).
+        WORKER-FIRST PATTERN (Jan 2026):
+        Loop runs every 5 seconds (was 10) to keep DB always fresh!
+        Routes don't call APIs anymore - this worker is the ONLY sync source!
+        
+        Each task type has its own cooldown (now 2 min for core tasks).
         Tasks respect TASK_DEPENDENCIES - e.g., ALBUM_SYNC waits for ARTIST_SYNC.
         
         CRITICAL FIX: Run ALL runnable tasks in one cycle!
@@ -711,15 +774,16 @@ class UnifiedLibraryManager:
         then start fresh cycle. This ensures IMAGE_SYNC runs after ALBUM_SYNC
         in the SAME cycle.
         """
-        logger.info("UnifiedLibraryManager main loop started")
+        logger.info("UnifiedLibraryManager main loop started (WORKER-FIRST mode)")
 
         try:
             while self._running:
                 try:
                     # Check for stop signal with timeout
+                    # WORKER-FIRST: 5 second loop (was 10) for faster responsiveness
                     try:
                         await asyncio.wait_for(
-                            self._stop_event.wait(), timeout=10.0
+                            self._stop_event.wait(), timeout=5.0
                         )
                         # Stop event was set
                         break
